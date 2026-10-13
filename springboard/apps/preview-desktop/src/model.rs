@@ -3,6 +3,7 @@
 //! is plain data, so the tests run without a window.
 
 use bifrost_app::kit::{pack, Image};
+use std::rc::Rc;
 
 /// The smallest and largest zoom factor the viewer goes to.
 pub const ZOOM_MIN: f32 = 0.05;
@@ -133,6 +134,21 @@ pub fn rot_rect(r: Norm, quarters: u8) -> Norm {
     Norm::from_corners(a, b)
 }
 
+/// The zoom factor and pan (canvas pixels) that fill a `view_w` by `view_h` canvas with the selected rectangle `sel`
+/// (source-page coordinates) of a picture shown turned `quarters`, whose turned size at actual size is `rw` by `rh`.
+/// The zoom is held to the viewer's range. None for an empty selection or canvas.
+pub fn zoom_to_rect(sel: Norm, quarters: u8, rw: usize, rh: usize, view_w: usize, view_h: usize) -> Option<(f32, (f32, f32))> {
+    let t = rot_rect(sel, quarters);
+    let (sw, sh) = (t.w * rw as f32, t.h * rh as f32);
+    if sw <= 0.0 || sh <= 0.0 || view_w == 0 || view_h == 0 {
+        return None;
+    }
+    let scale = (view_w as f32 / sw).min(view_h as f32 / sh).clamp(ZOOM_MIN, ZOOM_MAX);
+    // the picture is centred; moving it by minus the selection's offset from the middle brings the selection there
+    let pan = (-(t.x + t.w / 2.0 - 0.5) * rw as f32 * scale, -(t.y + t.h / 2.0 - 0.5) * rh as f32 * scale);
+    Some((scale, pan))
+}
+
 /// Which page is shown and how. The pan offset is in canvas pixels and resets on a page change.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct View {
@@ -222,6 +238,16 @@ pub enum MarkKind {
     Rounded,
     /// A freehand stroke: a signature or a drawing. Its points are in `Mark::ink`.
     Ink,
+    /// An ellipse inside the rectangle.
+    Oval,
+    /// A straight line; its two ends are in `Mark::ink`.
+    Line,
+    /// A line with a head at its second end; the two ends are in `Mark::ink`.
+    Arrow,
+    /// A line along the bottom of the rectangle, for marking a line of text.
+    Underline,
+    /// A line through the middle of the rectangle, for striking out a line of text.
+    Strike,
 }
 
 impl MarkKind {
@@ -232,6 +258,32 @@ impl MarkKind {
             MarkKind::Rect => "rect",
             MarkKind::Rounded => "rounded",
             MarkKind::Ink => "ink",
+            MarkKind::Oval => "oval",
+            MarkKind::Line => "line",
+            MarkKind::Arrow => "arrow",
+            MarkKind::Underline => "underline",
+            MarkKind::Strike => "strike",
+        }
+    }
+
+    /// Whether the mark keeps its points in `Mark::ink`: a stroke, or the two ends of a line or an arrow.
+    pub fn has_points(self) -> bool {
+        matches!(self, MarkKind::Ink | MarkKind::Line | MarkKind::Arrow)
+    }
+
+    /// What the markup list in the sidebar calls the mark.
+    pub fn label(self) -> &'static str {
+        match self {
+            MarkKind::Highlight => "Highlight",
+            MarkKind::Note => "Note",
+            MarkKind::Rect => "Rectangle",
+            MarkKind::Rounded => "Rounded rectangle",
+            MarkKind::Ink => "Drawing",
+            MarkKind::Oval => "Oval",
+            MarkKind::Line => "Line",
+            MarkKind::Arrow => "Arrow",
+            MarkKind::Underline => "Underline",
+            MarkKind::Strike => "Strike-through",
         }
     }
 
@@ -242,6 +294,11 @@ impl MarkKind {
             "rect" => Some(MarkKind::Rect),
             "rounded" => Some(MarkKind::Rounded),
             "ink" => Some(MarkKind::Ink),
+            "oval" => Some(MarkKind::Oval),
+            "line" => Some(MarkKind::Line),
+            "arrow" => Some(MarkKind::Arrow),
+            "underline" => Some(MarkKind::Underline),
+            "strike" => Some(MarkKind::Strike),
             _ => None,
         }
     }
@@ -262,13 +319,27 @@ pub struct Mark {
     pub ink: Vec<(f32, f32)>,
 }
 
-/// Everything an edit can change in a document: markup, page order and deletions, turns and colour adjustments.
+/// A picture's pixels as an edit left them. Two values are equal when they are the same picture, not when every pixel
+/// matches: an edit makes a new picture, so comparing the pointers tells whether anything changed without a pass over
+/// the pixels.
+#[derive(Clone, Debug)]
+pub struct Pixels(pub Rc<Image>);
+
+impl PartialEq for Pixels {
+    fn eq(&self, other: &Pixels) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+/// Everything an edit can change in a document: markup, page order and deletions, turns, colour adjustments and the
+/// pixels of a picture (flip, crop, alpha). A PDF has no pixels of its own to edit.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Snapshot {
     pub marks: Vec<Mark>,
     pub order: Vec<usize>,
     pub turns: Vec<u8>,
     pub adjust: Adjust,
+    pub pixels: Option<Pixels>,
 }
 
 /// The most edits Undo goes back through.
@@ -409,6 +480,8 @@ const NOTE_PX: usize = 14;
 pub const HIGHLIGHT: u32 = pack(255, 214, 10, 115);
 /// Note and shape colour: system blue.
 pub const MARK_BLUE: u32 = pack(10, 132, 255, 255);
+/// Strike-through colour: system red.
+pub const MARK_RED: u32 = pack(255, 69, 58, 255);
 
 const SIDECAR_HEADER: &str = "# viewer markup 1";
 
@@ -459,7 +532,7 @@ pub fn to_sidecar(marks: &[Mark]) -> String {
             m.rect.w,
             m.rect.h,
             m.color,
-            if m.kind == MarkKind::Ink { encode_ink(&m.ink) } else { escape(&m.text) }
+            if m.kind.has_points() { encode_ink(&m.ink) } else { escape(&m.text) }
         ));
     }
     out
@@ -485,7 +558,7 @@ fn parse_line(line: &str) -> Option<Mark> {
     let h = f.next()?.parse::<f32>().ok()?;
     let color = u32::from_str_radix(f.next()?, 16).ok()?;
     let field = f.next().unwrap_or("");
-    let (text, ink) = if kind == MarkKind::Ink { (String::new(), decode_ink(field)) } else { (unescape(field), Vec::new()) };
+    let (text, ink) = if kind.has_points() { (String::new(), decode_ink(field)) } else { (unescape(field), Vec::new()) };
     if ![x, y, w, h].iter().all(|v| v.is_finite()) {
         return None;
     }
@@ -534,14 +607,91 @@ fn over(dst: u32, src: u32) -> u32 {
     ch(0) | (ch(8) << 8) | (ch(16) << 16) | (a << 24)
 }
 
+/// The mark a drag from `a` to `b` (source-page points) makes. A line or an arrow keeps its two ends, in the order
+/// they were dragged.
+pub fn drag_mark(kind: MarkKind, page: usize, a: (f32, f32), b: (f32, f32), color: u32) -> Mark {
+    let ink = if matches!(kind, MarkKind::Line | MarkKind::Arrow) { vec![a, b] } else { Vec::new() };
+    Mark { kind, page, rect: Norm::from_corners(a, b), color, text: String::new(), ink }
+}
+
+/// Whether a drag of `moved` pixels that spans `rect` is big enough to keep as a mark of `kind`, on a page shown turned
+/// `quarters`. A line may run straight across or down, and an underline or a strike-through has no height, but it needs
+/// width as the page is shown (which is the page's height when it is turned a quarter).
+pub fn drag_counts(kind: MarkKind, moved: f32, rect: Norm, quarters: u8) -> bool {
+    if moved < 4.0 {
+        return false;
+    }
+    match kind {
+        MarkKind::Line | MarkKind::Arrow => true,
+        MarkKind::Underline | MarkKind::Strike => (if quarters % 2 == 0 { rect.w } else { rect.h }) > 0.0,
+        _ => rect.w > 0.0 && rect.h > 0.0,
+    }
+}
+
+/// The two ends of the line an underline or a strike-through draws, as points of the unrotated page. The line follows
+/// the bottom (underline) or the middle (strike-through) of the rectangle as the page is shown after `quarters`
+/// clockwise turns, so a PDF reader that draws the saved annotation in the page's own orientation agrees with the window.
+pub fn text_line_ends(kind: MarkKind, r: Norm, quarters: u8) -> ((f32, f32), (f32, f32)) {
+    let (u0, v0, u1, v1) = (r.x, r.y, r.x + r.w, r.y + r.h);
+    let (um, vm) = ((u0 + u1) / 2.0, (v0 + v1) / 2.0);
+    let under = kind == MarkKind::Underline;
+    match quarters % 4 {
+        1 => {
+            let u = if under { u1 } else { um };
+            ((u, v0), (u, v1))
+        }
+        2 => {
+            let v = if under { v0 } else { vm };
+            ((u0, v), (u1, v))
+        }
+        3 => {
+            let u = if under { u0 } else { um };
+            ((u, v0), (u, v1))
+        }
+        _ => {
+            let v = if under { v1 } else { vm };
+            ((u0, v), (u1, v))
+        }
+    }
+}
+
+/// The two ends of an arrow head, for an arrow from `from` to `to`. The head is a quarter of the arrow long, between
+/// 8 and 24 units (times `scale`), and opens 28 degrees each side. None for an arrow without length.
+pub fn arrow_head(from: (f32, f32), to: (f32, f32), scale: f32) -> Option<[(f32, f32); 2]> {
+    let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-3 {
+        return None;
+    }
+    let head = (len * 0.25).clamp(8.0 * scale, 24.0 * scale);
+    // the unit vector from the tip back along the arrow, turned either way
+    let (ux, uy) = (-dx / len, -dy / len);
+    let (sin, cos) = 28.0f32.to_radians().sin_cos();
+    let end = |side: f32| (to.0 + head * (ux * cos - side * uy * sin), to.1 + head * (uy * cos + side * ux * sin));
+    Some([end(1.0), end(-1.0)])
+}
+
+/// The outline of the ellipse inside a rectangle, as a closed run of points.
+pub fn ellipse_points(x: f32, y: f32, w: f32, h: f32) -> Vec<(f32, f32)> {
+    const STEPS: usize = 48;
+    let (cx, cy, rx, ry) = (x + w / 2.0, y + h / 2.0, w / 2.0, h / 2.0);
+    (0..=STEPS)
+        .map(|k| {
+            let t = k as f32 / STEPS as f32 * std::f32::consts::TAU;
+            (cx + rx * t.cos(), cy + ry * t.sin())
+        })
+        .collect()
+}
+
 /// Draws the marks of `page` onto a picture that is `quarters` turns from the page. Highlights
-/// are tinted, rectangles and rounded rectangles get a 2 pixel outline, notes get a small marker.
+/// are tinted, rectangles and rounded rectangles get a 2 pixel outline, notes get a small marker,
+/// and strokes, lines, arrows, ovals, underlines and strike-throughs are drawn 2 pixels thick.
 /// The picture is the unrotated page scaled to its own size, so this runs on the export copy.
 pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
     let (w, h) = (img.w, img.h);
     for m in marks.iter().filter(|m| m.page == page) {
-        if m.kind == MarkKind::Ink {
-            burn_ink(img, m, quarters);
+        if m.kind.has_points() {
+            burn_points_mark(img, m, quarters);
             continue;
         }
         let r = rot_rect(m.rect, quarters);
@@ -554,7 +704,8 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
             x1 = (x0 + NOTE_PX).min(w);
             y1 = (y0 + NOTE_PX).min(h);
         }
-        if x1 <= x0 || y1 <= y0 {
+        let flat = matches!(m.kind, MarkKind::Underline | MarkKind::Strike);
+        if x1 <= x0 || (y1 <= y0 && !flat) {
             continue;
         }
         match m.kind {
@@ -579,13 +730,21 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
                     }
                 }
             }
-            MarkKind::Ink => {}
+            MarkKind::Oval => {
+                let ring = ellipse_points(x0 as f32, y0 as f32, (x1 - x0) as f32, (y1 - y0) as f32);
+                burn_path(img, &ring, m.color);
+            }
+            MarkKind::Underline | MarkKind::Strike => {
+                let y = if m.kind == MarkKind::Underline { y1 as f32 - 2.0 } else { (y0 + y1) as f32 / 2.0 };
+                burn_path(img, &[(x0 as f32, y), (x1 as f32, y)], m.color);
+            }
+            MarkKind::Ink | MarkKind::Line | MarkKind::Arrow => {}
         }
     }
 }
 
-/// Draws a stroke onto a turned picture: a 2 by 2 dot every pixel along each segment between its points.
-fn burn_ink(img: &mut Image, m: &Mark, quarters: u8) {
+/// Draws a stroke, a line or an arrow onto a turned picture.
+fn burn_points_mark(img: &mut Image, m: &Mark, quarters: u8) {
     let (w, h) = (img.w as f32, img.h as f32);
     let pts: Vec<(f32, f32)> = m
         .ink
@@ -595,6 +754,18 @@ fn burn_ink(img: &mut Image, m: &Mark, quarters: u8) {
             (a * w, b * h)
         })
         .collect();
+    burn_path(img, &pts, m.color);
+    if m.kind == MarkKind::Arrow {
+        if let [.., from, to] = pts.as_slice() {
+            if let Some([a, b]) = arrow_head(*from, *to, 1.0) {
+                burn_path(img, &[a, *to, b], m.color);
+            }
+        }
+    }
+}
+
+/// Draws a path of pixel points onto a picture: a 2 by 2 dot every pixel along each segment between its points.
+fn burn_path(img: &mut Image, pts: &[(f32, f32)], color: u32) {
     for pair in pts.windows(2) {
         let (a, b) = (pair[0], pair[1]);
         let steps = (b.0 - a.0).abs().max((b.1 - a.1).abs()).ceil().max(1.0) as usize;
@@ -607,7 +778,7 @@ fn burn_ink(img: &mut Image, m: &Mark, quarters: u8) {
                     let (px, py) = (x + dx, y + dy);
                     if px >= 0 && py >= 0 && (px as usize) < img.w && (py as usize) < img.h {
                         let i = py as usize * img.w + px as usize;
-                        img.px[i] = over(img.px[i], m.color);
+                        img.px[i] = over(img.px[i], color);
                     }
                 }
             }
@@ -686,6 +857,25 @@ mod tests {
         assert!((turned.w - 0.25).abs() < 1e-6 && (turned.h - 0.5).abs() < 1e-6);
         let back = Norm::from_corners(unrot_point(turned.x, turned.y, 1), unrot_point(turned.x + turned.w, turned.y + turned.h, 1));
         assert!((back.x - 0.0).abs() < 1e-6 && (back.w - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn zooming_to_a_selection_fits_it_to_the_canvas_and_centres_it() {
+        let middle = Norm { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+        let (scale, pan) = zoom_to_rect(middle, 0, 1000, 500, 500, 250).expect("a zoom");
+        assert!((scale - 1.0).abs() < 1e-6 && pan.0.abs() < 1e-3 && pan.1.abs() < 1e-3);
+        let corner = Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 };
+        let (scale, pan) = zoom_to_rect(corner, 0, 1000, 500, 500, 250).expect("a zoom");
+        assert!((scale - 1.0).abs() < 1e-6);
+        assert!((pan.0 - 250.0).abs() < 1e-3 && (pan.1 - 125.0).abs() < 1e-3, "{pan:?}");
+        // a tiny selection is held to the largest zoom, and an empty one gives nothing
+        let tiny = Norm { x: 0.5, y: 0.5, w: 0.0001, h: 0.0001 };
+        assert_eq!(zoom_to_rect(tiny, 0, 1000, 500, 500, 250).map(|z| z.0), Some(ZOOM_MAX));
+        assert_eq!(zoom_to_rect(Norm { x: 0.1, y: 0.1, w: 0.0, h: 0.2 }, 0, 10, 10, 10, 10), None);
+        assert_eq!(zoom_to_rect(middle, 0, 10, 10, 0, 10), None);
+        // turned a quarter, the selection's shown size swaps its sides
+        let (scale, _) = zoom_to_rect(Norm { x: 0.0, y: 0.0, w: 0.5, h: 1.0 }, 1, 500, 1000, 1000, 250).expect("a zoom");
+        assert!((scale - 0.5).abs() < 1e-6, "{scale}");
     }
 
     #[test]
@@ -768,8 +958,99 @@ mod tests {
         assert_eq!(picture.px[9 * 10 + 9], pack(255, 255, 255, 255));
     }
 
+    #[test]
+    fn lines_and_arrows_keep_their_ends_and_round_trip() {
+        let line = drag_mark(MarkKind::Arrow, 2, (0.8, 0.1), (0.2, 0.6), MARK_BLUE);
+        assert_eq!(line.ink, vec![(0.8, 0.1), (0.2, 0.6)]);
+        assert_eq!(line.rect, Norm::from_corners((0.8, 0.1), (0.2, 0.6)));
+        assert_eq!(parse_sidecar(&to_sidecar(std::slice::from_ref(&line))), vec![line]);
+        let oval = drag_mark(MarkKind::Oval, 0, (0.1, 0.1), (0.5, 0.4), MARK_BLUE);
+        assert!(oval.ink.is_empty());
+        for kind in [MarkKind::Oval, MarkKind::Underline, MarkKind::Strike, MarkKind::Line] {
+            let m = drag_mark(kind, 1, (0.1, 0.2), (0.4, 0.3), MARK_RED);
+            assert_eq!(parse_sidecar(&to_sidecar(std::slice::from_ref(&m))), vec![m], "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn a_drag_is_kept_by_what_the_mark_needs() {
+        let flat = Norm { x: 0.1, y: 0.5, w: 0.4, h: 0.0 };
+        assert!(drag_counts(MarkKind::Line, 30.0, flat, 0));
+        assert!(drag_counts(MarkKind::Underline, 30.0, flat, 0));
+        assert!(!drag_counts(MarkKind::Rect, 30.0, flat, 0));
+        assert!(!drag_counts(MarkKind::Arrow, 2.0, flat, 0));
+        let tall = Norm { x: 0.1, y: 0.1, w: 0.0, h: 0.3 };
+        assert!(!drag_counts(MarkKind::Strike, 30.0, tall, 0));
+        // turned a quarter, a page's height is the width on screen
+        assert!(drag_counts(MarkKind::Strike, 30.0, tall, 1));
+        assert!(!drag_counts(MarkKind::Strike, 30.0, flat, 1));
+    }
+
+    #[test]
+    fn a_text_line_lies_along_the_bottom_or_middle_as_the_page_is_shown() {
+        let r = Norm { x: 0.2, y: 0.3, w: 0.4, h: 0.1 };
+        for q in 0..4u8 {
+            let shown = rot_rect(r, q);
+            let ((ax, ay), (bx, by)) = text_line_ends(MarkKind::Underline, r, q);
+            let (a, b) = (rot_point(ax, ay, q), rot_point(bx, by, q));
+            assert!((a.1 - (shown.y + shown.h)).abs() < 1e-5 && (b.1 - (shown.y + shown.h)).abs() < 1e-5, "underline at turn {q}");
+            assert!((a.0.min(b.0) - shown.x).abs() < 1e-5 && (a.0.max(b.0) - (shown.x + shown.w)).abs() < 1e-5, "underline span at turn {q}");
+            let ((ax, ay), (bx, by)) = text_line_ends(MarkKind::Strike, r, q);
+            let (a, b) = (rot_point(ax, ay, q), rot_point(bx, by, q));
+            assert!((a.1 - (shown.y + shown.h / 2.0)).abs() < 1e-5 && (b.1 - a.1).abs() < 1e-5, "strike at turn {q}");
+        }
+    }
+
+    #[test]
+    fn an_arrow_head_sits_at_the_tip_and_opens_back_along_the_arrow() {
+        let [a, b] = arrow_head((0.0, 0.0), (100.0, 0.0), 1.0).expect("a head");
+        // a quarter of 100 is 25, held to 24, and the ends mirror each other across the arrow
+        for p in [a, b] {
+            let d = ((p.0 - 100.0).powi(2) + p.1.powi(2)).sqrt();
+            assert!((d - 24.0).abs() < 1e-3, "{d}");
+            assert!(p.0 < 100.0);
+        }
+        assert!((a.1 + b.1).abs() < 1e-4 && a.1.abs() > 1.0);
+        assert_eq!(arrow_head((1.0, 1.0), (1.0, 1.0), 1.0), None);
+        let [short, _] = arrow_head((0.0, 0.0), (10.0, 0.0), 1.0).expect("a head");
+        assert!((((short.0 - 10.0).powi(2) + short.1.powi(2)).sqrt() - 8.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn the_ellipse_outline_closes_and_stays_on_the_ellipse() {
+        let pts = ellipse_points(10.0, 20.0, 40.0, 20.0);
+        let (first, last) = (pts[0], pts[pts.len() - 1]);
+        assert!((first.0 - last.0).abs() < 1e-3 && (first.1 - last.1).abs() < 1e-3);
+        for (x, y) in pts {
+            let v = ((x - 30.0) / 20.0).powi(2) + ((y - 30.0) / 10.0).powi(2);
+            assert!((v - 1.0).abs() < 1e-3, "{v}");
+        }
+    }
+
+    #[test]
+    fn the_new_shapes_burn_into_an_export() {
+        let white = pack(255, 255, 255, 255);
+        let blank = || Image { w: 20, h: 20, px: vec![white; 400] };
+        let touched = |m: Mark| {
+            let mut picture = blank();
+            burn(&mut picture, &[m], 0, 0);
+            picture.px.iter().filter(|&&p| p != white).count()
+        };
+        assert!(touched(drag_mark(MarkKind::Oval, 0, (0.1, 0.1), (0.9, 0.9), MARK_BLUE)) > 20);
+        assert!(touched(drag_mark(MarkKind::Line, 0, (0.0, 0.0), (1.0, 1.0), MARK_BLUE)) > 20);
+        assert!(touched(drag_mark(MarkKind::Arrow, 0, (0.0, 0.5), (1.0, 0.5), MARK_BLUE)) > touched(drag_mark(MarkKind::Line, 0, (0.0, 0.5), (1.0, 0.5), MARK_BLUE)));
+        // an underline sits on the bottom edge of its rectangle, a strike-through in the middle
+        let mut under = blank();
+        burn(&mut under, &[drag_mark(MarkKind::Underline, 0, (0.0, 0.2), (1.0, 0.6), MARK_BLUE)], 0, 0);
+        assert_ne!(under.px[10 * 20 + 5], white);
+        assert_eq!(under.px[6 * 20 + 5], white);
+        let mut strike = blank();
+        burn(&mut strike, &[drag_mark(MarkKind::Strike, 0, (0.0, 0.2), (1.0, 0.6), MARK_RED)], 0, 0);
+        assert_ne!(strike.px[8 * 20 + 5], white);
+    }
+
     fn snap(n: usize) -> Snapshot {
-        Snapshot { marks: Vec::new(), order: (0..n).collect(), turns: vec![0; n], adjust: Adjust::default() }
+        Snapshot { marks: Vec::new(), order: (0..n).collect(), turns: vec![0; n], adjust: Adjust::default(), pixels: None }
     }
 
     #[test]

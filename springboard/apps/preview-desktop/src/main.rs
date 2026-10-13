@@ -1,32 +1,40 @@
 //! Viewer, a document window for images and PDFs: zoom and fit, rotation, page navigation with a
-//! thumbnails sidebar or an outline, page moves and deletes, markup (highlight, note, rectangle, rounded
-//! rectangle, freehand signature), Adjust Color through the image filter API, PNG and JPEG export at a
-//! chosen size, and Export PDF, which saves the markup, page order and rotation into a new PDF. A PDF is
-//! opened and drawn by its worker thread (`pdfjob`); pages and markup live in `document` and `canvas`, the
-//! pure state and maths in `model`, and the file writing in `export` and `pdfmarks`.
+//! thumbnails sidebar, an outline, a markup list, bookmarks or search hits, page moves and deletes, markup
+//! (highlight, note, shapes, underline, strike-through, freehand signature), Adjust Color through the image
+//! filter API, picture edits (select and crop, flip, instant alpha, background removal), a contact sheet, a
+//! slideshow, a magnifier, an Inspector, Find in PDF, PNG and JPEG export at a chosen size, and Export PDF,
+//! which saves the markup, page order and rotation into a new PDF. A PDF is opened and drawn by its worker
+//! thread (`pdfjob`); pages and markup live in `document` and `canvas`, the pure state and maths in `model`
+//! and `pixels`, and the file writing in `export` and `pdfmarks`.
 
 mod canvas;
 mod document;
 mod export;
+mod find;
+mod inspector;
 mod model;
 mod pdfjob;
 mod pdfmarks;
+mod pixels;
 mod printjob;
 mod recents;
 
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::proto::DocMode;
+use bifrost_app::pasteboard::{NativePasteboard, PNG};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
-use canvas::{Action, Layout, PictureCache, Scene, Side, Tool};
+use canvas::{Action, Layout, Mode, PictureCache, Scene, Side, Tool};
 use document::Document;
 use export::Raster;
-use model::{Adjust, History, Mark, MarkKind, Norm, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE};
+use model::{Adjust, History, Mark, MarkKind, Norm, Pixels, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE, MARK_RED};
 use pdfjob::{Inbox, Job, Reply};
 use recents::Recents;
 use springboard::shell::books::engine;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::mpsc::Sender;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// File > Open and the Open Recent items. The ids sit above every `Action` id.
 const MENU_OPEN: u32 = 0x5001;
@@ -34,6 +42,8 @@ const MENU_CLEAR_RECENTS: u32 = 0x5002;
 const MENU_RECENT: u32 = 0x5010;
 /// The kinds of file the open panel offers.
 const OPEN_TYPES: [&str; 4] = ["pdf", "png", "jpg", "jpeg"];
+/// The type a JPEG has on the pasteboard (the PNG type is `bifrost_app::pasteboard::PNG`).
+const JPEG: &str = "public.jpeg";
 
 /// A pointer gesture in progress. The coordinates are canvas or sidebar pixels.
 enum Gesture {
@@ -45,6 +55,10 @@ enum Gesture {
     Drag { start: (f32, f32), now: (f32, f32), kind: MarkKind },
     /// Drawing a stroke: its points so far.
     Ink { points: Vec<(f32, f32)> },
+    /// Dragging out the selection rectangle.
+    Select { start: (f32, f32), now: (f32, f32) },
+    /// Dragging the contact sheet up or down; a short press picks the page under it.
+    Sheet { last: f32, start: (f32, f32) },
 }
 
 /// A PDF on its way from its worker: the worker's job sender and the inbox its replies come back in.
@@ -80,6 +94,23 @@ struct Viewer {
     sidebar: bool,
     /// The files opened lately, for File > Open Recent.
     recents: Recents,
+    /// One page, the contact sheet, or the slideshow.
+    mode: Mode,
+    /// The zoom to go back to when the slideshow ends.
+    slideshow_zoom: Zoom,
+    contact_scroll: f32,
+    /// The selected rectangle and the source page it is on.
+    selection: Option<(usize, Norm)>,
+    /// Whether the magnifier is on, and where the pointer last was over the canvas.
+    loupe_on: bool,
+    loupe: Option<(f32, f32)>,
+    /// Whether the Inspector is shown, and what is known about the open file.
+    inspector: bool,
+    facts: inspector::Facts,
+    /// The search text being typed after Edit > Find, the text last searched for and its hits.
+    finding: Option<String>,
+    query: String,
+    found: Vec<find::Hit>,
 }
 
 impl Viewer {
@@ -102,14 +133,32 @@ impl Viewer {
             goto: None,
             sidebar: true,
             recents: Recents::default(),
+            mode: Mode::Page,
+            slideshow_zoom: Zoom::Fit,
+            contact_scroll: 0.0,
+            selection: None,
+            loupe_on: false,
+            loupe: None,
+            inspector: false,
+            facts: inspector::Facts::default(),
+            finding: None,
+            query: String::new(),
+            found: Vec::new(),
         }
     }
 
-    /// The window layout: the sidebar takes no room while it is hidden.
+    /// The window layout: the sidebar takes no room while it is hidden, the Inspector takes room while it is shown, and
+    /// the slideshow shows the page and nothing else.
     fn layout(&self, ui: &Ui, w: i32, h: i32) -> Layout {
+        if self.mode == Mode::Slideshow {
+            return Layout::bare(w, h);
+        }
         let mut lay = Layout::new(ui, w, h);
         if !self.sidebar {
             lay.side = 0;
+        }
+        if self.inspector {
+            lay.inspector = Layout::inspector_width(ui, w);
         }
         lay
     }
@@ -117,7 +166,13 @@ impl Viewer {
     /// The document's editable state, or None with no document.
     fn snapshot(&self) -> Option<Snapshot> {
         let doc = self.doc.as_ref()?;
-        Some(Snapshot { marks: doc.marks.clone(), order: doc.order.clone(), turns: doc.turns.clone(), adjust: self.adjust })
+        Some(Snapshot {
+            marks: doc.marks.clone(),
+            order: doc.order.clone(),
+            turns: doc.turns.clone(),
+            adjust: self.adjust,
+            pixels: doc.picture_rc().map(Pixels),
+        })
     }
 
     /// Puts a state from the undo history back.
@@ -127,7 +182,11 @@ impl Viewer {
             doc.marks = state.marks;
             doc.order = state.order;
             doc.turns = state.turns;
+            if let Some(Pixels(picture)) = state.pixels {
+                doc.replace_picture(picture);
+            }
         }
+        self.selection = None;
         self.adjust = state.adjust;
         let count = self.doc.as_ref().map_or(0, |d| d.count());
         let keep = self.view.page;
@@ -158,6 +217,14 @@ impl Viewer {
         self.history = History::default();
         self.trail = Trail::default();
         self.goto = None;
+        self.finding = None;
+        self.found.clear();
+        self.query.clear();
+        self.mode = Mode::Page;
+        self.contact_scroll = 0.0;
+        self.selection = None;
+        self.loupe = None;
+        self.facts = inspector::read(path);
         self.status.clear();
         self.remember(path);
         if matches!(engine::format_of(path), Some(engine::Format::Pdf)) {
@@ -240,6 +307,7 @@ impl Viewer {
                 }
             }
         }
+        let mut results = None;
         if let Some(doc) = &self.doc {
             let (arrived, replies) = doc.take_replies();
             changed |= arrived;
@@ -253,11 +321,38 @@ impl Viewer {
                         };
                     }
                     Reply::Printed(status) => self.status = status,
+                    Reply::Found(query, hits) => results = Some((query, hits)),
                     _ => {}
                 }
             }
         }
+        if let Some((query, hits)) = results {
+            self.show_results(query, hits);
+        }
         changed
+    }
+
+    /// Takes the hits of a search: lists them in the sidebar and goes to the first one on or after the shown page.
+    fn show_results(&mut self, query: String, hits: Vec<find::Hit>) {
+        self.status = find::summary(&query, hits.len());
+        self.found = hits;
+        if self.found.is_empty() {
+            return;
+        }
+        self.side = Side::Search;
+        self.sidebar = true;
+        self.view.sidebar_scroll = 0.0;
+        if let Some(page) = find::first_from(&self.hit_places(), self.view.page) {
+            self.go_page(page);
+        }
+    }
+
+    /// The shown pages that hold a hit, in hit order. A hit on a deleted page has none.
+    fn hit_places(&self) -> Vec<usize> {
+        match &self.doc {
+            Some(doc) => self.found.iter().filter_map(|h| doc.display_of(h.page)).collect(),
+            None => Vec::new(),
+        }
     }
 
     fn save(&self) {
@@ -298,11 +393,41 @@ impl Viewer {
             Gesture::Drag { start, now, kind } => {
                 let a = canvas::to_source(&p, q, start.0, start.1);
                 let b = canvas::to_source(&p, q, now.0, now.1);
-                Some(Mark { kind: *kind, page: src, rect: Norm::from_corners(a, b), color: color_for(*kind), text: String::new(), ink: Vec::new() })
+                Some(model::drag_mark(*kind, src, a, b, color_for(*kind)))
             }
             Gesture::Ink { points } => Some(stroke(src, points.iter().map(|&(x, y)| canvas::to_source(&p, q, x, y)).collect())),
             _ => None,
         }
+    }
+
+    /// The selection on the shown page, if there is one.
+    fn selection_on_page(&self) -> Option<Norm> {
+        let (page, rect) = self.selection?;
+        (self.src()? == page).then_some(rect)
+    }
+
+    /// The selection to draw: the one being dragged out, else the saved one.
+    fn selection_now(&self, lay: &Layout) -> Option<Norm> {
+        if let Some(Gesture::Select { start, now }) = &self.gesture {
+            let p = self.placed(lay)?;
+            let q = self.view.quarters;
+            let (a, b) = (canvas::to_source(&p, q, start.0, start.1), canvas::to_source(&p, q, now.0, now.1));
+            return Some(Norm::from_corners(a, b));
+        }
+        self.selection_on_page()
+    }
+
+    /// The rows the Inspector lists for the open file.
+    fn inspector_rows(&self) -> Vec<(String, String)> {
+        let Some(doc) = &self.doc else { return Vec::new() };
+        let shown = inspector::Shown {
+            pages: doc.count(),
+            is_pdf: doc.is_pdf,
+            size: doc.sizes.first().copied(),
+            marks: &doc.marks,
+            bookmarks: doc.bookmarks.len(),
+        };
+        inspector::rows(&self.facts, &shown)
     }
 
     /// The size the zoom steps work from: the turned picture, or the canvas with no document.
@@ -317,6 +442,7 @@ impl Viewer {
         match (&self.doc, self.side) {
             (Some(doc), Side::Pages) => canvas::rows(ui, doc),
             (Some(doc), Side::Outline) => canvas::outline_rows(ui, doc),
+            (Some(doc), side) => canvas::list_rows(ui, canvas::side_items(doc, side, &self.found).len()),
             (None, _) => Vec::new(),
         }
     }
@@ -476,7 +602,291 @@ impl Viewer {
                 self.sidebar = !self.sidebar;
                 true
             }
+            Action::ToggleMagnifier => {
+                self.loupe_on = !self.loupe_on;
+                if !self.loupe_on {
+                    self.loupe = None;
+                }
+                true
+            }
+            Action::Inspector => {
+                self.inspector = !self.inspector;
+                true
+            }
+            Action::ShowLocation => {
+                self.show_location();
+                true
+            }
+            Action::ContactSheet => {
+                self.toggle_contact(ui, lay);
+                true
+            }
+            Action::Slideshow => {
+                self.toggle_slideshow();
+                true
+            }
+            Action::ZoomToSelection => {
+                self.zoom_to_selection(lay);
+                true
+            }
+            Action::NewFromClipboard => {
+                self.new_from_clipboard();
+                true
+            }
+            Action::Find => {
+                self.start_find();
+                true
+            }
+            Action::FindNext | Action::FindPrevious => {
+                self.find_step(action == Action::FindNext);
+                true
+            }
             _ => self.track(|v| v.act_edit(ui, lay, action)),
+        }
+    }
+
+    /// Edit > Find: the status line takes the search text. Only a PDF has text to search.
+    fn start_find(&mut self) {
+        if !self.doc.as_ref().is_some_and(|d| d.is_pdf) {
+            self.status = "Find works in PDF documents.".into();
+            return;
+        }
+        self.stop_editing();
+        self.finding = Some(self.query.clone());
+        self.show_finding();
+    }
+
+    /// Shows what has been typed after Find in the status line.
+    fn show_finding(&mut self) {
+        self.status = format!("Find: {}|", self.finding.as_deref().unwrap_or(""));
+    }
+
+    /// A key while the search text is being typed.
+    fn key_find(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Text(t) => {
+                if let Some(f) = &mut self.finding {
+                    f.extend(t.chars().filter(|c| !c.is_control()));
+                }
+            }
+            KeyInput::Code(8) => {
+                if let Some(f) = &mut self.finding {
+                    f.pop();
+                }
+            }
+            KeyInput::Code(13) => {
+                let query = self.finding.take().unwrap_or_default().trim().to_string();
+                self.status.clear();
+                if !query.is_empty() {
+                    self.query = query.clone();
+                    let sent = self.doc.as_ref().is_some_and(|d| d.send(find::find_job(query)));
+                    self.status = if sent { "Searching".into() } else { "The document is not open.".into() };
+                }
+                return true;
+            }
+            KeyInput::Code(27) => {
+                self.finding = None;
+                self.status.clear();
+                return true;
+            }
+            _ => return false,
+        }
+        self.show_finding();
+        true
+    }
+
+    /// Edit > Find Next and Find Previous: goes to the next page that holds a hit, wrapping round. With nothing searched
+    /// for yet, asks for the text.
+    fn find_step(&mut self, forward: bool) {
+        if self.found.is_empty() {
+            if self.query.is_empty() {
+                self.start_find();
+            } else {
+                self.status = find::summary(&self.query, 0);
+            }
+            return;
+        }
+        match find::next_page(&self.hit_places(), self.view.page, forward) {
+            Some(page) => self.go_page(page),
+            None => self.status = find::summary(&self.query, 0),
+        }
+    }
+
+    /// Tools > Show Location Info: the place a picture was taken, from its EXIF block, in the status line and the Inspector.
+    fn show_location(&mut self) {
+        match inspector::location(&self.facts) {
+            Some(place) => {
+                self.status = format!("Location: {place}");
+                self.inspector = true;
+            }
+            None => self.status = "This file has no location information.".into(),
+        }
+    }
+
+    /// View > Contact Sheet: all the pages in a grid, or back to one page. The sheet opens scrolled to the shown page.
+    fn toggle_contact(&mut self, ui: &Ui, lay: &Layout) {
+        if self.mode == Mode::Contact {
+            self.mode = Mode::Page;
+            return;
+        }
+        self.stop_editing();
+        let Some(doc) = &self.doc else { return };
+        let (_, _, cw, ch) = lay.canvas();
+        let sheet = canvas::contact_sheet(ui, doc, cw);
+        let top = sheet.origin(self.view.page).1;
+        let most = (sheet.height(doc.count()) - ch).max(0) as f32;
+        self.contact_scroll = ((top - ch / 3) as f32).clamp(0.0, most);
+        self.mode = Mode::Contact;
+    }
+
+    /// View > Slideshow: the pages one after another with nothing else on screen, or back to the window.
+    fn toggle_slideshow(&mut self) {
+        if self.mode == Mode::Slideshow {
+            self.leave_slideshow();
+            return;
+        }
+        if self.doc.is_none() {
+            return;
+        }
+        self.stop_editing();
+        self.slideshow_zoom = self.view.zoom;
+        self.view.zoom = Zoom::Fit;
+        self.view.pan = (0.0, 0.0);
+        self.mode = Mode::Slideshow;
+    }
+
+    fn leave_slideshow(&mut self) {
+        self.mode = Mode::Page;
+        self.view.zoom = self.slideshow_zoom;
+    }
+
+    /// Shows the page `delta` pages on in the slideshow. It stops at the first and last page.
+    fn slide_by(&mut self, delta: i64) {
+        let target = (self.view.page as i64 + delta).max(0) as usize;
+        self.go_page(target);
+    }
+
+    /// A key during the slideshow: arrows, space and Return move through the pages, Escape ends it.
+    fn key_slideshow(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Code(27) => self.leave_slideshow(),
+            KeyInput::Code(37) | KeyInput::Code(38) | KeyInput::Code(8) => self.slide_by(-1),
+            KeyInput::Code(39) | KeyInput::Code(40) | KeyInput::Code(13) => self.slide_by(1),
+            KeyInput::Text(t) if t == " " => self.slide_by(1),
+            _ => return false,
+        }
+        true
+    }
+
+    /// View > Zoom to Selection: the zoom and pan that fill the canvas with the selected rectangle.
+    fn zoom_to_selection(&mut self, lay: &Layout) {
+        let Some(sel) = self.selection_on_page() else {
+            self.status = "Select an area first.".into();
+            return;
+        };
+        let (w, h) = self.page_dims(lay);
+        let (_, _, cw, ch) = lay.canvas();
+        if let Some((scale, pan)) = model::zoom_to_rect(sel, self.view.quarters, w, h, cw as usize, ch as usize) {
+            self.view.zoom = Zoom::Factor(scale);
+            self.view.pan = pan;
+        }
+    }
+
+    /// File > New from Clipboard: opens the picture on the clipboard. It is kept as a file in the app's data folder,
+    /// because the markup and the exports belong to a file.
+    fn new_from_clipboard(&mut self) {
+        let board = NativePasteboard::general();
+        let Some(bytes) = board.data(PNG).or_else(|| board.data(JPEG)) else {
+            self.status = "The clipboard holds no picture.".into();
+            return;
+        };
+        if let Err(e) = document::decode_picture(&bytes) {
+            self.status = format!("The clipboard picture could not be read: {e}");
+            return;
+        }
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let name = document::clipboard_file_name(&bytes, stamp);
+        match recents::keep_copy(&self.data_dir, &name, &bytes) {
+            Ok(path) => self.open_path(&path),
+            Err(e) => self.status = format!("Could not keep the clipboard picture: {e}"),
+        }
+    }
+
+    /// Tools > Crop: the picture keeps the selected rectangle, and the markup moves with it.
+    fn crop(&mut self) {
+        self.stop_editing();
+        let Some((page, sel)) = self.selection else {
+            self.status = "Select an area to crop first.".into();
+            return;
+        };
+        let Some(doc) = &mut self.doc else { return };
+        let Some(picture) = doc.picture_rc() else {
+            self.status = "Crop works on pictures, not PDFs.".into();
+            return;
+        };
+        match pixels::crop(&picture, sel) {
+            Some(cropped) => {
+                doc.marks = pixels::crop_marks(&doc.marks, page, sel);
+                doc.replace_picture(Rc::new(cropped));
+                self.selection = None;
+                self.view.pan = (0.0, 0.0);
+                self.status.clear();
+            }
+            None => self.status = "The selection is empty.".into(),
+        }
+        self.save();
+    }
+
+    /// Tools > Flip Horizontal and Flip Vertical: mirrors the shown picture, and the markup with it.
+    fn flip(&mut self, horizontal: bool) {
+        self.stop_editing();
+        let axis = pixels::source_horizontal(horizontal, self.view.quarters);
+        let Some(doc) = &mut self.doc else { return };
+        let Some(picture) = doc.picture_rc() else {
+            self.status = "Flip works on pictures, not PDFs.".into();
+            return;
+        };
+        doc.marks = pixels::flip_marks(&doc.marks, 0, axis);
+        doc.replace_picture(Rc::new(pixels::flip(&picture, axis)));
+        self.selection = None;
+        self.save();
+    }
+
+    /// Tools > Remove Background: the background that reaches the picture's edge becomes transparent.
+    fn remove_background(&mut self) {
+        self.stop_editing();
+        let Some(doc) = &mut self.doc else { return };
+        let Some(picture) = doc.picture_rc() else {
+            self.status = "Remove Background works on pictures, not PDFs.".into();
+            return;
+        };
+        let cleared = pixels::remove_background(&picture, pixels::TOLERANCE);
+        if cleared.px == picture.px {
+            self.status = "There is no background to remove.".into();
+        } else {
+            doc.replace_picture(Rc::new(cleared));
+            self.status = "Background removed. Export as PNG to keep the transparency.".into();
+        }
+    }
+
+    /// The Instant Alpha tool: the region of one colour around the point clicked becomes transparent.
+    fn instant_alpha(&mut self, lay: &Layout, x: f32, y: f32) {
+        let Some(placed) = self.placed(lay) else { return };
+        let (u, v) = canvas::to_source(&placed, self.view.quarters, x, y);
+        let Some(doc) = &mut self.doc else { return };
+        let Some(picture) = doc.picture_rc() else {
+            self.status = "Instant Alpha works on pictures, not PDFs.".into();
+            return;
+        };
+        if picture.w == 0 || picture.h == 0 {
+            return;
+        }
+        let px = ((u * picture.w as f32) as usize).min(picture.w - 1);
+        let py = ((v * picture.h as f32) as usize).min(picture.h - 1);
+        let cleared = pixels::instant_alpha(&picture, px, py, pixels::TOLERANCE);
+        if cleared.px != picture.px {
+            doc.replace_picture(Rc::new(cleared));
+            self.status = "Export as PNG to keep the transparency.".into();
         }
     }
 
@@ -506,13 +916,24 @@ impl Viewer {
                 self.stop_editing();
                 self.tool = tool;
             }
-            Action::ShowPages | Action::ShowOutline => {
-                let side = if action == Action::ShowPages { Side::Pages } else { Side::Outline };
+            Action::ShowPages | Action::ShowOutline | Action::ShowNotes | Action::ShowBookmarks | Action::ShowSearch => {
+                let side = match action {
+                    Action::ShowPages => Side::Pages,
+                    Action::ShowOutline => Side::Outline,
+                    Action::ShowNotes => Side::Notes,
+                    Action::ShowBookmarks => Side::Bookmarks,
+                    _ => Side::Search,
+                };
+                self.sidebar = true;
                 if self.side != side {
                     self.side = side;
                     self.view.sidebar_scroll = 0.0;
                 }
             }
+            Action::Crop => self.crop(),
+            Action::FlipHorizontal => self.flip(true),
+            Action::FlipVertical => self.flip(false),
+            Action::RemoveBackground => self.remove_background(),
             Action::MovePageUp | Action::MovePageDown => {
                 let delta = if action == Action::MovePageUp { -1 } else { 1 };
                 if let Some(doc) = &mut self.doc {
@@ -549,7 +970,17 @@ impl Viewer {
             | Action::AddBookmark
             | Action::NextBookmark
             | Action::PreviousBookmark
-            | Action::ToggleSidebar => {}
+            | Action::ToggleSidebar
+            | Action::ToggleMagnifier
+            | Action::Inspector
+            | Action::ShowLocation
+            | Action::ContactSheet
+            | Action::Slideshow
+            | Action::ZoomToSelection
+            | Action::NewFromClipboard
+            | Action::Find
+            | Action::FindNext
+            | Action::FindPrevious => {}
             Action::ExportPng => self.export_raster(Raster::Png),
             Action::ExportJpeg => self.export_raster(Raster::Jpeg),
             Action::ExportPdf => self.export_pdf(),
@@ -570,7 +1001,9 @@ impl Viewer {
             doc.marks.clear();
             doc.order = (0..n).collect();
             doc.turns = vec![0; n];
+            doc.restore_original();
         }
+        self.selection = None;
         self.adjust = Adjust::default();
         let count = self.doc.as_ref().map_or(0, |d| d.count());
         let keep = self.view.page;
@@ -638,18 +1071,27 @@ impl Viewer {
 
     fn touch(&mut self, ui: &Ui, width: i32, height: i32, kind: TouchKind, x: f32, y: f32) -> bool {
         let lay = self.layout(ui, width, height);
+        let (cx, cy, cw, ch) = lay.canvas();
+        let over_canvas = x >= cx as f32 && x < (cx + cw) as f32 && y >= cy as f32 && y < (cy + ch) as f32;
+        if self.loupe_on && over_canvas {
+            self.loupe = Some((x, y));
+        }
         match kind {
             TouchKind::Down => {
                 // a press ends the note being typed (an empty note is dropped) before the edit is recorded
                 self.stop_editing();
-                self.track(|v| v.touch_down(ui, &lay, x, y))
+                self.track(|v| v.touch_down(ui, &lay, x, y)) || self.loupe_on
             }
-            TouchKind::Move => self.touch_move(ui, &lay, x, y),
-            TouchKind::Up | TouchKind::Cancel => self.track(|v| v.touch_up(&lay, x, y)),
+            TouchKind::Move => self.touch_move(ui, &lay, x, y) || (self.loupe_on && over_canvas),
+            TouchKind::Up | TouchKind::Cancel => self.track(|v| v.touch_up(ui, &lay, x, y)),
         }
     }
 
     fn touch_down(&mut self, ui: &Ui, lay: &Layout, x: f32, y: f32) -> bool {
+        if self.mode == Mode::Slideshow {
+            self.slide_by(1);
+            return true;
+        }
         if let Some(action) = canvas::button_hit(ui, lay, x, y) {
             return self.act(ui, lay, action);
         }
@@ -674,15 +1116,38 @@ impl Viewer {
                             self.go_page(page);
                         }
                     }
+                    side => {
+                        // a markup, bookmark or search entry goes to the page it names
+                        let target = self.doc.as_ref().and_then(|d| canvas::side_items(d, side, &self.found).get(i).and_then(|item| item.1));
+                        if let Some(page) = target {
+                            self.go_page(page);
+                        }
+                    }
                 }
             }
             self.gesture = Some(Gesture::Scroll { last: y });
             return true;
         }
-        if self.doc.is_none() {
+        let (cx, _, cw, _) = lay.canvas();
+        if self.doc.is_none() || x >= (cx + cw) as f32 {
             return false;
         }
         self.stop_editing();
+        if self.mode == Mode::Contact {
+            self.gesture = Some(Gesture::Sheet { last: y, start: (x, y) });
+            return true;
+        }
+        match self.tool {
+            Tool::Select => {
+                self.gesture = Some(Gesture::Select { start: (x, y), now: (x, y) });
+                return true;
+            }
+            Tool::Alpha => {
+                self.instant_alpha(lay, x, y);
+                return true;
+            }
+            _ => {}
+        }
         match self.tool.mark_kind() {
             None => self.gesture = Some(Gesture::Pan { last: (x, y) }),
             Some(MarkKind::Note) => {
@@ -732,11 +1197,29 @@ impl Viewer {
                 }
                 true
             }
+            Some(Gesture::Select { now, .. }) => {
+                *now = (x, y);
+                true
+            }
+            Some(Gesture::Sheet { last, .. }) => {
+                let delta = y - *last;
+                *last = y;
+                let most = self.contact_max(ui, lay);
+                self.contact_scroll = (self.contact_scroll - delta).clamp(0.0, most);
+                true
+            }
             None => false,
         }
     }
 
-    fn touch_up(&mut self, lay: &Layout, x: f32, y: f32) -> bool {
+    /// How far the contact sheet scrolls.
+    fn contact_max(&self, ui: &Ui, lay: &Layout) -> f32 {
+        let Some(doc) = &self.doc else { return 0.0 };
+        let (_, _, cw, ch) = lay.canvas();
+        (canvas::contact_sheet(ui, doc, cw).height(doc.count()) - ch).max(0) as f32
+    }
+
+    fn touch_up(&mut self, ui: &Ui, lay: &Layout, x: f32, y: f32) -> bool {
         let Some(gesture) = self.gesture.take() else { return false };
         match gesture {
             Gesture::Drag { start, kind, .. } => {
@@ -745,12 +1228,37 @@ impl Viewer {
                     let q = self.view.quarters;
                     let a = canvas::to_source(&p, q, start.0, start.1);
                     let b = canvas::to_source(&p, q, x, y);
-                    let rect = Norm::from_corners(a, b);
-                    if moved >= 4.0 && rect.w > 0.0 && rect.h > 0.0 {
+                    let mark = model::drag_mark(kind, src, a, b, color_for(kind));
+                    if model::drag_counts(kind, moved, mark.rect, q) {
                         if let Some(doc) = &mut self.doc {
-                            doc.marks.push(Mark { kind, page: src, rect, color: color_for(kind), text: String::new(), ink: Vec::new() });
+                            doc.marks.push(mark);
                         }
                         self.save();
+                    }
+                }
+            }
+            Gesture::Select { start, .. } => {
+                let moved = (x - start.0).abs() + (y - start.1).abs();
+                self.selection = None;
+                if let (Some(p), Some(src)) = (self.placed(lay), self.src()) {
+                    let q = self.view.quarters;
+                    let rect = Norm::from_corners(canvas::to_source(&p, q, start.0, start.1), canvas::to_source(&p, q, x, y));
+                    if moved >= 4.0 && rect.w > 0.0 && rect.h > 0.0 {
+                        self.selection = Some((src, rect));
+                    }
+                }
+            }
+            Gesture::Sheet { start, .. } => {
+                let moved = (x - start.0).abs() + (y - start.1).abs();
+                if moved < 4.0 {
+                    let (cx, cy, cw, _) = lay.canvas();
+                    let hit = self.doc.as_ref().and_then(|doc| {
+                        let sheet = canvas::contact_sheet(ui, doc, cw);
+                        sheet.hit(doc.count(), self.contact_scroll, x - cx as f32, y - cy as f32)
+                    });
+                    if let Some(page) = hit {
+                        self.go_page(page);
+                        self.mode = Mode::Page;
                     }
                 }
             }
@@ -773,8 +1281,18 @@ impl Viewer {
     }
 
     fn key(&mut self, ctx: &Ctx, key: KeyInput) -> bool {
+        if self.mode == Mode::Slideshow {
+            return self.key_slideshow(&key);
+        }
         if self.goto.is_some() {
             return self.key_goto(&key);
+        }
+        if self.finding.is_some() {
+            return self.key_find(&key);
+        }
+        if self.mode == Mode::Contact && key == KeyInput::Code(27) {
+            self.mode = Mode::Page;
+            return true;
         }
         match &key {
             KeyInput::Text(text) => {
@@ -833,6 +1351,7 @@ fn stroke(page: usize, ink: Vec<(f32, f32)>) -> Mark {
 fn color_for(kind: MarkKind) -> u32 {
     match kind {
         MarkKind::Highlight => HIGHLIGHT,
+        MarkKind::Strike => MARK_RED,
         _ => MARK_BLUE,
     }
 }
@@ -852,8 +1371,21 @@ fn path_from_url(url: &str) -> Option<PathBuf> {
 }
 
 fn item(action: Action, enabled: bool, checked: bool) -> AppMenuItem {
-    let mut m = AppMenuItem::new(action.id(), action.label()).enabled(enabled).checked(checked);
+    item_labelled(action, action.label(), enabled, checked)
+}
+
+/// A menu item for `action` under a different label, for the items that switch between two (Show and Hide).
+fn item_labelled(action: Action, label: &str, enabled: bool, checked: bool) -> AppMenuItem {
+    let mut m = AppMenuItem::new(action.id(), label).enabled(enabled).checked(checked);
     m = match action {
+        Action::NewFromClipboard => m.key("cmd+n"),
+        Action::Find => m.key("cmd+f"),
+        Action::FindNext => m.key("cmd+g"),
+        Action::FindPrevious => m.key("cmd+shift+g"),
+        Action::Crop => m.key("cmd+k"),
+        Action::Inspector => m.key("cmd+i"),
+        Action::ContactSheet => m.key("cmd+2"),
+        Action::Slideshow => m.key("cmd+shift+f"),
         Action::ZoomIn => m.key("cmd+="),
         Action::ZoomOut => m.key("cmd+-"),
         Action::ActualSize => m.key("cmd+0"),
@@ -894,15 +1426,47 @@ impl App for Viewer {
         let count = self.doc.as_ref().map_or(0, |d| d.count());
         let bookmarks = self.doc.as_ref().map(|d| d.bookmark_places()).unwrap_or_default();
         let outline = self.doc.as_ref().is_some_and(|d| pdf && !d.outline.is_empty());
-        let tool_items: Vec<AppMenuItem> = [Tool::Pan, Tool::Highlight, Tool::Note, Tool::Rect, Tool::Rounded, Tool::Sign]
+        let is_picture = open && !pdf;
+        let has_selection = self.selection_on_page().is_some();
+        let tools = [
+            Tool::Pan,
+            Tool::Select,
+            Tool::Highlight,
+            Tool::Underline,
+            Tool::Strike,
+            Tool::Note,
+            Tool::Rect,
+            Tool::Rounded,
+            Tool::Oval,
+            Tool::Line,
+            Tool::Arrow,
+            Tool::Sign,
+            Tool::Alpha,
+        ];
+        let mut tool_items: Vec<AppMenuItem> = tools
             .into_iter()
-            .map(|t| item(Action::UseTool(t), open, self.tool == t))
+            .map(|t| item(Action::UseTool(t), if t == Tool::Alpha { is_picture } else { open }, self.tool == t))
             .collect();
+        tool_items.push(AppMenuItem::separator());
+        tool_items.extend([
+            item(Action::Crop, is_picture && has_selection, false),
+            item(Action::FlipHorizontal, is_picture, false),
+            item(Action::FlipVertical, is_picture, false),
+            item(Action::RemoveBackground, is_picture, false),
+            AppMenuItem::separator(),
+            item_labelled(Action::ToggleMagnifier, if self.loupe_on { "Hide Magnifier" } else { "Show Magnifier" }, open, self.loupe_on),
+            item_labelled(Action::Inspector, if self.inspector { "Hide Inspector" } else { "Show Inspector" }, open, self.inspector),
+            item(Action::ShowLocation, open, false),
+        ]);
         let scale_items: Vec<AppMenuItem> = [Action::ExportAt25, Action::ExportAt50, Action::ExportAt100, Action::ExportAt200]
             .into_iter()
             .map(|a| item(a, open, a.export_scale() == Some(self.export_scale)))
             .collect();
-        let mut file_items = vec![AppMenuItem::new(MENU_OPEN, "Open\u{2026}").key("cmd+o"), AppMenuItem::submenu("Open Recent")];
+        let mut file_items = vec![
+            item(Action::NewFromClipboard, true, false),
+            AppMenuItem::new(MENU_OPEN, "Open\u{2026}").key("cmd+o"),
+            AppMenuItem::submenu("Open Recent"),
+        ];
         for (i, path) in self.recents.paths().iter().enumerate() {
             file_items.push(AppMenuItem::new(MENU_RECENT + i as u32, &name_of(path)).depth(1));
         }
@@ -923,7 +1487,14 @@ impl App for Viewer {
             AppMenu { title: "File".into(), items: file_items },
             AppMenu {
                 title: "Edit".into(),
-                items: vec![item(Action::Undo, self.history.can_undo(), false), item(Action::Redo, self.history.can_redo(), false)],
+                items: vec![
+                    item(Action::Undo, self.history.can_undo(), false),
+                    item(Action::Redo, self.history.can_redo(), false),
+                    AppMenuItem::separator(),
+                    item(Action::Find, pdf, false),
+                    item(Action::FindNext, pdf, false),
+                    item(Action::FindPrevious, pdf, false),
+                ],
             },
             AppMenu {
                 title: "View".into(),
@@ -936,9 +1507,17 @@ impl App for Viewer {
                     item(Action::RotateLeft, picture, false),
                     item(Action::RotateRight, picture, false),
                     AppMenuItem::separator(),
+                    item(Action::ZoomToSelection, has_selection, false),
+                    AppMenuItem::separator(),
+                    item_labelled(Action::ContactSheet, if self.mode == Mode::Contact { "Single Page" } else { "Contact Sheet" }, open, self.mode == Mode::Contact),
+                    item(Action::Slideshow, open, false),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(Action::ToggleSidebar.id(), sidebar_label).key("cmd+alt+s").enabled(open),
                     item(Action::ShowPages, open, self.side == Side::Pages),
                     item(Action::ShowOutline, outline, self.side == Side::Outline),
+                    item(Action::ShowNotes, open, self.side == Side::Notes),
+                    item(Action::ShowBookmarks, open, self.side == Side::Bookmarks),
+                    item(Action::ShowSearch, !self.found.is_empty(), self.side == Side::Search),
                 ],
             },
             AppMenu {
@@ -1041,6 +1620,7 @@ impl App for Viewer {
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
         let lay = self.layout(&ctx.ui, s.w as i32, s.h as i32);
         let draft = self.draft(&lay);
+        let rows = if self.inspector && self.mode != Mode::Slideshow { self.inspector_rows() } else { Vec::new() };
         let scene = Scene {
             doc: self.doc.as_ref(),
             view: self.view,
@@ -1050,6 +1630,12 @@ impl App for Viewer {
             draft,
             editing: self.editing,
             status: &self.status,
+            mode: self.mode,
+            selection: self.selection_now(&lay),
+            loupe: if self.loupe_on { self.loupe } else { None },
+            inspector: (lay.inspector > 0).then_some(rows.as_slice()),
+            contact_scroll: self.contact_scroll,
+            found: &self.found,
         };
         canvas::draw(s, &ctx.ui, &lay, &scene, &mut self.cache);
         let mut d = Damage::new(s.w, s.h);
@@ -1065,6 +1651,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::kit::{pack, Image};
 
     #[test]
     fn open_requests_take_file_urls_and_absolute_paths_only() {
@@ -1077,6 +1664,187 @@ mod tests {
     fn highlight_and_shapes_have_their_colours() {
         assert_eq!(color_for(MarkKind::Highlight), HIGHLIGHT);
         assert_eq!(color_for(MarkKind::Rect), MARK_BLUE);
+    }
+
+    /// A viewer with a picture open and a data folder of its own, so saving the markup leaves the working folder alone.
+    fn viewer_with(img: Image) -> Viewer {
+        let mut v = Viewer::new();
+        v.data_dir = std::env::temp_dir().join(format!("viewer-main-{}", std::process::id()));
+        v.doc = Some(document::tests_support::picture_of(img));
+        v
+    }
+
+    fn pixels_of(v: &Viewer) -> Vec<u32> {
+        v.doc.as_ref().and_then(|d| d.picture_rc()).map(|i| i.px.clone()).unwrap_or_default()
+    }
+
+    fn cleanup(v: &Viewer) {
+        let _ = std::fs::remove_dir_all(&v.data_dir);
+    }
+
+    fn rect_mark(rect: Norm) -> Mark {
+        Mark { kind: MarkKind::Rect, page: 0, rect, color: MARK_BLUE, text: String::new(), ink: Vec::new() }
+    }
+
+    /// Undoes the last edit the way Edit > Undo does.
+    fn undo(v: &mut Viewer) {
+        let current = v.snapshot().expect("a document");
+        let previous = v.history.undo(current).expect("an edit to undo");
+        v.restore(previous);
+    }
+
+    #[test]
+    fn flipping_mirrors_the_picture_and_its_markup_and_can_be_undone() {
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![pack(1, 0, 0, 255), pack(2, 0, 0, 255), pack(3, 0, 0, 255), pack(4, 0, 0, 255)] });
+        let original = pixels_of(&v);
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.25, h: 0.5 }));
+        v.track(|v| v.flip(true));
+        let flipped = pixels_of(&v);
+        assert_eq!(flipped, vec![original[1], original[0], original[3], original[2]]);
+        let mark = &v.doc.as_ref().unwrap().marks[0];
+        assert!((mark.rect.x - 0.75).abs() < 1e-6 && (mark.rect.w - 0.25).abs() < 1e-6);
+        // shown turned a quarter, Flip Horizontal mirrors the rows of the stored picture instead
+        v.view.quarters = 1;
+        v.track(|v| v.flip(true));
+        assert_eq!(pixels_of(&v), vec![flipped[2], flipped[3], flipped[0], flipped[1]]);
+        undo(&mut v);
+        undo(&mut v);
+        assert_eq!(pixels_of(&v), original);
+        assert!((v.doc.as_ref().unwrap().marks[0].rect.x).abs() < 1e-6);
+        cleanup(&v);
+    }
+
+    #[test]
+    fn cropping_keeps_the_selection_moves_the_markup_and_can_be_undone() {
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![1, 2, 3, 4].into_iter().map(|n| pack(n, 0, 0, 255)).collect() });
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.5, y: 0.0, w: 0.5, h: 0.5 }));
+        v.track(|v| v.crop());
+        assert!(v.status.contains("Select an area"), "{}", v.status);
+        v.selection = Some((0, Norm { x: 0.5, y: 0.0, w: 0.5, h: 1.0 }));
+        v.track(|v| v.crop());
+        let doc = v.doc.as_ref().unwrap();
+        assert_eq!(doc.sizes, vec![(1, 2)]);
+        assert_eq!(pixels_of(&v), vec![pack(2, 0, 0, 255), pack(4, 0, 0, 255)]);
+        let mark = &doc.marks[0];
+        assert!((mark.rect.x).abs() < 1e-6 && (mark.rect.w - 1.0).abs() < 1e-6 && (mark.rect.h - 0.5).abs() < 1e-6);
+        assert!(v.selection.is_none());
+        undo(&mut v);
+        assert_eq!(v.doc.as_ref().unwrap().sizes, vec![(2, 2)]);
+        assert_eq!(pixels_of(&v).len(), 4);
+        cleanup(&v);
+    }
+
+    #[test]
+    fn removing_the_background_and_instant_alpha_clear_to_transparent_and_revert_restores() {
+        let white = pack(255, 255, 255, 255);
+        let black = pack(0, 0, 0, 255);
+        // a white page with a black pixel in the middle of a 3 by 3 picture
+        let mut px = vec![white; 9];
+        px[4] = black;
+        let mut v = viewer_with(Image { w: 3, h: 3, px: px.clone() });
+        v.track(|v| v.remove_background());
+        let cleared = pixels_of(&v);
+        assert_eq!(cleared[0], 0);
+        assert_eq!(cleared[4], black);
+        assert!(v.status.contains("PNG"));
+        undo(&mut v);
+        assert_eq!(pixels_of(&v), px);
+        // Instant Alpha on the black pixel clears just it
+        let lay = Layout::bare(100, 100);
+        let placed = v.placed(&lay).expect("a placed picture");
+        v.track(|v| v.instant_alpha(&lay, placed.x as f32 + 1.5 * placed.w as f32 / 3.0, placed.y as f32 + 1.5 * placed.h as f32 / 3.0));
+        assert_eq!(pixels_of(&v)[4], 0);
+        assert_eq!(pixels_of(&v)[0], white);
+        v.track(|v| v.revert());
+        assert_eq!(pixels_of(&v), px);
+        // a picture without an edge to remove says so
+        v.track(|v| v.remove_background());
+        v.track(|v| v.remove_background());
+        assert!(v.status.contains("no background") || v.status.contains("PNG"));
+        cleanup(&v);
+    }
+
+    #[test]
+    fn search_results_list_the_hits_and_the_find_commands_step_through_them() {
+        let mut v = Viewer::new();
+        v.data_dir = std::env::temp_dir().join(format!("viewer-find-{}", std::process::id()));
+        v.doc = Some(document::tests_support::pictures(4));
+        v.view.page = 1;
+        v.show_results("x".into(), vec![find::Hit { page: 0, snippet: "a".into() }, find::Hit { page: 3, snippet: "b".into() }]);
+        assert_eq!(v.side, Side::Search);
+        assert_eq!(v.view.page, 3, "the first hit on or after the shown page");
+        assert!(v.status.starts_with("2 matches"));
+        v.find_step(true);
+        assert_eq!(v.view.page, 0, "next wraps round");
+        v.find_step(false);
+        assert_eq!(v.view.page, 3);
+        v.show_results("zzz".into(), Vec::new());
+        assert!(v.status.starts_with("Nothing found"));
+        // a picture has no text to search
+        v.start_find();
+        assert!(v.finding.is_none() && v.status.contains("PDF"));
+        cleanup(&v);
+    }
+
+    #[test]
+    fn typing_a_search_edits_the_text_and_escape_ends_it() {
+        let mut v = Viewer::new();
+        v.finding = Some(String::new());
+        assert!(v.key_find(&KeyInput::Text("ab".into())));
+        assert!(v.key_find(&KeyInput::Code(8)));
+        assert!(v.key_find(&KeyInput::Text("c\n".into())));
+        assert_eq!(v.finding.as_deref(), Some("ac"));
+        assert_eq!(v.status, "Find: ac|");
+        assert!(v.key_find(&KeyInput::Code(27)));
+        assert!(v.finding.is_none() && v.status.is_empty());
+        assert!(!v.key_find(&KeyInput::Code(65)));
+    }
+
+    #[test]
+    fn the_slideshow_hides_everything_steps_through_pages_and_restores_the_zoom() {
+        let mut v = Viewer::new();
+        v.doc = Some(document::tests_support::pictures(3));
+        v.view.zoom = Zoom::Factor(2.0);
+        v.toggle_slideshow();
+        assert_eq!(v.mode, Mode::Slideshow);
+        assert_eq!(v.view.zoom, Zoom::Fit);
+        assert!(v.key_slideshow(&KeyInput::Code(39)));
+        assert!(v.key_slideshow(&KeyInput::Text(" ".into())));
+        assert!(v.key_slideshow(&KeyInput::Code(39)));
+        assert_eq!(v.view.page, 2, "it stops at the last page");
+        assert!(v.key_slideshow(&KeyInput::Code(37)));
+        assert_eq!(v.view.page, 1);
+        assert!(!v.key_slideshow(&KeyInput::Code(65)));
+        assert!(v.key_slideshow(&KeyInput::Code(27)));
+        assert_eq!(v.mode, Mode::Page);
+        assert_eq!(v.view.zoom, Zoom::Factor(2.0));
+        // with no document there is nothing to show
+        let mut empty = Viewer::new();
+        empty.toggle_slideshow();
+        assert_eq!(empty.mode, Mode::Page);
+    }
+
+    #[test]
+    fn the_inspector_lists_the_open_files_facts() {
+        let mut v = Viewer::new();
+        assert!(v.inspector_rows().is_empty());
+        v.doc = Some(document::tests_support::pictures(1));
+        v.facts = inspector::Facts { name: "p.jpg".into(), kind: "JPEG image", bytes: 10, exif: vec![("Location", "1.0000 N, 2.0000 E".into())] };
+        let rows = v.inspector_rows();
+        assert!(rows.contains(&("Name".to_string(), "p.jpg".to_string())));
+        assert!(rows.contains(&("Dimensions".to_string(), "4 x 4 pixels".to_string())));
+        v.show_location();
+        assert!(v.inspector && v.status.contains("1.0000 N"));
+        v.facts.exif.clear();
+        v.show_location();
+        assert!(v.status.contains("no location"));
+    }
+
+    #[test]
+    fn strike_through_is_red_and_the_other_new_marks_blue() {
+        assert_eq!(color_for(MarkKind::Strike), MARK_RED);
+        assert_eq!(color_for(MarkKind::Underline), MARK_BLUE);
+        assert_eq!(color_for(MarkKind::Arrow), MARK_BLUE);
     }
 
     #[test]

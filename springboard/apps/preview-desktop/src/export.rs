@@ -5,7 +5,9 @@
 use crate::document::adjusted;
 use crate::model::{self, Adjust, Mark};
 use crate::pdfjob::{self, Job, Pdf, Reply, PAGE_BOX};
+use crate::pixels;
 use bifrost_app::kit::Image;
+use springboard::cg::imageio::encode::{encode_png, PngOptions};
 use springboard::cg::pdf::draw;
 use springboard::shell::camera::jpeg;
 use std::path::{Path, PathBuf};
@@ -50,14 +52,23 @@ pub fn finish(img: &Image, marks: &[Mark], src: usize, turns: u8, adjust: &Adjus
     out
 }
 
-/// Encodes `img` and writes it to `target`.
+/// Encodes `img` and writes it to `target`. A PNG keeps transparency; a JPEG has none, so a transparent picture is laid
+/// over white first.
 pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), String> {
+    let unencoded = || "The picture could not be encoded.".to_string();
     let bytes = match raster {
-        Raster::Png => springboard::pngenc::encode_rgb(img.w, img.h, &img.px),
+        Raster::Png => encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default()).ok_or_else(unencoded)?,
         Raster::Jpeg => {
-            let encoded = jpeg::encode_pixels(img.w, img.h, &img.px, JPEG_QUALITY, None);
+            let flat;
+            let opaque = if pixels::has_alpha(img) {
+                flat = pixels::flatten_on_white(img);
+                &flat
+            } else {
+                img
+            };
+            let encoded = jpeg::encode_pixels(opaque.w, opaque.h, &opaque.px, JPEG_QUALITY, None);
             if encoded.is_empty() {
-                return Err("The picture could not be encoded.".into());
+                return Err(unencoded());
             }
             encoded
         }
@@ -101,6 +112,23 @@ mod tests {
         // half size is 2 by 1, and a quarter turn makes it 1 by 2
         assert_eq!((out.w, out.h), (1, 2));
         assert_ne!(out.px[0], 0xff00_0000);
+    }
+
+    #[test]
+    fn a_png_keeps_transparency_and_a_jpeg_is_written_flattened() {
+        let dir = std::env::temp_dir().join(format!("viewer-export-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a folder");
+        let img = Image { w: 2, h: 1, px: vec![0, 0xff00_00ff] };
+        let png = dir.join("a.png");
+        write_image(&img, Raster::Png, &png).expect("a png");
+        let bytes = std::fs::read(&png).expect("the file");
+        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+        // IHDR colour type 6 is RGBA
+        assert_eq!(bytes[25], 6);
+        let jpg = dir.join("a.jpg");
+        write_image(&img, Raster::Jpeg, &jpg).expect("a jpeg");
+        assert_eq!(&std::fs::read(&jpg).expect("the file")[..2], &[0xff, 0xd8]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

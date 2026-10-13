@@ -3,6 +3,7 @@
 //! draw first; the sidebar and the toolbar draw last, so anything that runs under them is covered.
 
 use crate::document::{Document, THUMB_W};
+use crate::find::Hit;
 use crate::model::{self, Adjust, Mark, MarkKind, Norm, View, HIGHLIGHT, MARK_BLUE};
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{rgba, Image, Surface};
@@ -17,6 +18,15 @@ pub enum Tool {
     Rounded,
     /// A freehand stroke, for a signature.
     Sign,
+    Oval,
+    Line,
+    Arrow,
+    Underline,
+    Strike,
+    /// Drags out a rectangular selection, for Crop and Zoom to Selection.
+    Select,
+    /// A click clears the connected region of one colour to transparent.
+    Alpha,
 }
 
 impl Tool {
@@ -29,15 +39,34 @@ impl Tool {
             Tool::Rect => Some(MarkKind::Rect),
             Tool::Rounded => Some(MarkKind::Rounded),
             Tool::Sign => Some(MarkKind::Ink),
+            Tool::Oval => Some(MarkKind::Oval),
+            Tool::Line => Some(MarkKind::Line),
+            Tool::Arrow => Some(MarkKind::Arrow),
+            Tool::Underline => Some(MarkKind::Underline),
+            Tool::Strike => Some(MarkKind::Strike),
+            Tool::Select | Tool::Alpha => None,
         }
     }
 }
 
-/// What the sidebar lists: the page thumbnails, or the PDF outline.
+/// What the sidebar lists: the page thumbnails, the PDF outline, the markup, the bookmarks, or the search hits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
     Pages,
     Outline,
+    Notes,
+    Bookmarks,
+    /// The hits of Find in PDF.
+    Search,
+}
+
+/// How the canvas shows the document: one page, a grid of all the pages, or the pages one after another with nothing
+/// else on screen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    Page,
+    Contact,
+    Slideshow,
 }
 
 /// Everything a toolbar button or a menu item does.
@@ -89,6 +118,31 @@ pub enum Action {
     PreviousBookmark,
     /// View > Hide Sidebar / Show Sidebar.
     ToggleSidebar,
+    /// Tools > Crop: the picture keeps the selected rectangle.
+    Crop,
+    FlipHorizontal,
+    FlipVertical,
+    /// Tools > Remove Background: the background that touches the picture's edge becomes transparent.
+    RemoveBackground,
+    ZoomToSelection,
+    /// Tools > Show Magnifier / Hide Magnifier.
+    ToggleMagnifier,
+    ShowNotes,
+    ShowBookmarks,
+    /// View > Contact Sheet / Single Page.
+    ContactSheet,
+    Slideshow,
+    /// Tools > Show Inspector / Hide Inspector.
+    Inspector,
+    /// Tools > Show Location Info.
+    ShowLocation,
+    /// File > New from Clipboard.
+    NewFromClipboard,
+    /// Edit > Find: the status line takes the search text.
+    Find,
+    FindNext,
+    FindPrevious,
+    ShowSearch,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -137,6 +191,30 @@ pub const ACTIONS: &[Action] = &[
     Action::NextBookmark,
     Action::PreviousBookmark,
     Action::ToggleSidebar,
+    Action::Crop,
+    Action::FlipHorizontal,
+    Action::FlipVertical,
+    Action::RemoveBackground,
+    Action::ZoomToSelection,
+    Action::ToggleMagnifier,
+    Action::ShowNotes,
+    Action::ShowBookmarks,
+    Action::ContactSheet,
+    Action::Slideshow,
+    Action::Inspector,
+    Action::ShowLocation,
+    Action::NewFromClipboard,
+    Action::Find,
+    Action::FindNext,
+    Action::FindPrevious,
+    Action::ShowSearch,
+    Action::UseTool(Tool::Oval),
+    Action::UseTool(Tool::Line),
+    Action::UseTool(Tool::Arrow),
+    Action::UseTool(Tool::Underline),
+    Action::UseTool(Tool::Strike),
+    Action::UseTool(Tool::Select),
+    Action::UseTool(Tool::Alpha),
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -219,6 +297,30 @@ impl Action {
             Action::NextBookmark => "Next Bookmark",
             Action::PreviousBookmark => "Previous Bookmark",
             Action::ToggleSidebar => "Hide Sidebar",
+            Action::Crop => "Crop",
+            Action::FlipHorizontal => "Flip Horizontal",
+            Action::FlipVertical => "Flip Vertical",
+            Action::RemoveBackground => "Remove Background",
+            Action::ZoomToSelection => "Zoom to Selection",
+            Action::ToggleMagnifier => "Show Magnifier",
+            Action::ShowNotes => "Markup",
+            Action::ShowBookmarks => "Bookmarks",
+            Action::ContactSheet => "Contact Sheet",
+            Action::Slideshow => "Slideshow",
+            Action::Inspector => "Show Inspector",
+            Action::ShowLocation => "Show Location Info",
+            Action::NewFromClipboard => "New from Clipboard",
+            Action::Find => "Find\u{2026}",
+            Action::FindNext => "Find Next",
+            Action::FindPrevious => "Find Previous",
+            Action::ShowSearch => "Search Results",
+            Action::UseTool(Tool::Oval) => "Oval",
+            Action::UseTool(Tool::Line) => "Line",
+            Action::UseTool(Tool::Arrow) => "Arrow",
+            Action::UseTool(Tool::Underline) => "Underline",
+            Action::UseTool(Tool::Strike) => "Strike Through",
+            Action::UseTool(Tool::Select) => "Select",
+            Action::UseTool(Tool::Alpha) => "Instant Alpha",
         }
     }
 
@@ -246,18 +348,30 @@ pub struct Layout {
     pub h: i32,
     pub bar: i32,
     pub side: i32,
+    /// The width of the Inspector along the right edge; 0 while it is hidden.
+    pub inspector: i32,
 }
 
 impl Layout {
     pub fn new(ui: &Ui, w: i32, h: i32) -> Layout {
         let bar = ui.pt(ui::SPACE_XXXL + ui::SPACE_L) as i32;
         let side = (ui.pt(ui::SPACE_XXXL * 5.0) as i32).min(w / 3).max(0);
-        Layout { w: w.max(1), h: h.max(1), bar, side }
+        Layout { w: w.max(1), h: h.max(1), bar, side, inspector: 0 }
     }
 
     /// The canvas rectangle (x, y, w, h).
     pub fn canvas(&self) -> (i32, i32, i32, i32) {
-        (self.side, self.bar, (self.w - self.side).max(1), (self.h - self.bar).max(1))
+        (self.side, self.bar, (self.w - self.side - self.inspector).max(1), (self.h - self.bar).max(1))
+    }
+
+    /// The window with the sidebar, toolbar and Inspector gone: the slideshow's layout.
+    pub fn bare(w: i32, h: i32) -> Layout {
+        Layout { w: w.max(1), h: h.max(1), bar: 0, side: 0, inspector: 0 }
+    }
+
+    /// The width the Inspector takes when it is shown.
+    pub fn inspector_width(ui: &Ui, w: i32) -> i32 {
+        (ui.pt(ui::SPACE_XXXL * 6.0) as i32).min(w / 2).max(0)
     }
 }
 
@@ -298,6 +412,97 @@ pub fn rows(ui: &Ui, doc: &Document) -> Vec<(i32, i32)> {
 pub fn outline_rows(ui: &Ui, doc: &Document) -> Vec<(i32, i32)> {
     let row = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
     (0..doc.outline.len()).map(|i| (i as i32 * row, row)).collect()
+}
+
+/// The rows of a sidebar list of `n` one-line entries (the markup list and the bookmarks).
+pub fn list_rows(ui: &Ui, n: usize) -> Vec<(i32, i32)> {
+    let row = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
+    (0..n).map(|i| (i as i32 * row, row)).collect()
+}
+
+/// The entries of the markup list, the bookmarks list or the search hits: the text to show and the shown page it goes to.
+/// The markup list holds every mark but strokes, by shown page; the bookmarks list holds the bookmarked pages in page
+/// order; the search list holds the hits on pages that are still shown. The other sidebar lists have no entries here.
+pub fn side_items(doc: &Document, side: Side, found: &[Hit]) -> Vec<(String, Option<usize>)> {
+    match side {
+        Side::Notes => {
+            let mut out = Vec::new();
+            for shown in 0..doc.count() {
+                let Some(src) = doc.source_of(shown) else { continue };
+                for m in doc.marks.iter().filter(|m| m.page == src && m.kind != MarkKind::Ink) {
+                    let text = if m.text.is_empty() { String::new() } else { format!(": {}", m.text) };
+                    out.push((format!("{}  {}{}", shown + 1, m.kind.label(), text), Some(shown)));
+                }
+            }
+            out
+        }
+        Side::Bookmarks => {
+            let mut places = doc.bookmark_places();
+            places.sort_unstable();
+            places.into_iter().map(|p| (format!("Page {}", p + 1), Some(p))).collect()
+        }
+        Side::Search => found
+            .iter()
+            .filter_map(|hit| {
+                let shown = doc.display_of(hit.page)?;
+                Some((format!("{}  {}", shown + 1, hit.snippet), Some(shown)))
+            })
+            .collect(),
+        Side::Pages | Side::Outline => Vec::new(),
+    }
+}
+
+/// The contact sheet's grid: equal cells in rows, the grid centred across the canvas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Sheet {
+    pub cols: usize,
+    pub cell_w: i32,
+    pub cell_h: i32,
+    /// The space left of the first column.
+    pub left: i32,
+}
+
+impl Sheet {
+    /// A grid of `cell_w` by `cell_h` cells across a canvas `canvas_w` wide: as many columns as fit, at least one.
+    pub fn new(canvas_w: i32, cell_w: i32, cell_h: i32) -> Sheet {
+        let (cell_w, cell_h) = (cell_w.max(1), cell_h.max(1));
+        let cols = (canvas_w / cell_w).max(1) as usize;
+        let left = ((canvas_w - cols as i32 * cell_w) / 2).max(0);
+        Sheet { cols, cell_w, cell_h, left }
+    }
+
+    /// The top-left of cell `i`, from the canvas's top-left with no scroll.
+    pub fn origin(&self, i: usize) -> (i32, i32) {
+        (self.left + (i % self.cols) as i32 * self.cell_w, (i / self.cols) as i32 * self.cell_h)
+    }
+
+    /// The height of `count` cells in rows.
+    pub fn height(&self, count: usize) -> i32 {
+        count.div_ceil(self.cols) as i32 * self.cell_h
+    }
+
+    /// The cell under a point given from the canvas's top-left, with the sheet scrolled by `scroll`.
+    pub fn hit(&self, count: usize, scroll: f32, x: f32, y: f32) -> Option<usize> {
+        let (lx, ly) = (x - self.left as f32, y + scroll);
+        if lx < 0.0 || ly < 0.0 {
+            return None;
+        }
+        let col = lx as i32 / self.cell_w;
+        if col as usize >= self.cols {
+            return None;
+        }
+        let i = (ly as i32 / self.cell_h) as usize * self.cols + col as usize;
+        (i < count).then_some(i)
+    }
+}
+
+/// The contact sheet for `doc` on a canvas `canvas_w` wide. A cell fits the widest thumbnail and the tallest, with the
+/// page number under it.
+pub fn contact_sheet(ui: &Ui, doc: &Document, canvas_w: i32) -> Sheet {
+    let pad = ui.pt(ui::SPACE_L) as i32;
+    let label = ui.pt(ui::MAC_FOOTNOTE_PT * 1.6) as i32;
+    let tallest = (0..doc.count()).filter_map(|i| doc.thumb_box(i)).map(|(_, h)| h as i32).max().unwrap_or(THUMB_W as i32);
+    Sheet::new(canvas_w, THUMB_W as i32 + 2 * pad, tallest + label + 2 * pad)
 }
 
 /// The sidebar's total content height.
@@ -374,13 +579,25 @@ fn to_screen(placed: &Placed, quarters: u8, r: Norm) -> (f32, f32, f32, f32) {
 
 /// The rendered picture of one page, kept while nothing that changes it has changed. The key names the source page.
 pub struct PictureCache {
-    key: (usize, Adjust, u8, usize, usize),
+    key: (usize, Adjust, u8, usize, usize, u32),
     pub img: Image,
 }
 
 /// Looks up or makes the scaled, adjusted and turned picture of source page `src` for the current view.
-pub fn picture_for<'a>(cache: &'a mut Option<PictureCache>, src: usize, picture: &Image, adjust: &Adjust, quarters: u8, w: usize, h: usize) -> &'a Image {
-    let key = (src, *adjust, quarters, w, h);
+/// `revision` counts the document's pixel edits, so an edited picture of the same size is drawn again.
+// The picture, the cache and the view are separate inputs of one lookup.
+#[allow(clippy::too_many_arguments)]
+pub fn picture_for<'a>(
+    cache: &'a mut Option<PictureCache>,
+    src: usize,
+    revision: u32,
+    picture: &Image,
+    adjust: &Adjust,
+    quarters: u8,
+    w: usize,
+    h: usize,
+) -> &'a Image {
+    let key = (src, *adjust, quarters, w, h, revision);
     if cache.as_ref().map(|c| c.key) != Some(key) {
         let base = crate::document::adjusted(picture, adjust);
         let turned = model::rotate(&base, quarters);
@@ -404,14 +621,37 @@ pub struct Scene<'a> {
     pub editing: Option<usize>,
     /// A message to show in the middle of the canvas (an open error, an export result).
     pub status: &'a str,
+    pub mode: Mode,
+    /// The rectangle selected on the shown page, in source-page coordinates.
+    pub selection: Option<Norm>,
+    /// Where the magnifier is, in canvas pixels; None while it is off.
+    pub loupe: Option<(f32, f32)>,
+    /// The Inspector's rows; None while it is hidden.
+    pub inspector: Option<&'a [(String, String)]>,
+    /// How far the contact sheet is scrolled.
+    pub contact_scroll: f32,
+    /// The hits of the last search.
+    pub found: &'a [Hit],
 }
 
 /// Draws the window. `cache` keeps the scaled picture between frames.
 pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut Option<PictureCache>) -> Option<Placed> {
     let (cx, cy, cw, ch) = lay.canvas();
-    fill(s, cx, cy, cw, ch, ui::CONTENT_BG.now());
+    let show = scene.mode == Mode::Slideshow;
+    fill(s, cx, cy, cw, ch, if show { rgba(0, 0, 0, 255) } else { ui::CONTENT_BG.now() });
+    if let (Mode::Contact, Some(doc)) = (scene.mode, scene.doc) {
+        draw_sheet(s, ui, lay, scene, doc);
+        draw_sidebar(s, ui, lay, scene);
+        draw_toolbar(s, ui, lay, scene);
+        if let Some(rows) = scene.inspector {
+            draw_inspector(s, ui, lay, rows);
+        }
+        return None;
+    }
     let mut placed = None;
     let mut shown_src = None;
+    // the drawn picture in the cache is this page's only once the page's picture has arrived
+    let mut cached = false;
     match scene.doc {
         None => {
             let msg = if scene.status.is_empty() { "Open an image or a PDF to view it." } else { scene.status };
@@ -428,8 +668,9 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
                 let p = place((cx, cy, cw, ch), rw, rh, scale, scene.view.pan);
                 match doc.picture(page_no) {
                     Some(img) => {
-                        let shown = picture_for(cache, src, &img, &scene.adjust, q, target_w, target_h);
+                        let shown = picture_for(cache, src, doc.revision, &img, &scene.adjust, q, target_w, target_h);
                         s.blit(shown, p.x, p.y, 255, 255);
+                        cached = true;
                     }
                     // a PDF page is still on its way from the worker: the paper shows first
                     None => fill(s, p.x, p.y, p.w as i32, p.h as i32, rgba(255, 255, 255, 255)),
@@ -454,33 +695,155 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
             s.blit_colored(&img, x as i32 + ui.pt(ui::SPACE_L) as i32, y as i32, ui::LABEL.now(), 255);
         }
     }
-    if scene.doc.is_some() && !scene.status.is_empty() {
+    if let (Some(p), Some(sel)) = (placed, scene.selection) {
+        let (x, y, w, h) = to_screen(&p, scene.view.quarters, sel);
+        s.stroke_rrect(x, y, w.max(1.0), h.max(1.0), 0.0, 1.5, ui::TINT);
+    }
+    if let (Some(p), Some(at), true) = (placed, scene.loupe, cached) {
+        if let Some(c) = cache.as_ref() {
+            draw_loupe(s, ui, &p, &c.img, at);
+        }
+    }
+    if scene.doc.is_some() && !scene.status.is_empty() && !show {
         let img = ui.text(scene.status, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
         let pad = ui.pt(ui::SPACE_S) as i32;
         s.blit_colored(&img, cx + pad, cy + ch - img.h as i32 - pad, ui::LABEL_2.now(), 255);
     }
     draw_sidebar(s, ui, lay, scene);
-    draw_toolbar(s, ui, lay, scene);
+    if !show {
+        draw_toolbar(s, ui, lay, scene);
+        if let Some(rows) = scene.inspector {
+            draw_inspector(s, ui, lay, rows);
+        }
+    }
     placed
 }
 
+/// How much the magnifier enlarges.
+const LOUPE_ZOOM: f32 = 2.5;
+
+/// The picture pixel the magnifier shows at offset (`dx`, `dy`) from its centre. `origin` is the picture's top-left on
+/// the canvas and `centre` the pointer, both in canvas pixels; the picture is the one drawn, already at the zoom.
+pub fn loupe_sample(centre: (f32, f32), origin: (i32, i32), dx: i32, dy: i32) -> (i32, i32) {
+    (
+        (centre.0 - origin.0 as f32 + dx as f32 / LOUPE_ZOOM).floor() as i32,
+        (centre.1 - origin.1 as f32 + dy as f32 / LOUPE_ZOOM).floor() as i32,
+    )
+}
+
+/// Draws the magnifier: a round lens around `at` that shows the picture under it enlarged. Pixels that are not opaque
+/// (a transparent corner, or past the picture's edge) are left as they are.
+fn draw_loupe(s: &mut Surface, ui: &Ui, p: &Placed, shown: &Image, at: (f32, f32)) {
+    let r = ui.pt(ui::SPACE_XXXL * 1.5) as i32;
+    let (cx, cy) = (at.0 as i32, at.1 as i32);
+    for dy in -r..=r {
+        for dx in -r..=r {
+            if dx * dx + dy * dy > r * r {
+                continue;
+            }
+            let (x, y) = (cx + dx, cy + dy);
+            if x < 0 || y < s.y0 as i32 || x >= s.w as i32 || y >= s.h as i32 {
+                continue;
+            }
+            let (sx, sy) = loupe_sample(at, (p.x, p.y), dx, dy);
+            if sx < 0 || sy < 0 || sx as usize >= shown.w || sy as usize >= shown.h {
+                continue;
+            }
+            let pixel = shown.px[sy as usize * shown.w + sx as usize];
+            if pixel >> 24 == 255 {
+                *s.at(x as usize, y as usize) = pixel;
+            }
+        }
+    }
+    s.stroke_rrect((cx - r) as f32, (cy - r) as f32, (2 * r) as f32, (2 * r) as f32, r as f32, 2.0, ui::TINT);
+}
+
+/// The contact sheet: every page's thumbnail in a grid, the shown page marked.
+fn draw_sheet(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
+    let (cx, cy, cw, ch) = lay.canvas();
+    let sheet = contact_sheet(ui, doc, cw);
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    for i in 0..doc.count() {
+        let (ox, oy) = sheet.origin(i);
+        let (x, y) = (cx + ox, cy + oy - scene.contact_scroll as i32);
+        if y + sheet.cell_h < cy || y > cy + ch {
+            continue;
+        }
+        if i == scene.view.page {
+            s.fill_rrect((x + pad / 2) as f32, (y + pad / 2) as f32, (sheet.cell_w - pad) as f32, (sheet.cell_h - pad) as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+        }
+        let (bw, bh) = doc.thumb_box(i).unwrap_or((THUMB_W, (THUMB_W as f32 * 1.3) as usize));
+        let top = y + ui.pt(ui::SPACE_L) as i32;
+        match doc.thumb(i) {
+            Some(t) => s.blit(&t, x + (sheet.cell_w - t.w as i32) / 2, top, 255, 255),
+            None => fill(s, x + (sheet.cell_w - bw as i32) / 2, top, bw as i32, bh as i32, ui::FILL),
+        }
+        let text = format!("{}", i + 1);
+        let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let tw = ui.measure(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular) as i32;
+        s.blit_colored(&img, x + (sheet.cell_w - tw) / 2, top + bh as i32 + pad / 2, ui::LABEL_2.now(), 255);
+    }
+}
+
+/// The Inspector: a panel along the right edge listing each fact as a small label over its value.
+fn draw_inspector(s: &mut Surface, ui: &Ui, lay: &Layout, rows: &[(String, String)]) {
+    let w = lay.inspector;
+    if w <= 0 {
+        return;
+    }
+    let (x, top) = (lay.w - w, lay.bar);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    let mut y = top + pad;
+    for (label, value) in rows {
+        if y > lay.h {
+            break;
+        }
+        let name = ui.text(label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&name, x + pad, y, ui::LABEL_2.now(), 255);
+        y += name.h as i32;
+        let text = fit_text(ui, value, ui::MAC_BODY_PT, (w - 2 * pad).max(0) as f32);
+        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&img, x + pad, y, ui::LABEL.now(), 255);
+        y += img.h as i32 + pad;
+    }
+}
+
+/// Strokes a path of canvas points: a 2 pixel dot at every step along each segment.
+fn draw_path(s: &mut Surface, pts: &[(f32, f32)], color: u32) {
+    for pair in pts.windows(2) {
+        let ((ax, ay), (bx, by)) = (pair[0], pair[1]);
+        let steps = (bx - ax).abs().max((by - ay).abs()).ceil().max(1.0) as usize;
+        for k in 0..=steps {
+            let t = k as f32 / steps as f32;
+            let x = (ax + (bx - ax) * t) as i32;
+            let y = (ay + (by - ay) * t) as i32;
+            fill(s, x - 1, y - 1, 2, 2, color);
+        }
+    }
+}
+
 fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
-    if m.kind == MarkKind::Ink {
-        // a stroke: a 2 pixel dot at every step along each segment
-        for pair in m.ink.windows(2) {
-            let (ax, ay) = screen_point(p, quarters, pair[0].0, pair[0].1);
-            let (bx, by) = screen_point(p, quarters, pair[1].0, pair[1].1);
-            let steps = (bx - ax).abs().max((by - ay).abs()).ceil().max(1.0) as usize;
-            for k in 0..=steps {
-                let t = k as f32 / steps as f32;
-                let x = (ax + (bx - ax) * t) as i32;
-                let y = (ay + (by - ay) * t) as i32;
-                fill(s, x - 1, y - 1, 2, 2, m.color);
+    if m.kind.has_points() {
+        // a stroke, a line or an arrow
+        let pts: Vec<(f32, f32)> = m.ink.iter().map(|&(u, v)| screen_point(p, quarters, u, v)).collect();
+        draw_path(s, &pts, m.color);
+        if m.kind == MarkKind::Arrow {
+            if let [.., from, to] = pts.as_slice() {
+                if let Some([a, b]) = model::arrow_head(*from, *to, 1.0) {
+                    draw_path(s, &[a, *to, b], m.color);
+                }
             }
         }
         return;
     }
     let (x, y, w, h) = to_screen(p, quarters, m.rect);
+    if matches!(m.kind, MarkKind::Underline | MarkKind::Strike) {
+        let line = if m.kind == MarkKind::Underline { y + h } else { y + h / 2.0 };
+        draw_path(s, &[(x, line), (x + w, line)], m.color);
+        return;
+    }
     let (x, y, w, h) = (x as i32, y as i32, w.max(1.0) as i32, h.max(1.0) as i32);
     match m.kind {
         MarkKind::Highlight => {
@@ -499,7 +862,8 @@ fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
         MarkKind::Note => {
             fill(s, x, y, 14, 14, MARK_BLUE);
         }
-        MarkKind::Ink => {}
+        MarkKind::Oval => draw_path(s, &model::ellipse_points(x as f32, y as f32, w as f32, h as f32), m.color),
+        MarkKind::Ink | MarkKind::Line | MarkKind::Arrow | MarkKind::Underline | MarkKind::Strike => {}
     }
 }
 
@@ -512,6 +876,25 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     match scene.side {
         Side::Pages => draw_pages(s, ui, lay, scene, doc),
         Side::Outline => draw_outline(s, ui, lay, scene, doc),
+        Side::Notes | Side::Bookmarks | Side::Search => draw_items(s, ui, lay, scene, &side_items(doc, scene.side, scene.found)),
+    }
+}
+
+/// The markup list or the bookmarks list: one line per entry, the entry for the shown page marked.
+fn draw_items(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, items: &[(String, Option<usize>)]) {
+    let rows = list_rows(ui, items.len());
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    for ((text, page), &(top, h)) in items.iter().zip(rows.iter()) {
+        let y = lay.bar + top - scene.view.sidebar_scroll as i32;
+        if y + h < lay.bar || y > lay.h {
+            continue;
+        }
+        if *page == Some(scene.view.page) {
+            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+        }
+        let text = fit_text(ui, text, ui::MAC_BODY_PT, (lay.side - 2 * pad).max(0) as f32);
+        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&img, pad, y + (h - img.h as i32) / 2, ui::LABEL.now(), 255);
     }
 }
 
@@ -680,13 +1063,81 @@ mod tests {
 
     #[test]
     fn sidebar_hit_uses_scroll_and_ignores_the_toolbar() {
-        let lay = Layout { w: 600, h: 400, bar: 40, side: 150 };
+        let lay = Layout { w: 600, h: 400, bar: 40, side: 150, inspector: 0 };
         let rows = vec![(8, 100), (116, 100)];
         assert_eq!(sidebar_hit(&lay, &rows, 0.0, 10.0, 60.0), Some(0));
         assert_eq!(sidebar_hit(&lay, &rows, 100.0, 10.0, 60.0), Some(1));
         assert_eq!(sidebar_hit(&lay, &rows, 0.0, 10.0, 20.0), None);
         assert_eq!(sidebar_hit(&lay, &rows, 0.0, 200.0, 60.0), None);
         assert_eq!(rows_height(&rows), 216);
+    }
+
+    #[test]
+    fn the_inspector_takes_room_from_the_canvas_and_the_slideshow_takes_none() {
+        let lay = Layout { w: 800, h: 600, bar: 40, side: 150, inspector: 200 };
+        assert_eq!(lay.canvas(), (150, 40, 450, 560));
+        assert_eq!(Layout::bare(800, 600).canvas(), (0, 0, 800, 600));
+    }
+
+    #[test]
+    fn the_sheet_fits_columns_centres_them_and_finds_the_cell_under_a_point() {
+        let sheet = Sheet::new(700, 200, 100);
+        assert_eq!((sheet.cols, sheet.left), (3, 50));
+        assert_eq!(sheet.origin(0), (50, 0));
+        assert_eq!(sheet.origin(4), (250, 100));
+        assert_eq!(sheet.height(7), 300);
+        assert_eq!(sheet.hit(7, 0.0, 60.0, 10.0), Some(0));
+        assert_eq!(sheet.hit(7, 0.0, 460.0, 10.0), Some(2));
+        assert_eq!(sheet.hit(7, 0.0, 260.0, 110.0), Some(4));
+        // scrolled by a row, the same point is a row further on
+        assert_eq!(sheet.hit(7, 100.0, 60.0, 10.0), Some(3));
+        assert_eq!(sheet.hit(7, 0.0, 10.0, 10.0), None, "left of the grid");
+        assert_eq!(sheet.hit(7, 0.0, 690.0, 10.0), None, "right of the grid");
+        assert_eq!(sheet.hit(7, 200.0, 460.0, 110.0), None, "past the last page");
+        assert_eq!(Sheet::new(50, 200, 100).cols, 1);
+    }
+
+    #[test]
+    fn the_magnifier_samples_around_the_pointer_enlarged() {
+        // the pointer is 30 pixels into a picture whose top-left is at (100, 50)
+        assert_eq!(loupe_sample((130.0, 80.0), (100, 50), 0, 0), (30, 30));
+        assert_eq!(loupe_sample((130.0, 80.0), (100, 50), 25, -25), (40, 20));
+        assert_eq!(loupe_sample((130.0, 80.0), (100, 50), -25, 0), (20, 30));
+    }
+
+    #[test]
+    fn the_new_tools_make_the_marks_their_names_say() {
+        assert_eq!(Tool::Oval.mark_kind(), Some(MarkKind::Oval));
+        assert_eq!(Tool::Arrow.mark_kind(), Some(MarkKind::Arrow));
+        assert_eq!(Tool::Underline.mark_kind(), Some(MarkKind::Underline));
+        assert_eq!(Tool::Select.mark_kind(), None);
+        assert_eq!(Tool::Alpha.mark_kind(), None);
+        for tool in [Tool::Oval, Tool::Line, Tool::Arrow, Tool::Underline, Tool::Strike, Tool::Select, Tool::Alpha] {
+            assert!(ACTIONS.contains(&Action::UseTool(tool)), "{tool:?}");
+        }
+    }
+
+    #[test]
+    fn the_parity_actions_keep_the_earlier_ids() {
+        assert_eq!(Action::ToggleSidebar.id(), 43);
+        assert_eq!(Action::Crop.id(), 44);
+        for a in [Action::Crop, Action::Inspector, Action::ContactSheet, Action::NewFromClipboard, Action::UseTool(Tool::Alpha)] {
+            assert!(!Action::toolbar().contains(&a), "{a:?}");
+            assert_eq!(Action::from_id(a.id()), Some(a));
+        }
+    }
+
+    #[test]
+    fn the_search_list_skips_hits_on_deleted_pages_and_numbers_the_rest_as_shown() {
+        let doc = crate::document::tests_support::pictures(3);
+        let hits = vec![
+            Hit { page: 2, snippet: "two".into() },
+            Hit { page: 0, snippet: "zero".into() },
+            Hit { page: 7, snippet: "gone".into() },
+        ];
+        let items = side_items(&doc, Side::Search, &hits);
+        assert_eq!(items, vec![("3  two".to_string(), Some(2)), ("1  zero".to_string(), Some(0))]);
+        assert!(side_items(&doc, Side::Pages, &hits).is_empty());
     }
 
     #[test]

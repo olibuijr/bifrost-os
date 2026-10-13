@@ -3,6 +3,7 @@
 //! the worker in order and returns a `Reply`, which goes into the document's inbox; the delivery runs on the app loop
 //! and wakes it, so `App::tick` can take the reply and the window can draw it.
 
+use crate::find::Hit;
 use bifrost_app::dispatch::DispatchQueue;
 use bifrost_app::kit::Image;
 use springboard::cg::pdf::doc::Doc;
@@ -51,6 +52,8 @@ pub enum Reply {
     Written(Result<PathBuf, String>),
     /// A print: the status line to show, which says whether the job was sent.
     Printed(String),
+    /// A search: the text searched for and the lines that hold it, in page order.
+    Found(String, Vec<Hit>),
 }
 
 /// A job for the worker: it runs on the worker thread with the parsed file and returns its reply.
