@@ -158,8 +158,10 @@ mod tests {
         fs::write(root.join("docs/deep/report-b.txt"), b"x").unwrap();
         fs::write(root.join(".hidden/report-c.txt"), b"x").unwrap();
         fs::write(root.join("other.txt"), b"x").unwrap();
+        // Order is by entry name within each folder, depth first: `deep` sorts before `report-a.txt`, so the
+        // subfolder's match comes first.
         let found = search(&root, "REPORT");
-        assert_eq!(found, vec![root.join("docs/report-a.txt"), root.join("docs/deep/report-b.txt")]);
+        assert_eq!(found, vec![root.join("docs/deep/report-b.txt"), root.join("docs/report-a.txt")]);
         assert_eq!(search(&root, "other"), vec![root.join("other.txt")]);
         let _ = fs::remove_dir_all(&root);
     }
