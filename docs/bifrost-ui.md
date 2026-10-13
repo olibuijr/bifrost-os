@@ -3691,3 +3691,13 @@ Decisions and gaps: a stroke measures its width and dash with the CTM at stroke 
 unpremultiplied RGBA, not in a colour space. The old stroker used round joins and caps; the default is now butt caps
 and miter joins with a limit of 10, as in Core Graphics. No PDF context (printing task), no patterns or shadings.
 Tests are host golden-pixel tests, not yet run on Midget.
+
+#### Declarative drag and drop and share by representation (Sprint 11)
+
+`bifrost_app::transfer_drag` builds on `Transferable`. `draggable(&reps, &value)` returns a `Dragged` (the session items offering every type
+the value exports, a promised file for a file representation, and the data per type). `DropTarget::new(id, reps, action)` implements
+`bifrost_ui::drag_session::Destination`: it registers for the importable types, answers the operation set with `wanting`, exposes
+`is_targeted()` (the `isTargeted` binding, cleared by the new `Destination::exited`), and on drop rebuilds the values for `action`.
+`transfer::share_items` and `share::show_transferable` / `SharingService::sharing_services_for_transferable` drive the share menu from the
+exported representations; `transfer::paste_values` reads every pasteboard item a model can import.
+Not done yet: the shell pasteboard wire still carries one item, and the view kit has no modifier that attaches these to a view.
