@@ -14,7 +14,7 @@ pub const TAG_FILENAME_EXTENSION: &str = "public.filename-extension";
 /// `UTTagClass.mimeType`.
 pub const TAG_MIME_TYPE: &str = "public.mime-type";
 
-/// A tag class identifier (`UTTagClass`): the two Apple ones, or any other string such as a pasteboard class.
+/// A tag class identifier (`UTTagClass`): the two built-in ones, or any other string such as a pasteboard class.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UtTagClass(pub String);
 

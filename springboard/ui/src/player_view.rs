@@ -1,4 +1,4 @@
-//! `AVPlayerView` and SwiftUI `VideoPlayer(player:videoOverlay:)` as pure state: the controls style, the chrome that
+//! `AVPlayerView` and the declarative `VideoPlayer(player:videoOverlay:)` as pure state: the controls style, the chrome that
 //! style shows, the layout of that chrome, hit-testing and time labels. The view drives a `PlayerHandle` (the app's
 //! existing player) and decodes nothing. Nothing is drawn here.
 use crate::media_time::MediaTime;
@@ -216,7 +216,7 @@ pub fn format_remaining(current: f64, duration: f64) -> String {
     format!("-{}", format_time((duration - current).max(0.0)))
 }
 
-/// SwiftUI `VideoPlayer(player:videoOverlay:)`: the player view with inline controls and an overlay drawn over the video.
+/// Declarative `VideoPlayer(player:videoOverlay:)`: the player view with inline controls and an overlay drawn over the video.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VideoPlayer<O> {
     pub view: PlayerView,
@@ -321,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_match_apple() {
+    fn defaults_match_reference() {
         let v = PlayerView::new();
         assert_eq!(v.controls_style, ControlsStyle::Inline);
         assert!(!v.shows_full_screen_toggle_button);

@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn representation_types_round_trip_by_apple_name() {
+    fn representation_types_round_trip_by_reference_name() {
         for t in [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail] {
             assert_eq!(RepresentationType::parse(t.as_str()), Some(t));
         }

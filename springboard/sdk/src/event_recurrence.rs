@@ -770,7 +770,7 @@ mod tests {
     }
 
     #[test]
-    fn rule_fields_mirror_the_apple_names() {
+    fn rule_fields_mirror_the_reference_names() {
         let r = rule("RRULE:FREQ=MONTHLY;BYDAY=2TU;BYSETPOS=1;COUNT=4");
         assert_eq!(r.frequency, Frequency::Monthly);
         assert_eq!(r.days_of_the_week, vec![RecurrenceDayOfWeek::with_week_number(3, 2)]);

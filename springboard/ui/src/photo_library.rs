@@ -81,7 +81,7 @@ pub enum SortKey {
     Duration,
 }
 
-/// `NSSortDescriptor` over an asset key.
+/// `SortDescriptor` over an asset key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SortDescriptor {
     pub key: SortKey,

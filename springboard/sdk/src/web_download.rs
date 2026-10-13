@@ -1,7 +1,7 @@
-//! Downloads started by web content (WebKit's `WKDownload` and `WKDownloadDelegate`).
+//! Downloads started by web content (WebKit's `WebDownload` and `WebDownloadDelegate`).
 //!
 //! A navigation becomes a download when the response carries `Content-Disposition: attachment` or a MIME type the
-//! view cannot render (`navigation_response_policy`, `WKNavigationResponsePolicy.download`). The app then owns a
+//! view cannot render (`navigation_response_policy`, `NavigationResponsePolicy.download`). The app then owns a
 //! [`WebDownload`]: it asks the delegate where to save (`download(_:decideDestinationUsing:...)`), tracks
 //! `progress`, and can `cancel` to get [`ResumeData`] (offset and ETag) that `resume_headers` turns into a Range
 //! request. This module is pure state; the transfer itself runs in the URL client or the engine.
@@ -10,12 +10,12 @@ use std::path::{Path, PathBuf};
 
 use crate::webview::WebViewId;
 
-/// What the view does with a response (`WKNavigationResponsePolicy`).
+/// What the view does with a response (`NavigationResponsePolicy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavigationResponsePolicy {
     Cancel,
     Allow,
-    /// `WKNavigationResponsePolicy.download`: the navigation becomes a `WebDownload`.
+    /// `NavigationResponsePolicy.download`: the navigation becomes a `WebDownload`.
     Download,
 }
 
@@ -128,7 +128,7 @@ pub enum WebDownloadState {
     Cancelled,
 }
 
-/// `WKDownload`.
+/// `WebDownload`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WebDownload {
     /// `originalRequest` URL.
@@ -243,7 +243,7 @@ pub enum RedirectDecision {
     Cancel,
 }
 
-/// `WKDownloadDelegate`. Return values stand for the completion handlers.
+/// `WebDownloadDelegate`. Return values stand for the completion handlers.
 pub trait WebDownloadDelegate {
     /// `download(_:decideDestinationUsing:suggestedFilename:completionHandler:)`: the file to write, or `None` to cancel.
     fn decide_destination(&mut self, download: &WebDownload, response_url: &str, suggested_filename: &str) -> Option<PathBuf>;

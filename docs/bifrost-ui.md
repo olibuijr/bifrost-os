@@ -164,7 +164,7 @@ received, search filtered, and Edit Select All/Copy/Cut/Paste completed.
 Core/protocol/Files/shell focused tests passed. Captures live in
 `~/Pictures/tab/bifrost-ui-final.png` and `bifrost-ui-menu-verified.png`.
 
-## AppKit drawing and print layout (`bifrost_app::appkit_drawing`)
+## AppKit drawing and print layout (`bifrost_app::drawing_model`)
 
 `BezierPath` (NSBezierPath: move/line/curve, close, appendRect/Oval/RoundedRect/Arc, `bounds`, `contains` under
 `WindingRule` NonZero or EvenOdd, `set_line_dash`, `line_width`, cap and join styles, `fill`/`stroke`/`add_clip` on a
@@ -1818,7 +1818,7 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
 Tests: `bifrost_proto::spotlight` (wire round trip, packet bound), `bifrost_app::spotlight` (`Ctx::testing` + `take_sent`),
 `springboard::shell::spotindex` (ranking, replace, delete, bounds, disk round trip).
 
-Query side (`bifrost_ui::spotlight_query`, pure model, host-tested, not yet wired to the shell or `bifrost_app`):
+Query side (`bifrost_ui::quicksearch_query`, pure model, host-tested, not yet wired to the shell or `bifrost_app`):
 `SearchQuery::new(query_string, QueryContext{fetch_attributes, filter_queries, source_options})` with `start(items, now,
 found_items, completion)` (batches of 8, `cancel()` / `CancelHandle`, `found_item_count`); language `attr == "text"`
 (`!=`, `<` `>` `<=` `>=` for numbers and times), `*` wildcard, modifiers `c` `d` `w`, `&&` over `||`, parentheses,
@@ -2553,7 +2553,7 @@ text detection exists). `CIRenderDestination` and depth effects stay gaps (need 
 Perspective and triangle tiles, displacement, circle splash and torus lens are not built. Falloffs are linear
 in the distance from the centre, which may differ from the reference curve; check on Midget before promoting.
 
-## Foundation and Core Foundation small gaps (`predicate_validating`, `cf_bundle`, `dispatch_io`, `apple_events`)
+## Foundation and Core Foundation small gaps (`predicate_validating`, `cf_bundle`, `dispatch_io`, `app_events`)
 
 - **Foundation: `bifrost_app::predicate_validating`** (`NSPredicateValidating`). `Predicate` (comparison, `And`, `Or`, `Not`),
   `PredicateVisitor`, `ValidationPolicy::new().allow("title", &[Operator::Contains]).allow_key("date")` and the
@@ -2568,10 +2568,10 @@ in the distance from the centre, which may differ from the reference curve; chec
   over a file or pipe end. `read(offset, length, queue, handler)` calls `handler(done, data, error)` per chunk, then once
   with `done == true`; `write(offset, data, queue, handler)` hands back the unwritten remainder. `set_limit` is the
   high-water chunk size, `set_low_water` batches chunks, `close` ends operations with `ECANCELED` (125).
-- **Core Services: `bifrost_app::apple_events`** (`AEDesc`, `AESendMessage`, `AEInstallEventHandler`). `AppleEvent::new(class,
+- **Core Services: `bifrost_app::app_events`** (`AEDesc`, `AESendMessage`, `AEInstallEventHandler`). `AppEvent::new(class,
   id, record)` travels as the control-socket method `ae.<class>.<id>`; `send_message(socket, &event, timeout)` returns an
-  `AppleEventReply` (`error_number` 0 on success, `-1708` not handled, `-1712` timeout, `-609` unreachable).
-  `AppleEventHandlers::install(class, id, handler)` and `rpc(method, params)` serve events from `Application::rpc`.
+  `AppEventReply` (`error_number` 0 on success, `-1708` not handled, `-1712` timeout, `-609` unreachable).
+  `AppEventHandlers::install(class, id, handler)` and `rpc(method, params)` serve events from `Application::rpc`.
 
 All four are host-tested only; rows stay `partial` until checked on Midget.
 

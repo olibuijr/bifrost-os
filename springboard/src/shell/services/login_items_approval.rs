@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn registering_twice_is_already_registered_with_the_apple_code() {
+    fn registering_twice_is_already_registered_with_the_reference_code() {
         assert_eq!(call_error(LoginStatus::Enabled, "register"), Some(("already_registered", 11)));
         assert_eq!(call_error(LoginStatus::RequiresApproval, "register"), Some(("already_registered", 11)));
         assert_eq!(call_error(LoginStatus::NotRegistered, "register"), None);

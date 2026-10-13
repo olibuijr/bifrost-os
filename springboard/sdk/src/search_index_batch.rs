@@ -1,4 +1,4 @@
-//! Index completion results, errors and batches for Core Spotlight (`CSIndexError`, `beginBatch()`,
+//! Index completion results, errors and batches for the search index (`CSIndexError`, `beginBatch()`,
 //! `endBatch(withClientState:completionHandler:)`, `fetchLastClientState(completionHandler:)`).
 //!
 //! The shell index is fire-and-forget, so the app keeps a [`SearchIndexLedger`]: a model of what it has indexed. The
@@ -13,7 +13,7 @@ use crate::Ctx;
 pub const MAX_INDEXED_ITEMS: usize = 1000;
 /// The most text bytes one item may carry across title, description, keywords, custom values, authors and content type.
 pub const MAX_ATTRIBUTE_BYTES: usize = 4096;
-/// `endBatch(withClientState:)` takes at most this many bytes (Apple's limit is 250).
+/// `endBatch(withClientState:)` takes at most this many bytes (the reference limit is 250).
 pub const MAX_CLIENT_STATE_BYTES: usize = 250;
 
 /// `CSIndexError.Code`.

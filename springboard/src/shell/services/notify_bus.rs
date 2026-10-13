@@ -55,7 +55,7 @@ pub const MAX_TOKENS_PER_APP: usize = 64;
 const SYSTEM_PREFIX: &str = "system.";
 
 /// Whether `app` may hear `name`. The store-change names say that a person's private data changed, so only an app
-/// with that store's access hears them (Apple sends the contacts and event-store change notices only to apps that can
+/// with that store's access hears them (the reference platform sends the contacts and event-store change notices only to apps that can
 /// read the store). Every other name is open to all apps.
 fn may_hear(app: &str, name: &str) -> bool {
     match name {

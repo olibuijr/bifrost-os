@@ -1,8 +1,8 @@
-//! Drag session state machine (`NSDraggingSession`, `NSDraggingSource`, `NSDraggingDestination`): operation
-//! negotiation between the source's allowed mask and the destination's answer, and the callbacks in Apple's order:
+//! Drag session state machine (`DraggingSession`, `DraggingSource`, `DraggingDestination`): operation
+//! negotiation between the source's allowed mask and the destination's answer, and the callbacks in the reference order:
 //! entered, updated..., exited, or performDragOperation then concludeDragOperation.
 
-/// `NSDragOperation` bits.
+/// `DragOperation` bits.
 pub mod op {
     pub const NONE: u8 = 0;
     pub const COPY: u8 = 1;
@@ -11,8 +11,8 @@ pub mod op {
     pub const EVERY: u8 = COPY | LINK | MOVE;
 }
 
-/// One pasteboard item in a drag (`NSDraggingItem` with an `NSPasteboardItem`): the types it carries, and an
-/// optional file promise (`NSFilePromiseProvider`) whose file is written on drop.
+/// One pasteboard item in a drag (`DraggingItem` with an `PasteboardItem`): the types it carries, and an
+/// optional file promise (`FilePromiseProvider`) whose file is written on drop.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DraggingItem {
     pub types: Vec<String>,

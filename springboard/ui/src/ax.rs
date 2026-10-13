@@ -456,7 +456,7 @@ pub fn take_frame() -> Vec<Node> {
     FRAME.with(|f| std::mem::take(&mut *f.borrow_mut()))
 }
 
-/// parity: `NSAccessibility.Notification`, the ones a default handler posts.
+/// parity: `Accessibility.Notification`, the ones a default handler posts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Notification {
     /// `.valueChanged`
@@ -475,7 +475,7 @@ pub enum Request {
     Decrement,
 }
 
-/// The settable state of one control, keyed on its role: the default `NSAccessibilityProtocol` behaviour for kit sliders
+/// The settable state of one control, keyed on its role: the default accessibility behaviour for sliders
 /// (`.slider`) and text fields (`.textField`). Other roles are left unchanged.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settable {

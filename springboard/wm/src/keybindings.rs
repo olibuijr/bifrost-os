@@ -1,4 +1,4 @@
-//! Compositor key bindings (the labwc `rc.xml` set): Super+Space opens Spotlight, Super+A the app list, Alt+Tab cycles
+//! Compositor key bindings (the labwc `rc.xml` set): Super+Space opens the search panel, Super+A the app list, Alt+Tab cycles
 //! the focus, Alt+F4 closes the focused window and Ctrl+Super+arrows tile it. The shell only gets keys while one of its
 //! surfaces has focus, so the compositor takes these chords before any client sees them.
 //!
@@ -26,8 +26,8 @@ pub mod keysym {
 pub const CONTROL_ADDR: &str = "127.0.0.1:7777";
 /// The app list program Super+A starts.
 pub const APPS_PROGRAM: &str = "/usr/bin/bifrost-apps";
-/// The line sent to the shell for Spotlight.
-pub const SPOTLIGHT_LINE: &[u8] = b"spotlight\n";
+/// The line sent to the shell for the search panel.
+pub const QUICKSEARCH_LINE: &[u8] = b"quicksearch\n";
 
 /// The modifier keys held with a chord.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -45,8 +45,8 @@ impl From<&ModifiersState> for Mods {
 /// What a compositor key binding does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
-    /// Super+Space: sends `spotlight` to the shell control port.
-    Spotlight,
+    /// Super+Space: sends `quicksearch` to the shell control port.
+    QuickSearch,
     /// Super+A: starts the app list.
     Apps,
     /// Alt+Tab: focuses the next window.
@@ -57,14 +57,14 @@ pub enum Action {
     Tile(Arrow),
 }
 
-/// The action a chord is bound to. The modifiers must match exactly: Super+Shift+Space is not Spotlight.
+/// The action a chord is bound to. The modifiers must match exactly: Super+Shift+Space is not the search panel.
 pub fn action(sym: u32, mods: Mods) -> Option<Action> {
     let none = Mods::default();
     let super_only = mods == Mods { logo: true, ..none };
     let alt_only = mods == Mods { alt: true, ..none };
     let ctrl_super = mods == Mods { logo: true, ctrl: true, ..none };
     match sym {
-        keysym::SPACE if super_only => Some(Action::Spotlight),
+        keysym::SPACE if super_only => Some(Action::QuickSearch),
         keysym::A if super_only => Some(Action::Apps),
         keysym::TAB if alt_only => Some(Action::NextWindow),
         keysym::F4 if alt_only => Some(Action::CloseWindow),
@@ -84,7 +84,7 @@ fn tell_shell() {
     let Ok(addr) = CONTROL_ADDR.parse() else { return };
     match TcpStream::connect_timeout(&addr, Duration::from_millis(200)) {
         Ok(mut s) => {
-            if let Err(e) = s.write_all(SPOTLIGHT_LINE) {
+            if let Err(e) = s.write_all(QUICKSEARCH_LINE) {
                 eprintln!("bifrost-wm: shell control port: {e}");
             }
         }
@@ -96,7 +96,7 @@ impl WmState {
     /// Performs a key binding's action.
     pub fn run_action(&mut self, action: Action) {
         match action {
-            Action::Spotlight => tell_shell(),
+            Action::QuickSearch => tell_shell(),
             Action::Apps => {
                 if let Err(e) = std::process::Command::new(APPS_PROGRAM).spawn() {
                     eprintln!("bifrost-wm: {APPS_PROGRAM}: {e}");
@@ -137,7 +137,7 @@ mod tests {
     const CTRL_SUPER: Mods = Mods { logo: true, alt: false, ctrl: true, shift: false };
 
     #[test]
-    fn super_space_is_spotlight() { assert_eq!(action(keysym::SPACE, SUPER), Some(Action::Spotlight)); }
+    fn super_space_is_quicksearch() { assert_eq!(action(keysym::SPACE, SUPER), Some(Action::QuickSearch)); }
 
     #[test]
     fn super_a_starts_the_app_list() { assert_eq!(action(keysym::A, SUPER), Some(Action::Apps)); }
@@ -177,5 +177,5 @@ mod tests {
     }
 
     #[test]
-    fn spotlight_is_one_line_for_the_control_port() { assert_eq!(SPOTLIGHT_LINE, b"spotlight\n"); }
+    fn quicksearch_is_one_line_for_the_control_port() { assert_eq!(QUICKSEARCH_LINE, b"quicksearch\n"); }
 }

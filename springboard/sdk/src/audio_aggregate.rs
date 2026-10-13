@@ -1,5 +1,5 @@
 //! Aggregate devices (`AudioHardwareCreateAggregateDevice`) and the hardware clock domain
-//! (`kAudioDevicePropertyClockDomain`), as a pure model. The description serialises with the same keys as Apple's
+//! (`kAudioDevicePropertyClockDomain`), as a pure model. The description serialises with the same keys as the reference platform's
 //! `kAudioAggregateDevice*Key` dictionary. Not implemented: drift compensation resampling (the flag is carried and
 //! reported, nothing corrects drift) and the audiod command that would create the device.
 use bifrost_core::json::Json;
@@ -69,7 +69,7 @@ impl AggregateDescription {
             .or(self.sub_devices.first().map(|s| s.uid.as_str()))
     }
 
-    /// The dictionary Apple's keys describe.
+    /// The dictionary the reference platform's keys describe.
     pub fn to_json(&self) -> Json {
         let subs = self
             .sub_devices
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn it_serialises_with_apple_keys_and_round_trips() {
+    fn it_serialises_with_reference_keys_and_round_trips() {
         let d = desc();
         let j = d.to_json();
         assert_eq!(j.str_field("master").as_deref(), Some("speaker"));

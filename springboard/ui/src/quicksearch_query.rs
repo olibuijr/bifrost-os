@@ -1,7 +1,7 @@
-//! Core Spotlight query side: `CSSearchQuery`, `CSSearchQueryContext`, `CSUserQuery`, `CSSuggestion`,
+//! Search index query side: `CSSearchQuery`, `CSSearchQueryContext`, `CSUserQuery`, `CSSuggestion`,
 //! `CSSearchableIndexDelegate` and acknowledged index writes with client state.
 //!
-//! Query language (as Apple's `queryString`): `attr == "text"` or `!=`, `<` `>` `<=` `>=` for numbers and times,
+//! Query language (as the reference `queryString`): `attr == "text"` or `!=`, `<` `>` `<=` `>=` for numbers and times,
 //! `*` wildcard inside text, modifiers after the closing quote (`c` ignore case, `d` ignore diacritics, `w` match any
 //! whole word of the value), `&&` binds tighter than `||`, parentheses group, and `$time.now` or `$time.now(-3600)`
 //! (seconds from now) as a time value. Pure model, std only; callers pass the clock.
@@ -25,7 +25,7 @@ pub enum Error {
 }
 
 impl Error {
-    pub const DOMAIN: &'static str = "bifrost.spotlight";
+    pub const DOMAIN: &'static str = "bifrost.quicksearch.query";
     pub fn code(self) -> u32 {
         match self {
             Error::InvalidQuery => 1,

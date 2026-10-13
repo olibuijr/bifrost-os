@@ -1,8 +1,8 @@
-//! Predicate validation (`NSPredicateValidating`): checks a predicate tree against a policy of allowed keys and
+//! Predicate validation (`PredicateValidating`): checks a predicate tree against a policy of allowed keys and
 //! operators before anything evaluates it, so a search field or a saved filter cannot reach keys or comparisons the
 //! app did not expose. The visitor walks compound predicates (`AND`, `OR`, `NOT`) and every comparison inside.
 
-/// Comparison operators (`NSComparisonPredicate.Operator`).
+/// Comparison operators (`ComparisonPredicate.Operator`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operator {
     Equal,
@@ -35,7 +35,7 @@ pub enum ValidationError {
     Empty,
 }
 
-/// Visits every comparison of a predicate (`NSPredicate` visitor).
+/// Visits every comparison of a predicate (`Predicate` visitor).
 pub trait PredicateVisitor {
     fn visit_comparison(&mut self, key: &str, op: Operator, value: &str) -> Result<(), ValidationError>;
 }
@@ -93,7 +93,7 @@ impl PredicateVisitor for ValidationPolicy {
     }
 }
 
-/// `NSPredicateValidating`: a type that decides whether a predicate may run against it.
+/// `PredicateValidating`: a type that decides whether a predicate may run against it.
 pub trait PredicateValidating {
     fn validate(&self, predicate: &Predicate) -> Result<(), ValidationError>;
 }

@@ -12,7 +12,7 @@ use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Se
 use std::collections::HashMap;
 
 pub const INBOX: &str = "INBOX";
-/// Most message texts kept at once. Past this the lowest UIDs (the oldest mail) are dropped; a dropped text is
+/// Most message texts kept at once. Past this the lowest UID values (the oldest mail) are dropped; a dropped text is
 /// asked for again when its message is opened.
 pub const MAX_CACHED_BODIES: usize = 64;
 /// One line of the list: a message, in the threaded view how many messages its conversation holds, and how far it is
@@ -330,7 +330,7 @@ impl Mail {
         }
     }
 
-    /// Keeps at most [`MAX_CACHED_BODIES`] texts: the open message and `keep` stay, the lowest UIDs go first.
+    /// Keeps at most [`MAX_CACHED_BODIES`] texts: the open message and `keep` stay, the lowest UID values go first.
     fn trim_bodies(&mut self, keep: u32) {
         while self.bodies.len() > MAX_CACHED_BODIES {
             let victim = self.bodies.keys().copied().filter(|&u| u != keep && Some(u) != self.open).min();

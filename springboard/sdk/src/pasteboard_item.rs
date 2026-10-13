@@ -1,9 +1,9 @@
-//! `PasteboardItem` (`NSPasteboardItem`): one copied thing offered in several typed representations. Types are UTType
+//! `PasteboardItem`: one copied thing offered in several typed representations. Types are UTType
 //! ids; a pasteboard holds a list of items (`pasteboard::NativePasteboard::write_items`).
 
 use bifrost_ui::uttype;
 
-/// `NSPasteboardItem`.
+/// `PasteboardItem`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PasteboardItem {
     reps: Vec<(String, Vec<u8>)>,

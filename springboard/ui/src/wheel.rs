@@ -1,11 +1,11 @@
-//! Scroll wheel events (`NSEvent` scrollWheel): `scrollingDeltaX/Y`, `hasPreciseScrollingDeltas`, `phase` and
+//! Scroll wheel events (scrollWheel): `scrollingDeltaX/Y`, `hasPreciseScrollingDeltas`, `phase` and
 //! `momentumPhase`. Pure model: the shell feeds raw wheel notches or touchpad pixel deltas and gets the event to
-//! deliver to `NSResponder.scrollWheel(with:)`.
+//! deliver to `scrollWheel(with:)`.
 
 /// Pixels one wheel line is worth when a device reports lines (a notched mouse wheel).
 pub const LINE_HEIGHT: f32 = 10.0;
 
-/// `NSEvent.Phase`.
+/// `Event.Phase`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
     None,

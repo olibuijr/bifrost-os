@@ -218,7 +218,7 @@ pub(crate) fn mirror(status: Status) {
 pub const ERROR_DOMAIN: &str = "SMAppServiceErrorDomain";
 
 /// The errors a registration or removal can report (the cases of the Service Management Errors reference).
-/// [`ServiceError::code`] is the `kSMError*` value of macOS 27 (`kSMErrorInternalFailure` 1 to
+/// [`ServiceError::code`] is the `kSMError*` value of the reference platform, release 27 (`kSMErrorInternalFailure` 1 to
 /// `kSMErrorAlreadyRegistered` 11).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ServiceError {
@@ -434,7 +434,7 @@ mod tests {
     }
 
     #[test]
-    fn the_domain_is_the_apple_service_domain() {
+    fn the_domain_is_the_reference_service_domain() {
         assert_eq!(ServiceError::InternalFailure.to_error().domain(), "SMAppServiceErrorDomain");
         assert_eq!(ServiceError::InternalFailure.to_error().code(), 1);
     }

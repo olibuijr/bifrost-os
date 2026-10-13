@@ -59,16 +59,16 @@
   {
    "feature": "App-side search queries",
    "apple": "CSSearchQuery, CSSearchQueryContext, Searching for information in your app",
-   "bifrost": "springboard/ui/src/searchquery.rs, springboard/sdk/src/quicksearch.rs (search_items); wired: springboard/src/shell/services/search_ranking.rs (search reply adds kind); springboard/sdk/src/search_ranking.rs (Hit.kind); springboard/ui/src/spotlight_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
+   "bifrost": "springboard/ui/src/searchquery.rs, springboard/sdk/src/quicksearch.rs (search_items); wired: springboard/src/shell/services/search_ranking.rs (search reply adds kind); springboard/sdk/src/search_ranking.rs (Hit.kind); springboard/ui/src/quicksearch_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
    "status": "partial",
-   "note": "Wave 2 (theme-23, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot query its own or other apps' indexed items through the SDK Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Added: spotlight_query::SearchQuery with query language (== != < > <= >=, * wildcard, c d w, && ||, parentheses, $time.now), incremental found_items batches, cancel, filter queries, QueryContext."
+   "note": "Wave 2 (theme-23, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot query its own or other apps' indexed items through the SDK Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Added: quicksearch_query::SearchQuery with query language (== != < > <= >=, * wildcard, c d w, && ||, parentheses, $time.now), incremental found_items batches, cancel, filter queries, QueryContext."
   },
   {
    "feature": "User query interface and suggestions",
    "apple": "CSUserQuery, CSUserQueryContext, CSSuggestion, Building a search interface for your app",
-   "bifrost": "springboard/src/shell/quicksearch.rs:273 (Documents group in the system Search panel); springboard/src/shell/quicksearch.rs:829 (suggestions_shown, the app-launch suggestions row); wired: springboard/src/shell/quicksearch.rs (Documents group); springboard/src/shell/spotindex.rs (parse_query, time_phrase, kind_word); springboard/ui/src/spotlight_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
+   "bifrost": "springboard/src/shell/quicksearch.rs:273 (Documents group in the system Search panel); springboard/src/shell/quicksearch.rs:829 (suggestions_shown, the app-launch suggestions row); wired: springboard/src/shell/quicksearch.rs (Documents group); springboard/src/shell/spotindex.rs (parse_query, time_phrase, kind_word); springboard/ui/src/quicksearch_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
    "status": "partial",
-   "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Added: spotlight_query::UserQuery, UserQueryContext, Suggestion: ranked results and title suggestions."
+   "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Added: quicksearch_query::UserQuery, UserQueryContext, Suggestion: ranked results and title suggestions."
   },
   {
    "feature": "Opening a search result",
@@ -80,9 +80,9 @@
   {
    "feature": "Errors and error domains",
    "apple": "CSIndexError, CSIndexErrorDomain, CSSearchQueryError, CSSearchQueryErrorDomain",
-   "bifrost": "springboard/sdk/src/quicksearch.rs; springboard/ui/src/spotlight_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
+   "bifrost": "springboard/sdk/src/quicksearch.rs; springboard/ui/src/quicksearch_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. indexing returns nothing, so no error codes reach the app. Added: spotlight_query::Error (InvalidQuery, Cancelled, RemoteConnection, BatchState) with stable codes."
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. indexing returns nothing, so no error codes reach the app. Added: quicksearch_query::Error (InvalidQuery, Cancelled, RemoteConnection, BatchState) with stable codes."
   },
   {
    "feature": "Custom attributes, localized strings and persons",

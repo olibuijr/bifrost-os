@@ -1,4 +1,4 @@
-//! `NSFileVersion` parity (Foundation).
+//! `FileVersion` parity (Foundation).
 //!
 //! A `FileVersionStore` is the per-app version store: a directory holding one folder per file, keyed by its canonical
 //! path (a safe save replaces the inode, so the inode cannot be the identity; a renamed file starts a new history). Each version is an atomic copy named `<millis>-<serial>.<d|k>`
@@ -7,7 +7,7 @@
 //! Mirrors `currentVersionOfItemAtURL:`, `otherVersionsOfItemAtURL:` (newest first),
 //! `addVersionOfItemAtURL:withContentsOfURL:options:`, `removeOtherVersionsOfItemAtURL:`,
 //! `replaceItemAtURL:options:` and `remove`. Discardable versions are pruned by count and age on every add.
-//! Gaps: no conflict versions (`isConflict` is always false, `isResolved` always true), no iCloud versions.
+//! Gaps: no conflict versions (`isConflict` is always false, `isResolved` always true), no cloud versions.
 
 use std::fs;
 use std::io;
@@ -17,21 +17,21 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 static SERIAL: AtomicU64 = AtomicU64::new(0);
 
-/// `NSFileVersionAddingOptions`.
+/// Options for adding a version.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AddingOptions {
     /// The system may delete the version to reclaim space (autosave snapshots).
     pub discardable: bool,
 }
 
-/// `NSFileVersionReplacingOptions`.
+/// Options for replacing an item with a version.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReplacingOptions {
     /// Consume the version's file after restoring it.
     pub by_moving: bool,
 }
 
-/// `NSFileVersion`.
+/// One saved version of a file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileVersion {
     url: PathBuf,

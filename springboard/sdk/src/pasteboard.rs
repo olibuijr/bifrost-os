@@ -22,10 +22,10 @@ pub const RTF: &str = "public.rtf";
 pub const PNG: &str = "public.png";
 pub const FILE_URL: &str = "public.file-url";
 
-/// `NSPasteboard.Name` raw values.
-pub const GENERAL: &str = "Apple CFPasteboard general";
-pub const DRAG: &str = "Apple CFPasteboard drag";
-pub const FIND: &str = "Apple CFPasteboard find";
+/// Names of the system pasteboards.
+pub const GENERAL: &str = "bifrost general";
+pub const DRAG: &str = "bifrost drag";
+pub const FIND: &str = "bifrost find";
 
 #[derive(Default)]
 struct State {
@@ -49,7 +49,7 @@ pub(crate) fn mirror(change_count: u32, items: Vec<(String, Vec<u8>)>) {
     });
 }
 
-/// `NSPasteboard`. Get it with [`NativePasteboard::general`] or [`NativePasteboard::named`].
+/// A named pasteboard. Get it with [`NativePasteboard::general`] or [`NativePasteboard::named`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativePasteboard {
     name: String,
@@ -59,15 +59,15 @@ impl NativePasteboard {
     pub fn general() -> Self {
         Self::named(GENERAL)
     }
-    /// `NSPasteboard(name:)`.
+    /// The pasteboard with the given name.
     pub fn named(name: &str) -> Self {
         NativePasteboard { name: name.to_string() }
     }
-    /// `NSPasteboard(name: .drag)`.
+    /// The drag pasteboard.
     pub fn drag() -> Self {
         Self::named(DRAG)
     }
-    /// `NSPasteboard(name: .find)`.
+    /// The find pasteboard.
     pub fn find() -> Self {
         Self::named(FIND)
     }

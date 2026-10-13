@@ -1,4 +1,4 @@
-//! The contact data model and an in-memory store, mirroring Apple's Contacts framework type by type: `Contact`
+//! The contact data model and an in-memory store, mirroring the reference contacts framework type by type: `Contact`
 //! (CNMutableContact), `LabeledValue` (CNLabeledValue), the `label` constants (CNLabel*), `Group`, `Container`
 //! and `ContainerType`, `Predicate` (CNContact.predicateFor*), `SaveRequest` (CNSaveRequest), `ContactStore`
 //! (CNContactStore) and `FetchedContact`, whose getters fail with `Error::PropertyNotFetched` for a key the fetch
@@ -15,7 +15,7 @@ pub mod label {
     pub const WORK: &str = "_$!<Work>!$_";
     pub const OTHER: &str = "_$!<Other>!$_";
     pub const MOBILE: &str = "_$!<Mobile>!$_";
-    pub const IPHONE: &str = "iPhone";
+    pub const DEVICE: &str = "_$!<Device>!$_";
     pub const MAIN: &str = "_$!<Main>!$_";
     pub const HOME_FAX: &str = "_$!<HomeFAX>!$_";
     pub const WORK_FAX: &str = "_$!<WorkFAX>!$_";

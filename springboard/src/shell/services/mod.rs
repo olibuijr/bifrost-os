@@ -15,13 +15,13 @@
 //! | Reference agent | BifrOSt module (under `springboard/src/shell/`) |
 //! |---|---|
 //! | Dock | `desktop_dock.rs`, `dock_stack.rs` |
-//! | Finder (desktop) | `desk.rs` |
+//! | Desktop file manager | `desk.rs` |
 //! | MenuBarAgent | `desktop_bar.rs` |
 //! | controlcenter | `control_center.rs` |
 //! | notificationcenterui | `notify/center.rs`, `notify/banner.rs`, `notify/lockwidgets.rs` |
 //! | usernotificationsd, UserNotificationCenter | `usernotif.rs`, `notify/store.rs`, `notify/schedule.rs`, `notify/permission.rs` |
 //! | WindowManager, WindowServer | `workspace.rs`, `window_fx.rs`, labwc |
-//! | Spotlight | `quicksearch.rs` |
+//! | Search panel | `quicksearch.rs` |
 //! | corespotlightd, mdworker.shared | `spotindex.rs` |
 //! | screencaptureui | `screenshot.rs`, `screenrec.rs` |
 //! | wallpaper | `wallpaper_page.rs` |
@@ -35,7 +35,7 @@
 //! | ScreenReaderUIServer | `accessibility/reader.rs` |
 //! | gamecontrolleragentd | `game_controllers_page.rs` |
 //!
-//! Siri, family controls, iCloud, search-party, Screen Time and the memory/expansion slot agents have no counterpart
+//! Voice assistant, family controls, cloud sync, search-party, Screen Time and the memory/expansion slot agents have no counterpart
 //! and stay gap rows.
 use super::Shell;
 use bifrost_core::json::Json;

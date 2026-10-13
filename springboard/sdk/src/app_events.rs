@@ -1,4 +1,4 @@
-//! Apple Events-style IPC (`AEDesc`, `AppleEvent`, `AESendMessage`, `AEInstallEventHandler`): typed requests to
+//! Event IPC (`AppEvent`, `AppEventReply`, `AppEventHandlers`): typed requests to
 //! another app with a reply descriptor and a timeout, carried over the app control socket (JSON-RPC, see
 //! `control`). An event is an (event class, event id) pair plus a parameter record; it travels as the method
 //! `ae.<class>.<id>` with the record as `params`. The reply descriptor holds the handler's result or its error
@@ -20,18 +20,18 @@ pub const ERR_TIMEOUT: i64 = -1712;
 /// `connectionInvalid` style failure: the target socket could not be reached.
 pub const ERR_TARGET_UNREACHABLE: i64 = -609;
 
-/// A typed event (`AppleEvent`): class, id and parameter record (`AEDesc` record).
+/// A typed event (`AppEvent`): class, id and parameter record (`AEDesc` record).
 #[derive(Clone, Debug, PartialEq)]
-pub struct AppleEvent {
+pub struct AppEvent {
     pub class: String,
     pub id: String,
     pub params: Json,
 }
 
-impl AppleEvent {
+impl AppEvent {
     /// `AECreateAppleEvent`.
-    pub fn new(class: &str, id: &str, params: Json) -> AppleEvent {
-        AppleEvent { class: class.into(), id: id.into(), params }
+    pub fn new(class: &str, id: &str, params: Json) -> AppEvent {
+        AppEvent { class: class.into(), id: id.into(), params }
     }
 
     /// The control-socket method this event travels as.
@@ -40,36 +40,36 @@ impl AppleEvent {
     }
 
     /// Reads an event back from a method name and params; None when it is not an `ae.` method.
-    pub fn from_method(method: &str, params: &Json) -> Option<AppleEvent> {
+    pub fn from_method(method: &str, params: &Json) -> Option<AppEvent> {
         let rest = method.strip_prefix("ae.")?;
         let (class, id) = rest.split_once('.')?;
         if class.is_empty() || id.is_empty() {
             return None;
         }
-        Some(AppleEvent::new(class, id, params.clone()))
+        Some(AppEvent::new(class, id, params.clone()))
     }
 }
 
 /// The reply descriptor: an error number and a result record.
 #[derive(Clone, Debug, PartialEq)]
-pub struct AppleEventReply {
+pub struct AppEventReply {
     pub error_number: i64,
     pub error_string: Option<String>,
     pub result: Json,
 }
 
-impl AppleEventReply {
+impl AppEventReply {
     pub fn ok(&self) -> bool {
         self.error_number == 0
     }
 }
 
-fn failed(code: i64, text: &str) -> AppleEventReply {
-    AppleEventReply { error_number: code, error_string: Some(text.into()), result: Json::Null }
+fn failed(code: i64, text: &str) -> AppEventReply {
+    AppEventReply { error_number: code, error_string: Some(text.into()), result: Json::Null }
 }
 
 /// `AESendMessage` with `kAEWaitReply`: sends `event` to the app listening at `socket` and waits up to `timeout`.
-pub fn send_message(socket: &Path, event: &AppleEvent, timeout: Duration) -> AppleEventReply {
+pub fn send_message(socket: &Path, event: &AppEvent, timeout: Duration) -> AppEventReply {
     let Ok(mut stream) = UnixStream::connect(socket) else {
         return failed(ERR_TARGET_UNREACHABLE, "target app is not reachable");
     };
@@ -96,7 +96,7 @@ pub fn send_message(socket: &Path, event: &AppleEvent, timeout: Duration) -> App
 }
 
 /// Turns one JSON-RPC reply line into a reply descriptor.
-pub fn parse_reply(line: &str) -> AppleEventReply {
+pub fn parse_reply(line: &str) -> AppEventReply {
     let Ok(v) = json::parse(line.trim()) else {
         return failed(ERR_TARGET_UNREACHABLE, "malformed reply");
     };
@@ -104,26 +104,26 @@ pub fn parse_reply(line: &str) -> AppleEventReply {
         let code = err.get("code").and_then(|c| c.number()).unwrap_or(-1.0) as i64;
         let msg = err.str_field("message");
         let number = if code == METHOD_NOT_FOUND { ERR_EVENT_NOT_HANDLED } else { code };
-        return AppleEventReply { error_number: number, error_string: msg, result: Json::Null };
+        return AppEventReply { error_number: number, error_string: msg, result: Json::Null };
     }
-    AppleEventReply { error_number: 0, error_string: None, result: v.get("result").cloned().unwrap_or(Json::Null) }
+    AppEventReply { error_number: 0, error_string: None, result: v.get("result").cloned().unwrap_or(Json::Null) }
 }
 
-type EventHandler = Box<dyn FnMut(&AppleEvent) -> Result<Json, RpcError>>;
+type EventHandler = Box<dyn FnMut(&AppEvent) -> Result<Json, RpcError>>;
 
 /// The receiving side (`AEInstallEventHandler`): handlers per (class, id). Plug `process` into `Application::rpc`.
 #[derive(Default)]
-pub struct AppleEventHandlers {
+pub struct AppEventHandlers {
     handlers: Vec<(String, String, EventHandler)>,
 }
 
-impl AppleEventHandlers {
+impl AppEventHandlers {
     pub fn new() -> Self {
         Self::default()
     }
 
     /// `AEInstallEventHandler`: replaces any handler for the same class and id.
-    pub fn install(&mut self, class: &str, id: &str, handler: impl FnMut(&AppleEvent) -> Result<Json, RpcError> + 'static) {
+    pub fn install(&mut self, class: &str, id: &str, handler: impl FnMut(&AppEvent) -> Result<Json, RpcError> + 'static) {
         self.remove(class, id);
         self.handlers.push((class.into(), id.into(), Box::new(handler)));
     }
@@ -134,7 +134,7 @@ impl AppleEventHandlers {
     }
 
     /// `AEProcessAppleEvent`.
-    pub fn process(&mut self, event: &AppleEvent) -> Result<Json, RpcError> {
+    pub fn process(&mut self, event: &AppEvent) -> Result<Json, RpcError> {
         match self.handlers.iter_mut().find(|(c, i, _)| *c == event.class && *i == event.id) {
             Some((_, _, h)) => h(event),
             None => Err(RpcError::new(METHOD_NOT_FOUND, format!("no handler for {}", event.method()))),
@@ -143,7 +143,7 @@ impl AppleEventHandlers {
 
     /// For `Application::rpc`: serves `ae.*` methods, answers METHOD_NOT_FOUND for the rest.
     pub fn rpc(&mut self, method: &str, params: &Json) -> Result<Json, RpcError> {
-        match AppleEvent::from_method(method, params) {
+        match AppEvent::from_method(method, params) {
             Some(ev) => self.process(&ev),
             None => Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}"))),
         }
@@ -162,16 +162,16 @@ mod tests {
 
     #[test]
     fn event_round_trips_through_method_name() {
-        let ev = AppleEvent::new("core", "open", obj("path", "/a"));
+        let ev = AppEvent::new("core", "open", obj("path", "/a"));
         assert_eq!(ev.method(), "ae.core.open");
-        assert_eq!(AppleEvent::from_method("ae.core.open", &ev.params), Some(ev));
-        assert_eq!(AppleEvent::from_method("app.info", &Json::Null), None);
-        assert_eq!(AppleEvent::from_method("ae.core.", &Json::Null), None);
+        assert_eq!(AppEvent::from_method("ae.core.open", &ev.params), Some(ev));
+        assert_eq!(AppEvent::from_method("app.info", &Json::Null), None);
+        assert_eq!(AppEvent::from_method("ae.core.", &Json::Null), None);
     }
 
     #[test]
     fn handlers_dispatch_by_class_and_id() {
-        let mut h = AppleEventHandlers::new();
+        let mut h = AppEventHandlers::new();
         h.install("core", "open", |ev| Ok(ev.params.clone()));
         let r = h.rpc("ae.core.open", &obj("x", "1")).unwrap();
         assert_eq!(r, obj("x", "1"));
@@ -202,7 +202,7 @@ mod tests {
             assert!(line.contains("\"method\":\"ae.core.open\""));
             s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"opened\":true}}\n").unwrap();
         });
-        let r = send_message(&path, &AppleEvent::new("core", "open", Json::Obj(vec![])), Duration::from_secs(5));
+        let r = send_message(&path, &AppEvent::new("core", "open", Json::Obj(vec![])), Duration::from_secs(5));
         t.join().unwrap();
         assert!(r.ok());
         assert_eq!(r.result.get("opened"), Some(&Json::Bool(true)));
@@ -219,14 +219,14 @@ mod tests {
             let _ = s.read(&mut sink);
             std::thread::sleep(Duration::from_millis(400));
         });
-        let r = send_message(&path, &AppleEvent::new("core", "slow", Json::Null), Duration::from_millis(100));
+        let r = send_message(&path, &AppEvent::new("core", "slow", Json::Null), Duration::from_millis(100));
         t.join().unwrap();
         assert_eq!(r.error_number, ERR_TIMEOUT);
     }
 
     #[test]
     fn unreachable_target_is_reported() {
-        let r = send_message(Path::new("/nonexistent/x.sock"), &AppleEvent::new("a", "b", Json::Null), Duration::from_millis(50));
+        let r = send_message(Path::new("/nonexistent/x.sock"), &AppEvent::new("a", "b", Json::Null), Duration::from_millis(50));
         assert_eq!(r.error_number, ERR_TARGET_UNREACHABLE);
     }
 }

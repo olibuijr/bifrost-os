@@ -133,7 +133,7 @@ impl Kind {
     }
 }
 
-/// Which edge or corner of a frame the pointer is on (`NSCursor.FrameResizePosition`).
+/// Which edge or corner of a frame the pointer is on (`Cursor.FrameResizePosition`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FrameResizePosition {
     Top,
@@ -162,20 +162,20 @@ macro_rules! direction_set {
 }
 
 direction_set!(
-    /// Directions an edge can still move (`NSCursor.FrameResizeDirections`).
+    /// Directions an edge can still move (`Cursor.FrameResizeDirections`).
     FrameResizeDirections { INWARD = 1, OUTWARD = 2 }
 );
 direction_set!(
-    /// `NSCursor.ColumnResizeDirections`.
+    /// `Cursor.ColumnResizeDirections`.
     ColumnResizeDirections { LEFT = 1, RIGHT = 2 }
 );
 direction_set!(
-    /// `NSCursor.RowResizeDirections`.
+    /// `Cursor.RowResizeDirections`.
     RowResizeDirections { UP = 1, DOWN = 2 }
 );
 
 impl Kind {
-    /// `NSCursor.frameResize(position:directions:)`. A one-way edge shows the one-sided arrow; corners only have
+    /// `Cursor.frameResize(position:directions:)`. A one-way edge shows the one-sided arrow; corners only have
     /// diagonal shapes. No direction at all shows the arrow.
     pub fn frame_resize(position: FrameResizePosition, directions: FrameResizeDirections) -> Kind {
         use FrameResizePosition::*;
@@ -199,7 +199,7 @@ impl Kind {
         }
     }
 
-    /// `NSCursor.columnResize(directions:)`.
+    /// `Cursor.columnResize(directions:)`.
     pub fn column_resize(directions: ColumnResizeDirections) -> Kind {
         let (l, r) = (directions.contains(ColumnResizeDirections::LEFT), directions.contains(ColumnResizeDirections::RIGHT));
         match (l, r) {
@@ -210,7 +210,7 @@ impl Kind {
         }
     }
 
-    /// `NSCursor.rowResize(directions:)`.
+    /// `Cursor.rowResize(directions:)`.
     pub fn row_resize(directions: RowResizeDirections) -> Kind {
         let (u, d) = (directions.contains(RowResizeDirections::UP), directions.contains(RowResizeDirections::DOWN));
         match (u, d) {
