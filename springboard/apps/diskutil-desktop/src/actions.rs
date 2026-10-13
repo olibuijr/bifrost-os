@@ -105,9 +105,15 @@ pub fn plan(action: Action, disks: &[Disk], name: &str, mounted_partitions: &[St
 /// Runs the commands in order on a new thread. The receiver gets one result: Ok when every command succeeded, else the
 /// first error text (the tool's stderr when it has one).
 pub fn spawn(plan: Vec<Command>) -> Receiver<Result<(), String>> {
+    spawn_with(plan, false)
+}
+
+/// Like `spawn`. With `repairing` a checker that exits 1 after fixing something counts as a success (an image resize
+/// runs `e2fsck` first).
+pub fn spawn_with(plan: Vec<Command>, repairing: bool) -> Receiver<Result<(), String>> {
     let (tx, rx) = channel();
     std::thread::spawn(move || {
-        let result = disk_run::run_plan(&plan, false).map(|_| ());
+        let result = disk_run::run_plan(&plan, repairing).map(|_| ());
         let _ = tx.send(result);
     });
     rx

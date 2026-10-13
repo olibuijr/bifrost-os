@@ -278,7 +278,7 @@ pub fn partition_device(disk: &str, index: u32) -> String {
 
 /// A label is at most the file system's limit, uses letters, digits, spaces, `-` and `_`, and does not start or end
 /// with a space. An empty label is allowed.
-fn check_label(label: &str, fs: Personality) -> Result<(), Refusal> {
+pub fn check_label(label: &str, fs: Personality) -> Result<(), Refusal> {
     let ok = label.len() <= fs.label_limit()
         && label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b' ' || b == b'-' || b == b'_')
         && !label.starts_with(' ')
