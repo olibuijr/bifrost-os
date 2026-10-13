@@ -3,23 +3,23 @@
   "doc": "https://developer.apple.com/documentation/photokit",
   "macos_since": "10.11",
   "status": "partial",
-  "bifrost": "springboard/src/shell/photos/ (built-in Photos app, reads ~/Pictures); springboard/apps/notes-desktop/src/notes/picker.rs (camera-roll sheet). No app-facing photo API in springboard/sdk/src/",
+  "bifrost": "springboard/src/shell/photos/ (built-in Photos app, reads ~/Pictures); springboard/apps/notes-desktop/src/notes/picker.rs (camera-roll sheet). App API: springboard/sdk/src/photo_library.rs with the photos service",
   "summary": "BifrOSt has a built-in Photos app that browses a folder-based library (All Photos, Favorites, Recently Deleted, Screenshots, Recents), with thumbnails, a viewer, a slideshow, a basic editor and JPEG EXIF reading. Apps get no PhotoKit-style API: there is no shared library access, no asset fetch, no picker, no Live Photo, no editing extension and no change observation.",
   "rea_evidence": "ev_c5daec50d0ec7872629a366160cc42fbfa15d118ce6fd1d0e4113eb6a3df1689",
   "features": [
     {
       "feature": "Shared photo library access (PHPhotoLibrary)",
       "apple": "PHPhotoLibrary, PHPhotosError, PHPhotosErrorDomain",
-      "bifrost": "springboard/ui/src/photo_access.rs",
+      "bifrost": "springboard/ui/src/photo_access.rs; springboard/sdk/src/photo_library.rs, springboard/src/shell/services/photos.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object manages access or changes to the library; Notes calls the springboard library module directly. No permission or authorization flow for apps."
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object manages access or changes to the library; Notes calls the springboard library module directly. No permission or authorization flow for apps. Sprint 5: app-facing PHPhotoLibrary.authorization_status/request_authorization in springboard/sdk/src/photo_library.rs, answered by the photos service (springboard/src/shell/services/photos.rs); denied without the photos manifest permission. Host unit tests only; Midget check pending. No access sheet or change observation."
     },
     {
       "feature": "Asset retrieval and fetch options",
       "apple": "PHAsset, PHAssetCollection, PHCollectionList, PHFetchResult, PHFetchOptions, PHObject",
-      "bifrost": "springboard/ui/src/photo_fetch.rs; wired: springboard/src/shell/photos/models.rs (fetch model of springboard/ui/src/photo_fetch.rs; Sort by Date row in the album picker)",
+      "bifrost": "springboard/ui/src/photo_fetch.rs; wired: springboard/src/shell/photos/models.rs (fetch model of springboard/ui/src/photo_fetch.rs; Sort by Date row in the album picker); springboard/sdk/src/photo_library.rs, springboard/src/shell/services/photos.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 5: PHAsset.fetch_assets with PHFetchOptions (sort descriptors, media type and creation date predicate, fetch limit) and PHFetchResult (count, object_at) in springboard/sdk/src/photo_library.rs; the photos service answers from ~/Pictures with stable localIdentifiers. Collections and isFavorite are not exposed. Midget check pending."
     },
     {
       "feature": "Smart albums (screenshots, recents, recently deleted)",
@@ -38,9 +38,9 @@
     {
       "feature": "Image and thumbnail loading and caching",
       "apple": "PHImageManager, PHCachingImageManager, PHImageRequestOptions, PHVideoRequestOptions",
-      "bifrost": "springboard/ui/src/photo_caching.rs; wired: springboard/src/shell/photos/mod.rs (request_thumbs uses bifrost_ui::photo_caching::Manager as the record of the grid window)",
+      "bifrost": "springboard/ui/src/photo_caching.rs; wired: springboard/src/shell/photos/mod.rs (request_thumbs uses bifrost_ui::photo_caching::Manager as the record of the grid window); springboard/sdk/src/photo_library.rs, springboard/src/shell/services/photos.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The cache is internal to the Photos app. No request API with delivery modes or preheating for apps. Video is not handled. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 5 (w5-photokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The cache is internal to the Photos app. No request API with delivery modes or preheating for apps. Video is not handled. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 5: PHImageManager.request_image (aspect fit or fill thumbnail that fits the target size) in springboard/sdk/src/photo_library.rs using image_source; no caching manager or progress handler for apps. Midget check pending."
     },
     {
       "feature": "Asset metadata (EXIF and extended attributes)",
@@ -135,7 +135,7 @@
     }
   ],
   "gaps": [
-    "No app-facing photo library API (PHPhotoLibrary): apps cannot fetch, load or create assets.",
+    "App-facing photo library covers fetch, authorization and thumbnails only: no asset creation, collections, isFavorite or change observation.",
     "No system picker for apps: only Notes has a local camera-roll sheet that reads ~/Pictures directly.",
     "No Live Photo support in the library or the viewer (PHLivePhoto).",
     "No video assets in the Photos app (PHAsset video media type).",
