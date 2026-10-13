@@ -101,9 +101,9 @@
   {
    "feature": "Errors and validation",
    "apple": "CNError, CNErrorDomain, CNErrorUserInfo keys",
-   "bifrost": "springboard/src/shell/contactstore.rs:save (io::Error InvalidInput)",
+   "bifrost": "springboard/sdk/src/contacts.rs:ContactsError (from_message, From<contact_access::Error>, decode_error); springboard/ui/src/contact_access.rs:Error; springboard/src/shell/services/contacts.rs:247 (read-only message); springboard/src/shell/contactstore.rs:save (io::Error InvalidInput)",
    "status": "partial",
-   "note": "Errors are std io errors with fixed text (Invalid contact, Contacts file too large, Unknown contacts format). No typed error codes for apps."
+   "note": "Apps get a typed ContactsError from the SDK for access and read-only failures and for the access model errors. The store still reports fixed io text for file-level failures (invalid contact, file too large, unknown format). The CNErrorCode raw values are not mapped: they are not verified against Apple's reference, so apps match on the variant."
   },
   {
    "feature": "Notes and images",
