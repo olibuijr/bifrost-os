@@ -13,10 +13,10 @@
  "summary": {
   "features": 46,
   "parity": 10,
-  "partial": 24,
-  "gap": 10,
+  "partial": 28,
+  "gap": 6,
   "n/a": 2,
-  "coverage_pct": 50.0
+  "coverage_pct": 54.5
  },
  "features": [
   {
@@ -79,17 +79,17 @@
    "apple": "Info.plist CFBundleDocumentTypes: Word 2007/2003 XML/97, OpenDocument Text, Web archive",
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/docx.rs:1, springboard/apps/textedit-desktop/src/odt.rs:1, springboard/apps/textedit-desktop/src/document.rs:44",
-   "note": ".docx and .odt open and save (paragraphs, runs, bold/italic/underline/strike, size, colour, highlight, baseline, font family, alignment, spacing, lists) through a ZIP reader/writer (zipdoc.rs). Not carried: pictures, tables, headers/footers, comments, styles.xml defaults; .doc, Word XML and web archive are still missing.",
+   "note": ".docx and .odt open and save (paragraphs, runs, bold/italic/underline/strike, size, colour, highlight, baseline, font family, alignment, spacing, lists) through a ZIP reader/writer (zipdoc.rs). Hyperlinks, line and page breaks and the title, subject, author and keywords are carried (docx.rs, odt.rs). Not carried: pictures, tables, headers/footers, comments, styles.xml defaults; .doc, Word XML and web archive are still missing. built on parity/team-d-textedit; not yet verified on Midget.",
    "wire": "Start with .docx and .odt (zip + XML): new docx.rs/odt.rs mapping paragraphs, runs (b/i/u, font, size, colour) and alignment to text.rs cells; add types in document.rs read/write."
   },
   {
    "feature": "Plain text encodings (open/save encoding accessory, customize list)",
    "area": "panel",
    "apple": "EncodingAccessory.nib, SelectEncodingsPanel.nib; Localizable: encoding errors, Customize Encodings List",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Plain text is UTF-8 only.",
-   "wire": "Add an encoding popup to the open/save panels via SDK panel accessory (or a Format > Text Encoding submenu); decode/encode UTF-16/Latin-1/MacRoman in document.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/encoding.rs:124",
+   "note": "Plain text opens in its own encoding (byte order mark, UTF-8, UTF-16 without a mark, else Western single-byte) and saves in the document encoding; Format > Text Encoding sets it (UTF-8, UTF-16 either byte order, ISO Latin 1, Windows Latin 1, Classic Roman, ASCII), Format > Reinterpret As rereads the text, Preferences > Plain Text Encoding sets the default for new documents. There is no encoding accessory in the open and save panels and no customised list, and RTF, HTML and the packages keep their own fixed encodings. built on parity/team-d-textedit; not yet verified on Midget.",
+   "wire": "Add an encoding popup to the open and save panels through an SDK panel accessory (the SDK has none yet) and a customise-list sheet; the codec and the Format menu are in encoding.rs and main.rs."
   },
   {
    "feature": "Export as PDF",
@@ -113,10 +113,10 @@
    "feature": "Show/Hide document properties (author, title, subject, keywords, copyright)",
    "area": "panel",
    "apple": "DocumentProperties.nib; Localizable: Show/Hide Properties, Change Author/Title/…",
-   "status": "gap",
-   "bifrost": "",
-   "note": "RTF reader skips the info group (rtf.rs:6).",
-   "wire": "Read/write the RTF \\info group in rtf.rs into TextDocument properties; add File > Show Properties opening a sheet with the fields."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/properties.rs:98",
+   "note": "File > Show Properties opens a panel with title, author, subject, keywords and copyright; the values are read and written in the RTF info group (rtf.rs:97) and the docx and odt package metadata (the packages have no copyright field). HTML files do not carry them. built on parity/team-d-textedit; not yet verified on Midget.",
+   "wire": "Carry the properties in HTML (meta elements in html.rs) and show them in the window title area or the info popover; add the creation and modification dates the reference panel lists."
   },
   {
    "feature": "Undo / Redo",
@@ -150,18 +150,18 @@
    "area": "menu",
    "apple": "Edit.nib: Edit > Delete, Complete, Insert submenu",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:494, springboard/apps/textedit-desktop/src/main.rs:675",
-   "note": "Edit > Delete and Edit > Complete (alt+escape) work: Complete offers the words of the document that start with the typed prefix and steps through them on repeat. Insert (page break, line break, paragraph break) is not done: the layout has no break characters other than the paragraph newline.",
-   "wire": "Add Insert submenu items inserting break characters via insert_raw (main.rs:470); Complete = word completion from the document vocabulary."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1324",
+   "note": "Edit > Delete and Edit > Complete (alt+escape) work: Complete offers the words of the document that start with the typed prefix and steps through them on repeat. Edit > Insert adds Page Break, Line Break and Paragraph Break: breaks take no width in the layout (layout.rs:146), a page break starts a new page in print (print.rs:38) and shows a rule on screen, RTF and docx carry them, HTML and odt write them as a line break. built on parity/team-d-textedit; not yet verified on Midget.",
+   "wire": "Read HTML br and odt line-break as line breaks instead of paragraph breaks, and carry the page break through odt (paragraph break-before) and HTML (page-break-before)."
   },
   {
    "feature": "Attach Files / Add Link",
    "area": "menu",
    "apple": "Edit.nib: Edit > Attach Files…, Link…",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No attachments or links.",
-   "wire": "Add a link attribute on cells in text.rs written as RTF \\field HYPERLINK; Edit > Link… sheet; open via ctx.open_url on Cmd-click."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:722",
+   "note": "Edit > Add Link (Cmd+K), Open Link and Remove Link link text to a web, mail, phone or file transfer address (links.rs); links are drawn in the link colour with an underline, kept by RTF hyperlink fields, HTML anchors, docx hyperlinks and odt anchors, printed, and followed by a click in a document that cannot be edited. Attachments (files and pictures in the text) are not done. built on parity/team-d-textedit; not yet verified on Midget.",
+   "wire": "Attachments need an inline attachment cell kind in text.rs, drawing in view.rs and the RTFD package; a click on a link in an editable document needs the modifier state in touch events."
   },
   {
    "feature": "Find, Find Next/Previous, Replace, Replace All",
@@ -195,8 +195,8 @@
    "area": "menu",
    "apple": "Edit.nib: Edit > Substitutions; Preferences.nib: Smart quotes/dashes/links",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:627, springboard/apps/textedit-desktop/src/main.rs:800",
-   "note": "Edit > Substitutions has Smart Quotes and Smart Dashes (curly quotes, -- to an em dash), applied while typing and kept in the preferences. Smart Links, Text Replacement and data detectors are not done.",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1096",
+   "note": "Edit > Substitutions has Smart Quotes, Smart Dashes (curly quotes, -- to an em dash) and Smart Links (a web or mail address becomes a link when the word ends, links.rs:72), applied while typing and kept in the preferences. Text Replacement and data detectors are not done. built on parity/team-d-textedit; not yet verified on Midget.",
    "wire": "Add an Edit > Substitutions submenu with checked Smart Quotes / Smart Dashes; apply in type_into (main.rs:454) when typing quotes or \"--\"; persist in preferences."
   },
   {
@@ -401,10 +401,10 @@
    "feature": "Settings: open and save options (HTML/RTF as code, encodings, HTML saving, .txt extension)",
    "area": "settings",
    "apple": "Preferences.nib: Open and Save tab",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No settings.",
-   "wire": "Add Open and Save pane: show HTML/RTF as code, default encodings, HTML doctype/CSS style, add .txt; consult them in document.rs read/write."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1423",
+   "note": "Preferences > Show RTF and HTML Files as Code opens those files as plain text, and Preferences > Plain Text Encoding sets the encoding of new plain text documents (prefs.rs). The HTML saving options (document type, style handling) and the add-.txt-extension option are not done. built on parity/team-d-textedit; not yet verified on Midget.",
+   "wire": "Add the HTML saving options (doctype, CSS or inline styles, preserve white space) to prefs.rs and html.rs write, and the add .txt option to the document controller save path."
   },
   {
    "feature": "Settings: spelling and substitution defaults",
