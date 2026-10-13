@@ -1065,6 +1065,8 @@ pub mod bt_passkey;
 pub mod input_switches;
 pub mod device_match;
 pub mod window_list;
+pub mod wire_json;
+pub mod display_info;
 pub mod event_tap;
 pub mod media_time;
 pub mod media_timebase;

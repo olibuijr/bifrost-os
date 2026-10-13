@@ -627,6 +627,16 @@ fn run() -> std::io::Result<()> {
         }
         // real touches arrive in panel coordinates and are turned into the
         // frame's; synthetic ones already name frame pixels
+        // input posted by apps through the events service enters here, after the taps have seen it
+        for posted in shell.take_posted_input() {
+            use springboard::shell::services::event_services::Posted;
+            match posted {
+                Posted::Key(code, down) => events.push(input::Event::Key { code, down }),
+                Posted::Pointer(e) => effects.extend(shell.event_untapped(e, t)),
+                Posted::Hover(x, y) => shell.desktop_pointer(x, y, false, t),
+                Posted::Context(x, y) => shell.desktop_pointer(x, y, true, t),
+            }
+        }
         let orientation = shell.orientation();
         let map = |x: f32, y: f32| orientation.to_logical(x, y, w as i32, h as i32);
         for ev in &events {
@@ -643,11 +653,13 @@ fn run() -> std::io::Result<()> {
                     let (x, y) = map(x, y);
                     Event::Up(x, y)
                 }
-                input::Event::Hover{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,false,t);continue;},
+                input::Event::Hover{x,y,..}=>{let (x,y)=map(x,y);let Some((x,y))=shell.tap_hover(x,y) else {continue};shell.desktop_pointer(x,y,false,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
                 input::Event::Key { code, down } => {
+                    // session event taps see the key first and may drop or replace it
+                    let Some(code) = shell.tap_key(code, down) else { continue };
                     let raw_sc = hw_keys.key_in(code, down, shell.term_front());
                     if trace {
                         eprintln!("springboard: key {code} {} shortcut={raw_sc:?}", if down { "down" } else { "up" });

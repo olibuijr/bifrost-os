@@ -899,7 +899,7 @@ impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
 impl Dispatch<wl_output::WlOutput,()> for State {
     fn event(s:&mut Self,_:&wl_output::WlOutput,e:wl_output::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
         if let wl_output::Event::Mode {flags:WEnum::Value(flags),refresh,..}=e {
-            if flags.contains(wl_output::Mode::Current) {s.refresh=(refresh.max(1) as u32+500)/1000;}
+            if flags.contains(wl_output::Mode::Current) {s.refresh=(refresh.max(1) as u32+500)/1000;crate::shell::services::display_services::OUTPUT_REFRESH_HZ.store(s.refresh,std::sync::atomic::Ordering::Relaxed);}
         }
     }
 }

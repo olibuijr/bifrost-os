@@ -19,6 +19,11 @@ pub struct Policy {
     pub documents: bool,
     /// `keychain`: may store secrets with the shell (`ToShell::Keychain`); it binds nothing.
     pub keychain: bool,
+    /// `accessibility`: may post input events and install event taps through the shell's `events` service. It binds
+    /// nothing here; the service checks the manifest on every call.
+    pub accessibility: bool,
+    /// `display-config`: may ask the shell's `display` service for a different display mode. Checked by the service.
+    pub display_config: bool,
     /// `entitlements = ["log-store"]` on a `system-app`: the system journal is mounted read-only so
     /// `LogStore::local()` works (Console). Set through `with_entitlements`, never from `permissions`.
     pub log_store: bool,
@@ -41,6 +46,8 @@ impl Policy {
                 "notifications" => p.notifications = true,
                 "documents" => p.documents = true,
                 "keychain" => p.keychain = true,
+                "accessibility" => p.accessibility = true,
+                "display-config" => p.display_config = true,
                 "remote-desktop" if id == "is.olibuijr.remote.desktop" => p.remote = true,
                 _ => {
                     return Err(io::Error::other(format!(
@@ -329,6 +336,13 @@ pub fn remote_sharing(id: &str, policy: Policy, on: bool, package: &Path) -> io:
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn input_and_display_permissions_are_recognised_and_bind_nothing() {
+        let p = Policy::from_permissions("example", &["accessibility".into(), "display-config".into()]).unwrap();
+        assert!(p.accessibility && p.display_config);
+        assert!(!p.network && !p.storage && !p.remote);
+    }
+
     #[test]
     fn isolation_permissions_fail_closed() {
         assert!(Policy::from_permissions("example", &["system-update".into()]).is_err());

@@ -6,3 +6,4 @@ description = "Independent BifrOSt control semantics, focus, commands and text e
 [dependencies]
 bifrost-audio-types = { path = "../audio/types" }
 bifrost-render = { path = "../render" }
+bifrost-core = { path = "../core" }

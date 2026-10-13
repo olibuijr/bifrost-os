@@ -474,6 +474,11 @@ impl AppHost {
         self.status
     }
 
+    /// The process id of the app, when it runs as a child of the shell (none on a test channel).
+    pub fn pid(&self) -> Option<u32> {
+        self.child.as_ref().map(|c| c.id())
+    }
+
     pub fn running(&self) -> bool {
         self.status == Status::Running
     }
