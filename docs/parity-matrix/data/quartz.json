@@ -80,7 +80,7 @@
     {
       "feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)",
       "apple": "PDFDocument, PDFPage, PDFOutline, PDFSelection",
-      "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs, pdf/obj.rs, pdf/content.rs",
+      "bifrost": "springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/obj.rs, springboard/render/src/cg/pdf/extract.rs",
       "status": "os",
       "note": "The Books engine parses PDF objects and page trees and extracts text lines and images in reading order. It is internal to Books; apps get no document, page, outline or selection API."
     },

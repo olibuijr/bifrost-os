@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/colorsync",
   "macos_since": "10.13",
   "status": "partial",
-  "bifrost": "springboard/render/src/imgdec.rs, springboard/src/shell/night_shift.rs, springboard/src/shell/books/engine/pdf/image.rs, springboard/src/gpu/nv12.rs",
+  "bifrost": "springboard/render/src/imgdec.rs, springboard/src/shell/night_shift.rs, springboard/render/src/cg/pdf/image.rs, springboard/src/gpu/nv12.rs",
   "summary": "ColorSync is the ICC profile and colour-transform engine. BifrOSt has no ICC profile loading, no profile-to-profile transforms, no device or display profiles and no HDR path. Its only colour work is 8-bit sRGB image decoding, a Night Shift warmth tint applied to the final frame, and Light/Dark colour pairs; apps get no ColorSync-style API.",
   "rea_evidence": "ev_30be09349fd96962c2c0d304f23da436d4e22734281493023b9095453ed6b510",
   "features": [

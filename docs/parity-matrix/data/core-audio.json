@@ -1,121 +1,121 @@
 {
-  "framework": "Core Audio",
-  "doc": "https://developer.apple.com/documentation/coreaudio",
-  "macos_since": "10.0",
-  "status": "partial",
-  "bifrost": "springboard/audiod (audio service), springboard/sdk/src/lib.rs (audio::Client re-export), springboard/src/svc.rs, springboard/src/media/speaker.rs, springboard/src/media/capture.rs, springboard/audio/alsa/src/ctl.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs",
-  "summary": "BifrOSt covers speaker playback, microphone capture and volume through an ALSA and libasound layer owned by one audio service, and apps reach it over a socket client for playback transport and recording. The HAL object model, virtual audio drivers, aggregate devices, hardware clocks and per-process audio taps have no counterpart; no SDK exposes device objects.",
-  "rea_evidence": "ev_bd10e360fb1e915d03b738fad1e0a829b4d87a74e798502bbe22e6d509ce6332",
-  "features": [
-    {
-      "feature": "Audio HAL object model (system, devices, streams, controls, clocks)",
-      "apple": "AudioHardwareSystem, AudioHardwareDevice, AudioHardwareStream, AudioHardwareControl, AudioHardwareClock, AudioHardwareObject",
-      "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA mixer controls), springboard/src/media/capture.rs (PCM discovery via /proc/asound/pcm)",
-      "status": "os",
-      "note": "Device and control enumeration exists in the system layer only. No app-facing device or stream object API in springboard/sdk/src/lib.rs."
-    },
-    {
-      "feature": "Audio server driver plug-ins (virtual devices)",
-      "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
-      "bifrost": "none; kernel ALSA drivers only (springboard/src/media/alsa.rs)",
-      "status": "gap",
-      "note": "No user-space HAL plug-in loader. A virtual device would need an ALSA loopback or PipeWire node, neither of which is exposed to apps."
-    },
-    {
-      "feature": "Aggregate devices",
-      "apple": "AudioHardwareAggregateDevice",
-      "bifrost": "springboard/sdk/src/audio_aggregate.rs",
-      "status": "partial",
-      "note": "SDK model: description with Apple's dictionary keys, validation, clock source. Not implemented: audiod creation command, drift compensation resampling. Needs a Midget check."
-    },
-    {
-      "feature": "Process taps (capture a process's output)",
-      "apple": "AudioHardwareTap, CATapDescription, Capturing system audio with Core Audio taps",
-      "bifrost": "springboard/sdk/src/audio_process.rs",
-      "status": "partial",
-      "note": "SDK model: CATapDescription constructors, mono or stereo mixdown, exclusion, mute behavior, wire shape. Not implemented: the audiod output hook that captures audio. Needs a Midget check."
-    },
-    {
-      "feature": "Process objects (client process list)",
-      "apple": "AudioHardwareProcess",
-      "bifrost": "springboard/sdk/src/audio_process.rs",
-      "status": "partial",
-      "note": "SDK model: ProcessObject (pid, bundle id, running input and output), kAudioHardwarePropertyProcessObjectList request and reply decoding. Not implemented: audiod does not report processes yet. Needs a Midget check."
-    },
-    {
-      "feature": "Speaker playback",
-      "apple": "AudioHardwareStream IO, AudioHardwareDevice IO",
-      "bifrost": "springboard/src/media/speaker.rs, springboard/src/media/alsalib.rs, springboard/src/media/alsa.rs (AudioOut trait)",
-      "status": "partial",
-      "note": "Playback works through the default PCM, and idle PCMs close after a delay. Apps write through the audio service, not through a stream API."
-    },
-    {
-      "feature": "Playback transport and now-playing state (app client)",
-      "apple": "AudioHardwareDevice properties as seen by clients",
-      "bifrost": "springboard/src/svc.rs (audio::Client), springboard/proto/src/svc.rs (Cmd, Evt, Snapshot), springboard/apps/music-desktop/src/music/engine.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 2 tests. Apps get a socket client that keeps the latest snapshot and reconnects after a service restart. It is a media-player API, not a device API."
-    },
-    {
-      "feature": "Property change notifications",
-      "apple": "AudioHardwareObject.addPropertyListener, PropertyListenerDelegate",
-      "bifrost": "springboard/src/svc.rs (Client subscribes and pumps events), springboard/proto/src/svc.rs (Evt); wired: springboard/apps/voicememos-desktop/src/main.rs (service_event); src/voicememos.rs (devices_changed, set_input); existing wiring, unchanged",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 2 tests. Clients receive state events from the service. Device properties such as default device or sample rate changes are not published. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Volume and mute controls",
-      "apple": "AudioHardwareControl (volume, mute, gain), AudioObjectPropertyVolume",
-      "bifrost": "springboard/ui/src/volume_control.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Volume is set through the audio service and the mixer. The SDK exposes no per-device volume control API."
-    },
-    {
-      "feature": "Output routing (speaker or headphones)",
-      "apple": "AudioObjectProperty default output device selection",
-      "bifrost": "springboard/ui/src/default_device.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Route state and per-route volume are kept in the system layer. The sound server does the real routing, and apps cannot choose a device."
-    },
-    {
-      "feature": "Microphone capture",
-      "apple": "AudioHardwareDevice input streams",
-      "bifrost": "springboard/src/media/capture.rs (Recorder, wav_bytes), springboard/audiod/src/main.rs (Record events); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (sync_audio input_level, draw meter); src/services.rs caption",
-      "status": "partial",
-      "note": "Recording goes through the audio service for Voice Memos. Apps cannot open an input stream directly, and there is no input device selection. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Hardware clocks and sample-accurate sync",
-      "apple": "AudioHardwareClock, kAudioDevicePropertySuggestedReferenceDevice",
-      "bifrost": "springboard/sdk/src/audio_aggregate.rs",
-      "status": "partial",
-      "note": "SDK model: ClockDomain (kAudioDevicePropertyClockDomain) and which sub-devices need drift compensation. Not implemented: real hardware clocks, timestamps and sample-accurate sync. Needs a Midget check."
-    },
-    {
-      "feature": "Channel layouts and data types",
-      "apple": "ManagedAudioChannelLayout, AudioHardwareError",
-      "bifrost": "springboard/audio/types/src/layout.rs (re-exported by springboard/ui/src/channel_layout.rs)",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No layout type or typed HAL error is exposed. Format handling is per decoder and PCM, with no general channel layout API."
-    },
-    {
-      "feature": "Boxes and device containers",
-      "apple": "AudioHardwareBox",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. No enable or disable of audio containers. Hardware is handled by the kernel and the sound server."
-    },
-    {
-      "feature": "Remote and streaming device transports",
-      "apple": "kAudioDeviceTransportTypeRemoteScreen, kAudioDeviceTransportTypeRemoteStreaming, kAudioDevicePropertyWantsControlsRestored",
-      "bifrost": "springboard/src/bare/bluetooth.rs (Bluetooth audio devices)",
-      "status": "n/a",
-      "note": "Apple's remote-screen and streaming transport types are tied to Apple's AirPlay and screen-sharing stack. Bluetooth audio is handled by the system and the sound server."
-    }
-  ],
-  "gaps": [
-    "Virtual audio device and driver plug-in (Audio Server Plug-in, AudioHardwarePlugin) or an app-facing loopback device.",
-    "App-facing device and stream API: enumerate devices, open input and output streams and choose a device (AudioHardwareDevice, AudioHardwareStream).",
-    "Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener)."
-  ]
+ "framework": "Core Audio",
+ "doc": "https://developer.apple.com/documentation/coreaudio",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "springboard/audiod (audio service), springboard/sdk/src/lib.rs (audio::Client re-export), springboard/src/svc.rs, springboard/src/media/speaker.rs, springboard/src/media/capture.rs, springboard/audio/alsa/src/ctl.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs",
+ "summary": "BifrOSt covers speaker playback, microphone capture and volume through an ALSA and libasound layer owned by one audio service, and apps reach it over a socket client for playback transport and recording. The HAL object model, virtual audio drivers, aggregate devices, hardware clocks and per-process audio taps have no counterpart; no SDK exposes device objects.",
+ "rea_evidence": "ev_bd10e360fb1e915d03b738fad1e0a829b4d87a74e798502bbe22e6d509ce6332",
+ "features": [
+  {
+   "feature": "Audio HAL object model (system, devices, streams, controls, clocks)",
+   "apple": "AudioHardwareSystem, AudioHardwareDevice, AudioHardwareStream, AudioHardwareControl, AudioHardwareClock, AudioHardwareObject",
+   "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA mixer controls), springboard/src/media/capture.rs (PCM discovery via /proc/asound/pcm)",
+   "status": "os",
+   "note": "Device and control enumeration exists in the system layer only. No app-facing device or stream object API in springboard/sdk/src/lib.rs."
+  },
+  {
+   "feature": "Audio server driver plug-ins (virtual devices)",
+   "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
+   "bifrost": "none; kernel ALSA drivers only (springboard/audio/alsa/src/lib.rs)",
+   "status": "gap",
+   "note": "No user-space HAL plug-in loader. A virtual device would need an ALSA loopback or PipeWire node, neither of which is exposed to apps."
+  },
+  {
+   "feature": "Aggregate devices",
+   "apple": "AudioHardwareAggregateDevice",
+   "bifrost": "springboard/sdk/src/audio_aggregate.rs",
+   "status": "partial",
+   "note": "SDK model: description with Apple's dictionary keys, validation, clock source. Not implemented: audiod creation command, drift compensation resampling. Needs a Midget check."
+  },
+  {
+   "feature": "Process taps (capture a process's output)",
+   "apple": "AudioHardwareTap, CATapDescription, Capturing system audio with Core Audio taps",
+   "bifrost": "springboard/sdk/src/audio_process.rs",
+   "status": "partial",
+   "note": "SDK model: CATapDescription constructors, mono or stereo mixdown, exclusion, mute behavior, wire shape. Not implemented: the audiod output hook that captures audio. Needs a Midget check."
+  },
+  {
+   "feature": "Process objects (client process list)",
+   "apple": "AudioHardwareProcess",
+   "bifrost": "springboard/sdk/src/audio_process.rs",
+   "status": "partial",
+   "note": "SDK model: ProcessObject (pid, bundle id, running input and output), kAudioHardwarePropertyProcessObjectList request and reply decoding. Not implemented: audiod does not report processes yet. Needs a Midget check."
+  },
+  {
+   "feature": "Speaker playback",
+   "apple": "AudioHardwareStream IO, AudioHardwareDevice IO",
+   "bifrost": "springboard/src/media/speaker.rs, springboard/src/media/audio_out.rs (AudioOut trait)",
+   "status": "partial",
+   "note": "Playback works through the default PCM, and idle PCMs close after a delay. Apps write through the audio service, not through a stream API."
+  },
+  {
+   "feature": "Playback transport and now-playing state (app client)",
+   "apple": "AudioHardwareDevice properties as seen by clients",
+   "bifrost": "springboard/src/svc.rs (audio::Client), springboard/proto/src/svc.rs (Cmd, Evt, Snapshot), springboard/apps/music-desktop/src/music/engine.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 2 tests. Apps get a socket client that keeps the latest snapshot and reconnects after a service restart. It is a media-player API, not a device API."
+  },
+  {
+   "feature": "Property change notifications",
+   "apple": "AudioHardwareObject.addPropertyListener, PropertyListenerDelegate",
+   "bifrost": "springboard/src/svc.rs (Client subscribes and pumps events), springboard/proto/src/svc.rs (Evt); wired: springboard/apps/voicememos-desktop/src/main.rs (service_event); src/voicememos.rs (devices_changed, set_input); existing wiring, unchanged",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 2 tests. Clients receive state events from the service. Device properties such as default device or sample rate changes are not published. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Volume and mute controls",
+   "apple": "AudioHardwareControl (volume, mute, gain), AudioObjectPropertyVolume",
+   "bifrost": "springboard/ui/src/volume_control.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Volume is set through the audio service and the mixer. The SDK exposes no per-device volume control API."
+  },
+  {
+   "feature": "Output routing (speaker or headphones)",
+   "apple": "AudioObjectProperty default output device selection",
+   "bifrost": "springboard/ui/src/default_device.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Route state and per-route volume are kept in the system layer. The sound server does the real routing, and apps cannot choose a device."
+  },
+  {
+   "feature": "Microphone capture",
+   "apple": "AudioHardwareDevice input streams",
+   "bifrost": "springboard/src/media/capture.rs (Recorder, wav_bytes), springboard/audiod/src/main.rs (Record events); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (sync_audio input_level, draw meter); src/services.rs caption",
+   "status": "partial",
+   "note": "Recording goes through the audio service for Voice Memos. Apps cannot open an input stream directly, and there is no input device selection. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Hardware clocks and sample-accurate sync",
+   "apple": "AudioHardwareClock, kAudioDevicePropertySuggestedReferenceDevice",
+   "bifrost": "springboard/sdk/src/audio_aggregate.rs",
+   "status": "partial",
+   "note": "SDK model: ClockDomain (kAudioDevicePropertyClockDomain) and which sub-devices need drift compensation. Not implemented: real hardware clocks, timestamps and sample-accurate sync. Needs a Midget check."
+  },
+  {
+   "feature": "Channel layouts and data types",
+   "apple": "ManagedAudioChannelLayout, AudioHardwareError",
+   "bifrost": "springboard/audio/types/src/layout.rs (re-exported by springboard/ui/src/channel_layout.rs)",
+   "status": "partial",
+   "note": "Wave 4 (w4-core-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No layout type or typed HAL error is exposed. Format handling is per decoder and PCM, with no general channel layout API."
+  },
+  {
+   "feature": "Boxes and device containers",
+   "apple": "AudioHardwareBox",
+   "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
+   "status": "gap",
+   "note": "The pure model had no caller and was removed. No enable or disable of audio containers. Hardware is handled by the kernel and the sound server."
+  },
+  {
+   "feature": "Remote and streaming device transports",
+   "apple": "kAudioDeviceTransportTypeRemoteScreen, kAudioDeviceTransportTypeRemoteStreaming, kAudioDevicePropertyWantsControlsRestored",
+   "bifrost": "springboard/src/bare/bluetooth.rs (Bluetooth audio devices)",
+   "status": "n/a",
+   "note": "Apple's remote-screen and streaming transport types are tied to Apple's AirPlay and screen-sharing stack. Bluetooth audio is handled by the system and the sound server."
+  }
+ ],
+ "gaps": [
+  "Virtual audio device and driver plug-in (Audio Server Plug-in, AudioHardwarePlugin) or an app-facing loopback device.",
+  "App-facing device and stream API: enumerate devices, open input and output streams and choose a device (AudioHardwareDevice, AudioHardwareStream).",
+  "Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener)."
+ ]
 }

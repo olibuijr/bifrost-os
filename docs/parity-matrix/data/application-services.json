@@ -59,7 +59,7 @@
     {
       "feature": "ColorSync Manager (profiles, transforms, CMM)",
       "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
-      "bifrost": "springboard/src/shell/books/engine/pdf/image.rs (ICCBased colour space decode only)",
+      "bifrost": "springboard/render/src/cg/pdf/image.rs (ICCBased colour space decode only)",
       "status": "gap",
       "note": "PDF ICC-based images decode, but there is no profile or transform API and no display profile handling for apps."
     },
