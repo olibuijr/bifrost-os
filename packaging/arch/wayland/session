@@ -90,7 +90,7 @@ if [[ "$compositor" == bifrost-wm ]]; then
     as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 ${DBUS_SESSION_BUS_ADDRESS:+DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS} /usr/bin/bifrost-portal 1>&2 &
 else
     as_user env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd "${runtime_env[@]}" \
-        labwc --verbose --config-dir /usr/share/bifrost/wayland 1>&2 &
+        labwc --config-dir /usr/share/bifrost/wayland 1>&2 &
     compositor_pid=$!
 fi
 for ((i=0;i<250;i++)); do

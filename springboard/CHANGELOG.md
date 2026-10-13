@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.14 — 2026-10-13
+
+- Boot: the compositor starts without `--verbose` (dozens of debug lines into the journal on every boot; no measurable start-up change, less log noise).
+
 ## 0.7.13 — 2026-10-13
 
 - Reverts 0.7.12's release of the window scratch buffers: freeing and re-allocating them raised the shell's memory after a lock cycle (97 to 113 MiB) instead of lowering it.
