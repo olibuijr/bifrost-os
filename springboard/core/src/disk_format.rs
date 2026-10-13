@@ -195,6 +195,66 @@ pub fn erase_disk(
     ])
 }
 
+/// The most partitions one partition plan creates.
+pub const MAX_PARTITIONS: usize = 16;
+
+/// One partition of a partition plan: its size in MiB (0 takes the rest of the disk, allowed for the last one only),
+/// the file system it is formatted with, and its label.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PartitionSpec {
+    pub size_mib: u64,
+    pub fs: Personality,
+    pub label: String,
+}
+
+/// Plans a new partition table on a whole disk, one GPT partition per spec in order, each formatted empty. Like
+/// `erase_disk`, every partition of the disk is replaced and any mounted one refuses the plan.
+pub fn partition_disk(
+    disk: &Disk,
+    partitions: &[PartitionSpec],
+    existing: &[Disk],
+    approvals: &Approvals,
+    claims: &Claims,
+    owner: &str,
+) -> Result<Vec<Command>, Refusal> {
+    let dev = gate(disk, Operation::Erase, approvals, claims, owner)?;
+    if disk.read_only {
+        return Err(Refusal::ReadOnly);
+    }
+    let mounted = disk.mount_point.iter().chain(existing.iter().filter_map(|p| p.mount_point.as_ref())).next();
+    if let Some(point) = mounted {
+        return Err(Refusal::Mounted(point.clone()));
+    }
+    if partitions.is_empty() || partitions.len() > MAX_PARTITIONS {
+        return Err(Refusal::InvalidOption(format!("{} partitions", partitions.len())));
+    }
+    let last = partitions.len() - 1;
+    let mut create: Vec<String> = Vec::new();
+    let mut formats: Vec<Command> = Vec::new();
+    for (i, spec) in partitions.iter().enumerate() {
+        if spec.size_mib == 0 && i != last {
+            return Err(Refusal::InvalidOption("only the last partition takes the rest of the disk".to_string()));
+        }
+        check_label(&spec.label, spec.fs)?;
+        let index = i + 1;
+        let end = if spec.size_mib == 0 { "0".to_string() } else { format!("+{}M", spec.size_mib) };
+        create.extend(["-n".to_string(), format!("{index}:0:{end}"), "-t".to_string(), format!("{index}:{}", spec.fs.gpt_code())]);
+        if !spec.label.is_empty() {
+            create.extend(["-c".to_string(), format!("{index}:{}", spec.label)]);
+        }
+        formats.push(spec.fs.make_command(&partition_device(&disk.bsd_name, index as u32), &spec.label));
+    }
+    create.push(dev.clone());
+    let mut plan = vec![
+        Command { program: "sgdisk", args: vec!["--zap-all".to_string(), dev.clone()] },
+        Command { program: "sgdisk", args: create },
+        Command { program: "partprobe", args: vec![dev.clone()] },
+        Command { program: "udevadm", args: vec!["settle".to_string()] },
+    ];
+    plan.extend(formats);
+    Ok(plan)
+}
+
 /// Plans a file system check (first aid) of an unmounted volume. `fs_type` is the type the volume reports; a type this
 /// module has no checker for is refused.
 pub fn check_volume(
@@ -359,6 +419,55 @@ mod tests {
         assert_eq!(words(&verify), vec![("fsck.fat", s(&["-n", "/dev/sdb1"]))]);
         let exfat = check_volume(&d, "exfat", CheckMode::Repair, &approvals, &claims, "disk").unwrap();
         assert_eq!(words(&exfat), vec![("fsck.exfat", s(&["-a", "/dev/sdb1"]))]);
+    }
+
+    fn spec(size_mib: u64, fs: Personality, label: &str) -> PartitionSpec {
+        PartitionSpec { size_mib, fs, label: label.to_string() }
+    }
+
+    #[test]
+    fn a_partition_plan_creates_each_partition_then_formats_it() {
+        let parts = vec![spec(512, Personality::Fat32, "BOOT"), spec(0, Personality::Ext4, "")];
+        let plan = partition_disk(&disk("sdb", None), &parts, &[], &Approvals::new(), &Claims::new(), "disk").unwrap();
+        assert_eq!(
+            words(&plan),
+            vec![
+                ("sgdisk", s(&["--zap-all", "/dev/sdb"])),
+                ("sgdisk", s(&["-n", "1:0:+512M", "-t", "1:0700", "-c", "1:BOOT", "-n", "2:0:0", "-t", "2:8300", "/dev/sdb"])),
+                ("partprobe", s(&["/dev/sdb"])),
+                ("udevadm", s(&["settle"])),
+                ("mkfs.vfat", s(&["-F", "32", "-n", "BOOT", "/dev/sdb1"])),
+                ("mkfs.ext4", s(&["-F", "-q", "/dev/sdb2"])),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_partition_plan_refuses_a_rest_of_disk_size_that_is_not_last_and_bad_counts() {
+        let approvals = Approvals::new();
+        let claims = Claims::new();
+        let middle_rest = vec![spec(0, Personality::Ext4, ""), spec(64, Personality::Ext4, "")];
+        assert!(partition_disk(&disk("sdb", None), &middle_rest, &[], &approvals, &claims, "disk").is_err());
+        assert!(partition_disk(&disk("sdb", None), &[], &[], &approvals, &claims, "disk").is_err());
+        let too_many = vec![spec(1, Personality::Ext4, ""); MAX_PARTITIONS + 1];
+        assert!(partition_disk(&disk("sdb", None), &too_many, &[], &approvals, &claims, "disk").is_err());
+    }
+
+    #[test]
+    fn a_partition_plan_refuses_a_mounted_partition_and_a_bad_label() {
+        let approvals = Approvals::new();
+        let claims = Claims::new();
+        let parts = vec![spec(0, Personality::Fat32, "OK")];
+        let held = vec![disk("sdb1", Some("/media/a"))];
+        assert_eq!(
+            partition_disk(&disk("sdb", None), &parts, &held, &approvals, &claims, "disk"),
+            Err(Refusal::Mounted("/media/a".into()))
+        );
+        let bad = vec![spec(0, Personality::Fat32, "TOOLONGLABEL")];
+        assert_eq!(
+            partition_disk(&disk("sdb", None), &bad, &[], &approvals, &claims, "disk"),
+            Err(Refusal::InvalidLabel("TOOLONGLABEL".into()))
+        );
     }
 
     #[test]
