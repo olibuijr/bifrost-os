@@ -31,9 +31,9 @@ impl SessionLockHandler for WmState {
     }
 
     fn new_surface(&mut self, surface: LockSurface, output: WlOutput) {
-        let size = Output::from_resource(&output).or_else(|| self.output()).and_then(|o| o.current_mode()).map(|m| m.size);
-        if let Some(size) = size {
-            surface.with_pending_state(|s| s.size = Some((size.w as u32, size.h as u32).into()));
+        let size = Output::from_resource(&output).or_else(|| self.output()).and_then(|o| crate::transform::output_size(&o));
+        if let Some((w, h)) = size {
+            surface.with_pending_state(|s| s.size = Some((w as u32, h as u32).into()));
         }
         surface.send_configure();
         let wl = surface.wl_surface().clone();

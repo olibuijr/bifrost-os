@@ -116,7 +116,8 @@ fn items(renderer: &mut GlesRenderer, state: &WmState, output: &Output, scale: S
 /// The scene front to back, with each blurred surface's backdrop under it. `top` goes first (the pointer, the boot fade).
 pub fn build(renderer: &mut GlesRenderer, state: &WmState, output: &Output, glass: &mut Glass, top: Vec<SceneElement>) -> Vec<SceneElement> {
     let scale = Scale::from(output.current_scale().fractional_scale());
-    let size = output.current_mode().map(|m| m.size).unwrap_or_default();
+    // the scene is composed in desktop coordinates: the mode turned by the output transform
+    let size: smithay::utils::Size<i32, smithay::utils::Physical> = crate::transform::output_size(output).unwrap_or_default().into();
     // locked: the lock surface and nothing else (black until it arrives)
     if state.locked {
         let mut all = top;
