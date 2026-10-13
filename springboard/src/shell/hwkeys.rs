@@ -322,6 +322,29 @@ impl KeyRepeat {
         self.held.as_ref().map(|h| h.2)
     }
 
+    /// A held letter that has accents, once its delay is up, opens its accent list (`popup`: the caller can open one)
+    /// instead of repeating. Returns the letter and ends the hold, so `due` repeats nothing for it.
+    pub fn accent_hold(&mut self, t: f64, popup: bool) -> Option<char> {
+        if !popup {
+            return None;
+        }
+        let (_, out, next) = self.held.as_ref()?;
+        if t < *next {
+            return None;
+        }
+        let Out::Text(text) = out else { return None };
+        let mut chars = text.chars();
+        let letter = match (chars.next(), chars.next()) {
+            (Some(c), None) => c,
+            _ => return None,
+        };
+        if bifrost_ui::compose_method::candidates_for(letter).is_empty() {
+            return None;
+        }
+        self.held = None;
+        Some(letter)
+    }
+
     /// The repeats due by `t` (at most a few, so a stalled loop does not flood a field).
     pub fn due(&mut self, t: f64) -> Vec<Out> {
         let Some((_, out, next)) = self.held.as_mut() else { return vec![] };
@@ -752,6 +775,18 @@ mod tests {
         assert_eq!(k.key(KEY_C, true), None);
         k.key(KEY_LEFTCTRL, false);
         assert_eq!(k.key(KEY_C, true), None, "stray releases never underflow");
+    }
+
+    #[test]
+    fn a_held_letter_with_accents_opens_its_list_instead_of_repeating() {
+        let mut r = KeyRepeat::default();
+        r.press(18, Some(Out::Text("e".into())), 0.0);
+        assert_eq!(r.accent_hold(399.0, true), None, "the delay is not up");
+        assert_eq!(r.accent_hold(400.0, false), None, "no list can open here, so the key repeats");
+        assert_eq!(r.accent_hold(400.0, true), Some('e'));
+        assert!(r.due(10_000.0).is_empty(), "the hold ended the repeat");
+        r.press(49, Some(Out::Text("x".into())), 0.0);
+        assert_eq!(r.accent_hold(400.0, true), None, "x has no accents, so it repeats");
     }
 
     #[test]

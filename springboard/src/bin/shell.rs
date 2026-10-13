@@ -734,7 +734,10 @@ fn run() -> std::io::Result<()> {
             };
             effects.extend(shell.event(e, t));
         }
-        // held keys repeat once their delay is up
+        // a held letter with accents opens its accent list (Search only); other held keys repeat once their delay is up
+        if let Some(letter) = key_repeat.accent_hold(t, shell.accent_popup_ready()) {
+            effects.extend(shell.accent_hold(letter, t));
+        }
         for out in key_repeat.due(t) {
             effects.extend(shell.hw_type(out, t));
         }

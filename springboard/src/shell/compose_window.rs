@@ -85,6 +85,24 @@ impl Shell {
         }
     }
 
+    /// Whether a held letter may open its accent list: the Search field is open on a Latin source and no list is up.
+    pub fn accent_popup_ready(&self) -> bool {
+        self.quicksearch.is_shown() && kb_layouts::active() != Layout::Japanese && self.compose_ime.session.is_none()
+    }
+
+    /// A letter held down (`KeyRepeat::accent_hold`): the letter typed at the press is taken back and shown as marked
+    /// text over its accents, with digits to pick one.
+    pub fn accent_hold(&mut self, letter: char, t: f64) -> Vec<Effect> {
+        let candidates = compose_method::candidates_for(letter);
+        if candidates.is_empty() {
+            return vec![];
+        }
+        let fx = self.quicksearch_key(Out::Backspace, t);
+        let candidates: Vec<String> = candidates.into_iter().take(compose_method::MAX_SHOWN).collect();
+        self.compose_open(&letter.to_string(), candidates);
+        fx
+    }
+
     /// Shows the letter as marked text in the Search field and opens its candidate list.
     fn compose_open(&mut self, original: &str, candidates: Vec<String>) {
         self.quicksearch.field_mut().set_marked(&self.ui, original, original.len());
