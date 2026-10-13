@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- File > Open (Cmd+O) shows the open panel for PDFs and pictures. The chosen file is copied into the app's data folder and opened from there.
+- File > Open Recent lists the last ten files opened, with Clear Menu. Files that are gone are dropped.
+
 ## 0.6.0
 
 - Edit > Undo (Cmd+Z) and Redo (Cmd+Shift+Z) step back and forward through markup, page moves and deletes, turns and
