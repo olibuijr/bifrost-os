@@ -337,7 +337,7 @@ fn escape_html(s: &str) -> String {
 /// The text as an RTF document: braces and backslashes are escaped, line breaks become `\par`, and characters outside
 /// ASCII become `\uN?` (N is the UTF-16 code unit, signed, as RTF expects).
 pub fn text_to_rtf(text: &str) -> String {
-    let mut out = String::from("{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0 Helvetica;}}\\f0\\fs24 ");
+    let mut out = String::from("{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0 Sans;}}\\f0\\fs24 ");
     for c in text.chars() {
         match c {
             '\\' => out.push_str("\\\\"),
@@ -567,7 +567,7 @@ mod tests {
 
     #[test]
     fn rtf_reads_text_and_skips_tables() {
-        let rtf = "{\\rtf1\\ansi{\\fonttbl{\\f0 Helvetica;}}\\f0\\fs24 Hello\\par World \\'e9\\u8364?}";
+        let rtf = "{\\rtf1\\ansi{\\fonttbl{\\f0 Sans;}}\\f0\\fs24 Hello\\par World \\'e9\\u8364?}";
         assert_eq!(rtf_to_text(rtf), "Hello\nWorld \u{e9}\u{20ac}");
     }
 
