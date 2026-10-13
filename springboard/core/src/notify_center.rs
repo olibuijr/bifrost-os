@@ -9,13 +9,15 @@ use std::io;
 use std::os::unix::net::UnixDatagram;
 
 /// Names for system changes (time zone, clock, volumes, network, host name, caches). The shell decides when to post them.
-pub const SYSTEM_EVENTS: [&str; 9] = [
+pub const SYSTEM_EVENTS: [&str; 11] = [
     "system.timezone.change",
     "system.clock.set",
     "system.volume.mount",
     "system.volume.unmount",
     "system.volume.low-disk-space",
     "system.network.change",
+    "system.contacts.change",
+    "system.calendar.change",
     "system.hostname.change",
     "system.disk-cache.invalidate",
     "system.log-db.update",

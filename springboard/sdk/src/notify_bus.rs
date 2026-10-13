@@ -28,6 +28,10 @@ pub const SCREEN_LOCKED: &str = "system.screen.locked";
 pub const SCREEN_UNLOCKED: &str = "system.screen.unlocked";
 /// Posted by the shell when the connection goes up or down.
 pub const NETWORK_CHANGE: &str = "system.network.change";
+/// Posted by the shell when the contacts file changes (the Contacts app saved, or the file appeared or went).
+pub const CONTACTS_CHANGE: &str = "system.contacts.change";
+/// Posted by the shell when the events file changes (the Calendar app saved, or the file appeared or went).
+pub const CALENDAR_CHANGE: &str = "system.calendar.change";
 
 /// How a token delivers its posts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
