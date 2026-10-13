@@ -4,6 +4,9 @@
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
+use bifrost_app::control::RpcError;
+use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult};
+use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_calendar::calendar::archive;
@@ -105,6 +108,8 @@ impl App for CalendarApp {
                     item(Command::Import),
                     item(Command::ImportArchive),
                     item(Command::ExportArchive),
+                    AppMenuItem::separator(),
+                    item(Command::Print),
                 ],
             },
             AppMenu {
@@ -179,6 +184,19 @@ impl App for CalendarApp {
                 let request = ctx.save_document(&c.archive_name(), &[archive::EXTENSION]);
                 self.jobs.insert(request, Job::Export(c.archive_text().into_bytes()));
                 false
+            }
+            Some(c) if cmd == Command::Print => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let (job, text) = c.print_job();
+                match PrintOperation::text(job, text).run() {
+                    Ok(_) => c.show_notice("Sent to the printer"),
+                    Err(PrintError::NoCups) => c.show_error("The printing service is not running"),
+                    Err(PrintError::NoPrinter) => c.show_error("No printer is set up"),
+                    Err(PrintError::Failed(why)) => c.show_error(&format!("Printing failed: {why}")),
+                }
+                true
             }
             // the sentence is the pasteboard's text, read when the command runs
             Some(c) if cmd == Command::NewEventFromText => {
@@ -291,6 +309,23 @@ impl App for CalendarApp {
         }
         share_copy(c, ctx);
         c.tick(&ctx.ui, t)
+    }
+
+    fn intents(&self) -> Vec<Intent> {
+        calendar::intents::declared()
+    }
+
+    fn perform_intent(&mut self, ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+        let (Some(ctx), Some(c)) = (ctx, self.cal.as_mut()) else { return Err(intents::failed("Calendar is not running yet")) };
+        calendar::intents::perform(c, &ctx.ui, id, params)
+    }
+
+    fn entities(&mut self, _data_dir: &std::path::Path, ty: &str, query: &EntityQuery) -> Result<Vec<Entity>, RpcError> {
+        match (&self.cal, ty) {
+            (Some(c), calendar::intents::EVENT) => Ok(c.event_entities(query)),
+            (None, calendar::intents::EVENT) => Ok(Vec::new()),
+            _ => Err(RpcError::new(bifrost_app::control::INVALID_PARAMS, format!("unknown entity type {ty}"))),
+        }
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {

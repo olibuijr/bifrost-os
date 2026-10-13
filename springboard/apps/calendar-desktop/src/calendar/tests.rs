@@ -1301,3 +1301,126 @@ fn every_screen_draws() {
     assert!(c.drag.is_some());
     draw_once(&mut c, &ui);
 }
+
+fn params(fields: &[(&str, &str)]) -> bifrost_core::json::Json {
+    use bifrost_core::json::Json;
+    Json::Obj(fields.iter().map(|(k, v)| (k.to_string(), Json::Str(v.to_string()))).collect())
+}
+
+#[test]
+fn the_show_date_intent_opens_the_calendar_on_a_date() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    c.open(&ui, Some(1));
+    let r = intents::perform(&mut c, &ui, "show-date", &params(&[("date", "2027-01-15")])).unwrap();
+    assert_eq!(c.selected, date(2027, 1, 15));
+    assert!(c.editor.is_none() && !c.searching(), "whatever was open is closed");
+    assert!(r.continue_foreground);
+    assert_eq!(r.dialog.as_deref(), Some("Showing January 15, 2027"));
+    assert!(intents::perform(&mut c, &ui, "show-date", &params(&[("date", "soon")])).is_err());
+}
+
+#[test]
+fn the_show_event_intent_opens_the_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let r = intents::perform(&mut c, &ui, "show-event", &params(&[("event", "3")])).unwrap();
+    assert!(r.continue_foreground);
+    assert_eq!(c.selected, date(2026, 10, 8));
+    assert!(c.editor.as_ref().is_some_and(|d| d.existing && d.event.id == 3));
+    assert!(intents::perform(&mut c, &ui, "show-event", &params(&[("event", "99")])).is_err(), "no such event");
+    assert!(intents::perform(&mut c, &ui, "show-event", &params(&[("event", "abc")])).is_err());
+}
+
+#[test]
+fn the_create_event_intent_adds_and_saves_an_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let r = intents::perform(
+        &mut c,
+        &ui,
+        "create-event",
+        &bifrost_core::json::Json::Obj(vec![
+            ("title".into(), bifrost_core::json::Json::Str("  Physio ".into())),
+            ("start".into(), bifrost_core::json::Json::Str("2026-10-12T09:30".into())),
+            ("minutes".into(), bifrost_core::json::Json::Num(45.0)),
+            ("location".into(), bifrost_core::json::Json::Str("Laugavegur 5".into())),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(r.dialog.as_deref(), Some("Created Physio on 2026-10-12 09:30"));
+    assert!(!r.continue_foreground);
+    let saved = new(&ui, temp.file());
+    let e = saved.events.iter().find(|e| e.title == "Physio").expect("saved");
+    assert_eq!((e.date, e.minute, e.duration, e.location.as_str()), (date(2026, 10, 12), 570, 45, "Laugavegur 5"));
+    assert_eq!(r.value, bifrost_core::json::Json::Str(e.id.to_string()));
+    assert_eq!(c.events.len(), 4);
+}
+
+#[test]
+fn the_create_event_intent_takes_the_shown_day_and_the_defaults_and_refuses_bad_input() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.change_setting(&ui, Setting::Length(2));
+    c.change_setting(&ui, Setting::Alert(3));
+    intents::perform(&mut c, &ui, "create-event", &params(&[("title", "Call")])).unwrap();
+    let e = &c.events[0];
+    assert_eq!((e.date, e.minute, e.duration, e.alert), (date(2026, 10, 4), 540, 90, 3));
+    // an all-day event has no time and its own alert
+    c.change_setting(&ui, Setting::AllDayAlert(6));
+    let json = bifrost_core::json::Json::Obj(vec![
+        ("title".into(), bifrost_core::json::Json::Str("Holiday".into())),
+        ("all_day".into(), bifrost_core::json::Json::Bool(true)),
+    ]);
+    intents::perform(&mut c, &ui, "create-event", &json).unwrap();
+    let holiday = c.events.iter().find(|e| e.title == "Holiday").unwrap();
+    assert_eq!((holiday.all_day, holiday.minute, holiday.duration, holiday.alert), (true, 0, 1440, 6));
+    assert!(intents::perform(&mut c, &ui, "create-event", &params(&[("title", "   ")])).is_err(), "a blank title");
+    assert!(intents::perform(&mut c, &ui, "create-event", &params(&[("title", "Ok"), ("start", "nope")])).is_err());
+    assert!(intents::perform(&mut c, &ui, "no-such-intent", &params(&[])).is_err());
+    assert_eq!(c.events.len(), 2);
+}
+
+#[test]
+fn events_are_entities_for_the_intents() {
+    use bifrost_app::intents::EntityQuery;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let c = searchable(&ui, temp.file());
+    let ids = |q: &EntityQuery| c.event_entities(q).into_iter().map(|e| e.id).collect::<Vec<_>>();
+    assert_eq!(ids(&EntityQuery::Suggested), vec!["1", "2", "3"]);
+    assert_eq!(ids(&EntityQuery::Ids(vec!["3".into(), "9".into()])), vec!["3"]);
+    assert_eq!(ids(&EntityQuery::String("LUNCH".into())), vec!["2"]);
+    let lunch = &c.event_entities(&EntityQuery::String("lunch".into()))[0];
+    assert_eq!((lunch.ty.as_str(), lunch.title.as_str(), lunch.subtitle.as_deref()), ("Event", "Lunch with Ana", Some("2026-10-06 12:30")));
+}
+
+#[test]
+fn print_sends_the_agenda_of_what_the_window_shows() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    assert!(c.enabled(Command::Print) && !c.perform(&ui, Command::Print, 0.0), "the app runs the print job");
+    let (job, text) = c.print_job();
+    assert_eq!(job, "Calendar October 2026");
+    assert!(text.starts_with("October 2026\n============\n"));
+    for title in ["Standup", "Lunch with Ana", "Dentist"] {
+        assert!(text.contains(title), "{title}");
+    }
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    let (job, text) = c.print_job();
+    assert_eq!(job, "Calendar Sunday, October 4");
+    assert!(text.contains("Standup") && !text.contains("Dentist"));
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    assert_eq!(c.print_job().0, "Calendar Oct 4 - 10, 2026");
+    assert_eq!(c.print_job().1.matches("\n  ").count(), 3, "three events that week");
+    c.activate(&ui, Target::Add, 0.0);
+    assert!(!c.enabled(Command::Print), "not while the event form is open");
+}

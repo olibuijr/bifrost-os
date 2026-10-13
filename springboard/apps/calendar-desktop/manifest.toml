@@ -11,3 +11,24 @@ permissions = ["storage", "documents", "notifications", "keychain"]
 keychain_groups = ["is.bifrost.passwords"]
 window = "full-size"
 handles = ["public.calendar-event:default"]
+
+[[intent]]
+id = "show-date"
+title = "Show Date"
+description = "Opens the calendar on a date."
+shortcut = false
+params = ["date:date"]
+
+[[intent]]
+id = "show-event"
+title = "Show Event"
+description = "Opens an event on its day."
+shortcut = false
+params = ["event:entity(Event)"]
+
+[[intent]]
+id = "create-event"
+title = "Create Event"
+description = "Adds an event to the calendar."
+shortcut = false
+params = ["title:string", "start:date?", "minutes:int?", "location:string?", "notes:string?", "all_day:bool?"]

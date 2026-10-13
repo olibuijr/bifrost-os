@@ -283,10 +283,10 @@
    "feature": "Print",
    "area": "menu",
    "apple": "MainMenu.nib File > Print; PrintPanel.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add File > Print... rendering the current view through the shell print service."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/printing.rs:66",
+   "note": "File > Print... (Cmd+P) sends the shown day, week, month or year as a plain-text agenda to the printing service, not a picture of the grid; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Draw the month grid and the day and week columns onto the pages (PrintOperation::pages) instead of an agenda list; text prints in ASCII only, so accented letters need the page writer's font support."
   },
   {
    "feature": "Publish / share calendar",
@@ -346,10 +346,10 @@
    "feature": "User activities / intents (show date, show event, create event)",
    "area": "intent",
    "apple": "Info.plist NSUserActivityTypes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Expose open-date, open-event and create-event methods on the app control socket and the intent registry."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/intents.rs:14",
+   "note": "Intents show-date, show-event and create-event on the control socket (intent.<id>), declared in manifest.toml; Event entities for pickers; no Search indexing of events yet; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Add a continue-activity hook (Search items for events), a show-day intent that picks the view, and a reply with the event for create-event."
   }
  ]
 }

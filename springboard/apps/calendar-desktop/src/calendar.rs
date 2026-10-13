@@ -10,10 +10,12 @@ pub mod exchange;
 mod lookup;
 mod goto;
 pub mod ics;
+pub mod intents;
 pub mod invitees;
 pub mod layout;
 pub mod notes;
 pub mod prefs;
+pub mod printing;
 pub mod quick;
 pub mod recur;
 pub mod search;
@@ -1438,10 +1440,12 @@ pub enum Command {
     ImportArchive,
     /// Event > Search Events (Cmd+F): the cursor goes to the search field.
     Search,
+    /// File > Print...: the app sends `Calendar::print_job` to the printing service.
+    Print,
 }
 
 impl Command {
-    pub const ALL: [Command; 23] = [
+    pub const ALL: [Command; 24] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1465,6 +1469,7 @@ impl Command {
         Command::ExportArchive,
         Command::ImportArchive,
         Command::Search,
+        Command::Print,
     ];
 
     pub fn id(self) -> u32 {
@@ -1500,6 +1505,7 @@ impl Command {
             Command::ExportArchive => "Export Archive...",
             Command::ImportArchive => "Import Archive...",
             Command::Search => "Search Events",
+            Command::Print => "Print...",
         }
     }
 
@@ -1517,6 +1523,7 @@ impl Command {
             Command::ZoomOut => "cmd+-",
             Command::GoToDate => "cmd+shift+t",
             Command::Search => "cmd+f",
+            Command::Print => "cmd+p",
             _ => "",
         }
     }
@@ -1593,7 +1600,7 @@ impl Calendar {
             Command::GoToDate => Target::GoOpen,
             Command::Search => Target::SearchField,
             // the app shows the panels and passes the file's text to `import_file` / reads `archive_text`
-            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive => return false,
+            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print => return false,
         };
         self.activate(ui, target, t);
         true
