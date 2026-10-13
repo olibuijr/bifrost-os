@@ -699,7 +699,7 @@ fn sample(src: &Pixmap, x: f32, y: f32) -> u32 {
     pack(o)
 }
 
-fn invert3(m: [[f32; 3]; 3]) -> Option<[[f32; 3]; 3]> {
+pub(crate) fn invert3(m: [[f32; 3]; 3]) -> Option<[[f32; 3]; 3]> {
     let c = |r: usize, c: usize| m[r][c];
     let det = c(0, 0) * (c(1, 1) * c(2, 2) - c(1, 2) * c(2, 1)) - c(0, 1) * (c(1, 0) * c(2, 2) - c(1, 2) * c(2, 0))
         + c(0, 2) * (c(1, 0) * c(2, 1) - c(1, 1) * c(2, 0));
@@ -1095,5 +1095,83 @@ mod tests {
         render_tree(&mut dst, &parent, Transform3D::IDENTITY);
         assert_eq!(dst.get(7, 5), RED);
         assert_eq!(dst.get(12, 5), 0);
+    }
+}
+
+// ---- hit testing through transforms ----
+
+/// The z = 0 plane point that `m` maps to the screen point `(x, y)`; `None` when `m` is singular.
+pub fn unproject(m: Transform3D, x: f32, y: f32) -> Option<(f32, f32)> {
+    let a = m.m;
+    let h = [[a[0][0], a[1][0], a[3][0]], [a[0][1], a[1][1], a[3][1]], [a[0][3], a[1][3], a[3][3]]];
+    let inv = invert3(h)?;
+    let w = inv[2][0] * x + inv[2][1] * y + inv[2][2];
+    if w.abs() < 1e-9 {
+        return None;
+    }
+    Some(((inv[0][0] * x + inv[0][1] * y + inv[0][2]) / w, (inv[1][0] * x + inv[1][1] * y + inv[1][2]) / w))
+}
+
+impl StyledLayer {
+    /// The front-most layer under the screen point `p`, as the path of child indices from this layer (empty for this
+    /// layer itself). Follows the same transforms, sublayer transform, perspective and depth order as
+    /// [`render_tree`]. Back faces are not hit when the layer is not double sided.
+    pub fn hit_test(&self, p: (f32, f32), parent_world: Transform3D) -> Option<Vec<usize>> {
+        let world = self.to_parent().concat(parent_world);
+        let child_world = self.sub().concat(world);
+        let mut order: Vec<usize> = (0..self.children.len()).collect();
+        let depth = |i: usize| {
+            let c = &self.children[i];
+            c.to_parent().concat(child_world).depth_of(c.centre().0, c.centre().1)
+        };
+        order.sort_by(|a, b| depth(*a).total_cmp(&depth(*b)));
+        for i in order.into_iter().rev() {
+            if let Some(mut path) = self.children[i].hit_test(p, child_world) {
+                path.insert(0, i);
+                return Some(path);
+            }
+        }
+        let (lx, ly) = unproject(world, p.0, p.1)?;
+        let inside = lx >= 0.0 && ly >= 0.0 && lx < self.content.w as f32 && ly < self.content.h as f32;
+        if !inside || self.style.opacity <= 0.0 {
+            return None;
+        }
+        if !self.double_sided {
+            let q = [(0.0, 0.0), (self.content.w as f32, 0.0), (self.content.w as f32, self.content.h as f32)]
+                .map(|c| world.project(c.0, c.1));
+            if let [Some(a), Some(b), Some(c)] = q {
+                if (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0) < 0.0 {
+                    return None;
+                }
+            }
+        }
+        Some(Vec::new())
+    }
+}
+
+#[cfg(test)]
+mod hit_tests {
+    use super::*;
+
+    #[test]
+    fn hits_follow_translation_and_scale_and_children_win() {
+        let mut p = StyledLayer::new(Pixmap::filled(10, 10, 0xFF00_00FF));
+        p.position = (20.0, 0.0);
+        p.transform = Transform3D::make_scale(2.0, 2.0, 1.0);
+        let mut c = StyledLayer::new(Pixmap::filled(4, 4, 0xFF00_00FF));
+        c.position = (0.0, 0.0);
+        p.children.push(c);
+        // The parent is 10x10 scaled by 2 about its centre (5,5): it spans screen 15..35 on x.
+        assert_eq!(p.hit_test((16.0, 2.0), Transform3D::IDENTITY), Some(vec![0]));
+        assert_eq!(p.hit_test((30.0, 10.0), Transform3D::IDENTITY), Some(vec![]));
+        assert_eq!(p.hit_test((5.0, 5.0), Transform3D::IDENTITY), None);
+    }
+
+    #[test]
+    fn unproject_inverts_a_perspective_projection() {
+        let m = Transform3D::make_rotation(0.6, 0.0, 1.0, 0.0).concat(Transform3D::make_perspective(200.0));
+        let (sx, sy) = m.project(10.0, 7.0).unwrap();
+        let (x, y) = unproject(m, sx, sy).unwrap();
+        assert!((x - 10.0).abs() < 1e-2 && (y - 7.0).abs() < 1e-2);
     }
 }

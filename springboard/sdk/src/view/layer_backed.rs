@@ -20,6 +20,11 @@ pub(super) fn draw(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
     let Some(layer) = v.base().layer.clone() else { return };
     let f = v.frame();
     sync(&layer, f);
+    if bifrost_ui::layer_bridge::needs_styled_path(&layer) {
+        draw_styled(&layer, f, c, ui);
+        layer.clear_dirty_tree();
+        return;
+    }
     let cmds = layer.render_list();
     layer.clear_dirty_tree();
     if cmds.is_empty() {
@@ -31,6 +36,20 @@ pub(super) fn draw(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
     replay(&cmds, c);
     c.pop_transform();
     c.pop_clip();
+}
+
+/// Draws a layer tree that uses corner radii, shadows, filters, masks or 3D transforms through the styled
+/// rasteriser, into the view's frame.
+fn draw_styled(layer: &Layer, f: Rect, c: &mut dyn Canvas, ui: &Ui) {
+    use bifrost_ui::transform3d::Transform3D;
+    let area = px_rf(ui, f);
+    let (w, h) = (area.w.ceil().max(1.0) as usize, area.h.ceil().max(1.0) as usize);
+    let s = ui.pt(1.0);
+    let to_dst = Transform3D::make_translation(-f.x, -f.y, 0.0).concat(Transform3D::make_scale(s, s, 1.0));
+    let p = bifrost_ui::layer_bridge::render_layer_tree(layer, w, h, to_dst);
+    let id = p.px.iter().fold(0xcbf2_9ce4_8422_2325u64, |a, v| (a ^ *v as u64).wrapping_mul(0x100_0000_01b3));
+    let img = Image { w: p.w, h: p.h, px: p.px };
+    c.image(ImageRef { id, image: &img }, area, 1.0);
 }
 
 fn rf(r: Rect) -> RectF {

@@ -46,6 +46,7 @@ mod autolayout;
 mod controls;
 mod forms;
 mod layer_backed;
+mod style_props;
 mod scroll;
 pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
 pub use app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
