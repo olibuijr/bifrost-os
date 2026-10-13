@@ -3,7 +3,10 @@
 
 Benchmarks are #[ignore]d tests that print `BENCH <name> <value> ms`. Each run records the git sha,
 system version and host, prints the change against the previous run, and flags regressions over 15 %.
-Usage: tools/bench.py [--audio] [--no-record] [--history] [--midget [--reboot] [--apps]] [--graphics [--click X Y]]
+Usage: tools/bench.py [--frames] [--audio] [--no-record] [--history] [--midget [--reboot] [--apps]] [--graphics [--click X Y]]
+--frames runs only the shell frame-time scenes (every `bench_frame_*` test: desktop idle, Settings open, Window menu open,
+window drag, Files with 5,000 items; springboard/src/shell/frame_budget.rs and files/bench.rs). Each scene prints the
+`frame_<scene>_median` and `frame_<scene>_p95` keys in ms and fails the run (exit 1) when a p95 frame is over 16.7 ms.
 --graphics (with --midget) adds the window-server graphics suite (tools/graphics_bench.py: compose CPU and GPU
 percentiles, present latency, dropped frames, input-to-photon with --click) and gates it against
 docs/graphics-architecture.md ("Performance budgets"); a breach exits 3.
@@ -21,6 +24,7 @@ HIST = os.path.join(ROOT, "docs", "perf-history.jsonl")
 BUDGETS = os.path.join(ROOT, "docs", "budgets.toml")
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 SUITES = [["-p", "bifrost-render", "glass_cost"], ["-p", "springboard", "--features", "desktop-wayland,testkit", "--lib", "bench_"], ["-p", "bifrost-ui", "--lib", "bench_ui_"], ["-p", "bifrost-files", "--bins", "bench_files_"]]
+FRAME_SUITES = [["-p", "springboard", "--features", "desktop-wayland,testkit", "--lib", "bench_frame_"]]
 
 
 def load():
@@ -31,7 +35,7 @@ def load():
 
 def run():
     out = {}
-    for suite in SUITES:
+    for suite in (FRAME_SUITES if "--frames" in sys.argv else SUITES):
         pkg, flt = suite[:-1], suite[-1]
         cmd = ["cargo", "test", "--offline", "--profile", "fast"] + pkg + [flt, "--", "--ignored", "--nocapture"]
         r = subprocess.run(cmd, cwd=os.path.join(ROOT, "springboard"), capture_output=True, text=True, timeout=1500)

@@ -4368,6 +4368,9 @@ fn lock_date_text(i: &Info) -> String {
 pub mod tests;
 
 #[cfg(test)]
+pub(crate) mod frame_budget;
+
+#[cfg(test)]
 mod term_fast_tests;
 
 /// Average `draw_quicksearch` cost, logged to stderr (the journal) every 120 frames.
