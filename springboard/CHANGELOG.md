@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.16 — 2026-10-13
+
+- Fewer shell threads: volume and sound share one audio worker; the SIGTERM and stall watchers share one `sys-watch` poll thread (`bare/sys_watch.rs`).
+
 ## 0.7.15 — 2026-10-13
 
 - Unlock hands the lock screen's freed memory back to the system (`malloc_trim` when the unlock finishes): shell memory after a lock cycle 112 → 97 MiB on Midget.
