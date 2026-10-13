@@ -31,11 +31,14 @@ ttf-croscore
 gsfonts
 systemd-ukify
 alsa-utils
+apache
 at
 avahi
 bc
 bind
+bzip2
 chrony
+coreutils
 cpio
 cronie
 cups
@@ -66,6 +69,7 @@ man-db
 mg
 nano
 ncompress
+net-snmp
 nethogs
 openbsd-netcat
 patch
