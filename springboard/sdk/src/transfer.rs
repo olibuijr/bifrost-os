@@ -1,33 +1,41 @@
-//! `Transferable` parity (`TransferRepresentation`, `DataRepresentation`, `ProxyRepresentation`,
-//! `TransferRepresentationVisibility`): one declaration per app model type of the representations it moves as through
-//! copy, paste, drag and share. Each representation is a UTType id with an export function and, when the value can be
-//! read back, an import function. Declaration order is the preference order.
+//! `Transferable` parity (`TransferRepresentation`, `CodableRepresentation`, `DataRepresentation`, `FileRepresentation`,
+//! `ProxyRepresentation`, `TransferRepresentationVisibility`, `SentTransferredFile`, `ReceivedTransferredFile`): one
+//! declaration per app model type of the representations it moves as through copy, paste, drag and share. Each
+//! representation is a UTType id with an export function and, when the value can be read back, an import function.
+//! Declaration order is the preference order (`exportedContentType` is the first, `importedContentTypes` the importable ones).
 //!
 //! The conversions below are pure; [`begin_drag`] is the one call that talks to the shell. The bridges are [`pasteboard_item`]
 //! and [`from_pasteboard_item`] (named pasteboards), [`drag_item`], [`begin_drag`] and [`drop_values`] (typed drag and drop). The pasteboard ([`crate::pasteboard`]), drag and drop
-//! ([`crate::dnd`]) and the share picker ([`crate::share`]) take the bytes a representation exports and hand back the
-//! bytes they received, so a model type needs one declaration instead of hand-written conversions at every site.
+//! ([`crate::dnd`]), the item provider ([`crate::item_provider`]) and the share picker ([`crate::share`]) take the bytes a
+//! representation exports and hand back the bytes they received, so a model type needs one declaration instead of
+//! hand-written conversions at every site.
 //!
-//! Remaining gaps: no sender and receiver roles for file transfers (`SentTransferredFile`), and visibility only separates
-//! the owning process from everyone else (no team level).
+//! Remaining gaps: a `ProxyRepresentation` through another `Transferable` ([`Representations::proxy_of`]) re-exposes that
+//! type's bytes representations only (its file representations are not forwarded); a file representation travels as bytes on
+//! a pasteboard item (the shell has no file promise yet).
 
 use crate::dnd::{self, DragItem, DragPreview, Payload};
 use crate::pasteboard_types::Item as PasteItem;
 use crate::Ctx;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 /// `TransferRepresentationVisibility`: who may receive a representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Visibility {
     /// `.all`: any app or process.
     All,
+    /// `.group` / team: processes of the same team, and the owner.
+    Team,
     /// `.ownProcess`: only the process that wrote the item.
     OwnProcess,
 }
 
-/// The party asking for a representation: the process that declared the model, or another one.
+/// The party asking for a representation: the process that declared the model, a process of the same team, or another one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Viewer {
     OwnProcess,
+    Team,
     Other,
 }
 
@@ -36,9 +44,82 @@ impl Visibility {
     pub fn is_visible_to(self, viewer: Viewer) -> bool {
         match self {
             Visibility::All => true,
+            Visibility::Team => viewer != Viewer::Other,
             Visibility::OwnProcess => viewer == Viewer::OwnProcess,
         }
     }
+
+    /// The stricter of two visibilities (a proxy is never more visible than the type it forwards).
+    fn narrow(self, other: Visibility) -> Visibility {
+        let rank = |v: Visibility| match v {
+            Visibility::All => 0,
+            Visibility::Team => 1,
+            Visibility::OwnProcess => 2,
+        };
+        if rank(other) > rank(self) {
+            other
+        } else {
+            self
+        }
+    }
+}
+
+/// `SentTransferredFile`: a file the sender hands over. The receiver gets a copy unless `allow_open_in_place` is set.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SentTransferredFile {
+    pub file: PathBuf,
+    pub allow_open_in_place: bool,
+}
+
+/// `ReceivedTransferredFile`: the file the receiver was given. `is_original_file` is true only when it is the sender's own file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReceivedTransferredFile {
+    pub file: PathBuf,
+    pub is_original_file: bool,
+}
+
+impl SentTransferredFile {
+    pub fn new(file: impl Into<PathBuf>) -> Self {
+        Self { file: file.into(), allow_open_in_place: false }
+    }
+
+    /// `init(_:allowAccessingOriginalFile:)`.
+    pub fn allow_open_in_place(mut self, allow: bool) -> Self {
+        self.allow_open_in_place = allow;
+        self
+    }
+
+    /// The receiving side: with `allow_open_in_place` the receiver gets the original; otherwise the file is copied into
+    /// `dest_dir` (same name) and the sender's file stays untouched.
+    pub fn receive(&self, dest_dir: &Path) -> std::io::Result<ReceivedTransferredFile> {
+        if self.allow_open_in_place {
+            return Ok(ReceivedTransferredFile { file: self.file.clone(), is_original_file: true });
+        }
+        let name = self.file.file_name().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "no file name"))?;
+        let dest = dest_dir.join(name);
+        std::fs::copy(&self.file, &dest)?;
+        Ok(ReceivedTransferredFile { file: dest, is_original_file: false })
+    }
+}
+
+/// Which `TransferRepresentation` a [`Representation`] was declared as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Codable,
+    Data,
+    File,
+    Proxy,
+}
+
+/// The public JSON type a `CodableRepresentation` defaults to.
+pub const JSON: &str = "public.json";
+
+type Export<T> = Rc<dyn Fn(&T) -> Vec<u8>>;
+type Import<T> = Rc<dyn Fn(&[u8]) -> Option<T>>;
+
+enum Io<T> {
+    Bytes { export: Export<T>, import: Option<Import<T>> },
+    File { export: Rc<dyn Fn(&T) -> SentTransferredFile>, import: Rc<dyn Fn(&ReceivedTransferredFile) -> Option<T>> },
 }
 
 /// One representation of `T`: a UTType id, how to export `T` to it and, when present, how to rebuild `T` from it.
@@ -46,8 +127,23 @@ impl Visibility {
 pub struct Representation<T> {
     pub uti: &'static str,
     pub visibility: Visibility,
-    export: fn(&T) -> Vec<u8>,
-    import: Option<fn(&[u8]) -> Option<T>>,
+    pub kind: Kind,
+    io: Io<T>,
+}
+
+impl<T> Representation<T> {
+    fn export_bytes(&self, value: &T) -> Option<Vec<u8>> {
+        match &self.io {
+            Io::Bytes { export, .. } => Some(export(value)),
+            Io::File { export, .. } => std::fs::read(export(value).file).ok(),
+        }
+    }
+    fn imports_bytes(&self) -> bool {
+        matches!(&self.io, Io::Bytes { import: Some(_), .. })
+    }
+    fn imports(&self) -> bool {
+        self.imports_bytes() || matches!(&self.io, Io::File { .. })
+    }
 }
 
 /// The ordered representations of one model type (`TransferRepresentationBuilder`).
@@ -61,63 +157,131 @@ impl<T> Default for Representations<T> {
     }
 }
 
-impl<T> Representations<T> {
+impl<T: 'static> Representations<T> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// `DataRepresentation(contentType:exporting:importing:)`: both directions.
-    pub fn data(
-        mut self,
-        uti: &'static str,
-        visibility: Visibility,
-        export: fn(&T) -> Vec<u8>,
-        import: fn(&[u8]) -> Option<T>,
-    ) -> Self {
-        self.items.push(Representation { uti, visibility, export, import: Some(import) });
+    fn push_bytes(mut self, kind: Kind, uti: &'static str, visibility: Visibility, export: Export<T>, import: Option<Import<T>>) -> Self {
+        self.items.push(Representation { uti, visibility, kind, io: Io::Bytes { export, import } });
         self
+    }
+
+    /// `DataRepresentation(contentType:exporting:importing:)`: both directions.
+    pub fn data(self, uti: &'static str, visibility: Visibility, export: fn(&T) -> Vec<u8>, import: fn(&[u8]) -> Option<T>) -> Self {
+        self.push_bytes(Kind::Data, uti, visibility, Rc::new(export), Some(Rc::new(import)))
+    }
+
+    /// `CodableRepresentation(contentType:)`: the model is encoded and decoded as structured text (JSON by default, [`JSON`]).
+    pub fn codable(self, uti: &'static str, visibility: Visibility, encode: fn(&T) -> Vec<u8>, decode: fn(&[u8]) -> Option<T>) -> Self {
+        self.push_bytes(Kind::Codable, uti, visibility, Rc::new(encode), Some(Rc::new(decode)))
     }
 
     /// `ProxyRepresentation(exporting:)`: export only.
-    pub fn proxy(mut self, uti: &'static str, visibility: Visibility, export: fn(&T) -> Vec<u8>) -> Self {
-        self.items.push(Representation { uti, visibility, export, import: None });
+    pub fn proxy(self, uti: &'static str, visibility: Visibility, export: fn(&T) -> Vec<u8>) -> Self {
+        self.push_bytes(Kind::Proxy, uti, visibility, Rc::new(export), None)
+    }
+
+    /// `ProxyRepresentation(exporting:importing:)` through another `Transferable` `U`: every bytes representation of `U`
+    /// is offered for `T` (converted with `to_proxy`), and read back through `from_proxy` when given. A proxy is never more
+    /// visible than the representation it forwards.
+    pub fn proxy_of<U: Transferable>(mut self, visibility: Visibility, to_proxy: fn(&T) -> U, from_proxy: Option<fn(U) -> T>) -> Self {
+        let inner = Rc::new(U::transfer_representations());
+        for rep in &inner.items {
+            if !matches!(rep.io, Io::Bytes { .. }) {
+                continue;
+            }
+            let uti = rep.uti;
+            let vis = visibility.narrow(rep.visibility);
+            let via = Rc::clone(&inner);
+            let export: Export<T> = Rc::new(move |t: &T| via.export(&to_proxy(t), uti, Viewer::OwnProcess).unwrap_or_default());
+            let import: Option<Import<T>> = match (from_proxy, rep.imports_bytes()) {
+                (Some(back), true) => {
+                    let via = Rc::clone(&inner);
+                    let f: Import<T> = Rc::new(move |b: &[u8]| via.import(uti, b).map(back));
+                    Some(f)
+                }
+                _ => None,
+            };
+            self = self.push_bytes(Kind::Proxy, uti, vis, export, import);
+        }
         self
     }
 
+    /// `FileRepresentation(contentType:exporting:importing:)`: the model travels as a file. The sender names the file; the
+    /// receiver is handed a copy (see [`SentTransferredFile::receive`]) and rebuilds the model from it.
+    pub fn file(
+        mut self,
+        uti: &'static str,
+        visibility: Visibility,
+        export: fn(&T) -> SentTransferredFile,
+        import: fn(&ReceivedTransferredFile) -> Option<T>,
+    ) -> Self {
+        self.items.push(Representation { uti, visibility, kind: Kind::File, io: Io::File { export: Rc::new(export), import: Rc::new(import) } });
+        self
+    }
+
+}
+
+impl<T> Representations<T> {
     /// The UTType ids `viewer` may see, in preference order: what a pasteboard or a drag offers it.
     pub fn types_for(&self, viewer: Viewer) -> Vec<&'static str> {
         self.items.iter().filter(|r| r.visibility.is_visible_to(viewer)).map(|r| r.uti).collect()
     }
 
+    /// `exportedContentType`: the most preferred type `viewer` may see.
+    pub fn exported_content_type(&self, viewer: Viewer) -> Option<&'static str> {
+        self.types_for(viewer).first().copied()
+    }
+
+    /// `importedContentTypes`: every type the model can be rebuilt from, in preference order.
+    pub fn imported_content_types(&self) -> Vec<&'static str> {
+        self.items.iter().filter(|r| r.imports()).map(|r| r.uti).collect()
+    }
+
     /// Exports `value` as `uti` for `viewer`. `None` when there is no such representation or `viewer` may not see it.
+    /// A file representation exports the bytes of its file.
     pub fn export(&self, value: &T, uti: &str, viewer: Viewer) -> Option<Vec<u8>> {
-        self.items
-            .iter()
-            .find(|r| r.uti == uti && r.visibility.is_visible_to(viewer))
-            .map(|r| (r.export)(value))
+        self.items.iter().find(|r| r.uti == uti && r.visibility.is_visible_to(viewer)).and_then(|r| r.export_bytes(value))
+    }
+
+    /// The file a file representation of `uti` hands over to `viewer`.
+    pub fn export_file(&self, value: &T, uti: &str, viewer: Viewer) -> Option<SentTransferredFile> {
+        self.items.iter().find(|r| r.uti == uti && r.visibility.is_visible_to(viewer)).and_then(|r| match &r.io {
+            Io::File { export, .. } => Some(export(value)),
+            Io::Bytes { .. } => None,
+        })
     }
 
     /// Rebuilds a value from `bytes` of `uti`. `None` for an unknown type, a proxy, or bytes the importer rejects.
     pub fn import(&self, uti: &str, bytes: &[u8]) -> Option<T> {
-        self.items
-            .iter()
-            .find(|r| r.uti == uti)
-            .and_then(|r| r.import)
-            .and_then(|f| f(bytes))
+        self.items.iter().find(|r| r.uti == uti).and_then(|r| match &r.io {
+            Io::Bytes { import: Some(f), .. } => f(bytes),
+            _ => None,
+        })
     }
 
-    /// The first representation in preference order that the pasteboard or drop `offered` and this model can read back.
+    /// Rebuilds a value from the file a sender handed over, through the file representation of `uti`.
+    pub fn import_file(&self, uti: &str, file: &ReceivedTransferredFile) -> Option<T> {
+        self.items.iter().find(|r| r.uti == uti).and_then(|r| match &r.io {
+            Io::File { import, .. } => import(file),
+            Io::Bytes { .. } => None,
+        })
+    }
+
+    /// The first representation in preference order that the pasteboard or drop `offered` and this model can read back from bytes.
     pub fn best_import(&self, offered: &[&str]) -> Option<&'static str> {
-        self.items
-            .iter()
-            .filter(|r| r.import.is_some())
-            .find(|r| offered.contains(&r.uti))
-            .map(|r| r.uti)
+        self.items.iter().filter(|r| r.imports_bytes()).find(|r| offered.contains(&r.uti)).map(|r| r.uti)
+    }
+
+    /// The `TransferRepresentation` kind declared for `uti`.
+    pub fn kind_of(&self, uti: &str) -> Option<Kind> {
+        self.items.iter().find(|r| r.uti == uti).map(|r| r.kind)
     }
 }
 
 /// A model type that declares how it moves through copy, paste, drag and share (`Transferable`).
-pub trait Transferable: Sized {
+pub trait Transferable: Sized + 'static {
     fn transfer_representations() -> Representations<Self>;
 }
 

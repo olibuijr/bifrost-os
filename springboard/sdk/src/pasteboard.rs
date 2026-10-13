@@ -5,16 +5,27 @@
 //! A board holds a list of [`PasteboardItem`]s; the plain `set_*`/`data` calls work on the first item. Boards other
 //! than the general one (`named`, `drag`, `find`) live inside the app.
 //!
-//! parity gap: the shell wire carries a flat (type, data) list, so only the first item of the general board reaches
-//! the shell, and the shell publishes only the text-like type to the Wayland selection for now; other types and items
-//! stay inside BifrOSt apps until the presenter offers multi-MIME data sources.
+//! Several types of one copy go out in a single write: [`NativePasteboard::write_items`] (`writeObjects` with
+//! `PasteboardItem`s), [`NativePasteboard::write_transferable`] (a `Transferable` model, one change step) and
+//! [`NativePasteboard::declare_types`] (`declareTypes(_:owner:)`, the types promised and produced lazily by a
+//! [`PasteboardTypeOwner`]). Reading back: [`NativePasteboard::items`] and [`NativePasteboard::read_objects`]
+//! (`readObjects(forClasses:options:)`).
+//!
+//! parity gap: the shell wire carries a flat (type, data) list, so the general board sends the representations of its
+//! items merged (the first item holding a type keeps it, at most 16 items), and the shell publishes only the text-like
+//! type to the Wayland selection for now; other types stay inside BifrOSt apps until the presenter offers multi-MIME
+//! data sources. Promised data that nobody has read yet is not sent, and another app's write ends this process's
+//! promises.
 
-use crate::pasteboard_item::PasteboardItem;
+use crate::pasteboard_item::{Found, PasteboardItem};
+use crate::pasteboard_promise::{OwnerProvider, PasteboardTypeOwner};
 use crate::proto::ToShell;
+use crate::transfer::{self, Representations, Transferable};
 use crate::Ctx;
 use bifrost_ui::uttype;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub const STRING: &str = "public.utf8-plain-text";
 pub const HTML: &str = "public.html";
@@ -27,10 +38,15 @@ pub const GENERAL: &str = "bifrost general";
 pub const DRAG: &str = "bifrost drag";
 pub const FIND: &str = "bifrost find";
 
+/// The shell's wire limit on items per write.
+const MAX_ITEMS: usize = 16;
+
 #[derive(Default)]
 struct State {
     change_count: u32,
     items: Vec<PasteboardItem>,
+    /// The change count `declare_types` made, while its promises are still this board's contents.
+    declared_at: Option<u32>,
 }
 
 thread_local! {
@@ -41,12 +57,26 @@ fn with<R>(name: &str, f: impl FnOnce(&mut State) -> R) -> R {
     BOARDS.with(|b| f(b.borrow_mut().entry(name.to_string()).or_default()))
 }
 
-/// Applies the shell's `ToApp::Pasteboard` (the general board; the flat list becomes one item).
+/// Providers are told they are finished outside the board's borrow, so they may use the pasteboard themselves.
+fn finish(items: Vec<PasteboardItem>) {
+    for item in &items {
+        item.finish_providers();
+    }
+}
+
+/// Applies the shell's `ToApp::Pasteboard` (the general board; the flat list becomes one item). The echo of this
+/// process's own `declare_types` keeps its promises; any other change ends them.
 pub(crate) fn mirror(change_count: u32, items: Vec<(String, Vec<u8>)>) {
-    with(GENERAL, |s| {
+    let old = with(GENERAL, |s| {
+        if s.declared_at == Some(change_count) {
+            return Vec::new();
+        }
+        s.declared_at = None;
         s.change_count = change_count;
-        s.items = if items.is_empty() { Vec::new() } else { vec![PasteboardItem::from_representations(items)] };
+        let fresh = if items.is_empty() { Vec::new() } else { vec![PasteboardItem::from_representations(items)] };
+        std::mem::replace(&mut s.items, fresh)
     });
+    finish(old);
 }
 
 /// A named pasteboard. Get it with [`NativePasteboard::general`] or [`NativePasteboard::named`].
@@ -78,20 +108,34 @@ impl NativePasteboard {
     fn is_general(&self) -> bool {
         self.name == GENERAL
     }
+    /// Sends the general board to the shell: the data that exists, items merged, one write.
     fn push(&self, ctx: &Ctx) {
         if !self.is_general() {
             return;
         }
-        let items = with(GENERAL, |s| s.items.first().map(|i| i.representations().to_vec()).unwrap_or_default());
+        let items = with(GENERAL, |s| {
+            let mut flat: Vec<(String, Vec<u8>)> = Vec::new();
+            for (t, d) in s.items.iter().take(MAX_ITEMS).flat_map(|i| i.available_representations()) {
+                if !flat.iter().any(|(have, _)| *have == t) {
+                    flat.push((t, d));
+                }
+            }
+            flat
+        });
         ctx.send_to_shell(ToShell::PasteboardSet { items });
+    }
+    /// Empties the board and steps its change count; the dropped items are returned for finishing.
+    fn empty(&self) -> (u32, Vec<PasteboardItem>) {
+        with(&self.name, |s| {
+            s.declared_at = None;
+            s.change_count = s.change_count.wrapping_add(1);
+            (s.change_count, std::mem::take(&mut s.items))
+        })
     }
     /// `clearContents`: empties the pasteboard and returns the new change count.
     pub fn clear_contents(&self, ctx: &Ctx) -> u32 {
-        let n = with(&self.name, |s| {
-            s.items.clear();
-            s.change_count = s.change_count.wrapping_add(1);
-            s.change_count
-        });
+        let (n, old) = self.empty();
+        finish(old);
         self.push(ctx);
         n
     }
@@ -100,6 +144,15 @@ impl NativePasteboard {
         with(&self.name, |s| s.items.extend(items.iter().cloned()));
         self.push(ctx);
         true
+    }
+    /// `clearContents` then `writeObjects(_:)` as one step: one change count, one message to the shell. Returns the
+    /// new change count.
+    pub fn replace_items(&self, ctx: &Ctx, items: Vec<PasteboardItem>) -> u32 {
+        let (n, old) = self.empty();
+        with(&self.name, |s| s.items = items);
+        finish(old);
+        self.push(ctx);
+        n
     }
     /// `pasteboardItems`.
     pub fn items(&self) -> Vec<PasteboardItem> {
@@ -116,7 +169,7 @@ impl NativePasteboard {
     }
     /// `canReadItem(withDataConformingToTypes:)`.
     pub fn can_read_item(&self, types: &[&str]) -> bool {
-        self.items().iter().any(|i| i.conforms_to_any(types))
+        with(&self.name, |s| s.items.iter().any(|i| i.conforms_to_any(types)))
     }
     /// `setData(_:forType:)`: replaces the data of `uti` on the first item.
     pub fn set_data(&self, ctx: &Ctx, bytes: &[u8], uti: &str) {
@@ -132,9 +185,14 @@ impl NativePasteboard {
     pub fn set_string(&self, ctx: &Ctx, text: &str) {
         self.set_data(ctx, text.as_bytes(), STRING);
     }
-    /// `data(forType:)`: the first item that has `uti`.
+    /// `data(forType:)`: the first item that has `uti`. A promised type is resolved on first read (the provider is
+    /// asked once).
     pub fn data(&self, uti: &str) -> Option<Vec<u8>> {
-        with(&self.name, |s| s.items.iter().find_map(|i| i.data(uti).map(|d| d.to_vec())))
+        let found = with(&self.name, |s| s.items.iter().find_map(|i| i.lookup(uti)));
+        match found? {
+            Found::Data(d) => Some(d),
+            Found::Promise(p) => p.resolve(uti),
+        }
     }
     /// `string(forType: .string)`; the general board falls back to the plain clipboard text.
     pub fn string(&self) -> Option<String> {
@@ -145,7 +203,7 @@ impl NativePasteboard {
             own
         }
     }
-    /// `types`: the UTType ids on the pasteboard, across items, without duplicates.
+    /// `types`: the UTType ids on the pasteboard, across items, promised ones included, without duplicates.
     pub fn types(&self) -> Vec<String> {
         with(&self.name, |s| {
             let mut out: Vec<String> = Vec::new();
@@ -168,12 +226,56 @@ impl NativePasteboard {
         self.set_data(ctx, urls.join("\n").as_bytes(), FILE_URL);
         n
     }
+
+    /// `writeObjects([item])` for a `Transferable`: every representation another app may see, in one write. Returns
+    /// the new change count.
+    pub fn write_transferable<T: Transferable>(&self, ctx: &Ctx, value: &T) -> u32 {
+        self.write_representations(ctx, &T::transfer_representations(), value)
+    }
+
+    /// As [`Self::write_transferable`] for representations built on the spot.
+    pub fn write_representations<T: 'static>(&self, ctx: &Ctx, reps: &Representations<T>, value: &T) -> u32 {
+        self.replace_items(ctx, vec![PasteboardItem::from_item(&transfer::pasteboard_item(reps, value))])
+    }
+
+    /// `declareTypes(_:owner:)`: clears the board and announces `types`; `owner` supplies each one the first time it is
+    /// read and hears `changed_owner` when the board is cleared or another app writes it. The shell is sent only data
+    /// that exists (promised bytes stay here until read); returns the new change count.
+    pub fn declare_types(&self, ctx: &Ctx, types: &[&str], owner: Rc<dyn PasteboardTypeOwner>) -> u32 {
+        let (n, old) = self.empty();
+        let mut item = PasteboardItem::new();
+        item.set_data_provider(Rc::new(OwnerProvider(owner)), types);
+        with(&self.name, |s| {
+            s.items = vec![item];
+            s.declared_at = Some(n);
+        });
+        finish(old);
+        self.push(ctx);
+        n
+    }
+
+    /// `readObjects(forClasses:options:)` for a `Transferable`: the values the board holds, one per item, read through
+    /// the best type the model can import.
+    pub fn read_objects<T: Transferable>(&self) -> Vec<T> {
+        let reps = T::transfer_representations();
+        self.items().iter().filter_map(|i| transfer::from_pasteboard_item(&reps, &i.to_item())).collect()
+    }
+
+    /// `canReadObject(forClasses:options:)`.
+    pub fn can_read_object<T: Transferable>(&self) -> bool {
+        let types = self.types();
+        let offered: Vec<&str> = types.iter().map(String::as_str).collect();
+        T::transfer_representations().best_import(&offered).is_some()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pasteboard_promise::PasteboardItemDataProvider;
     use crate::proto::Configure;
+    use crate::transfer::Visibility;
+    use std::cell::Cell;
 
     fn ctx() -> Ctx {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
@@ -225,15 +327,154 @@ mod tests {
     }
 
     #[test]
-    fn legacy_set_string_is_one_item_and_the_wire_sends_the_first_item() {
+    fn the_wire_carries_the_items_merged_first_holder_of_a_type_wins() {
         let ctx = ctx();
         let pb = NativePasteboard::general();
         pb.clear_contents(&ctx);
         pb.set_string(&ctx, "hi");
         assert_eq!(pb.items().len(), 1);
-        pb.write_items(&ctx, &[item(HTML, "<b>")]);
+        pb.write_items(&ctx, &[item(HTML, "<b>"), item(STRING, "later")]);
         let sent = ctx.take_sent();
-        assert!(matches!(sent.last(), Some(ToShell::PasteboardSet { items }) if items.len() == 1 && items[0].0 == STRING));
-        assert_eq!(pb.items().len(), 2);
+        assert!(matches!(sent.last(), Some(ToShell::PasteboardSet { items })
+            if items.len() == 2 && items[0] == (STRING.to_string(), b"hi".to_vec()) && items[1].0 == HTML));
+        assert_eq!(pb.items().len(), 3);
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct Note(String);
+
+    fn text(n: &Note) -> Vec<u8> {
+        n.0.as_bytes().to_vec()
+    }
+    fn read(b: &[u8]) -> Option<Note> {
+        String::from_utf8(b.to_vec()).ok().map(Note)
+    }
+    fn html(n: &Note) -> Vec<u8> {
+        format!("<p>{}</p>", n.0).into_bytes()
+    }
+
+    impl Transferable for Note {
+        fn transfer_representations() -> Representations<Note> {
+            Representations::new()
+                .data(STRING, Visibility::All, text, read)
+                .proxy(HTML, Visibility::All, html)
+                .proxy("is.bifrost.note", Visibility::OwnProcess, text)
+        }
+    }
+
+    #[test]
+    fn a_transferable_goes_out_as_all_its_types_in_one_write_and_change_count_step() {
+        let ctx = ctx();
+        let pb = NativePasteboard::general();
+        let before = pb.change_count();
+        let n = pb.write_transferable(&ctx, &Note("hi".into()));
+        assert_eq!(n, before.wrapping_add(1));
+        assert_eq!(pb.change_count(), n);
+        assert_eq!(pb.types(), [STRING, HTML], "own-process types stay home");
+        let sent = ctx.take_sent();
+        assert_eq!(sent.len(), 1, "one message to the shell");
+        assert!(matches!(&sent[0], ToShell::PasteboardSet { items } if items.len() == 2));
+    }
+
+    #[test]
+    fn the_board_reads_back_as_an_item_and_as_the_model() {
+        let ctx = ctx();
+        let pb = NativePasteboard::general();
+        pb.write_transferable(&ctx, &Note("hi".into()));
+        let items = pb.items();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].data(HTML), Some(b"<p>hi</p>".to_vec()));
+        assert_eq!(pb.read_objects::<Note>(), vec![Note("hi".into())]);
+        assert!(pb.can_read_object::<Note>());
+        pb.clear_contents(&ctx);
+        assert!(pb.items().is_empty());
+        assert!(!pb.can_read_object::<Note>());
+    }
+
+    struct Owner {
+        asked: Cell<u32>,
+        changed: Cell<u32>,
+    }
+
+    impl Owner {
+        fn new() -> Rc<Owner> {
+            Rc::new(Owner { asked: Cell::new(0), changed: Cell::new(0) })
+        }
+    }
+
+    impl PasteboardTypeOwner for Owner {
+        fn provide_data(&self, uti: &str) -> Option<Vec<u8>> {
+            self.asked.set(self.asked.get() + 1);
+            Some(format!("lazy {uti}").into_bytes())
+        }
+        fn changed_owner(&self) {
+            self.changed.set(self.changed.get() + 1);
+        }
+    }
+
+    #[test]
+    fn declared_types_are_listed_at_once_and_provided_lazily_once() {
+        let ctx = ctx();
+        let pb = NativePasteboard::general();
+        let owner = Owner::new();
+        let before = pb.change_count();
+        assert_eq!(pb.declare_types(&ctx, &[STRING, PNG], owner.clone()), before.wrapping_add(1));
+        assert_eq!(pb.types(), [STRING, PNG]);
+        assert_eq!(owner.asked.get(), 0, "nothing is produced until read");
+        assert!(matches!(ctx.take_sent().last(), Some(ToShell::PasteboardSet { items }) if items.is_empty()), "promised bytes are not sent");
+        assert_eq!(pb.data(PNG), Some(b"lazy public.png".to_vec()));
+        assert_eq!(pb.data(PNG), Some(b"lazy public.png".to_vec()));
+        assert_eq!(owner.asked.get(), 1, "resolved once");
+    }
+
+    #[test]
+    fn the_owner_hears_of_a_clear_once() {
+        let ctx = ctx();
+        let pb = NativePasteboard::named("t-owner");
+        let owner = Owner::new();
+        pb.declare_types(&ctx, &[HTML], owner.clone());
+        assert_eq!(pb.types(), [HTML]);
+        pb.clear_contents(&ctx);
+        pb.clear_contents(&ctx);
+        assert_eq!(owner.changed.get(), 1);
+        assert!(pb.types().is_empty());
+    }
+
+    #[test]
+    fn another_apps_write_ends_the_promises() {
+        let ctx = ctx();
+        let pb = NativePasteboard::general();
+        let owner = Owner::new();
+        let n = pb.declare_types(&ctx, &[STRING], owner.clone());
+        mirror(n, vec![(PNG.into(), vec![2])]);
+        assert_eq!(pb.types(), [STRING], "the echo of the board's own declare keeps the promise");
+        mirror(n + 5, vec![(PNG.into(), vec![1])]);
+        assert_eq!(pb.types(), [PNG]);
+        assert_eq!(pb.data(STRING), None);
+        assert_eq!(owner.changed.get(), 1);
+    }
+
+    struct Recording(Cell<u32>);
+
+    impl PasteboardItemDataProvider for Recording {
+        fn provide_data(&self, _uti: &str) -> Option<Vec<u8>> {
+            Some(b"x".to_vec())
+        }
+        fn finished_with_data_provider(&self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+
+    #[test]
+    fn clearing_the_board_finishes_an_items_provider_once() {
+        let ctx = ctx();
+        let pb = NativePasteboard::named("t-finish");
+        let provider = Rc::new(Recording(Cell::new(0)));
+        let mut promised = PasteboardItem::new();
+        promised.set_data_provider(provider.clone(), &[PNG]);
+        pb.write_items(&ctx, &[promised]);
+        assert_eq!(pb.clear_contents(&ctx), 1);
+        pb.clear_contents(&ctx);
+        assert_eq!(provider.0.get(), 1);
     }
 }

@@ -738,11 +738,13 @@ path; on the retained GPU window path it may not show until the next full repain
 ### Promised pasteboard data (AppKit)
 
 `bifrost_app::pasteboard_promise` mirrors `NSPasteboardItemDataProvider`: `PasteboardItem::set_data_provider(provider, types)`
-lists promised types without bytes, the first `data_for_type` calls `provide_data` once and caches it, and a provider that
-returns `None` gives `PromiseError::NoData`. `PromiseBoard` adds `declare_types(types, owner)` with `PasteboardTypeOwner`,
-and `clear_contents` fires `finished_with_data_provider` / `changed_owner`. `FilePromiseProvider` +
+lists promised types without bytes, the first `data_for_type` calls `provide_data` once and keeps the answer, and a provider
+that returns `None` gives `PromiseError::NoData`. `NativePasteboard::declare_types(ctx, types, owner)` takes a
+`PasteboardTypeOwner`; clearing the board (or an item dropping its last use of a provider) fires
+`finished_with_data_provider` / `changed_owner` once. `FilePromiseProvider` +
 `FilePromiseProviderDelegate` (`file_name_for_type`, `write_promise_to`) write a promised file into a destination dir.
-Gap: promises are not carried over the wire to other apps yet.
+Gap: promises are not carried over the wire to other apps yet. (This replaces the separate `PromiseBoard`: a board is
+a `NativePasteboard`, so promises and named boards share one implementation.)
 
 ## Open and save panels (`NSOpenPanel` / `NSSavePanel`, 0.4.81)
 
@@ -1678,16 +1680,47 @@ never snapshots "Loading…".
 (plain text, else file URLs, else HTML) to the Wayland selection; other types stay inside BifrOSt until the presenter offers
 multi-MIME data sources (today one rich type, png then html, rtf, uri-list, goes out through `wl-copy --type`). The shell pushes `ToApp::Pasteboard` with the bytes to every other connected app.
 
-#### NSPasteboard items and named boards
+#### Pasteboard items and named boards
 
 `bifrost_app::pasteboard::NativePasteboard::named(name)` mirrors `NSPasteboard(name:)`; `general()`, `drag()` and `find()` use
-the Apple names. A board holds a list of `bifrost_app::pasteboard_item::PasteboardItem` (`NSPasteboardItem`: `set_data`,
-`set_string`, `data`, `string`, `types`). Board calls: `write_items(ctx, &[item])` (appends; `clear_contents` first to replace),
-`items()` (`pasteboardItems`), `read_items(&[uti])` (items with a conforming type), `available_type(&[uti])` (first requested type
+the Apple names. A board holds a list of `bifrost_app::pasteboard_item::PasteboardItem` (`set_data`,
+`set_string`, `data`, `string`, `types`, `set_data_provider`). Board calls: `write_items(ctx, &[item])` (appends; `clear_contents` first to replace),
+`replace_items(ctx, items)` (clear and write as one change step), `items()` (`pasteboardItems`), `read_items(&[uti])` (items with a conforming type), `available_type(&[uti])` (first requested type
 the board conforms to, by UTType conformance), `can_read_item(&[uti])`, and `change_count()` (bumped by each `clear_contents`).
 The older `set_data`, `set_string`, `data`, `types` work on the first item, so a legacy copy stays a single item. Gap: the shell
-wire (`PasteboardSet`) is a flat (type, data) list, so only the first item of the general board reaches the shell and other apps;
-named boards are local to the app (cross-app named boards are `pasteboard_types::Board`). Not modelled: data providers.
+wire (`PasteboardSet`) is a flat (type, data) list, so the general board sends its items merged (the first item holding a type
+wins, at most 16 items) and promised data nobody has read yet is not sent; named boards are local to the app (cross-app named
+boards are `pasteboard_types::Board`).
+
+### Core Transferable and the multi-type pasteboard (Sprint 10)
+
+`bifrost_app::transfer` mirrors Core Transferable. A model type implements `Transferable::transfer_representations()` and
+returns a `Representations<Self>` builder; declaration order is the preference order:
+
+- `.data(uti, visibility, export, import)` (`DataRepresentation`), `.codable(JSON, ...)` (`CodableRepresentation`),
+  `.proxy(uti, visibility, export)` (export only) and `.proxy_of::<U>(visibility, to_proxy, from_proxy)` (forwards `U`'s
+  bytes representations, with the stricter visibility).
+- `.file(uti, visibility, export -> SentTransferredFile, import(&ReceivedTransferredFile))` (`FileRepresentation`).
+  `SentTransferredFile::new(path).allow_open_in_place(bool)`; `receive(dest_dir)` copies the file (receiver gets
+  `is_original_file == false`) unless opening in place was allowed.
+- `Visibility::{All, Team, OwnProcess}` against `Viewer::{Other, Team, OwnProcess}`; `types_for`, `exported_content_type`,
+  `imported_content_types`, `export`, `export_file`, `import`, `import_file`, `best_import`, `kind_of`.
+
+Bridges: `pasteboard_item` / `from_pasteboard_item`, `drag_item` / `begin_drag` / `drop_values`.
+
+`NativePasteboard` gains `write_transferable(ctx, &value)` (every representation as one item, one write, one change count
+step), `declare_types(ctx, types, owner)` (`declareTypes(_:owner:)` with a lazy `PasteboardTypeOwner`, resolved once on first
+read; the owner hears `changed_owner` when the board is cleared or another app writes it), `read_objects::<T>()` (one value
+per item) and `can_read_object::<T>()`. There is one `PasteboardItem` (`bifrost_app::pasteboard_item`): each type is data or a
+promise (`set_data_provider`, `is_pending`, `data_for_type`, `to_item`, `from_item`), served by a
+`bifrost_app::pasteboard_promise::PasteboardItemDataProvider` (`provide_data(&self, uti)`, `finished_with_data_provider`).
+`bifrost_app::item_provider::ItemProvider` registers data or lazy representations (`registerDataRepresentation`),
+`with_transferable(&value)`, and `load_transferable::<T>()` (synchronous; errors are `ItemProviderError`).
+
+Gaps: the shell (`springboard/src/shell/pasteboard.rs`) still publishes one type to the Wayland selection and keeps items
+flat (the general board sends its items merged, the first item holding a type wins), so multi-type
+copies stay inside BifrOSt until multi-MIME sources land; file representations travel as bytes on a pasteboard item;
+`proxy_of` does not forward file representations. Host tests only (`sdk/tests/transferable.rs`); verify on Midget.
 
 ## Printing (NSPrintInfo / NSPrintOperation parity)
 
