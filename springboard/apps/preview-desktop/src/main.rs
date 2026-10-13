@@ -12,17 +12,28 @@ mod model;
 mod pdfjob;
 mod pdfmarks;
 mod printjob;
+mod recents;
 
 use bifrost_app::kit::{Damage, Surface, Ui};
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::proto::DocMode;
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
 use canvas::{Action, Layout, PictureCache, Scene, Side, Tool};
 use document::Document;
 use export::Raster;
 use model::{Adjust, History, Mark, MarkKind, Norm, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE};
 use pdfjob::{Inbox, Job, Reply};
+use recents::Recents;
 use springboard::shell::books::engine;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
+
+/// File > Open and the Open Recent items. The ids sit above every `Action` id.
+const MENU_OPEN: u32 = 0x5001;
+const MENU_CLEAR_RECENTS: u32 = 0x5002;
+const MENU_RECENT: u32 = 0x5010;
+/// The kinds of file the open panel offers.
+const OPEN_TYPES: [&str; 4] = ["pdf", "png", "jpg", "jpeg"];
 
 /// A pointer gesture in progress. The coordinates are canvas or sidebar pixels.
 enum Gesture {
@@ -67,6 +78,8 @@ struct Viewer {
     goto: Option<String>,
     /// Whether the thumbnails and outline sidebar is shown.
     sidebar: bool,
+    /// The files opened lately, for File > Open Recent.
+    recents: Recents,
 }
 
 impl Viewer {
@@ -88,6 +101,7 @@ impl Viewer {
             trail: Trail::default(),
             goto: None,
             sidebar: true,
+            recents: Recents::default(),
         }
     }
 
@@ -145,6 +159,7 @@ impl Viewer {
         self.trail = Trail::default();
         self.goto = None;
         self.status.clear();
+        self.remember(path);
         if matches!(engine::format_of(path), Some(engine::Format::Pdf)) {
             let (jobs, inbox) = pdfjob::spawn(path.to_path_buf());
             self.loading = Some(Loading { path: path.to_path_buf(), jobs, inbox });
@@ -155,6 +170,48 @@ impl Viewer {
             Ok(doc) => self.doc = Some(doc),
             Err(e) => self.status = format!("Could not open {}: {e}", path.display()),
         }
+    }
+
+    /// Puts `path` first in Open Recent and saves the list.
+    fn remember(&mut self, path: &Path) {
+        if self.data_dir.as_os_str().is_empty() || !path.exists() {
+            return;
+        }
+        self.recents.add(path);
+        let _ = recents::save(&self.data_dir, &self.recents);
+    }
+
+    /// Shows the open panel for PDFs and pictures.
+    fn show_open_panel(&self, ctx: &Ctx) {
+        let options = OpenOptions {
+            mode: DocMode::Read,
+            title: "Open".into(),
+            filters: OPEN_TYPES.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        ctx.open_panel(&options);
+    }
+
+    /// File > Open, Open Recent and Clear Menu. False when `id` is not one of those.
+    fn open_menu(&mut self, ctx: &Ctx, id: u32) -> bool {
+        match id {
+            MENU_OPEN => self.show_open_panel(ctx),
+            MENU_CLEAR_RECENTS => {
+                self.recents.clear();
+                let _ = recents::save(&self.data_dir, &self.recents);
+            }
+            _ if (MENU_RECENT..MENU_RECENT + recents::MAX_RECENTS as u32).contains(&id) => {
+                let Some(path) = self.recents.get((id - MENU_RECENT) as usize).map(Path::to_path_buf) else { return true };
+                if path.exists() {
+                    self.open_path(&path);
+                } else {
+                    self.recents.prune();
+                    self.status = format!("{} is no longer there.", name_of(&path));
+                }
+            }
+            _ => return false,
+        }
+        true
     }
 
     /// Takes what the PDF worker has sent: the open result, drawn pages and the results of saves and exports.
@@ -825,6 +882,7 @@ impl App for Viewer {
         // the app's private storage holds the markup sidecars
         if self.data_dir.as_os_str().is_empty() {
             self.data_dir = ctx.data_dir.clone();
+            self.recents = recents::load(&self.data_dir);
         }
     }
 
@@ -844,7 +902,15 @@ impl App for Viewer {
             .into_iter()
             .map(|a| item(a, open, a.export_scale() == Some(self.export_scale)))
             .collect();
-        let mut file_items = vec![item(Action::Print, open, false), AppMenuItem::separator()];
+        let mut file_items = vec![AppMenuItem::new(MENU_OPEN, "Open\u{2026}").key("cmd+o"), AppMenuItem::submenu("Open Recent")];
+        for (i, path) in self.recents.paths().iter().enumerate() {
+            file_items.push(AppMenuItem::new(MENU_RECENT + i as u32, &name_of(path)).depth(1));
+        }
+        if !self.recents.is_empty() {
+            file_items.push(AppMenuItem::separator().depth(1));
+        }
+        file_items.push(AppMenuItem::new(MENU_CLEAR_RECENTS, "Clear Menu").enabled(!self.recents.is_empty()).depth(1));
+        file_items.extend([AppMenuItem::separator(), item(Action::Print, open, false), AppMenuItem::separator()]);
         file_items.extend([item(Action::ExportPng, open, false), item(Action::ExportJpeg, open, false)]);
         file_items.push(AppMenuItem::separator());
         file_items.extend(scale_items);
@@ -915,6 +981,9 @@ impl App for Viewer {
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if self.open_menu(ctx, id) {
+            return true;
+        }
         let Some(action) = Action::from_id(id) else { return false };
         let lay = self.layout(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
         self.act(&ctx.ui, &lay, action)
@@ -936,6 +1005,28 @@ impl App for Viewer {
             }
             _ => false,
         }
+    }
+
+    /// The answer to the open panel: the chosen file is copied into the app's data folder and opened from there.
+    fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let doc = match ev {
+            DocumentEvent::Opened(doc) => doc,
+            DocumentEvent::OpenedMany { docs, .. } => match docs.into_iter().next() {
+                Some(doc) => doc,
+                None => return false,
+            },
+            _ => return false,
+        };
+        let mut bytes = Vec::new();
+        if let Err(e) = (&doc.file).read_to_end(&mut bytes) {
+            self.status = format!("Could not read {}: {e}", doc.name);
+            return true;
+        }
+        match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
+            Ok(path) => self.open_path(&path),
+            Err(e) => self.status = format!("Could not open {}: {e}", doc.name),
+        }
+        true
     }
 
     fn tick(&mut self, _ctx: &Ctx, _t: f64) -> bool {

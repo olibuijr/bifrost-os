@@ -23,9 +23,9 @@
       "feature": "File > Open dialog and Open Recent",
       "area": "menu",
       "apple": "MainMenu.nib File > Open, Open Recent",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Opening only via Open With / drop",
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:196",
+      "note": "File > Open (Cmd+O) through the open panel (chosen file copied into the app data folder) and Open Recent with Clear Menu (src/recents.rs, tested); not yet checked on the lab machine",
       "wire": "Add Open (cmd+o) using the SDK open panel and an Open Recent submenu fed by a recents list in data_dir; wire in main_menu File items main.rs:618"
     },
     {
@@ -159,8 +159,8 @@
       "area": "menu",
       "apple": "MainMenu.nib Tools > Rotate Left/Right",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:634",
-      "note": "Enabled for pictures only; PDF pages have per-page turns (document.rs:106) but the menu is disabled for PDFs",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:419",
+      "note": "Rotate acts on PDF pages too (Document::set_turn on the shown page); the old note about PDFs being disabled is stale. Needs a lab check",
       "wire": "Enable Rotate for PDF pages by calling Document::set_turn for the current page"
     },
     {
