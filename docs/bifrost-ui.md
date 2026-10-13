@@ -266,7 +266,10 @@ Parity gaps against `NSAccessibility` (recorded, not hidden):
 - `accessibilityTitle` and `accessibilityHelp` are set on the SDK `TextField` only (`with_ax_title`, `with_ax_help`); other
   controls report no title or help yet.
 - `Value` is parsed from the node's value text ("0.4", "40%"); a typed min/max/step needs a node field.
-- `SetValue` and `Focus` only reach apps that override `ax_set`; sliders and text fields in the shared kit do not yet.
+- `bifrost_ui::ax::Settable` is the default role-keyed handler for `setAccessibilityValue(_:)`, `setAccessibilityFocused(_:)`,
+  `accessibilityPerformIncrement()`/`Decrement()` on `.slider` (clamped to min/max, stepped) and `.textField` (replaces text), posting
+  `Notification::ValueChanged` and `FocusedUIElementChanged`; other roles are unchanged. Routing it from every app's `ax_set` and a
+  live Orca check are still open.
 - Rows are not selectable (`Selection` interface) and lists are not `Table`s.
 - Untested on a live Orca: unit tests cover the wire round trips and role/state/path mapping only.
 

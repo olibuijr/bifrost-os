@@ -59,9 +59,9 @@
     {
       "feature": "Custom actions and value setting",
       "apple": "accessibilityPerformPress, accessibilityIncrement, setAccessibilityValue",
-      "bifrost": "springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
+      "bifrost": "springboard/ui/src/ax.rs (Settable, Request, Notification); springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
       "status": "partial",
-      "note": "Default ax_set maps Press to a tap and ignores SetValue and Focus; only apps that override ax_set accept them. Shared kit sliders and text fields do not yet. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Default ax_set maps Press to a tap. springboard/ui/src/ax.rs now has role-keyed default handlers (Settable: slider SetValue clamps, Increment/Decrement step, text field SetValue, Focus; ValueChanged and FocusedUIElementChanged notifications); not yet routed from every app's ax_set, live Orca untested. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "System accessibility settings readable by apps",
