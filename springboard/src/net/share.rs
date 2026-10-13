@@ -25,7 +25,7 @@ use crate::shell::sha256::{self, Sha256};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -251,10 +251,6 @@ pub fn send<R: Read + Seek>(addr: SocketAddr, secret: &str, name: &str, src: &mu
     }
 }
 
-pub fn send_bytes(addr: SocketAddr, secret: &str, name: &str, data: &[u8]) -> io::Result<()> {
-    send(addr, secret, name, &mut io::Cursor::new(data), |_, _| {})
-}
-
 // ---- receiving ----
 
 /// An incoming file waiting for the user's Accept or Decline.
@@ -297,7 +293,7 @@ pub fn human_size(n: u64) -> String {
     if i == 0 { format!("{n} B") } else { format!("{v:.1} {}", U[i]) }
 }
 
-fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>) -> io::Result<()> {
+fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>, tracker: &Tracker) -> io::Result<()> {
     s.set_read_timeout(Some(Duration::from_secs(10)))?;
     let from = s.peer_addr()?;
     let h = Header::read(&mut s, secret)?;
@@ -315,6 +311,7 @@ fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>) ->
     if !ok {
         return Ok(());
     }
+    let id = tracker.begin(false, &from.ip().to_string(), &name, h.size);
     let deadline = Instant::now() + RECEIVE_DEADLINE;
     let part = dir.join(part_name());
     let result = (|| {
@@ -336,6 +333,7 @@ fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>) ->
             hash.update(&buf[..n]);
             f.write_all(&buf[..n])?;
             left -= n as u64;
+            tracker.progress(id, h.size - left, h.size);
         }
         f.sync_all()?;
         if hash.finish() != h.sha256 {
@@ -352,15 +350,97 @@ fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>) ->
     })();
     match result {
         Ok(dest) => {
+            tracker.finish(id, None);
             let _ = s.write_all(&[1]);
             let _ = events.send(Event::Received(dest));
             Ok(())
         }
         Err(e) => {
+            tracker.finish(id, Some(e.to_string()));
             let _ = std::fs::remove_file(&part);
             let _ = s.write_all(&[0]);
             Err(e)
         }
+    }
+}
+
+// ---- progress ----
+
+/// A finished transfer stays on the progress card this long, then drops off.
+pub const DONE_SHOW: Duration = Duration::from_secs(4);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Status {
+    Running,
+    Done,
+    /// why it stopped, e.g. "declined" or "checksum mismatch"
+    Failed(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Transfer {
+    pub id: u64,
+    /// true for a file this device sends
+    pub outgoing: bool,
+    /// the other device: its name when known, else its address
+    pub peer: String,
+    pub name: String,
+    pub done: u64,
+    pub total: u64,
+    pub status: Status,
+    /// when it finished; None while it runs
+    pub finished: Option<Instant>,
+}
+
+/// Every transfer this device runs, outgoing and incoming. The receiver threads
+/// and the shell's send threads share clones, so the progress card reads live state.
+#[derive(Clone, Default)]
+pub struct Tracker {
+    list: Arc<Mutex<Vec<Transfer>>>,
+    next: Arc<AtomicU64>,
+}
+
+impl Tracker {
+    /// Starts a transfer and returns its id.
+    pub fn begin(&self, outgoing: bool, peer: &str, name: &str, total: u64) -> u64 {
+        let id = self.next.fetch_add(1, Ordering::Relaxed);
+        let t = Transfer { id, outgoing, peer: peer.to_string(), name: name.to_string(), done: 0, total, status: Status::Running, finished: None };
+        self.list.lock().unwrap().push(t);
+        id
+    }
+
+    /// Records the bytes moved so far; `total` is the file size.
+    pub fn progress(&self, id: u64, done: u64, total: u64) {
+        if let Some(t) = self.list.lock().unwrap().iter_mut().find(|t| t.id == id) {
+            t.done = done.min(total);
+            t.total = total;
+        }
+    }
+
+    /// Ends a transfer: `None` for success, otherwise the reason.
+    pub fn finish(&self, id: u64, error: Option<String>) {
+        self.finish_at(id, error, Instant::now());
+    }
+
+    fn finish_at(&self, id: u64, error: Option<String>, now: Instant) {
+        if let Some(t) = self.list.lock().unwrap().iter_mut().find(|t| t.id == id) {
+            t.finished = Some(now);
+            match error {
+                None => {
+                    t.status = Status::Done;
+                    t.done = t.total;
+                }
+                Some(e) => t.status = Status::Failed(e),
+            }
+        }
+    }
+
+    /// The transfers to show at `now`: the running ones and the finished ones within DONE_SHOW.
+    /// Older finished ones are dropped from the list.
+    pub fn snapshot(&self, now: Instant) -> Vec<Transfer> {
+        let mut list = self.list.lock().unwrap();
+        list.retain(|t| t.finished.map_or(true, |f| now.duration_since(f) < DONE_SHOW));
+        list.clone()
     }
 }
 
@@ -393,6 +473,8 @@ impl Peers {
 
 pub struct Service {
     pub events: Receiver<Event>,
+    /// the transfers this service receives; the shell adds the ones it sends
+    pub tracker: Tracker,
     peers: Arc<Mutex<Peers>>,
     stop: Arc<AtomicBool>,
     pub port: u16,
@@ -408,8 +490,9 @@ impl Service {
         let peers = Arc::new(Mutex::new(Peers::default()));
         let (tx, rx) = mpsc::channel();
         let secret_s = secret.to_string();
+        let tracker = Tracker::default();
 
-        let (st, tx2, sec) = (stop.clone(), tx.clone(), secret_s.clone());
+        let (st, tx2, sec, trk) = (stop.clone(), tx.clone(), secret_s.clone(), tracker.clone());
         // blocking accept: no timer; `Drop` connects once to wake it after setting `stop`
         crate::bare::sys::spawn_named("share-accept", move || {
             while !st.load(Ordering::Relaxed) {
@@ -418,10 +501,10 @@ impl Service {
                         if st.load(Ordering::Relaxed) {
                             break;
                         }
-                        let (tx3, sec, dir) = (tx2.clone(), sec.clone(), dir.clone());
+                        let (tx3, sec, dir, trk) = (tx2.clone(), sec.clone(), dir.clone(), trk.clone());
                         crate::bare::sys::spawn_named("share-recv", move || {
                             s.set_nonblocking(false).ok();
-                            if let Err(e) = handle(s, &sec, &dir, &tx3) {
+                            if let Err(e) = handle(s, &sec, &dir, &tx3, &trk) {
                                 let _ = tx3.send(Event::Failed(e.to_string()));
                             }
                         });
@@ -458,7 +541,7 @@ impl Service {
                 }
             }
         });
-        Ok(Service { events: rx, peers, stop, port, secret: secret_s })
+        Ok(Service { events: rx, tracker, peers, stop, port, secret: secret_s })
     }
 
     pub fn peers(&self) -> Vec<Peer> {
@@ -611,7 +694,7 @@ mod tests {
         let addr: SocketAddr = format!("127.0.0.1:{}", svc.port).parse().unwrap();
         let data: Vec<u8> = (0..200_000u32).map(|i| i as u8).collect();
         let d2 = data.clone();
-        let t = std::thread::spawn(move || send_bytes(addr, "pw", "blob.bin", &d2));
+        let t = std::thread::spawn(move || send(addr, "pw", "blob.bin", &mut io::Cursor::new(d2), |_, _| {}));
         match svc.events.recv_timeout(Duration::from_secs(5)).unwrap() {
             Event::Offer(o) => {
                 assert_eq!((o.name.as_str(), o.size), ("blob.bin", 200_000));
@@ -625,11 +708,32 @@ mod tests {
     }
 
     #[test]
+    fn tracker_counts_then_drops_finished_transfers() {
+        let trk = Tracker::default();
+        let t0 = Instant::now();
+        let a = trk.begin(true, "Titan", "a.bin", 100);
+        let b = trk.begin(false, "10.0.0.7", "b.bin", 50);
+        trk.progress(a, 40, 100);
+        trk.progress(b, 500, 50);
+        let s = trk.snapshot(t0);
+        assert_eq!(s.len(), 2);
+        assert_eq!((s[0].done, s[0].total, s[0].status.clone()), (40, 100, Status::Running));
+        assert_eq!(s[1].done, 50, "progress never passes the total");
+        trk.finish_at(a, None, t0);
+        trk.finish_at(b, Some("declined".into()), t0);
+        let s = trk.snapshot(t0 + Duration::from_secs(1));
+        assert_eq!(s[0].status, Status::Done);
+        assert_eq!(s[0].done, 100);
+        assert_eq!(s[1].status, Status::Failed("declined".into()));
+        assert!(trk.snapshot(t0 + DONE_SHOW + Duration::from_millis(1)).is_empty(), "finished ones age out");
+    }
+
+    #[test]
     fn declined_transfer_errors() {
         let dir = std::env::temp_dir().join(format!("share-decl-{}", std::process::id()));
         let svc = Service::start("test", "pw", dir.clone()).unwrap();
         let addr: SocketAddr = format!("127.0.0.1:{}", svc.port).parse().unwrap();
-        let t = std::thread::spawn(move || send_bytes(addr, "pw", "x.txt", b"hi"));
+        let t = std::thread::spawn(move || send(addr, "pw", "x.txt", &mut io::Cursor::new(b"hi".to_vec()), |_, _| {}));
         if let Event::Offer(o) = svc.events.recv_timeout(Duration::from_secs(5)).unwrap() {
             o.decline();
         }
