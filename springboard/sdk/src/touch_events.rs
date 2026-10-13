@@ -31,6 +31,23 @@ pub use bifrost_ui::touch::{Raw, Sample, Touch, TouchEvent, TouchPhase, TouchTra
 
 use crate::proto::TouchKind;
 
+/// A wire stamp (the low 32 bits of the shell's monotonic ms clock) on the app's clock at `now`. Unlike a plain touch,
+/// a touch of a frame can be old (a finger held down is `Stationary` with the time it last changed), so any age up to
+/// about 24 days is kept; a stamp that lies ahead of `now` falls back to `now`.
+pub fn local_time(now: f64, wire_ms: u32) -> f64 {
+    let ago = (now as u64 as u32).wrapping_sub(wire_ms);
+    if ago < i32::MAX as u32 { now - ago as f64 } else { now }
+}
+
+/// Moves the wire stamps of a received frame onto the app's clock (see [`local_time`]).
+pub fn localize(ev: &mut TouchEvent, now: f64) {
+    let local = |t: f64| local_time(now, t as u64 as u32);
+    ev.timestamp = local(ev.timestamp);
+    for t in &mut ev.touches {
+        t.timestamp = local(t.timestamp);
+    }
+}
+
 /// What to do with a plain `ToApp::Touch`.
 #[derive(Debug, PartialEq)]
 pub enum Plain {
@@ -118,6 +135,27 @@ mod tests {
             Plain::Frame(f) => f,
             other => panic!("expected a frame, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn old_stamps_stay_old_and_future_ones_clamp() {
+        assert_eq!(local_time(10_000.0, 9_990), 9_990.0);
+        assert_eq!(local_time(10_000.0, 4_000), 4_000.0, "a held finger keeps the time it last changed");
+        assert_eq!(local_time(10_000.0, 10_050), 10_000.0, "ahead of now");
+        // the low 32 bits wrapped between the stamp and now
+        let now = (u32::MAX as f64) + 101.0;
+        assert_eq!(local_time(now, u32::MAX - 9), now - 110.0);
+    }
+
+    #[test]
+    fn a_frame_is_localized_touch_by_touch() {
+        let mut tr = TouchTracker::new();
+        tr.down(Sample::at(1, 0.0, 0.0), 4_000.0);
+        let mut ev = tr.down(Sample::at(2, 5.0, 5.0), 9_990.0).unwrap();
+        localize(&mut ev, 10_000.0);
+        assert_eq!(ev.timestamp, 9_990.0);
+        assert_eq!(ev.touch(1).unwrap().timestamp, 4_000.0);
+        assert_eq!(ev.touch(2).unwrap().timestamp, 9_990.0);
     }
 
     #[test]

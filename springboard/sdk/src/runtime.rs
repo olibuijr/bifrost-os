@@ -1,6 +1,6 @@
 use crate::proto::sys::{now_ms, shm_create, Channel, Map, Owned, Recv};
 use crate::proto::{Configure, KeyInput, Rect, ToApp, ToShell, TouchKind, SDK_VERSION};
-use crate::touch_events::{Plain, TouchEvent, TouchRouter};
+use crate::touch_events::{localize, Plain, TouchRouter};
 use crate::{kit, App};
 use bifrost_render::font::Font;
 use bifrost_render::gfx::{Damage, Surface};
@@ -588,6 +588,17 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 }
                 continue;
             }
+            // a touch frame leaves the held plain move alone: the frame of every sample would otherwise defeat the
+            // coalescing for apps that take plain touches
+            if let ToApp::Touches(mut ev) = msg {
+                if let Some(c) = &ctx {
+                    localize(&mut ev, now);
+                    if let Some(ev) = touch_router.frame(app.wants_touch_events(), ev) {
+                        need_frame |= app.touches(c, &ev);
+                    }
+                }
+                continue;
+            }
             if let Some(h) = held_move.take() {
                 need_frame |= deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
             }
@@ -643,14 +654,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= deliver_touch(&mut app, c, &mut touch_router, kind, id, x, y, event_time(now, t_ms));
                     }
                 }
-                ToApp::Touches(mut ev) => {
-                    if let Some(c) = &ctx {
-                        localize_touches(&mut ev, now);
-                        if let Some(ev) = touch_router.frame(app.wants_touch_events(), ev) {
-                            need_frame |= app.touches(c, &ev);
-                        }
-                    }
-                }
+                ToApp::Touches(_) => {}
                 ToApp::Key(k) => {
                     if let Some(c) = &ctx {
                         need_frame |= app.event(c, Input::Key(k));
@@ -961,15 +965,6 @@ fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: T
         Plain::Deliver => app.event(c, Input::Touch { kind, id, x, y, t }),
         Plain::Frame(ev) => app.touches(c, &ev),
         Plain::Skip => false,
-    }
-}
-
-/// Moves the shell's millisecond stamps of a touch frame onto the app's clock (`event_time`).
-fn localize_touches(ev: &mut TouchEvent, now: f64) {
-    let local = |t: f64| event_time(now, t as u64 as u32);
-    ev.timestamp = local(ev.timestamp);
-    for t in &mut ev.touches {
-        t.timestamp = local(t.timestamp);
     }
 }
 
