@@ -344,8 +344,9 @@ fn open_link_reports_when_the_selection_has_no_link() {
     let mut sh = terminal(&["/bin/sh", "-c", "echo plain words; read x"]);
     pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("plain words"));
     assert_eq!(MENU[15], "Open link in selection");
-    tap_control(&mut sh, 7, 2000.0);
-    tap_control(&mut sh, 15, 2100.0);
+    // rows 7 and up are menu actions (`terminal_menu_action`); `terminal_action` only handles the header and keys
+    sh.terminal_menu_action(7, 2020.0);
+    sh.terminal_menu_action(15, 2120.0);
     assert_eq!(sh.terminal_ui.message, "No link in selection");
 }
 
