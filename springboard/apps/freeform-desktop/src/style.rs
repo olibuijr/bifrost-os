@@ -40,16 +40,20 @@ pub struct Style {
     pub opacity: f32,
     /// A closed shape drawn by the rectangle or oval tool. Only a shape takes a fill.
     pub shape: bool,
+    /// The group the stroke belongs to (0 for none): strokes of one group are selected and moved together.
+    pub group: u32,
+    /// A locked stroke cannot be moved, changed or deleted until it is unlocked.
+    pub locked: bool,
 }
 
 impl Default for Style {
     /// A solid, unfilled, opaque, shadowless stroke that is not a shape.
     fn default() -> Self {
-        Style { fill: Fill::None, dashed: false, shadow: false, opacity: 1.0, shape: false }
+        Style { fill: Fill::None, dashed: false, shadow: false, opacity: 1.0, shape: false, group: 0, locked: false }
     }
 }
 
-/// One style per line, for the saved board: `fill c1 c2 dashed shadow opacity shape` (fill is `none`, `solid` or
+/// One style per line, for the saved board: `fill c1 c2 dashed shadow opacity shape group locked` (an older board has only the first seven fields; fill is `none`, `solid` or
 /// `gradient`; colours are 8 hex digits).
 pub fn styles_to_text(styles: &[Style]) -> String {
     let mut out = String::new();
@@ -59,7 +63,10 @@ pub fn styles_to_text(styles: &[Style]) -> String {
             Fill::Solid(c) => ("solid", c, 0),
             Fill::Gradient(c, d) => ("gradient", c, d),
         };
-        out.push_str(&format!("{kind} {a:08x} {b:08x} {} {} {} {}\n", st.dashed as u8, st.shadow as u8, st.opacity, st.shape as u8));
+        out.push_str(&format!(
+            "{kind} {a:08x} {b:08x} {} {} {} {} {} {}\n",
+            st.dashed as u8, st.shadow as u8, st.opacity, st.shape as u8, st.group, st.locked as u8
+        ));
     }
     out
 }
@@ -71,7 +78,7 @@ pub fn styles_from_text(text: &str) -> Vec<Style> {
 
 fn parse_style(line: &str) -> Option<Style> {
     let f: Vec<&str> = line.split_whitespace().collect();
-    if f.len() != 7 {
+    if f.len() != 7 && f.len() != 9 {
         return None;
     }
     let a = u32::from_str_radix(f[1], 16).ok()?;
@@ -86,7 +93,8 @@ fn parse_style(line: &str) -> Option<Style> {
     if !opacity.is_finite() {
         return None;
     }
-    Some(Style { fill, dashed: f[3] == "1", shadow: f[4] == "1", opacity: opacity.clamp(0.0, 1.0), shape: f[6] == "1" })
+    let (group, locked) = if f.len() == 9 { (f[7].parse().ok()?, f[8] == "1") } else { (0, false) };
+    Some(Style { fill, dashed: f[3] == "1", shadow: f[4] == "1", opacity: opacity.clamp(0.0, 1.0), shape: f[6] == "1", group, locked })
 }
 
 /// A packed 0xAARRGGBB colour as the opaque pixel the canvas stores.
@@ -322,7 +330,7 @@ mod tests {
     fn styles_survive_a_text_round_trip() {
         let looks = vec![
             Style::default(),
-            Style { fill: Fill::Gradient(0xFF11_2233, 0xFF44_5566), dashed: true, shadow: true, opacity: 0.5, shape: true },
+            Style { fill: Fill::Gradient(0xFF11_2233, 0xFF44_5566), dashed: true, shadow: true, opacity: 0.5, shape: true, group: 3, locked: true },
             Style { fill: Fill::Solid(BLACK), ..Style::default() },
         ];
         assert_eq!(styles_from_text(&styles_to_text(&looks)), looks);
@@ -332,6 +340,15 @@ mod tests {
     fn a_bad_style_line_reads_as_the_default_look() {
         let got = styles_from_text("garbage\n");
         assert_eq!(got, vec![Style::default()]);
+    }
+
+    #[test]
+    fn a_board_saved_before_groups_and_locks_still_loads() {
+        let got = styles_from_text("solid ff112233 00000000 1 0 0.5 1\n");
+        assert_eq!(got[0].group, 0);
+        assert!(!got[0].locked);
+        assert!(got[0].dashed && got[0].shape);
+        assert_eq!(got[0].fill, Fill::Solid(0xFF11_2233));
     }
 
     #[test]

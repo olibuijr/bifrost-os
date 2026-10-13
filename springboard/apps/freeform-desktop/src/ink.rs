@@ -2,7 +2,7 @@
 //! the pixel canvas, the spacing of the discs along a stroke, and the outlines the shape tools draw. Nothing here
 //! touches the screen, so the host tests cover it.
 use bifrost_app::controls::cg::path::Affine;
-use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke};
+use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke, StrokePoint};
 use bifrost_app::controls::cg::path::Path;
 use bifrost_app::kit::cg::color::Color;
 use bifrost_app::kit::cg::context::{DrawContext, LineCap, LineJoin, Rect as CgRect};
@@ -100,6 +100,76 @@ pub fn shape_drawing(a: (f32, f32), b: (f32, f32), oval: bool, ink: Ink) -> Draw
         p.add_rect(r.into());
     }
     Drawing::from_path(&p, 0.5, ink)
+}
+
+/// The shapes the Insert menu and the toolbar draw by dragging from one corner to the other.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ShapeKind {
+    Rectangle,
+    Oval,
+    Line,
+    Arrow,
+    Triangle,
+    Star,
+}
+
+impl ShapeKind {
+    /// Whether the shape is a closed outline that a fill can cover.
+    pub fn closed(self) -> bool {
+        !matches!(self, ShapeKind::Line | ShapeKind::Arrow)
+    }
+}
+
+/// Length of an arrow head's two barbs, as a fraction of the arrow's length, and the most they reach (pixels).
+const ARROW_HEAD_FRACTION: f32 = 0.25;
+const ARROW_HEAD_MAX: f32 = 28.0;
+/// The star's inner radius as a fraction of its outer radius (a regular five-point star).
+const STAR_INNER: f32 = 0.381_966;
+
+fn pts_stroke(ink: Ink, pts: &[(f32, f32)]) -> Stroke {
+    Stroke { ink, points: pts.iter().map(|&(x, y)| StrokePoint::at(x, y)).collect() }
+}
+
+/// The outline of `kind` dragged from `a` to `b`. A line and an arrow run from `a` to `b` (the arrow's head is at
+/// `b`); the closed shapes fill the box between the two points. Each is one stroke except the rectangle and the oval,
+/// which come from the path import. The closed outlines end on their first point.
+pub fn shape_of_kind(a: (f32, f32), b: (f32, f32), kind: ShapeKind, ink: Ink) -> Drawing {
+    let r = rect_between(a, b);
+    match kind {
+        ShapeKind::Rectangle => shape_drawing(a, b, false, ink),
+        ShapeKind::Oval => shape_drawing(a, b, true, ink),
+        ShapeKind::Line => Drawing::from_strokes(vec![pts_stroke(ink, &[a, b])]),
+        ShapeKind::Arrow => {
+            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+            let len = dx.hypot(dy);
+            if len < f32::EPSILON {
+                return Drawing::from_strokes(vec![pts_stroke(ink, &[a, b])]);
+            }
+            let head = (len * ARROW_HEAD_FRACTION).min(ARROW_HEAD_MAX);
+            let (ux, uy) = (dx / len, dy / len);
+            // the barbs sweep back from the tip at 30 degrees either side of the shaft
+            let (s, c) = (std::f32::consts::FRAC_PI_6.sin(), std::f32::consts::FRAC_PI_6.cos());
+            let barb = |sign: f32| (b.0 - head * (ux * c - sign * uy * s), b.1 - head * (uy * c + sign * ux * s));
+            Drawing::from_strokes(vec![pts_stroke(ink, &[a, b, barb(1.0), b, barb(-1.0)])])
+        }
+        ShapeKind::Triangle => {
+            let pts = [(r.x + r.w / 2.0, r.y), (r.x + r.w, r.y + r.h), (r.x, r.y + r.h), (r.x + r.w / 2.0, r.y)];
+            Drawing::from_strokes(vec![pts_stroke(ink, &pts)])
+        }
+        ShapeKind::Star => {
+            let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
+            let (rx, ry) = (r.w / 2.0, r.h / 2.0);
+            let mut pts: Vec<(f32, f32)> = (0..10)
+                .map(|k| {
+                    let radius = if k % 2 == 0 { 1.0 } else { STAR_INNER };
+                    let angle = -std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::PI / 5.0;
+                    (cx + rx * radius * angle.cos(), cy + ry * radius * angle.sin())
+                })
+                .collect();
+            pts.push(pts[0]);
+            Drawing::from_strokes(vec![pts_stroke(ink, &pts)])
+        }
+    }
 }
 
 /// The canvas-space transform that moves a selection by (`dx`, `dy`).
@@ -248,6 +318,60 @@ mod tests {
         let b = d.bounds().unwrap();
         assert!((b.x - 0.0).abs() < 0.01 && (b.y - 0.0).abs() < 0.01);
         assert!((b.w - 40.0).abs() < 0.05 && (b.h - 20.0).abs() < 0.05, "bounds {b:?}");
+    }
+
+    #[test]
+    fn a_line_runs_between_the_drag_points() {
+        let d = shape_of_kind((2.0, 3.0), (20.0, 9.0), ShapeKind::Line, ink(InkKind::Pen, BLACK, 2.0));
+        assert_eq!(d.strokes().len(), 1);
+        let p = &d.strokes()[0].points;
+        assert_eq!((p[0].x, p[0].y, p[1].x, p[1].y), (2.0, 3.0, 20.0, 9.0));
+        assert!(!ShapeKind::Line.closed() && !ShapeKind::Arrow.closed() && ShapeKind::Star.closed());
+    }
+
+    #[test]
+    fn an_arrow_has_its_head_at_the_end_point_and_barbs_behind_it() {
+        let d = shape_of_kind((0.0, 0.0), (100.0, 0.0), ShapeKind::Arrow, ink(InkKind::Pen, BLACK, 2.0));
+        let p = &d.strokes()[0].points;
+        assert_eq!(p.len(), 5);
+        assert_eq!((p[1].x, p[1].y), (100.0, 0.0), "the tip");
+        assert_eq!((p[3].x, p[3].y), (100.0, 0.0), "back to the tip between the barbs");
+        assert!(p[2].x < 100.0 && p[4].x < 100.0, "both barbs sweep back");
+        assert!(p[2].y * p[4].y < 0.0, "one barb each side of the shaft");
+    }
+
+    #[test]
+    fn a_zero_length_arrow_is_a_dot_not_a_nan() {
+        let d = shape_of_kind((5.0, 5.0), (5.0, 5.0), ShapeKind::Arrow, ink(InkKind::Pen, BLACK, 2.0));
+        assert!(d.strokes()[0].points.iter().all(|p| p.x.is_finite() && p.y.is_finite()));
+    }
+
+    #[test]
+    fn a_triangle_fits_its_box_and_closes() {
+        let d = shape_of_kind((10.0, 20.0), (50.0, 60.0), ShapeKind::Triangle, ink(InkKind::Pen, BLACK, 2.0));
+        let p = &d.strokes()[0].points;
+        assert_eq!(p.len(), 4);
+        assert_eq!((p[0].x, p[0].y), (30.0, 20.0), "apex at the top middle");
+        assert_eq!((p[0].x, p[0].y), (p[3].x, p[3].y));
+        let b = d.bounds().unwrap();
+        assert_eq!((b.x, b.y, b.w, b.h), (10.0, 20.0, 40.0, 40.0));
+    }
+
+    #[test]
+    fn a_star_has_ten_points_and_touches_the_top_of_its_box() {
+        let d = shape_of_kind((0.0, 0.0), (100.0, 100.0), ShapeKind::Star, ink(InkKind::Pen, BLACK, 2.0));
+        let p = &d.strokes()[0].points;
+        assert_eq!(p.len(), 11, "ten corners and the closing point");
+        assert!((p[0].x - 50.0).abs() < 0.01 && p[0].y.abs() < 0.01, "first point at the top middle");
+        let b = d.bounds().unwrap();
+        assert!(b.y.abs() < 0.01 && b.h <= 100.0 + 0.01);
+    }
+
+    #[test]
+    fn a_dragged_corner_order_does_not_change_a_closed_shape() {
+        let a = shape_of_kind((10.0, 20.0), (50.0, 60.0), ShapeKind::Star, ink(InkKind::Pen, BLACK, 2.0));
+        let b = shape_of_kind((50.0, 60.0), (10.0, 20.0), ShapeKind::Star, ink(InkKind::Pen, BLACK, 2.0));
+        assert_eq!(a, b);
     }
 
     #[test]

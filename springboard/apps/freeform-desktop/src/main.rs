@@ -2,12 +2,17 @@
 //! unchanged, hosted through the SDK. It also talks to the shell's services: the cursor (the
 //! pointer shape of each tool), the pasteboard (Copy) and the screens (the export scale).
 
+mod arrange;
+mod boards;
 mod freeform;
 mod ink;
+mod pdfout;
 mod services;
 mod style;
 
+use arrange::Align;
 use bifrost_app::kit::{Damage, Event, Surface};
+use ink::ShapeKind;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use bifrost_core::json::Json;
 use std::path::PathBuf;
@@ -23,6 +28,41 @@ const MENU_DELETE: u32 = 7;
 const MENU_FRONT: u32 = 8;
 const MENU_BACK: u32 = 9;
 const MENU_ROW: u32 = 10;
+const MENU_GROUP: u32 = 11;
+const MENU_UNGROUP: u32 = 12;
+const MENU_LOCK: u32 = 13;
+const MENU_UNLOCK: u32 = 14;
+const MENU_ALIGN_LEFT: u32 = 15;
+const MENU_ALIGN_CENTER: u32 = 16;
+const MENU_ALIGN_RIGHT: u32 = 17;
+const MENU_ALIGN_TOP: u32 = 18;
+const MENU_ALIGN_MIDDLE: u32 = 19;
+const MENU_ALIGN_BOTTOM: u32 = 20;
+const MENU_DISTRIBUTE_H: u32 = 21;
+const MENU_DISTRIBUTE_V: u32 = 22;
+const MENU_EXPORT_PDF: u32 = 23;
+const MENU_PRINT: u32 = 24;
+const MENU_NEW_BOARD: u32 = 25;
+const MENU_DUPLICATE_BOARD: u32 = 26;
+const MENU_DELETE_BOARD: u32 = 27;
+const MENU_NEXT_BOARD: u32 = 28;
+const MENU_PREV_BOARD: u32 = 29;
+const MENU_GRID: u32 = 30;
+const MENU_SNAP: u32 = 31;
+/// Insert menu shapes: `MENU_SHAPE + index` into `SHAPES`.
+const MENU_SHAPE: u32 = 40;
+/// The Boards menu: `MENU_BOARD + board id` opens that board.
+const MENU_BOARD: u32 = 1000;
+
+/// The shapes of the Insert menu, with their titles.
+const SHAPES: [(ShapeKind, &str); 6] = [
+    (ShapeKind::Line, "Line"),
+    (ShapeKind::Arrow, "Arrow"),
+    (ShapeKind::Rectangle, "Rectangle"),
+    (ShapeKind::Oval, "Oval"),
+    (ShapeKind::Triangle, "Triangle"),
+    (ShapeKind::Star, "Star"),
+];
 
 struct FreeformApp {
     app: Option<freeform::Freeform>,
@@ -109,8 +149,35 @@ impl App for FreeformApp {
         let selected = app.is_some_and(|c| c.has_selection());
         let can_undo = app.is_some_and(|c| c.can_undo());
         let can_redo = app.is_some_and(|c| c.can_redo());
+        let boards = app.map(|c| c.board_count()).unwrap_or(1);
+        let two = app.is_some_and(|c| c.has_units(2));
+        let three = app.is_some_and(|c| c.has_units(3));
+        let tool = app.and_then(|c| c.shape_tool());
+        let flag = |f: fn(&freeform::Freeform) -> bool| app.is_some_and(f);
+        let mut board_items: Vec<AppMenuItem> = vec![
+            AppMenuItem::new(MENU_NEXT_BOARD, "Next Board").key("cmd+shift+]").enabled(boards > 1),
+            AppMenuItem::new(MENU_PREV_BOARD, "Previous Board").key("cmd+shift+[").enabled(boards > 1),
+            AppMenuItem::separator(),
+        ];
+        if let Some(c) = app {
+            for (id, title, open) in c.board_entries() {
+                board_items.push(AppMenuItem::new(MENU_BOARD + id, &title).checked(open));
+            }
+        }
         vec![
-            AppMenu { title: "File".into(), items: vec![AppMenuItem::new(MENU_EXPORT, "Export as PNG...").key("cmd+shift+e").enabled(has)] },
+            AppMenu {
+                title: "File".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_NEW_BOARD, "New Board").key("cmd+n"),
+                    AppMenuItem::new(MENU_DUPLICATE_BOARD, "Duplicate Board"),
+                    AppMenuItem::new(MENU_DELETE_BOARD, "Delete Board").enabled(boards > 1),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_EXPORT, "Export as PNG...").key("cmd+shift+e").enabled(has),
+                    AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").key("cmd+alt+e").enabled(has),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(has),
+                ],
+            },
             AppMenu {
                 title: "Edit".into(),
                 items: vec![
@@ -124,14 +191,40 @@ impl App for FreeformApp {
                 ],
             },
             AppMenu {
+                title: "Insert".into(),
+                items: SHAPES.iter().enumerate().map(|(i, (kind, title))| AppMenuItem::new(MENU_SHAPE + i as u32, title).checked(tool == Some(*kind))).collect(),
+            },
+            AppMenu {
                 title: "Arrange".into(),
                 items: vec![
                     AppMenuItem::new(MENU_FRONT, "Bring to Front").key("cmd+alt+f").enabled(selected),
                     AppMenuItem::new(MENU_BACK, "Send to Back").key("cmd+alt+b").enabled(selected),
                     AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_GROUP, "Group").key("cmd+alt+g").enabled(flag(|c| c.can_group())),
+                    AppMenuItem::new(MENU_UNGROUP, "Ungroup").key("cmd+alt+shift+g").enabled(flag(|c| c.can_ungroup())),
+                    AppMenuItem::new(MENU_LOCK, "Lock").key("cmd+alt+l").enabled(flag(|c| c.can_lock())),
+                    AppMenuItem::new(MENU_UNLOCK, "Unlock").key("cmd+alt+shift+l").enabled(flag(|c| c.can_unlock())),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_ALIGN_LEFT, "Align Left").enabled(two),
+                    AppMenuItem::new(MENU_ALIGN_CENTER, "Align Centre").enabled(two),
+                    AppMenuItem::new(MENU_ALIGN_RIGHT, "Align Right").enabled(two),
+                    AppMenuItem::new(MENU_ALIGN_TOP, "Align Top").enabled(two),
+                    AppMenuItem::new(MENU_ALIGN_MIDDLE, "Align Middle").enabled(two),
+                    AppMenuItem::new(MENU_ALIGN_BOTTOM, "Align Bottom").enabled(two),
+                    AppMenuItem::new(MENU_DISTRIBUTE_H, "Distribute Horizontally").enabled(three),
+                    AppMenuItem::new(MENU_DISTRIBUTE_V, "Distribute Vertically").enabled(three),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_ROW, "Arrange in Row").enabled(selected),
                 ],
             },
+            AppMenu {
+                title: "View".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_GRID, if flag(|c| c.grid_shown()) { "Hide Grid" } else { "Show Grid" }).key("cmd+'"),
+                    AppMenuItem::new(MENU_SNAP, "Snap to Grid").checked(flag(|c| c.snapping())),
+                ],
+            },
+            AppMenu { title: "Boards".into(), items: board_items },
         ]
     }
 
@@ -143,6 +236,13 @@ impl App for FreeformApp {
         let Some(c) = &mut self.app else { return false };
         match id {
             MENU_EXPORT => c.export_as_png(&ctx.ui),
+            MENU_EXPORT_PDF => c.export_as_pdf(&ctx.ui),
+            MENU_PRINT => c.print_board(&ctx.ui),
+            MENU_NEW_BOARD => c.new_board(&ctx.ui),
+            MENU_DUPLICATE_BOARD => c.duplicate_board(&ctx.ui),
+            MENU_DELETE_BOARD => c.delete_board(&ctx.ui),
+            MENU_NEXT_BOARD => c.step_board(&ctx.ui, true),
+            MENU_PREV_BOARD => c.step_board(&ctx.ui, false),
             MENU_UNDO => c.undo_step(),
             MENU_REDO => c.redo_step(),
             MENU_COPY => c.copy_selected(),
@@ -151,6 +251,22 @@ impl App for FreeformApp {
             MENU_FRONT => c.reorder_selection(&ctx.ui, true),
             MENU_BACK => c.reorder_selection(&ctx.ui, false),
             MENU_ROW => c.arrange_in_row(&ctx.ui),
+            MENU_GROUP => c.group_selection(),
+            MENU_UNGROUP => c.ungroup_selection(),
+            MENU_LOCK => c.lock_selection(),
+            MENU_UNLOCK => c.unlock_selection(),
+            MENU_ALIGN_LEFT => c.align_selection(&ctx.ui, Align::Left),
+            MENU_ALIGN_CENTER => c.align_selection(&ctx.ui, Align::Center),
+            MENU_ALIGN_RIGHT => c.align_selection(&ctx.ui, Align::Right),
+            MENU_ALIGN_TOP => c.align_selection(&ctx.ui, Align::Top),
+            MENU_ALIGN_MIDDLE => c.align_selection(&ctx.ui, Align::Middle),
+            MENU_ALIGN_BOTTOM => c.align_selection(&ctx.ui, Align::Bottom),
+            MENU_DISTRIBUTE_H => c.distribute_selection(&ctx.ui, true),
+            MENU_DISTRIBUTE_V => c.distribute_selection(&ctx.ui, false),
+            MENU_GRID => c.toggle_grid(),
+            MENU_SNAP => c.toggle_snap(),
+            i if (MENU_SHAPE..MENU_SHAPE + SHAPES.len() as u32).contains(&i) => c.choose_shape(SHAPES[(i - MENU_SHAPE) as usize].0),
+            i if i > MENU_BOARD => c.open_board(&ctx.ui, i - MENU_BOARD),
             _ => return false,
         }
         self.drain(ctx);
