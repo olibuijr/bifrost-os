@@ -1,7 +1,9 @@
 //! The `dock` service: an app's own Dock tile. `badge` {"text"} sets the badge (the `notifications` permission is needed,
 //! as for `ToShell::SetBadge`; empty clears it), `progress` {"fraction": 0..1} shows a bar and {"indeterminate": true} a
 //! sweeping one (an empty body clears it), `bounce` {"critical": bool} bounces the icon (critical bounces for longer), and
-//! `state` reads the three back. The shell draws them: the badge in `desk.rs`, the bar and the bounce in `desktop_dock.rs`.
+//! `state` reads the three back, and `menu` {"items": [{"id", "title", "enabled"}]} replaces the app's Dock menu items
+//! (an empty list clears them). The shell draws them: the badge in `desk.rs`, the bar and the bounce in `desktop_dock.rs`,
+//! and the menu items in the Dock's menu (`desktop_bar.rs`); choosing one sends the app `ContextAction(id)`.
 use super::{Event, Shell, SystemService};
 use crate::shell::apphost::{clean_badge, installed};
 use crate::shell::AppId;
@@ -46,6 +48,42 @@ fn bounce_len(params: &Json, hop: f64) -> f64 {
     }
 }
 
+/// The most items an app may put in its Dock menu.
+pub const MENU_MAX: usize = 8;
+/// The longest Dock menu title, in characters.
+pub const MENU_TITLE_MAX: usize = 64;
+
+/// One item of an app's Dock menu. Choosing it sends `ToApp::ContextAction(id)` to the app, with the id the app chose.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MenuEntry {
+    pub id: u32,
+    pub title: String,
+    pub enabled: bool,
+}
+
+/// The items in `params` (`items`: a list of `{"id", "title", "enabled"}`). A missing or empty list clears the menu.
+fn menu_items(params: &Json) -> Result<Vec<MenuEntry>, String> {
+    let items = match params.get("items") {
+        None | Some(Json::Null) => return Ok(Vec::new()),
+        Some(Json::Arr(v)) => v,
+        Some(_) => return Err("dock: items must be a list".into()),
+    };
+    if items.len() > MENU_MAX {
+        return Err(format!("dock: a Dock menu holds at most {MENU_MAX} items"));
+    }
+    items
+        .iter()
+        .map(|item| -> Result<MenuEntry, String> {
+            let id = item.get("id").and_then(Json::as_u64).filter(|id| *id <= u64::from(u32::MAX)).ok_or("dock: each item needs a numeric id")?;
+            let title: String = item.get("title").and_then(Json::as_str).ok_or("dock: each item needs a title")?.trim().chars().take(MENU_TITLE_MAX).collect();
+            if title.is_empty() {
+                return Err("dock: an item title cannot be empty".into());
+            }
+            Ok(MenuEntry { id: id as u32, title, enabled: !matches!(item.get("enabled"), Some(Json::Bool(false))) })
+        })
+        .collect()
+}
+
 /// The slot of the installed app `app_id`. Only an installed app has a Dock tile.
 fn slot_of(app_id: &str) -> Result<usize, String> {
     installed().iter().position(|a| a.manifest.id == app_id).ok_or_else(|| "dock: only an installed app has a Dock tile".to_string())
@@ -76,6 +114,10 @@ impl SystemService for DockService {
             }
             "progress" => {
                 host.tile.progress = progress_of(params)?;
+                Json::Null
+            }
+            "menu" => {
+                host.dock_menu = menu_items(params)?;
                 Json::Null
             }
             "bounce" => {
@@ -172,5 +214,36 @@ mod tests {
     #[test]
     fn an_app_that_is_not_installed_has_no_tile() {
         assert!(slot_of("no.such.app.for.the.dock").is_err());
+    }
+
+    #[test]
+    fn the_menu_items_keep_their_id_title_and_enabled_flag() {
+        let items = menu_items(&json(r#"{"items":[{"id":7,"title":"  New Window  "},{"id":8,"title":"Hidden","enabled":false}]}"#)).unwrap();
+        assert_eq!(
+            items,
+            vec![
+                MenuEntry { id: 7, title: "New Window".into(), enabled: true },
+                MenuEntry { id: 8, title: "Hidden".into(), enabled: false },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_missing_or_empty_menu_clears_the_items() {
+        assert_eq!(menu_items(&json("{}")).unwrap(), Vec::new());
+        assert_eq!(menu_items(&json(r#"{"items":[]}"#)).unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn bad_menu_items_are_errors_and_titles_are_cut() {
+        assert!(menu_items(&json(r#"{"items":"x"}"#)).is_err());
+        assert!(menu_items(&json(r#"{"items":[{"title":"no id"}]}"#)).is_err());
+        assert!(menu_items(&json(r#"{"items":[{"id":1,"title":"   "}]}"#)).is_err());
+        assert!(menu_items(&json(r#"{"items":[{"id":-1,"title":"neg"}]}"#)).is_err());
+        let nine: String = (0..9).map(|i| format!(r#"{{"id":{i},"title":"t"}}"#)).collect::<Vec<_>>().join(",");
+        assert!(menu_items(&json(&format!(r#"{{"items":[{nine}]}}"#))).is_err(), "more than {MENU_MAX} items");
+        let long = "x".repeat(MENU_TITLE_MAX + 10);
+        let items = menu_items(&json(&format!(r#"{{"items":[{{"id":1,"title":"{long}"}}]}}"#))).unwrap();
+        assert_eq!(items[0].title.chars().count(), MENU_TITLE_MAX);
     }
 }

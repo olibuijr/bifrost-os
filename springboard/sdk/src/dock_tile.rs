@@ -1,6 +1,7 @@
 //! The app's Dock tile through the `dock` system service (`springboard/src/shell/services/dock_tile.rs`): the badge
 //! (`NativeDockTile.badgeLabel`), a progress bar (a `contentView` with a progress indicator) and an attention bounce
-//! (`NativeApplication.requestUserAttention`). Each call returns the request id; the reply arrives in
+//! (`NativeApplication.requestUserAttention`), and the app's own items in the Dock's menu (`set_menu`; choosing one
+//! arrives as `Input::ContextAction` with the item's id). Each call returns the request id; the reply arrives in
 //! `App::service_reply`, or can be taken with `service::take_reply`.
 //!
 //! ```ignore
@@ -58,6 +59,35 @@ pub fn bounce(ctx: &Ctx, critical: bool) -> u32 {
     service::call(ctx, SERVICE, "bounce", &bounce_params(critical))
 }
 
+/// One item of the app's Dock menu. Choosing it arrives as `Input::ContextAction(id)`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MenuItem {
+    pub id: u32,
+    pub title: String,
+    /// A disabled item shows, greyed out, and cannot be chosen.
+    pub enabled: bool,
+}
+
+/// The params of `menu`: the list of items, at most eight, each with its id, title and enabled flag.
+pub fn menu_params(items: &[MenuItem]) -> Json {
+    let list = items
+        .iter()
+        .map(|i| {
+            Json::Obj(vec![
+                ("id".into(), Json::Num(f64::from(i.id))),
+                ("title".into(), Json::Str(i.title.clone())),
+                ("enabled".into(), Json::Bool(i.enabled)),
+            ])
+        })
+        .collect();
+    Json::Obj(vec![("items".into(), Json::Arr(list))])
+}
+
+/// Replaces the app's Dock menu items (the shell keeps eight, with titles cut to 64 characters). An empty slice clears them.
+pub fn set_menu(ctx: &Ctx, items: &[MenuItem]) -> u32 {
+    service::call(ctx, SERVICE, "menu", &menu_params(items))
+}
+
 /// Reads back the badge, progress, indeterminate and bouncing state of the app's Dock tile.
 pub fn state(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "state", &Json::Null)
@@ -84,6 +114,18 @@ mod tests {
         assert_eq!(progress_params(Some(f32::NAN)).get("fraction"), None, "not finite: cleared");
         assert_eq!(indeterminate_params().get("indeterminate"), Some(&Json::Bool(true)));
         assert_eq!(bounce_params(true).get("critical"), Some(&Json::Bool(true)));
+    }
+
+    #[test]
+    fn the_menu_params_list_each_item_with_its_id_title_and_flag() {
+        let items = [MenuItem { id: 4, title: "Open Recent".into(), enabled: false }];
+        let params = menu_params(&items);
+        let Some(Json::Arr(list)) = params.get("items") else { panic!("items must be a list") };
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].get("id"), Some(&Json::Num(4.0)));
+        assert_eq!(list[0].get("title"), Some(&Json::Str("Open Recent".into())));
+        assert_eq!(list[0].get("enabled"), Some(&Json::Bool(false)));
+        assert_eq!(menu_params(&[]).get("items"), Some(&Json::Arr(Vec::new())), "an empty list clears the menu");
     }
 
     #[test]

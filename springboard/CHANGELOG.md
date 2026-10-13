@@ -13,6 +13,8 @@
   (Dictionary's `look-up` and Notes' `create-note` intents over their control sockets, links in the browser, Files, Search).
   Ctrl+Cmd+D runs Look Up on the selection. `bifrost_ui::look_up` is the Look Up popover model; its drawing is not built yet.
   Intents can take string parameters: `intents::run_with` and `request_line_with`.
+- Dock: an app sets its own items in the Dock's menu (`dock` service `menu`, SDK `dock_tile::set_menu`). Items show under the
+  app's Open, Keep in Dock and Quit rows; choosing one sends the app its id as `ContextAction`. Up to eight items.
 - Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
   Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
   update agent and the shell's own checker both read.
