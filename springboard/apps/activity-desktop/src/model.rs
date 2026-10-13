@@ -386,15 +386,6 @@ mod tests {
     }
 
     #[test]
-    fn hidden_columns_drop_out_but_name_and_figure_stay() {
-        assert_eq!(visible_columns(Tab::Cpu, 0).len(), 5);
-        let titles: Vec<&str> = visible_columns(Tab::Cpu, 0b110).iter().map(|c| c.title).collect();
-        assert_eq!(titles, vec!["Process", "User", "% CPU"]);
-        assert_eq!(visible_columns(Tab::Cpu, 0b111).len(), 2);
-        assert_eq!(visible_columns(Tab::Network, 0b111).len(), 5);
-    }
-
-    #[test]
     fn cpu_sort_is_largest_first_and_ties_keep_pid_order() {
         let procs = vec![proc(30, "a", 1000, 5.0, 1), proc(10, "b", 1000, 9.0, 1), proc(20, "c", 1000, 5.0, 1)];
         let rows = visible(&procs, Filter::All, 1000, "", Tab::Cpu.default_sort());

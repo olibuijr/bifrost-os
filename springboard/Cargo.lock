@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-contacts"
-version = "1.8.1"
+version = "1.9.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-diskutil"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-messages"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -702,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-music"
-version = "1.6.2"
+version = "1.7.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.15.0"
+version = "1.16.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -840,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -885,7 +885,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-viewer"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -903,7 +903,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-weather"
-version = "1.5.3"
+version = "1.6.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
