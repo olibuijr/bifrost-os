@@ -50,6 +50,7 @@ pub mod compose_window;
 pub mod kb_layouts;
 pub mod kb_capslock;
 pub mod kb_clicks;
+pub mod alert_sound;
 pub mod hwkeys;
 pub mod backup;
 pub mod backup_page;
@@ -984,6 +985,12 @@ impl Shell {
     /// The options as Settings last saved them.
     fn options(&self) -> Options {
         self.settings.as_ref().map_or_else(|| Options::load(&self.prefs), |st| st.options().clone())
+    }
+
+    /// The alert tone (an index into `options::ALERT_SOUNDS`) for a timer or alarm that just fired: the Settings
+    /// Alert Sound choice, or `None` while the output is muted (the clock is muted at zero volume too).
+    pub fn alert_tone(&self) -> Option<usize> {
+        (self.cc.volume > 0.0).then(|| self.options().alert_sound)
     }
 
     /// Tells the shell whether the device has a vibrator; Settings shows
