@@ -12,11 +12,13 @@ use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Se
 use std::collections::HashMap;
 
 pub const INBOX: &str = "INBOX";
-/// One line of the list: a message, and in the threaded view how many messages its conversation holds.
+/// One line of the list: a message, in the threaded view how many messages its conversation holds, and how far it is
+/// indented under the conversation's first message (0 when flat).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Line {
     pub row: Row,
     pub thread: usize,
+    pub depth: usize,
 }
 
 /// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
@@ -126,6 +128,13 @@ pub fn arrivals(seen: Option<u32>, listed: &[Listed]) -> Vec<&Listed> {
     }
 }
 
+/// Listed messages as rows, the newest (highest UID) first.
+fn newest_first(messages: Vec<Listed>) -> Vec<Row> {
+    let mut rows: Vec<Row> = messages.into_iter().map(|m| Row { uid: m.uid, flags: m.flags, summary: Summary::from_headers(&m.header) }).collect();
+    rows.sort_by(|a, b| b.uid.cmp(&a.uid));
+    rows
+}
+
 pub struct Mail {
     pub accounts: Vec<Account>,
     /// The index of the account shown in the sidebar.
@@ -150,6 +159,9 @@ pub struct Mail {
     pub threaded: bool,
     /// The files of each message loaded for the shown mailbox, by UID.
     pub attachments: HashMap<u32, Vec<Attachment>>,
+    /// The messages the server found for the applied search in the shown mailbox (`SEARCH` on the server), newest
+    /// first. None until the server answers; the list then shows the loaded rows that match.
+    pub found: Option<Vec<Row>>,
 }
 
 impl Mail {
@@ -169,6 +181,7 @@ impl Mail {
             search: String::new(),
             threaded: false,
             attachments: HashMap::new(),
+            found: None,
         }
     }
 
@@ -195,6 +208,7 @@ impl Mail {
         self.rows.clear();
         self.bodies.clear();
         self.attachments.clear();
+        self.found = None;
         self.open = None;
     }
 
@@ -218,14 +232,23 @@ impl Mail {
             if !mailboxes.is_empty() {
                 self.mailboxes = mailboxes;
             }
-            let mut rows: Vec<Row> = messages
-                .into_iter()
-                .map(|m| Row { uid: m.uid, flags: m.flags, summary: Summary::from_headers(&m.header) })
-                .collect();
-            rows.sort_by(|a, b| b.uid.cmp(&a.uid));
-            self.rows = rows;
+            self.rows = newest_first(messages);
         }
         notices
+    }
+
+    /// Takes the server's answer to the applied search. It is kept only while the same search is applied to the same
+    /// account and mailbox; an answer for an older search is dropped.
+    pub fn apply_found(&mut self, account_id: &str, mailbox: &str, query: &str, messages: Vec<Listed>) {
+        let current = self.current().is_some_and(|a| a.id == account_id) && self.mailbox == mailbox && self.search == query;
+        if current {
+            self.found = Some(newest_first(messages));
+        }
+    }
+
+    /// The row of a message the list shows: from the server's answer when a search is applied, else from the listing.
+    pub fn row(&self, uid: u32) -> Option<&Row> {
+        self.found.iter().flatten().chain(self.rows.iter()).find(|r| r.uid == uid)
     }
 
     /// Opens a message in the reader. Returns true when its text is not loaded yet.
@@ -241,19 +264,22 @@ impl Mail {
 
     /// Sets a flag on a row at once, before the server answers.
     pub fn set_flag_locally(&mut self, uid: u32, flag: Flag, on: bool) {
-        if let Some(row) = self.rows.iter_mut().find(|r| r.uid == uid) {
+        for row in self.rows.iter_mut().chain(self.found.iter_mut().flatten()).filter(|r| r.uid == uid) {
             row.flags = row.flags.with(flag, on);
         }
     }
 
     /// The flags of a row in the shown mailbox, when it is listed.
     pub fn flags_of(&self, uid: u32) -> Option<Flags> {
-        self.rows.iter().find(|r| r.uid == uid).map(|r| r.flags)
+        self.row(uid).map(|r| r.flags)
     }
 
     /// Takes a message out of the shown list, because it moved to another mailbox. An open message is closed.
     pub fn remove_row(&mut self, uid: u32) {
         self.rows.retain(|r| r.uid != uid);
+        if let Some(found) = &mut self.found {
+            found.retain(|r| r.uid != uid);
+        }
         self.bodies.remove(&uid);
         self.attachments.remove(&uid);
         if self.open == Some(uid) {
@@ -262,11 +288,12 @@ impl Mail {
     }
 
     /// The lines the list shows. Threaded, the matching messages are grouped by conversation (`threads::group`): each
-    /// conversation is listed together, the newest conversation first, the newest message first inside it.
+    /// conversation is listed together, the newest conversation first, in tree order inside it (`threads::arrange`):
+    /// a reply sits under the message it answers, indented by its depth.
     pub fn visible_lines(&self) -> Vec<Line> {
         let rows = self.visible_rows();
         if !self.threaded {
-            return rows.into_iter().map(|row| Line { row, thread: 1 }).collect();
+            return rows.into_iter().map(|row| Line { row, thread: 1, depth: 0 }).collect();
         }
         let nodes: Vec<Node> = rows
             .iter()
@@ -279,8 +306,8 @@ impl Mail {
             .collect();
         let mut lines = Vec::with_capacity(rows.len());
         for group in threads::group(&nodes) {
-            for &i in &group {
-                lines.push(Line { row: rows[i].clone(), thread: group.len() });
+            for (i, depth) in threads::arrange(&nodes, &group) {
+                lines.push(Line { row: rows[i].clone(), thread: group.len(), depth });
             }
         }
         lines
@@ -339,11 +366,16 @@ impl Mail {
     /// Applies a search text. Empty (or blank) shows every message again.
     pub fn apply_search(&mut self, text: &str) {
         self.search = text.trim().to_string();
+        self.found = None;
     }
 
-    /// The rows the list shows: the loaded rows that match the search, newest first. Bodies are searched when they are
-    /// loaded; a message whose body is not loaded matches on its headers only.
+    /// The rows the list shows. With a search applied and the server's answer in, that answer (the server searched
+    /// every message of the mailbox). Otherwise the loaded rows that match the search, newest first: bodies are searched
+    /// when they are loaded, and a message whose body is not loaded matches on its headers only.
     pub fn visible_rows(&self) -> Vec<Row> {
+        if let Some(found) = &self.found {
+            return found.clone();
+        }
         let query = Query::parse(&self.search);
         self.rows
             .iter()
@@ -576,8 +608,25 @@ mod tests {
         assert!(mail.visible_lines().iter().all(|l| l.thread == 1));
         mail.threaded = true;
         let lines = mail.visible_lines();
-        assert_eq!(lines.iter().map(|l| l.row.uid).collect::<Vec<_>>(), vec![3, 1, 2]);
+        assert_eq!(lines.iter().map(|l| l.row.uid).collect::<Vec<_>>(), vec![1, 3, 2], "the reply sits under its parent");
         assert_eq!(lines.iter().map(|l| l.thread).collect::<Vec<_>>(), vec![2, 2, 1]);
+        assert_eq!(lines.iter().map(|l| l.depth).collect::<Vec<_>>(), vec![0, 1, 0]);
+    }
+
+    #[test]
+    fn a_server_search_answer_replaces_the_rows_only_for_the_same_search() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Fundur"), listed(4, "Reikningur")]);
+        mail.apply_search("subject:reikn");
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![4], "the loaded rows until the server answers");
+        mail.apply_found("work", INBOX, "subject:other", vec![listed(9, "x")]);
+        assert_eq!(mail.found, None, "an answer for another search is dropped");
+        mail.apply_found("work", INBOX, "subject:reikn", vec![listed(2, "old"), listed(9, "Reikningur 2")]);
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![9, 2]);
+        assert!(mail.row(9).is_some() && mail.row(3).is_some());
+        mail.apply_search("");
+        assert_eq!(mail.visible_rows().len(), 2);
+        assert_eq!(mail.found, None);
     }
 
     #[test]

@@ -6,10 +6,13 @@ use crate::accounts;
 use crate::attachments;
 use crate::flags::Flag;
 use crate::message;
+use crate::migrate;
+use crate::search::Query;
 use crate::state::{Mail, Notice, Sheet, ARCHIVE_NAMES, INBOX, TRASH_NAMES};
 use crate::sync::{self, Change, Event};
 use crate::transport;
 use bifrost_app::controls::internet_accounts::Account;
+use bifrost_app::keychain::{self, Error as LegacyError, Reply as KeyReply};
 use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::usernotif::{self, Request};
@@ -17,7 +20,7 @@ use bifrost_app::{AppMenu, AppMenuItem, Ctx, KeyInput, TouchKind};
 use bifrost_app::proto::{CHORD_CTRL, CHORD_META};
 use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
@@ -41,6 +44,9 @@ pub const MENU_PRINT: u32 = 14;
 
 /// How often the inbox of every account is checked for new mail, in milliseconds.
 pub const POLL_MS: f64 = 60_000.0;
+/// An account whose inbox is watched over IDLE is listed by the watcher when mail arrives; the poll still checks it
+/// once every this many poll rounds (10 minutes) in case the watcher missed something.
+pub const IDLE_CHECK_ROUNDS: u32 = 10;
 /// Movement, in points, before a press counts as a drag.
 const DRAG_PT: f32 = 6.0;
 /// Key codes the shell sends for the editing keys (as the other apps read them).
@@ -58,6 +64,19 @@ enum Pending {
     /// A new account's password, being added. `Replace` follows when an item already exists.
     Add { account: Account, password: String },
     Replace { account: Account, password: String },
+    /// An account moved from the 0.3.0 file: its password is read from the old keychain item `legacy`.
+    Migrate { account: Account, legacy: String },
+    /// A password read from the old keychain item `legacy` is being saved in Passwords.
+    Moved { account: Account, legacy: String },
+    /// The old keychain item is being deleted. Nothing follows its answer.
+    Discard,
+}
+
+impl Pending {
+    /// The keychain answers: the window tells them apart from Passwords' by the request id.
+    fn from_keychain(&self) -> bool {
+        matches!(self, Pending::Migrate { .. } | Pending::Discard)
+    }
 }
 
 /// Where a press started. Only the two panes scroll; the rest is chrome.
@@ -89,6 +108,12 @@ pub struct MailWindow {
     /// Counter for Message-IDs of the messages sent in this run.
     seq: u64,
     next_poll: f64,
+    /// Poll rounds run so far (see [`IDLE_CHECK_ROUNDS`]).
+    poll_round: u32,
+    /// Accounts with an inbox watcher started. A watcher runs for the rest of the run, or until its server has no IDLE.
+    watching: HashSet<String>,
+    /// Accounts whose watcher is connected and waiting in IDLE.
+    live: HashSet<String>,
     pub w: u32,
     pub h: u32,
     pub list_scroll: Scroller,
@@ -116,6 +141,11 @@ impl MailWindow {
     /// Reads the mail accounts of the shared list and asks Passwords for each password. Mail is fetched as the passwords
     /// arrive.
     pub fn new(ctx: &Ctx) -> MailWindow {
+        // the first run after 0.3.0 moves its accounts into the shared list, before the list is read
+        let (imports, import_error) = match migrate::run(&ctx.data_dir) {
+            Ok(imported) => (imported, None),
+            Err(e) => (Vec::new(), Some(e)),
+        };
         let (mail_accounts, load_error) = match accounts::load_mail() {
             Ok(list) => (list, None),
             Err(e) => (Vec::new(), Some(e)),
@@ -126,9 +156,10 @@ impl MailWindow {
             None => (None, None),
         };
         let mut mail = Mail::new(mail_accounts);
-        if let Some(e) = load_error {
+        if let Some(e) = load_error.or(import_error) {
             mail.status = e;
         }
+        let legacy: HashMap<String, String> = imports.into_iter().map(|i| (i.account.id, i.legacy_id)).collect();
         let mut window = MailWindow {
             mail,
             transport: transport::shared(),
@@ -140,6 +171,9 @@ impl MailWindow {
             jobs: 0,
             seq: 0,
             next_poll: 0.0,
+            poll_round: 0,
+            watching: HashSet::new(),
+            live: HashSet::new(),
             w: 0,
             h: 0,
             list_scroll: Scroller::new(),
@@ -150,8 +184,17 @@ impl MailWindow {
             dirty: true,
         };
         for account in &window.mail.accounts {
-            let request = passwords::fill(ctx, &account.password_site(), &account.username);
-            window.pending.insert(request, Pending::Load(account.id.clone()));
+            match legacy.get(&account.id) {
+                // a 0.3.0 password is read from its old keychain item; Passwords gets it from there
+                Some(legacy_id) => {
+                    let request = keychain::get(ctx, migrate::LEGACY_SERVICE, &migrate::legacy_name(legacy_id));
+                    window.pending.insert(request, Pending::Migrate { account: account.clone(), legacy: legacy_id.clone() });
+                }
+                None => {
+                    let request = passwords::fill(ctx, &account.password_site(), &account.username);
+                    window.pending.insert(request, Pending::Load(account.id.clone()));
+                }
+            }
         }
         window
     }
@@ -187,7 +230,9 @@ impl MailWindow {
             while r.read(&mut buf).is_ok_and(|n| n > 0) {}
         }
         while let Ok(event) = self.rx.try_recv() {
-            self.jobs = self.jobs.saturating_sub(1);
+            if event.is_job() {
+                self.jobs = self.jobs.saturating_sub(1);
+            }
             self.event(ctx, event);
             self.dirty = true;
         }
@@ -201,8 +246,22 @@ impl MailWindow {
 
     /// The answer to one of the requests the window made to Passwords. False when the request was not the window's.
     pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.pending.get(&request).is_some_and(Pending::from_keychain) {
+            return false;
+        }
         let Some(pending) = self.pending.remove(&request) else { return false };
         match pending {
+            Pending::Migrate { .. } | Pending::Discard => {}
+            Pending::Moved { account, legacy } => match passwords::decode_password(result) {
+                Ok(_) => {
+                    let request = keychain::delete(ctx, migrate::LEGACY_SERVICE, &migrate::legacy_name(&legacy));
+                    self.pending.insert(request, Pending::Discard);
+                }
+                Err(KeyError::DuplicateItem) => {
+                    self.mail.status = format!("Passwords already has a password for {}. The old one is kept", account.name);
+                }
+                Err(e) => self.mail.status = format!("The password could not be saved in Passwords: {e:?}"),
+            },
             Pending::Load(id) => match passwords::decode_password(result) {
                 Ok(password) => {
                     self.mail.passwords.insert(id.clone(), password);
@@ -229,6 +288,41 @@ impl MailWindow {
         }
         self.dirty = true;
         true
+    }
+
+    /// The answer to one of the keychain calls for the 0.3.0 passwords. False when the request was not the window's.
+    pub fn keychain(&mut self, ctx: &Ctx, reply: KeyReply) -> bool {
+        if !self.pending.get(&reply.request).is_some_and(Pending::from_keychain) {
+            return false;
+        }
+        let Some(pending) = self.pending.remove(&reply.request) else { return false };
+        match pending {
+            Pending::Migrate { account, legacy } => match reply.result {
+                Ok(secret) => match String::from_utf8(secret) {
+                    Ok(password) => self.moved(ctx, account, legacy, password),
+                    Err(_) => self.mail.status = format!("The saved password of {} is not text", account.name),
+                },
+                // nothing in the old store: Passwords may hold it already (saved by a later run), so ask there
+                Err(LegacyError::ItemNotFound) => {
+                    let request = passwords::fill(ctx, &account.password_site(), &account.username);
+                    self.pending.insert(request, Pending::Load(account.id.clone()));
+                }
+                Err(e) => self.mail.status = format!("The password of {} could not be read: {e:?}", account.name),
+            },
+            // the old item is gone or was refused; nothing else depends on it
+            _ => {}
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// A password read from the 0.3.0 store: it is saved in Passwords under the account, and the account is listed
+    /// with it now.
+    fn moved(&mut self, ctx: &Ctx, account: Account, legacy: String, password: String) {
+        let request = passwords::save(ctx, &account.password_site(), &account.username, &password);
+        self.pending.insert(request, Pending::Moved { account: account.clone(), legacy });
+        self.mail.passwords.insert(account.id.clone(), password);
+        self.refresh_account(&account.id);
     }
 
     pub fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64) -> bool {
@@ -403,6 +497,18 @@ impl MailWindow {
                 Ok(text) => self.mail.body_arrived(&account, &mailbox, uid, text),
                 Err(e) => self.mail.status = format!("The message could not be loaded: {e}"),
             },
+            Event::Found { account, mailbox, query, result } => match result {
+                Ok(messages) => self.mail.apply_found(&account, &mailbox, &query, messages),
+                Err(e) => self.mail.status = format!("{}: {e}", self.account_name(&account)),
+            },
+            Event::Watch { account, live } => {
+                if live {
+                    self.live.insert(account);
+                } else {
+                    self.live.remove(&account);
+                }
+            }
+            Event::Arrived { account } => self.refresh_account(&account),
             Event::Sent { result, .. } => match result {
                 Ok(()) => {
                     if matches!(self.mail.sheet, Some(Sheet::Compose(_))) {
@@ -443,6 +549,9 @@ impl MailWindow {
     fn refresh(&mut self, index: usize, mailbox: &str) {
         let Some(account) = self.mail.accounts.get(index).cloned() else { return };
         let Some(password) = self.mail.password(&account).map(str::to_string) else { return };
+        if self.watching.insert(account.id.clone()) {
+            sync::watch(self.transport.clone(), account.clone(), password.clone(), self.tx.clone(), self.wake_clone());
+        }
         let transport = self.transport.clone();
         let mailbox = mailbox.to_string();
         self.jobs += 1;
@@ -467,9 +576,15 @@ impl MailWindow {
         }
     }
 
-    /// The periodic check: the inbox of every account (for notices) and the shown mailbox.
+    /// The periodic check: the inbox of every account (for notices) and the shown mailbox. An account whose watcher is
+    /// connected is left to the watcher, and checked here only every [`IDLE_CHECK_ROUNDS`] rounds.
     fn poll(&mut self) {
+        self.poll_round = self.poll_round.wrapping_add(1);
         for index in 0..self.mail.accounts.len() {
+            let live = self.live.contains(&self.mail.accounts[index].id);
+            if live && self.poll_round % IDLE_CHECK_ROUNDS != 0 {
+                continue;
+            }
             self.refresh(index, INBOX);
         }
         let mailbox = self.mail.mailbox.clone();
@@ -562,7 +677,7 @@ impl MailWindow {
     /// thread; nothing prints until the body has arrived.
     fn print_open(&self) {
         let Some(uid) = self.mail.open else { return };
-        let Some(row) = self.mail.rows.iter().find(|r| r.uid == uid) else { return };
+        let Some(row) = self.mail.row(uid) else { return };
         let Some(raw) = self.mail.bodies.get(&uid) else { return };
         let s = &row.summary;
         let text = format!("From: {}\nTo: {}\nDate: {}\nSubject: {}\n\n{}", s.from, s.to, s.date, s.subject, crate::body::readable(raw));
@@ -577,7 +692,7 @@ impl MailWindow {
 
     fn reply(&mut self) {
         let Some(uid) = self.mail.open else { return };
-        let original = self.mail.rows.iter().find(|r| r.uid == uid).map(|r| r.summary.clone());
+        let original = self.mail.row(uid).map(|r| r.summary.clone());
         if let Some(original) = original {
             self.mail.open_compose(Some(&original));
         }
@@ -608,9 +723,23 @@ impl MailWindow {
                 let text = form.value("Search").to_string();
                 self.mail.apply_search(&text);
                 self.mail.close_sheet();
+                self.search_server();
             }
             None => {}
         }
+    }
+
+    /// Asks the server to search the shown mailbox for the applied search, so messages beyond the loaded ones match too.
+    /// The answer replaces the list when it arrives (see `Mail::apply_found`).
+    fn search_server(&mut self) {
+        let query = self.mail.search.clone();
+        let Some(criteria) = Query::parse(&query).imap_criteria() else { return };
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else { return };
+        let mailbox = self.mail.mailbox.clone();
+        let transport = self.transport.clone();
+        self.jobs += 1;
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::search(transport.as_ref(), &account, &password, &mailbox, &query, &criteria));
     }
 
     fn send(&mut self, compose: &crate::state::Compose) {
