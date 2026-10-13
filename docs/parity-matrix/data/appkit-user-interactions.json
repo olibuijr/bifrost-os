@@ -60,15 +60,15 @@
    "feature": "NSPasteboardItem",
    "apple": "NSPasteboardItem setData/setString/data(forType:)/types",
    "bifrost": "springboard/sdk/src/pasteboard_item.rs",
-   "status": "parity",
-   "note": "verified on Midget 0.7.25 by 2 tests. typed representations per item with UTType conformance; no data providers or promised data; needs a Midget check"
+   "status": "partial",
+   "note": "verified on Midget 0.7.25 by 2 tests (earlier part). Since merged with the Transferable pasteboard (host tests only): an item also holds promised types (setDataProvider), converts to and from the wire item; needs a Midget check"
   },
   {
    "feature": "NSPasteboardItem data providers",
    "apple": "NSPasteboardItemDataProvider, setDataProvider(_:forTypes:), declareTypes(_:owner:), NSFilePromiseProvider",
    "bifrost": "springboard/sdk/src/pasteboard_promise.rs",
-   "status": "parity",
-   "note": "verified on Midget 0.7.25 by 8 tests. lazy in-process promised data, type owners and file promises; not yet carried over the wire to other apps"
+   "status": "partial",
+   "note": "verified on Midget 0.7.25 by 8 tests (earlier part). Since merged with the Transferable pasteboard (host tests only): one PasteboardItem and NativePasteboard::declare_types replace the separate PromiseBoard; lazy in-process promised data, type owners and file promises; not yet carried over the wire to other apps"
   }
  ],
  "gaps": [
