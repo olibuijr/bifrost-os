@@ -405,6 +405,8 @@ impl Settings {
     /// `wallpapers` is the packed catalogue; `info.wallpaper` names the
     /// current one; `prefs` holds the persisted options.
     pub fn new(ui: &Ui, info: &Info, prefs: &Prefs, w: i32, h: i32, wallpapers: Rc<Vec<Wallpaper>>) -> Self {
+        let opts = Options::load(prefs);
+        crate::bare::pointer_prefs::set(opts.pointer_tuning());
         let mut st = Settings {
             w,
             h,
@@ -418,7 +420,7 @@ impl Settings {
             split_allowed: true,
             side_cache: None,
             info: info.clone(),
-            opts: Options::load(prefs),
+            opts,
             haptics: false,
             a11y: AccessibilitySettings::load(prefs),
             wallpapers,
@@ -686,6 +688,11 @@ impl Settings {
     /// The options as the user has set them.
     pub fn options(&self) -> &Options {
         &self.opts
+    }
+
+    /// Publishes the Mouse and Trackpad choices to the input layer (`bare::pointer_prefs`).
+    fn apply_pointer(&self) {
+        crate::bare::pointer_prefs::set(self.opts.pointer_tuning());
     }
 
     /// The accessibility settings as the user has set them.
@@ -1687,6 +1694,21 @@ impl Settings {
                 }
                 vec![]
             }
+            Slider::MouseSpeed | Slider::MouseScroll | Slider::TrackpadSpeed => {
+                let v = v.clamp(0., 1.);
+                let speed = super::options::speed_from_slider(v);
+                match which {
+                    Slider::MouseSpeed => self.opts.mouse_speed = speed,
+                    Slider::MouseScroll => self.opts.mouse_scroll = speed,
+                    _ => self.opts.trackpad_speed = speed,
+                }
+                self.list_mut().expect("list").set_slider(g, i, v);
+                self.apply_pointer();
+                if release {
+                    self.opts.save(prefs);
+                }
+                vec![]
+            }
             Slider::LiquidGlass => {
                 let v = v.clamp(0., 1.);
                 self.list_mut().expect("list").set_slider(g, i, v);
@@ -1870,6 +1892,12 @@ impl Settings {
                         self.desk.sidebar_icons = k.min(super::pages::SIDEBAR_ICON_SIZES.len() - 1);
                         let _ = prefs.set(super::pages::SIDEBAR_ICON_PREF, &self.desk.sidebar_icons.to_string());
                         self.desk.apply();
+                        vec![]
+                    }
+                    Pick::TrackpadSecondary(k) => {
+                        self.opts.trackpad_secondary = k.min(super::options::TRACKPAD_SECONDARY.len() - 1);
+                        self.opts.save(prefs);
+                        self.apply_pointer();
                         vec![]
                     }
                     Pick::ScrollBars(k) => {
@@ -2060,6 +2088,23 @@ impl Settings {
             Toggle::BoldText => flip(&mut self.opts.bold_text),
             Toggle::AutoJoin => flip(&mut self.opts.auto_join),
             Toggle::Dnd => flip(&mut self.opts.dnd),
+            Toggle::NaturalScroll => {
+                let on = flip(&mut self.opts.natural_scroll);
+                self.apply_pointer();
+                on
+            }
+            Toggle::TapToClick => {
+                let on = flip(&mut self.opts.tap_to_click);
+                self.apply_pointer();
+                on
+            }
+            Toggle::SwapButtons => {
+                let on = flip(&mut self.opts.swap_buttons);
+                self.apply_pointer();
+                on
+            }
+            Toggle::LoginNamePassword => flip(&mut self.opts.login_name_password),
+            Toggle::LoginHints => flip(&mut self.opts.login_hints),
             Toggle::AssistiveTouch => flip(&mut self.opts.assistive_touch),
             Toggle::ReduceMotion => flip(&mut self.a11y.reduce_motion),
             Toggle::IncreaseContrast => flip(&mut self.a11y.increase_contrast),
@@ -2681,6 +2726,9 @@ mod tests {
             (vec!["Sharing", "Nearby Share"], PageId::Nearby),
             (vec!["Sharing", "AirPlay & Handoff"], PageId::AirPlayHandoff),
             (vec!["Lock Screen"], PageId::LockScreen),
+            (vec!["Trackpad"], PageId::Trackpad),
+            (vec!["Mouse"], PageId::Mouse),
+            (vec!["Users & Groups"], PageId::Users),
             (vec!["Keyboard Shortcuts"], PageId::Shortcuts),
             (vec!["Accessibility"], PageId::Accessibility),
             (vec!["Wallpaper"], PageId::Wallpaper),
