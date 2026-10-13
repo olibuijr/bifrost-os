@@ -94,9 +94,9 @@
     {
       "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
       "apple": "CIRenderDestination, CIRenderTask, CIRenderInfo, CIImageAccumulator",
-      "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames)",
-      "status": "gap",
-      "note": "Frames reach the screen through the shell presenter. No app API for rendering filtered frames to a destination"
+      "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames); springboard/src/gpu/filter_kernels.rs (GLSL generation, backend choice)",
+      "status": "partial",
+      "note": "GPU path for the colour filters: CIColorMatrix, CIGammaAdjust and CISourceOverCompositing generate GLSL ES 3.00 with packed uniforms, a CPU reference evaluator and a Backend choice (CIContext useSoftwareRenderer). Pure model with host unit tests (written, not run); the GL dispatch and CIContext.render(_:to:) are not wired yet; not tested on Midget. No app API for rendering filtered frames to a destination"
     },
     {
       "feature": "Distortion effects (twirl, pinch, bump, vortex, glass distortion, displacement, circle splash, torus lens)",

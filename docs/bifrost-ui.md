@@ -1899,6 +1899,20 @@ destination; `CIColorMatrix` has no per-channel bias beyond the five-vector form
 Midget in this round (unit tests written, not run). The parity matrix row for "Composite operations and blend modes" and
 "Colour adjustment" can move to partial; parity needs a Midget test.
 
+#### Core Image GPU path (colour kernels)
+
+Code: `springboard/src/gpu/filter_kernels.rs` (pure, host-testable).
+
+| Apple | BifrOSt |
+|---|---|
+| `CIColorKernel` running `CIColorMatrix` and `CIGammaAdjust` | `ColorKernel { stages: [Stage::Matrix(ColorMatrix), Stage::Gamma(p)] }`: `fragment_source()` (GLSL ES 3.00, unpremultiply, stages clamped one by one, premultiply), `uniforms()` (`u_m<i>` column-major `mat4`, `u_b<i>` bias, `u_g<i>` power) |
+| `CISourceOverCompositing` | `source_over_fragment_source()`: `fg + bg * (1 - fg.a)` on premultiplied texels |
+| `CIContext(options: [.useSoftwareRenderer: false])` | `Backend::choose(has_gl_context, ContextOptions { use_software_renderer })`: GPU only with a context and no software request, else CPU |
+
+`ColorKernel::eval_pixel` and `source_over_eval` are the CPU reference of the generated expressions; tests hold them within
+1/255 of `ColorMatrix::apply_pixel`, `gamma` and `composite`. Gaps: the GL program build and draw and
+`CIContext.render(_:to:)` are not wired yet; no app API; written but not run (no builds this round), not tested on Midget.
+
 ### Accessibility display options (Reduce Transparency, Increase Contrast)
 
 Settings > Accessibility > Display holds the toggles (`a11y_reduce_transparency`, `a11y_contrast`, `a11y_button_shapes` in
