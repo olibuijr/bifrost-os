@@ -503,6 +503,8 @@ pub struct Shell {
     app_workspace: workspace::State,
     /// System services apps call by name (`services/`).
     pub(crate) services: Vec<Box<dyn services::SystemService>>,
+    /// Input events pass through the session event taps and the source state tables (`services::event_services`).
+    input_taps: services::event_services::InputTaps,
     /// the drag and drop session between app windows, and the types each window registered (`dnd`)
     dnd: dnd::State,
     assistive_touch: assistive_touch::AssistiveTouch,
@@ -776,6 +778,7 @@ impl Shell {
             app_share: sharing::State::default(),
             app_workspace: workspace::State::default(),
             services: services::all(),
+            input_taps: Default::default(),
             dnd: dnd::State::default(),
             fullscreen: false,
             prefs: Prefs::memory(),
@@ -2151,6 +2154,8 @@ impl Shell {
     }
 
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // session event taps see the pointer first and may drop or move it (`services::event_services`)
+        let Some(ev) = self.tap_pointer_event(ev) else { return vec![] };
         self.last_input = t;
         self.dirty = true;
         // a touch or key ends a screen saver and is not passed on (the display power key still sleeps)
@@ -3945,13 +3950,19 @@ impl Shell {
         }
     }
 
-    fn take_screenshot(&mut self, t: f64) {
-        self.shot = None;
+    /// Draws the whole screen into a fresh image (screenshots and the display capture service).
+    pub(crate) fn capture_frame(&mut self, t: f64) -> Image {
         let mut img = Image::new(self.w as usize, self.h as usize);
         self.drawn = Drawn::Nothing;
         self.draw(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, t);
         self.drawn = Drawn::Nothing;
         self.dirty = true;
+        img
+    }
+
+    fn take_screenshot(&mut self, t: f64) {
+        self.shot = None;
+        let img = self.capture_frame(t);
         let (unix, offset) = self.wall_now(t);
         let name = screenshot::file_name(&photos::library::civil(unix, offset));
         let dir = self.photo_dirs.first().cloned().unwrap_or_else(|| self.data_dir.join("Pictures"));

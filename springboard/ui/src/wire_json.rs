@@ -61,6 +61,45 @@ pub fn rect_of(j: &Json, key: &str) -> Option<Rect> {
     Some(Rect { x: f32_of(r, "x")?, y: f32_of(r, "y")?, w: f32_of(r, "w")?, h: f32_of(r, "h")? })
 }
 
+const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/// Standard base64 with padding: how binary data (an image) travels in a JSON string.
+pub fn base64_encode(data: &[u8]) -> String {
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for c in data.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        out.push(B64[(n >> 18) as usize & 63] as char);
+        out.push(B64[(n >> 12) as usize & 63] as char);
+        out.push(if c.len() > 1 { B64[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if c.len() > 2 { B64[n as usize & 63] as char } else { '=' });
+    }
+    out
+}
+
+/// Decodes standard base64; `None` for a character outside the alphabet or a bad length.
+pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
+    let bytes = text.trim_end_matches('=').as_bytes();
+    if bytes.len() % 4 == 1 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
+    for c in bytes.chunks(4) {
+        let mut n = 0u32;
+        for (i, b) in c.iter().enumerate() {
+            let v = B64.iter().position(|x| x == b)? as u32;
+            n |= v << (18 - 6 * i as u32);
+        }
+        out.push((n >> 16) as u8);
+        if c.len() > 2 {
+            out.push((n >> 8) as u8);
+        }
+        if c.len() > 3 {
+            out.push(n as u8);
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,5 +121,17 @@ mod tests {
         let j = obj(vec![("n", num(-1.0))]);
         assert_eq!(u32_of(&j, "n"), None);
         assert_eq!(i32_of(&j, "n"), Some(-1));
+    }
+
+    #[test]
+    fn base64_round_trips_and_matches_the_rfc_vectors() {
+        for (plain, enc) in [("", ""), ("f", "Zg=="), ("fo", "Zm8="), ("foo", "Zm9v"), ("foob", "Zm9vYg==")] {
+            assert_eq!(base64_encode(plain.as_bytes()), enc);
+            assert_eq!(base64_decode(enc).unwrap(), plain.as_bytes());
+        }
+        let all: Vec<u8> = (0..=255).collect();
+        assert_eq!(base64_decode(&base64_encode(&all)).unwrap(), all);
+        assert_eq!(base64_decode("a"), None);
+        assert_eq!(base64_decode("a$bc"), None);
     }
 }

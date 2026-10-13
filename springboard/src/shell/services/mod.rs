@@ -31,6 +31,9 @@ pub mod text_services;
 pub mod focus_filter;
 pub mod notify_bus;
 pub mod launch_services;
+pub mod display_services;
+pub mod window_services;
+pub mod event_services;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -42,6 +45,17 @@ pub trait SystemService {
     fn tick(&mut self, _shell: &mut Shell, _t: f64) -> Vec<Event> {
         Vec::new()
     }
+}
+
+/// Whether the installed app `app_id` lists `permission` in its manifest.
+pub fn app_has_permission(app_id: &str, permission: &str) -> bool {
+    super::apphost::installed().iter().find(|a| a.manifest.id == app_id).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == permission))
+}
+
+/// The process id of the running installed app `app_id`, when it runs as a child of the shell.
+pub fn app_pid(shell: &Shell, app_id: &str) -> Option<u32> {
+    let slot = super::apphost::slot_of(app_id)?;
+    shell.ext.get(slot)?.as_ref()?.pid()
 }
 
 /// An event a service sends: to one app (`app` is its id) or to every running app (`None`).
@@ -78,6 +92,9 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(focus_filter::FocusFilterService::default()),
         Box::new(notify_bus::NotifyBus::default()),
         Box::new(launch_services::LaunchServices),
+        Box::new(display_services::DisplayServices::default()),
+        Box::new(window_services::WindowServices),
+        Box::new(event_services::EventServices),
     ]
 }
 
