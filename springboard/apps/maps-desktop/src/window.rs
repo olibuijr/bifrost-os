@@ -6,10 +6,11 @@
 use crate::loader::TileLoader;
 use crate::net::Net;
 use crate::route::{self, Route};
-use crate::source::MapType;
-use crate::state::{Act, Effect, Maps, Panel};
+use crate::source::{MapType, TRAFFIC_MAX_AGE};
+use crate::state::{Act, Effect, Here, Maps, Panel};
 use crate::tiles::{TileId, TILE_SIZE};
 use crate::units::{metres_per_pt, scale_bar};
+use bifrost_app::controls::location_auth::RequestOutcome;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -19,7 +20,9 @@ use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LINK, SEPARATOR_
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE3_PT, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS};
 use bifrost_app::kit::{Image, Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
-use bifrost_app::{widgets, Ctx, KeyInput};
+use bifrost_app::core_location::{AuthorizationStatus, Delegate, Location, LocationError, LocationManager};
+use bifrost_app::{privacy_permissions, widgets, Ctx, KeyInput};
+use bifrost_core::json::Json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -48,6 +51,11 @@ const FAV_ID: u32 = 100;
 const COLL_ID: u32 = 200;
 const REC_ID: u32 = 300;
 const SUG_ID: u32 = 400;
+
+/// How long (ms) the Allow sheet of the location permission is waited for.
+const ALLOW_WAIT_MS: f64 = 90_000.0;
+/// Pause (ms) between two looks at the permission while the sheet is up.
+const STATUS_POLL_MS: f64 = 1_500.0;
 
 
 #[derive(Clone, Copy, PartialEq)]
@@ -119,6 +127,58 @@ struct Drag {
     in_card: bool,
 }
 
+/// What a pending call to the location or privacy service was for.
+#[derive(Clone, Copy, PartialEq)]
+enum LocCall {
+    /// the permission request: its reply says whether to ask the person, go on, or stop
+    Authorize,
+    /// anything else: a status, a position or a start or stop; the location manager reads the reply
+    Other,
+}
+
+/// What the location manager reported, collected while it handles one reply or event.
+#[derive(Default)]
+struct Sink {
+    updates: Vec<Location>,
+    errors: Vec<LocationError>,
+    statuses: Vec<AuthorizationStatus>,
+}
+
+impl Delegate for Sink {
+    fn did_update_locations(&mut self, locations: &[Location]) {
+        self.updates.extend_from_slice(locations);
+    }
+    fn did_fail_with_error(&mut self, error: LocationError) {
+        self.errors.push(error);
+    }
+    fn did_change_authorization(&mut self, status: AuthorizationStatus) {
+        self.statuses.push(status);
+    }
+}
+
+/// The sentence for a location failure.
+fn location_error_text(error: LocationError) -> &'static str {
+    match error {
+        LocationError::Denied | LocationError::PromptDeclined => "Maps may not use your location. Allow it in Settings, Privacy, App Permissions.",
+        LocationError::LocationUnknown => "Your location is not known. Set one in Settings.",
+        LocationError::Network => "Your location could not be looked up.",
+        _ => "Your location is not available.",
+    }
+}
+
+/// Draws a map tile at its place, scaled to the size on screen (the scaled copies are kept in `scaled`).
+fn blit_tile(c: &mut Surface, scaled: &mut HashMap<(TileId, usize), Image>, id: TileId, img: &Image, x: i32, y: i32, tile_px: usize) {
+    if img.w == tile_px && img.h == tile_px {
+        c.blit(img, x, y, 255, 255);
+        return;
+    }
+    if scaled.len() > 200 {
+        scaled.clear();
+    }
+    let entry = scaled.entry((id, tile_px)).or_insert_with(|| img.resized(tile_px.max(1), tile_px.max(1)));
+    c.blit(entry, x, y, 255, 255);
+}
+
 pub struct Window {
     pub maps: Maps,
     loader: TileLoader,
@@ -138,6 +198,20 @@ pub struct Window {
     gpx_request: Option<u32>,
     share_request: Option<u32>,
     dirty: bool,
+    /// the traffic layer's tiles, when `traffic_url` is set
+    traffic: Option<TileLoader>,
+    scaled_traffic: HashMap<(TileId, usize), Image>,
+    /// whether the traffic layer was on at the last tick, to ask for tiles again when it is switched on
+    traffic_on: bool,
+    loc: LocationManager,
+    loc_calls: Vec<(u32, LocCall)>,
+    /// the person is allowed to share their location with the app
+    granted: bool,
+    /// positions are wanted continuously (a route is followed)
+    tracking: bool,
+    /// while the Allow sheet is up: when to stop waiting, and when to look at the permission next
+    allow_until: Option<f64>,
+    next_status_poll: f64,
 }
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> KRect {
@@ -148,6 +222,7 @@ fn bar_table() -> Vec<(u32, &'static str, &'static str, Act, u32)> {
     vec![
         (1, "Directions", "arrow.triangle.turn.up.right.diamond", Act::Directions, 0),
         (2, "Drop Pin", "mappin", Act::DropPin, 0),
+        (3, "Current Location", "location", Act::Locate, 0),
         (10, "Map", "map", Act::MapType(MapType::Standard), 1),
         (11, "Satellite", "globe", Act::MapType(MapType::Satellite), 1),
         (20, "Measure Distance", "ruler", Act::Measure, 0),
@@ -161,6 +236,7 @@ impl Window {
         let pt = ui.pt(1.0).max(0.01);
         let maps = Maps::new(&root, version, (w as f32 / pt) as f64, (h as f32 / pt) as f64);
         let loader = TileLoader::new(&root, maps.map_type.source(version), net.clone());
+        let traffic = maps.traffic_source().cloned().map(|source| TileLoader::overlay(&root, source, net.clone(), TRAFFIC_MAX_AGE));
         Window {
             maps,
             loader,
@@ -179,6 +255,15 @@ impl Window {
             gpx_request: None,
             share_request: None,
             dirty: true,
+            traffic,
+            scaled_traffic: HashMap::new(),
+            traffic_on: false,
+            loc: LocationManager::new(),
+            loc_calls: Vec::new(),
+            granted: false,
+            tracking: false,
+            allow_until: None,
+            next_status_poll: 0.0,
         }
     }
 
@@ -437,11 +522,14 @@ impl Window {
                 }
                 v.push(Item::Buttons(vec![("Swap".into(), Act::SwapEnds, false), ("Print".into(), Act::Print, false), ("Copy Link".into(), Act::CopyLink, false)]));
                 v.push(Item::Buttons(
-                    [(route::Profile::Driving, "Drive"), (route::Profile::Walking, "Walk"), (route::Profile::Cycling, "Cycle")]
+                    [(route::Profile::Driving, "Drive"), (route::Profile::Walking, "Walk"), (route::Profile::Cycling, "Cycle"), (route::Profile::Transit, "Transit")]
                         .into_iter()
                         .map(|(p, l)| (l.to_string(), Act::Profile(p), m.profile == p))
                         .collect(),
                 ));
+                if m.can(Act::StartNavigation) {
+                    v.push(Item::Buttons(vec![("Start Navigation".into(), Act::StartNavigation, false)]));
+                }
                 if m.routing {
                     v.push(Item::Sub("Finding routes\u{2026}".into()));
                 }
@@ -460,6 +548,21 @@ impl Window {
                         v.push(Item::Step { text: s.instruction(), distance: m.distance_text(s.distance_m) });
                     }
                 }
+            }
+            Panel::Navigation => {
+                v.push(Item::Title(m.nav_title()));
+                v.push(Item::Sub(m.nav_subtitle()));
+                if let Some(remaining) = m.nav_remaining() {
+                    v.push(Item::Line(remaining));
+                }
+                if let Some(call) = &m.announcement {
+                    v.push(Item::Line(call.clone()));
+                }
+                if let Some(n) = &m.note {
+                    v.push(Item::Sub(n.clone()));
+                }
+                v.push(Item::Gap(4.0));
+                v.push(Item::Buttons(vec![("End Navigation".into(), Act::EndNavigation, false)]));
             }
             Panel::Measure => {
                 v.push(Item::Title("Measure Distance".into()));
@@ -874,7 +977,121 @@ impl Window {
                 Effect::StartDownload(tiles) => self.loader.start_download(tiles),
                 Effect::CancelDownload => self.loader.cancel_download(),
                 Effect::FocusSearch => self.focused = true,
+                Effect::Plan { url } => {
+                    let net = self.net.clone();
+                    let ua = crate::source::user_agent(self.maps.version());
+                    self.spawn(move || Done::Route(net.get(&url, &ua, crate::net::REPLY_LIMIT).map_err(|e| e.to_string()).and_then(|b| crate::transit::parse_itineraries(&String::from_utf8_lossy(&b)))));
+                }
+                Effect::Locate => self.ask_location(ctx),
+                Effect::TrackLocation(on) => self.track_location(ctx, on),
             }
+        }
+    }
+
+    // ---- the location service ----
+
+    /// Makes sure the person has allowed location, asking them first when they have not answered. Once it is allowed
+    /// (`authorized`), a position is asked for.
+    fn ask_location(&mut self, ctx: &Ctx) {
+        if self.granted {
+            self.authorized(ctx);
+            return;
+        }
+        let id = self.loc.request_when_in_use_authorization(ctx);
+        self.loc_calls.push((id, LocCall::Authorize));
+    }
+
+    /// Starts or stops the live positions that guidance follows.
+    fn track_location(&mut self, ctx: &Ctx, on: bool) {
+        self.tracking = on;
+        if on {
+            self.ask_location(ctx);
+        } else if self.loc.is_updating() {
+            let id = self.loc.stop_updating_location(ctx);
+            self.loc_calls.push((id, LocCall::Other));
+        }
+    }
+
+    /// Location is allowed: ask for one position now and, while a route is followed, for every change after it.
+    fn authorized(&mut self, ctx: &Ctx) {
+        self.granted = true;
+        self.allow_until = None;
+        if self.maps.locating || self.tracking {
+            let id = self.loc.request_location(ctx);
+            self.loc_calls.push((id, LocCall::Other));
+        }
+        if self.tracking && !self.loc.is_updating() {
+            let id = self.loc.start_updating_location(ctx);
+            self.loc_calls.push((id, LocCall::Other));
+        }
+    }
+
+    /// The person said no (or the system did): nothing more is asked, and the reason shows.
+    fn refused(&mut self, why: &str) {
+        self.granted = false;
+        self.allow_until = None;
+        self.tracking = false;
+        self.maps.locate_failed(why);
+    }
+
+    /// A reply to a call this window made to the location or privacy service. False for any other reply.
+    pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        let Some(at) = self.loc_calls.iter().position(|(id, _)| *id == request) else { return false };
+        let (_, call) = self.loc_calls.remove(at);
+        let mut sink = Sink::default();
+        match call {
+            LocCall::Authorize => match result.as_ref().ok().and_then(privacy_permissions::decode_location_outcome) {
+                Some(RequestOutcome::AlreadyGranted) => self.authorized(ctx),
+                Some(RequestOutcome::Prompt) => {
+                    // the Allow sheet is up; its answer is read from the permission
+                    let now = bifrost_app::proto::sys::now_ms();
+                    self.allow_until = Some(now + ALLOW_WAIT_MS);
+                    self.next_status_poll = now + STATUS_POLL_MS;
+                    self.maps.note = Some("Allow Maps to use your location to go on".to_string());
+                }
+                Some(RequestOutcome::Refused) => self.refused(location_error_text(LocationError::Denied)),
+                None => self.refused(location_error_text(LocationError::LocationUnknown)),
+            },
+            LocCall::Other => {
+                self.loc.handle_reply(result, &mut sink);
+            }
+        }
+        self.apply_location(ctx, sink);
+        self.dirty = true;
+        true
+    }
+
+    /// A push from the location service (a changed position, a failure).
+    pub fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        let mut sink = Sink::default();
+        if !self.loc.handle_event(service, event, body, &mut sink) {
+            return false;
+        }
+        self.apply_location(ctx, sink);
+        self.dirty = true;
+        true
+    }
+
+    /// Carries out what the location manager reported: a permission change, failures, then the newest position.
+    fn apply_location(&mut self, ctx: &Ctx, sink: Sink) {
+        for status in sink.statuses {
+            if status.is_authorized() {
+                self.authorized(ctx);
+            } else if matches!(status, AuthorizationStatus::Denied | AuthorizationStatus::Restricted) {
+                self.refused(location_error_text(LocationError::Denied));
+            }
+        }
+        for error in sink.errors {
+            if error.needs_user_action() {
+                self.granted = false;
+            }
+            self.maps.locate_failed(location_error_text(error));
+        }
+        if let Some(l) = sink.updates.last() {
+            let here = Here { lat: l.coordinate.latitude, lon: l.coordinate.longitude, accuracy_m: l.horizontal_accuracy };
+            let fx = self.maps.position_update(here, bifrost_app::proto::sys::now_ms() as u64);
+            self.effects(ctx, fx);
+            self.maps.persist();
         }
     }
 
@@ -896,6 +1113,9 @@ impl Window {
 
     pub fn set_online(&mut self, online: bool) {
         self.loader.set_online(online);
+        if let Some(t) = &mut self.traffic {
+            t.set_online(online);
+        }
     }
 
     /// Applies finished work and starts what is due. True when a frame is needed.
@@ -922,9 +1142,32 @@ impl Window {
             self.effects(ctx, vec![fx]);
             changed = true;
         }
+        if let Some(until) = self.allow_until {
+            if t >= until {
+                self.refused("Maps was not allowed to use your location.");
+                changed = true;
+            } else if t >= self.next_status_poll {
+                self.next_status_poll = t + STATUS_POLL_MS;
+                let id = self.loc.refresh_authorization(ctx);
+                self.loc_calls.push((id, LocCall::Other));
+            }
+        }
         let wanted: Vec<TileId> = self.maps.view.tiles().into_iter().map(|(id, _, _)| id).collect();
         changed |= self.loader.want(&wanted);
         changed |= self.loader.pump();
+        if self.maps.show_traffic != self.traffic_on {
+            self.traffic_on = self.maps.show_traffic;
+            if let (true, Some(layer)) = (self.traffic_on, self.traffic.as_mut()) {
+                layer.retry_failed();
+            }
+            changed = true;
+        }
+        if self.maps.show_traffic {
+            if let Some(layer) = &mut self.traffic {
+                changed |= layer.want(&wanted);
+                changed |= layer.pump();
+            }
+        }
         if let Some(p) = self.loader.download_progress() {
             if self.maps.progress != Some(p) {
                 self.maps.progress = Some(p);
@@ -939,7 +1182,12 @@ impl Window {
     }
 
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        self.maps.next_search_wake(t as u64).map(|ms| ms as f64)
+        let search = self.maps.next_search_wake(t as u64).map(|ms| ms as f64);
+        let poll = self.allow_until.map(|until| self.next_status_poll.min(until));
+        match (search, poll) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     // ---- drawing ----
@@ -1030,17 +1278,20 @@ impl Window {
         let (_, scale) = crate::tiles::tile_level(zoom);
         let tile_px = (TILE_SIZE * scale * p as f64).round() as usize;
         let oy = UNIFIED_BAR_PT * p;
-        for (id, tx, ty) in self.maps.view.tiles() {
+        let tiles = self.maps.view.tiles();
+        for &(id, tx, ty) in &tiles {
             let (x, y) = ((tx as f32 * p).round() as i32, (ty as f32 * p).round() as i32 + oy as i32);
             let Some(img) = self.loader.image(id) else { continue };
-            if img.w == tile_px && img.h == tile_px {
-                c.blit(img, x, y, 255, 255);
-            } else {
-                if self.scaled.len() > 200 {
-                    self.scaled.clear();
+            blit_tile(&mut c, &mut self.scaled, id, img, x, y, tile_px);
+        }
+        // the traffic layer, over the base tiles
+        if self.maps.show_traffic {
+            if let Some(layer) = &self.traffic {
+                for &(id, tx, ty) in &tiles {
+                    let (x, y) = ((tx as f32 * p).round() as i32, (ty as f32 * p).round() as i32 + oy as i32);
+                    let Some(img) = layer.image(id) else { continue };
+                    blit_tile(&mut c, &mut self.scaled_traffic, id, img, x, y, tile_px);
                 }
-                let entry = self.scaled.entry((id, tile_px)).or_insert_with(|| img.resized(tile_px.max(1), tile_px.max(1)));
-                c.blit(entry, x, y, 255, 255);
             }
         }
         // overlays: tracks, the route, the measurement, then markers
@@ -1053,9 +1304,10 @@ impl Window {
             let line: Vec<(f32, f32)> = pts.iter().map(|&(la, lo)| to_px(la, lo)).collect();
             Self::polyline(&mut c, &line, ui.pt(SPACE_XS), bifrost_app::kit::colors::SYSTEM_PURPLE.now());
         }
-        if self.maps.panel == Panel::Directions {
+        if matches!(self.maps.panel, Panel::Directions | Panel::Navigation) {
             for (i, r) in self.maps.routes.iter().enumerate() {
-                if i == self.maps.route_index {
+                // while a route is followed only that one is drawn
+                if i == self.maps.route_index || self.maps.panel == Panel::Navigation {
                     continue;
                 }
                 let line: Vec<(f32, f32)> = r.geometry.iter().map(|&(la, lo)| to_px(la, lo)).collect();
@@ -1108,6 +1360,17 @@ impl Window {
                 Self::dot(&mut c, x, y, ui.pt(9.0), WHITE);
                 Self::dot(&mut c, x, y, ui.pt(6.5), LINK);
             }
+        }
+        // the person's position: a dot, and a ring as wide as the fix is uncertain when that is wide enough to see
+        if let Some(h) = self.maps.here {
+            let (x, y) = to_px(h.lat, h.lon);
+            let ring = (h.accuracy_m / metres_per_pt(h.lat, zoom).max(1e-9)) as f32 * p;
+            if ring > ui.pt(14.0) {
+                let ring = ring.min(ui.pt(2000.0));
+                c.stroke_rrect(x - ring, y - ring, 2.0 * ring, 2.0 * ring, ring, 1.0, LINK);
+            }
+            Self::dot(&mut c, x, y, ui.pt(9.0), WHITE);
+            Self::dot(&mut c, x, y, ui.pt(6.5), SYSTEM_TEAL);
         }
         // the scale bar and the data credit, bottom corners
         let bottom = c.h as f32 - ui.pt(MARGIN);
@@ -1469,5 +1732,188 @@ mod tests {
     fn describe_names_the_state() {
         let (w, _, _) = window("describe", 1200, 780);
         assert!(w.describe().contains("maps_panel=None"));
+    }
+
+    /// The service calls the window queued since the last look, as (request, method).
+    fn calls(ctx: &Ctx) -> Vec<(u32, String)> {
+        ctx.take_sent()
+            .into_iter()
+            .filter_map(|m| match m {
+                bifrost_app::proto::ToShell::ServiceCall { request, method, .. } => Some((request, method)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn methods(calls: &[(u32, String)]) -> Vec<&str> {
+        calls.iter().map(|c| c.1.as_str()).collect()
+    }
+
+    fn json(text: &str) -> Json {
+        bifrost_core::json::parse(text).unwrap()
+    }
+
+    fn fix_json(lat: f64, lon: f64, accuracy: f64) -> Json {
+        json(&format!(
+            r#"{{"latitude":{lat},"longitude":{lon},"altitude":null,"horizontal_accuracy":{accuracy},"timestamp":1790000000,"source":"manual","city":"Akureyri","country":"Iceland"}}"#
+        ))
+    }
+
+    #[test]
+    fn the_current_location_button_asks_permission_then_centres_on_the_position() {
+        let (mut w, ui, ctx) = window("locate", 1200, 780);
+        let (x, y) = centre_of(&find(&w, &ui, "Current Location"));
+        click(&mut w, &ctx, &ui, x, y);
+        assert!(w.maps.locating);
+        let sent = calls(&ctx);
+        assert_eq!(methods(&sent), vec!["location_request"]);
+        // the person has not answered: the Allow sheet is up, and the window looks at the permission now and then
+        assert!(w.service_reply(&ctx, sent[0].0, &Ok(json(r#"{"outcome":"prompt"}"#))));
+        assert!(w.next_wake(0.0).is_some(), "the window wakes to look at the permission");
+        w.tick(&ctx, &ui, bifrost_app::proto::sys::now_ms() + 2_000.0);
+        let poll = calls(&ctx);
+        assert_eq!(methods(&poll), vec!["location_status"]);
+        assert!(w.service_reply(&ctx, poll[0].0, &Ok(json(r#"{"status":"authorized_when_in_use","authorized":true}"#))));
+        let ask = calls(&ctx);
+        assert_eq!(methods(&ask), vec!["current"]);
+        assert!(w.service_reply(&ctx, ask[0].0, &Ok(fix_json(65.68, -18.1, 100.0))));
+        assert!(!w.maps.locating);
+        let (lat, lon) = w.maps.view.centre();
+        assert!((lat - 65.68).abs() < 1e-6 && (lon + 18.1).abs() < 1e-6);
+        assert!(w.next_wake(0.0).is_none(), "nothing is waited for any more");
+    }
+
+    #[test]
+    fn an_allowed_app_is_not_asked_twice() {
+        let (mut w, ui, ctx) = window("allowed", 1200, 780);
+        let (x, y) = centre_of(&find(&w, &ui, "Current Location"));
+        click(&mut w, &ctx, &ui, x, y);
+        let sent = calls(&ctx);
+        assert!(w.service_reply(&ctx, sent[0].0, &Ok(json(r#"{"outcome":"already_granted"}"#))));
+        let ask = calls(&ctx);
+        assert_eq!(methods(&ask), vec!["current"]);
+        w.service_reply(&ctx, ask[0].0, &Ok(fix_json(65.68, -18.1, 100.0)));
+        click(&mut w, &ctx, &ui, x, y);
+        assert_eq!(methods(&calls(&ctx)), vec!["current"], "the second Locate goes straight to the position");
+    }
+
+    #[test]
+    fn a_refused_permission_stops_the_locate_and_says_why() {
+        let (mut w, ui, ctx) = window("refused", 1200, 780);
+        let (x, y) = centre_of(&find(&w, &ui, "Current Location"));
+        click(&mut w, &ctx, &ui, x, y);
+        let sent = calls(&ctx);
+        assert!(w.service_reply(&ctx, sent[0].0, &Ok(json(r#"{"outcome":"refused"}"#))));
+        assert!(!w.maps.locating);
+        assert!(w.maps.note.as_deref().unwrap().contains("may not use your location"));
+        assert!(w.maps.here.is_none());
+    }
+
+    #[test]
+    fn replies_to_other_calls_are_left_alone() {
+        let (mut w, _, ctx) = window("others", 1200, 780);
+        assert!(!w.service_reply(&ctx, 987_654, &Ok(Json::Null)));
+        assert!(!w.service_event(&ctx, "network_path", "pathUpdate", &Json::Null));
+    }
+
+    /// 1000 m north of (64, -21), a right turn, 1000 m east.
+    fn l_route() -> Route {
+        let b = (64.0 + 1000.0 / 111_194.9, -21.0);
+        let c = (b.0, b.1 + 1000.0 / (111_194.9 * b.0.to_radians().cos()));
+        let step = |name: &str, maneuver: &str, distance_m: f64| route::Step { name: name.into(), maneuver: maneuver.into(), distance_m };
+        Route {
+            distance_m: 2000.0,
+            duration_s: 200.0,
+            steps: vec![step("Main Street", "depart", 1000.0), step("Side Road", "turn right", 1000.0), step("", "arrive", 0.0)],
+            approximate: false,
+            geometry: vec![(64.0, -21.0), b, c],
+        }
+    }
+
+    #[test]
+    fn guidance_follows_positions_from_the_location_service_until_it_ends() {
+        let (mut w, ui, ctx) = window("guidance", 1200, 780);
+        let route = l_route();
+        w.maps.route_from = Some(("A".into(), (64.0, -21.0)));
+        w.maps.route_to = Some(("B".into(), *route.geometry.last().unwrap()));
+        w.maps.panel = Panel::Directions;
+        w.maps.route_done(Ok(vec![route]));
+        let (x, y) = centre_of(&find(&w, &ui, "Start Navigation"));
+        click(&mut w, &ctx, &ui, x, y);
+        assert_eq!(w.maps.panel, Panel::Navigation);
+        let sent = calls(&ctx);
+        assert_eq!(methods(&sent), vec!["location_request"]);
+        w.service_reply(&ctx, sent[0].0, &Ok(json(r#"{"outcome":"already_granted"}"#)));
+        let go = calls(&ctx);
+        assert_eq!(methods(&go), vec!["current", "start"]);
+        assert!(w.loc.is_updating());
+        // a position 100 m along the route arrives as an update event
+        let body = json(&format!(r#"{{"locations":[{}]}}"#, fix_json(64.0 + 100.0 / 111_194.9, -21.0, 10.0).encode()));
+        assert!(w.service_event(&ctx, "location", "didUpdateLocations", &body));
+        assert_eq!(w.maps.nav_title(), "Turn right onto Side Road");
+        find(&w, &ui, "End Navigation");
+        let (x, y) = centre_of(&find(&w, &ui, "End Navigation"));
+        click(&mut w, &ctx, &ui, x, y);
+        assert_eq!(methods(&calls(&ctx)), vec!["stop"]);
+        assert_eq!(w.maps.panel, Panel::Directions);
+        assert!(w.maps.nav.is_none());
+    }
+
+    #[test]
+    fn the_transit_button_is_on_the_directions_card() {
+        let (mut w, ui, ctx) = window("transit-button", 1200, 780);
+        w.maps.choose(crate::geocode::Place::new("Perlan, Reykjavik", 64.1295, -21.9186));
+        let (x, y) = centre_of(&find(&w, &ui, "Directions"));
+        click(&mut w, &ctx, &ui, x, y);
+        let (x, y) = centre_of(&find(&w, &ui, "Transit"));
+        click(&mut w, &ctx, &ui, x, y);
+        assert_eq!(w.maps.profile, route::Profile::Transit);
+        assert!(w.maps.note.as_deref().unwrap().contains("transit_url"));
+    }
+
+    #[test]
+    fn the_traffic_layer_loads_its_own_tiles_and_draws_over_the_map() {
+        let root = std::env::temp_dir().join(format!("maps-window-traffic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let template = "https://traffic.example.org/{z}/{x}/{y}.png";
+        std::fs::write(root.join("settings.json"), format!(r#"{{"traffic_url":"{template}","traffic":true}}"#)).unwrap();
+        let ui = ui();
+        let mut w = Window::new(&ui, 1200, 780, root.clone(), "1.0.0", Arc::new(Offline));
+        w.set_online(false);
+        let ctx = ctx(1200, 780);
+        assert!(w.maps.show_traffic && w.traffic.is_some());
+        // a cached traffic tile for the first tile on screen
+        let (id, _, _) = w.maps.view.tiles()[0];
+        let source = crate::source::TileSource::new(template, "ua").unwrap();
+        let tile = springboard::pngenc::encode_rgb(4, 4, &[0xff80_4020; 16]);
+        crate::cache::TileCache::new(&root, &source.overlay_cache_key()).write(id, &tile).unwrap();
+        w.tick(&ctx, &ui, 1000.0);
+        assert!(w.traffic.as_ref().unwrap().image(id).is_some(), "the traffic tile was read from its own folder");
+        assert!(w.loader.image(id).is_none(), "and not as a base tile");
+        let (width, height) = (1200usize, 780usize);
+        let mut px = vec![0u32; width * height];
+        let mut s = Surface { w: width, h: height, stride: width, px: &mut px, y0: 0 };
+        w.draw(&mut s, &ui, 0.0);
+        assert!(px.iter().any(|p| *p != px[0]));
+    }
+
+    #[test]
+    fn the_position_and_the_guidance_card_are_drawn() {
+        let (mut w, ui, _) = window("draw-here", 1200, 780);
+        let (lat, lon) = w.maps.view.centre();
+        w.maps.here = Some(Here { lat, lon, accuracy_m: 500.0 });
+        let route = l_route();
+        w.maps.route_from = Some(("A".into(), (64.0, -21.0)));
+        w.maps.route_to = Some(("B".into(), *route.geometry.last().unwrap()));
+        w.maps.panel = Panel::Directions;
+        w.maps.route_done(Ok(vec![route]));
+        w.maps.act(Act::StartNavigation, 0);
+        let (width, height) = (1200usize, 780usize);
+        let mut px = vec![0u32; width * height];
+        let mut s = Surface { w: width, h: height, stride: width, px: &mut px, y0: 0 };
+        w.draw(&mut s, &ui, 0.0);
+        let first = px[0];
+        assert!(px.iter().any(|p| *p != first));
     }
 }

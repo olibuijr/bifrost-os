@@ -123,6 +123,7 @@ impl App for MapsApp {
                 items: vec![
                     item(w, Act::MapType(bifrost_maps::source::MapType::Standard), "Map", "cmd+1"),
                     item(w, Act::MapType(bifrost_maps::source::MapType::Satellite), "Satellite", "cmd+2"),
+                    item(w, Act::ToggleTraffic, "Show Traffic", "cmd+t"),
                     AppMenuItem::separator(),
                     item(w, Act::ZoomIn, "Zoom In", "cmd++"),
                     item(w, Act::ZoomOut, "Zoom Out", "cmd+-"),
@@ -141,7 +142,10 @@ impl App for MapsApp {
                 items: vec![
                     item(w, Act::Search, "Search", "cmd+f"),
                     item(w, Act::Directions, "Directions", "cmd+r"),
+                    item(w, Act::StartNavigation, "Start Navigation", ""),
+                    item(w, Act::EndNavigation, "End Navigation", ""),
                     AppMenuItem::separator(),
+                    item(w, Act::Locate, "Current Location", "cmd+l"),
                     item(w, Act::DropPin, "Drop Pin", "cmd+shift+p"),
                     item(w, Act::RemovePin, "Remove Pin", "cmd+delete"),
                     AppMenuItem::separator(),
@@ -180,7 +184,10 @@ impl App for MapsApp {
         }
     }
 
-    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.w.as_mut().is_some_and(|w| w.service_reply(ctx, request, result)) {
+            return true;
+        }
         if Some(request) != self.path_request {
             return false;
         }
@@ -191,7 +198,10 @@ impl App for MapsApp {
         true
     }
 
-    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if self.w.as_mut().is_some_and(|w| w.service_event(ctx, service, event, body)) {
+            return true;
+        }
         match (network_path::path_event(service, event, body), self.w.as_mut()) {
             (Some(Ok(path)), Some(w)) => {
                 w.set_online(path.status == network_path::Status::Satisfied);

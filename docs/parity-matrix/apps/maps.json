@@ -9,10 +9,10 @@
   "summary": {
     "features": 29,
     "parity": 3,
-    "partial": 20,
-    "gap": 6,
+    "partial": 24,
+    "gap": 2,
     "n/a": 0,
-    "coverage_pct": 44.8
+    "coverage_pct": 51.7
   },
   "features": [
     {
@@ -127,28 +127,28 @@
       "feature": "Transit directions",
       "area": "directions",
       "apple": "Public transport routes with lines and departures",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Skipped: no journey planner service is configured, and a transit tab with nothing behind it would be a stub.",
-      "wire": "Add a transit provider (GTFS journey planner endpoint) behind a Profile::Transit with a Router-like client and show legs with line, stops and times."
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/transit.rs:50",
+      "note": "built on parity/team-d-maps; not yet verified on Midget. Journeys come from an OpenTripPlanner-compatible planner set as transit_url in settings.json (Profile::Transit, transit::Planner); each leg lists the line, stops and times. No planner is bundled, so without the setting the card says transit is not set up.",
+      "wire": "Bundle or default a public journey planner endpoint for the region; add departure-time choice (leave at, arrive by) to Planner::plan_url and show the legs' stop counts."
     },
     {
       "feature": "Turn-by-turn navigation",
       "area": "directions",
       "apple": "Live navigation with voice guidance and rerouting",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Skipped: needs a position source (the shell has no location service) and the speech service; steps are listed in the directions card.",
-      "wire": "Follow a Route against a position source: advance Step by distance to the next manoeuvre, reroute when off route more than 50 m, speak steps through the speech service; needs the shell location service."
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/nav.rs:60",
+      "note": "built on parity/team-d-maps; not yet verified on Midget. Navigator follows the positions from the shell location service: next manoeuvre, distance, time left, calls at three distances, arrival, reroute when more than 50 m (or the fix's uncertainty) off the route. Calls are shown on the card, not spoken: the shell has no speech engine. The shell's fixes are a manual location or a city-level lookup, so guidance only moves when that position moves.",
+      "wire": "Speak the calls (state::Maps::announcement) through the speech service once the shell has a speech engine; use a finer position source when the shell gets one."
     },
     {
       "feature": "Current location",
       "area": "location",
       "apple": "Show your location on the map and route from it (NSLocationUsageDescription)",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Skipped: the shell offers apps no location service, so there is nothing to centre on; the Weather app has the same limit.",
-      "wire": "When the shell exposes a location service, add a Locate button that centres MapView (view.rs:57) on it and uses it as the default origin."
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/window.rs:995",
+      "note": "built on parity/team-d-maps; not yet verified on Midget. Current Location (toolbar, Go menu, Cmd+L) asks the shell location service for a position, asking permission first, centres the map on it and draws a dot with an accuracy ring; Directions starts from it by default. The shell only has a manual location or a city-level IP lookup, so the fix is coarse.",
+      "wire": "Show the position live while the app is open (not only during guidance) and use a finer position source when the shell gets one."
     },
     {
       "feature": "Map modes",
@@ -172,10 +172,10 @@
       "feature": "Traffic and incidents",
       "area": "map",
       "apple": "Live traffic colours and incident markers",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Skipped: no traffic raster source is available to the app, so no Show Traffic toggle was added.",
-      "wire": "Add an optional traffic raster layer URL to TileSource and a Show Traffic toggle drawing it over the base tiles."
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/window.rs:1287",
+      "note": "built on parity/team-d-maps; not yet verified on Midget. View > Show Traffic (Cmd+T) draws an optional traffic raster layer from traffic_url in settings.json over the base tiles, refetched after five minutes (loader::TileLoader::overlay). No traffic source is bundled, so without the setting the item says how to turn it on; no incident markers.",
+      "wire": "Add incident markers from a source that provides them, and a default traffic layer when a licensed source is available."
     },
     {
       "feature": "Favorites",
