@@ -3601,6 +3601,19 @@ impl Shell {
         }
     }
 
+    /// Screen Zoom as the presenter draws it each frame (Option+Cmd+8 and the zoom steps).
+    pub fn screen_zoom(&self) -> accessibility::zoom::ScreenZoom {
+        self.screen_zoom
+    }
+
+    /// Cursor Size as a pointer scale: the open Settings' slider while it is open (not yet saved), else the saved value.
+    pub fn cursor_scale(&self) -> f32 {
+        match &self.settings {
+            Some(st) => st.accessibility().cursor_scale(),
+            None => accessibility::AccessibilitySettings::load(&self.prefs).cursor_scale(),
+        }
+    }
+
     /// Repaints everything on the next `draw` (after the GPU path drew frames the CPU did not see).
     pub fn force_full_redraw(&mut self) {
         self.perf_only = false;

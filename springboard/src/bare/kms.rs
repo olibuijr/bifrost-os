@@ -774,6 +774,9 @@ impl Display {
     pub fn wayland_gpu_active(&self) -> bool {self.wayland.as_ref().is_some_and(|w| w.gpu_active())}
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_wallpaper(&mut self, wp: crate::gfx::View, x: i32) {if let Some(w)=&mut self.wayland {w.wallpaper(wp,x);}}
+    /// Screen Zoom state and pointer for the next present (see `wayland::Display::set_zoom`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_set_zoom(&mut self, zoom: crate::shell::accessibility::zoom::ScreenZoom, pointer: (f32, f32)) {if let Some(w)=&mut self.wayland {w.set_zoom(zoom,pointer);}}
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=&mut self.wayland {w.foreign_maximize(id,maximized)?;}Ok(())}
     #[cfg(feature="desktop-wayland")]

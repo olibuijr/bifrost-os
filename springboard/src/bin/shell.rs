@@ -1253,6 +1253,10 @@ fn run() -> std::io::Result<()> {
                 }
                 // the desktop pointer is stamped over CPU frames that are not turned (the GPU zoom,
                 // the switcher and a rotated screen stay without it)
+                // Cursor Size: a new size repaints the panel, since the old pointer is still on it
+                if cursor.set_scale(shell.cursor_scale()) { shell.force_full_redraw(); }
+                #[cfg(feature = "desktop-wayland")]
+                disp.wayland_set_zoom(shell.screen_zoom(), inputs.pointer());
                 let want = springboard::gfx::cursor::Spot::want(inputs.pointer(), inputs.is_down(), inputs.has_pointer(), shell.screen_on(), sys::now_ms(), last_motion);
                 let damage = shell.draw(&mut Surface { w: fw, h: fh, stride: fw, px: &mut frame, y0: 0 }, vt);
                 let t1 = sys::now_ms();
@@ -1356,6 +1360,8 @@ fn run() -> std::io::Result<()> {
                 cursor_dim = (fw, fh);
             }
             cursor_damage.clear();
+            #[cfg(feature = "desktop-wayland")]
+            disp.wayland_set_zoom(shell.screen_zoom(), inputs.pointer());
             if cursor.plan(want, &mut cursor_damage) {
                 cursor.stamp(&mut frame, fw, fh);
                 disp.present(&frame, &cursor_damage);

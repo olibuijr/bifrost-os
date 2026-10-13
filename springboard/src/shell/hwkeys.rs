@@ -647,10 +647,12 @@ impl Shell {
             }
             Shortcut::ZoomToggle if !self.is_locked() => {
                 self.screen_zoom.toggle();
+                self.force_full_redraw();
                 vec![]
             }
             Shortcut::ZoomStep(bigger) if !self.is_locked() => {
                 self.screen_zoom.step(bigger);
+                self.force_full_redraw();
                 vec![]
             }
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
