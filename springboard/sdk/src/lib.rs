@@ -688,3 +688,4 @@ pub mod gpu_pass;
 pub mod biquad;
 pub mod extent_map;
 pub mod os_services;
+pub mod buffer_handoff;

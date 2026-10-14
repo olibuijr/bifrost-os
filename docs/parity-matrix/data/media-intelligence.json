@@ -38,9 +38,9 @@
     {
       "feature": "Errors (MediaIntelligenceError)",
       "apple": "MediaIntelligenceError",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Blocked: no analysis request exists in springboard/sdk/src/ or springboard/ui/src/, so no analysis can fail and no error type is needed yet. The error type comes with the first analysis API. The face grouping and highlight rows above are marked parity but cite no analysis code; they need checking."
+      "bifrost": "springboard/ui/src/media_intelligence_error.rs (MediaIntelligenceError, check_embedding, check_threshold); springboard/ui/src/face_group.rs (FaceGroups::try_insert_face, try_entities)",
+      "status": "partial",
+      "note": "One typed error covers face grouping: an empty, non-finite or wrong-length embedding and a threshold outside -1 to 1 are refused with their reason, and runtime failures are carried through; tested headless in ui/tests/parity_sdk-rest-10.rs. Gap: no app-facing analysis request returns it yet, so the reference error cases for asset loading and video analysis have no counterpart."
     }
   ],
   "gaps": [
@@ -48,6 +48,6 @@
     "On-device ML inference runtime that the analysis requests would run on",
     "Video highlight scoring (engaging segments) over decoded frames",
     "Content-based keyframe selection (representative frame) beyond container sync samples",
-    "Media analysis error type"
+    "Media analysis errors for asset loading and video analysis (face grouping errors are typed)"
   ]
 }
