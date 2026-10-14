@@ -61,6 +61,8 @@ pub mod font_substitution;
 /// App-facing font objects, specs, the font manager, collections and fallback cascade.
 pub use bifrost_render::{fontinfo, fontobj};
 pub mod screen_saver_defaults;
+pub mod screen_saver;
+pub mod idle_watch;
 pub mod screen_time;
 pub mod screens;
 pub mod displays;
