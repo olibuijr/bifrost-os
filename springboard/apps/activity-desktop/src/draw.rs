@@ -11,6 +11,7 @@ use crate::window::{
     INSPECT_SEGMENTS, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL,
 };
 use bifrost_app::controls::Rect;
+use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::kit::colors::{SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_YELLOW};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
@@ -21,7 +22,7 @@ use bifrost_app::widgets;
 const PAD: f32 = 8.0;
 const CARD_PAD: f32 = 14.0;
 /// Corner radius of the graph card (points): a grouped card.
-const CARD_RADIUS_PT: f32 = 13.0;
+const CARD_RADIUS_PT: f32 = m::CARD_RADIUS;
 /// The footer width the Memory tab's pressure strip and its label take, left of the footer text (points).
 const PRESSURE_SPACE_PT: f32 = 280.0;
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3 — 2026-10-14
+
+- Use configured content size instead of a fixed-resolution initial geometry.
+
 ## 0.5.2
 
 - Added the SDK and design compliance test harness.

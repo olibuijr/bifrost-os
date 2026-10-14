@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.3 — 2026-10-14
+
+- Use shared radius and spacing tokens; use the named white color for text on dark custom notes.
+
 ## 0.8.2
 
 - Standard editing commands now come from the shell Edit menu; app specific text actions are in Text. Added the SDK and design compliance test harness.

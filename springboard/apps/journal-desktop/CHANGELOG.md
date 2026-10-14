@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 — 2026-10-14
+
+- Drop the unused documents permission; Journal uses only app storage.
+
 ## 0.1.3 — 2026-10-14
 
 - Draw the entry timeline with the shared Golden Gate source-list rows.

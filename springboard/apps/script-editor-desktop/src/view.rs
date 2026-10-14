@@ -1,5 +1,6 @@
 //! Where each part of the window sits, in points. Pure geometry: the drawing and the touch handling both read it, and
 //! the tests cover it without a canvas.
+use bifrost_app::controls::prefs_layout::m;
 
 /// Height of the top band, which holds the Run and Stop buttons and the document name.
 pub const BAR_H: f32 = 52.0;
@@ -20,7 +21,7 @@ pub const BUTTON_W: f32 = 64.0;
 /// Height of a Run or Stop button.
 pub const BUTTON_H: f32 = 32.0;
 /// Corner radius of the buttons (flat corners, at most 6 points).
-pub const BUTTON_RADIUS: f32 = 6.0;
+pub const BUTTON_RADIUS: f32 = m::ICON_RADIUS;
 /// Share of the height above the status bar given to the editor; the output pane takes the rest.
 pub const EDITOR_SHARE: f32 = 0.6;
 

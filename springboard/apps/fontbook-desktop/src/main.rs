@@ -1192,7 +1192,7 @@ impl FontBookApp {
             if cy > hp {
                 break;
             }
-            let img = font.text(&c.to_string(), 20.0, Weight::Regular, ui::LABEL.now());
+            let img = font.text(&c.to_string(), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
             s.blit_colored(&img, (cx * ui.s) as i32, (cy * ui.s) as i32, ui::LABEL.now(), 255);
         }
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.18.2 — 2026-10-14
+
+- Use named system black and white colors for sketch ink and paper pixels.
+
 ## 1.18.1 — 2026-10-14
 
 - Send print jobs through the shared Utility dispatch queue so the app UI never creates a raw worker thread.

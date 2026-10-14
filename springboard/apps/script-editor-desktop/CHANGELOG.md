@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 — 2026-10-14
+
+- Use the shared small-control corner radius token.
+
 ## 0.1.2
 
 - Added the SDK and design compliance test harness.

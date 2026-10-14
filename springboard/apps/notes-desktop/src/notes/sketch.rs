@@ -5,12 +5,13 @@
 
 use super::folders;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke, StrokePoint};
+use bifrost_app::kit::ui::{BLACK, WHITE};
 use springboard::gfx::pack;
 use std::io;
 use std::path::Path;
 
 /// Ink of a new sketch line (0xAARRGGBB): opaque black.
-pub const INK_COLOR: u32 = 0xFF00_0000;
+pub const INK_COLOR: u32 = BLACK;
 /// Width of a new sketch line, in points.
 pub const LINE_PT: f32 = 2.5;
 /// Margin around the strokes in the picture (px).
@@ -135,7 +136,7 @@ pub fn render(drawing: &Drawing) -> Option<(usize, usize, Vec<u32>)> {
     let scale = (MAX_SIDE / bw.max(bh)).min(1.0);
     let w = ((bw * scale).ceil() as usize).max(1);
     let h = ((bh * scale).ceil() as usize).max(1);
-    let mut px = vec![rgba(0xFFFF_FFFF); w * h];
+    let mut px = vec![rgba(WHITE); w * h];
     let to_px = |x: f32, y: f32| ((x - ox) * scale, (y - oy) * scale);
     for s in drawing.strokes() {
         for (cx, cy, r, color) in stroke_dabs(s, &to_px, scale) {
@@ -230,7 +231,7 @@ mod tests {
         let (w, h, px) = render(&line((10.0, 20.0), (50.0, 20.0))).unwrap();
         assert_eq!((w, h), (72, 32));
         assert_eq!(px.len(), 72 * 32);
-        assert_eq!(px[0], rgba(0xFFFF_FFFF), "paper is white");
+        assert_eq!(px[0], rgba(WHITE), "paper is white");
         assert!(px.contains(&rgba(INK_COLOR)), "the stroke is inked");
         assert!(render(&Drawing::new()).is_none());
     }

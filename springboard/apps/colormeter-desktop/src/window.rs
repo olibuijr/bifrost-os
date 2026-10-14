@@ -109,7 +109,7 @@ impl ColorMeter {
             space: Space::Srgb,
             format: CopyFormat::Hex,
             copied: None,
-            size: (1000.0, 640.0),
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
         }

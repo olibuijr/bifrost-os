@@ -8,11 +8,12 @@ use crate::spell::{Mark, MarkKind};
 use crate::swatch;
 use bifrost_app::attributed::FontFeatures;
 use bifrost_app::controls::Rect;
+use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::rgba;
 use bifrost_app::kit::ui::{
     Ui, Weight, BLACK, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SYSTEM_BLUE,
-    SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW, SPACE_L, SPACE_S, SPACE_XXS,
+    SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW, SPACE_L, SPACE_S, SPACE_XXS, WHITE,
 };
 use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SHADOW};
 use bifrost_app::kit::Image;
@@ -21,7 +22,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 /// Corner radius of a note (points): the grouped card radius of the design rules.
-pub const RADIUS_PT: f32 = 13.0;
+pub const RADIUS_PT: f32 = m::CARD_RADIUS;
 /// The marks of each note, by note id: the misspelled words and the detected items of its text.
 pub type Marks = HashMap<u64, Vec<Mark>>;
 /// Shade over the title bar of a note, so the bar reads apart from the body.
@@ -46,7 +47,7 @@ const ITALIC_SLANT: f32 = 0.2;
 const FIND_W_PT: f32 = 320.0;
 const FIND_H_PT: f32 = 30.0;
 const FIND_BOTTOM_PT: f32 = 16.0;
-const FIND_RADIUS_PT: f32 = 6.0;
+const FIND_RADIUS_PT: f32 = m::CARD_RADIUS;
 
 pub fn colour_value(c: Colour) -> u32 {
     match c {
@@ -81,7 +82,7 @@ pub fn ink_value(ink: Ink) -> u32 {
 /// The colour of a text ink on a note. Black text turns white on a dark custom colour, so it stays readable there.
 pub fn ink_on(note: &Note, ink: Ink) -> u32 {
     match (ink, note.rgb) {
-        (Ink::Black, Some(rgb)) if swatch::is_dark(rgb) => rgba(255, 255, 255, 255),
+        (Ink::Black, Some(rgb)) if swatch::is_dark(rgb) => WHITE,
         _ => ink_value(ink),
     }
 }
@@ -379,7 +380,7 @@ fn draw_grip(c: &mut dyn Canvas, ui: &Ui, x: f32, y: f32, w: f32, h: f32) {
     let colour = LABEL_2.now();
     for i in 0..3 {
         let off = 4.0 + 4.0 * i as f32; // points in from the right and bottom edges
-        c.fill_rrect(RectF::new(x + w - ui.pt(off), y + h - ui.pt(off), ui.pt(2.0), ui.pt(2.0)), ui.pt(1.0), colour);
+        c.fill_rrect(RectF::new(x + w - ui.pt(off), y + h - ui.pt(off), ui.pt(SPACE_XXS), ui.pt(SPACE_XXS)), ui.pt(1.0), colour);
     }
 }
 
@@ -397,7 +398,7 @@ pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, query: &str, replace: &str, replac
     let (cw, ch) = c.size();
     let bar = find_bar_rect(ui, cw, ch);
     widgets::material(c, ui, bar, FIND_RADIUS_PT, Material::Popover);
-    let pad = ui.pt(10.0);
+    let pad = ui.pt(SPACE_M);
     let status = match (query.is_empty(), found) {
         (true, _) => String::new(),
         (false, 0) => "Not found".to_string(),
@@ -435,7 +436,7 @@ fn draw_entry(c: &mut dyn Canvas, ui: &Ui, entry: &str, hint: &str, swatch_colou
     let (cw, ch) = c.size();
     let bar = find_bar_rect(ui, cw, ch);
     widgets::material(c, ui, bar, FIND_RADIUS_PT, Material::Popover);
-    let pad = ui.pt(10.0);
+    let pad = ui.pt(SPACE_M);
     let (bx, by, bh) = (ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.h));
     let hint_img = ui.text(hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
     let swatch_px = ui.pt(SPACE_L);
@@ -503,7 +504,7 @@ mod tests {
         let mut n = Note::new(1, 0.0, 0.0, 0);
         assert_eq!(ink_on(&n, Ink::Black), BLACK, "a preset colour keeps black text");
         n.rgb = Some((10, 20, 30));
-        assert_eq!(ink_on(&n, Ink::Black), rgba(255, 255, 255, 255), "black text would vanish on navy");
+        assert_eq!(ink_on(&n, Ink::Black), WHITE, "black text would vanish on navy");
         assert_eq!(ink_on(&n, Ink::Red), SYSTEM_RED, "other inks keep their colour");
         n.rgb = Some((250, 250, 210));
         assert_eq!(ink_on(&n, Ink::Black), BLACK, "a light custom colour keeps black text");

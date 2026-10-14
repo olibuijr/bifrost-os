@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2 — 2026-10-14
+
+- Use the shared grouped-card radius token for graph cards.
+
 ## 0.7.1
 
 - Standard Copy now uses the shell Edit command. Added the SDK and design compliance test harness.
