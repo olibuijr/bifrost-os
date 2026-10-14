@@ -1,8 +1,12 @@
-//! Cryptography for the standard security handler (empty user password):
+//! Cryptography for the standard security handler (the user password, empty by default):
 //! MD5, SHA-2, RC4 and AES, and the key derivation of revisions 2 to 6.
 //! Written out here so the PDF reader needs no crypto crate.
 
 use super::obj::{Dict, Obj};
+
+/// The error a document reports when it needs a user password that was not given or is wrong. A caller that asks
+/// the user for one matches on this text.
+pub const PASSWORD_NEEDED: &str = "this PDF needs a password";
 
 const MD5_K: [u32; 64] = [0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8, 0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a, 0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70, 0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665, 0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1, 0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391];
 const MD5_S: [u32; 64] = [
@@ -350,7 +354,15 @@ enum Method {
     AesV3,
 }
 
-/// The decryptor of an encrypted document, opened with the empty user password.
+/// The user password as the revision 2 to 4 key derivation takes it: its first 32 bytes, padded with the standard
+/// padding string.
+fn padded(password: &[u8]) -> Vec<u8> {
+    let mut out: Vec<u8> = password.iter().take(32).copied().collect();
+    out.extend_from_slice(&PAD[..32 - out.len()]);
+    out
+}
+
+/// The decryptor of an encrypted document, opened with a user password.
 pub struct Crypt {
     key: Vec<u8>,
     stm: Method,
@@ -384,8 +396,14 @@ fn hash_r6(password: &[u8], salt: &[u8], udata: &[u8]) -> Vec<u8> {
 }
 
 impl Crypt {
-    /// Builds the decryptor from the (resolved) Encrypt dictionary and the first file ID.
+    /// Builds the decryptor from the (resolved) Encrypt dictionary and the first file ID, with the empty user password.
     pub fn open(enc: &Dict, id0: &[u8]) -> Result<Crypt, String> {
+        Crypt::open_with(enc, id0, b"")
+    }
+
+    /// Builds the decryptor with the user password `password`. A document that the password does not open reports
+    /// `PASSWORD_NEEDED`. The owner password is not tried.
+    pub fn open_with(enc: &Dict, id0: &[u8], password: &[u8]) -> Result<Crypt, String> {
         let int = |k: &str| enc.get(k).and_then(Obj::int);
         let bytes = |k: &str| match enc.get(k) {
             Some(Obj::Str(s)) => s.clone(),
@@ -430,17 +448,19 @@ impl Crypt {
             }
             let ue = bytes("UE");
             let (vsalt, ksalt) = (&u[32..40], &u[40..48]);
+            // the password is cut to 127 bytes, the most the revision 5 and 6 hashes take
+            let password = &password[..password.len().min(127)];
             let hash = |salt: &[u8]| -> Vec<u8> {
                 if r == 5 {
-                    let mut s = salt.to_vec();
-                    s.truncate(8);
+                    let mut s = password.to_vec();
+                    s.extend_from_slice(&salt[..salt.len().min(8)]);
                     sha256(&s).to_vec()
                 } else {
-                    hash_r6(b"", salt, b"")
+                    hash_r6(password, salt, b"")
                 }
             };
             if hash(vsalt)[..] != u[..32] {
-                return Err("this PDF is encrypted".into());
+                return Err(PASSWORD_NEEDED.into());
             }
             let ik = hash(ksalt);
             let key = aes_cbc_decrypt_raw(&ik, &[0u8; 16], ue.get(..32).unwrap_or(&[])).ok_or("damaged encryption dictionary")?;
@@ -449,7 +469,7 @@ impl Crypt {
         }
         let len_bits = if v == 1 { 40 } else { int("Length").unwrap_or(40) };
         let n = if r == 2 { 5 } else { ((len_bits / 8) as usize).clamp(5, 16) };
-        let mut input = PAD.to_vec();
+        let mut input = padded(password);
         input.extend_from_slice(&o);
         input.extend_from_slice(&(p as u32).to_le_bytes());
         input.extend_from_slice(id0);
@@ -478,7 +498,7 @@ impl Crypt {
         };
         let cmp = if r == 2 { 32 } else { 16 };
         if u.len() >= cmp && check.len() >= cmp && u[..cmp] != check[..cmp] {
-            return Err("this PDF is encrypted".into());
+            return Err(PASSWORD_NEEDED.into());
         }
         Ok(Crypt { key, stm, strm, encrypt_metadata })
     }

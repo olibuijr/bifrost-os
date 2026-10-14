@@ -14,6 +14,7 @@ mod export;
 mod find;
 mod inspector;
 mod model;
+mod password;
 mod pdfjob;
 mod pdfmarks;
 mod pixels;
@@ -30,6 +31,7 @@ use canvas::{Action, Layout, Mode, PictureCache, Scene, Side, Tool};
 use document::Document;
 use export::Raster;
 use model::{Adjust, History, Mark, MarkKind, Norm, Pixels, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE, MARK_RED};
+use password::Ask;
 use pdfjob::{Inbox, Job, Reply};
 use prefs::Prefs;
 use recents::Recents;
@@ -77,6 +79,8 @@ enum Gesture {
 /// A PDF on its way from its worker: the worker's job sender and the inbox its replies come back in.
 struct Loading {
     path: PathBuf,
+    /// The password the file is opened with; empty when none was asked for.
+    password: Vec<u8>,
     jobs: Sender<Job>,
     inbox: Inbox,
 }
@@ -143,6 +147,10 @@ struct Viewer {
     after_open: Option<String>,
     /// Whether the Adjust Color sliders are shown on the right side.
     color_panel: bool,
+    /// A PDF that needs a password, and the password being typed for it.
+    asking: Option<Ask>,
+    /// The password a PDF was opened with this session, so it is not asked for again (Revert to Saved, Open Recent).
+    password: Option<(PathBuf, Vec<u8>)>,
 }
 
 impl Viewer {
@@ -186,6 +194,8 @@ impl Viewer {
             authoring: None,
             after_open: None,
             color_panel: false,
+            asking: None,
+            password: None,
         }
     }
 
@@ -253,8 +263,18 @@ impl Viewer {
     }
 
     fn open_path(&mut self, path: &Path) {
+        let password = match &self.password {
+            Some((known, password)) if known == path => password.clone(),
+            _ => Vec::new(),
+        };
+        self.open_document(path, password);
+    }
+
+    /// Opens `path` with `password` (empty for a file without one). A PDF that the password does not open asks for it.
+    fn open_document(&mut self, path: &Path, password: Vec<u8>) {
         self.stop_editing();
         self.save_position();
+        self.asking = None;
         self.authoring = None;
         self.pending_save = None;
         self.after_open = None;
@@ -279,8 +299,8 @@ impl Viewer {
         self.remember(path);
         self.restore_page = if self.prefs.remember_page { document::load_position(&self.data_dir, path) } else { None };
         if matches!(engine::format_of(path), Some(engine::Format::Pdf)) {
-            let (jobs, inbox) = pdfjob::spawn(path.to_path_buf());
-            self.loading = Some(Loading { path: path.to_path_buf(), jobs, inbox });
+            let (jobs, inbox) = pdfjob::spawn(path.to_path_buf(), password.clone());
+            self.loading = Some(Loading { path: path.to_path_buf(), password, jobs, inbox });
             self.status = format!("Opening {}", name_of(path));
             return;
         }
@@ -586,10 +606,17 @@ impl Viewer {
                 None => self.loading = Some(loading),
                 Some(Ok(info)) => {
                     changed = true;
-                    let Loading { path, jobs, inbox } = loading;
+                    let Loading { path, jobs, inbox, .. } = loading;
                     self.doc = Some(document::from_pdf(&path, &self.data_dir, info, jobs, inbox));
                     self.status = self.after_open.take().unwrap_or_default();
                     self.restore_view();
+                }
+                Some(Err(e)) if pdfjob::needs_password(&e) => {
+                    changed = true;
+                    let retry = !loading.password.is_empty();
+                    self.password = None;
+                    self.asking = Some(Ask::new(&loading.path, retry));
+                    self.show_asking();
                 }
                 Some(Err(e)) => {
                     changed = true;
@@ -1760,7 +1787,49 @@ impl Viewer {
         true
     }
 
+    /// Shows the password request, with the typing as stars.
+    fn show_asking(&mut self) {
+        if let Some(ask) = &self.asking {
+            self.status = ask.message(&name_of(&ask.path));
+        }
+    }
+
+    /// A key while the password of a PDF is being typed. Return opens the file with what was typed, and Escape leaves
+    /// the file unopened.
+    fn key_password(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Text(t) => {
+                if let Some(ask) = &mut self.asking {
+                    ask.type_text(t);
+                }
+            }
+            KeyInput::Code(8) => {
+                if let Some(ask) = &mut self.asking {
+                    ask.delete();
+                }
+            }
+            KeyInput::Code(13) => {
+                let Some(ask) = self.asking.take() else { return false };
+                let password = ask.password();
+                self.password = Some((ask.path.clone(), password.clone()));
+                self.open_document(&ask.path, password);
+                return true;
+            }
+            KeyInput::Code(27) => {
+                self.asking = None;
+                self.status = "The document was not opened.".into();
+                return true;
+            }
+            _ => return false,
+        }
+        self.show_asking();
+        true
+    }
+
     fn key(&mut self, ctx: &Ctx, key: KeyInput) -> bool {
+        if self.asking.is_some() {
+            return self.key_password(&key);
+        }
         if self.authoring.is_some() {
             return self.key_author(&key);
         }

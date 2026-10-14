@@ -71,9 +71,9 @@ pub struct Pdf {
 }
 
 impl Pdf {
-    fn open(path: &Path) -> Result<Pdf, String> {
+    fn open(path: &Path, password: &[u8]) -> Result<Pdf, String> {
         let data = std::fs::read(path).map_err(|e| e.to_string())?;
-        let doc = Doc::open(data)?;
+        let doc = Doc::open_with_password(data, password)?;
         let pages = page::pages(&doc);
         if pages.is_empty() {
             return Err("The document has no pages.".into());
@@ -98,13 +98,18 @@ impl Pdf {
     }
 }
 
-/// Starts the worker for the PDF at `path`. It opens the file and reports it, then runs the jobs sent on the returned
-/// sender in order. Results collect in the returned inbox.
-pub fn spawn(path: PathBuf) -> (Sender<Job>, Inbox) {
+/// Whether an open error means the file needs a user password (none was given, or the one given is wrong).
+pub fn needs_password(error: &str) -> bool {
+    error == springboard::cg::pdf::crypt::PASSWORD_NEEDED
+}
+
+/// Starts the worker for the PDF at `path`, opened with `password` (empty for a file without one). It opens the file and
+/// reports it, then runs the jobs sent on the returned sender in order. Results collect in the returned inbox.
+pub fn spawn(path: PathBuf, password: Vec<u8>) -> (Sender<Job>, Inbox) {
     let inbox: Inbox = Arc::default();
     let (tx, rx) = channel::<Job>();
     let sink = Arc::clone(&inbox);
-    thread::spawn(move || match Pdf::open(&path) {
+    thread::spawn(move || match Pdf::open(&path, &password) {
         Ok(pdf) => {
             deliver(&sink, Reply::Opened(pdf.summary()));
             for job in rx {
