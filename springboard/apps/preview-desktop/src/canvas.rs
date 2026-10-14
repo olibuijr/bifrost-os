@@ -4,7 +4,7 @@
 
 use crate::document::{Document, THUMB_W};
 use crate::find::Hit;
-use crate::model::{self, Adjust, Mark, MarkKind, Norm, View, HIGHLIGHT, MARK_BLUE};
+use crate::model::{self, Adjust, Mark, MarkKind, Norm, Slider, View, HIGHLIGHT, MARK_BLUE};
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{rgba, Image, Surface};
 
@@ -27,6 +27,16 @@ pub enum Tool {
     Select,
     /// A click clears the connected region of one colour to transparent.
     Alpha,
+    /// A five-point star dragged out.
+    Star,
+    /// A hexagon dragged out.
+    Polygon,
+    /// A speech bubble dragged out.
+    Bubble,
+    /// A click places a text box, which takes the typed text.
+    Text,
+    /// Drags out a black box over a picture's content.
+    Redact,
 }
 
 impl Tool {
@@ -44,6 +54,11 @@ impl Tool {
             Tool::Arrow => Some(MarkKind::Arrow),
             Tool::Underline => Some(MarkKind::Underline),
             Tool::Strike => Some(MarkKind::Strike),
+            Tool::Star => Some(MarkKind::Star),
+            Tool::Polygon => Some(MarkKind::Polygon),
+            Tool::Bubble => Some(MarkKind::Bubble),
+            Tool::Text => Some(MarkKind::Text),
+            Tool::Redact => Some(MarkKind::Redact),
             Tool::Select | Tool::Alpha => None,
         }
     }
@@ -149,6 +164,28 @@ pub enum Action {
     QualityHigh,
     QualityMedium,
     QualityLow,
+    /// File > Save: the document is written back, with its markup, page order and turns, and reopened.
+    Save,
+    /// File > Revert to Saved: the file is opened again, so every change since the last save goes.
+    RevertToSaved,
+    /// Edit > Copy: the selected text of a PDF page, or the picture, goes to the clipboard.
+    CopyText,
+    /// Edit > Select All: the whole shown page is selected.
+    SelectAll,
+    /// Tools > Save Signature: the last drawing on the shown page joins the signature library.
+    SaveSignature,
+    /// Tools > Clear Signatures: the signature library is emptied.
+    ClearSignatures,
+    /// View > Hide Toolbar / Show Toolbar.
+    ToggleToolbar,
+    /// Settings > Remember Last Page.
+    ToggleRememberPage,
+    /// Settings > Open PDFs as Contact Sheet.
+    ToggleContactDefault,
+    /// Settings > Annotation Author: the status line takes the author's name.
+    SetAuthor,
+    /// Adjust > Show Adjust Color / Hide Adjust Color: the right side shows sliders for the colour adjustments.
+    ShowColorPanel,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -225,6 +262,22 @@ pub const ACTIONS: &[Action] = &[
     Action::UseTool(Tool::Strike),
     Action::UseTool(Tool::Select),
     Action::UseTool(Tool::Alpha),
+    Action::UseTool(Tool::Star),
+    Action::UseTool(Tool::Polygon),
+    Action::UseTool(Tool::Bubble),
+    Action::UseTool(Tool::Text),
+    Action::UseTool(Tool::Redact),
+    Action::Save,
+    Action::RevertToSaved,
+    Action::CopyText,
+    Action::SelectAll,
+    Action::SaveSignature,
+    Action::ClearSignatures,
+    Action::ToggleToolbar,
+    Action::ToggleRememberPage,
+    Action::ToggleContactDefault,
+    Action::SetAuthor,
+    Action::ShowColorPanel,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -335,6 +388,22 @@ impl Action {
             Action::UseTool(Tool::Strike) => "Strike Through",
             Action::UseTool(Tool::Select) => "Select",
             Action::UseTool(Tool::Alpha) => "Instant Alpha",
+            Action::UseTool(Tool::Star) => "Star",
+            Action::UseTool(Tool::Polygon) => "Polygon",
+            Action::UseTool(Tool::Bubble) => "Speech Bubble",
+            Action::UseTool(Tool::Text) => "Text Box",
+            Action::UseTool(Tool::Redact) => "Redact",
+            Action::Save => "Save",
+            Action::RevertToSaved => "Revert to Saved",
+            Action::CopyText => "Copy",
+            Action::SelectAll => "Select All",
+            Action::SaveSignature => "Save Signature",
+            Action::ClearSignatures => "Clear Signatures",
+            Action::ToggleToolbar => "Hide Toolbar",
+            Action::ToggleRememberPage => "Remember Last Page",
+            Action::ToggleContactDefault => "Open PDFs as Contact Sheet",
+            Action::SetAuthor => "Annotation Author\u{2026}",
+            Action::ShowColorPanel => "Show Adjust Color",
         }
     }
 
@@ -656,6 +725,8 @@ pub struct Scene<'a> {
     pub contact_scroll: f32,
     /// The hits of the last search.
     pub found: &'a [Hit],
+    /// The Adjust Color panel's sliders, when the panel is shown; it takes the right side instead of the Inspector.
+    pub color: Option<&'a [Slider]>,
 }
 
 /// Draws the window. `cache` keeps the scaled picture between frames.
@@ -667,9 +738,7 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
         draw_sheet(s, ui, lay, scene, doc);
         draw_sidebar(s, ui, lay, scene);
         draw_toolbar(s, ui, lay, scene);
-        if let Some(rows) = scene.inspector {
-            draw_inspector(s, ui, lay, rows);
-        }
+        draw_right_panel(s, ui, lay, scene);
         return None;
     }
     let mut placed = None;
@@ -707,16 +776,23 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
             }
         }
     }
-    // a note's text sits beside its marker on picture pages
+    // a note's text sits beside its marker on picture pages; a text box holds its text inside its frame
     if let (Some(doc), Some(p), Some(src)) = (scene.doc, placed, shown_src) {
-        for (i, m) in doc.marks.iter().enumerate().filter(|(_, m)| m.page == src && m.kind == MarkKind::Note) {
+        for (i, m) in doc.marks.iter().enumerate().filter(|(_, m)| m.page == src && matches!(m.kind, MarkKind::Note | MarkKind::Text)) {
             if m.text.is_empty() && scene.editing != Some(i) {
                 continue;
             }
-            let (x, y, _, _) = to_screen(&p, scene.view.quarters, m.rect);
+            let (x, y, w, h) = to_screen(&p, scene.view.quarters, m.rect);
             let shown = if scene.editing == Some(i) { format!("{}|", m.text) } else { m.text.clone() };
-            let img = ui.text(&shown, ui::MAC_CALLOUT_PT, Weight::Regular, ui::WHITE);
-            s.blit_colored(&img, x as i32 + ui.pt(ui::SPACE_L) as i32, y as i32, ui::LABEL.now(), 255);
+            if m.kind == MarkKind::Text {
+                let pad = ui.pt(ui::SPACE_S);
+                s.stroke_rrect(x, y, w.max(1.0), h.max(1.0), 0.0, 1.0, m.color);
+                let img = ui.text(&shown, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+                s.blit_colored(&img, (x + pad) as i32, (y + (h - img.h as f32) / 2.0) as i32, m.color, 255);
+            } else {
+                let img = ui.text(&shown, ui::MAC_CALLOUT_PT, Weight::Regular, ui::WHITE);
+                s.blit_colored(&img, x as i32 + ui.pt(ui::SPACE_L) as i32, y as i32, ui::LABEL.now(), 255);
+            }
         }
     }
     if let (Some(p), Some(sel)) = (placed, scene.selection) {
@@ -736,9 +812,7 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
     draw_sidebar(s, ui, lay, scene);
     if !show {
         draw_toolbar(s, ui, lay, scene);
-        if let Some(rows) = scene.inspector {
-            draw_inspector(s, ui, lay, rows);
-        }
+        draw_right_panel(s, ui, lay, scene);
     }
     placed
 }
@@ -809,6 +883,73 @@ fn draw_sheet(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
     }
 }
 
+/// The right-hand panel: the Adjust Color sliders while they are shown, otherwise the Inspector.
+fn draw_right_panel(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
+    if let Some(sliders) = scene.color {
+        draw_color_panel(s, ui, lay, sliders);
+    } else if let Some(rows) = scene.inspector {
+        draw_inspector(s, ui, lay, rows);
+    }
+}
+
+/// The top and height of Adjust Color slider `i`, in window pixels.
+pub fn slider_row(ui: &Ui, lay: &Layout, i: usize) -> (i32, i32) {
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    let row = ui.pt(ui::MAC_BODY_PT * 3.0) as i32;
+    (lay.bar + pad + i as i32 * row, row)
+}
+
+/// The left edge and the width of the Adjust Color track, in window pixels.
+pub fn slider_track(ui: &Ui, lay: &Layout) -> (i32, i32) {
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    (lay.w - lay.inspector + pad, (lay.inspector - 2 * pad).max(1))
+}
+
+/// The slider of the Adjust Color panel under a window point, when the panel is shown and the point is in one of its
+/// `count` rows.
+pub fn slider_hit(ui: &Ui, lay: &Layout, count: usize, x: f32, y: f32) -> Option<usize> {
+    if lay.inspector <= 0 || x < (lay.w - lay.inspector) as f32 {
+        return None;
+    }
+    (0..count).find(|&i| {
+        let (top, h) = slider_row(ui, lay, i);
+        y >= top as f32 && y < (top + h) as f32
+    })
+}
+
+/// The value a point across the track sets on `slider`: its range, by the point's share of the track, clamped to the range.
+pub fn slider_value(ui: &Ui, lay: &Layout, slider: &Slider, x: f32) -> f32 {
+    let (tx, tw) = slider_track(ui, lay);
+    let t = ((x - tx as f32) / tw as f32).clamp(0.0, 1.0);
+    slider.min + t * (slider.max - slider.min)
+}
+
+/// The Adjust Color panel: each adjustment's name and value over a track with a knob at its place in the range.
+fn draw_color_panel(s: &mut Surface, ui: &Ui, lay: &Layout, sliders: &[Slider]) {
+    let w = lay.inspector;
+    if w <= 0 {
+        return;
+    }
+    let (x, top) = (lay.w - w, lay.bar);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    let (tx, tw) = slider_track(ui, lay);
+    for (i, slider) in sliders.iter().enumerate() {
+        let (row_top, row_h) = slider_row(ui, lay, i);
+        let name = ui.text(slider.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&name, x + pad, row_top, ui::LABEL_2.now(), 255);
+        let readout = format!("{:.2}", slider.value);
+        let value = ui.text(&readout, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&value, x + w - pad - value.w as i32, row_top, ui::LABEL_2.now(), 255);
+        let ty = row_top + row_h * 2 / 3;
+        fill(s, tx, ty, tw, 2, ui::FILL);
+        let t = if slider.max > slider.min { (slider.value - slider.min) / (slider.max - slider.min) } else { 0.0 };
+        let kx = tx as f32 + t.clamp(0.0, 1.0) * tw as f32;
+        s.fill_rrect(kx - 6.0, (ty - 5) as f32, 12.0, 12.0, 6.0, ui::TINT);
+    }
+}
+
 /// The Inspector: a panel along the right edge listing each fact as a small label over its value.
 fn draw_inspector(s: &mut Surface, ui: &Ui, lay: &Layout, rows: &[(String, String)]) {
     let w = lay.inspector;
@@ -848,7 +989,24 @@ fn draw_path(s: &mut Surface, pts: &[(f32, f32)], color: u32) {
     }
 }
 
+/// Strokes a closed outline of canvas points: the path and the last segment back to its first point.
+fn draw_closed(s: &mut Surface, pts: &[(f32, f32)], color: u32) {
+    let Some(&first) = pts.first() else { return };
+    let mut closed = pts.to_vec();
+    closed.push(first);
+    draw_path(s, &closed, color);
+}
+
 fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
+    if m.kind.is_outline() {
+        let pts: Vec<(f32, f32)> = model::outline(m.kind, m.rect).iter().map(|&(u, v)| screen_point(p, quarters, u, v)).collect();
+        draw_closed(s, &pts, m.color);
+        return;
+    }
+    // a text box is drawn with the notes, in the text's own font
+    if m.kind == MarkKind::Text {
+        return;
+    }
     if m.kind.has_points() {
         // a stroke, a line or an arrow
         let pts: Vec<(f32, f32)> = m.ink.iter().map(|&(u, v)| screen_point(p, quarters, u, v)).collect();
@@ -887,7 +1045,9 @@ fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
             fill(s, x, y, 14, 14, MARK_BLUE);
         }
         MarkKind::Oval => draw_path(s, &model::ellipse_points(x as f32, y as f32, w as f32, h as f32), m.color),
+        MarkKind::Redact => fill(s, x, y, w, h, rgba(0, 0, 0, 255)),
         MarkKind::Ink | MarkKind::Line | MarkKind::Arrow | MarkKind::Underline | MarkKind::Strike => {}
+        MarkKind::Star | MarkKind::Polygon | MarkKind::Bubble | MarkKind::Text => {}
     }
 }
 
@@ -990,6 +1150,10 @@ fn fit_text(ui: &Ui, text: &str, pt: f32, max_w: f32) -> String {
 }
 
 fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
+    // View > Hide Toolbar leaves no bar to draw
+    if lay.bar <= 0 {
+        return;
+    }
     fill(s, 0, 0, lay.w, lay.bar, ui::CONTENT_BG.now());
     fill(s, 0, lay.bar - 1, lay.w, 1, ui::SEPARATOR_C.now());
     let y = (lay.bar - ui.pt(ui::MAC_BODY_PT * 1.5) as i32) / 2;
@@ -1170,6 +1334,40 @@ mod tests {
         let items = side_items(&doc, Side::Search, &hits);
         assert_eq!(items, vec![("3  two".to_string(), Some(2)), ("1  zero".to_string(), Some(0))]);
         assert!(side_items(&doc, Side::Pages, &hits).is_empty());
+    }
+
+    #[test]
+    fn the_shape_text_and_redact_tools_make_their_marks_and_sit_in_the_menus() {
+        assert_eq!(Tool::Star.mark_kind(), Some(MarkKind::Star));
+        assert_eq!(Tool::Polygon.mark_kind(), Some(MarkKind::Polygon));
+        assert_eq!(Tool::Bubble.mark_kind(), Some(MarkKind::Bubble));
+        assert_eq!(Tool::Text.mark_kind(), Some(MarkKind::Text));
+        assert_eq!(Tool::Redact.mark_kind(), Some(MarkKind::Redact));
+        for tool in [Tool::Star, Tool::Polygon, Tool::Bubble, Tool::Text, Tool::Redact] {
+            assert!(ACTIONS.contains(&Action::UseTool(tool)), "{tool:?}");
+            assert!(!Action::toolbar().contains(&Action::UseTool(tool)), "{tool:?} is in the menus only");
+        }
+    }
+
+    #[test]
+    fn the_file_edit_settings_and_signature_actions_are_menu_only_and_round_trip() {
+        let menu_only = [
+            Action::Save,
+            Action::RevertToSaved,
+            Action::CopyText,
+            Action::SelectAll,
+            Action::SaveSignature,
+            Action::ClearSignatures,
+            Action::ToggleToolbar,
+            Action::ToggleRememberPage,
+            Action::ToggleContactDefault,
+            Action::SetAuthor,
+        ];
+        for a in menu_only {
+            assert!(!Action::toolbar().contains(&a), "{a:?}");
+            assert_eq!(Action::from_id(a.id()), Some(a));
+            assert!(!a.label().is_empty());
+        }
     }
 
     #[test]

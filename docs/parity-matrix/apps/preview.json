@@ -24,18 +24,18 @@
       "area": "menu",
       "apple": "MainMenu.nib File > Open, Open Recent",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:196",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:552",
       "note": "File > Open (Cmd+O) through the open panel (chosen file copied into the app data folder) and Open Recent with Clear Menu (src/recents.rs, tested); not yet checked on the lab machine",
-      "wire": "Add Open (cmd+o) using the SDK open panel and an Open Recent submenu fed by a recents list in data_dir; wire in main_menu File items main.rs:618"
+      "wire": ""
     },
     {
       "feature": "Save / Revert to Saved",
       "area": "menu",
       "apple": "MainMenu.nib File > Save, Revert to Saved",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:509",
-      "note": "Revert to Original added (undoable); edited PDF copy saved via Export; no save-in-place",
-      "wire": "Add Save (cmd+s) writing the edited PDF/image over the original with a backup, and Revert that discards sidecar marks; add to File menu main.rs:618"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:334",
+      "note": "File > Save (Cmd+S) writes the markup, page order and turns into the file and reopens it; File > Revert to Saved reopens the file and drops unsaved changes; Revert to Original kept. Save replaces the app's copy for a file chosen in the open panel, not the original file (needs the document grant write-back). Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Export As (PNG/JPEG/PDF, scale)",
@@ -50,9 +50,9 @@
       "feature": "Export options (quality, more formats, PDF encryption)",
       "area": "panel",
       "apple": "MainMenu.nib File > Export As sheet",
-      "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/export.rs:58",
-      "note": "File > JPEG Quality (High 90, Medium 75, Low 50) sets the compression of an exported JPEG, and PNG export keeps transparency. No quality slider, no other formats, no PDF password; built on parity/team-d-preview; not yet verified on Midget",
+      "status": "gap",
+      "bifrost": "",
+      "note": "JPEG quality is a File menu choice (File > JPEG Quality) and the export scale a submenu; no export sheet and no PDF password (the PDF writer refuses encrypted files)",
       "wire": "Add an export sheet with format popup, JPEG quality and PDF password (encrypt via the PDF writer used by pdfmarks.rs); open it from Export As in main.rs:618"
     },
     {
@@ -69,9 +69,9 @@
       "area": "menu",
       "apple": "MainMenu.nib File > New from Clipboard",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:797",
-      "note": "File > New from Clipboard (Cmd+N) reads a PNG or JPEG from the pasteboard, keeps it as a file under the app data folder and opens it. It is a saved copy, not an untitled document, because markup and exports are tied to a file; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Read an image from the clipboard, open it as an unsaved picture Document (bytes variant of document.rs:219 open_picture); add to File menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1210",
+      "note": "File > New from Clipboard (Cmd+N) keeps the clipboard picture as a file in the app folder and opens it; not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Take Screenshot (selection/window/screen)",
@@ -79,7 +79,7 @@
       "apple": "MainMenu.nib File > Take Screenshot",
       "status": "gap",
       "bifrost": "",
-      "note": "Left open: the shell screenshot toolbar saves to Photos and gives an app no way to receive the file, and an app has no call to the shell capture socket",
+      "note": "The shell's screenshot tool has no app-facing service, so the menu item cannot call it yet; needs a shell service first",
       "wire": "Call the shell screenshot service and open the result via open_path main.rs:82; File submenu"
     },
     {
@@ -97,7 +97,7 @@
       "apple": "MainMenu.nib File > Enter Password, Edit Permissions; PVInspectorPDFEncryption.nib",
       "status": "gap",
       "bifrost": "",
-      "note": "",
+      "note": "Encrypted PDFs open only with the empty user password (springboard/render/src/cg/pdf/crypt.rs). Needs a user-password path in the engine and an encrypting writer for Edit Permissions",
       "wire": "Detect encrypted PDFs on open in pdfjob.rs, prompt with a password sheet, and add an Edit Permissions sheet that writes owner/user passwords on save"
     },
     {
@@ -105,36 +105,36 @@
       "area": "menu",
       "apple": "MainMenu.nib Edit > Undo, Redo",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:179",
-      "note": "Edit > Undo/Redo over marks, page order/deletes, turns, colour and picture pixel edits (flip, crop, alpha, background); view zoom not covered; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Keep an undo stack of model edits (marks, order, turns, adjust) in model.rs; expose Edit > Undo/Redo cmd+z / cmd+shift+z in main_menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:859",
+      "note": "Edit > Undo/Redo cover markup, page order and deletes, turns, colour, picture pixels and Adjust Color drags; view zoom is not covered",
+      "wire": ""
     },
     {
       "feature": "Copy / Select All / text selection",
       "area": "menu",
       "apple": "MainMenu.nib Edit > Copy, Select All; Tools > Text Selection",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No PDF text-layer selection. The extractor gives lines without positions along the line, so a selection cannot be mapped to the page yet",
-      "wire": "Add a text-selection tool using PDF text extraction and Edit > Copy to the clipboard; add Tool::Text to tool_items main.rs:610"
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:407",
+      "note": "Edit > Copy (Cmd+C) takes the PDF text lines inside the selection's band, or the whole page, from the PDF worker (find.rs copy_text) to the clipboard; a picture copies as PNG; Edit > Select All (Cmd+A) selects the shown page. Lines, not words: the extraction has no word positions, so there is no drag-to-select on the page. Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Rectangular selection and Crop",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Rectangular Selection, Crop",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:816",
-      "note": "Select tool drags a rectangle (canvas.rs Tool::Select); Tools > Crop (Cmd+K) crops a picture, moves its markup into the cropped page and is undoable. A PDF is not cropped: the PDF writer has no crop box edit yet; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add Tool::Select drawing a selection rect on the canvas (canvas.rs to_source) and Tools > Crop that crops the picture or sets the PDF crop box on save"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1229",
+      "note": "Tools > Select drags a rectangle; Tools > Crop (Cmd+K) keeps it for pictures and moves the markup with it; Select All selects the shown page. Crop for PDF pages is not done",
+      "wire": ""
     },
     {
       "feature": "Find in PDF with results sidebar",
       "area": "menu",
       "apple": "MainMenu.nib Edit > Find, Find Next/Previous; PVSearchPanel.nib, PVSidebarSearchResults.nib",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/find.rs:58",
-      "note": "Edit > Find (Cmd+F, text typed in the status line), Find Next/Previous (Cmd+G, Shift+Cmd+G) and a Search Results sidebar list; the PDF worker lists the text lines that hold the text. The extractor gives no position along the line, so the page is shown but the word is not highlighted; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add a toolbar search field, search page text in the pdfjob.rs worker, list hits in a Side::Search sidebar and highlight on the canvas; cmd+f / cmd+g"
+      "bifrost": "springboard/apps/preview-desktop/src/find.rs:82",
+      "note": "Edit > Find (Cmd+F) lists the matching lines in the sidebar and Find Next/Previous step through the pages; a hit marks its line, not the word, and is not highlighted on the page",
+      "wire": ""
     },
     {
       "feature": "Zoom in/out, Actual Size, Zoom to Fit",
@@ -150,108 +150,108 @@
       "area": "menu",
       "apple": "MainMenu.nib View > Zoom to Selection",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:782",
-      "note": "View > Zoom to Selection fills the canvas with the selection (model.rs zoom_to_rect, tested); built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "After the selection tool exists, set zoom/pan to the selection rect; View menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1195",
+      "note": "View > Zoom to Selection fills the canvas with the Select tool's rectangle; not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Rotate Left/Right",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Rotate Left/Right",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:419",
-      "note": "Rotate acts on PDF pages too (Document::set_turn on the shown page); the old note about PDFs being disabled is stale. Needs a lab check",
-      "wire": "Enable Rotate for PDF pages by calling Document::set_turn for the current page"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:845",
+      "note": "Rotate acts on PDF pages too (Document::set_turn on the shown page); needs a lab check",
+      "wire": ""
     },
     {
       "feature": "Flip Horizontal/Vertical",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Flip Horizontal/Vertical",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:841",
-      "note": "Tools > Flip Horizontal/Vertical mirror a picture along the axis that is shown (turn aware), mirror its markup, and are undoable. PDF pages are not flipped; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add flip flags beside turns in model.rs, apply in canvas::picture_for and export::finish; Tools menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1254",
+      "note": "Tools > Flip Horizontal and Flip Vertical mirror a picture and its markup, undoable. PDF pages are not flipped",
+      "wire": ""
     },
     {
       "feature": "Adjust Size (resample)",
       "area": "panel",
       "apple": "MainMenu.nib Tools > Adjust Size",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:660",
-      "note": "Tools > Adjust Size (Cmd+Option+I): the width, the width x height or a percentage is typed in the status line and the picture is resampled in place (bilinear), undoable. A single side keeps the shape; it is not a sheet with live fields; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add an Adjust Size sheet (width, height, keep ratio) that writes the resized picture; Tools menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:998",
+      "note": "Tools > Adjust Size (Cmd+Option+I) takes a width, a width x height or a percentage in the status line and resamples the picture; export-at-scale stays in the File menu. No sheet with a keep-ratio switch yet",
+      "wire": ""
     },
     {
       "feature": "Adjust Color",
       "area": "panel",
       "apple": "MainMenu.nib Tools > Adjust Color; PVAdjustColor.nib",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:656",
-      "note": "Four step items and reset, no sliders or levels",
-      "wire": "Replace the Adjust menu with an Adjust Color panel of sliders (exposure, contrast, saturation, temperature, sharpness) backed by Adjust in model.rs"
+      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:928",
+      "note": "Adjust > Show Adjust Color shows sliders for exposure, contrast, saturation and temperature on the right side; a drag is one undo step. Sharpness has no filter in the render engine yet; the Adjust menu steps stay",
+      "wire": ""
     },
     {
       "feature": "Remove Background",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Remove Background",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:856",
-      "note": "Tools > Remove Background clears the background colour that reaches the picture edge (corner vote, tolerance 24, pixels.rs remove_background). No segmentation: a subject on a plain background works, a photograph does not. PNG export keeps the alpha channel; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add a background-removal job (local segmentation or edge flood-fill) on the document worker; Tools menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1269",
+      "note": "Flood fill from the picture's edges with a tolerance; a background enclosed by the picture is not removed. Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Instant alpha / mask",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Mask",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:873",
-      "note": "Tools > Instant Alpha: a click clears the connected region of one colour (tolerance 24) to transparent. No drag-to-grow tolerance; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add a mask tool that clears a colour region to alpha; Tools menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1286",
+      "note": "Tools > Instant Alpha clears the connected region of one colour around the click to transparent, undoable; not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Markup shapes and notes",
       "area": "toolbar",
       "apple": "MainMenu.nib Tools > Annotate (Rectangle, Oval, Line, Arrow, Star, Polygon, Speech Bubble, Note)",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/pdfmarks.rs:113",
-      "note": "Highlight, Note, Rectangle, Rounded, Oval, Line and Arrow, drawn, burned into exports and saved as PDF Square/Circle/Line annotations; Star, Polygon and Bubble are not done; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add MarkKind variants Oval, Line, Arrow, Star, Polygon, Bubble in model.rs, draw in canvas.rs and write in pdfmarks.rs; list in Tools"
+      "bifrost": "springboard/apps/preview-desktop/src/model.rs:378",
+      "note": "Highlight, Note, Rectangle, Rounded, Oval, Line, Arrow, Star, Polygon and Speech Bubble are drawn, burned into exports and saved as annotations (Square, Circle, Line, Polygon). The speech bubble takes no text yet",
+      "wire": ""
     },
     {
       "feature": "Text markup: underline, strike-through",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Annotate > Underline/Strike Through Text",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/pdfmarks.rs:144",
-      "note": "Underline and Strike Through tools drag over a line of text and save Underline/StrikeOut annotations (the line follows the shown orientation). They are drag-based, not attached to a text selection, because the viewer has no text layer to select; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add underline/strike MarkKinds on the text-selection layer; Tools menu"
+      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:55",
+      "note": "Tools menu Underline and Strike Through draw along a rectangle's bottom or middle, saved as Underline and StrikeOut annotations. Not yet on a text selection, since the text layer has no word positions",
+      "wire": ""
     },
     {
       "feature": "Text box annotation",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Annotate > Text",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Left open: a text box must be drawn into raster exports too, and the viewer has no text renderer outside the UI kit",
-      "wire": "Add a Text mark kind with font/size/colour and inline editing; write as a free-text annotation in pdfmarks.rs"
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1607",
+      "note": "Tools > Text Box places a box at a click; the typed text is drawn in it and saved as a FreeText annotation in Helvetica (pdfmarks.rs:174). Text boxes are not burned into exported pictures yet. Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Signature",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Annotate > Signature",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:610",
-      "note": "Freehand Sign tool; no saved signature library",
-      "wire": "Store captured signatures in data_dir and offer a signature picker in the Sign tool"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:445",
+      "note": "Tools > Save Signature keeps the page's drawn strokes in a library of nine (signature.rs, data folder); Tools > Insert Signature places one centred at 30% of the page width, as one undo step. No signature picker panel yet",
+      "wire": ""
     },
     {
       "feature": "Redact",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Redact",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Add a Redact tool that blacks out and removes underlying content on PDF save in pdfmarks.rs"
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/model.rs:856",
+      "note": "Tools > Redact draws a black box that is burned into saved and exported pictures. Pictures only: a PDF keeps the text under a box, so the tool is refused there",
+      "wire": ""
     },
     {
       "feature": "Inspector (file info, metadata, keywords, annotations, encryption)",
@@ -267,18 +267,18 @@
       "area": "menu",
       "apple": "MainMenu.nib Tools > Show Magnifier",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:736",
-      "note": "Tools > Show Magnifier draws a 2.5x lens of the picture around the pointer while it moves over the canvas; markup under the lens is not enlarged; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Draw a magnified lens around the pointer on the canvas when toggled; Tools menu"
+      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:834",
+      "note": "View > Show Magnifier draws a round lens that enlarges the picture under the pointer; not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Show Location Info",
       "area": "menu",
       "apple": "MainMenu.nib Tools > Show Location Info",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:716",
-      "note": "Tools > Show Location Info reads the GPS position from a JPEG EXIF block (latitude and longitude as text); no map; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Read GPS EXIF and show it in the inspector"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1129",
+      "note": "Tools > Show Location Info reads the GPS EXIF block and shows it in the status line and the Inspector",
+      "wire": ""
     },
     {
       "feature": "Assign colour profile / soft proof",
@@ -303,27 +303,27 @@
       "area": "view",
       "apple": "MainMenu.nib View > Highlights and Notes, Bookmarks; PVSidebarHighlightsAndNotes.nib, PVSidebarBookmarks.nib",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:426",
-      "note": "View > Markup lists every mark by page with its note text, View > Bookmarks lists bookmarked pages (Go > Add Bookmark, Cmd+D); a click goes to the page. The list is not grouped by kind; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add Side::Notes listing marks per page and Side::Bookmarks with Add Bookmark (cmd+d) persisted in the sidecar"
+      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:519",
+      "note": "View > Markup lists every mark but strokes by page and View > Bookmarks lists bookmarked pages; a click goes to the page. Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Contact Sheet view",
       "area": "view",
       "apple": "MainMenu.nib View > Contact Sheet",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:762",
-      "note": "View > Contact Sheet (Cmd+2) shows every page thumbnail in a grid; a click picks the page, Escape returns; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Add a grid mode showing all page thumbnails in the canvas"
+      "bifrost": "springboard/apps/preview-desktop/src/canvas.rs:860",
+      "note": "View > Contact Sheet (Cmd+2) shows every page in a grid; a click picks a page. Settings can open PDFs as the contact sheet. Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Hide/Show Sidebar and Toolbar",
       "area": "menu",
       "apple": "MainMenu.nib View > Hide Sidebar, Hide Toolbar",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:95",
-      "note": "View > Hide/Show Sidebar (Cmd+Option+S); toolbar hide/show not done",
-      "wire": "Add a sidebar-hidden flag to Layout (canvas.rs:210) and a View menu toggle"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:201",
+      "note": "View > Hide Sidebar (Cmd+Option+S) and View > Hide Toolbar (Cmd+Option+T); the toolbar's height goes to the page. Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Continuous scroll / single / two pages",
@@ -339,27 +339,27 @@
       "area": "view",
       "apple": "MainMenu.nib View > Slideshow",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:743",
-      "note": "View > Slideshow (Shift+Cmd+F) shows the pages one after another in the window with no chrome; arrows, space and Return step, Escape ends it. It does not take over the whole screen: apps have no full-screen call yet; built on parity/team-d-preview; not yet verified on Midget",
-      "wire": "Full-screen page cycling with arrow keys; View menu"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:1156",
+      "note": "View > Slideshow (Shift+Cmd+F) shows the pages with arrows and Escape; not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Go: next/previous page, Go to Page",
       "area": "menu",
       "apple": "MainMenu.nib Go > Next/Previous, Go to Page; PVPDFPageNumberPanel.nib",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:295",
-      "note": "Go menu: First/Last Page, Go to Page (typed in status line); no sheet",
-      "wire": "Add a Go to Page sheet calling go_page (main.rs:390)"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:885",
+      "note": "Go menu: First/Last Page, Go to Page (number typed in the status line, not a sheet), Next and Previous",
+      "wire": ""
     },
     {
       "feature": "Back / Forward history",
       "area": "menu",
       "apple": "MainMenu.nib Go > Back, Forward",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:374",
-      "note": "Go > Back/Forward over visited pages (model.rs Trail)",
-      "wire": "Keep a page history in the view and add Go > Back/Forward"
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:868",
+      "note": "Go > Back and Forward over the pages visited (model.rs Trail); not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Pages: reorder, delete",
@@ -376,7 +376,7 @@
       "apple": "MainMenu.nib Edit > Insert > Page from File, Blank Page",
       "status": "gap",
       "bifrost": "",
-      "note": "Left open: the PDF writer (cg/pdf/writer.rs Edits) can reorder, rotate and annotate but cannot add pages",
+      "note": "Needs merging the pages of another PDF into the writer (document order and the object tree); not started",
       "wire": "Add an Insert submenu that merges pages of another PDF into the order in document.rs and pdfmarks::write_edited"
     },
     {
@@ -403,26 +403,26 @@
       "apple": "MainMenu.nib Edit > Speech",
       "status": "gap",
       "bifrost": "",
-      "note": "Left open: apps have no speech synthesis call; the shell reader is not reachable from an app",
+      "note": "The PC has no voice engine, so there is nothing to speak with (Books reads aloud by timing only)",
       "wire": "Send page text to the speech service; Edit > Speech submenu"
     },
     {
       "feature": "Settings: window mode, background, default PDF view, remember page, logical page numbers, image DPI",
       "area": "settings",
       "apple": "PVPreferences.nib General/Images/PDF panes",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No settings",
-      "wire": "Add a Settings window; store the last page in the sidecar and apply on open_path main.rs:82"
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:974",
+      "note": "Settings menu: Remember Last Page (the page is saved beside the markup) and Open PDFs as Contact Sheet, both kept in prefs.txt (prefs.rs). Not done: window mode, background, a default PDF display mode other than the two views, logical page numbers and image DPI",
+      "wire": ""
     },
     {
       "feature": "Settings: annotation author name",
       "area": "settings",
       "apple": "PVPreferences.nib Annotations",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Add an author-name pref and write it as annotation author in pdfmarks.rs"
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/pdfmarks.rs:46",
+      "note": "Settings > Annotation Author (typed in the status line) is written as /T on each annotation of a saved, exported or printed PDF. Not yet checked on the lab machine",
+      "wire": ""
     },
     {
       "feature": "Services: open images",
@@ -430,7 +430,7 @@
       "apple": "Info.plist NSServices",
       "status": "gap",
       "bifrost": "",
-      "note": "",
+      "note": "Needs a shell service registration for the services menu; not done",
       "wire": "Register an open-in-viewer service with the shell services menu"
     },
     {

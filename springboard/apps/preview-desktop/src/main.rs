@@ -16,8 +16,10 @@ mod model;
 mod pdfjob;
 mod pdfmarks;
 mod pixels;
+mod prefs;
 mod printjob;
 mod recents;
+mod signature;
 
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::proto::DocMode;
@@ -28,7 +30,9 @@ use document::Document;
 use export::Raster;
 use model::{Adjust, History, Mark, MarkKind, Norm, Pixels, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE, MARK_RED};
 use pdfjob::{Inbox, Job, Reply};
+use prefs::Prefs;
 use recents::Recents;
+use signature::Signature;
 use springboard::shell::books::engine;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -40,6 +44,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const MENU_OPEN: u32 = 0x5001;
 const MENU_CLEAR_RECENTS: u32 = 0x5002;
 const MENU_RECENT: u32 = 0x5010;
+/// Tools > Insert Signature: one item per saved signature, from this id on.
+const MENU_SIGNATURE: u32 = 0x5100;
+/// The size a text box is dragged out to, as a share of the page, when a click places it.
+const TEXT_BOX: (f32, f32) = (0.3, 0.06);
+/// The width an inserted signature takes, as a share of the page.
+const SIGNATURE_WIDTH: f32 = 0.3;
 /// The kinds of file the open panel offers.
 const OPEN_TYPES: [&str; 4] = ["pdf", "png", "jpg", "jpeg"];
 /// The type a JPEG has on the pasteboard (the PNG type is `bifrost_app::pasteboard::PNG`).
@@ -59,6 +69,8 @@ enum Gesture {
     Select { start: (f32, f32), now: (f32, f32) },
     /// Dragging the contact sheet up or down; a short press picks the page under it.
     Sheet { last: f32, start: (f32, f32) },
+    /// Dragging an Adjust Color slider. `before` is the document as it was when the drag began, for Undo.
+    Slider { which: usize, before: Option<Snapshot> },
 }
 
 /// A PDF on its way from its worker: the worker's job sender and the inbox its replies come back in.
@@ -115,6 +127,21 @@ struct Viewer {
     resizing: Option<String>,
     /// The quality of an exported JPEG, 1 to 100.
     jpeg_quality: u8,
+    /// Whether the toolbar is shown (View > Hide Toolbar).
+    toolbar: bool,
+    /// The Settings menu's choices, and the signature library.
+    prefs: Prefs,
+    signatures: Vec<Signature>,
+    /// The file a save is written for, until the worker has written the copy that replaces it.
+    pending_save: Option<PathBuf>,
+    /// The source page to show once the document is open, from the last time it was shown.
+    restore_page: Option<usize>,
+    /// The author's name being typed after Settings > Annotation Author.
+    authoring: Option<String>,
+    /// The status line to show once the file that is being opened again has arrived.
+    after_open: Option<String>,
+    /// Whether the Adjust Color sliders are shown on the right side.
+    color_panel: bool,
 }
 
 impl Viewer {
@@ -150,6 +177,14 @@ impl Viewer {
             found: Vec::new(),
             resizing: None,
             jpeg_quality: export::JPEG_QUALITY,
+            toolbar: true,
+            prefs: Prefs::default(),
+            signatures: Vec::new(),
+            pending_save: None,
+            restore_page: None,
+            authoring: None,
+            after_open: None,
+            color_panel: false,
         }
     }
 
@@ -163,7 +198,10 @@ impl Viewer {
         if !self.sidebar {
             lay.side = 0;
         }
-        if self.inspector {
+        if !self.toolbar {
+            lay.bar = 0;
+        }
+        if self.inspector || self.color_panel {
             lay.inspector = Layout::inspector_width(ui, w);
         }
         lay
@@ -215,6 +253,10 @@ impl Viewer {
 
     fn open_path(&mut self, path: &Path) {
         self.stop_editing();
+        self.save_position();
+        self.authoring = None;
+        self.pending_save = None;
+        self.after_open = None;
         self.doc = None;
         self.loading = None;
         self.cache = None;
@@ -234,6 +276,7 @@ impl Viewer {
         self.facts = inspector::read(path);
         self.status.clear();
         self.remember(path);
+        self.restore_page = if self.prefs.remember_page { document::load_position(&self.data_dir, path) } else { None };
         if matches!(engine::format_of(path), Some(engine::Format::Pdf)) {
             let (jobs, inbox) = pdfjob::spawn(path.to_path_buf());
             self.loading = Some(Loading { path: path.to_path_buf(), jobs, inbox });
@@ -253,6 +296,245 @@ impl Viewer {
         }
         self.recents.add(path);
         let _ = recents::save(&self.data_dir, &self.recents);
+    }
+
+    /// Writes the page the document is shown on, so it opens there again while Remember Last Page is on.
+    fn save_position(&self) {
+        if !self.prefs.remember_page || self.data_dir.as_os_str().is_empty() {
+            return;
+        }
+        if let (Some(doc), Some(src)) = (&self.doc, self.src()) {
+            let _ = document::save_position(&self.data_dir, &doc.path, src);
+        }
+    }
+
+    /// Saves the Settings menu's choices under the app's data folder.
+    fn save_prefs(&self) {
+        if !self.data_dir.as_os_str().is_empty() {
+            let _ = prefs::save(&self.data_dir, &self.prefs);
+        }
+    }
+
+    /// The author written into new markup: the name from Settings, or none.
+    fn author(&self) -> String {
+        self.prefs.author_name().unwrap_or("").to_string()
+    }
+
+    /// The file a save is written to before it replaces the document's file. It lives in the app's data folder.
+    fn saving_file(&self, path: &Path, ext: &str) -> PathBuf {
+        let dir = self.data_dir.join("save");
+        let _ = std::fs::create_dir_all(&dir);
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("document");
+        dir.join(format!("{stem}.{ext}"))
+    }
+
+    /// File > Save: the markup, page order and turns are written into the document's file, and the file is opened again.
+    /// A picture is written as a picture in the format of its file. A PDF is written by its worker and then copied over.
+    /// The copy is the one the window opened, for a file chosen in the open panel.
+    fn save_document(&mut self) {
+        self.stop_editing();
+        let Some(doc) = &self.doc else {
+            self.status = "There is nothing to save.".into();
+            return;
+        };
+        let path = doc.path.clone();
+        if doc.is_pdf {
+            let temp = self.saving_file(&path, "pdf");
+            let job = pdfmarks::save_job(path.clone(), temp, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author());
+            if doc.send(job) {
+                self.pending_save = Some(path);
+                self.status = "Saving".into();
+            } else {
+                self.status = "The document is not open.".into();
+            }
+            return;
+        }
+        let page = self.view.page;
+        let Some(src) = doc.source_of(page) else { return };
+        let Some(img) = doc.picture(page) else { return };
+        let raster = match path.extension().and_then(|e| e.to_str()) {
+            Some(ext) if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") => Raster::Jpeg(self.jpeg_quality),
+            _ => Raster::Png,
+        };
+        let out = export::finish(&img, &doc.marks, src, doc.turn_of(page), &self.adjust, 1.0);
+        let temp = self.saving_file(&path, raster.ext());
+        let written = export::write_image(&out, raster, &temp).and_then(|()| std::fs::copy(&temp, &path).map(|_| ()).map_err(|e| e.to_string()));
+        match written {
+            Ok(()) => {
+                let message = format!("Saved {}", name_of(&path));
+                self.reopen(&path, message);
+            }
+            Err(e) => self.status = format!("Save failed: {e}"),
+        }
+    }
+
+    /// The PDF worker wrote the saved copy: it replaces the file the document was opened from.
+    fn finish_save(&mut self, original: PathBuf, result: Result<PathBuf, String>) {
+        let copied = result.and_then(|temp| std::fs::copy(&temp, &original).map(|_| ()).map_err(|e| e.to_string()));
+        match copied {
+            Ok(()) => {
+                let message = format!("Saved {}", name_of(&original));
+                self.reopen(&original, message);
+            }
+            Err(e) => self.status = format!("Save failed: {e}"),
+        }
+    }
+
+    /// Opens `path` again. The markup, page order and turns are in the file now, so the document's markup is dropped
+    /// (the sidecar is emptied first) and the message is shown once the file is open.
+    fn reopen(&mut self, path: &Path, message: String) {
+        if let Some(doc) = &mut self.doc {
+            doc.marks.clear();
+        }
+        self.save();
+        self.open_path(path);
+        self.status = message.clone();
+        self.after_open = Some(message);
+    }
+
+    /// File > Revert to Saved: the file is opened again from disk, so every change since it was last saved goes.
+    fn revert_to_saved(&mut self) {
+        let Some(path) = self.doc.as_ref().map(|d| d.path.clone()) else {
+            self.status = "There is nothing to revert.".into();
+            return;
+        };
+        let message = format!("Reverted to the saved {}", name_of(&path));
+        self.reopen(&path, message);
+    }
+
+    /// Edit > Copy: the text of a PDF page (only the lines in the selection when there is one) or a picture as PNG. The
+    /// PDF worker reads the text and the text reaches the clipboard in `finish_copy`.
+    fn copy(&mut self, ctx: &Ctx) {
+        let Some(doc) = &self.doc else { return };
+        let page = self.view.page;
+        let Some(src) = doc.source_of(page) else { return };
+        if doc.is_pdf {
+            let band = self.selection_on_page().map(|sel| (sel.y, sel.y + sel.h));
+            let sent = doc.send(find::copy_job(src, band));
+            self.status = if sent { "Copying the text".into() } else { "The document is not open.".into() };
+            return;
+        }
+        let Some(img) = doc.picture(page) else { return };
+        let out = export::finish(&img, &doc.marks, src, doc.turn_of(page), &self.adjust, 1.0);
+        match export::png_bytes(&out) {
+            Some(bytes) => {
+                NativePasteboard::general().set_data(ctx, &bytes, PNG);
+                self.status = "Copied the picture".into();
+            }
+            None => self.status = "The picture could not be copied.".into(),
+        }
+    }
+
+    /// Puts the text the worker copied on the clipboard.
+    fn finish_copy(&mut self, ctx: &Ctx, text: String) {
+        if text.trim().is_empty() {
+            self.status = "There is no text to copy here.".into();
+            return;
+        }
+        ctx.set_pasteboard_string(&text);
+        let lines = text.lines().count();
+        self.status = format!("Copied {lines} {}", if lines == 1 { "line" } else { "lines" });
+    }
+
+    /// Edit > Select All: the whole shown page is selected.
+    fn select_all(&mut self) {
+        self.selection = self.src().map(|src| (src, Norm { x: 0.0, y: 0.0, w: 1.0, h: 1.0 }));
+    }
+
+    /// Tools > Save Signature: the drawings on the shown page become a signature in the library.
+    fn save_signature(&mut self) {
+        let Some(src) = self.src() else { return };
+        let strokes: Vec<Vec<(f32, f32)>> = self
+            .doc
+            .as_ref()
+            .map(|d| d.marks.iter().filter(|m| m.page == src && m.kind == MarkKind::Ink).map(|m| m.ink.clone()).collect())
+            .unwrap_or_default();
+        match signature::from_strokes(&strokes) {
+            Some(sig) => {
+                signature::add(&mut self.signatures, sig);
+                self.status = match signature::save(&self.data_dir, &self.signatures) {
+                    Ok(()) => format!("Saved signature {}", self.signatures.len()),
+                    Err(e) => format!("Could not save the signature: {e}"),
+                };
+            }
+            None => self.status = "Draw a signature with the Sign tool on this page first.".into(),
+        }
+    }
+
+    /// Tools > Clear Signatures: the library is emptied.
+    fn clear_signatures(&mut self) {
+        self.signatures.clear();
+        self.status = match signature::save(&self.data_dir, &self.signatures) {
+            Ok(()) => "Cleared the saved signatures.".into(),
+            Err(e) => format!("Could not clear the signatures: {e}"),
+        };
+    }
+
+    /// Tools > Insert Signature: the saved signature `index` goes in the middle of the shown page, as drawn strokes.
+    fn insert_signature(&mut self, index: usize) {
+        let Some(sig) = self.signatures.get(index).cloned() else { return };
+        let Some(src) = self.src() else {
+            self.status = "Open a page to insert a signature on.".into();
+            return;
+        };
+        if let Some(doc) = &mut self.doc {
+            for points in signature::centred(&sig, 0.5, 0.5, SIGNATURE_WIDTH) {
+                doc.marks.push(stroke(src, points));
+            }
+        }
+        self.save();
+        self.status = format!("Inserted signature {}", index + 1);
+    }
+
+    /// Settings > Annotation Author: the status line takes the name; Return keeps it and Escape leaves it as it was.
+    fn show_authoring(&mut self) {
+        self.status = format!("Annotation author: {}|", self.authoring.as_deref().unwrap_or(""));
+    }
+
+    /// A key while the author's name is being typed.
+    fn key_author(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Text(t) => {
+                if let Some(name) = &mut self.authoring {
+                    name.extend(t.chars().filter(|c| !c.is_control()));
+                }
+            }
+            KeyInput::Code(8) => {
+                if let Some(name) = &mut self.authoring {
+                    name.pop();
+                }
+            }
+            KeyInput::Code(13) => {
+                let name = self.authoring.take().unwrap_or_default();
+                self.prefs.author = prefs::sanitize(&name);
+                self.save_prefs();
+                self.status = if self.prefs.author.is_empty() { "New markup has no author name.".into() } else { format!("Annotation author: {}", self.prefs.author) };
+                return true;
+            }
+            KeyInput::Code(27) => {
+                self.authoring = None;
+                self.status.clear();
+                return true;
+            }
+            _ => return false,
+        }
+        self.show_authoring();
+        true
+    }
+
+    /// Shows the page a PDF was last shown on (Remember Last Page), or the contact sheet when that is the default. Called
+    /// once a PDF has opened.
+    fn restore_view(&mut self) {
+        let restored = self.restore_page.take().and_then(|src| self.doc.as_ref()?.display_of(src));
+        if let Some(page) = restored {
+            let count = self.doc.as_ref().map_or(0, |d| d.count());
+            self.view.go(page, count);
+        }
+        self.sync_turn();
+        if self.prefs.contact_sheet {
+            self.mode = Mode::Contact;
+            self.contact_scroll = 0.0;
+        }
     }
 
     /// Shows the open panel for PDFs and pictures.
@@ -290,7 +572,7 @@ impl Viewer {
 
     /// Takes what the PDF worker has sent: the open result, drawn pages and the results of saves and exports.
     /// True when the window needs a new frame.
-    fn pump(&mut self) -> bool {
+    fn pump(&mut self, ctx: &Ctx) -> bool {
         let mut changed = false;
         if let Some(loading) = self.loading.take() {
             let mut opened = None;
@@ -305,8 +587,8 @@ impl Viewer {
                     changed = true;
                     let Loading { path, jobs, inbox } = loading;
                     self.doc = Some(document::from_pdf(&path, &self.data_dir, info, jobs, inbox));
-                    self.status.clear();
-                    self.sync_turn();
+                    self.status = self.after_open.take().unwrap_or_default();
+                    self.restore_view();
                 }
                 Some(Err(e)) => {
                     changed = true;
@@ -315,11 +597,15 @@ impl Viewer {
             }
         }
         let mut results = None;
+        let mut saved = None;
+        let mut copied = None;
         if let Some(doc) = &self.doc {
             let (arrived, replies) = doc.take_replies();
             changed |= arrived;
             for reply in replies {
                 match reply {
+                    // the copy File > Save made is the one that replaces the document's file
+                    Reply::Written(result) if self.pending_save.is_some() => saved = Some(result),
                     Reply::Written(result) => {
                         self.status = match result {
                             Ok(path) if path.extension().is_some_and(|e| e == "pdf") => format!("Saved {}", path.display()),
@@ -329,9 +615,16 @@ impl Viewer {
                     }
                     Reply::Printed(status) => self.status = status,
                     Reply::Found(query, hits) => results = Some((query, hits)),
+                    Reply::Copied(text) => copied = Some(text),
                     _ => {}
                 }
             }
+        }
+        if let (Some(result), Some(original)) = (saved, self.pending_save.take()) {
+            self.finish_save(original, result);
+        }
+        if let Some(text) = copied {
+            self.finish_copy(ctx, text);
         }
         if let Some((query, hits)) = results {
             self.show_results(query, hits);
@@ -650,6 +943,51 @@ impl Viewer {
             }
             Action::FindNext | Action::FindPrevious => {
                 self.find_step(action == Action::FindNext);
+                true
+            }
+            Action::Save => {
+                self.save_document();
+                true
+            }
+            Action::RevertToSaved => {
+                self.revert_to_saved();
+                true
+            }
+            // Copy needs the window's context to reach the clipboard, so menu_action runs it
+            Action::CopyText => true,
+            Action::SelectAll => {
+                self.select_all();
+                true
+            }
+            Action::SaveSignature => {
+                self.save_signature();
+                true
+            }
+            Action::ClearSignatures => {
+                self.clear_signatures();
+                true
+            }
+            Action::ToggleToolbar => {
+                self.toolbar = !self.toolbar;
+                true
+            }
+            Action::ToggleRememberPage => {
+                self.prefs.remember_page = !self.prefs.remember_page;
+                self.save_prefs();
+                true
+            }
+            Action::ToggleContactDefault => {
+                self.prefs.contact_sheet = !self.prefs.contact_sheet;
+                self.save_prefs();
+                true
+            }
+            Action::SetAuthor => {
+                self.authoring = Some(self.prefs.author.clone());
+                self.show_authoring();
+                true
+            }
+            Action::ShowColorPanel => {
+                self.color_panel = !self.color_panel;
                 true
             }
             _ => self.track(|v| v.act_edit(ui, lay, action)),
@@ -1056,7 +1394,18 @@ impl Viewer {
             | Action::Find
             | Action::FindNext
             | Action::FindPrevious
-            | Action::AdjustSize => {}
+            | Action::AdjustSize
+            | Action::Save
+            | Action::RevertToSaved
+            | Action::CopyText
+            | Action::SelectAll
+            | Action::SaveSignature
+            | Action::ClearSignatures
+            | Action::ToggleToolbar
+            | Action::ToggleRememberPage
+            | Action::ToggleContactDefault
+            | Action::SetAuthor
+            | Action::ShowColorPanel => {}
             Action::QualityHigh | Action::QualityMedium | Action::QualityLow => {
                 if let Some(quality) = action.jpeg_quality() {
                     self.jpeg_quality = quality;
@@ -1099,7 +1448,7 @@ impl Viewer {
         let Some(doc) = &self.doc else { return };
         if doc.is_pdf {
             let target = printjob::scratch_file(&self.data_dir, &doc.path, "pdf");
-            let job = printjob::pdf_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone());
+            let job = printjob::pdf_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author());
             self.status = if doc.send(job) { "Printing".into() } else { "The document is not open.".into() };
             return;
         }
@@ -1146,7 +1495,7 @@ impl Viewer {
             return;
         }
         let target = export::target(&doc.path, "pdf");
-        let job = pdfmarks::save_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone());
+        let job = pdfmarks::save_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author());
         self.status = if doc.send(job) { "Saving the PDF".into() } else { "The document is not open.".into() };
     }
 
@@ -1164,6 +1513,8 @@ impl Viewer {
                 self.track(|v| v.touch_down(ui, &lay, x, y)) || self.loupe_on
             }
             TouchKind::Move => self.touch_move(ui, &lay, x, y) || (self.loupe_on && over_canvas),
+            // a slider drag records its own undo step when it ends, from the state it began with
+            TouchKind::Up | TouchKind::Cancel if matches!(self.gesture, Some(Gesture::Slider { .. })) => self.touch_up(ui, &lay, x, y),
             TouchKind::Up | TouchKind::Cancel => self.track(|v| v.touch_up(ui, &lay, x, y)),
         }
     }
@@ -1175,6 +1526,13 @@ impl Viewer {
         }
         if let Some(action) = canvas::button_hit(ui, lay, x, y) {
             return self.act(ui, lay, action);
+        }
+        // the Adjust Color panel takes the clicks on its side; its value changes while the finger moves
+        if self.color_panel && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
+            if let Some(which) = canvas::slider_hit(ui, lay, 4, x, y) {
+                self.gesture = Some(Gesture::Slider { which, before: self.snapshot() });
+            }
+            return true;
         }
         if y < lay.bar as f32 {
             return false;
@@ -1218,6 +1576,10 @@ impl Viewer {
             self.gesture = Some(Gesture::Sheet { last: y, start: (x, y) });
             return true;
         }
+        if self.tool == Tool::Redact && self.doc.as_ref().is_some_and(|d| d.is_pdf) {
+            self.status = "Redact works on pictures. A PDF page keeps what is under a box.".into();
+            return true;
+        }
         match self.tool {
             Tool::Select => {
                 self.gesture = Some(Gesture::Select { start: (x, y), now: (x, y) });
@@ -1237,6 +1599,18 @@ impl Viewer {
                     let rect = Norm { x: a.0, y: a.1, w: 0.0, h: 0.0 };
                     if let Some(doc) = &mut self.doc {
                         doc.marks.push(Mark { kind: MarkKind::Note, page: src, rect, color: MARK_BLUE, text: String::new(), ink: Vec::new() });
+                        self.editing = Some(doc.marks.len() - 1);
+                    }
+                    self.save();
+                }
+            }
+            Some(MarkKind::Text) => {
+                // a click places a text box at the point and the typing that follows fills it
+                if let (Some(p), Some(src)) = (self.placed(lay), self.src()) {
+                    let a = canvas::to_source(&p, self.view.quarters, x, y);
+                    let rect = Norm { x: a.0, y: a.1, w: TEXT_BOX.0, h: TEXT_BOX.1 };
+                    if let Some(doc) = &mut self.doc {
+                        doc.marks.push(Mark { kind: MarkKind::Text, page: src, rect, color: MARK_BLUE, text: String::new(), ink: Vec::new() });
                         self.editing = Some(doc.marks.len() - 1);
                     }
                     self.save();
@@ -1289,7 +1663,21 @@ impl Viewer {
                 self.contact_scroll = (self.contact_scroll - delta).clamp(0.0, most);
                 true
             }
+            Some(Gesture::Slider { which, .. }) => {
+                let which = *which;
+                self.drag_slider(ui, lay, which, x);
+                true
+            }
             None => false,
+        }
+    }
+
+    /// Sets Adjust Color slider `which` from the point `x` across its track.
+    fn drag_slider(&mut self, ui: &Ui, lay: &Layout, which: usize, x: f32) {
+        let sliders = self.adjust.sliders();
+        if let Some(slider) = sliders.get(which) {
+            let value = canvas::slider_value(ui, lay, slider, x);
+            self.adjust.set_slider(which, value);
         }
     }
 
@@ -1329,6 +1717,14 @@ impl Viewer {
                     }
                 }
             }
+            Gesture::Slider { which, before } => {
+                self.drag_slider(ui, lay, which, x);
+                if let Some(before) = before {
+                    if self.snapshot().as_ref() != Some(&before) {
+                        self.history.record(before);
+                    }
+                }
+            }
             Gesture::Sheet { start, .. } => {
                 let moved = (x - start.0).abs() + (y - start.1).abs();
                 if moved < 4.0 {
@@ -1362,6 +1758,9 @@ impl Viewer {
     }
 
     fn key(&mut self, ctx: &Ctx, key: KeyInput) -> bool {
+        if self.authoring.is_some() {
+            return self.key_author(&key);
+        }
         if self.mode == Mode::Slideshow {
             return self.key_slideshow(&key);
         }
@@ -1485,6 +1884,10 @@ fn item_labelled(action: Action, label: &str, enabled: bool, checked: bool) -> A
         Action::GoForward => m.key("cmd+alt+f"),
         Action::GoToPage => m.key("cmd+alt+g"),
         Action::AddBookmark => m.key("cmd+d"),
+        Action::Save => m.key("cmd+s"),
+        Action::CopyText => m.key("cmd+c"),
+        Action::SelectAll => m.key("cmd+a"),
+        Action::ToggleToolbar => m.key("cmd+alt+t"),
         _ => m,
     };
     m
@@ -1500,6 +1903,8 @@ impl App for Viewer {
         if self.data_dir.as_os_str().is_empty() {
             self.data_dir = ctx.data_dir.clone();
             self.recents = recents::load(&self.data_dir);
+            self.prefs = prefs::load(&self.data_dir);
+            self.signatures = signature::load(&self.data_dir);
         }
     }
 
@@ -1527,10 +1932,16 @@ impl App for Viewer {
             Tool::Arrow,
             Tool::Sign,
             Tool::Alpha,
+            Tool::Text,
+            Tool::Star,
+            Tool::Polygon,
+            Tool::Bubble,
+            Tool::Redact,
         ];
+        // Instant Alpha and Redact change the pixels of a picture, so they are for pictures only
         let mut tool_items: Vec<AppMenuItem> = tools
             .into_iter()
-            .map(|t| item(Action::UseTool(t), if t == Tool::Alpha { is_picture } else { open }, self.tool == t))
+            .map(|t| item(Action::UseTool(t), if matches!(t, Tool::Alpha | Tool::Redact) { is_picture } else { open }, self.tool == t))
             .collect();
         tool_items.push(AppMenuItem::separator());
         tool_items.extend([
@@ -1539,6 +1950,15 @@ impl App for Viewer {
             item(Action::FlipVertical, is_picture, false),
             item(Action::AdjustSize, is_picture, false),
             item(Action::RemoveBackground, is_picture, false),
+            AppMenuItem::separator(),
+            item(Action::SaveSignature, open, false),
+            AppMenuItem::submenu("Insert Signature").enabled(open && !self.signatures.is_empty()),
+        ]);
+        for i in 0..self.signatures.len() {
+            tool_items.push(AppMenuItem::new(MENU_SIGNATURE + i as u32, &format!("Signature {}", i + 1)).enabled(open).depth(1));
+        }
+        tool_items.push(item(Action::ClearSignatures, !self.signatures.is_empty(), false));
+        tool_items.extend([
             AppMenuItem::separator(),
             item_labelled(Action::ToggleMagnifier, if self.loupe_on { "Hide Magnifier" } else { "Show Magnifier" }, open, self.loupe_on),
             item_labelled(Action::Inspector, if self.inspector { "Hide Inspector" } else { "Show Inspector" }, open, self.inspector),
@@ -1571,6 +1991,8 @@ impl App for Viewer {
         file_items.push(AppMenuItem::separator());
         file_items.push(item(Action::ExportPdf, pdf, false));
         file_items.push(AppMenuItem::separator());
+        file_items.push(item(Action::Save, open, false));
+        file_items.push(item(Action::RevertToSaved, open, false));
         file_items.push(item(Action::RevertToOriginal, open, false));
         let sidebar_label = if self.sidebar { "Hide Sidebar" } else { "Show Sidebar" };
         vec![
@@ -1584,6 +2006,9 @@ impl App for Viewer {
                     item(Action::Find, pdf, false),
                     item(Action::FindNext, pdf, false),
                     item(Action::FindPrevious, pdf, false),
+                    AppMenuItem::separator(),
+                    item(Action::CopyText, open, false),
+                    item(Action::SelectAll, open, false),
                 ],
             },
             AppMenu {
@@ -1603,6 +2028,7 @@ impl App for Viewer {
                     item(Action::Slideshow, open, false),
                     AppMenuItem::separator(),
                     AppMenuItem::new(Action::ToggleSidebar.id(), sidebar_label).key("cmd+alt+s").enabled(open),
+                    item_labelled(Action::ToggleToolbar, if self.toolbar { "Hide Toolbar" } else { "Show Toolbar" }, open, false),
                     item(Action::ShowPages, open, self.side == Side::Pages),
                     item(Action::ShowOutline, outline, self.side == Side::Outline),
                     item(Action::ShowNotes, open, self.side == Side::Notes),
@@ -1644,6 +2070,22 @@ impl App for Viewer {
                     item(Action::Saturate, open, false),
                     item(Action::Desaturate, open, false),
                     item(Action::ResetColour, open && !self.adjust.is_identity(), false),
+                    AppMenuItem::separator(),
+                    item_labelled(
+                        Action::ShowColorPanel,
+                        if self.color_panel { "Hide Adjust Color" } else { "Show Adjust Color" },
+                        open,
+                        self.color_panel,
+                    ),
+                ],
+            },
+            AppMenu {
+                title: "Settings".into(),
+                items: vec![
+                    item(Action::ToggleRememberPage, true, self.prefs.remember_page),
+                    item(Action::ToggleContactDefault, true, self.prefs.contact_sheet),
+                    AppMenuItem::separator(),
+                    item(Action::SetAuthor, true, false),
                 ],
             },
         ]
@@ -1653,7 +2095,17 @@ impl App for Viewer {
         if self.open_menu(ctx, id) {
             return true;
         }
+        if (MENU_SIGNATURE..MENU_SIGNATURE + signature::MAX_SIGNATURES as u32).contains(&id) {
+            let index = (id - MENU_SIGNATURE) as usize;
+            self.track(|v| v.insert_signature(index));
+            return true;
+        }
         let Some(action) = Action::from_id(id) else { return false };
+        // Copy reaches the clipboard through the window's context, which only this entry point has
+        if action == Action::CopyText {
+            self.copy(ctx);
+            return true;
+        }
         let lay = self.layout(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
         self.act(&ctx.ui, &lay, action)
     }
@@ -1698,19 +2150,21 @@ impl App for Viewer {
         true
     }
 
-    fn tick(&mut self, _ctx: &Ctx, _t: f64) -> bool {
-        self.pump()
+    fn tick(&mut self, ctx: &Ctx, _t: f64) -> bool {
+        self.pump(ctx)
     }
 
     fn suspend(&mut self, _ctx: &Ctx) {
         self.stop_editing();
         self.save();
+        self.save_position();
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
         let lay = self.layout(&ctx.ui, s.w as i32, s.h as i32);
         let draft = self.draft(&lay);
         let rows = if self.inspector && self.mode != Mode::Slideshow { self.inspector_rows() } else { Vec::new() };
+        let sliders = (self.color_panel && lay.inspector > 0 && self.mode != Mode::Slideshow).then(|| self.adjust.sliders());
         let scene = Scene {
             doc: self.doc.as_ref(),
             view: self.view,
@@ -1726,6 +2180,7 @@ impl App for Viewer {
             inspector: (lay.inspector > 0).then_some(rows.as_slice()),
             contact_scroll: self.contact_scroll,
             found: &self.found,
+            color: sliders.as_ref().map(|s| s.as_slice()),
         };
         canvas::draw(s, &ctx.ui, &lay, &scene, &mut self.cache);
         let mut d = Damage::new(s.w, s.h);
@@ -1966,6 +2421,55 @@ mod tests {
         assert_eq!(color_for(MarkKind::Strike), MARK_RED);
         assert_eq!(color_for(MarkKind::Underline), MARK_BLUE);
         assert_eq!(color_for(MarkKind::Arrow), MARK_BLUE);
+    }
+
+    #[test]
+    fn a_saved_signature_keeps_every_stroke_and_goes_back_in_as_strokes() {
+        let mut v = viewer_with(Image { w: 40, h: 40, px: vec![0xff00_0000; 1600] });
+        v.data_dir = std::env::temp_dir().join(format!("viewer-sign-{}", std::process::id()));
+        if let Some(doc) = &mut v.doc {
+            doc.marks.push(stroke(0, vec![(0.1, 0.1), (0.3, 0.2)]));
+            doc.marks.push(stroke(0, vec![(0.2, 0.5), (0.4, 0.6), (0.6, 0.5)]));
+        }
+        v.save_signature();
+        assert_eq!(v.signatures.len(), 1);
+        assert_eq!(v.signatures[0].strokes.len(), 2, "both strokes are kept apart");
+        v.track(|v| v.insert_signature(0));
+        let marks = &v.doc.as_ref().unwrap().marks;
+        assert_eq!(marks.len(), 4, "the two drawn strokes and the two inserted ones");
+        assert!(marks[2..].iter().all(|m| m.kind == MarkKind::Ink && m.page == 0));
+        assert_eq!(marks[3].ink.len(), 3);
+        undo(&mut v);
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 2, "insert is one edit");
+        cleanup(&v);
+    }
+
+    #[test]
+    fn the_author_is_typed_into_the_status_line_and_kept_on_return() {
+        let mut v = Viewer::new();
+        v.data_dir = std::env::temp_dir().join(format!("viewer-author-{}", std::process::id()));
+        v.authoring = Some(String::new());
+        assert!(v.key_author(&KeyInput::Text("Ana".into())));
+        assert!(v.key_author(&KeyInput::Code(8)));
+        assert!(v.key_author(&KeyInput::Text("a Lind".into())));
+        assert_eq!(v.status, "Annotation author: Ana Lind|");
+        assert!(v.key_author(&KeyInput::Code(13)));
+        assert!(v.authoring.is_none());
+        assert_eq!(v.author(), "Ana Lind");
+        let _ = std::fs::remove_dir_all(&v.data_dir);
+    }
+
+    #[test]
+    fn a_document_reopens_on_the_page_it_was_last_shown_on_and_the_contact_sheet_can_be_the_default() {
+        let mut v = Viewer::new();
+        v.doc = Some(document::tests_support::pictures(3));
+        v.restore_page = Some(2);
+        v.restore_view();
+        assert_eq!(v.view.page, 2);
+        assert!(v.restore_page.is_none());
+        v.prefs.contact_sheet = true;
+        v.restore_view();
+        assert_eq!(v.mode, Mode::Contact);
     }
 
     #[test]

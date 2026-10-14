@@ -54,6 +54,8 @@ pub enum Reply {
     Printed(String),
     /// A search: the text searched for and the lines that hold it, in page order.
     Found(String, Vec<Hit>),
+    /// The text copied from a page: its lines, one to a line of the string.
+    Copied(String),
 }
 
 /// A job for the worker: it runs on the worker thread with the parsed file and returns its reply.

@@ -53,12 +53,17 @@ pub fn finish(img: &Image, marks: &[Mark], src: usize, turns: u8, adjust: &Adjus
     out
 }
 
+/// The picture as PNG bytes, transparency kept. None when it cannot be encoded.
+pub fn png_bytes(img: &Image) -> Option<Vec<u8>> {
+    encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default())
+}
+
 /// Encodes `img` and writes it to `target`. A PNG keeps transparency; a JPEG has none, so a transparent picture is laid
 /// over white first.
 pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), String> {
     let unencoded = || "The picture could not be encoded.".to_string();
     let bytes = match raster {
-        Raster::Png => encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default()).ok_or_else(unencoded)?,
+        Raster::Png => png_bytes(img).ok_or_else(unencoded)?,
         Raster::Jpeg(quality) => {
             let flat;
             let opaque = if pixels::has_alpha(img) {

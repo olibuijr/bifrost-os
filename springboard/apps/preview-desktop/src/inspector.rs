@@ -78,7 +78,7 @@ pub fn human_size(bytes: u64) -> String {
 
 /// A count of the markup by kind: "2 highlights, 1 note", or "None".
 pub fn annotation_summary(marks: &[Mark]) -> String {
-    const KINDS: [MarkKind; 10] = [
+    const KINDS: [MarkKind; 15] = [
         MarkKind::Highlight,
         MarkKind::Note,
         MarkKind::Underline,
@@ -89,6 +89,11 @@ pub fn annotation_summary(marks: &[Mark]) -> String {
         MarkKind::Line,
         MarkKind::Arrow,
         MarkKind::Ink,
+        MarkKind::Star,
+        MarkKind::Polygon,
+        MarkKind::Bubble,
+        MarkKind::Text,
+        MarkKind::Redact,
     ];
     let parts: Vec<String> = KINDS
         .iter()

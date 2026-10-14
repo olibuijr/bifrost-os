@@ -5,6 +5,7 @@
 
 use crate::pdfjob::{self, Job, Pdf, Reply};
 use springboard::cg::pdf::extract::{Extractor, Piece};
+use springboard::cg::pdf::page::PageBox;
 
 /// The characters of the line a hit shows in the sidebar.
 const SNIPPET_CHARS: usize = 60;
@@ -83,6 +84,51 @@ pub fn find_job(query: String) -> Job {
         let hits = search(pdf, &query);
         Reply::Found(query, hits)
     })
+}
+
+/// The text lines of source page `src` with their baselines, in drawing order. A missing page has none.
+pub fn page_lines(pdf: &Pdf, src: usize) -> Vec<(f32, String)> {
+    let Some(source) = pdf.pages.get(src) else { return Vec::new() };
+    let mut extractor = Extractor::new(&pdf.doc);
+    extractor.page(source);
+    extractor
+        .pieces
+        .into_iter()
+        .filter_map(|piece| match piece {
+            Piece::Line { y, text, .. } => Some((y, text)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether a baseline at `y` (user space) lies inside `band`, a top and a bottom fraction of the page from its top edge
+/// (0 at the top, 1 at the bottom). `None` takes every line; a page with no height takes every line too.
+pub fn in_band(y: f32, media_top: f64, media_bottom: f64, band: Option<(f32, f32)>) -> bool {
+    let height = media_top - media_bottom;
+    match band {
+        Some((top, bottom)) if height > 0.0 => {
+            let v = ((media_top - y as f64) / height) as f32;
+            v >= top && v <= bottom
+        }
+        _ => true,
+    }
+}
+
+/// The text copied from source page `src`: its lines within `band` (see `in_band`), one to a line.
+pub fn copy_text(pdf: &Pdf, src: usize, band: Option<(f32, f32)>) -> String {
+    let Some(source) = pdf.pages.get(src) else { return String::new() };
+    let media = source.rect(PageBox::Media);
+    page_lines(pdf, src)
+        .into_iter()
+        .filter(|(y, _)| in_band(*y, media[3], media[1], band))
+        .map(|(_, text)| text)
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
+/// A job that copies the text of source page `src` within `band` and replies with it.
+pub fn copy_job(src: usize, band: Option<(f32, f32)>) -> Job {
+    pdfjob::run(move |pdf: &Pdf| Reply::Copied(copy_text(pdf, src, band)))
 }
 
 /// The shown page of the next (or previous) hit after `current`, from the shown pages of the hits (in any order). It
@@ -173,5 +219,14 @@ mod tests {
         assert_eq!(summary("x", 1), "1 match for \u{201c}x\u{201d}");
         assert_eq!(summary("x", 4), "4 matches for \u{201c}x\u{201d}");
         assert!(summary("x", MAX_HITS).starts_with("500 or more"));
+    }
+
+    #[test]
+    fn a_copy_takes_the_lines_inside_the_selected_band_from_the_top_of_the_page() {
+        // a page 800 points high: the top is 800, the bottom 0
+        assert!(in_band(750.0, 800.0, 0.0, Some((0.0, 0.1))), "a line near the top");
+        assert!(!in_band(400.0, 800.0, 0.0, Some((0.0, 0.1))), "a line in the middle");
+        assert!(in_band(400.0, 800.0, 0.0, None), "no selection takes every line");
+        assert!(in_band(400.0, 0.0, 0.0, Some((0.0, 0.1))), "a page with no height takes every line");
     }
 }

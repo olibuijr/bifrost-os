@@ -316,6 +316,25 @@ pub fn load_bookmarks(data_dir: &Path, path: &Path) -> Vec<usize> {
     std::fs::read_to_string(bookmarks_path(data_dir, path)).map(|t| model::parse_bookmarks(&t)).unwrap_or_default()
 }
 
+/// The file the page a document was last shown on is kept in, beside its markup.
+fn position_path(data_dir: &Path, path: &Path) -> PathBuf {
+    sidecar_path(data_dir, path).with_extension("page")
+}
+
+/// The source page `path` was last shown on, when that was saved.
+pub fn load_position(data_dir: &Path, path: &Path) -> Option<usize> {
+    std::fs::read_to_string(position_path(data_dir, path)).ok()?.trim().parse().ok()
+}
+
+/// Saves the source page `path` is shown on, so it opens there again.
+pub fn save_position(data_dir: &Path, path: &Path, src: usize) -> std::io::Result<()> {
+    let file = position_path(data_dir, path);
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(file, format!("{src}\n"))
+}
+
 /// Saves the bookmarks for `path`. With none left the file is removed.
 pub fn save_bookmarks(data_dir: &Path, path: &Path, pages: &[usize]) -> std::io::Result<()> {
     let file = bookmarks_path(data_dir, path);
@@ -459,6 +478,16 @@ mod tests {
         assert_eq!(doc.sizes, vec![(4, 2)]);
         assert_eq!(doc.revision, 2);
         assert_eq!(doc.picture_rc().map(|i| (i.w, i.h)), Some((4, 2)));
+    }
+
+    #[test]
+    fn the_shown_page_is_remembered_beside_the_markup() {
+        let dir = std::env::temp_dir().join(format!("viewer-position-{}", std::process::id()));
+        let path = Path::new("/a/c.pdf");
+        assert_eq!(load_position(&dir, path), None);
+        save_position(&dir, path, 4).expect("saved");
+        assert_eq!(load_position(&dir, path), Some(4));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
