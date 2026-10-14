@@ -5,8 +5,11 @@
 //! URIs, `VALUE=uri` parameters), skips `KIND:group` cards (groups are not people), and keeps the postal address, which
 //! the model does not parse. The store holds one phone, one email and one address per contact, so the first of each
 //! is kept in the store and the later phones and emails are kept as extra values (`extras.rs`), up to `MAX_EXTRAS`
-//! per contact; the rest are counted. Pure std.
+//! per contact; the rest are counted. The card fields in `details.rs` (nickname, job title, department, URL, birthday,
+//! pronouns, phonetic name, related name, profile and the company flag) are read from and written to their own
+//! properties. Pure std.
 
+use crate::details::{self, CardDetails, Detail, Details};
 use crate::extras::{Extra, Extras, ValueKind, MAX_EXTRAS};
 use crate::names;
 use bifrost_app::controls::vcard::{self, Card, Labeled};
@@ -25,6 +28,8 @@ pub struct Import {
     pub contacts: Vec<Contact>,
     /// The extra values of each person in `contacts`, in the same order.
     pub values: Vec<Vec<Extra>>,
+    /// The card fields of each person in `contacts`, in the same order.
+    pub details: Vec<CardDetails>,
     /// Cards the contact store cannot hold: no name or company, or a field longer than the store allows.
     pub invalid: usize,
     /// Phone numbers and emails after the first of each, beyond the `MAX_EXTRAS` a contact keeps.
@@ -40,12 +45,12 @@ pub fn import(text: &str) -> Result<Import, String> {
     let mut addresses = Vec::new();
     for block in blocks(text) {
         match normalize(&block) {
-            Some((lines, address)) => {
+            Some((lines, address, card_details)) => {
                 for line in lines {
                     normalized.push_str(&line);
                     normalized.push_str("\r\n");
                 }
-                addresses.push(address);
+                addresses.push((address, card_details));
             }
             None => out.groups += 1,
         }
@@ -56,12 +61,13 @@ pub fn import(text: &str) -> Result<Import, String> {
         vcard::Error::TooLarge => "The file is too large to import".to_string(),
         vcard::Error::Malformed => "A card in the file does not begin and end properly".to_string(),
     })?;
-    for (card, address) in cards.iter().zip(addresses) {
+    for (card, (address, card_details)) in cards.iter().zip(addresses) {
         let (contact, values, dropped) = contact_of(card, &address);
         out.extra_values += dropped;
         if contact.valid() {
             out.contacts.push(contact);
             out.values.push(values);
+            out.details.push(card_details);
         } else {
             out.invalid += 1;
         }
@@ -69,20 +75,49 @@ pub fn import(text: &str) -> Result<Import, String> {
     Ok(out)
 }
 
+/// What an export writes besides the contact's name and numbers (Settings > vCard).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExportOptions {
+    /// Write the notes of each card.
+    pub notes: bool,
+}
+
+impl Default for ExportOptions {
+    fn default() -> Self {
+        ExportOptions { notes: true }
+    }
+}
+
 /// Writes contacts as one vCard text, in the chosen version, with their extra values. Each card ends with CRLF.
 pub fn export(contacts: &[Contact], values: &Extras, version: Version) -> String {
+    export_with(contacts, values, &Details::default(), ExportOptions::default(), version)
+}
+
+/// Writes contacts as one vCard text with their extra values, card fields and the export options.
+pub fn export_with(contacts: &[Contact], values: &Extras, card_details: &Details, options: ExportOptions, version: Version) -> String {
     let mut out = String::new();
     for contact in contacts {
         let extra = values.get(contact.id);
-        let mut lines = logical_lines(&card_of(contact, extra).to_vcard());
-        // The addresses go just before the last line, END:VCARD, in order.
-        let addresses = std::iter::once(contact.address.trim())
+        let own = card_details.of(contact.id);
+        let mut lines = logical_lines(&card_of(contact, extra, options.notes).to_vcard());
+        // The addresses and the card fields go just before the last line, END:VCARD, in order.
+        let mut added: Vec<String> = std::iter::once(contact.address.trim())
             .chain(extra.iter().filter(|e| e.kind == ValueKind::Address).map(|e| e.value.trim()))
-            .filter(|address| !address.is_empty());
-        let end = lines.len().saturating_sub(1);
-        for (i, address) in addresses.enumerate() {
-            lines.insert(end + i, format!("ADR:;;{};;;;", escape(address)));
+            .filter(|address| !address.is_empty())
+            .map(|address| format!("ADR:;;{};;;;", escape(address)))
+            .collect();
+        added.extend(detail_lines(&own));
+        let department = own.get(Detail::Department);
+        if !department.is_empty() {
+            match lines.iter().position(|line| line.starts_with("ORG:")) {
+                Some(at) => lines[at] = format!("{};{}", lines[at], escape(department)),
+                None => added.push(format!("ORG:;{}", escape(department))),
+            }
         }
+        let end = lines.len().saturating_sub(1);
+        let tail = lines.split_off(end);
+        lines.extend(added);
+        lines.extend(tail);
         for line in lines {
             let line = match version {
                 Version::V3 => line,
@@ -92,6 +127,29 @@ pub fn export(contacts: &[Contact], values: &Extras, version: Version) -> String
         }
     }
     out
+}
+
+/// The properties for a card's fields and company flag (the department goes in `ORG`, written by the caller).
+fn detail_lines(own: &CardDetails) -> Vec<String> {
+    let mut lines = Vec::new();
+    if own.company {
+        lines.push("KIND:org".to_string());
+    }
+    for (detail, value) in own.filled() {
+        let line = match detail {
+            Detail::Nickname => format!("NICKNAME:{}", escape(value)),
+            Detail::JobTitle => format!("TITLE:{}", escape(value)),
+            Detail::Department => continue,
+            Detail::Url => format!("URL:{value}"),
+            Detail::Birthday => format!("BDAY:{value}"),
+            Detail::Pronouns => format!("X-PRONOUNS:{}", escape(value)),
+            Detail::Phonetic => format!("X-PHONETIC-NAME:{}", escape(value)),
+            Detail::Related => format!("RELATED:{}", escape(value)),
+            Detail::Profile => format!("X-SOCIALPROFILE:{value}"),
+        };
+        lines.push(line);
+    }
+    lines
 }
 
 /// Joins continuation lines (starting with a space or a tab) to the line before them.
@@ -139,10 +197,11 @@ fn blocks(text: &str) -> Vec<Vec<String>> {
     out
 }
 
-/// One card's lines rewritten for the 3.0 model, and its postal address. `None` for a group card.
-fn normalize(block: &[String]) -> Option<(Vec<String>, String)> {
+/// One card's lines rewritten for the 3.0 model, its postal address and its card fields. `None` for a group card.
+fn normalize(block: &[String]) -> Option<(Vec<String>, String, CardDetails)> {
     let mut lines = Vec::with_capacity(block.len());
     let mut address = String::new();
+    let mut own = CardDetails::default();
     for line in block {
         let Some((head, raw)) = line.split_once(':') else {
             lines.push(line.clone());
@@ -153,6 +212,7 @@ fn normalize(block: &[String]) -> Option<(Vec<String>, String)> {
         if name == "KIND" && raw.trim().eq_ignore_ascii_case("group") {
             return None;
         }
+        read_detail(&mut own, &name, raw);
         let mut out_head = name.clone();
         for param in parts {
             let param = param.replace('"', "");
@@ -174,7 +234,69 @@ fn normalize(block: &[String]) -> Option<(Vec<String>, String)> {
         };
         lines.push(format!("{out_head}:{value}"));
     }
-    Some((lines, address))
+    Some((lines, address, own))
+}
+
+/// Reads one property into the card fields. The first value of a field wins.
+fn read_detail(own: &mut CardDetails, name: &str, raw: &str) {
+    let field = match name {
+        "NICKNAME" => Detail::Nickname,
+        "TITLE" => Detail::JobTitle,
+        "URL" => Detail::Url,
+        "BDAY" => Detail::Birthday,
+        "X-PRONOUNS" | "PRONOUNS" => Detail::Pronouns,
+        "X-PHONETIC-NAME" => Detail::Phonetic,
+        "RELATED" => Detail::Related,
+        "X-SOCIALPROFILE" => Detail::Profile,
+        "ORG" => {
+            let department = structured(raw).get(1).cloned().unwrap_or_default();
+            if own.get(Detail::Department).is_empty() {
+                own.set(Detail::Department, &department);
+            }
+            return;
+        }
+        "KIND" => {
+            if raw.trim().eq_ignore_ascii_case("org") {
+                own.company = true;
+            }
+            return;
+        }
+        _ => return,
+    };
+    if !own.get(field).is_empty() {
+        return;
+    }
+    let value = match field {
+        Detail::Url | Detail::Profile => raw.trim().to_string(),
+        Detail::Birthday => details::normalize_birthday(&unescape_text(raw)),
+        _ => unescape_text(raw),
+    };
+    own.set(field, &value);
+}
+
+/// The `;`-separated components of a structured value, each unescaped.
+fn structured(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => match chars.next() {
+                Some('n') | Some('N') => cur.push('\n'),
+                Some(other) => cur.push(other),
+                None => {}
+            },
+            ';' => out.push(std::mem::take(&mut cur)),
+            _ => cur.push(c),
+        }
+    }
+    out.push(cur);
+    out
+}
+
+/// A single text value with its escapes undone; a bare `;` is kept.
+fn unescape_text(raw: &str) -> String {
+    structured(raw).join(";")
 }
 
 /// Drops a `tel:` or `mailto:` scheme from a 4.0 URI value.
@@ -288,7 +410,7 @@ fn type_of(label: &str) -> &str {
     }
 }
 
-fn card_of(contact: &Contact, extra: &[Extra]) -> Card {
+fn card_of(contact: &Contact, extra: &[Extra], notes: bool) -> Card {
     let (given, family) = names::split(&contact.name);
     let mut phones = if contact.phone.trim().is_empty() {
         vec![]
@@ -315,7 +437,7 @@ fn card_of(contact: &Contact, extra: &[Extra]) -> Card {
         organization: contact.company.trim().to_string(),
         phones,
         emails,
-        note: contact.notes.clone(),
+        note: if notes { contact.notes.clone() } else { String::new() },
     }
 }
 
@@ -501,5 +623,75 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Friends\r\nMEMBER:urn:uuid:0001\r
         assert!(text.contains("ADR:;;Gata 1;;;;\r\n") && text.contains("ADR:;;Gata 2;;;;\r\n"), "{text}");
         let got = import(&text).unwrap();
         assert_eq!(got.values[0], vec![Extra { kind: ValueKind::Phone, label: "work".into(), value: "+354 555 9999".into() }]);
+    }
+
+    #[test]
+    fn card_fields_are_read_from_their_properties() {
+        let text = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Anna Lindqvist\r\nN:Lindqvist;Anna;;;\r\nORG:Acme;Sales\r\nNICKNAME:Annie\r\n\
+TITLE:Engineer\r\nURL:https://example.org/anna\r\nBDAY:19900517\r\nX-PRONOUNS:she/her\r\nX-PHONETIC-NAME:AN-uh\r\n\
+RELATED:Bo Berg\r\nX-SOCIALPROFILE;type=chat:https://chat.example/anna\r\nKIND:org\r\nEND:VCARD\r\n";
+        let got = import(text).unwrap();
+        let card = &got.details[0];
+        assert_eq!(got.contacts[0].company, "Acme");
+        assert_eq!(card.get(Detail::Department), "Sales");
+        assert_eq!(card.get(Detail::Nickname), "Annie");
+        assert_eq!(card.get(Detail::JobTitle), "Engineer");
+        assert_eq!(card.get(Detail::Url), "https://example.org/anna");
+        assert_eq!(card.get(Detail::Birthday), "1990-05-17");
+        assert_eq!(card.get(Detail::Pronouns), "she/her");
+        assert_eq!(card.get(Detail::Phonetic), "AN-uh");
+        assert_eq!(card.get(Detail::Related), "Bo Berg");
+        assert_eq!(card.get(Detail::Profile), "https://chat.example/anna");
+        assert!(card.company, "KIND:org marks a company");
+    }
+
+    #[test]
+    fn card_fields_round_trip_through_3_0_and_4_0() {
+        let contact = sample();
+        let mut details = Details::default();
+        let mut card = CardDetails::default();
+        card.company = true;
+        for (field, value) in [
+            (Detail::Nickname, "Óli, the dev"),
+            (Detail::JobTitle, "Engineer"),
+            (Detail::Department, "R&D; Labs"),
+            (Detail::Url, "https://example.org/a,b"),
+            (Detail::Birthday, "1990-05-17"),
+            (Detail::Pronouns, "he/him"),
+            (Detail::Phonetic, "OH-lee"),
+            (Detail::Related, "Anna"),
+            (Detail::Profile, "https://chat.example/oli"),
+        ] {
+            assert!(card.set(field, value));
+        }
+        details.set(contact.id, card.clone());
+        for version in [Version::V3, Version::V4] {
+            let text = export_with(std::slice::from_ref(&contact), &Extras::default(), &details, ExportOptions::default(), version);
+            let got = import(&text).unwrap();
+            assert_eq!(got.contacts, vec![contact.clone()], "{version:?}");
+            assert_eq!(got.details, vec![card.clone()], "{version:?}\n{text}");
+        }
+    }
+
+    #[test]
+    fn a_department_without_a_company_still_gets_an_org_line() {
+        let mut contact = sample();
+        contact.company = String::new();
+        let mut details = Details::default();
+        let mut card = CardDetails::default();
+        card.set(Detail::Department, "Sales");
+        details.set(contact.id, card);
+        let text = export_with(&[contact], &Extras::default(), &details, ExportOptions::default(), Version::V3);
+        assert!(text.contains("ORG:;Sales\r\n"), "{text}");
+    }
+
+    #[test]
+    fn leaving_the_notes_out_drops_the_note_line_only() {
+        let options = ExportOptions { notes: false };
+        let text = export_with(&[sample()], &Extras::default(), &Details::default(), options, Version::V3);
+        assert!(!text.contains("NOTE"), "{text}");
+        assert!(text.contains("TEL;TYPE=work:+354 555 1234\r\n"), "{text}");
+        let with = export_with(&[sample()], &Extras::default(), &Details::default(), ExportOptions::default(), Version::V3);
+        assert!(with.contains("NOTE:"), "{with}");
     }
 }

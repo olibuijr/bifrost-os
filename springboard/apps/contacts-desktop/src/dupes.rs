@@ -1,10 +1,12 @@
 //! Duplicate detection for contacts. Two contacts are duplicates when they share an email address, or the same phone
 //! number (compared by its last seven digits, so "+354 555 1234" and "5551234" match), or the same name with no
-//! conflicting phone or email. Names match ignoring case and accents. Pure std.
+//! conflicting phone or email. Names match ignoring case and accents. `merge` folds a group of duplicates into its first
+//! card. Pure std.
 
-use crate::extras::{Extra, ValueKind};
+use crate::details::{CardDetails, Details};
+use crate::extras::{Extra, Extras, ValueKind, MAX_EXTRAS};
 use crate::names;
-use springboard::shell::contactstore::Contact;
+use springboard::shell::contactstore::{Contact, LABELS, MAX_NOTES};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn email_key(c: &Contact) -> String {
@@ -111,81 +113,152 @@ pub fn has_duplicate(existing: &[Contact], candidate: &Contact) -> bool {
     existing.iter().any(|c| is_duplicate(c, candidate))
 }
 
-/// Folds `others` into `keep`. An empty field of the kept card takes the other card's value; a value that differs
-/// is returned as an extra value under the label the other card gave it, so nothing is lost. Notes are joined and a
-/// favourite stays a favourite. Values that repeat what the kept card already holds are dropped.
-pub fn merge(keep: &Contact, others: &[Contact]) -> (Contact, Vec<Extra>) {
-    let mut card = keep.clone();
-    let mut spare: Vec<Extra> = Vec::new();
-    for other in others {
-        if card.name.trim().is_empty() {
-            card.name = other.name.clone();
+/// What folding a group of duplicates into one card produced.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Merged {
+    /// The card that stays: the first card with the others' fields folded in.
+    pub keep: Contact,
+    /// The extra values of the kept card.
+    pub extras: Vec<Extra>,
+    /// The card fields of the kept card.
+    pub details: CardDetails,
+    /// The identifiers of the cards that are deleted.
+    pub removed: Vec<u64>,
+    /// Values that did not fit on the kept card (a card keeps `MAX_EXTRAS` extra values and a note of `MAX_NOTES`).
+    pub dropped: usize,
+}
+
+/// Two values of one kind that name the same thing: phone numbers by their last seven digits (or, with no digits, the
+/// text), emails and addresses ignoring case.
+fn same_value(kind: ValueKind, a: &str, b: &str) -> bool {
+    let (a, b) = (a.trim(), b.trim());
+    if kind != ValueKind::Phone {
+        return a.to_lowercase() == b.to_lowercase();
+    }
+    let tail = |text: &str| {
+        let digits: String = text.chars().filter(char::is_ascii_digit).collect();
+        if digits.is_empty() {
+            return text.to_lowercase();
         }
-        if card.company.trim().is_empty() {
-            card.company = other.company.clone();
+        digits[digits.len().saturating_sub(7)..].to_string()
+    };
+    tail(a) == tail(b)
+}
+
+/// The card being built by a merge.
+struct Folded {
+    keep: Contact,
+    extras: Vec<Extra>,
+    details: CardDetails,
+    dropped: usize,
+}
+
+impl Folded {
+    fn has(&self, kind: ValueKind, value: &str) -> bool {
+        let store = match kind {
+            ValueKind::Phone => &self.keep.phone,
+            ValueKind::Email => &self.keep.email,
+            ValueKind::Address => &self.keep.address,
+        };
+        (!store.trim().is_empty() && same_value(kind, store, value))
+            || self.extras.iter().any(|e| e.kind == kind && same_value(kind, &e.value, value))
+    }
+
+    /// Adds a phone, email or address of another card: into the store field when the kept card has none, otherwise as an
+    /// extra value, unless the card already has it.
+    fn add(&mut self, kind: ValueKind, label_index: u8, value: &str) {
+        let value = value.trim();
+        if value.is_empty() || self.has(kind, value) {
+            return;
         }
-        card.favorite |= other.favorite;
-        let notes = other.notes.trim();
-        if !notes.is_empty() && !card.notes.contains(notes) {
-            card.notes = if card.notes.trim().is_empty() {
-                notes.to_string()
+        let k = kind.index();
+        let label_index = label_index % LABELS[k].len() as u8;
+        let slot = match kind {
+            ValueKind::Phone => &mut self.keep.phone,
+            ValueKind::Email => &mut self.keep.email,
+            ValueKind::Address => &mut self.keep.address,
+        };
+        if slot.trim().is_empty() {
+            *slot = value.to_string();
+            self.keep.labels[k] = label_index;
+            return;
+        }
+        let extra = Extra { kind, label: LABELS[k][label_index as usize].to_string(), value: value.to_string() };
+        if self.extras.len() < MAX_EXTRAS && extra.well_formed() {
+            self.extras.push(extra);
+        } else {
+            self.dropped += 1;
+        }
+    }
+
+    fn fold(&mut self, other: &Contact, other_extras: &[Extra], other_details: &CardDetails) {
+        if self.keep.name.trim().is_empty() {
+            self.keep.name = other.name.clone();
+        }
+        if self.keep.company.trim().is_empty() {
+            self.keep.company = other.company.clone();
+        }
+        self.keep.favorite |= other.favorite;
+        let note = other.notes.trim();
+        if !note.is_empty() && !self.keep.notes.contains(note) {
+            let joined = if self.keep.notes.trim().is_empty() {
+                note.to_string()
             } else {
-                format!("{}\n{notes}", card.notes.trim_end())
+                format!("{}\n\n{note}", self.keep.notes.trim_end())
             };
-        }
-        let kinds = [ValueKind::Phone, ValueKind::Email, ValueKind::Address];
-        for (k, kind) in kinds.into_iter().enumerate() {
-            let value = [&other.phone, &other.email, &other.address][k].trim().to_string();
-            if value.is_empty() {
-                continue;
+            if joined.chars().count() <= MAX_NOTES {
+                self.keep.notes = joined;
+            } else {
+                self.dropped += 1;
             }
-            let own = match k {
-                0 => &mut card.phone,
-                1 => &mut card.email,
-                _ => &mut card.address,
-            };
-            if own.trim().is_empty() {
-                *own = value;
-                card.labels[k] = other.labels[k];
-            } else if own.trim().to_lowercase() != value.to_lowercase()
-                && !spare.iter().any(|e| e.kind == kind && e.value.to_lowercase() == value.to_lowercase())
-            {
-                let labels = springboard::shell::contactstore::LABELS[k];
-                let label = labels[other.labels[k] as usize % labels.len()].to_string();
-                spare.push(Extra { kind, label, value });
+        }
+        self.add(ValueKind::Phone, other.labels[0], &other.phone);
+        self.add(ValueKind::Email, other.labels[1], &other.email);
+        self.add(ValueKind::Address, other.labels[2], &other.address);
+        for extra in other_extras {
+            let k = extra.kind.index();
+            let at = LABELS[k].iter().position(|l| *l == extra.label).unwrap_or(LABELS[k].len() - 1);
+            self.add(extra.kind, at as u8, &extra.value);
+        }
+        self.details.company |= other_details.company;
+        for (detail, value) in other_details.filled() {
+            if self.details.get(detail).is_empty() {
+                self.details.set(detail, value);
             }
         }
     }
-    (card, spare)
+}
+
+/// Folds the cards `ids` into the first of them. The first card keeps its name, company and favorite mark; fields it
+/// lacks are taken from the others, phones, emails and addresses it does not already have become extra values, the
+/// notes are joined, and the card fields it lacks are taken over. `None` when fewer than two of the cards exist, or the
+/// folded card would not be valid.
+pub fn merge(contacts: &[Contact], values: &Extras, card_details: &Details, ids: &[u64]) -> Option<Merged> {
+    let cards: Vec<&Contact> = ids.iter().filter_map(|id| contacts.iter().find(|c| c.id == *id)).collect();
+    let (first, rest) = cards.split_first()?;
+    if rest.is_empty() {
+        return None;
+    }
+    let mut folded = Folded { keep: (*first).clone(), extras: values.get(first.id).to_vec(), details: card_details.of(first.id), dropped: 0 };
+    for other in rest {
+        folded.fold(other, values.get(other.id), &card_details.of(other.id));
+    }
+    if !folded.keep.valid() {
+        return None;
+    }
+    Some(Merged {
+        keep: folded.keep,
+        extras: folded.extras,
+        details: folded.details,
+        removed: rest.iter().map(|c| c.id).collect(),
+        dropped: folded.dropped,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn merge_fills_gaps_and_keeps_differing_values_as_extras() {
-        let keep = c(1, "Anna As", "111 1111", "");
-        let mut other = c(2, "Anna As", "222 2222", "anna@x.is");
-        other.notes = "met at fair".into();
-        other.favorite = true;
-        let (card, spare) = merge(&keep, &[other]);
-        assert_eq!(card.id, 1);
-        assert_eq!(card.phone, "111 1111");
-        assert_eq!(card.email, "anna@x.is");
-        assert_eq!(card.notes, "met at fair");
-        assert!(card.favorite);
-        assert_eq!(spare.len(), 1);
-        assert_eq!(spare[0].value, "222 2222");
-        assert!(spare[0].well_formed());
-    }
-
-    #[test]
-    fn merge_drops_repeated_values() {
-        let keep = c(1, "Anna", "111", "A@x.is");
-        let (_, spare) = merge(&keep, &[c(2, "Anna", "111", "a@x.is"), c(3, "Anna", "111", "")]);
-        assert!(spare.is_empty());
-    }
+    use crate::details::Detail;
 
     fn c(id: u64, name: &str, phone: &str, email: &str) -> Contact {
         Contact { id, name: name.into(), phone: phone.into(), email: email.into(), ..Default::default() }
@@ -233,5 +306,96 @@ mod tests {
         assert_eq!(duplicate_ids(&list), BTreeSet::from([1, 2, 3, 4]));
         assert!(has_duplicate(&list, &c(9, "Dan Dahl", "", "")));
         assert!(!has_duplicate(&list, &c(9, "Eva Eld", "", "")));
+    }
+
+    #[test]
+    fn a_merge_keeps_the_first_card_and_fills_what_it_lacks() {
+        let mut first = c(1, "Anna As", "", "anna@x.is");
+        first.labels = [0, 1, 2];
+        let mut second = c(2, "A. As", "555 0100", "");
+        second.company = "Acme".into();
+        second.favorite = true;
+        second.address = "Gata 1".into();
+        second.labels = [2, 0, 1];
+        let merged = merge(&[first, second], &Extras::default(), &Details::default(), &[1, 2]).unwrap();
+        assert_eq!(merged.removed, vec![2]);
+        let keep = &merged.keep;
+        assert_eq!((keep.id, keep.name.as_str()), (1, "Anna As"), "the first card keeps its name");
+        assert_eq!((keep.phone.as_str(), keep.email.as_str()), ("555 0100", "anna@x.is"));
+        assert_eq!((keep.company.as_str(), keep.address.as_str()), ("Acme", "Gata 1"));
+        assert!(keep.favorite);
+        assert_eq!(keep.labels, [2, 1, 1], "the phone and address bring their labels; the email stays home");
+        assert!(merged.extras.is_empty());
+    }
+
+    #[test]
+    fn different_values_become_extra_values_and_the_same_ones_do_not() {
+        let first = c(1, "Anna As", "+354 555 0100", "anna@x.is");
+        let mut second = c(2, "Anna As", "5550100", "ANNA@x.is");
+        second.address = "Gata 1".into();
+        let mut third = c(3, "Anna As", "555 0200", "anna@work.is");
+        third.labels = [2, 1, 2];
+        let mut values = Extras::default();
+        assert!(values.add(3, Extra { kind: ValueKind::Phone, label: "home".into(), value: "555 0300".into() }));
+        let merged = merge(&[first, second, third], &values, &Details::default(), &[1, 2, 3]).unwrap();
+        assert_eq!(merged.removed, vec![2, 3]);
+        let found: Vec<(ValueKind, &str, &str)> = merged.extras.iter().map(|e| (e.kind, e.label.as_str(), e.value.as_str())).collect();
+        assert_eq!(
+            found,
+            vec![
+                (ValueKind::Phone, "work", "555 0200"),
+                (ValueKind::Email, "work", "anna@work.is"),
+                (ValueKind::Phone, "home", "555 0300"),
+            ],
+            "the same phone and email are not added again"
+        );
+        assert_eq!(merged.keep.address, "Gata 1", "the empty address is filled from the second card");
+    }
+
+    #[test]
+    fn notes_are_joined_once_and_card_fields_are_taken_over() {
+        let mut first = c(1, "Anna As", "", "");
+        first.notes = "Met at a fair".into();
+        let mut second = c(2, "Anna As", "", "");
+        second.notes = "Likes tea".into();
+        let mut third = c(3, "Anna As", "", "");
+        third.notes = "Met at a fair".into();
+        let mut one = CardDetails::default();
+        one.set(Detail::Nickname, "Annie");
+        let mut two = CardDetails::default();
+        two.set(Detail::Nickname, "An");
+        two.set(Detail::JobTitle, "Engineer");
+        two.company = true;
+        let mut details = Details::default();
+        details.set(1, one);
+        details.set(2, two);
+        let merged = merge(&[first, second, third], &Extras::default(), &details, &[1, 2, 3]).unwrap();
+        assert_eq!(merged.keep.notes, "Met at a fair\n\nLikes tea", "a note the card already has is not repeated");
+        assert_eq!(merged.details.get(Detail::Nickname), "Annie", "the first card's field wins");
+        assert_eq!(merged.details.get(Detail::JobTitle), "Engineer");
+        assert!(merged.details.company);
+    }
+
+    #[test]
+    fn values_beyond_the_limits_are_counted_not_lost_silently() {
+        let mut all = vec![c(1, "Anna As", "100", "")];
+        for i in 0..8u64 {
+            all.push(c(10 + i, "Anna As", &format!("20{i}"), ""));
+        }
+        let ids: Vec<u64> = all.iter().map(|card| card.id).collect();
+        let merged = merge(&all, &Extras::default(), &Details::default(), &ids).unwrap();
+        assert_eq!(merged.extras.len(), MAX_EXTRAS);
+        assert_eq!(merged.dropped, 2);
+        assert_eq!(merged.removed.len(), 8);
+    }
+
+    #[test]
+    fn a_merge_needs_two_cards_that_exist() {
+        let list = [c(1, "Anna As", "", ""), c(2, "Bo Berg", "", "")];
+        assert!(merge(&list, &Extras::default(), &Details::default(), &[1]).is_none());
+        assert!(merge(&list, &Extras::default(), &Details::default(), &[1, 9]).is_none());
+        assert!(merge(&list, &Extras::default(), &Details::default(), &[]).is_none());
+        let merged = merge(&list, &Extras::default(), &Details::default(), &[2, 1]).unwrap();
+        assert_eq!(merged.keep.id, 2, "the first id given is the card that stays");
     }
 }

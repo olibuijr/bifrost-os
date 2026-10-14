@@ -76,6 +76,12 @@ impl Sync {
         done
     }
 
+    /// File > Refresh Accounts: makes the next `poll` start a sync at once instead of waiting for the interval. A sync
+    /// that is already running finishes first.
+    pub fn refresh(&mut self) {
+        self.last = None;
+    }
+
     /// Call from `service_reply`. True when `request` was the password this sync asked for.
     pub fn reply(&mut self, request: u32, result: &Result<Json, String>) -> bool {
         match &self.asking {
@@ -162,6 +168,15 @@ mod tests {
         assert_eq!(first_account(&all, Service::Calendars).unwrap().id, "cal");
         assert_eq!(first_account(&all, Service::Contacts).unwrap().id, "book");
         assert!(first_account(&all, Service::Mail).is_none());
+    }
+
+    #[test]
+    fn refresh_makes_the_next_poll_due_at_once() {
+        let mut sync = Sync::new(Service::Contacts);
+        sync.last = Some(1_000.0);
+        assert!(sync.last.map_or(true, |last| 2_000.0 - last < EVERY_MS), "a second later nothing is due");
+        sync.refresh();
+        assert!(sync.last.map_or(true, |last| 2_000.0 - last >= EVERY_MS), "after a refresh the sync is due");
     }
 
     #[test]
