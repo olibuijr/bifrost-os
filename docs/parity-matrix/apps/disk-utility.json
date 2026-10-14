@@ -45,9 +45,9 @@
    "area": "menu",
    "apple": "File > Get Info",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:MENU_INFO",
-   "note": "File > Get Info (cmd+I) opens a sheet with all facts (model, parent disk, image file). Not a separate window and no UUID or block size yet (the scan does not read them).",
-   "wire": "Add File > Get Info (cmd+I) opening a window listing all lsblk -O fields for the node."
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:301",
+   "note": "Get Info (cmd+I) still opens a sheet, not a separate window, but is wider and now adds lsblk facts: UUID, partition UUID and name, partition type and map, disk UUID, logical and physical block size, rotational, transport, vendor, serial number, WWN and firmware revision (model.rs extra_rows, probe.rs read_lsblk). built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "wire": "Open the info as its own window once the SDK has secondary windows; the sheet lists the useful lsblk fields, not all of them."
   },
   {
    "feature": "Mount / Unmount / Eject",
@@ -63,9 +63,9 @@
    "area": "panel",
    "apple": "SUEraseSheetController.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:Ask::Erase",
-   "note": "Disk menu picks ext4, exFAT or FAT32; a volume keeps its old name when valid. No name text field (the sheet kit has no text input), no NTFS or btrfs (the disk helper lacks them), no MBR scheme.",
-   "wire": "Extend the erase sheet with a Name text field, Format popup (ext4, exFAT, FAT32, NTFS, btrfs) and Scheme popup (GPT/MBR) for disks, feeding DiskRequest::EraseDisk fs/label."
+   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:90",
+   "note": "Erase opens a form sheet with a Name text field, a Format choice (ext4, exFAT, FAT32, NTFS, btrfs) and, for a whole disk, a Scheme choice (GUID Partition Map or Master Boot Record), then the confirmation; EraseDisk carries the scheme (core disk_format::erase_disk, parted for a DOS table). built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "wire": "Verify the DOS-table erase and the NTFS and btrfs formats on a scratch disk on the lab machine."
   },
   {
    "feature": "First Aid (check / repair)",
@@ -89,10 +89,10 @@
    "feature": "Restore (copy a volume onto another)",
    "area": "panel",
    "apple": "SURestoreSheetController.nib, Disk > Restore",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs a new privileged request in the disk helper (dd/partclone with progress) that cannot be built here.",
-   "wire": "Add a Restore sheet picking source volume or image; privd request running dd/partclone with progress."
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:133",
+   "note": "Disk > Restore lists the volumes that fit (attach a disk image first to restore from it) and sends DiskRequest::RestoreVolume; core disk_format::restore_volume plans dd with fsync after the checks (both sides unmounted, destination writable and large enough, no overlap) and privd serves disk.restore_volume. No progress bar, only the footer's Restoring word; the file system is not grown when the destination is larger. built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "wire": "Stream the copy progress to the footer, and grow the destination file system after a restore onto a larger volume."
   },
   {
    "feature": "Rename volume",
@@ -117,9 +117,9 @@
    "area": "menu",
    "apple": "File > Open Disk Image",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:28",
-   "note": "Detach Disk Image exists; no open/attach.",
-   "wire": "Add File > Open Disk Image... using the SDK open panel and a losetup -P attach through disk_session."
+   "bifrost": "springboard/apps/diskutil-desktop/src/flow.rs:97",
+   "note": "File > Open Disk Image (cmd+O) shows the open panel (documents permission) and attaches the chosen image read-only through hdiutil attach, which binds a loop device and mounts it (flow.rs opened_path, images.rs attach_plan). Detach Disk Image already existed. built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "wire": "Verify on the lab machine that the panel's file resolves to a path the attach tool accepts; offer read-write attach."
   },
   {
    "feature": "Convert / Resize image, Change Password",
@@ -152,10 +152,10 @@
    "feature": "RAID Assistant",
    "area": "panel",
    "apple": "SURAIDAssistantWindowController.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs an mdadm request in the disk helper.",
-   "wire": "mdadm-based RAID assistant window: choose type, members, create; privd request."
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:153",
+   "note": "Disk > RAID Assistant: level (RAID 0, 1, 5, 6, 10), array name and tickable members in a form sheet; DiskRequest::CreateRaid plans mdadm --create (core disk_format::create_raid: minimum members, unmounted, no overlap, free name) and privd serves disk.create_raid. A created array is not listed in the sidebar (md devices are hidden), and there is no assemble, add or remove of members. built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "wire": "List assembled arrays (show md devices in the sidebar) and add stop, assemble and member add or remove actions."
   },
   {
    "feature": "Show in file manager",

@@ -268,6 +268,104 @@ pub fn equal_parts_mib(bytes: u64, count: usize) -> Vec<u64> {
     sizes
 }
 
+/// Breaks `text` into lines of at most `width` characters at spaces, keeping its own line breaks. A word longer than the
+/// width gets a line to itself. An alert sheet draws one line per `\n` and cuts what does not fit, so its message is
+/// wrapped here first.
+pub fn wrap_text(text: &str, width: usize) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    for paragraph in text.split('\n') {
+        let mut line = String::new();
+        for word in paragraph.split_whitespace() {
+            if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > width {
+                lines.push(std::mem::take(&mut line));
+            }
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+        lines.push(line);
+    }
+    lines.join("\n")
+}
+
+/// Reads the `KEY="value"` pairs of the line `lsblk -P` prints for a device. Values hold `\xNN` escapes for bytes that
+/// are not safe to print (a quote is `\x22`), which are decoded here.
+pub fn parse_lsblk_pairs(text: &str) -> Vec<(String, String)> {
+    let line = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    let mut pairs = Vec::new();
+    let mut rest = line.trim_start();
+    while let Some(eq) = rest.find("=\"") {
+        let key = rest[..eq].trim();
+        let body = &rest[eq + 2..];
+        let Some(end) = body.find('"') else { break };
+        pairs.push((key.to_string(), unescape_lsblk(&body[..end])));
+        rest = body[end + 1..].trim_start();
+    }
+    pairs
+}
+
+/// Decodes the `\xNN` escapes of an `lsblk -P` value.
+fn unescape_lsblk(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = if bytes[i] == b'\\' && bytes.get(i + 1) == Some(&b'x') { text.get(i + 2..i + 4).and_then(|h| u8::from_str_radix(h, 16).ok()) } else { None };
+        match hex {
+            Some(byte) => {
+                out.push(byte);
+                i += 4;
+            }
+            None => {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The `lsblk` fields Get Info adds to the info pane's rows, in the order they are listed, with the labels they show.
+const LSBLK_FIELDS: [(&str, &str); 14] = [
+    ("UUID", "UUID"),
+    ("PARTUUID", "Partition UUID"),
+    ("PARTLABEL", "Partition name"),
+    ("PARTTYPENAME", "Partition type"),
+    ("PTTYPE", "Partition map"),
+    ("PTUUID", "Disk UUID"),
+    ("LOG-SEC", "Logical block size"),
+    ("PHY-SEC", "Physical block size"),
+    ("ROTA", "Rotational"),
+    ("TRAN", "Transport"),
+    ("VENDOR", "Vendor"),
+    ("SERIAL", "Serial number"),
+    ("WWN", "WWN"),
+    ("REV", "Firmware revision"),
+];
+
+/// The rows Get Info adds from the pairs `parse_lsblk_pairs` read: the identifiers, block sizes and drive facts that the
+/// scan of `/sys` does not give. Empty fields are left out.
+pub fn extra_rows(pairs: &[(String, String)]) -> Vec<(String, String)> {
+    LSBLK_FIELDS
+        .iter()
+        .filter_map(|(key, label)| {
+            let value = pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v.trim()).filter(|v| !v.is_empty())?;
+            let shown = match *key {
+                "ROTA" => (if value == "1" { "Yes" } else { "No" }).to_string(),
+                "LOG-SEC" | "PHY-SEC" => format!("{value} bytes"),
+                _ => value.to_string(),
+            };
+            Some((label.to_string(), shown))
+        })
+        .collect()
+}
+
+/// The lines of the Get Info sheet: every row of `detail_rows`, then the extra rows.
+pub fn info_lines(node: &Node, extra: &[(String, String)]) -> Vec<String> {
+    detail_rows(node).iter().map(|(k, v)| format!("{k}: {v}")).chain(extra.iter().map(|(k, v)| format!("{k}: {v}"))).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -405,5 +503,48 @@ mod tests {
         assert_eq!(equal_parts_mib(10 * 1024 * 1024, 3), vec![2, 2, 0]);
         assert!(equal_parts_mib(3 * 1024 * 1024, 3).is_empty());
         assert!(equal_parts_mib(1 << 30, 0).is_empty());
+    }
+
+    #[test]
+    fn long_messages_wrap_at_spaces_and_keep_their_own_breaks() {
+        assert_eq!(wrap_text("Erase sdb and format it as FAT32? All data on it will be lost.", 34), "Erase sdb and format it as FAT32?\nAll data on it will be lost.");
+        assert_eq!(wrap_text("one\ntwo three", 5), "one\ntwo\nthree");
+        assert_eq!(wrap_text("unbreakable-word-here ok", 8), "unbreakable-word-here\nok");
+        assert_eq!(wrap_text("", 10), "");
+        for line in wrap_text("Create the RAID 5 array md0 from sdb, sdc, sdd? All data on the members will be lost.", 34).lines() {
+            assert!(line.chars().count() <= 34, "{line}");
+        }
+    }
+
+    #[test]
+    fn lsblk_pairs_keep_values_with_spaces_and_decode_escapes() {
+        let text = "NAME=\"sdb1\" LABEL=\"My\\x20Stick\" UUID=\"1A2B-3C4D\" SERIAL=\"\" NOTE=\"say \\x22hi\\x22\"\n";
+        let pairs = parse_lsblk_pairs(text);
+        assert_eq!(pairs.len(), 5);
+        assert_eq!(pairs[0], ("NAME".to_string(), "sdb1".to_string()));
+        assert_eq!(pairs[1].1, "My Stick");
+        assert_eq!(pairs[3], ("SERIAL".to_string(), String::new()));
+        assert_eq!(pairs[4].1, "say \"hi\"");
+        assert!(parse_lsblk_pairs("").is_empty());
+        assert!(parse_lsblk_pairs("\n\nNAME=\"unterminated").is_empty());
+    }
+
+    #[test]
+    fn get_info_adds_identifiers_and_block_sizes_and_skips_empty_fields() {
+        let pairs = parse_lsblk_pairs("NAME=\"sdb1\" UUID=\"1A2B-3C4D\" PARTUUID=\"\" LOG-SEC=\"512\" PHY-SEC=\"4096\" ROTA=\"0\" TRAN=\"usb\" SERIAL=\"X9\"");
+        let rows = extra_rows(&pairs);
+        let labels: Vec<&str> = rows.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(labels, vec!["UUID", "Logical block size", "Physical block size", "Rotational", "Transport", "Serial number"]);
+        assert_eq!(rows[1].1, "512 bytes");
+        assert_eq!(rows[3].1, "No");
+        assert!(extra_rows(&[]).is_empty());
+    }
+
+    #[test]
+    fn the_info_lines_list_the_detail_rows_then_the_extra_rows() {
+        let node = Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), ..Node::default() };
+        let lines = info_lines(&node, &[("UUID".to_string(), "1A2B".to_string())]);
+        assert!(lines.contains(&"Device: /dev/sdb1".to_string()));
+        assert_eq!(lines.last().map(String::as_str), Some("UUID: 1A2B"));
     }
 }

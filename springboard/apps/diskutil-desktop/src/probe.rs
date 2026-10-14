@@ -2,7 +2,7 @@
 //! health. Each runs a fixed program with fixed arguments; device and mount point names are passed as separate
 //! arguments, never through a shell.
 
-use crate::model::{parse_df, parse_smart, Usage};
+use crate::model::{parse_df, parse_lsblk_pairs, parse_smart, Usage};
 use std::process::Command;
 
 /// The mount table as text. Empty when it cannot be read.
@@ -19,6 +19,18 @@ pub fn read_df(points: &[String]) -> Vec<(String, Usage)> {
     }
     match Command::new("df").args(["-B1", "--output=target,size,used,avail", "--"]).args(&paths).output() {
         Ok(out) => parse_df(&String::from_utf8_lossy(&out.stdout)),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Every field `lsblk` knows about one device, as `KEY="value"` pairs (empty when the tool is missing or the name is
+/// not a plain device name). Get Info shows the ones the scan of `/sys` does not read.
+pub fn read_lsblk(name: &str) -> Vec<(String, String)> {
+    if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Vec::new();
+    }
+    match Command::new("lsblk").args(["-d", "-P", "-O"]).arg(format!("/dev/{name}")).output() {
+        Ok(out) => parse_lsblk_pairs(&String::from_utf8_lossy(&out.stdout)),
         Err(_) => Vec::new(),
     }
 }

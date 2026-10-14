@@ -39,6 +39,9 @@ pub enum Refusal {
     NotWhole(String),
     /// The request needs a partition and the device is a whole disk.
     NotPartition(String),
+    /// The request cannot run as asked, for the reason given as a sentence (a restore onto a smaller volume, an array
+    /// with too few members).
+    Invalid(String),
 }
 
 impl Refusal {
@@ -56,6 +59,7 @@ impl Refusal {
             Refusal::NoDisk(name) => format!("{name} is no longer connected."),
             Refusal::NotWhole(name) => format!("{name} is a partition. Choose the whole disk instead."),
             Refusal::NotPartition(name) => format!("{name} is a whole disk. Choose one of its partitions instead."),
+            Refusal::Invalid(reason) => reason.clone(),
         }
     }
 }

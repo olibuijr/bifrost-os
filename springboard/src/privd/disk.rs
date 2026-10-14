@@ -1,5 +1,5 @@
-//! The privileged disk requests (`disk.*`): erase a disk or a volume, partition a disk, and verify or repair a
-//! volume. The request is read and checked by `bifrost_core::disk_request`, planned against a fresh snapshot of the
+//! The privileged disk requests (`disk.*`): erase a disk or a volume, partition a disk, verify, repair or rename a
+//! volume, restore one volume onto another, and create a RAID array. The request is read and checked by `bifrost_core::disk_request`, planned against a fresh snapshot of the
 //! disks taken here (so a stale client view never reaches a command), and the plan runs as root with fixed argv.
 //! Like every method other than the unlock ones, it needs the unlocked session's token (see `server::dispatch`).
 
@@ -15,7 +15,14 @@ use std::process::Command;
 pub fn handles(method: &str) -> bool {
     matches!(
         method,
-        disk_request::M_ERASE_DISK | disk_request::M_ERASE_VOLUME | disk_request::M_PARTITION_DISK | disk_request::M_VERIFY_VOLUME | disk_request::M_REPAIR_VOLUME
+        disk_request::M_ERASE_DISK
+            | disk_request::M_ERASE_VOLUME
+            | disk_request::M_PARTITION_DISK
+            | disk_request::M_VERIFY_VOLUME
+            | disk_request::M_REPAIR_VOLUME
+            | disk_request::M_RENAME_VOLUME
+            | disk_request::M_RESTORE_VOLUME
+            | disk_request::M_CREATE_RAID
     )
 }
 
@@ -25,7 +32,9 @@ pub fn call(method: &str, params: &Json) -> Result<Json, PErr> {
     let mounts = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
     let entries = disk_scan::scan(Path::new("/sys/block"), &mounts);
     let probed = match request {
-        DiskRequest::VerifyVolume { .. } | DiskRequest::RepairVolume { .. } if entries.iter().any(|e| e.disk.bsd_name == request.device()) => {
+        DiskRequest::VerifyVolume { .. } | DiskRequest::RepairVolume { .. } | DiskRequest::RenameVolume { .. }
+            if entries.iter().any(|e| e.disk.bsd_name == request.device()) =>
+        {
             probe_type(request.device())?
         }
         _ => String::new(),
@@ -58,8 +67,9 @@ mod tests {
     }
 
     #[test]
-    fn only_the_five_disk_methods_are_served() {
+    fn only_the_eight_disk_methods_are_served() {
         assert!(handles(disk_request::M_ERASE_DISK) && handles(disk_request::M_REPAIR_VOLUME));
+        assert!(handles(disk_request::M_RENAME_VOLUME) && handles(disk_request::M_RESTORE_VOLUME) && handles(disk_request::M_CREATE_RAID));
         assert!(!handles("disk.mount") && !handles("store.install") && !handles("disk"));
     }
 
@@ -81,7 +91,7 @@ mod tests {
 
     #[test]
     fn an_unknown_file_system_is_refused_before_the_disks_are_read() {
-        let p = params(vec![("device", s("sdb")), ("fs", s("ntfs"))]);
+        let p = params(vec![("device", s("sdb")), ("fs", s("xfs"))]);
         assert!(call(disk_request::M_ERASE_VOLUME, &p).unwrap_err().message.contains("unknown file system"));
     }
 }
