@@ -10,16 +10,16 @@
     {
       "feature": "3D asset container and object hierarchy",
       "apple": "MDLAsset, MDLObject, MDLObjectContainer, MDLNamed",
-      "bifrost": "springboard/ui/src/scene_object.rs",
+      "bifrost": "springboard/ui/src/scene_object.rs (SceneObjects::add_root, add_child, find, descendants, is_rendered); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scene graph of 3D objects anywhere in springboard/"
+      "note": "Headless tests in parity_sdk-tests-18 cover the named-node arena: paths, hidden subtrees, depth-first order and refused names. The module is not wired into apps or the shell, and it has no asset loader, so no 3D file format is read."
     },
     {
       "feature": "Transforms (local coordinate space)",
       "apple": "MDLTransform, MDLTransformStack, MDLTransformOp and its rotate/scale/translate/matrix subclasses",
-      "bifrost": "springboard/ui/src/scene_object.rs",
+      "bifrost": "springboard/ui/src/scene_object.rs (TransformOp, SceneObjects::local_matrix, SceneObjects::world_matrix); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:892 lists 'no CALayer tree, transforms' as a decided gap"
+      "note": "Headless tests in parity_sdk-tests-18 cover operation order, translation, scale, rotation, matrix operations and parent composition of local transforms. Gap: no renderer consumes the transform stack, and the rotate, scale and translate forms are one enum rather than separate types."
     },
     {
       "feature": "Mesh and vertex buffers",

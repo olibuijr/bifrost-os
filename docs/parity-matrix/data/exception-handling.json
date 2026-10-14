@@ -45,9 +45,9 @@
     {
       "feature": "Panic isolation for background work",
       "apple": "No direct equivalent in the framework; Objective-C exceptions unwind through the caller",
-      "bifrost": "springboard/sdk/src/dispatch.rs (run, sync), springboard/src/deildu/jobs.rs (spawn, spawn_or, spawn_front_or), springboard/render/src/gfx/pool.rs (drain)",
+      "bifrost": "springboard/sdk/src/dispatch.rs (run, sync), springboard/src/deildu/jobs.rs (spawn, spawn_or, spawn_front_or), springboard/render/src/gfx/pool.rs (drain); springboard/sdk/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "catch_unwind per job keeps a panicking closure from killing the worker; sync re-raises the panic on the caller"
+      "note": "Headless tests in parity_sdk-tests-18 show that a panicking job leaves the background and serial workers running, and that sync re-raises the panic on the caller. Gap: the deildu job queue and the render pool isolate panics in their own code, which is not covered by these tests."
     },
     {
       "feature": "Crash record surfaced to the user and developer",

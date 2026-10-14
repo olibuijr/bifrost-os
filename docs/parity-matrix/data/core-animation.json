@@ -66,9 +66,9 @@
   {
    "feature": "Transitions (CATransition)",
    "apple": "CATransition, CATransitionType, CATransitionSubtype",
-   "bifrost": "springboard/ui/src/transition.rs (Transition: fade, move in, push, reveal; shared model), springboard/src/shell/settings.rs:74, springboard/src/files/nav.rs:21, springboard/src/shell/mod.rs:3214 (launch card cross-fade)",
+   "bifrost": "springboard/ui/src/transition.rs (Transition: fade, move in, push, reveal; shared model), springboard/src/shell/settings.rs (slide), springboard/src/files/nav.rs (placement), springboard/src/shell/mod.rs:3837 (zoom_alpha, Reduce Motion fade), springboard/ui/tests/parity_sdk-tests-18.rs",
    "status": "partial",
-   "note": "a shared transition model exists in bifrost_ui; the shell's Settings and Files stacks still carry their own copies. No app-facing CATransition-style API in the SDK. Reduce Motion cross-fade exists (springboard/sdk/src/view/animation.rs:15)."
+   "note": "Headless tests in parity_sdk-tests-18 cover the placement of fade, move in, push and reveal, reversed pops, progress and eases. The shell's Settings and Files stacks both use the shared model, and so does the Reduce Motion fade. Gap: no app-facing CATransition-style API in the SDK. Reduce Motion cross-fade exists (springboard/sdk/src/view/animation.rs:15)."
   },
   {
    "feature": "Text layer (CATextLayer)",

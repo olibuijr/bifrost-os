@@ -10,9 +10,9 @@
     {
       "feature": "Audio unit custom UI (view controller, view configuration, generic view)",
       "apple": "AUViewController, AUAudioUnitViewConfiguration, AUGenericView, AUCustomViewPersistentData",
-      "bifrost": "springboard/ui/src/param_view.rs; wired: springboard/apps/daw/src/rack.rs (slider mapping over springboard/ui/src/param_view.rs)",
+      "bifrost": "springboard/ui/src/param_view.rs (ParamSpec, GenericView); wired: springboard/apps/daw/src/rack.rs (slider mapping over springboard/ui/src/param_view.rs); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-coreaudiokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Audio Unit host and no plugin view controller. The DAW plugins are an in-house instrument/effect format with built-in device UIs. The generic ViewController in springboard/sdk/src/view/app.rs is not audio-specific. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-tests-18 cover the generic parameter view: expert filtering, clamping, linear and logarithmic slider positions, invalid ranges and reset. The DAW rack maps its sliders through the model. Gap: no Audio Unit host and no plugin view controller; the DAW plugins use built-in device UIs, and the generic ViewController in springboard/sdk/src/view/app.rs is not audio-specific."
     },
     {
       "feature": "Panner audio unit view",
