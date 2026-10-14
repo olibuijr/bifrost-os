@@ -66,9 +66,9 @@
     {
       "feature": "Log viewer app",
       "apple": "Console app (reads OSLogStore)",
-      "bifrost": "springboard/apps/console-desktop/src/model.rs (Query::parse, entry model)",
+      "bifrost": "springboard/apps/console-desktop/src/model.rs (Query::parse, entry model); springboard/apps/console-desktop/src/filter_tests.rs (filter path tests)",
       "status": "partial",
-      "note": "reads and filters entries; subsystem ownership checks apply on read; not verified on every filter path"
+      "note": "Headless tests run journal lines and coredump rows through the buffer, the search tokens and the Info and Debug toggles, and check that a claimed subsystem is not found by a subsystem search. Still needs a live journal on the lab machine to confirm the reader against real entries."
     },
     {
       "feature": "Subsystem ownership on read",

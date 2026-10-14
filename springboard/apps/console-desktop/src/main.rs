@@ -21,6 +21,8 @@ mod services;
 mod signposts;
 mod source;
 #[cfg(test)]
+mod filter_tests;
+#[cfg(test)]
 mod wire_tests;
 
 use bifrost_app::controls::Node;
