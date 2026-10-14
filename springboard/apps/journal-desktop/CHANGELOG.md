@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Exported the app icon at the required 180 x 180 pixel size.
+
 ## 0.1.0
 
 - First version: dated journal entries with text, a timeline of entries (newest first), search over the text and

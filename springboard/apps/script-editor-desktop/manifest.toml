@@ -1,6 +1,6 @@
 id = "is.olibuijr.scripteditor.desktop"
 name = "Script Editor"
-version = "0.1.0"
+version = "0.1.1"
 exec = "bifrost-script-editor"
 icon = "icon.png"
 min_shell = "0.4.84"

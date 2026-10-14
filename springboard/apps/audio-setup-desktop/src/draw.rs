@@ -6,14 +6,15 @@ use crate::model::{format_buffer, format_channels, format_latency, format_rate, 
 use crate::window::{AudioSetup, EditorLayout, KEY_PT, LINE_PT, MEMBER_BASE, N_CANCEL, N_KIND_AGG, N_KIND_MULTI, N_NAME, N_SAVE, SIDE_PT};
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{CAPSULE_BG, CAPSULE_EDGE, CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, FILL, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
+use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::kit::ui::{CAPSULE_BG, CAPSULE_EDGE, CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE2_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 
 /// Card corner radius (points): grouped cards are 13 pt, fields and segments are smaller.
-const CARD_R: f32 = 13.0;
-const FIELD_R: f32 = 6.0;
+const CARD_R: f32 = m::CARD_RADIUS;
+const FIELD_R: f32 = m::ICON_RADIUS;
 
 /// A filled rounded rectangle in points.
 fn fill(s: &mut Surface, ui: &Ui, r: Rect, radius: f32, color: u32) {
@@ -82,7 +83,7 @@ fn paint_detail(w: &mut AudioSetup, s: &mut Surface, ui: &Ui, d: &DeviceInfo) {
     let x = w.content_x();
     let cw = w.content_w();
     let y0 = UNIFIED_BAR_PT + crate::window::PAD_PT;
-    text_mid(&mut w.labels, s, ui, &d.name, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
+    text_mid(&mut w.labels, s, ui, &d.name, MAC_TITLE2_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
     let sub = if d.alive { subtitle(d) } else { format!("{} · unplugged", subtitle(d)) };
     text_mid(&mut w.labels, s, ui, &sub, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
 
@@ -126,7 +127,7 @@ fn paint_empty(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
     } else {
         ("Audio Setup", "Select a device to see its format, sample rate, buffer size, latency and volume.")
     };
-    text_mid(&mut w.labels, s, ui, title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
+    text_mid(&mut w.labels, s, ui, title, MAC_TITLE2_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
     text_mid(&mut w.labels, s, ui, body, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
 }
 
@@ -143,7 +144,7 @@ fn paint_editor(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
         (_, false) => "New Aggregate",
         (_, true) => "Edit Aggregate",
     };
-    text_mid(&mut w.labels, s, ui, heading, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
+    text_mid(&mut w.labels, s, ui, heading, MAC_TITLE2_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
 
     // Name
     text_mid(&mut w.labels, s, ui, "Name", MAC_BODY_PT, Weight::Regular, LABEL.now(), x, geo.name.y + geo.name.h / 2.0, KEY_PT);
@@ -189,7 +190,7 @@ fn paint_editor(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
             fill(s, ui, box_r, 4.0, LINK);
         } else {
             fill(s, ui, box_r, 4.0, FIELD_BG.now());
-            s.stroke_rrect(ui.pt(box_r.x), ui.pt(box_r.y), ui.pt(box_r.w), ui.pt(box_r.h), ui.pt(4.0), ui.pt(1.0).max(1.0), CAPSULE_EDGE.now());
+            s.stroke_rrect(ui.pt(box_r.x), ui.pt(box_r.y), ui.pt(box_r.w), ui.pt(box_r.h), ui.pt(m::ICON_RADIUS), ui.pt(1.0).max(1.0), CAPSULE_EDGE.now());
         }
         text_mid(&mut w.labels, s, ui, &d.name, MAC_BODY_PT, Weight::Regular, LABEL.now(), row.x + 44.0, row.y + 15.0, row.w - 150.0);
         text_mid(&mut w.labels, s, ui, &subtitle(d), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), row.x + 44.0, row.y + 31.0, row.w - 150.0);
@@ -212,7 +213,7 @@ fn paint_editor(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
     fill(s, ui, geo.save, 7.0, LINK);
     let save_label = if editor.draft.uid.is_some() { "Save" } else { "Create" };
     text_center(&mut w.labels, s, ui, save_label, MAC_BODY_PT, WHITE, geo.save);
-    fill(s, ui, geo.cancel, 7.0, FILL);
+    fill(s, ui, geo.cancel, FIELD_R, FIELD_BG.now());
     text_center(&mut w.labels, s, ui, "Cancel", MAC_BODY_PT, LABEL.now(), geo.cancel);
 }
 

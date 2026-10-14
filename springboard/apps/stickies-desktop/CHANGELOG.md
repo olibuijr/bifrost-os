@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- Exported the app icon at the required 180 x 180 pixel size.
+
 ## 0.8.0
 
 - File > Import Text keeps the list items of a rich text file: each item starts with its marker (a bullet or a number), typed in the default style, so the list reads the same in the note.

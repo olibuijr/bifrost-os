@@ -7,10 +7,11 @@ mod model;
 mod store;
 
 use bifrost_app::controls::text::TextBuffer;
+use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{
-    Ui, Weight, FIELD_BG, FILL, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
-    MENU_HIGHLIGHT_TEXT, SEPARATOR, SYSTEM_BLUE, SYSTEM_ORANGE, SYSTEM_RED,
+    Ui, Weight, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
+    MENU_HIGHLIGHT_TEXT, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_ORANGE, SYSTEM_RED,
 };
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::widgets::{self, Material};
@@ -21,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Corner radius of buttons, fields and rows (points). The design rules keep corners at 6 points or less.
-const RADIUS_PT: f32 = 6.0;
+const RADIUS_PT: f32 = m::ICON_RADIUS;
 /// Distance between lines of the entry text (points).
 const LINE_PT: f32 = 18.0;
 /// How far a touch must move before it scrolls the timeline instead of selecting a row (points).
@@ -457,7 +458,7 @@ impl JournalApp {
         // bookmarks filter
         let filter = layout.filter();
         let on = self.journal.bookmarks_only;
-        plate(c, ui, filter, if on { SYSTEM_ORANGE } else { FILL });
+        plate(c, ui, filter, if on { SYSTEM_ORANGE } else { FIELD_BG.now() });
         let label = if on { "Showing Bookmarks" } else { "All Entries" };
         text_centred(c, ui, label, MAC_FOOTNOTE_PT, Weight::Semibold, if on { MENU_HIGHLIGHT_TEXT } else { LABEL.now() }, filter);
 
@@ -515,13 +516,13 @@ impl JournalApp {
         let [new, bookmark, delete] = layout.buttons();
         let has = self.journal.selected.is_some();
         let bookmarked = self.selected_entry().is_some_and(|e| e.bookmarked);
-        plate(c, ui, new, FILL);
+        plate(c, ui, new, FIELD_BG.now());
         text_centred(c, ui, "New Entry", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL.now(), new);
-        plate(c, ui, bookmark, if bookmarked { SYSTEM_ORANGE } else { FILL });
+        plate(c, ui, bookmark, if bookmarked { SYSTEM_ORANGE } else { FIELD_BG.now() });
         let label = if bookmarked { "Bookmarked" } else { "Bookmark" };
         let ink = if has { LABEL.now() } else { LABEL_2.now() };
         text_centred(c, ui, label, MAC_FOOTNOTE_PT, Weight::Semibold, if bookmarked { MENU_HIGHLIGHT_TEXT } else { ink }, bookmark);
-        plate(c, ui, delete, FILL);
+        plate(c, ui, delete, FIELD_BG.now());
         text_centred(c, ui, "Delete", MAC_FOOTNOTE_PT, Weight::Semibold, if has { SYSTEM_RED } else { LABEL_2.now() }, delete);
     }
 
@@ -551,14 +552,14 @@ impl JournalApp {
 
     fn draw_photo_bar(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout) {
         let bar = layout.photo_bar();
-        c.fill_rect(RectF::new(ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.w), ui.pt(1.0)), SEPARATOR);
+        c.fill_rect(RectF::new(ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.w), ui.pt(1.0)), SEPARATOR_C.now());
         let names = self.selected_entry().map(|e| e.photos.join(", ")).unwrap_or_default();
         let list = if names.is_empty() { "No photos yet.".to_string() } else { format!("Photos: {names}") };
         let width = ui.pt(bar.w - 2.0 * layout::PAD_PT);
         text_at(c, ui, &ui.fit(&list, MAC_SUBHEAD_PT, width), MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), bar.x + layout::PAD_PT, bar.y + 10.0);
 
         let field = layout.photo_field();
-        plate(c, ui, field, FILL);
+        plate(c, ui, field, FIELD_BG.now());
         let focused = self.focus == Focus::PhotoField;
         if self.photo_path.text().is_empty() && !focused {
             text_at(c, ui, "Path to an image file (jpg, png, gif, webp, heic)", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), field.x + 8.0, field.y + 7.0);
@@ -568,7 +569,7 @@ impl JournalApp {
         }
 
         let attach = layout.attach();
-        plate(c, ui, attach, FILL);
+        plate(c, ui, attach, FIELD_BG.now());
         text_centred(c, ui, "Attach Photo", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL.now(), attach);
 
         if !self.status.is_empty() {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Exported the app icon at the required 180 x 180 pixel size.
+
 ## 0.1.0
 
 - New app: Colour Utility lists the ICC colour profiles in the system folders (`/usr/share/color/icc`,

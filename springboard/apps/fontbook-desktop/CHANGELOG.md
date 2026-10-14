@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- Sidebar and list selections use the neutral scheme-aware Golden Gate plate; separators and disabled controls follow Light and Dark.
+
 ## 0.6.0 — 2026-10-14
 
 - Font collections (.ttc) are validated: the table directory of the first face is checked the same way as a single

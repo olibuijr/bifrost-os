@@ -99,7 +99,7 @@ impl AudioSetup {
             selected: None,
             editor: None,
             labels: TextCache::default(),
-            size: (1200.0, 780.0),
+            size: (0.0, 0.0),
             last_refresh: f64::NEG_INFINITY,
             press: Target::Nothing,
             now: 0.0,
