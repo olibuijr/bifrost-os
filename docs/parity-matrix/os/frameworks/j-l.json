@@ -900,7 +900,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference system daemon com.apple.library-repair.agent (an XPC agent repairing the reference library caches). Arch verifies installed files with pacman, but BifrOSt names no repair service in its runtime packages, so it stays os until that decision is made.",
    "rea": [],
    "method": "assessed"
   },
@@ -921,7 +921,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LiftUI with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -942,7 +942,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LightSourceSupport with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -963,7 +963,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LighthouseBackground with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -984,7 +984,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LighthouseBitacoraFramework with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1005,7 +1005,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LighthouseCoreMLFeatureStore with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1026,7 +1026,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LighthouseCoreMLModelAnalysis with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1047,7 +1047,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LighthouseCoreMLModelStore with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1068,7 +1068,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LighthouseDataProcessor with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1089,7 +1089,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.Lightning with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1109,8 +1109,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Reference advertising identifier opt-out (com.apple.ap.LimitAdTracking). BifrOSt issues no advertising identifier, so the setting has no meaning here.",
    "rea": [],
    "method": "assessed"
   },
@@ -1131,7 +1131,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LinguisticData with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1150,9 +1150,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/ui/src/linkmeta.rs",
+   "status": "partial",
+   "note": "Link metadata is read from a page head into a card with placeholder, loading, timeout and completion states, tested headless. Gap: no network fetch, image or icon download, redirect following or share-sheet preview; the caller does those.",
    "rea": [],
    "method": "assessed"
   },
@@ -1215,7 +1215,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LinkServices with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1235,8 +1235,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Live execution results of the reference developer tools (com.apple.dt.LiveExecutionResultsFoundation), used only by the reference Xcode playground and preview runs. BifrOSt has no Xcode, so the component has no meaning here.",
    "rea": [],
    "method": "assessed"
   },
@@ -1256,8 +1256,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Live execution results of the reference developer tools (com.apple.dt.LiveExecutionResultsProbe), used only by the reference Xcode playground and preview runs. BifrOSt has no Xcode, so the component has no meaning here.",
    "rea": [],
    "method": "assessed"
   },
@@ -1277,8 +1277,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Live execution results of the reference developer tools (com.apple.dt.LiveExecutionResultsRuntime), used only by the reference Xcode playground and preview runs. BifrOSt has no Xcode, so the component has no meaning here.",
    "rea": [],
    "method": "assessed"
   },
@@ -1299,7 +1299,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LiveFS with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1320,7 +1320,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LiveSpeechServices with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1341,7 +1341,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LiveTranscription with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1465,9 +1465,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/sdk/src/indexed_entity.rs",
+   "status": "partial",
+   "note": "Entities an app lists are indexed into the shared Core Search index, so a search finds them without launching the app. Gap: there is no cross-app federated search service, and per-app indexes are not merged into one result set.",
    "rea": [],
    "method": "assessed"
   },
@@ -1488,7 +1488,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LocalSpeechRecognitionBridge with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1509,7 +1509,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LocalStatusKit with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1528,9 +1528,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/services/privacy_permissions.rs; springboard/src/shell/services/location.rs; springboard/ui/src/location_auth.rs",
+   "status": "partial",
+   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
    "method": "assessed"
   },
@@ -1549,9 +1549,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/services/privacy_permissions.rs; springboard/src/shell/services/location.rs; springboard/ui/src/location_auth.rs",
+   "status": "partial",
+   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
    "method": "assessed"
   },
@@ -1570,9 +1570,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/services/privacy_permissions.rs; springboard/src/shell/services/location.rs; springboard/ui/src/location_auth.rs",
+   "status": "partial",
+   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
    "method": "assessed"
   },
@@ -1593,7 +1593,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Encryption of the reference location log store (com.apple.CoreLocation.LocationLogEncryption). BifrOSt writes no location log, so there is no store to encrypt; it stays os pending that decision.",
    "rea": [],
    "method": "assessed"
   },
@@ -1614,7 +1614,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LocationSupport with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1635,7 +1635,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference hardening profile served by the lockdownmoded XPC daemon (com.apple.LockdownMode). BifrOSt has no equivalent profile; hardening on Arch is handled by the kernel and systemd units, so the choice is not made here and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1656,7 +1656,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Settings and prompt UI for the reference hardening profile (com.apple.LockdownModeUI); it depends on the LockdownMode profile, which BifrOSt does not have, so it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1676,8 +1676,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "Gap: the sign-in attempt counter and temporary lock exist in springboard/core/src/password_verify.rs (Attempts), but there is no lock screen panel that shows the lockout and the wait time. Build that panel in the shell lock screen.",
    "rea": [],
    "method": "assessed"
   },
@@ -1696,9 +1696,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/sdk/src/log.rs",
+   "status": "partial",
+   "note": "Unified logging for apps (os.Logger and the log store) is implemented in bifrost_core::log, with per-argument privacy formatting in springboard/core/src/log_format.rs. Gap: system-wide journal integration with systemd is not verified on the lab machine.",
    "rea": [],
    "method": "assessed"
   },
@@ -1719,7 +1719,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Reference bundle com.apple.LoginUIKit with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1739,8 +1739,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "Gap: no system-wide Look Up service shows a definition for selected text. The dictionary app (springboard/apps/dictionary-desktop/src/main.rs) looks words up only inside itself. Build a Look Up service and popover that other apps can call.",
    "rea": [],
    "method": "assessed"
   },
@@ -1759,9 +1759,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/bare/boost.rs; packaging/arch/runtime-packages.txt (power-profiles-daemon)",
+   "status": "partial",
+   "note": "The shell hands its power profile to power-profiles-daemon through powerprofilesctl. Gap: there is no Low Power Mode toggle or app-facing power-state API, and the profile change is not verified on the lab machine.",
    "rea": [],
    "method": "assessed"
   },
@@ -1782,7 +1782,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Kernel performance counter bridge used by the reference profiler (kperf.framework, com.apple.kperf). Arch offers the perf tool (listed as a candidate in tools/parity/os_cli_packages.txt, not shipped), so it stays os.",
    "rea": [],
    "method": "assessed"
   },
