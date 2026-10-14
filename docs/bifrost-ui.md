@@ -889,9 +889,9 @@ Gaps, decided:
   `ReturnKeyType::basic()` to the keyboard app, and forwards keyboard-app composition (`KeyboardOut::Preedit` /
   `Unmark`, sub-codes 8 and 9 of the existing tag) as `SetMarkedText` / `UnmarkText`. `textinput::popup_origin` places
   a candidate popup from the caret (`Shell::ext_caret_screen`).
-- No Wayland side: the shell is a Wayland client of the host compositor and serves no `wl_seat`, so `zwp_text_input_v3`
-  / `input_method` for third-party Wayland clients has nothing to attach to; the mapping is written down in
-  `src/shell/textinput.rs`. The keyboard app (`apps/keyboard`) does not yet send `Preedit`, draw the other return
+- Wayland side: `bifrost-wm` now serves `zwp_text_input_v3` / `zwp_input_method_v2` (`docs/window-server.md`), but the
+  shell does not bind the input method yet, so third-party Wayland clients still get no keyboard from it; the mapping is
+  written down in `src/shell/textinput.rs`. The keyboard app (`apps/keyboard`) does not yet send `Preedit`, draw the other return
   keys, or use secure/content traits; nothing draws a candidate popup yet (only the placement helper exists).
   `AccessoryItem`s are stored in the host (`AppHost::accessory`) but not drawn; `AccessoryAction` is not sent.
 - Only `view::TextField` is a text input client; other SDK text widgets (`widgets::text_field` over

@@ -259,3 +259,52 @@ XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
   options are not read yet.
 - The Vulkan scanout (`BIFROST_WM_RENDERER=vulkan`) has no readback, so captures fail there.
 - Tests: `capture_size`/`clamp_region` unit tests, and `tests/capture.rs` (headless, red scene reads back `[255,0,0,255]`).
+
+## Text input, input method and virtual keyboard
+
+`bifrost-wm` serves three protocols so an on-screen keyboard can type into any Wayland application (`wm/src/text_input.rs`;
+Smithay relays the messages, the module adds the policy, the candidate popup and the wiring).
+
+| Protocol | Bound by | Offered to |
+|---|---|---|
+| `zwp_text_input_v3` | applications (toolkits do this for their text fields) | every client, when the policy below is not `off` |
+| `zwp_input_method_v2` | the keyboard or IME process, one at a time | clients of the compositor's user |
+| `zwp_virtual_keyboard_v1` | a process that sends key events without a device (keys for applications with no text input, such as X11 clients) | clients of the compositor's user |
+
+What the compositor does:
+
+- **Show and hide.** The text input follows keyboard focus. When the focused client sends `enable` and `commit`, the input method
+  gets `activate`, then the surrounding text, the change cause, the content type (hint and purpose) and `done`; the keyboard
+  shows itself. `disable`, a focus change (`leave`) and a client that goes away give `deactivate`, and the keyboard hides.
+  `WmState::text_input_active` answers the same question for the compositor.
+- **Text back to the application.** `commit_string`, `set_preedit_string` and `delete_surrounding_text` reach the focused
+  client's text input; the input method's `commit(serial)` closes the batch (a stale serial makes the client discard it).
+- **Candidate window.** An input method may give one surface the popup role. It is placed below the text cursor rectangle the
+  client reports, flipped above it when it would leave the output, kept inside the output horizontally (`place_popup`), drawn
+  above the windows on both render paths, hit-tested before the windows (pointer and touch can pick a candidate) and given
+  frame callbacks. A docked keyboard needs none of this and just does not create a popup.
+- **Who may bind.** An input method grabs the keyboard and reads the text around every cursor; a virtual keyboard types into
+  any window. Both globals are hidden from clients of another user, and from every client when the credentials cannot be
+  read. `BIFROST_WM_INPUT_METHOD=off` removes all three globals. The sandbox proxy (`docs/wayland-filter-design.md`) does not
+  list the two privileged globals for native apps.
+- **Limits.** There is one input method per seat, so the shell must be the only binder: Smithay answers a second bind with `unavailable` on the object that is already registered and does not replace it. Text input exists for Wayland clients
+  only: X11 applications get keys from the virtual keyboard, not text. The window server's chords (`keybindings.rs`) are
+  intercepted before the keys reach an input method's keyboard grab, so a keyboard that grabs the keys never sees them.
+
+Binding the on-screen keyboard (`docs/keyboard-system-app.md`), planned and not written yet: the keyboard app is an SDK app,
+not a Wayland client, so the shell (`src/bare/wayland.rs`, the shell's own connection to `bifrost-wm`) is to bind
+`zwp_input_method_manager_v2` and `zwp_virtual_keyboard_manager_v1` once and translate, using the mapping already written in
+`src/shell/textinput.rs`:
+
+| Input method event | Shell action |
+|---|---|
+| `activate` + `done` | show the keyboard (`ToApp::KeyboardConfig` with `SHOWN`) |
+| `deactivate` + `done` | hide it |
+| `surrounding_text`, `text_change_cause` | `TextState` for predictions and auto-capitals |
+| `content_type` (hint, purpose) | `InputTraits` (layout, return key, secure entry, auto-correct) |
+| `KeyboardOut::Text`, `Composition::Preedit` | `commit_string`, `set_preedit_string` then `commit(serial)` |
+| `KeyboardOut::Backspace` | `delete_surrounding_text(1 char, 0)` or a virtual-keyboard backspace |
+| `KeyboardOut::Enter` and arrows | virtual-keyboard keys (no input-method request carries them) |
+| popup surface (candidates) | `get_input_popup_surface`, placed by the compositor |
+
+The shell is to count `done` events and send that number as `serial` in `commit`.
