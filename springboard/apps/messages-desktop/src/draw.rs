@@ -6,8 +6,11 @@ use crate::model::{day_label, day_of, preview, starts_day, typing_text, EmojiGro
 use crate::protocol::Body;
 use crate::window::MessagesWindow;
 use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::Rect as KRect;
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
 use bifrost_app::kit::{colors, Surface, TextCache, Ui, Weight};
+use bifrost_app::widgets;
 
 pub const HEADER_PT: f32 = 52.0;
 const SIDE_MIN_PT: f32 = 220.0;
@@ -282,6 +285,33 @@ impl Layout {
 }
 
 impl MessagesWindow {
+    fn room_source_list(&self, lay: &Layout) -> SourceList {
+        let rooms = self.model.visible_rooms();
+        let items = rooms.iter().enumerate().map(|(i, room)| {
+            let tags = room_tags(self.model.is_pinned(&room.id), self.model.is_muted(&room.id));
+            let marked = room.unread == 0 && self.model.is_marked_unread(&room.id) && !self.model.is_muted(&room.id);
+            let trailing = match (tags.is_empty(), marked) {
+                (true, true) => Some("•".to_string()),
+                (false, true) => Some(format!("{tags} •")),
+                (false, false) => Some(tags),
+                (true, false) => None,
+            };
+            let mut item = SidebarItem::row(i as u32, &room.title(&self.model.user_id))
+                .with_symbol("bubble.left")
+                .with_subtitle(&room.preview());
+            if room.unread > 0 {
+                item = item.with_count(room.unread.min(u32::MAX as u64) as u32);
+            }
+            if let Some(trailing) = trailing {
+                item = item.with_trailing(&trailing);
+            }
+            item
+        }).collect();
+        let mut list = SourceList::new(items, ROW_PT - 16.0, 0.0);
+        list.set_selected(rooms.iter().position(|r| self.model.selected.as_deref() == Some(r.id.as_str())).map(|i| i as u32));
+        list
+    }
+
     /// The geometry for the window as it is now: the banner strip exists while the composer holds a reply or an edit.
     pub fn layout(&self, ui: &Ui) -> Layout {
         let mut lay = Layout::new(ui, self.w as f32, self.h as f32);
@@ -338,8 +368,9 @@ impl MessagesWindow {
             return Hit::Quote(target.clone());
         }
         if inside(lay.sidebar(), x, y) {
-            let index = ((y - lay.header + self.room_scroll.offset()) / lay.row).floor();
-            if index >= 0.0 {
+            let scale = ui.pt(1.0);
+            let list = self.room_source_list(&lay);
+            if let Some(index) = list.hit(KRect { x: 0.0, y: HEADER_PT, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale) {
                 if let Some(room) = self.model.visible_rooms().get(index as usize) {
                     return Hit::Room(room.id.clone());
                 }
@@ -354,10 +385,9 @@ impl MessagesWindow {
         if !inside(lay.sidebar(), x, y) {
             return None;
         }
-        let index = ((y - lay.header + self.room_scroll.offset()) / lay.row).floor();
-        if index < 0.0 {
-            return None;
-        }
+        let scale = ui.pt(1.0);
+        let list = self.room_source_list(&lay);
+        let index = list.hit(KRect { x: 0.0, y: HEADER_PT, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale)?;
         self.model.visible_rooms().get(index as usize).map(|r| r.id.clone())
     }
 
@@ -528,16 +558,16 @@ impl MessagesWindow {
 
     fn draw_sidebar(&mut self, s: &mut Surface, ui: &Ui, lay: &Layout) {
         let side = lay.sidebar();
-        s.fill_rect(px(side[0]), px(side[1]), px(side[2]), px(side[3]), CARD_BG.now());
+        let list = self.room_source_list(lay);
+        let scale = ui.pt(1.0);
+        self.room_scroll.set_max((list.content_height() * scale - side[3]).max(0.0));
+        widgets::source_list(s, ui, KRect { x: side[0] / scale, y: side[1] / scale, w: side[2] / scale, h: side[3] / scale }, &list, self.room_scroll.offset() / scale, None);
         s.fill_rect(px(lay.side), 0, px(lay.rule), px(lay.h), SEPARATOR_C.now());
         let focus = self.model.search_focus;
         let search = lay.search_field();
         let add = lay.new_button();
         let enabled = self.model.signed_in();
         let rooms = self.model.visible_rooms();
-        let rows = rooms.len() as f32 * lay.row;
-        self.room_scroll.set_max((rows - side[3]).max(0.0));
-        let scroll = self.room_scroll.offset();
         if rooms.is_empty() {
             let hint = if !self.model.signed_in() {
                 "Sign in to see your conversations"
@@ -547,51 +577,6 @@ impl MessagesWindow {
                 "No conversation matches"
             };
             put(s, &mut self.labels, ui, hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), lay.pad, lay.header + lay.pad);
-        }
-        let inset = lay.gap;
-        let text_w = (lay.side - 2.0 * lay.pad).max(0.0);
-        for (i, room) in rooms.iter().enumerate() {
-            let r = lay.room_row(i, scroll);
-            if r[1] + r[3] < lay.header || r[1] > lay.h {
-                continue;
-            }
-            let selected = self.model.selected.as_deref() == Some(room.id.as_str());
-            if selected {
-                s.fill_rrect(r[0] + inset, r[1] + inset / 2.0, r[2] - 2.0 * inset, r[3] - inset, lay.corner, colors::SYSTEM_BLUE.now());
-            }
-            let (c_name, c_sub) = if selected { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
-            let marked = room.unread == 0 && self.model.is_marked_unread(&room.id) && !self.model.is_muted(&room.id);
-            let badge = if room.unread > 0 {
-                Some(badge_text(room.unread))
-            } else if marked {
-                Some("\u{2022}".to_string())
-            } else {
-                None
-            };
-            let badge_w = badge.as_ref().map_or(0.0, |b| ui.measure(b, MAC_FOOTNOTE_PT, Weight::Semibold) + lay.pad);
-            let tags = room_tags(self.model.is_pinned(&room.id), self.model.is_muted(&room.id));
-            let tags_w = if tags.is_empty() { 0.0 } else { ui.measure(&tags, MAC_FOOTNOTE_PT, Weight::Regular) + lay.gap };
-            let name_w = (text_w - badge_w - tags_w).max(0.0);
-            let title = room.title(&self.model.user_id);
-            let name = fit(ui, &title, MAC_BODY_PT, Weight::Semibold, name_w);
-            put(s, &mut self.labels, ui, &name, MAC_BODY_PT, Weight::Semibold, c_name, r[0] + lay.pad, r[1] + lay.row * 0.16);
-            if !tags.is_empty() {
-                let tx = r[0] + r[2] - lay.pad - badge_w - tags_w + lay.gap;
-                put(s, &mut self.labels, ui, &tags, MAC_FOOTNOTE_PT, Weight::Regular, c_sub, tx, r[1] + lay.row * 0.18);
-            }
-            let sub = fit(ui, &room.preview(), MAC_FOOTNOTE_PT, Weight::Regular, text_w);
-            put(s, &mut self.labels, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, c_sub, r[0] + lay.pad, r[1] + lay.row * 0.56);
-            if let Some(b) = badge {
-                let bw = ui.measure(&b, MAC_FOOTNOTE_PT, Weight::Semibold) + lay.pad;
-                let bx = r[0] + r[2] - lay.pad - bw;
-                let by = r[1] + (lay.row - ui.pt(BADGE_PT)) / 2.0;
-                let (fill, text) = if selected { (WHITE, colors::SYSTEM_BLUE.now()) } else { (colors::SYSTEM_BLUE.now(), WHITE) };
-                s.fill_rrect(bx, by, bw, ui.pt(BADGE_PT), ui.pt(BADGE_PT) / 2.0, fill);
-                put_centred(s, &mut self.labels, ui, &b, MAC_FOOTNOTE_PT, Weight::Semibold, text, bx + bw / 2.0, by + ui.pt(BADGE_PT) / 2.0);
-            }
-            if !selected {
-                s.fill_rect(px(r[0] + lay.pad), px(r[1] + r[3] - lay.rule), px((r[2] - lay.pad).max(0.0)), px(lay.rule), SEPARATOR_C.now());
-            }
         }
         // The header strip is drawn last so a scrolled row never shows through it.
         s.fill_rect(px(side[0]), 0, px(side[2]), px(lay.header), CARD_BG.now());

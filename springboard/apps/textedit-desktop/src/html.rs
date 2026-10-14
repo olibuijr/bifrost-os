@@ -12,6 +12,8 @@ use crate::properties::Properties;
 use crate::rtf::{nearest_color, nearest_spacing};
 use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_TAB, FAMILIES, MAX_PARAGRAPH_SPACE, MAX_SIZE, MAX_TAB, MIN_SIZE, MIN_TAB, SPACINGS};
 
+const BOLD_WEIGHT_THRESHOLD: u32 = 400 + 200;
+
 /// Whether `bytes` look like an HTML file.
 pub fn is_html(bytes: &[u8]) -> bool {
     let head = String::from_utf8_lossy(&bytes[..bytes.len().min(512)]).to_ascii_lowercase();
@@ -452,7 +454,7 @@ impl Reader {
                     }
                     "font-family" => self.cur.font = family_of(&v),
                     "color" => self.cur.color = color_of(&v),
-                    "font-weight" => self.cur.bold = v == "bold" || v.parse::<u32>().is_ok_and(|w| w >= 600),
+                    "font-weight" => self.cur.bold = v == "bold" || v.parse::<u32>().is_ok_and(|w| w >= BOLD_WEIGHT_THRESHOLD),
                     "font-style" => self.cur.italic = v == "italic" || v == "oblique",
                     "text-decoration" | "text-decoration-line" => self.cur.underline = v.contains("underline"),
                     _ => {}

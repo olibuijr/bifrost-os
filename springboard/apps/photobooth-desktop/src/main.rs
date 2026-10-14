@@ -37,7 +37,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const STILL_QUALITY: u8 = 92;
 const CLIP_QUALITY: u8 = 80;
 /// The clip frames are taken at most this wide.
-const CLIP_MAX_W: usize = 640;
+const CLIP_FRAME_PIXEL_LIMIT: usize = 640;
 /// Gap between strip thumbnails, in points.
 const SLOT_GAP_PT: f32 = 8.0;
 /// Frame period while the camera streams, in ms.
@@ -331,7 +331,7 @@ impl PhotoBooth {
         if vw == 0 || vh == 0 || frame.width == 0 || frame.height == 0 {
             return;
         }
-        let (w, h) = model::fit_size(frame.width, frame.height, vw.min(model::PREVIEW_MAX_W), vh);
+        let (w, h) = model::fit_size(frame.width, frame.height, vw.min(model::PREVIEW_PIXEL_LIMIT), vh);
         self.view = self.grab(w, h);
     }
 
@@ -378,7 +378,7 @@ impl PhotoBooth {
             self.status = "No camera picture yet".to_string();
             return;
         };
-        let w = frame.width.min(CLIP_MAX_W).max(2) & !1;
+        let w = frame.width.min(CLIP_FRAME_PIXEL_LIMIT).max(2) & !1;
         let h = (w * frame.height / frame.width.max(1)).max(2) & !1;
         self.clip = Some(Clip { frames: Vec::new(), size: (w, h), first: None, next_at: t, ends_at: t + model::CLIP_SECS * 1000.0 });
     }
@@ -474,7 +474,7 @@ impl PhotoBooth {
         let box_px = (model::THUMB_PT * self.scale).max(1.0) as usize;
         let (tw, th) = model::fit_size(img.w, img.h, box_px, box_px);
         let thumb = img.resized(tw, th);
-        let (sw, sh) = model::fit_size(img.w, img.h, model::PREVIEW_MAX_W, model::PREVIEW_MAX_W);
+        let (sw, sh) = model::fit_size(img.w, img.h, model::PREVIEW_PIXEL_LIMIT, model::PREVIEW_PIXEL_LIMIT);
         let shown = if (sw, sh) == (img.w, img.h) { img } else { img.resized(sw, sh) };
         self.status = format!("Saved {}", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
         self.captures.push(Capture { path, thumb, shown });

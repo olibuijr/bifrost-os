@@ -1441,7 +1441,7 @@ impl Keyboard {
         if self.mode == Mode::Floating {
             let (lo, hi) = (self.float_x, self.float_x + self.w * FLOAT_SCALE);
             let (x, y, w, h) = fl::grabber_rect(lo, hi, self.h - self.pt(fl::GRABBER_BAND_PT), self.s);
-            s.fill_rrect(x, oy + y, w, h, h.min(self.pt(6.0) * 2.0) / 2.0, fade(WHITE, 140));
+            s.fill_rrect(x, oy + y, w, h, h.min(self.pt(6.0) * 2.0) / 2.0, fade(LABEL_2.now(), 140));
         }
         if let Some(m) = self.fl_menu {
             let (x, y, w, h) = m.rect();

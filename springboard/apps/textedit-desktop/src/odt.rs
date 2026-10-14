@@ -12,6 +12,8 @@ use crate::xml::{self, Token};
 use crate::zipdoc;
 use std::collections::HashMap;
 
+const BOLD_WEIGHT_THRESHOLD: u32 = 400 + 200;
+
 /// The document's file type.
 pub const TYPE: &str = "org.oasis-open.opendocument.text";
 
@@ -155,7 +157,7 @@ fn on(value: &str) -> bool {
 fn text_properties(attrs: &[(String, String)], props: &mut Props) {
     for (key, value) in attrs {
         match key.as_str() {
-            "fo:font-weight" => props.bold = Some(value == "bold" || value.parse::<u32>().is_ok_and(|w| w >= 600)),
+            "fo:font-weight" => props.bold = Some(value == "bold" || value.parse::<u32>().is_ok_and(|w| w >= BOLD_WEIGHT_THRESHOLD)),
             "fo:font-style" => props.italic = Some(value == "italic" || value == "oblique"),
             "style:text-underline-style" => props.underline = Some(on(value)),
             "style:text-line-through-style" => props.strike = Some(on(value)),

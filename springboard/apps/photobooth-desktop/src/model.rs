@@ -20,7 +20,7 @@ pub const FLASH_MS: f64 = 260.0;
 /// While no camera is open the camera list is read again this often, in ms, so a camera plugged in later appears.
 pub const CAMERA_RETRY_MS: f64 = 2000.0;
 /// The widest the live preview is drawn, in pixels; the viewfinder never asks the camera for more.
-pub const PREVIEW_MAX_W: usize = 960;
+pub const PREVIEW_PIXEL_LIMIT: usize = 960;
 /// Bar heights from the bottom of the window, in points.
 pub const CONTROLS_PT: f32 = 64.0;
 pub const STRIP_PT: f32 = 84.0;

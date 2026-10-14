@@ -314,11 +314,6 @@ impl App for ScreenSharing {
         changed
     }
 
-    fn next_wake(&self, now: f64) -> Option<f64> {
-        let _ = now;
-        None
-    }
-
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
         if self.paste_req != Some(request) {
             return false;

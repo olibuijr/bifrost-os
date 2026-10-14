@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3 — 2026-10-14
+
+- Named preview and clip-frame pixel limits by their media purpose rather than as window dimensions.
+
 ## 0.5.2
 
 - The app is a full-size window; preview, capture-strip and selected-capture colors follow the appearance, and the existing icon is exported at the required 180 × 180 PNG size.
