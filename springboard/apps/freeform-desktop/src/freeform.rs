@@ -324,6 +324,8 @@ pub struct Freeform {
     pick: Option<Pick>,
     /// The item and cell the keyboard types into.
     edit: Option<(u32, usize)>,
+    /// The character the caret is before in that text; `usize::MAX` is the end, and it is clamped to the text.
+    caret: usize,
     /// An item is being dragged.
     item_drag: Option<ItemDrag>,
     /// A connector is being drawn.
@@ -465,6 +467,7 @@ impl Freeform {
             items: Items::default(),
             pick: None,
             edit: None,
+            caret: usize::MAX,
             item_drag: None,
             linking: None,
             last_tap: None,
@@ -502,6 +505,7 @@ impl Freeform {
         self.pics = Pictures::default();
         self.pick = None;
         self.edit = None;
+        self.caret = usize::MAX;
         self.item_drag = None;
         self.linking = None;
         self.last_tap = None;
