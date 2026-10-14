@@ -47,6 +47,30 @@ pub enum Kernel {
     Convolution { width: usize, height: usize, weights: Vec<f32>, bias: f32 },
 }
 
+/// A kernel an app can define for itself, the base class of `CIKernel` and its subclasses. It states its class and
+/// runs over a whole image. The built-in [`Kernel`] values implement it, and [`apply_chain`] runs several in order.
+pub trait ImageKernel {
+    /// The class of the kernel.
+    fn kind(&self) -> KernelKind;
+    /// Runs the kernel over `img` and returns the result.
+    fn run(&self, img: &Image) -> Image;
+}
+
+impl ImageKernel for Kernel {
+    fn kind(&self) -> KernelKind {
+        Kernel::kind(self)
+    }
+
+    fn run(&self, img: &Image) -> Image {
+        Kernel::run(self, img)
+    }
+}
+
+/// Runs each kernel in turn, feeding every result into the next. An empty chain returns a copy of `img`.
+pub fn apply_chain(kernels: &[&dyn ImageKernel], img: &Image) -> Image {
+    kernels.iter().fold(img.clone(), |current, kernel| kernel.run(&current))
+}
+
 impl Kernel {
     /// The Core Image class of this kernel.
     pub fn kind(&self) -> KernelKind {

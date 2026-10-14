@@ -76,6 +76,39 @@ pub struct MediaPlaybackSnapshot {
     pub position_ms: u64,
 }
 
+impl MediaPlaybackSnapshot {
+    /// `rate`: 1 while playing and 0 otherwise. Paused and stopped content does not advance.
+    pub fn rate(&self) -> f32 {
+        match self.state {
+            PlaybackState::Playing => 1.0,
+            PlaybackState::Paused | PlaybackState::Stopped => 0.0,
+        }
+    }
+}
+
+/// How many media seconds pass per second a skip command is held. Holding forward or backward moves the position at
+/// this rate.
+pub const HOLD_SEEK_RATE: u64 = 4;
+
+/// The position reached by holding a skip command for `held_ms` from `from_ms`. Forward holds stop at the end of
+/// finite content. Backward holds stop at zero. Live and continuous content have no end to stop at.
+pub fn held_seek_position(from_ms: u64, held_ms: u64, forward: bool, duration: MediaDuration) -> u64 {
+    let travelled = held_ms.saturating_mul(HOLD_SEEK_RATE);
+    if forward {
+        within(duration, from_ms.saturating_add(travelled))
+    } else {
+        from_ms.saturating_sub(travelled)
+    }
+}
+
+/// Caps a position at the end of finite content. Live and continuous content keep the position as given.
+fn within(duration: MediaDuration, position_ms: u64) -> u64 {
+    match duration {
+        MediaDuration::Finite(seconds) => position_ms.min((seconds * 1000.0) as u64),
+        MediaDuration::Continuous | MediaDuration::Live => position_ms,
+    }
+}
+
 /// Why a session operation was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaSessionError {
@@ -182,10 +215,18 @@ impl MediaSession {
     }
 
     fn clamp_position(&self, position_ms: u64) -> u64 {
-        match self.content.as_ref().map(|c| c.duration) {
-            Some(MediaDuration::Finite(seconds)) => position_ms.min((seconds * 1000.0) as u64),
-            _ => position_ms,
-        }
+        within(self.duration(), position_ms)
+    }
+
+    /// The duration of the content, or `Continuous` when there is none.
+    fn duration(&self) -> MediaDuration {
+        self.content.as_ref().map_or(MediaDuration::Continuous, |c| c.duration)
+    }
+
+    /// Moves the published position as a held skip command does, keeping the playback state. Holding forward or
+    /// backward for `held_ms` moves the position by [`HOLD_SEEK_RATE`] times that time.
+    pub fn seek_held(&mut self, forward: bool, held_ms: u64) {
+        self.position_ms = held_seek_position(self.position_ms, held_ms, forward, self.duration());
     }
 
     /// The state and position the session currently publishes.
