@@ -38,9 +38,9 @@
   {
    "feature": "Pyramid filters (Gaussian, Laplacian)",
    "apple": "MPSImageGaussianPyramid, MPSImageLaplacianPyramid, MPSImageLaplacianPyramidAdd/Subtract",
-   "bifrost": "springboard/src/gpu/wl.rs:300 (blur pyramid for the live backdrop)",
+   "bifrost": "springboard/src/gpu/wl.rs:300 (blur pyramid for the live backdrop); springboard/render/src/laplacian_pyramid.rs (gaussian_pyramid, laplacian_pyramid, collapse)",
    "status": "partial",
-   "note": "A fixed dual-Kawase down and up pyramid for glass only. No Laplacian pyramid and no app API."
+   "note": "The shell's glass uses a fixed dual-Kawase pyramid on the GPU. A CPU Gaussian and Laplacian pyramid over 8-bit planes is tested headless in springboard/render/tests/parity_sdk-complete-46.rs, and collapsing a Laplacian pyramid restores the source exactly. Gap: no app API, and the pyramid is not wired into the shell or verified on Midget."
   },
   {
    "feature": "Thresholding",

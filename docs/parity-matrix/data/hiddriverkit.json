@@ -31,9 +31,9 @@
     {
       "feature": "Keyboard events",
       "apple": "Handling Keyboard Events from a Human Interface Device, kIOHIDSupportedKeyboardUsagePairsKey",
-      "bifrost": "springboard/src/bare/input.rs:16-18 (Key, Switch events), springboard/sdk/src/runtime.rs:20-28 (Input::Key)",
+      "bifrost": "springboard/src/bare/input.rs:16-18 (Key, Switch events), springboard/sdk/src/runtime.rs:20-28 (Input::Key), springboard/src/bare/key_usage.rs (usage_of, code_of, boot_modifier_bit, boot_report)",
       "status": "partial",
-      "note": "Key codes are evdev codes, not HID usages; no keyboard usage-pair declaration"
+      "note": "Key events stay evdev codes, and key_usage maps them to HID keyboard usages (page 0x07) with a boot keyboard report and roll-over, tested in springboard/tests/parity_sdk-complete-46.rs. Gap: no keyboard usage-pair declaration is published to the system, and keys outside the boot set (keypad, media, vendor keys) have no usage."
     },
     {
       "feature": "Touch and multitouch digitizer data",
