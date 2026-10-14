@@ -1,6 +1,7 @@
 //! Parity sdk-rest-05: headless tests of the app-facing ChaCha20-Poly1305 key object (bifrost_app::chacha_poly).
 
 use bifrost_app::chacha_poly::{ChaChaPolyKey, Error, NONCE_BYTES, TAG_BYTES};
+use bifrost_app::encrypted_archive::{self, Error as ArchiveError, HEADER_BYTES, MAGIC, VERSION};
 
 #[test]
 fn an_app_can_seal_a_message_and_open_it_with_its_key() {
@@ -41,4 +42,37 @@ fn a_box_without_room_for_a_nonce_and_tag_is_reported_as_invalid() {
 fn the_debug_form_of_a_key_shows_its_size_only() {
     let key = ChaChaPolyKey::from_bytes(&[0xFFu8; 32]).unwrap();
     assert_eq!(format!("{key:?}"), "ChaChaPolyKey(256 bits)");
+}
+
+#[test]
+fn an_encrypted_archive_round_trips_the_callers_archive_bytes() {
+    let key = ChaChaPolyKey::from_bytes(&[0x29; 32]).unwrap();
+    let archive = b"compressed archive bytes";
+    let sealed = encrypted_archive::seal(&key, archive).unwrap();
+    assert_eq!(&sealed[..MAGIC.len()], MAGIC);
+    assert_eq!(sealed[MAGIC.len()], VERSION);
+    assert_eq!(sealed.len(), HEADER_BYTES + NONCE_BYTES + archive.len() + TAG_BYTES);
+    assert_eq!(encrypted_archive::open(&key, &sealed).unwrap(), archive);
+}
+
+#[test]
+fn an_encrypted_archive_rejects_a_wrong_key_and_tampered_ciphertext() {
+    let key = ChaChaPolyKey::from_bytes(&[0x29; 32]).unwrap();
+    let wrong_key = ChaChaPolyKey::from_bytes(&[0x30; 32]).unwrap();
+    let mut sealed = encrypted_archive::seal(&key, b"private archive").unwrap();
+    assert_eq!(encrypted_archive::open(&wrong_key, &sealed), Err(ArchiveError::WrongKeyOrCorrupt));
+    sealed[HEADER_BYTES + NONCE_BYTES] ^= 1;
+    assert_eq!(encrypted_archive::open(&key, &sealed), Err(ArchiveError::WrongKeyOrCorrupt));
+}
+
+#[test]
+fn malformed_and_unknown_version_headers_are_refused() {
+    let key = ChaChaPolyKey::from_bytes(&[0x29; 32]).unwrap();
+    assert_eq!(encrypted_archive::open(&key, b"BFEA"), Err(ArchiveError::NotEncryptedArchive));
+    let mut sealed = encrypted_archive::seal(&key, b"payload").unwrap();
+    sealed[0] ^= 1;
+    assert_eq!(encrypted_archive::open(&key, &sealed), Err(ArchiveError::NotEncryptedArchive));
+    sealed[0] ^= 1;
+    sealed[MAGIC.len()] = VERSION + 1;
+    assert_eq!(encrypted_archive::open(&key, &sealed), Err(ArchiveError::UnsupportedVersion(VERSION + 1)));
 }

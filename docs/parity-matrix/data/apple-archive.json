@@ -4,7 +4,7 @@
   "macos_since": "11.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/archive.rs (ByteStream, compress_to, compress_to_threaded, decompress_from, compress_file, compress_directory, expand), springboard/sdk/src/compression.rs (encode_buffer_threaded), springboard/src/files/zip.rs (create, extract), springboard/src/shell/store/install.rs (read_tar, index_tar, extract_from), springboard/render/src/cg/pdf/inflate.rs",
-  "summary": "BifrOSt has an app-facing archive module in the SDK: ZIP folders and single files, raw DEFLATE for buffers, strings and byte streams, and a thread-count option for large streams. Tar reading and extraction serve app package install. The Apple Archive container format (header, entry messages, stream traits) and encrypted archives are not present.",
+ "summary": "BifrOSt has an app-facing archive module in the SDK: ZIP folders and single files, raw DEFLATE for buffers, strings and byte streams, a thread-count option for large streams, and a custom BFEA encrypted wrapper. Tar reading and extraction serve app package install. The Apple Archive container format (header, entry messages, stream traits) and Apple-compatible encrypted archive profiles are not present.",
   "rea_evidence": "ev_d29483e649b181c7241be638022e1dc6ebfbd3923c5a414205cc47a344dd7a4d",
   "features": [
     {
@@ -66,15 +66,15 @@
     {
       "feature": "Encrypted archives",
       "apple": "Apple Encrypted Archive; ArchiveEncryptionContext",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No encrypted archive format in the code. Blocked: springboard/sdk/Cargo.toml has no AEAD cipher crate (chacha20 appears in Cargo.lock only as a transitive dependency), so a direct dependency and a lock change are needed first; springboard/sdk/src/crypto_key.rs provides HMAC authentication only, and the reference encryption profiles are not implemented."
+      "bifrost": "springboard/sdk/src/encrypted_archive.rs (BFEA v1 wrapper over ChaCha20-Poly1305); springboard/sdk/tests/parity_sdk-rest-05.rs",
+      "status": "partial",
+      "note": "BFEA v1 seals caller-provided archive bytes with ChaCha20-Poly1305 and authenticates its header; host tests cover round-trip, wrong-key, tampering and version errors. This is a custom wrapper, not the Apple Encrypted Archive format or its profiles; compression and key derivation/storage remain the caller's responsibility. Not yet verified on Midget."
     }
   ],
   "gaps": [
     "No Apple Archive container (AAR) reader or writer, with its header, entry messages and stream model; the SDK writes ZIP and raw DEFLATE",
     "No preservation of file ownership, extended attributes or flags in archives, as far as the code shows",
-    "No encrypted archives or encryption context; blocked until the SDK has a cipher and key derivation",
+    "No Apple-compatible encrypted archive format or ArchiveEncryptionContext; BFEA v1 is a custom wrapper and callers manage compression and keys",
     "Multithreaded compression covers byte streams only; the Files app zip writer runs as a single background job",
     "No lazy matching in the DEFLATE encoder, so output is larger than a full zlib encoder"
   ]
