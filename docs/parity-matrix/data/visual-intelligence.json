@@ -31,9 +31,9 @@
     {
       "feature": "Creating your first app intent (Spotlight and Shortcuts)",
       "apple": "Creating your first app intent (article)",
-      "bifrost": "springboard/sdk/src/lib.rs (App::intents); springboard/src/shell/intents.rs",
+      "bifrost": "springboard/sdk/src/intents.rs (Intent::new, shortcut, param, manifest_toml, validate); springboard/sdk/src/lib.rs (App::intents); springboard/src/shell/intents.rs (runnable, request_line)",
       "status": "partial",
-      "note": "Spotlight lists shortcuts without parameters and runs them by calling intent.<id> on the app control socket. A Shortcuts app does not exist in BifrOSt."
+      "note": "A declared intent's manifest table, method name and parameter checks are tested in springboard/sdk/tests/parity_sdk-tests-08.rs (first_intent). Spotlight lists shortcuts without parameters and runs them by calling intent.<id> on the app control socket; that shell side is not covered by these tests. A Shortcuts app does not exist in BifrOSt."
     },
     {
       "feature": "Making actions and content discoverable by Apple Intelligence (schemas for Siri)",

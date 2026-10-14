@@ -12,7 +12,7 @@
    "apple": "IKImageView, IKImageBrowserView (deprecated), IKImageBrowserCell, IKImageBrowserDataSource, IKImageBrowserDelegate",
    "bifrost": "springboard/src/shell/photos/viewer.rs, springboard/src/shell/photos/grid.rs, springboard/src/shell/photos/zoom.rs",
    "status": "partial",
-   "note": "Full-screen viewer with paging, pinch and double-tap zoom and pan, and a grid of thumbnails, all inside the Photos shell app. No SDK view for apps to embed an image view or browser."
+   "note": "Full-screen viewer with paging, pinch and double-tap zoom and pan, and a grid of thumbnails, all inside the Photos shell app. The zoom arithmetic, grid layout and viewer gestures are tested in springboard/tests/parity_sdk-tests-08.rs. Gap: no SDK view for apps to embed an image view or browser."
   },
   {
    "feature": "Image editing panel and save options (IKImageEditPanel, IKSaveOptions)",

@@ -134,6 +134,71 @@ mod tests {
         assert_eq!(og_image(html).as_deref(), Some("https://www.visir.is/i/A_1600x900.jpg"));
         assert_eq!(og_image("<meta property=\"og:title\" content=\"t\">"), None);
     }
+
+    #[test]
+    fn og_image_accepts_single_quotes_and_content_before_the_property() {
+        let html = "<meta content='https://www.mbl.is/a/b.jpg' property='og:image'>";
+        assert_eq!(og_image(html).as_deref(), Some("https://www.mbl.is/a/b.jpg"));
+    }
+
+    #[test]
+    fn og_image_ignores_a_relative_picture_address() {
+        assert_eq!(og_image("<meta property=\"og:image\" content=\"/img/a.jpg\">"), None);
+        assert_eq!(og_image("<meta property=\"og:image\">"), None);
+    }
+
+    #[test]
+    fn og_image_of_a_page_without_head_tags_is_none() {
+        assert_eq!(og_image("<html><body><p>No picture</p></body></html>"), None);
+        assert_eq!(og_image(""), None);
+    }
+
+    #[test]
+    fn ruv_jpeg_asks_for_the_drawn_height_as_well_as_the_width() {
+        let src = format!("https://myndir.ruv.is/{}", b64_encode(br#"{"bucket": "b", "key": "media/y.jpg", "edits": {}}"#));
+        let out = ruv_jpeg(&src, 300, 200).unwrap();
+        let json = String::from_utf8(b64_decode(out.strip_prefix("https://myndir.ruv.is/").unwrap()).unwrap()).unwrap();
+        assert!(json.contains("\"height\": 200") && json.contains("\"fit\": \"cover\""), "{json}");
+    }
+
+    #[test]
+    fn base64_encodes_one_and_two_byte_input_with_padding() {
+        assert_eq!(b64_encode(b"M"), "TQ==");
+        assert_eq!(b64_encode(b"Ma"), "TWE=");
+        assert_eq!(b64_encode(b""), "");
+    }
+
+    #[test]
+    fn base64_decoding_refuses_characters_outside_the_alphabet() {
+        assert_eq!(b64_decode("ab!c"), None);
+        assert_eq!(b64_decode("TWFu"), Some(b"Man".to_vec()));
+    }
+
+    #[test]
+    fn headless_round_paints_the_outer_corner_with_the_background_and_keeps_the_middle() {
+        let red = pack(255, 0, 0, 255);
+        let black = pack(0, 0, 0, 255);
+        let mut img = Image { w: 8, h: 8, px: vec![red; 64] };
+        round(&mut img, 4, black);
+        assert_eq!(img.px[0], black, "top left corner");
+        assert_eq!(img.px[7], black, "top right corner");
+        assert_eq!(img.px[7 * 8], black, "bottom left corner");
+        assert_eq!(img.px[4 * 8 + 4], red, "centre is untouched");
+        assert_eq!(img.px[3 * 8 + 3], red, "the arc's inner pixel is untouched");
+    }
+
+    #[test]
+    fn headless_round_does_nothing_for_zero_radius_or_a_picture_too_small_for_it() {
+        let red = pack(255, 0, 0, 255);
+        let black = pack(0, 0, 0, 255);
+        let mut flat = Image { w: 8, h: 8, px: vec![red; 64] };
+        round(&mut flat, 0, black);
+        assert_eq!(flat.px[0], red);
+
+        let mut small = Image { w: 6, h: 6, px: vec![red; 36] };
+        round(&mut small, 4, black);
+        assert_eq!(small.px[0], red, "a 6 px side cannot hold two 4 px corners");
+    }
 }
 
 #[cfg(test)]
