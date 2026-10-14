@@ -10,7 +10,6 @@ mod eval;
 mod format;
 mod history;
 mod icon;
-mod options;
 mod paste;
 mod programmer;
 mod rpn;

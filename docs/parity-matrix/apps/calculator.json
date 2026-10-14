@@ -39,7 +39,7 @@
    "apple": "Localizable: 2nd / Alternate Functions, Secondary Functions (or hold Shift)",
    "status": "partial",
    "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:156",
-   "note": "2nd key works; holding Shift does not switch the keypad. The shell sends no modifier state to apps (a held Shift is never an input event), so the held-Shift switch needs an SDK input addition first.",
+   "note": "The 2nd key (calc.rs:156) switches the scientific keypad to its second layer; holding Shift does not switch it. The SDK app protocol carries no modifier state, so the held-Shift switch needs an SDK input addition first.",
    "wire": "Add a modifier-state input to the SDK app protocol, then treat a held Shift as Act::Second while it is down and redraw the keypad labels."
   },
   {
@@ -47,8 +47,8 @@
    "area": "view",
    "apple": "Localizable: Y to the X, Log Base y, Y root of X, 2 to the X",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:164",
-   "note": "Second layer now has yˣ (under eˣ), 2ˣ (under 10ˣ), log base y (under ln, infix logy in eval.rs) and the x-th root of y (under ʸ√x, infix rootx); built on parity/team-d-calculator; not yet verified on Midget.",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:160-166",
+   "note": "The second layer has yˣ (under eˣ), 2ˣ (under 10ˣ), log base y (under ln, infix logy) and the x-th root of y (under ʸ√x, infix rootx), all in the scientific key table (calc.rs:160-166). Not yet compared with the reference keypad on a device.",
    "wire": "Compare the second-layer labels and their order with the reference keypad on Midget."
   },
   {
@@ -83,18 +83,18 @@
    "area": "view",
    "apple": "Localizable: Programmer, Hexadecimal, Bitwise …, Shift Left/Right, Rotate, Byte Flip, Word Flip, Show Binary, ASCII value, Unicode value",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/programmer.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add a Programmer segment in the toolbar (calc.rs:396) driving programmer::Programmer: keypad A-F, operator keys, a clickable binary row from bits(), ASCII readout from ascii()."
+   "bifrost": "springboard/apps/calculator-desktop/src/programmer.rs; springboard/apps/calculator-desktop/src/calc.rs:755",
+   "note": "Programmer is a toolbar segment (calc.rs:755) and View > Programmer (cmd+3, calc/menu.rs:47) driving programmer::Programmer, with the A-F and operator keypad, a clickable bit row and a Unicode readout; the model is tested in programmer.rs. The ASCII readout and the Show Binary toggle are not in the UI yet, and it is not tested on Midget.",
+   "wire": "Show the ASCII value next to the Unicode readout, then verify the keypad on Midget."
   },
   {
    "feature": "RPN mode (enter, drop, swap, roll up/down, stack display)",
    "area": "view",
    "apple": "Localizable: RPN Mode On/Off, Enter, Drop, Swap, Rotate stack up/down",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/rpn.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add an RPN flag in Settings (history.rs:106) with a View-menu toggle; route the keypad to rpn::Rpn (= becomes enter) and draw stack() above the display."
+   "bifrost": "springboard/apps/calculator-desktop/src/rpn.rs; springboard/apps/calculator-desktop/src/calc/menu.rs:102",
+   "note": "RPN Mode (View, cmd+R, calc/menu.rs:102) routes the basic keypad to rpn::Rpn, with Enter, Swap, Drop and Roll Up and Down in the Stack menu (calc/menu.rs:126-129); the model is tested in rpn.rs. The stack values are not drawn above the display yet, and it is not tested on Midget.",
+   "wire": "Draw the stack() values above the display in RPN mode, then verify on Midget."
   },
   {
    "feature": "Unit conversion",
@@ -119,8 +119,8 @@
    "area": "view",
    "apple": "Localizable: History, Show/Hide History, Today/Yesterday/Previous 7/30 Days, Delete, Clear History confirm",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:1188",
-   "note": "Day captions (Today, Yesterday, dates) on the first row of each day (history.rs:163), per-entry delete by a left swipe or the right-click menu (calc/menu.rs:230), and Clear History asks for a second tap; the rows are not separate day sections yet; built on parity/team-d-calculator; not yet verified on Midget.",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:1188; springboard/apps/calculator-desktop/src/history.rs:163",
+   "note": "Day captions (Today, Yesterday, dates) on the first row of each day (history.rs:163), per-entry delete by a left swipe or the right-click menu (calc/menu.rs:230), and Clear History asks for a second tap; the rows are not separate day sections yet. Not verified on Midget.",
    "wire": "Draw full section headers between day groups instead of a caption inside the first row."
   },
   {
@@ -164,18 +164,18 @@
    "area": "settings",
    "apple": "Localizable: Show/Hide Thousands Separator",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/options.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add a View-menu toggle stored in Settings (history.rs:106) and render through options::Options in format.rs."
+   "bifrost": "springboard/apps/calculator-desktop/src/calc/menu.rs:54; springboard/apps/calculator-desktop/src/format.rs:192",
+   "note": "View > Thousands Separator (calc/menu.rs:54, 117) is stored in Settings and grouped by format::localize_with (format.rs:192); the display and the expression both group digits in threes when it is on. Not tested on Midget.",
+   "wire": "Verify on Midget that the checkmark and the grouping in the display and the history agree."
   },
   {
    "feature": "Decimal places and scientific notation display",
    "area": "settings",
    "apple": "Localizable: Decimal Places, Scientific Notation",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/options.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add View > Decimal Places submenu (Options::place_choices) and a Scientific Notation toggle; store with Options::to_text."
+   "bifrost": "springboard/apps/calculator-desktop/src/calc/menu.rs:55; springboard/apps/calculator-desktop/src/format.rs:126",
+   "note": "View > Decimal Places (Automatic and 0 to 15, calc/menu.rs:55-59) and View > Scientific Notation (calc/menu.rs:61) are stored in Settings and rendered by format::format_styled (format.rs:126); tested in the format.rs style tests. Not tested on Midget.",
+   "wire": "Verify on Midget that the place submenu shows the checkmark and that a fixed place count keeps trailing zeros."
   },
   {
    "feature": "Keyboard entry for every key",

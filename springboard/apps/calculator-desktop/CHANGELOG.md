@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0 — 2026-10-14
+
+- Display settings have one model: thousands separators, decimal places and scientific notation are rendered by
+  `format::Style`. The unused `options` module, a second copy of the same rules, is removed.
+- Parity matrix rows for the Programmer and RPN modes, the display settings, the second-layer keys and the history
+  list now cite the code that is wired in the UI.
+
 ## 1.9.0 — 2026-10-13
 
 - Programmer mode (toolbar segment and View menu): an integer calculator on an 8, 16, 32 or 64-bit word in binary,
