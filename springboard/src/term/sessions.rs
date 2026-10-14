@@ -1,4 +1,5 @@
 //! All PTYs stay polled, including tabs behind the active one.
+use super::tab_order;
 use super::Terminal;
 #[derive(Default)]
 pub struct Sessions {
@@ -100,6 +101,18 @@ impl Sessions {
                 self.close(i);
             }
         }
+    }
+    /// Moves session `from` to position `to` on the tab bar. The active tab and a split pair follow their sessions.
+    pub fn move_session(&mut self, from: usize, to: usize) {
+        if from == to || from >= self.items.len() || to >= self.items.len() {
+            return;
+        }
+        let session = self.items.remove(from);
+        self.items.insert(to, session);
+        self.active = tab_order::moved_index(self.active, from, to);
+        self.split = self
+            .split
+            .map(|(left, right)| (tab_order::moved_index(left, from, to), tab_order::moved_index(right, from, to)));
     }
     pub fn clear(&mut self) {
         self.items.clear();

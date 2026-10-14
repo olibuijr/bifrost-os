@@ -49,8 +49,8 @@
    "area": "window",
    "apple": "Window > Move Tab to New Window, Move Tab Left/Right, drag tabs",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/input.rs:139",
-   "note": "More > Move tab left and Move tab right reorder the tab bar (the active tab and a split pair follow their sessions). Pressing a tab name and dragging it along the bar moves the tab. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/term/tab_order.rs; springboard/src/term/sessions.rs (move_session); springboard/src/shell/terminal/tabs.rs (terminal_move_tab)",
+   "note": "More > Move tab left and Move tab right reorder the tab bar, and the active tab and a split pair follow their sessions. The order rule is tested headless in tests/parity_app-terminal.rs. Gap: dragging a tab name along the bar, and Move Tab to New Window, which needs several windows.",
    "wire": "Move Tab to New Window once multiple windows exist (see New window)."
   },
   {
@@ -58,8 +58,8 @@
    "area": "window",
    "apple": "Shell > Close Tab, Close Other Tabs",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/menus.rs:162",
-   "note": "Close Other Tabs added to the More menu (row 24). Needs a Midget check.",
+   "bifrost": "springboard/src/shell/terminal/menus.rs (terminal_menu_action: rows 5 and 24); springboard/src/shell/terminal/input.rs (TermKey::CloseTab)",
+   "note": "Close Tab (Cmd+W, File menu), Close Other Tabs and Reopen Closed Tab (More) are in the code. The Midget check is pending.",
    "wire": ""
   },
   {
@@ -94,8 +94,8 @@
    "area": "shell",
    "apple": "CFBundleURLTypes ssh://, telnet://",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/launch.rs:238",
-   "note": "The Terminal declares ssh and telnet (shell/defaultapps.rs:39); a link opens a new tab with ssh [-p port] [user@]host or telnet host [port] typed in, from validated words (no option injection). A tap on an ssh, telnet or x-man-page link in the output opens it in a new tab (termtouch.rs:238 picks the links). No server browser yet. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/shell/terminal/schemes.rs (link_argv, first_scheme_link); springboard/src/shell/terminal/menus.rs (terminal_open_selected_link)",
+   "note": "The Terminal declares ssh and telnet (shell/defaultapps.rs:39). Open link in selection runs an ssh or telnet link in a new tab as an argv of validated words, so no option reaches the command; the argv rules are tested headless in tests/parity_app-terminal.rs. Gap: a tap on a link in the output does not open it yet, and there is no server browser.",
    "wire": "Offer the server browser (see New Remote Connection) from the links and the Connections panel."
   },
   {
@@ -103,8 +103,8 @@
    "area": "shell",
    "apple": "x-man-page scheme; Open man Page, Search man Page Index services",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/selection.rs:24",
-   "note": "More menu row Open man page for selection opens man in a new tab. No x-man-page scheme or search index.",
+   "bifrost": "springboard/src/shell/terminal/schemes.rs (link_argv, x-man-page links); springboard/src/shell/terminal/selection.rs (man_argv)",
+   "note": "Open man page for selection and Open link in selection run man in a new tab. An x-man-page link is read as an optional section and a page name with the same word checks, and the rule is tested headless. Gap: no Services entries for the man page index and no index search.",
    "wire": "Add the Services entries for the man page index."
   },
   {
@@ -112,8 +112,8 @@
    "area": "shell",
    "apple": "Services: New Terminal / New Tab at Folder, Files Open in Terminal",
    "status": "partial",
-   "bifrost": "springboard/ui/src/services_menu.rs:101",
-   "note": "Services > New Terminal at Folder (the App menu Services list) opens a Terminal tab in the folder of the selection, or the folder of a selected file; the route is services_route.rs:72 and terminal_open_in_folder in terminal/launch.rs:217. Files Open in Terminal (files/menu.rs OpenInTerminal) was already built. Needs a check on Midget.",
+   "bifrost": "springboard/ui/src/services_menu.rs:101; springboard/src/shell/services_route.rs (Route::Terminal)",
+   "note": "Services > New Terminal at Folder opens a Terminal tab in the selected folder, or in the folder of a selected file (services_route.rs used the file's own path before this fix). Files Open in Terminal (files/menu.rs) was already built. Needs a check on Midget.",
    "wire": "Check Open in Terminal from a file and a folder, and the Services entry, on Midget."
   },
   {
@@ -131,7 +131,7 @@
    "apple": "Shell > Save as Window Group, Open Window Group",
    "status": "partial",
    "bifrost": "springboard/src/shell/terminal/groups.rs:32",
-   "note": "Save window group asks for a name (More), and Open window group lists the saved groups: a tap opens one, the cross deletes it after a second tap. Each tab keeps its folder and the profile in use; a command in a tab is typed when the group opens, but saving does not record the command of a running program yet. Open window group at launch opens the newest group. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "note": "Save window group stores each tab's folder under a name, and Open window group reopens one from the list; the encoding is tested in groups.rs. Gap: the running command of a tab is not recorded, and no group opens at launch.",
    "wire": "Record the running command of each tab when a group is saved."
   },
   {
@@ -139,17 +139,17 @@
    "area": "settings",
    "apple": "Settings > Profiles: Basic, Pro, Homebrew, Ocean, Novel, Red Sands, Silver Aerogel, Clear Dark/Light",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/panels.rs:57",
-   "note": "More > Profiles lists every colour theme and profile with the one in use marked; a tap uses it in every tab, and Use at Launch makes it the profile a Terminal starts with (profiles.rs:45). Color theme still cycles. A profile text size, caret and opacity are not applied yet. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/shell/terminal/profile_table.rs (PROFILES, profile_colors); springboard/src/shell/terminal/menus.rs (Color theme row)",
+   "note": "More > Color theme cycles the terminal core's colour themes, and profile_table.rs holds the nine profiles with their colours (Basic follows the scheme). Gap: there is no profile list or Use at Launch, and a profile's text size, caret and opacity are not applied.",
    "wire": "Apply each profile text size and caret, and its opacity (see Window background image and translucency)."
   },
   {
    "feature": "Profile editor: ANSI colours, bold, blink, text",
    "area": "settings",
    "apple": "Profiles > Text: font, character and line spacing, ANSI colours, bright for bold, antialias, blinking text",
-   "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/colors.rs:47",
-   "note": "More > Text and background colors takes the text and background colour in hex and keeps them as the Custom entry at the end of the Color theme cycle (kept in terminal.colors). Font, spacing, the ANSI palette and the bold and blink options are not editable. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No profile editor exists yet. The profiles are fixed in profile_table.rs (PROFILES), so the font, spacing, ANSI palette and bold, bright and blink options cannot be set.",
    "wire": "Add a font picker, character and line spacing steppers, ANSI palette wells and bold, bright and blink toggles stored per profile."
   },
   {
@@ -184,8 +184,8 @@
    "area": "settings",
    "apple": "Settings > General: shell, new windows open with profile, startup window group",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/profiles.rs:45",
-   "note": "Use at Launch (Profiles panel) sets the default profile, empty for the numbered theme. More > Startup command sets a command typed into the first tab at launch (startup.rs:52). Login shell and Open window group at launch are as before. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/term/mod.rs (SHELL: the login shell /bin/bash -l)",
+   "note": "The Terminal always starts the login shell /bin/bash -l (term/mod.rs SHELL). Gap: no shell choice, no startup command, no Use at Launch profile and no window group at launch; a per-window default profile waits on several windows.",
    "wire": "Multiple windows: each new window opens with the default profile (see New window)."
   },
   {
@@ -193,8 +193,8 @@
    "area": "edit",
    "apple": "Edit > Find (panel with Ignore Case, Wrap Around, Not found), Find Next/Previous, Use Selection for Find",
    "status": "partial",
-   "bifrost": "springboard/src/term/mod.rs:578",
-   "note": "Use Selection for Find (Cmd+E, Edit menu, More menu) added. Ignore Case and Wrap Around need the iosterm search API.",
+   "bifrost": "springboard/src/term/mod.rs (Terminal::find, Terminal::match_position); springboard/src/shell/terminal/find.rs",
+   "note": "Find, Find Next and Find Previous, and Use Selection for Find (Cmd+E) work. Matching always ignores case. Gap: the Find panel has no Ignore Case or Wrap Around switches, and wrapping needs options in the terminal core search.",
    "wire": "Add Ignore Case and Wrap Around toggles to the Find panel."
   },
   {
@@ -202,7 +202,7 @@
    "area": "edit",
    "apple": "Edit > Copy, Paste, Select All; paste selection, paste escaped text",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/menus.rs:170",
+   "bifrost": "springboard/src/shell/terminal/menus.rs (terminal_menu_action: Copy selection, Paste, Paste escaped text, Paste selection)",
    "note": "Paste Escaped Text and Paste Selection added to the More menu (rows 25, 26); no key equivalents yet.",
    "wire": "Give Paste Selection a key equivalent."
   },
@@ -247,8 +247,8 @@
    "area": "view",
    "apple": "Edit > Mark as Bookmark, Insert Bookmark, Jump to Previous/Next Mark, Marks menu",
    "status": "partial",
-   "bifrost": "springboard/src/term/mod.rs:637",
-   "note": "Prompt starts reported by the shell (OSC 133;A) and lines marked with Cmd+U get a green tick in the margin; Cmd+Up and Cmd+Down (Edit menu, More menu) scroll to the previous and next mark. Marks are kept until the scrollback is full. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/shell/terminal/profile_table.rs (osc133_prompts)",
+   "note": "The OSC 133 prompt parser (osc133_prompts) is tested in profile_table.rs, but nothing feeds its results into the scrollback yet, so no line is marked. Gap: Mark as Bookmark (Cmd+U), mark navigation with Cmd+Up and Cmd+Down, bookmarks and a Marks menu are not built.",
    "wire": "Keep marks across a full scrollback (the iosterm core needs to report how many lines it dropped), name bookmarks and list them in a panel."
   },
   {
@@ -266,7 +266,7 @@
    "apple": "Shell > Export Text As…, Save Selected Text As…",
    "status": "partial",
    "bifrost": "springboard/src/shell/terminal/panels.rs:191",
-   "note": "Save selected text to Files added (fixed file name); still no save panel.",
+   "note": "Save scrollback to Files and Save selected text to Files write fixed file names in the Files folder. Gap: no save panel, so the folder and the name are not chosen by the user.",
    "wire": "Use the SDK save panel for the folder choice (Export Text As and Save Selected Text As)."
   },
   {
@@ -283,8 +283,8 @@
    "area": "window",
    "apple": "Shell > Show Inspector (cmd+I): window title, running processes, size",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/window.rs:170",
-   "note": "The Processes panel has an Edit Title button (window.rs:170, opens the tab title field). Terminate, Force kill and the list are as before. Columns and rows are not editable yet. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/shell/terminal/window.rs (Processes panel)",
+   "note": "The Processes panel lists the processes and offers Terminate and Force kill. Gap: columns and rows are neither shown nor editable there, and the tab title is set from More > Edit title.",
    "wire": "Add a Columns and Rows stepper to the Processes panel."
   },
   {
@@ -292,7 +292,7 @@
    "area": "window",
    "apple": "Shell > Edit Title",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/command.rs:16",
+   "bifrost": "springboard/src/shell/terminal/command.rs (terminal_open_title_edit, terminal_run_command)",
    "note": "More menu row Edit title sets a per-tab title (Terminal::set_custom_title); empty restores the automatic one. No Inspector field yet.",
    "wire": ""
   },
@@ -301,8 +301,8 @@
    "area": "view",
    "apple": "Edit > Open URL, Look Up, Search the Web; command-click links",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/selection.rs:5",
-   "note": "Search the web for selection added to the More menu. No command-click and no Look Up.",
+   "bifrost": "springboard/src/shell/terminal/links.rs; springboard/src/shell/terminal/schemes.rs; springboard/src/shell/terminal/selection.rs (web_search_url)",
+   "note": "Open link in selection opens the first web link in the browser, or runs the first ssh, telnet or x-man-page link in a new tab. Search the web for selection is in the More menu. Gap: no command-click on a link and no Look Up.",
    "wire": "Add Cmd+click on a link (pointer modifiers)."
   },
   {
@@ -310,8 +310,8 @@
    "area": "window",
    "apple": "View > Enter Full Screen, Show Tab Bar, Show All Tabs",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/panels.rs:134",
-   "note": "View > Show All Tabs (and More) lists every open tab, and a tap shows it. Hide Tab Bar is not added yet. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/shell/desktop_bar.rs (File menu: Maximize / Restore Window)",
+   "note": "Full screen is the window's Maximize / Restore in the File menu. Gap: there is no View > Show All Tabs, no Hide Tab Bar and no tab overview with previews.",
    "wire": "Add Hide Tab Bar and a tab overview with previews."
   },
   {
@@ -328,8 +328,8 @@
    "area": "menu",
    "apple": "Shell, Edit, View, Window, Help menus",
    "status": "partial",
-   "bifrost": "springboard/src/shell/desktop_bar.rs:266",
-   "note": "The desktop menu bar carries More rows: File (New Command, Close Other Tabs, Save and Open Window Group), Edit (Paste Escaped Text, Paste Selection, Look Up, Find options, Export), View (Show All Tabs, Allow Mouse Reporting), Window (a row per tab) and Help (Terminal Help, in desktop_bar.rs:270). Built on parity/team-d-terminal; not yet verified on Midget.",
+   "bifrost": "springboard/src/shell/desktop_bar.rs (Menu::File, Menu::Edit and Menu::View rows while the Terminal is in front)",
+   "note": "While the Terminal is in front, the desktop menu bar adds New Tab and Close Tab (File), Find, Find Next, Find Previous and Clear Scrollback (Edit), and Bigger, Smaller and Actual Size (View). Gap: Profiles, Startup Command and Login Shell are not published as a Shell menu, and More rows such as Close Other Tabs and Paste Selection are not in the bar.",
    "wire": "Publish Profiles, Startup Command and Login Shell as a Shell menu through the menu bar API."
   },
   {
