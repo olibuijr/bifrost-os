@@ -1697,7 +1697,7 @@ impl Podcasts {
     /// The search field's frame (the capsule is drawn a little wider).
     fn search_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let m = self.margin(ui);
-        (self.side(ui) + m + ui.pt(SPACE_L), self.list_top(ui) + ui.pt(SPACE_S), self.content_w(ui) - 2.0 * m - ui.pt(2.0 * SPACE_L), ui.pt(32.0))
+        (self.side(ui) + m + ui.pt(SPACE_L), self.list_top(ui) + ui.pt(SPACE_S), self.content_w(ui) - 2.0 * m - ui.pt(2.0 * SPACE_L), ui.pt(SPACE_XXXL))
     }
 
     /// The floating mini player capsule (Golden Gate Podcasts and Music).
@@ -2555,7 +2555,7 @@ impl Podcasts {
                     }
                     let (ink, dim) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
                     let clock = springboard::shell::music::nowplaying::clock(chapter.start_ms as f64);
-                    let ty = y + (row_h - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(2.0);
+                    let ty = y + (row_h - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(SPACE_XXS);
                     self.text(s, ui, &clock, MAC_BODY_PT, Weight::Regular, dim, p.0 + pad, ty);
                     let room = p.2 - 2.0 * pad - ui.pt(64.0);
                     let title = ui.fit(&chapter.title, MAC_BODY_PT, room);
@@ -2733,7 +2733,7 @@ impl Podcasts {
             }
             if unplayed && !active {
                 // an unplayed episode carries the accent dot
-                s.fill_rrect(r.0 + ui.pt(SPACE_XS), r.1 + ui.pt(SPACE_M + 5.0), ui.pt(8.0), ui.pt(8.0), ui.pt(4.0), LINK);
+                s.fill_rrect(r.0 + ui.pt(SPACE_XS), r.1 + ui.pt(SPACE_M + 5.0), ui.pt(SPACE_S), ui.pt(SPACE_S), ui.pt(SPACE_XS), LINK);
             }
             let room = if matches!(row, Row::Hit(_)) { r.2 - ui.pt(SPACE_XXXL) - ui.pt(96.0) } else { r.2 - ui.pt(SPACE_XXXL) };
             let title = ui.fit(&title, MAC_BODY_PT, room);
@@ -2784,7 +2784,7 @@ impl Podcasts {
             } else if i + 1 < rows.len() {
                 s.fill_rect((r.0 + ui.pt(SPACE_L)) as usize, (r.1 + r.3 - 1.0).max(0.0) as usize, (r.2 - ui.pt(SPACE_L)) as usize, 1, SEPARATOR_C.now());
             }
-            let ty = r.1 + (r.3 - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(2.0);
+            let ty = r.1 + (r.3 - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(SPACE_XXS);
             self.text(s, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), r.0 + ui.pt(SPACE_L), ty);
             let value = ui.fit(value, MAC_BODY_PT, r.2 / 2.0);
             let vw = ui.measure(&value, MAC_BODY_PT, Weight::Regular);
@@ -2848,10 +2848,10 @@ impl Podcasts {
         self.text(s, ui, "Notes", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, origin + notes_y);
         let line_h = ui.pt(LINE_PT);
         if lines.iter().all(|(l, _)| l.is_empty()) {
-            self.text(s, ui, "No notes", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, origin + notes_y + ui.pt(24.0));
+            self.text(s, ui, "No notes", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, origin + notes_y + ui.pt(SPACE_XXL));
         }
         for (j, (line, _)) in lines.iter().enumerate() {
-            let y = origin + notes_y + ui.pt(24.0) + line_h * j as f32;
+            let y = origin + notes_y + ui.pt(SPACE_XXL) + line_h * j as f32;
             if line.is_empty() || y + line_h < top || y >= bottom {
                 continue;
             }
