@@ -749,7 +749,7 @@ fn run() -> std::io::Result<()> {
                     let code = kp.remap.apply(code);
                     key_repeat.set_timing(f64::from(kp.repeat_delay_ms), kp.repeat_rate);
                     shell.keyboard_viewer_key(code, down);
-                    let raw_sc = hw_keys.key_in(code, down, shell.term_front()).filter(|sc| springboard::shell::kb_input::enabled(*sc, kp.shortcuts_off));
+                    let raw_sc = hw_keys.key_front(code, down, shell.term_front(), shell.photos_front()).filter(|sc| springboard::shell::kb_input::enabled(*sc, kp.shortcuts_off));
                     if trace {
                         eprintln!("springboard: key {code} {} shortcut={raw_sc:?}", if down { "down" } else { "up" });
                     }

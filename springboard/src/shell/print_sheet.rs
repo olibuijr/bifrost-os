@@ -456,6 +456,16 @@ impl PrintSheet {
 
 impl Shell {
     /// File > Print…: captures the desktop as the document and opens the sheet over it.
+    /// Print of a picture (Photos' File > Print): the print sheet over the picture itself.
+    pub(super) fn print_image_open(&mut self, img: Image) {
+        if self.print_sheet.is_some() {
+            return;
+        }
+        let printers = Client::local().printers().unwrap_or_default();
+        self.print_sheet = Some(PrintSheet::new(&self.ui, img, &printers));
+        self.dirty = true;
+    }
+
     pub(super) fn print_sheet_open(&mut self, t: f64) {
         if self.print_sheet.is_some() {
             return;

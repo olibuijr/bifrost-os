@@ -24,6 +24,8 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the leading system menu (the menu equivalent), drawn as the BifrOSt mark
     System,
     App,File,Edit,View,Window,Help,Network,Power,
+    /// Photos' Image menu: shown on the bar only while Photos is in front
+    Image,
     /// the Bluetooth menu extra: the radio, the paired and connected devices, and the Bluetooth pane
     Bluetooth,
     /// the recording stop item, shown while a screen recording runs: a red dot whose menu has Stop Recording
@@ -43,7 +45,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -82,6 +84,16 @@ pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_
 pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Settings…","cmd+,"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
 #[cfg(feature = "desktop-wayland")]
 impl Row {fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None}}}
+/// One row of a Photos menu: its title (with a check mark for a setting that is on), its key equivalent, and its
+/// action when the command can run now (greyed out otherwise).
+#[cfg(feature = "desktop-wayland")]
+fn photo_row(p:&super::photos::Photos,c:super::photos::commands::PhotoCommand)->Row{
+    let title=p.command_title(c);
+    let text=if c.checkable(){format!("{} {}",if p.command_checked(c){"\u{2713}"}else{" "},title)}else{title};
+    let mut r=if p.command_enabled(c){Row::action(text,Action::Photo(c))}else{Row::label(text)};
+    if let Some(k)=c.key_text(){r=r.key(k);}
+    r
+}
 /// Accessors the chrome menu bar model reads (chrome_host/menubar.rs): the separator flag and the shortcut text.
 #[cfg(feature = "desktop-wayland")]
 impl Row {pub(super) fn is_separator(&self)->bool {self.sep} pub(super) fn key_text(&self)->Option<&str> {self.key.as_deref()}}
@@ -121,6 +133,14 @@ impl Shell {
     /// Without the desktop's chrome text cache, a label is fitted by the shared text measure.
     #[cfg(not(feature="desktop-wayland"))]
     pub(super) fn fit_chrome(&self,text:&str,pt:f32,max_px:f32)->String {self.ui.fit(text,pt,max_px)}
+    /// Photos' commands come from the desktop menus and its key equivalents, which exist only with the desktop.
+    #[cfg(not(feature="desktop-wayland"))]
+    pub(super) fn photo_command(&mut self,command:super::photos::commands::PhotoCommand,t:f64)->Vec<super::Effect>{
+        if let Some(p)=self.photos.as_mut(){p.command(&self.ui,command,t);let _=p.take_print();}
+        self.dirty=true;
+        let _=t;
+        Vec::new()
+    }
 }
 #[cfg(feature="desktop-wayland")]
 impl Shell {
@@ -169,7 +189,7 @@ impl Shell {
         // the app's own menus follow its name menu (`NativeApp.mainMenu`), before the shell's File, Edit, View, Window and Help
         let mut bar:Vec<(Menu,String)>=vec![(Menu::App,name.clone())];
         bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,m)|(Menu::Custom(i as u8),self.fit_chrome(&m.title,13.,self.ui.pt(120.)))));
-        bar.extend([(Menu::File,"File"),(Menu::Edit,"Edit"),(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")].map(|(m,l)|(m,l.to_string())));
+        let mut shell_bar:Vec<(Menu,&str)>=vec![(Menu::File,"File"),(Menu::Edit,"Edit")];if self.photos_front(){shell_bar.push((Menu::Image,"Image"));}shell_bar.extend([(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")]);bar.extend(shell_bar.into_iter().map(|(m,l)|(m,l.to_string())));
         for (kind,label) in bar.iter().map(|(k,l)|(*k,l.as_str())) {
             let width=self.measure_chrome(label,13.,Weight::Semibold)+self.ui.pt(24.);buttons.push((kind,x,width,label.into()));x+=width;
         }
@@ -236,6 +256,7 @@ impl Shell {
     }
     pub(super) fn menu_rows(&self,menu:Menu)->Vec<Row> {
         let mut rows=self.own_menu_rows(menu);
+        if self.photos_front(){rows=self.photo_overlay(menu,rows);}
         if let Screen::App(AppId::External(slot))=self.screen {
             let merged:Vec<Row>=self.app_menus().iter().filter(|m|shell_menu(&m.title)==Some(menu)).flat_map(|m|app_menu_rows(slot,m)).collect();
             if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
@@ -245,6 +266,7 @@ impl Shell {
     fn own_menu_rows(&self,menu:Menu)->Vec<Row> {
         match menu {
             Menu::Document=>Vec::new(),
+            Menu::Image=>self.photo_image_rows(),
             // each enabled source, the active one checked; picking one makes it the source (`kb_layouts::set_active`)
             Menu::Input=>{let mut v:Vec<Row>=super::kb_layouts::Layout::ALL.iter().enumerate().filter(|(_,l)|super::kb_layouts::is_enabled(**l)).map(|(i,l)|Row::action(format!("{} {}",if *l==super::kb_layouts::active(){"✓"}else{" "},l.name()),Action::InputSource(i as u8))).collect();v.extend([Row::separator(),Row::action("Show Keyboard Viewer",Action::KeyboardViewer)]);v},
             Menu::Status(i)=>self.status_entries_now().get(i as usize).map(|e|e.menu.iter().map(|m|if m.separator{Row::separator()}else if m.enabled{Row::action(format!("{} {}",if m.checked{"✓"}else{" "},m.title),Action::StatusItem(e.slot,e.item,m.id))}else{Row::label(format!("{} {}",if m.checked{"✓"}else{" "},m.title))}).collect()).unwrap_or_default(),
@@ -429,7 +451,7 @@ impl Shell {
     pub(super) fn desktop_menu_key(&mut self,code:u16,t:f64)->Option<Vec<Effect>> {
         let menu=self.desktop_menu?;if !self.desk_active()||self.is_locked(){return None;}
         if menu==Menu::Document{self.doc_key(code,t);return Some(vec![]);}
-        let mut bar=vec![Menu::System,Menu::App];bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,_)|Menu::Custom(i as u8)));bar.extend([Menu::File,Menu::Edit,Menu::View,Menu::Window,Menu::Help]);
+        let mut bar=vec![Menu::System,Menu::App];bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,_)|Menu::Custom(i as u8)));bar.extend([Menu::File,Menu::Edit]);if self.photos_front(){bar.push(Menu::Image);}bar.extend([Menu::View,Menu::Window,Menu::Help]);
         self.dirty=true;
         match code {
             103|108=>{if let Some(i)=self.menu_step(menu,if code==108{1}else{-1}){self.desktop_menu_row=Some((menu,i));}},
@@ -499,7 +521,69 @@ impl Shell {
                     Action::Bluetooth(command)=>effects.push(Effect::Bluetooth(command)),
                     Action::Portal(url)=>{let _=self.desktop_open_url(&url,t);},
                     Action::RecordStop=>self.recording_stop_from_menu(),
+                    Action::Photo(command)=>effects.extend(self.photo_command(command,t)),
                 }effects
+    }
+    /// Runs a Photos command from a menu row or a key equivalent, and opens the print sheet when it asked for one.
+    pub(super) fn photo_command(&mut self,command:super::photos::commands::PhotoCommand,t:f64)->Vec<Effect>{
+        if let Some(p)=self.photos.as_mut(){p.command(&self.ui,command,t);}
+        self.photo_print_taken();
+        self.dirty=true;
+        Vec::new()
+    }
+    /// Opens the print sheet over the picture a Print command handed over (the picture is dropped without a print sheet).
+    #[cfg(feature = "desktop-wayland")]
+    fn photo_print_taken(&mut self) {
+        if let Some(image)=self.photos.as_mut().and_then(|p|p.take_print()){self.print_image_open(image);}
+    }
+    #[cfg(not(feature = "desktop-wayland"))]
+    fn photo_print_taken(&mut self) {
+        if let Some(p)=self.photos.as_mut(){let _=p.take_print();}
+    }
+    /// The Image menu of Photos: what the open photo, or the selection, can do.
+    fn photo_image_rows(&self)->Vec<Row>{
+        use super::photos::commands::PhotoCommand as P;
+        let Some(p)=self.photos.as_ref() else {return Vec::new();};
+        let mut v=vec![photo_row(p,P::Favourite),photo_row(p,P::Hide),Row::separator()];
+        v.extend([0,1,2,3,4,5].into_iter().map(|n|photo_row(p,P::Rate(n))));
+        v.push(Row::separator());
+        v.push(photo_row(p,P::Info));
+        v.push(Row::separator());
+        v.extend([P::RotateLeft,P::RotateRight,P::FlipHorizontal,P::FlipVertical,P::AutoEnhance].into_iter().map(|c|photo_row(p,c)));
+        v.push(Row::separator());
+        v.push(photo_row(p,P::RevertToOriginal));
+        v.push(Row::separator());
+        v.extend([P::Duplicate,P::CopyEdits,P::PasteEdits].into_iter().map(|c|photo_row(p,c)));
+        v.push(Row::separator());
+        v.push(photo_row(p,P::MergeDuplicates));
+        v.push(photo_row(p,P::Delete));
+        v
+    }
+    /// The File, Edit and View menus while Photos is in front: Photos' own commands lead File and View, and its Edit
+    /// menu replaces the shell's. The shell's Print row is Photos' own, so it is dropped from File.
+    fn photo_overlay(&self,menu:Menu,rows:Vec<Row>)->Vec<Row>{
+        use super::photos::commands::PhotoCommand as P;
+        let Some(p)=self.photos.as_ref() else {return rows;};
+        match menu {
+            Menu::File=>{
+                let mut v=vec![photo_row(p,P::NewAlbum),photo_row(p,P::RenameAlbum),photo_row(p,P::DeleteAlbum),Row::separator(),photo_row(p,P::Import),photo_row(p,P::Export),photo_row(p,P::Print),Row::separator(),photo_row(p,P::PlaySlideshow),Row::separator()];
+                let mut rest:Vec<Row>=rows.into_iter().filter(|r|!r.text.starts_with("Print")).collect();
+                while rest.last().is_some_and(|r|r.sep){rest.pop();}
+                v.extend(rest);
+                v
+            }
+            Menu::Edit=>{
+                let mut v=vec![photo_row(p,P::Undo),photo_row(p,P::Redo),Row::separator(),photo_row(p,P::Copy),Row::separator(),photo_row(p,P::SelectAll),photo_row(p,P::DeselectAll),Row::separator(),photo_row(p,P::Find),Row::separator()];
+                v.push(Row::action("Emoji & Symbols",Action::CharacterViewer));
+                v
+            }
+            Menu::View=>{
+                let mut v=vec![photo_row(p,P::ZoomIn),photo_row(p,P::ZoomOut),Row::separator(),photo_row(p,P::NewestFirst),photo_row(p,P::OldestFirst),photo_row(p,P::AlbumsByName),Row::separator(),photo_row(p,P::ShowAll),photo_row(p,P::FavouritesOnly),photo_row(p,P::EditedOnly),photo_row(p,P::ScreenshotsOnly),photo_row(p,P::FilterDate),Row::separator(),photo_row(p,P::ShowHidden),photo_row(p,P::AspectGrid),Row::separator(),Row::action("Enter Full Screen",Action::Zoom).key("ctrl+cmd+f"),Row::separator()];
+                v.extend(rows);
+                v
+            }
+            _=>rows,
+        }
     }
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).
     pub(super) fn desk_window_close_or_minimize(&mut self,minimize:bool)->Vec<Effect> {

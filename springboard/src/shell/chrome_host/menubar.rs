@@ -74,6 +74,7 @@ pub(super) fn model(shell: &Shell) -> MenuBarModel {
             | Menu::Custom(_)
             | Menu::File
             | Menu::Edit
+            | Menu::Image
             | Menu::View
             | Menu::Window
             | Menu::Help => menus.push(BarMenu { id, title, items }),

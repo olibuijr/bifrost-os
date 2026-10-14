@@ -6,6 +6,7 @@
 
 use super::keyboard::Out;
 use super::desk::Tile;
+use super::photos::commands::PhotoCommand;
 use super::{AppId, Effect, Screen, Shell};
 use crate::installer::keymaps::{Keyboard, Typed};
 use bifrost_proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
@@ -130,6 +131,8 @@ pub enum Shortcut {
     LookUp,
     /// Shift+Cmd+5: the screenshot toolbar, a capture session over the screen
     Capture,
+    /// a Photos menu command or its key equivalent, taken while Photos is in front (`photos::commands`)
+    Photo(PhotoCommand),
     /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
     ZoomToggle,
     /// Option+Cmd+= (true) zooms the screen in one step, Option+Cmd+- (false) zooms it out
@@ -146,7 +149,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) => return None,
         }))
     }
 }
@@ -193,6 +196,12 @@ impl HwKeys {
 
     /// `key`, with Term's Cmd chords taken first when `term` (Term is in front).
     pub fn key_in(&mut self, code: u16, down: bool, term: bool) -> Option<Shortcut> {
+        self.key_front(code, down, term, false)
+    }
+
+    /// `key`, with the key equivalents of the front app taken first: Term's Cmd chords while `term`, and Photos'
+    /// commands while `photos`.
+    pub fn key_front(&mut self, code: u16, down: bool, term: bool, photos: bool) -> Option<Shortcut> {
         if code == KEY_RIGHTALT {
             self.altgr = if down { self.altgr.saturating_add(1) } else { self.altgr.saturating_sub(1) };
         }
@@ -224,6 +233,11 @@ impl HwKeys {
         if term && meta && !ctrl && !alt {
             if let Some(k) = TermKey::from_chord(code, self.shift > 0) {
                 return Some(Shortcut::Term(k));
+            }
+        }
+        if photos && meta && !ctrl {
+            if let Some(c) = PhotoCommand::from_chord(code, self.shift > 0, alt) {
+                return Some(Shortcut::Photo(c));
             }
         }
         match code {
@@ -578,6 +592,10 @@ impl Shell {
     pub fn term_front(&self) -> bool {
         self.screen_on && self.screen == Screen::App(AppId::Terminal) && !self.is_locked()
     }
+    /// True while Photos is the front app: its menus show, and its Cmd key equivalents are taken.
+    pub fn photos_front(&self) -> bool {
+        self.screen_on && self.screen == Screen::App(AppId::Photos) && !self.is_locked()
+    }
     pub fn hw_window_shortcut(&self, sc: Shortcut) -> bool {
         cfg!(feature = "desktop-wayland") && matches!(sc, Shortcut::Close | Shortcut::Minimize) && self.desk_active() && !self.is_locked()
     }
@@ -689,6 +707,7 @@ impl Shell {
             Shortcut::Back => self.hw_back(t),
             Shortcut::Home => self.assistive_action(super::assistive_touch::Action::Home, t),
             Shortcut::Term(k) => self.terminal_hw_key(k, t),
+            Shortcut::Photo(c) => self.photo_command(c, t),
             Shortcut::Paste if self.screen == Screen::App(AppId::Terminal) => {
                 self.type_out(Out::Named("Paste"), t);
                 vec![]
