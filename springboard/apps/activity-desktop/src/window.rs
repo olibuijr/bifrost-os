@@ -49,6 +49,19 @@ pub const B_STOP: u32 = 5;
 pub const B_REPORT_CLOSE: u32 = 6;
 pub const B_REPORT_SAVE: u32 = 7;
 pub const B_REPORT_COPY: u32 = 8;
+pub const B_INSPECT_DONE: u32 = 9;
+pub const B_REVEAL: u32 = 10;
+
+/// The Inspect Process segments: Memory, Statistics, and Open Files and Ports.
+pub const INSPECT_SEGMENTS: [&str; 3] = ["Memory", "Statistics", "Open Files and Ports"];
+/// The inspector's list line height (points), the card's inset, and where its segments and body start below the top
+/// of the panel.
+pub const INSPECT_ROW_PT: f32 = 16.0;
+pub const INSPECT_PAD_PT: f32 = 14.0;
+pub const INSPECT_SEG_Y_PT: f32 = 58.0;
+pub const INSPECT_BODY_Y_PT: f32 = 94.0;
+/// The inspector's segmented control is at most this wide (points).
+const INSPECT_SEG_MAX_PT: f32 = 440.0;
 /// Sidebar row ids.
 const ROW_ALL: u32 = 1;
 const ROW_MINE: u32 = 2;
@@ -210,6 +223,9 @@ pub enum Press {
     None,
     Sheet,
     Report,
+    /// A press in the inspector's body (it scrolls by dragging) or on one of its segments.
+    Inspect,
+    InspectSeg(usize),
     Sidebar,
     Toolbar(u32),
     Tab(usize),
@@ -251,8 +267,14 @@ pub struct Monitor {
     pub status: String,
     pub labels: TextCache,
     pub press: Press,
-    /// The process being inspected (its pid and the last reading), shown in place of the graph.
+    /// The process being inspected (its pid and the last reading), shown in place of the graph and the table.
     pub inspector: Option<(u32, Inspection)>,
+    /// The inspector segment shown (an index into `INSPECT_SEGMENTS`).
+    pub inspect_segment: usize,
+    /// Scrolls the inspector's Open Files and Ports list.
+    pub inspect_scroll: Scroller,
+    /// The program the window asks the app layer to reveal in Files; taken with `take_reveal`.
+    pub reveal: Option<PathBuf>,
     pub frequency: UpdateFrequency,
     /// Which optional columns the user turned on or off (View > Columns).
     pub columns: ColumnSet,
@@ -307,6 +329,9 @@ impl Monitor {
             labels: TextCache::default(),
             press: Press::None,
             inspector: None,
+            inspect_segment: 0,
+            inspect_scroll: Scroller::new(),
+            reveal: None,
             frequency: UpdateFrequency::VeryOften,
             columns: ColumnSet::default(),
             baselines: HashMap::new(),
@@ -337,6 +362,7 @@ impl Monitor {
         if let Some(report) = &mut self.report {
             moving |= report.scroll.tick(t);
         }
+        moving |= self.inspect_scroll.tick(t);
         moving |= self.poll_job();
         let due = self.last_sample.map_or(true, |last| t - last >= self.frequency.millis());
         if !due {
@@ -771,13 +797,68 @@ impl Monitor {
         self.selected_proc().is_some()
     }
 
-    /// Opens the inspector on the selected process, or closes it when it is open.
+    /// Opens the inspector on the selected process, or closes it when it is open. It opens on the Memory segment.
     pub fn toggle_inspector(&mut self) {
         if self.inspector.take().is_some() {
             return;
         }
         let Some(pid) = self.selected else { return };
+        self.report = None;
+        self.search_focused = false;
+        self.inspect_segment = 0;
+        self.inspect_scroll.jump_top();
         self.inspector = Some((pid, inspect::inspect(pid)));
+    }
+
+    /// The process the inspector shows, as the last reading has it (None once it has gone from the list).
+    pub fn inspected_proc(&self) -> Option<&ProcSample> {
+        let (pid, _) = self.inspector.as_ref()?;
+        self.snapshot.as_ref()?.procs.iter().find(|p| p.pid == *pid)
+    }
+
+    /// The inspector's panel: the report's area, under the toolbar and down to the footer.
+    pub fn inspector_rect(&self, ui: &Ui) -> Rect {
+        self.report_rect(ui)
+    }
+
+    /// The segmented control of the inspector, under the title.
+    pub fn inspector_seg_rect(&self, ui: &Ui) -> Rect {
+        let r = self.inspector_rect(ui);
+        Rect { x: r.x + INSPECT_PAD_PT, y: r.y + INSPECT_SEG_Y_PT, w: (r.w - 2.0 * INSPECT_PAD_PT).min(INSPECT_SEG_MAX_PT), h: SEG_H_PT }
+    }
+
+    /// The lines of the Open Files and Ports segment (see `inspect::file_and_port_lines`).
+    pub fn inspector_lines(&self) -> Vec<(bool, String)> {
+        self.inspector.as_ref().map_or_else(Vec::new, |(_, data)| inspect::file_and_port_lines(data))
+    }
+
+    /// Sets the Open Files and Ports list's scroll range from its line count.
+    pub fn fit_inspect_scroll(&mut self, ui: &Ui) {
+        let r = self.inspector_rect(ui);
+        let body = (r.h - INSPECT_BODY_Y_PT - INSPECT_PAD_PT).max(0.0);
+        let max = (self.inspector_lines().len() as f32 * INSPECT_ROW_PT - body).max(0.0);
+        self.inspect_scroll.set_max(max);
+    }
+
+    /// Closes the inspector.
+    pub fn close_inspector(&mut self) {
+        self.inspector = None;
+    }
+
+    /// Reveal in Files: asks the app layer to show the inspected program. The app layer holds the grant for it.
+    pub fn reveal_in_files(&mut self) {
+        let Some((_, data)) = &self.inspector else { return };
+        if data.exe.is_empty() {
+            self.status = "This process has no program file to show".into();
+            return;
+        }
+        self.reveal = Some(PathBuf::from(&data.exe));
+        self.status = "Showing the program in Files".into();
+    }
+
+    /// Hands the app layer the program to reveal, once.
+    pub fn take_reveal(&mut self) -> Option<PathBuf> {
+        self.reveal.take()
     }
 
     // --- layout ---
@@ -924,6 +1005,13 @@ impl Monitor {
     }
 
     fn bar(&self) -> Toolbar {
+        if self.inspector.is_some() {
+            return Toolbar::new(vec![
+                ToolbarItem::button(B_INSPECT_DONE, "Done"),
+                ToolbarItem::button(B_REVEAL, "Reveal in Files"),
+                ToolbarItem::flexible_space(),
+            ]);
+        }
         if self.report.is_some() {
             return Toolbar::new(vec![
                 ToolbarItem::button(B_REPORT_CLOSE, "Done"),
@@ -985,6 +1073,8 @@ impl Monitor {
                     self.status = "Copied the report".into();
                 }
             }
+            B_INSPECT_DONE => self.close_inspector(),
+            B_REVEAL => self.reveal_in_files(),
             B_SEARCH => self.search_focused = true,
             _ => {}
         }
@@ -1025,7 +1115,11 @@ impl Monitor {
             }
             return true;
         }
-        // Escape leaves the report
+        // Escape leaves the inspector and the report
+        if self.inspector.is_some() && code == 1 {
+            self.close_inspector();
+            return true;
+        }
         if self.report.is_some() && code == 1 {
             self.report = None;
             return true;
@@ -1051,6 +1145,21 @@ impl Monitor {
         true
     }
 
+    /// What a press in the inspector's panel starts: a segment, or a drag of its list.
+    fn inspector_press(&mut self, ui: &Ui, x: f32, y: f32, t: f64) -> Press {
+        let seg = self.inspector_seg_rect(ui);
+        if y >= seg.y && y < seg.y + seg.h && x >= seg.x && x < seg.x + seg.w {
+            return sheet::segment_hit(seg, INSPECT_SEGMENTS.len(), x, y).map_or(Press::None, Press::InspectSeg);
+        }
+        let g = self.geo(ui);
+        let body_top = self.inspector_rect(ui).y + INSPECT_BODY_Y_PT;
+        if y >= body_top && y < g.table_bottom {
+            self.inspect_scroll.down(y, t);
+            return Press::Inspect;
+        }
+        Press::None
+    }
+
     /// A touch. Pixels in, points used inside. True when a frame is needed.
     pub fn touch(&mut self, ui: &Ui, kind: TouchKind, x: f32, y: f32, t: f64) -> bool {
         let k = ui.pt(1.0);
@@ -1069,6 +1178,8 @@ impl Monitor {
                     Press::Sidebar
                 } else if y < UNIFIED_BAR_PT {
                     self.toolbar_hit(ui, x, y).map_or(Press::None, Press::Toolbar)
+                } else if self.inspector.is_some() {
+                    self.inspector_press(ui, x, y, t)
                 } else if self.report.is_some() {
                     // the report fills the content; it scrolls by dragging
                     if y < g.table_bottom {
@@ -1097,6 +1208,9 @@ impl Monitor {
                 if self.press == Press::Table {
                     self.scroll.moved(y, t);
                 }
+                if self.press == Press::Inspect {
+                    self.inspect_scroll.moved(y, t);
+                }
                 if self.press == Press::Report {
                     if let Some(report) = &mut self.report {
                         report.scroll.moved(y, t);
@@ -1114,7 +1228,18 @@ impl Monitor {
                     Press::Sidebar => {
                         if let Some(id) = self.sidebar_hit(ui, x, y) {
                             self.report = None;
+                            self.inspector = None;
                             self.select_filter(id);
+                        }
+                    }
+                    Press::Inspect => {
+                        self.inspect_scroll.up(y, t);
+                    }
+                    Press::InspectSeg(i) => {
+                        let seg = self.inspector_seg_rect(ui);
+                        if sheet::segment_hit(seg, INSPECT_SEGMENTS.len(), x, y) == Some(i) {
+                            self.inspect_segment = i;
+                            self.inspect_scroll.jump_top();
                         }
                     }
                     Press::Report => {
@@ -1616,5 +1741,46 @@ mod tests {
         assert!(m.key(13));
         assert_eq!(m.signal_sheet, None);
         assert_eq!(m.status, "Could not signal STOP mine", "the process does not exist, so the signal is refused");
+    }
+
+    #[test]
+    fn the_inspector_opens_on_memory_and_closes_with_escape() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.selected = Some(std::process::id());
+        m.inspect_segment = 2;
+        m.toggle_inspector();
+        assert_eq!(m.inspect_segment, 0, "a new inspection starts on Memory");
+        assert!(m.inspector.is_some());
+        let ids = |m: &Monitor| m.bar().items.iter().map(|i| i.id).collect::<Vec<_>>();
+        assert_eq!(&ids(&m)[..2], &[B_INSPECT_DONE, B_REVEAL]);
+        assert!(!ids(&m).contains(&B_SEARCH));
+        assert!(m.key(1));
+        assert!(m.inspector.is_none());
+    }
+
+    #[test]
+    fn reveal_asks_for_the_inspected_program() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert_eq!(m.take_reveal(), None);
+        m.selected = Some(std::process::id());
+        m.toggle_inspector();
+        m.reveal_in_files();
+        let path = m.take_reveal().expect("the program of this process");
+        assert!(!path.as_os_str().is_empty());
+        assert_eq!(m.take_reveal(), None, "handed out once");
+        m.inspector.as_mut().unwrap().1.exe.clear();
+        m.reveal_in_files();
+        assert_eq!(m.take_reveal(), None);
+        assert_eq!(m.status, "This process has no program file to show");
+    }
+
+    #[test]
+    fn the_inspector_lists_files_then_ports() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.selected = Some(std::process::id());
+        m.toggle_inspector();
+        let lines = m.inspector_lines();
+        assert!(lines.len() >= 2, "a heading for the files and one for the ports");
+        assert!(lines[0].0, "the first line is a heading");
     }
 }

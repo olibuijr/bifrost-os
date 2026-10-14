@@ -24,6 +24,7 @@ use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::dock_tile;
 use bifrost_app::proto::DocErrorCode;
 use bifrost_app::windows::{self, WindowListOptions};
+use bifrost_app::workspace;
 use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use model::{ColumnSet, DockMode, Filter, Tab, UpdateFrequency, SIGNALS};
@@ -57,6 +58,8 @@ struct ActivityApp {
     export: Option<(u32, Export)>,
     /// The window list asked for, by request id.
     window_request: Option<u32>,
+    /// The read grant asked for the program that Reveal in Files shows, by request id.
+    reveal_request: Option<u32>,
 }
 
 impl ActivityApp {
@@ -68,6 +71,10 @@ impl ActivityApp {
         }
         if self.monitor.as_mut().map_or(false, Monitor::take_window_poll) {
             self.window_request = Some(windows::list(ctx, WindowListOptions::all()));
+        }
+        // Reveal in Files needs a read grant for the program; the grant comes back as a document event
+        if let Some(path) = self.monitor.as_mut().and_then(Monitor::take_reveal) {
+            self.reveal_request = Some(ctx.grant_path(&path.to_string_lossy()));
         }
         let Some(request) = self.monitor.as_mut().and_then(Monitor::take_request) else { return };
         // a save still waiting is dropped, and an archive it held is cleaned up
@@ -260,6 +267,24 @@ impl App for ActivityApp {
                 }
                 true
             }
+            DocumentEvent::Opened(doc) if Some(doc.request) == self.reveal_request => {
+                self.reveal_request = None;
+                let grant = doc.grant;
+                workspace::activate_file_viewer_selecting(ctx, &[grant], |_| {});
+                // the reveal is sent before the release, so the shell still has the grant when it reads the request
+                ctx.release_document(grant);
+                true
+            }
+            DocumentEvent::Failed { request, code } if Some(request) == self.reveal_request => {
+                self.reveal_request = None;
+                if let Some(m) = &mut self.monitor {
+                    m.status = "Could not show the program in Files".into();
+                }
+                if code != DocErrorCode::Cancelled {
+                    ctx.log(&format!("reveal: {code:?}"));
+                }
+                true
+            }
             DocumentEvent::Failed { request, code } => {
                 if self.export.as_ref().map_or(false, |(r, _)| *r == request) {
                     if let Some((_, Export::File(path))) = self.export.take() {
@@ -368,5 +393,5 @@ impl App for ActivityApp {
 }
 
 fn main() {
-    bifrost_app::run(ActivityApp { monitor: None, export: None, window_request: None });
+    bifrost_app::run(ActivityApp { monitor: None, export: None, window_request: None, reveal_request: None });
 }

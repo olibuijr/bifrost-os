@@ -3,10 +3,13 @@
 //! tap lands on what is drawn. Colours are the kit's semantic tokens resolved with `now()`, so Light and Dark follow
 //! the appearance.
 
-use crate::inspect::Inspection;
+use crate::inspect;
 use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, DISK_FLOOR, HISTORY, NET_FLOOR, SIGNALS};
 use crate::sample::{ProcSample, Snapshot};
-use crate::window::{quit_sheet_buttons, signal_sheet_buttons, signal_sheet_row, Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
+use crate::window::{
+    quit_sheet_buttons, signal_sheet_buttons, signal_sheet_row, Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, INSPECT_BODY_Y_PT, INSPECT_PAD_PT, INSPECT_ROW_PT,
+    INSPECT_SEGMENTS, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL,
+};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::colors::{SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
@@ -54,47 +57,6 @@ struct Graph {
     scale: f32,
 }
 
-/// The inspector card, in place of the graph: the process's command, folder and counts, then its open files and its
-/// threads in two columns. Only the first few lines of each fit; the counts say how many there are.
-fn draw_inspector(labels: &mut TextCache, s: &mut Surface, ui: &Ui, r: Rect, pid: u32, data: &Inspection) {
-    let x = r.x + CARD_PAD;
-    let w = r.w - 2.0 * CARD_PAD;
-    let title = if data.ppid > 0 && !data.parent.is_empty() {
-        format!("Process {pid}   Parent {} ({})", data.parent, data.ppid)
-    } else {
-        format!("Process {pid}")
-    };
-    text(labels, s, ui, &title, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x, r.y + 16.0, w);
-    let command = if data.command.is_empty() { &data.exe } else { &data.command };
-    text(labels, s, ui, command, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x, r.y + 34.0, w);
-    let counts = format!("Folder {}   Open Files {}   Sockets {}   Threads {}", data.cwd, data.files_total, data.sockets, data.threads_total);
-    text(labels, s, ui, &counts, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, r.y + 50.0, w);
-    let stats = format!(
-        "Page Faults {} minor, {} major   Context Switches {} voluntary, {} involuntary",
-        data.minor_faults, data.major_faults, data.voluntary_switches, data.involuntary_switches
-    );
-    text(labels, s, ui, &stats, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, r.y + 64.0, w);
-
-    let half = (w - CARD_PAD) / 2.0;
-    let right = x + half + CARD_PAD;
-    text(labels, s, ui, "Open Files", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, r.y + 80.0, half);
-    text(labels, s, ui, "Threads", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), right, r.y + 80.0, half);
-    const LINE: f32 = 12.5;
-    for i in 0..3 {
-        let mid = r.y + 94.0 + i as f32 * LINE;
-        let file = match data.files.get(i) {
-            Some(f) => f.clone(),
-            None if i == 0 && data.denied => "Open files are not readable for this process".into(),
-            None => String::new(),
-        };
-        text(labels, s, ui, &file, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), x, mid, half);
-        if let Some(t) = data.threads.get(i) {
-            let line = format!("{} ({})   {} ticks", t.name, t.state, t.ticks);
-            text(labels, s, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), right, mid, half);
-        }
-    }
-}
-
 /// The text of one table cell for a process row: the model's figure, with a mark on the name of a process shown as
 /// deltas.
 fn cell(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>) -> String {
@@ -125,7 +87,10 @@ impl Monitor {
         self.fit_scroll(ui);
         fill(s, ui, 0.0, 0.0, g.w, g.h, CONTENT_BG.now());
         self.draw_sidebar(ui, s, &g);
-        if self.report.is_some() {
+        if self.inspector.is_some() {
+            self.fit_inspect_scroll(ui);
+            self.draw_inspector(ui, s);
+        } else if self.report.is_some() {
             self.fit_report_scroll(ui);
             self.draw_report(ui, s);
         } else {
@@ -190,6 +155,47 @@ impl Monitor {
             rounded(s, ui, b.x, b.y, b.w, b.h, 5.0, fill_color);
             let lx = b.x + (b.w - width(ui, label, MAC_SUBHEAD_PT, Weight::Regular)) / 2.0;
             text(&mut self.labels, s, ui, label, MAC_SUBHEAD_PT, Weight::Regular, ink, lx, b.y + b.h / 2.0, b.w);
+        }
+    }
+
+    /// The inspector panel in the report's area: the process and its program, a segmented control, and the chosen
+    /// segment. Memory and Statistics are label and value rows; Open Files and Ports is a scrolling list, with headings.
+    fn draw_inspector(&mut self, ui: &Ui, s: &mut Surface) {
+        let Some((pid, data)) = self.inspector.clone() else { return };
+        let r = self.inspector_rect(ui);
+        rounded(s, ui, r.x, r.y, r.w, r.h, CARD_RADIUS_PT, CARD_BG.now());
+        let x = r.x + INSPECT_PAD_PT;
+        let w = r.w - 2.0 * INSPECT_PAD_PT;
+        let title = format!("Process {pid}");
+        text(&mut self.labels, s, ui, &title, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x, r.y + 16.0, w);
+        let command = if data.command.is_empty() { data.exe.clone() } else { data.command.clone() };
+        text(&mut self.labels, s, ui, &command, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), x, r.y + 34.0, w);
+        widgets::segmented(s, ui, self.inspector_seg_rect(ui), &INSPECT_SEGMENTS, self.inspect_segment, true);
+
+        let body_top = r.y + INSPECT_BODY_Y_PT;
+        let bottom = r.y + r.h - INSPECT_PAD_PT;
+        if self.inspect_segment < 2 {
+            let proc = self.inspected_proc().cloned();
+            let rows = inspect::detail_rows(self.inspect_segment, &data, proc.as_ref());
+            let label_w = 150.0;
+            for (i, (label, value)) in rows.iter().enumerate() {
+                let mid = body_top + 12.0 + i as f32 * 20.0;
+                if mid + 10.0 > bottom {
+                    break;
+                }
+                text(&mut self.labels, s, ui, label, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), x, mid, label_w);
+                text(&mut self.labels, s, ui, value, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x + label_w + PAD, mid, w - label_w - PAD);
+            }
+            return;
+        }
+        let offset = self.inspect_scroll.offset();
+        for (i, (heading, line)) in self.inspector_lines().iter().enumerate() {
+            let y = body_top + i as f32 * INSPECT_ROW_PT - offset;
+            if y < body_top || y + INSPECT_ROW_PT > bottom {
+                continue;
+            }
+            let weight = if *heading { Weight::Semibold } else { Weight::Regular };
+            text(&mut self.labels, s, ui, line, MAC_FOOTNOTE_PT, weight, LABEL.now(), x, y + INSPECT_ROW_PT / 2.0, w);
         }
     }
 
@@ -329,10 +335,6 @@ impl Monitor {
     fn draw_graph(&mut self, ui: &Ui, s: &mut Surface) {
         let r = self.graph_rect(ui);
         rounded(s, ui, r.x, r.y, r.w, r.h, CARD_RADIUS_PT, CARD_BG.now());
-        if let Some((pid, data)) = self.inspector.clone() {
-            draw_inspector(&mut self.labels, s, ui, r, pid, &data);
-            return;
-        }
         if self.tab == Tab::Cpu && self.cpu_history {
             self.draw_cores(ui, s, r);
             return;
@@ -452,7 +454,7 @@ impl Monitor {
             widgets::search_field(s, ui, &self.query, Rect { x: r.x, y: r.y + 4.0, w: r.w, h: r.h - 8.0 }, "Search", self.search_focused);
         }
 
-        if self.report.is_none() {
+        if self.report.is_none() && self.inspector.is_none() {
             let cols: Vec<(Column, f32, f32)> = self.col_frames(ui);
             fill(s, ui, g.content_x, g.head_y, g.content_w, HEAD_PT, CONTENT_BG.now());
             for (col, cx, cw) in &cols {
