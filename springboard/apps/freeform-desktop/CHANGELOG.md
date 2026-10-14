@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.10.0 — 2026-10-14
+
+- Edit > Paste centres pasted strokes, notes, links and text boxes on the pointer. With the pointer over the toolbar, the paste keeps the fixed offset; Duplicate is unchanged.
+- The unused second zoom, connector and search model (`canvas_view`) is removed; the app keeps one implementation of each.
+
 ## 1.9.0 — 2026-10-13
 
 - Board items: text boxes, sticky notes, tables, links, files and pictures. The toolbar has Text, Note and Connect tools, and the Insert menu adds a text box, sticky note, table, connector, link and Picture or File. Type into an item (double tap one with the lasso, or press Return on it); Tab and Return move between table cells; Add Table Row and Column grow a table.
