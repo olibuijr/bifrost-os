@@ -29,7 +29,7 @@ fn sample(bssid: &str, freq: u32, rssi: i32, flags: &str, ssid: &str) -> Sample 
     Sample { bssid: bssid.into(), freq, rssi, flags: flags.into(), ssid: ssid.into() }
 }
 
-// --- Wi-Fi client, interfaces and status (core-wlan) -------------------------------------------------------------
+// --- Wi-Fi client, interface and connection status ---------------------------------------------------------------
 
 #[test]
 fn a_connected_status_needs_the_connected_code_and_an_address() {
@@ -81,7 +81,7 @@ fn saved_networks_and_problem_notes_are_found_by_name() {
     assert_eq!(status.problem_for("Office"), None);
 }
 
-// --- Scan and network list (CWNetwork) ---------------------------------------------------------------------------
+// --- Scan and network list ----------------------------------------------------------------------------------------
 
 #[test]
 fn a_scan_merges_access_points_into_networks_with_channel_band_and_phy() {
@@ -179,7 +179,7 @@ fn a_watch_reports_the_first_join_then_only_real_changes() {
     assert_eq!(watch.update(quieter), vec![Event::RssiChanged(Some(-64))]);
 }
 
-// --- Bluetooth host and devices (iobluetooth) ----------------------------------------------------------------------
+// --- Bluetooth host, devices and local name ------------------------------------------------------------------------
 
 #[test]
 fn a_status_reply_sets_the_radio_state_and_the_device_table() {
@@ -256,10 +256,10 @@ fn a_local_name_is_utf8_of_at_most_248_bytes_without_a_nul() {
     assert_eq!(LocalName::new("desk\0name"), Err(LocalNameError::ContainsNul));
 }
 
-// --- Nearby browsing and background behaviour (multipeer-connectivity) --------------------------------------------
+// --- Nearby browsing and background behaviour ----------------------------------------------------------------------
 
 #[test]
-fn a_service_type_is_checked_with_the_bonjour_rules() {
+fn a_service_type_is_checked_before_it_is_used() {
     assert_eq!(ServiceType::new("my-chat").unwrap().as_str(), "my-chat");
     assert_eq!(ServiceType::new("Chat"), Err(ServiceTypeError::BadCharacter));
     assert_eq!(ServiceType::new("a--b"), Err(ServiceTypeError::DoubleHyphen));
@@ -306,7 +306,7 @@ fn stopping_ends_browsing_for_good_even_across_a_background_cycle() {
     assert_eq!(browser.phase(), Phase::Stopped, "a stopped browser does not restart by itself");
 }
 
-// --- Favourites (photokit) ----------------------------------------------------------------------------------------
+// --- Favourites in the photo library -------------------------------------------------------------------------------
 
 #[test]
 fn a_photo_asset_record_carries_its_favourite_flag() {
