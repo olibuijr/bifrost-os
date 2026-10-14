@@ -1,6 +1,7 @@
-//! Font validation and repertoire. A font is checked before it is installed: it must be a complete single-face
-//! TrueType or OpenType file with the tables a renderer needs and a character map it can read. The same reading
-//! gives the repertoire: how many characters the font maps and which Unicode blocks they fall in.
+//! Font validation and repertoire. A font is checked before it is installed: it must be a complete TrueType or
+//! OpenType file, or a font collection whose first face is complete, with the tables a renderer needs and a character
+//! map it can read. The same reading gives the repertoire: how many characters the font maps and which Unicode blocks
+//! they fall in.
 //!
 //! Pure: bytes in, a `Report` out. Nothing here draws or writes; `model.rs` and `main.rs` use the result.
 
@@ -103,18 +104,35 @@ pub fn check(bytes: &[u8]) -> Report {
         r.problems.push("The file is too short to be a font.".to_string());
         return r;
     };
-    if version == SFNT_COLLECTION {
-        r.problems.push("Font collections (.ttc) cannot be installed yet.".to_string());
+    // A collection holds several faces. The first face's table directory is checked; table offsets are absolute
+    // in the file, so one reading serves a single face (directory at zero) and a collection (directory after the
+    // collection header).
+    let dir = if version == SFNT_COLLECTION {
+        if u32_at(bytes, 8).unwrap_or(0) == 0 {
+            r.problems.push("The font collection holds no fonts.".to_string());
+            return r;
+        }
+        let Some(first) = u32_at(bytes, 12) else {
+            r.problems.push("The font collection header is cut short.".to_string());
+            return r;
+        };
+        r.warnings.push("This is a font collection: the first face is checked, the other faces are not.".to_string());
+        first as usize
+    } else {
+        0
+    };
+    let Some(face_version) = u32_at(bytes, dir) else {
+        r.problems.push("The font face is cut short.".to_string());
         return r;
-    }
-    if !matches!(version, SFNT_TRUETYPE | SFNT_TRUE | SFNT_OTTO) {
+    };
+    if !matches!(face_version, SFNT_TRUETYPE | SFNT_TRUE | SFNT_OTTO) {
         r.problems.push("The file has no TrueType or OpenType header.".to_string());
         return r;
     }
-    let count = u16_at(bytes, 4).unwrap_or(0) as usize;
+    let count = u16_at(bytes, dir + 4).unwrap_or(0) as usize;
     let mut tables: Vec<([u8; 4], usize, usize)> = Vec::new();
     for i in 0..count {
-        let at = 12 + 16 * i;
+        let at = dir + 12 + 16 * i;
         let tag = bytes.get(at..at + 4).and_then(|t| <[u8; 4]>::try_from(t).ok());
         let (Some(tag), Some(off), Some(len)) = (tag, u32_at(bytes, at + 8), u32_at(bytes, at + 12)) else {
             r.problems.push("The table directory is cut short.".to_string());
@@ -278,11 +296,25 @@ mod tests {
 
     /// A single-face font file with the given tables (tag, body), laid out as a table directory then the bodies.
     fn sfnt(tables: &[(&[u8; 4], Vec<u8>)]) -> Vec<u8> {
-        let mut out = Vec::new();
+        face_after(Vec::new(), tables)
+    }
+
+    /// A font collection with one face: the collection header, then the face's table directory and bodies.
+    fn collection(tables: &[(&[u8; 4], Vec<u8>)]) -> Vec<u8> {
+        let mut out = b"ttcf".to_vec();
+        out.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+        out.extend_from_slice(&1u32.to_be_bytes());
+        out.extend_from_slice(&16u32.to_be_bytes());
+        face_after(out, tables)
+    }
+
+    /// Appends a face (directory, then bodies) to `out`. Table offsets are absolute in the file.
+    fn face_after(mut out: Vec<u8>, tables: &[(&[u8; 4], Vec<u8>)]) -> Vec<u8> {
+        let start = out.len();
         out.extend_from_slice(&SFNT_TRUETYPE.to_be_bytes());
         out.extend_from_slice(&(tables.len() as u16).to_be_bytes());
         out.extend_from_slice(&[0u8; 6]);
-        let mut offset = 12 + 16 * tables.len();
+        let mut offset = start + 12 + 16 * tables.len();
         let mut data = Vec::new();
         for (tag, body) in tables {
             out.extend_from_slice(&tag[..]);
@@ -416,10 +448,31 @@ mod tests {
     }
 
     #[test]
-    fn files_that_are_not_sfnt_or_are_collections_are_refused() {
+    fn files_that_are_not_sfnt_or_are_empty_collections_are_refused() {
         assert_eq!(check(b"hello world").problems, ["The file has no TrueType or OpenType header."]);
         assert_eq!(check(&[1, 2]).problems, ["The file is too short to be a font."]);
-        assert_eq!(check(b"ttcf\0\0\0\x01").problems, ["Font collections (.ttc) cannot be installed yet."]);
+        assert_eq!(check(b"ttcf\0\0\0\x01").problems, ["The font collection holds no fonts."]);
+        assert_eq!(check(b"ttcf\0\x01\0\0\0\0\0\x01").problems, ["The font collection header is cut short."]);
+    }
+
+    #[test]
+    fn a_collection_passes_when_its_first_face_is_complete() {
+        let bytes = collection(&[(b"cmap", cmap(3, 1, format4_basic())), (b"head", vec![0; 54]), (b"maxp", maxp(8))]);
+        let r = check(&bytes);
+        assert!(r.is_valid(), "{:?}", r.problems);
+        assert_eq!(r.glyphs, 8);
+        assert_eq!(r.characters, 3);
+        assert_eq!(r.blocks, ["Basic Latin"]);
+        assert!(r.warnings.iter().any(|w| w.starts_with("This is a font collection: the first face is checked")), "{:?}", r.warnings);
+    }
+
+    #[test]
+    fn a_collection_with_a_broken_first_face_fails_with_the_face_problems() {
+        let bytes = collection(&[(b"cmap", cmap(3, 1, format4_basic())), (b"head", vec![0; 54])]);
+        assert_eq!(check(&bytes).problems, ["The maxp table is missing."]);
+        let mut cut = collection(&[(b"cmap", cmap(3, 1, format4_basic())), (b"head", vec![0; 54]), (b"maxp", maxp(8))]);
+        cut.truncate(18);
+        assert_eq!(check(&cut).problems, ["The font face is cut short."]);
     }
 
     #[test]
