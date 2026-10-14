@@ -2,8 +2,7 @@
 //! back. A byte written to the wake pipe tells the window's loop to read the channel, so nothing waits on a network call.
 
 use crate::accounts;
-use crate::flags::{Flag, FlagColor};
-use crate::message::Draft;
+use crate::flags::{Flag, FlagColor, Flags};
 use crate::state::INBOX;
 use bifrost_app::controls::internet_accounts::Account;
 use crate::session::{self, Listed, LIST_LIMIT};
@@ -41,6 +40,19 @@ pub enum Change {
     Rename { to: String },
     /// Deletes the job's mailbox with the messages in it (UID 0).
     Delete,
+    /// Moves the message to the Junk mailbox and marks it `$Junk` (Message > Move to Junk).
+    Junk { to: String },
+    /// Moves a message out of Junk, taking the `$Junk` mark off and putting `$NotJunk` on.
+    NotJunk { to: String },
+    /// Adds or removes a keyword such as `$Junk` on the message.
+    Keyword { keyword: String, on: bool },
+    /// Replaces message `uid` of the job's mailbox with `raw` kept under the same flags (Remove Attachments): the new text
+    /// is appended, then the old message is deleted. The job's UID is 0 so the mailbox is listed again afterwards.
+    Replace { uid: u32, raw: String, flags: Flags },
+    /// Brings back the message with this Message-ID: its Seen flag is cleared (Remind Me). The job's UID is 0.
+    Remind { message_id: String },
+    /// Adds messages to the job's mailbox, creating it first when it is missing (Import Mailbox). The job's UID is 0.
+    Import { messages: Vec<String> },
 }
 
 /// The answer of one job. Each carries the account id so the window can tell which account it belongs to.
@@ -48,7 +60,12 @@ pub enum Change {
 pub enum Event {
     Listed { account: String, mailbox: String, result: Result<Listing, String> },
     Body { account: String, mailbox: String, uid: u32, result: Result<String, String> },
-    Sent { account: String, result: Result<(), String> },
+    /// A message was sent. `id` is its place in the outbox, 0 for one sent at once.
+    Sent { account: String, id: u64, result: Result<(), String> },
+    /// What Check Connection found, one line for each server.
+    Diagnosed { account: String, lines: Vec<String> },
+    /// Every message of a mailbox, for Export Mailbox.
+    Exported { account: String, mailbox: String, result: Result<Vec<String>, String> },
     Changed { account: String, mailbox: String, uid: u32, result: Result<(), String> },
     /// The server's matches for the search `query` in `mailbox`: the newest matches' headers.
     Found { account: String, mailbox: String, query: String, result: Result<Vec<Listed>, String> },
@@ -128,6 +145,13 @@ fn apply_change(transport: &dyn Transport, account: &Account, password: &str, ma
         Change::Create { name } => session.create_mailbox(name)?,
         Change::Rename { to } => session.rename_mailbox(mailbox, to)?,
         Change::Delete => session.delete_mailbox(mailbox)?,
+        Change::Import { messages } => {
+            // a mailbox that exists already refuses CREATE; the appends below tell whether it is there
+            let _ = session.create_mailbox(mailbox);
+            for raw in messages {
+                session.append(mailbox, Flags::empty().with(Flag::Seen, true), raw)?;
+            }
+        }
         _ => {
             session.select(mailbox)?;
             match action {
@@ -136,7 +160,26 @@ fn apply_change(transport: &dyn Transport, account: &Account, password: &str, ma
                 Change::Move { to } => session.move_to(uid, to)?,
                 Change::Copy { to } => session.copy_to(uid, to)?,
                 Change::EraseAll => session.erase_all()?,
-                Change::Create { .. } | Change::Rename { .. } | Change::Delete => {}
+                Change::Junk { to } => {
+                    session.set_keyword(uid, "$Junk", true)?;
+                    session.move_to(uid, to)?;
+                }
+                Change::NotJunk { to } => {
+                    session.set_keyword(uid, "$Junk", false)?;
+                    session.set_keyword(uid, "$NotJunk", true)?;
+                    session.move_to(uid, to)?;
+                }
+                Change::Keyword { keyword, on } => session.set_keyword(uid, keyword, *on)?,
+                Change::Replace { uid: old, raw, flags } => {
+                    session.append(mailbox, *flags, raw)?;
+                    session.remove(*old)?;
+                }
+                Change::Remind { message_id } => {
+                    for found in session.search(&format!("HEADER Message-ID {}", crate::imap::quote(message_id)))? {
+                        session.set_flag(found, Flag::Seen, false)?;
+                    }
+                }
+                Change::Create { .. } | Change::Rename { .. } | Change::Delete | Change::Import { .. } => {}
             }
         }
     }
@@ -144,12 +187,59 @@ fn apply_change(transport: &dyn Transport, account: &Account, password: &str, ma
     Ok(())
 }
 
-/// Sends a rendered message (`text`, from [`Draft::render`]) to every recipient of `draft`.
-pub fn send(transport: Arc<dyn Transport>, account: Account, password: String, draft: Draft, text: String) -> Event {
-    let recipients: Vec<String> = draft.envelope_recipients().into_iter().map(str::to_string).collect();
+/// Sends a rendered message (`text`, from `Draft::render`) from `from` to every address of `recipients`. `id` is the
+/// message's place in the outbox, 0 for one that goes at once.
+pub fn send(transport: Arc<dyn Transport>, account: Account, password: String, id: u64, from: String, recipients: Vec<String>, text: String) -> Event {
     let result = accounts::outgoing(&account)
-        .and_then(|server| submit::send(transport.as_ref(), server, &account.username, &password, &draft.from, &recipients, &text));
-    Event::Sent { account: account.id, result }
+        .and_then(|server| submit::send(transport.as_ref(), server, &account.username, &password, &from, &recipients, &text));
+    Event::Sent { account: account.id, id, result }
+}
+
+/// Mailbox > Check Connection: signs in to the incoming and the outgoing server of `account` in turn and says what each
+/// answered. Nothing is changed or sent.
+pub fn diagnose(transport: &dyn Transport, account: &Account, password: &str) -> Event {
+    let mut lines = Vec::new();
+    lines.push(match accounts::incoming(account).and_then(|server| check_incoming(transport, server, account, password).map(|n| (server, n))) {
+        Ok((server, boxes)) => format!("Incoming {}:{}: signed in, {boxes} mailbox{}", server.host, server.port, if boxes == 1 { "" } else { "es" }),
+        Err(e) => format!("Incoming server: {e}"),
+    });
+    let domain = account.email.rsplit_once('@').map_or("localhost", |(_, d)| d);
+    lines.push(match accounts::outgoing(account).and_then(|server| submit::check(transport, server, &account.username, password, domain).map(|()| server)) {
+        Ok(server) => format!("Outgoing {}:{}: signed in", server.host, server.port),
+        Err(e) => format!("Outgoing server: {e}"),
+    });
+    Event::Diagnosed { account: account.id.clone(), lines }
+}
+
+fn check_incoming(transport: &dyn Transport, server: &bifrost_app::controls::internet_accounts::Server, account: &Account, password: &str) -> Result<usize, String> {
+    let mut session = session::connect(transport, server)?;
+    session.login(&account.username, password)?;
+    let boxes = session.list()?.len();
+    session.logout();
+    Ok(boxes)
+}
+
+/// Reads every message of `mailbox` (the newest [`EXPORT_LIMIT`]), oldest first, for Export Mailbox.
+pub fn export(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Event {
+    let result = fetch_all(transport, account, password, mailbox);
+    Event::Exported { account: account.id.clone(), mailbox: mailbox.to_string(), result }
+}
+
+/// Most messages one export reads.
+pub const EXPORT_LIMIT: usize = 5000;
+
+fn fetch_all(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Result<Vec<String>, String> {
+    let mut session = session::connect(transport, accounts::incoming(account)?)?;
+    session.login(&account.username, password)?;
+    session.select(mailbox)?;
+    let uids = session.uids()?;
+    let start = uids.len().saturating_sub(EXPORT_LIMIT);
+    let mut messages = Vec::with_capacity(uids.len() - start);
+    for uid in &uids[start..] {
+        messages.push(session.message(*uid)?);
+    }
+    session.logout();
+    Ok(messages)
 }
 
 /// Searches `mailbox` on the server with `criteria` (IMAP search keys, see `Query::imap_criteria`) and reads the headers

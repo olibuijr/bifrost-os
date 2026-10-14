@@ -113,6 +113,49 @@ impl<S: Read + Write> Session<S> {
         self.run(&format!("UID EXPUNGE {uid}")).map(|_| ())
     }
 
+    /// Deletes one message of the selected mailbox: it is marked deleted and that one UID is expunged (UIDPLUS, RFC 4315),
+    /// so other messages marked for deletion stay.
+    pub fn remove(&mut self, uid: u32) -> Result<(), String> {
+        self.run(&imap::store_flags(uid, '+', Flags::empty().with(Flag::Deleted, true)))?;
+        self.run(&format!("UID EXPUNGE {uid}")).map(|_| ())
+    }
+
+    /// Adds or removes one keyword (`$Junk`, ...) on a message, silently.
+    pub fn set_keyword(&mut self, uid: u32, keyword: &str, on: bool) -> Result<(), String> {
+        let op = if on { '+' } else { '-' };
+        self.run(&format!("UID STORE {uid} {op}FLAGS.SILENT ({keyword})")).map(|_| ())
+    }
+
+    /// Adds a message to `mailbox` with `flags` (APPEND, RFC 3501 section 6.3.11). The text is sent as a literal with
+    /// CRLF line ends once the server has answered the command with a continuation.
+    pub fn append(&mut self, mailbox: &str, flags: Flags, raw: &str) -> Result<(), String> {
+        let data = crate::export::crlf(raw);
+        self.tag += 1;
+        let tag = imap::tag(self.tag);
+        let command = format!("APPEND {} {} {{{}}}", imap::quote(mailbox), flags.to_imap_list(), data.len());
+        self.lines.send(&imap::command(&tag, &command)).map_err(io_text)?;
+        loop {
+            let line = self.response_line()?;
+            match imap::parse_line(&line) {
+                Reply::Continuation(_) => break,
+                Reply::Tagged { tag: got, text, .. } if got == tag => return Err(text),
+                _ => {}
+            }
+        }
+        self.lines.send(&format!("{data}\r\n")).map_err(io_text)?;
+        loop {
+            let line = self.response_line()?;
+            if let Reply::Tagged { tag: got, status, text } = imap::parse_line(&line) {
+                if got == tag {
+                    return match status {
+                        Status::Ok => Ok(()),
+                        _ => Err(text),
+                    };
+                }
+            }
+        }
+    }
+
     /// Copies one message to `mailbox` and leaves the original where it is (Message > Copy To).
     pub fn copy_to(&mut self, uid: u32, mailbox: &str) -> Result<(), String> {
         self.run(&format!("UID COPY {uid} {}", imap::quote(mailbox))).map(|_| ())
@@ -439,6 +482,38 @@ mod tests {
             sent.starts_with("A001 UID STORE 7 -FLAGS.SILENT (\\Flagged $MailFlagBit0 $MailFlagBit1 $MailFlagBit2)\r\nA002 UID STORE 7 +FLAGS.SILENT (\\Flagged $MailFlagBit0 $MailFlagBit1)\r\nA003 UID STORE 7 -FLAGS.SILENT"),
             "{sent}"
         );
+    }
+
+    #[test]
+    fn append_sends_the_message_as_a_literal_after_the_continuation() {
+        let mut s = session("+ Ready for literal data\r\nA001 OK [APPENDUID 1 9] done\r\n");
+        s.append("Archive", Flags::empty().with(Flag::Seen, true), "Subject: x\n\nbody\n").unwrap();
+        let sent = s.lines.into_inner().sent();
+        assert_eq!(sent, "A001 APPEND \"Archive\" (\\Seen) {20}\r\nSubject: x\r\n\r\nbody\r\n\r\n");
+    }
+
+    #[test]
+    fn append_refused_before_the_data_is_an_error_and_sends_no_data() {
+        let mut s = session("A001 NO [TRYCREATE] no such mailbox\r\n");
+        assert_eq!(s.append("Nope", Flags::empty(), "Subject: x\r\n\r\n").unwrap_err(), "[TRYCREATE] no such mailbox");
+        assert!(!s.lines.into_inner().sent().contains("Subject"));
+        let mut s = session("+ go\r\nA001 NO quota exceeded\r\n");
+        assert_eq!(s.append("Box", Flags::empty(), "x").unwrap_err(), "quota exceeded");
+    }
+
+    #[test]
+    fn remove_marks_the_message_deleted_and_expunges_only_it() {
+        let mut s = session("A001 OK done\r\nA002 OK done\r\n");
+        s.remove(9).unwrap();
+        assert_eq!(s.lines.into_inner().sent(), "A001 UID STORE 9 +FLAGS.SILENT (\\Deleted)\r\nA002 UID EXPUNGE 9\r\n");
+    }
+
+    #[test]
+    fn keywords_are_stored_silently_with_their_sign() {
+        let mut s = session("A001 OK done\r\nA002 OK done\r\n");
+        s.set_keyword(4, "$Junk", true).unwrap();
+        s.set_keyword(4, "$Junk", false).unwrap();
+        assert_eq!(s.lines.into_inner().sent(), "A001 UID STORE 4 +FLAGS.SILENT ($Junk)\r\nA002 UID STORE 4 -FLAGS.SILENT ($Junk)\r\n");
     }
 
     #[test]

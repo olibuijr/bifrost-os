@@ -33,6 +33,35 @@ pub fn save_all(dir: &Path, files: &[Attachment]) -> Result<usize, String> {
     Ok(files.len())
 }
 
+/// The media type for a file name, from its extension; `application/octet-stream` when the extension is not known.
+pub fn mime_for(name: &str) -> String {
+    let extension = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    let mime = match extension.as_str() {
+        "txt" | "log" => "text/plain",
+        "md" => "text/markdown",
+        "csv" => "text/csv",
+        "html" | "htm" => "text/html",
+        "json" => "application/json",
+        "xml" => "application/xml",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "gz" => "application/gzip",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "mp4" => "video/mp4",
+        "ics" => "text/calendar",
+        "vcf" => "text/vcard",
+        "eml" => "message/rfc822",
+        _ => "application/octet-stream",
+    };
+    mime.to_string()
+}
+
 /// A size for the reader: bytes, kilobytes or megabytes.
 pub fn size_text(bytes: usize) -> String {
     if bytes < 1024 {
@@ -54,6 +83,16 @@ mod tests {
         assert_eq!(safe_name("../x"), "_x");
         assert_eq!(safe_name("a/b\\c"), "a_b_c");
         assert_eq!(safe_name("  "), "attachment");
+    }
+
+    #[test]
+    fn the_media_type_follows_the_extension() {
+        assert_eq!(mime_for("skjal.PDF"), "application/pdf");
+        assert_eq!(mime_for("mynd.jpeg"), "image/jpeg");
+        assert_eq!(mime_for("notes.txt"), "text/plain");
+        assert_eq!(mime_for("old.eml"), "message/rfc822");
+        assert_eq!(mime_for("noextension"), "application/octet-stream");
+        assert_eq!(mime_for("weird.xyz"), "application/octet-stream");
     }
 
     #[test]
