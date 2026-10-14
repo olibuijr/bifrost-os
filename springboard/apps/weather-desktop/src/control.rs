@@ -110,7 +110,7 @@ mod tests {
 
     fn forecast() -> Forecast {
         let mut f = parse_forecast(ANSWER).unwrap();
-        f.air = Some(Air { aqi: 34, pm25: 7.8 });
+        f.air = Some(Air { aqi: 34, pm25: 7.8, ..Air::default() });
         f
     }
 

@@ -213,12 +213,58 @@ pub struct Day {
     pub precip_prob: u8,
 }
 
-/// Air quality now, on the European index.
-#[derive(Clone, Debug, PartialEq)]
+/// Air quality now, on the European index, with the concentrations the reading is made from.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Air {
     pub aqi: u16,
     /// fine particles (PM2.5), micrograms per cubic metre
     pub pm25: f64,
+    /// coarse particles (PM10), micrograms per cubic metre
+    pub pm10: f64,
+    /// ozone, micrograms per cubic metre
+    pub ozone: f64,
+    /// nitrogen dioxide, micrograms per cubic metre
+    pub no2: f64,
+    /// sulphur dioxide, micrograms per cubic metre
+    pub so2: f64,
+}
+
+/// A pollutant that the air quality reading can name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pollutant {
+    Pm25,
+    Pm10,
+    Ozone,
+    NitrogenDioxide,
+    SulphurDioxide,
+}
+
+impl Pollutant {
+    /// Every pollutant the reading carries, in the order that breaks a tie between two equal ratios.
+    pub const ALL: [Pollutant; 5] = [Pollutant::Pm25, Pollutant::Pm10, Pollutant::Ozone, Pollutant::NitrogenDioxide, Pollutant::SulphurDioxide];
+
+    /// The name shown to the reader.
+    pub fn name(self) -> &'static str {
+        match self {
+            Pollutant::Pm25 => "PM2.5",
+            Pollutant::Pm10 => "PM10",
+            Pollutant::Ozone => "Ozone",
+            Pollutant::NitrogenDioxide => "Nitrogen dioxide",
+            Pollutant::SulphurDioxide => "Sulphur dioxide",
+        }
+    }
+
+    /// The top of the Good band of the European index for this pollutant, micrograms per cubic metre. A concentration
+    /// at this limit reads as the edge of good air.
+    fn good_limit(self) -> f64 {
+        match self {
+            Pollutant::Pm25 => 10.0,
+            Pollutant::Pm10 => 20.0,
+            Pollutant::Ozone => 50.0,
+            Pollutant::NitrogenDioxide => 40.0,
+            Pollutant::SulphurDioxide => 100.0,
+        }
+    }
 }
 
 impl Air {
@@ -232,6 +278,41 @@ impl Air {
             81..=100 => "Very Poor",
             _ => "Extremely Poor",
         }
+    }
+
+    /// The advice that goes with the band, in the words a reader can act on.
+    pub fn advice(&self) -> &'static str {
+        match self.aqi {
+            0..=20 => "Enjoy your usual outdoor activities.",
+            21..=40 => "Unusually sensitive people should consider limiting prolonged outdoor exertion.",
+            41..=60 => "Sensitive people should limit prolonged outdoor exertion.",
+            61..=80 => "Everyone should limit prolonged outdoor exertion.",
+            _ => "Everyone should avoid prolonged outdoor exertion.",
+        }
+    }
+
+    /// The concentration of one pollutant, micrograms per cubic metre.
+    pub fn concentration(&self, pollutant: Pollutant) -> f64 {
+        match pollutant {
+            Pollutant::Pm25 => self.pm25,
+            Pollutant::Pm10 => self.pm10,
+            Pollutant::Ozone => self.ozone,
+            Pollutant::NitrogenDioxide => self.no2,
+            Pollutant::SulphurDioxide => self.so2,
+        }
+    }
+
+    /// The main pollutant: the one whose concentration is furthest above its Good limit, with that concentration.
+    /// A tie keeps the pollutant listed first in `Pollutant::ALL`.
+    pub fn main_pollutant(&self) -> (Pollutant, f64) {
+        let ratio = |p: Pollutant| self.concentration(p) / p.good_limit();
+        let mut best = Pollutant::Pm25;
+        for p in Pollutant::ALL {
+            if ratio(p) > ratio(best) {
+                best = p;
+            }
+        }
+        (best, self.concentration(best))
     }
 }
 
@@ -379,15 +460,26 @@ pub fn forecast_url(loc: &Location) -> String {
 }
 
 pub fn air_url(loc: &Location) -> String {
-    format!("{AIR_API}?latitude={:.4}&longitude={:.4}&current=european_aqi,pm2_5&timezone=auto", loc.lat, loc.lon)
+    format!(
+        "{AIR_API}?latitude={:.4}&longitude={:.4}&current=european_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,sulphur_dioxide&timezone=auto",
+        loc.lat, loc.lon
+    )
 }
 
-/// The air quality in an air-quality answer.
+/// The air quality in an air-quality answer. A pollutant the answer leaves out reads as zero.
 pub fn parse_air(text: &str) -> Option<Air> {
     let root = json::parse(text)?;
     let cur = root.get("current")?;
     let aqi = cur.get("european_aqi").and_then(Json::number).filter(|v| *v >= 0.0)?;
-    Some(Air { aqi: aqi.round().min(u16::MAX as f64) as u16, pm25: cur.get("pm2_5").and_then(Json::number).unwrap_or(0.0).max(0.0) })
+    let reading = |key: &str| cur.get(key).and_then(Json::number).unwrap_or(0.0).max(0.0);
+    Some(Air {
+        aqi: aqi.round().min(u16::MAX as f64) as u16,
+        pm25: reading("pm2_5"),
+        pm10: reading("pm10"),
+        ozone: reading("ozone"),
+        no2: reading("nitrogen_dioxide"),
+        so2: reading("sulphur_dioxide"),
+    })
 }
 
 /// The first and last day the archive request covers and the month and day ("10-04") of local date "2026-10-04":
@@ -761,7 +853,7 @@ mod tests {
         let air = parse_air(r#"{"current":{"time":"2026-10-04T13:00","european_aqi":34,"pm2_5":7.8}}"#).unwrap();
         assert_eq!((air.aqi, air.pm25, air.category()), (34, 7.8, "Fair"));
         for (aqi, name) in [(0, "Good"), (20, "Good"), (21, "Fair"), (41, "Moderate"), (61, "Poor"), (81, "Very Poor"), (101, "Extremely Poor")] {
-            assert_eq!(Air { aqi, pm25: 0.0 }.category(), name, "{aqi}");
+            assert_eq!(Air { aqi, ..Air::default() }.category(), name, "{aqi}");
         }
         assert!(parse_air(r#"{"current":{"pm2_5":7.8}}"#).is_none(), "no index, no reading");
         assert!(parse_air("nope").is_none());

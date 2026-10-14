@@ -122,7 +122,7 @@ const TILE_GRAPHIC_MIN_W: f32 = 260.0;
 const TILE_GRAPHIC_W: f32 = 100.0;
 /// The air quality card, below the detail tiles.
 const AIR_TOP: f32 = DETAILS_TOP + DETAILS_H + 16.0;
-const AIR_H: f32 = 104.0;
+const AIR_H: f32 = 132.0;
 /// The temperature chart card, below the air quality card: its plot area and the axis labels' room, in points.
 const CHART_TOP: f32 = AIR_TOP + AIR_H + 16.0;
 const CHART_H: f32 = 176.0;
@@ -1618,8 +1618,11 @@ impl Weather {
                 let dot = ui.pt(SPACE_S);
                 c.fill_rrect(after, p(AIR_TOP + 44.0) - dot / 2.0, dot, dot, dot / 2.0, bands[insights::air_band(air.aqi)]);
                 self.put(&mut c, ui, air.category(), MAC_TITLE3_PT, Weight::Semibold, WHITE, Align::Left, after + dot + ui.pt(SPACE_S), p(AIR_TOP + 44.0));
-                let detail = ui.fit(&format!("European index \u{b7} PM2.5 {:.0} \u{b5}g/m\u{b3}", air.pm25), MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
-                self.put(&mut c, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 68.0));
+                let (pollutant, concentration) = air.main_pollutant();
+                let detail = ui.fit(&format!("Main pollutant: {} {:.0} \u{b5}g/m\u{b3}", pollutant.name(), concentration), MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
+                self.put(&mut c, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 66.0));
+                let advice = ui.fit(air.advice(), MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
+                self.put(&mut c, ui, &advice, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 84.0));
                 let (bar_x, bar_w, bar_y) = (card_x + ui.pt(SPACE_L), card_w - ui.pt(2.0 * SPACE_L), p(AIR_TOP + AIR_H - 20.0));
                 let seg = bar_w / bands.len() as f32;
                 for (b, color) in bands.iter().enumerate() {
