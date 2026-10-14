@@ -1,10 +1,11 @@
 # Changelog
 
-## 1.9.0 — 2026-10-13
+## 1.10.0 — 2026-10-14
 
-- Chapters: when a feed links to a chapters file (the `podcast:chapters` JSON format) instead of listing the marks
-  itself, Podcasts reads it when the episode plays or its page opens. Chapters marked as hidden are left out.
-- Transcript: tap a timed line to jump to it.
+- Up Next can be reordered by hand: press and hold an episode for half a second, then drag it to a new place. The
+  list keeps its order when the app restarts. A drag that starts as a quick swipe still scrolls the list.
+- Episode notes keep links: a link shows its text followed by its address in parentheses, unless the text is the
+  address itself.
 
 ## 1.8.0 — 2026-10-13
 
@@ -131,3 +132,9 @@
 - Connect to the Linux audio service path.
 - Keep text-field focus without drawing an on-screen keyboard in PC app processes.
 - Route physical text, Backspace and Return keys to existing field editors.
+
+## 1.9.0 — 2026-10-13
+
+- Chapters: when a feed links to a chapters file (the `podcast:chapters` JSON format) instead of listing the marks
+  itself, Podcasts reads it when the episode plays or its page opens. Chapters marked as hidden are left out.
+- Transcript: tap a timed line to jump to it.

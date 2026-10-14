@@ -214,20 +214,36 @@ pub fn rfc2822_ts(raw: &str) -> Option<i64> {
 }
 
 /// Turns the HTML of a feed description into plain text: tags go, paragraph and line breaks become line breaks,
-/// entities are decoded, and runs of blank lines collapse to one.
+/// entities are decoded, and runs of blank lines collapse to one. A link keeps its text and its address in
+/// parentheses, unless the text is the address itself.
 pub fn html_to_text(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
+    // the link being read: where its text starts in `out`, and its address
+    let mut link: Option<(usize, String)> = None;
     while let Some(i) = rest.find('<') {
         out.push_str(&rest[..i]);
         let Some(end) = rest[i..].find('>') else {
             rest = "";
             break;
         };
+        let tag = &rest[i..i + end + 1];
         let closing = rest[i + 1..].starts_with('/');
         let name: String = rest[i + 1..i + end].trim_start_matches('/').chars().take_while(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
         if name == "br" || (closing && matches!(name.as_str(), "p" | "div" | "li" | "h1" | "h2" | "h3" | "h4")) {
             out.push('\n');
+        }
+        if name == "a" {
+            if closing {
+                if let Some((from, href)) = link.take() {
+                    let text = out[from..].trim();
+                    if !href.is_empty() && text != href {
+                        out.push_str(&format!(" ({href})"));
+                    }
+                }
+            } else {
+                link = Some((out.len(), attribute(tag, "a", "href").unwrap_or_default()));
+            }
         }
         rest = &rest[i + end + 1..];
     }
@@ -441,6 +457,14 @@ mod tests {
     fn html_becomes_plain_text() {
         assert_eq!(html_to_text("<b>Hi</b> &lt;you&gt;<br>\n\n\n<ul><li>a</li><li>b</li></ul>"), "Hi <you>\n\na\nb");
         assert_eq!(html_to_text("plain"), "plain");
+    }
+
+    #[test]
+    fn links_keep_their_address_unless_the_text_is_the_address() {
+        assert_eq!(html_to_text(r#"Read <a href="https://x.test/a?b=1&amp;c=2">the guide</a> now"#), "Read the guide (https://x.test/a?b=1&c=2) now");
+        assert_eq!(html_to_text(r#"<a href="https://x.test">https://x.test</a>"#), "https://x.test");
+        assert_eq!(html_to_text(r#"<a href='https://y.test/p'>Y</a>, <abbr>ok</abbr>"#), "Y (https://y.test/p), ok");
+        assert_eq!(html_to_text("<a>bare</a>"), "bare");
     }
 
     #[test]

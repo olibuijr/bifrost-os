@@ -129,6 +129,8 @@ const SPEED_ROW_PT: f32 = 26.0;
 const SAVE_EVERY_MS: f64 = 5_000.0;
 /// how long a started episode may take to show up as playing in the service
 const START_TIMEOUT_MS: f64 = 5_000.0;
+/// how long a press on an Up Next row must stay still before the row can be dragged to a new place
+const HOLD_MS: f64 = 500.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Target {
@@ -365,6 +367,10 @@ pub struct Podcasts {
     last_click: (usize, f64),
     /// the transcript cue the panel last scrolled to
     followed: Option<usize>,
+    /// an Up Next row pressed and still held: its episode, when the press began, and where it was pressed
+    hold: Option<(String, f64, f32)>,
+    /// the Up Next episode being dragged to a new place
+    reordering: Option<String>,
 }
 
 impl Podcasts {
@@ -448,6 +454,8 @@ impl Podcasts {
             selected_key: None,
             last_click: (usize::MAX, 0.0),
             followed: None,
+            hold: None,
+            reordering: None,
         }
         .with_rows()
     }
@@ -2248,6 +2256,11 @@ impl Podcasts {
                     }
                 }
                 self.pressed = self.hit(ui, x, y);
+                self.reordering = None;
+                self.hold = match self.pressed {
+                    Some(Target::Row(i)) if self.view == View::UpNext => self.row_url(i).map(|url| (url, t, y)),
+                    _ => None,
+                };
                 if self.pressed == Some(Target::Scrub) {
                     self.scrubbing = Some(self.scrub_ms(ui, x));
                     return;
@@ -2258,7 +2271,12 @@ impl Podcasts {
                 }
             }
             Event::Move(..) => {
-                if self.field_touch {
+                if let Some(url) = self.reordering.clone() {
+                    if let Some(Target::Row(j)) = self.hit(ui, x, y) {
+                        self.move_in_up_next(&url, j);
+                    }
+                    self.dirty = true;
+                } else if self.field_touch {
                     if let Some(search) = self.field_kind() {
                         let frame = self.field_frame(ui, search);
                         if let Some(f) = self.field_mut(search) {
@@ -2284,6 +2302,13 @@ impl Podcasts {
             }
             Event::Up(..) => {
                 self.dirty = true;
+                self.hold = None;
+                if self.reordering.take().is_some() {
+                    self.save_library();
+                    self.pressed = None;
+                    self.scrolling = false;
+                    return;
+                }
                 if std::mem::take(&mut self.field_touch) {
                     if let Some(search) = self.field_kind() {
                         let frame = self.field_frame(ui, search);
@@ -2315,6 +2340,7 @@ impl Podcasts {
         self.now = t;
         self.pump();
         self.want_chapters();
+        self.check_hold(t);
         if self.refresh.pump() {
             self.dirty = true;
         }
@@ -2364,6 +2390,38 @@ impl Podcasts {
         self.dirty
     }
 
+    /// A held Up Next row turns into a drag once the press has lasted `HOLD_MS` without the list scrolling.
+    fn check_hold(&mut self, t: f64) {
+        let Some((url, at, y)) = self.hold.clone() else { return };
+        if self.pressed.is_none() || self.drag_scroller().dragging() {
+            self.hold = None;
+        } else if t - at >= HOLD_MS {
+            self.hold = None;
+            // the press never became a scroll: end its scroll touch without a fling
+            self.drag_scroller().up(y, t);
+            self.scrolling = false;
+            self.pressed = None;
+            self.reordering = Some(url);
+            self.dirty = true;
+        }
+    }
+
+    /// The address of the episode in row `i`, when that row is an episode.
+    fn row_url(&self, i: usize) -> Option<String> {
+        match self.rows.get(i)? {
+            Row::Ep(s, e) => self.episode_url((*s, *e)),
+            _ => None,
+        }
+    }
+
+    /// Drags the Up Next episode `url` to the place of row `j`.
+    fn move_in_up_next(&mut self, url: &str, j: usize) {
+        let Some(target) = self.row_url(j).and_then(|u| self.library.queue().iter().position(|q| *q == u)) else { return };
+        if self.library.move_to(url, target) {
+            self.rebuild();
+        }
+    }
+
     /// Sizes the Now Playing panel's scroll range, and keeps the spoken line of a transcript in view.
     fn tick_panel(&mut self, ui: &Ui, t: f64) {
         if !(self.sheet && self.playing.is_some()) || self.sheet_panel == SheetPanel::None {
@@ -2395,12 +2453,13 @@ impl Podcasts {
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         // a playback clock only: downloads and feeds arrive through `deliver` (a main-queue wake), not by polling
         let mut due = self.playing.is_some().then_some(t + POLL_MS);
+        let hold = self.hold.as_ref().map(|(_, at, _)| at + HOLD_MS);
         // the service socket is only read between frames: once a second while idle, to notice an episode playing
         let listening = if self.audio.connected() { Some(t + 1000.0) } else { self.audio.next_wake(t) };
         due = [due, listening].into_iter().flatten().reduce(f64::min);
         let refresh = self.last_refresh.zip(self.prefs.settings.refresh_ms()).map(|(at, ms)| at + ms);
         let search = if self.view == View::Search { self.search_field.as_ref().and_then(|f| f.next_wake(t)) } else { None };
-        for wake in [self.field.as_ref().and_then(|f| f.next_wake(t)), search, refresh, self.scroll.animating().then_some(t), self.panel_scroll.animating().then_some(t)] {
+        for wake in [self.field.as_ref().and_then(|f| f.next_wake(t)), search, refresh, hold, self.scroll.animating().then_some(t), self.panel_scroll.animating().then_some(t)] {
             if let Some(w) = wake {
                 due = Some(due.map_or(w, |d| d.min(w)));
             }
