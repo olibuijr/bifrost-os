@@ -1609,8 +1609,9 @@ impl Viewer {
         // the signature picker takes the clicks on its side; a click on a signature places it on the shown page
         if self.signatures_shown && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
             let metrics = canvas::export_metrics(ui, lay);
+            // the press is already inside the undo record that touch() opens around this call
             if let Some(index) = signature_panel::hit(&metrics, self.signatures.len(), x, y) {
-                self.track(|v| v.insert_signature(index));
+                self.insert_signature(index);
             }
             return true;
         }
