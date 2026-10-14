@@ -46,7 +46,7 @@
    "area": "panel",
    "apple": "Up Next panel, song context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:2736",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_queue",
    "note": "Play Next and Play Last in the Song menu; a drag handle reorders the upcoming songs, each row has move-up and remove, Clear Up Next ends the queue, and History (the last 100 starts) opens from the Up Next toolbar and the View menu. Not yet checked on Midget.",
    "wire": ""
   },
@@ -64,7 +64,7 @@
    "area": "menu",
    "apple": "File > New > Smart Playlist",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:2669",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_rules",
    "note": "New Smart Playlist opens a rules editor (match all or any, field, operator, value, add and remove); the songs come from SmartPlaylist::select over the library and the listening data, and follow new ratings and plays. Not yet checked on Midget.",
    "wire": ""
   },
@@ -73,9 +73,9 @@
    "area": "menu",
    "apple": "File > New > Playlist Folder",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/folders.rs::rows",
-   "note": "File > New Playlist Folder and the New Playlist Folder row make folders; Move to Folder on a playlist page puts the playlist in one; the Playlists tab nests the playlists under their folder, and Show or Hide collapses it. Not yet: renaming or deleting a folder, folders in the sidebar, a check on Midget.",
-   "wire": "Rename and delete folders; folder rows in the sidebar"
+   "bifrost": "springboard/apps/music-desktop/src/music/folders.rs (Folders::rename, Folders::delete, rows)",
+   "note": "File > New Playlist Folder and the New Playlist Folder row make folders; Move to Folder on a playlist page puts the playlist in one; the Playlists tab nests the playlists under their folder, and Show or Hide collapses it. Folders can be renamed and deleted in the model, tested headless in tests/parity_app-music_w8.rs. Not yet: a folder page that offers rename and delete, folders in the sidebar, a check on Midget.",
+   "wire": "Folder page with Rename and Delete buttons over Folders::rename and Folders::delete; folder rows in the sidebar"
   },
   {
    "feature": "Search library",
@@ -145,7 +145,7 @@
    "area": "view",
    "apple": "Window > MiniPlayer / Full Screen Player",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:3043",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_sheet",
    "note": "Player sheet and mini bar, with the route button in the bar; no separate MiniPlayer window, because apps have no window size request in the SDK yet.",
    "wire": "Add a compact MiniPlayer window mode from a Window menu item, once the SDK can resize an app window"
   },
@@ -154,7 +154,7 @@
    "area": "panel",
    "apple": "View > Lyrics",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:3025",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_lyrics",
    "note": "A .lrc file beside a song adds a Lyrics switch on the Now Playing sheet; the line being sung is highlighted and follows the song. View > Show Lyrics does the same. Plain-text lyrics are listed without highlight. Not yet checked on Midget.",
    "wire": ""
   },
@@ -171,10 +171,10 @@
    "feature": "Playback settings: crossfade, Sound Check",
    "area": "settings",
    "apple": "Settings > Playback",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Settings window with crossfade seconds and loudness normalisation wired into the engine"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/playback.rs (Playback::gain, crossfade_gains, parse, to_text)",
+   "note": "The crossfade length (up to 12 seconds), the Sound Check gain toward -16 dB with a 9 dB limit, the settings file and the equal-power crossfade curve are tested headless in tests/parity_app-music_w8.rs. Not yet: no Settings page sets them, and the audio service has no crossfade or gain command, so the engine does not use them.",
+   "wire": "Settings page with the crossfade seconds and a Sound Check switch; crossfade and gain commands in the audio service"
   },
   {
    "feature": "Recently Added / Recently Played",
@@ -199,7 +199,7 @@
    "area": "integration",
    "apple": "output route picker",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:2230",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::show_outputs",
    "note": "The route button on the Now Playing sheet and in the mini player bar lists the output devices and makes the chosen one the default output. Not yet checked on Midget.",
    "wire": "Per-app output: the audio service keeps one default output"
   },
@@ -216,10 +216,10 @@
    "feature": "Visualizer",
    "area": "menu",
    "apple": "Window > Visualizer",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not started: the audio service publishes no spectrum to apps.",
-   "wire": "Full-window visualizer driven by the engine spectrum"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/visualizer.rs (band_levels, bars, smooth)",
+   "note": "The band levels of the ten equalizer bands (a Goertzel filter per band) and the rise and fall of the bars are tested headless in tests/parity_app-music_w8.rs. Not yet: the audio service publishes no spectrum, and no window draws the bars.",
+   "wire": "Audio service spectrum, and a full-window visualizer that draws the bars from it"
   },
   {
    "feature": "Streaming catalogue, subscription store, cloud library",

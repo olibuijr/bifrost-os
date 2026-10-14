@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.0 — 2026-10-14
+
+- Playlist folders can be renamed and deleted in the model. A renamed folder keeps its playlists, and a deleted folder
+  leaves its playlists in no folder. The folder page that offers these buttons is not built yet.
+- Playback settings model: a crossfade length of up to 12 seconds, Sound Check (a gain that moves each song toward
+  -16 dB, limited to 9 dB either way), and an equal-power crossfade curve. The settings are kept as text in the same
+  form the settings file uses. No Settings page sets them yet, and the audio service does not take them.
+- Visualizer model: the level of each of the ten equalizer bands in a block of audio, and the rise and fall of a bar.
+  No window draws the bars yet, because the audio service publishes no spectrum.
+
 ## 1.8.0 — 2026-10-14
 
 - Get Info. Song > Get Info, and Get Info in a song's "..." menu, opens a page with the song's Title, Artist and Album.

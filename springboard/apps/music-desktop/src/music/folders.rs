@@ -91,6 +91,36 @@ impl Folders {
         self.names.iter().position(|n| n == name)
     }
 
+    /// Renames folder `index` to `to`; its playlists stay in it. Returns the folder's index in name order after the
+    /// rename, or None when there is no such folder, the name is unusable or another folder already has it.
+    pub fn rename(&mut self, index: usize, to: &str) -> Option<usize> {
+        let from = self.names.get(index)?.clone();
+        let to = clean_name(to)?;
+        if self.position(&to).is_some_and(|other| other != index) {
+            return None;
+        }
+        for folder in self.members.values_mut() {
+            if *folder == from {
+                *folder = to.clone();
+            }
+        }
+        self.names[index] = to.clone();
+        self.names.sort_by_key(|n| n.to_lowercase());
+        self.save();
+        self.position(&to)
+    }
+
+    /// Deletes folder `index`. Its playlists are kept and listed in no folder. False when there is no such folder.
+    pub fn delete(&mut self, index: usize) -> bool {
+        if index >= self.names.len() {
+            return false;
+        }
+        let name = self.names.remove(index);
+        self.members.retain(|_, folder| *folder != name);
+        self.save();
+        true
+    }
+
     /// Puts `playlist` in folder `folder` (an index into `names`), or takes it out of its folder for None. True when
     /// its folder changed.
     pub fn put(&mut self, playlist: &str, folder: Option<usize>) -> bool {

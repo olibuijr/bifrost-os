@@ -27,6 +27,8 @@ pub mod system;
 pub mod tempo;
 pub mod equalizer;
 pub mod upnext;
+pub mod playback;
+pub mod visualizer;
 
 use bifrost_app::layout::{top_inset, UNIFIED_BAR_PT};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, ROW_PRESSED, SEPARATOR_C};
