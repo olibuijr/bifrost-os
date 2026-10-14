@@ -263,3 +263,89 @@ fn headless_widget_search_description_and_placeholder_are_trimmed() {
     let cleared = s.with_description("");
     assert_eq!(cleared.description(), None);
 }
+
+// ---- social: the compose post sheet (bifrost_ui::compose) ----
+
+use bifrost_ui::compose::{ComposeDraft, ComposeError, ComposeItem, ComposeResult, ComposeSheet, SheetState, MAX_IMAGES, MAX_URLS};
+
+#[test]
+fn headless_compose_draft_hands_off_text_then_images_then_links() {
+    let mut d = ComposeDraft::new();
+    assert!(d.is_empty());
+    d.add_url("https://example.com/a").unwrap();
+    d.add_image("photo.png").unwrap();
+    d.set_initial_text("  Hello  ");
+    assert_eq!(d.text(), "  Hello  ", "the text is kept as given");
+    assert!(!d.is_empty());
+    assert_eq!(
+        d.items(),
+        vec![
+            ComposeItem::Text("  Hello  ".into()),
+            ComposeItem::Image("photo.png".into()),
+            ComposeItem::Url("https://example.com/a".into()),
+        ]
+    );
+    d.set_initial_text("   ");
+    assert_eq!(d.items().len(), 2, "blank text is not handed off");
+}
+
+#[test]
+fn headless_compose_draft_refuses_bad_links_and_empty_items() {
+    let mut d = ComposeDraft::new();
+    assert_eq!(d.add_url("   "), Err(ComposeError::Empty));
+    assert_eq!(d.add_image(" "), Err(ComposeError::Empty));
+    assert_eq!(d.add_url("ftp://example.com"), Err(ComposeError::BadUrl("ftp://example.com".into())));
+    assert_eq!(d.add_url("https://"), Err(ComposeError::BadUrl("https://".into())), "a host is required");
+    assert_eq!(d.add_url("https://a b.test"), Err(ComposeError::BadUrl("https://a b.test".into())), "no spaces");
+    d.add_url("HTTPS://example.com/ok").expect("the scheme ignores case");
+    assert_eq!(d.urls(), ["HTTPS://example.com/ok"]);
+    d.remove_all_urls();
+    assert!(d.urls().is_empty());
+}
+
+#[test]
+fn headless_compose_draft_images_and_links_stop_at_their_limits() {
+    assert_eq!(MAX_IMAGES, 8);
+    assert_eq!(MAX_URLS, 8);
+    let mut d = ComposeDraft::new();
+    for i in 0..MAX_IMAGES {
+        d.add_image(&format!("img{i}.png")).unwrap();
+    }
+    assert_eq!(d.add_image("one-more.png"), Err(ComposeError::Full(MAX_IMAGES)));
+    for i in 0..MAX_URLS {
+        d.add_url(&format!("https://example.com/{i}")).unwrap();
+    }
+    assert_eq!(d.add_url("https://example.com/extra"), Err(ComposeError::Full(MAX_URLS)));
+    d.remove_all_images();
+    assert!(d.images().is_empty());
+    assert_eq!(d.urls().len(), MAX_URLS, "removing images leaves the links");
+}
+
+#[test]
+fn headless_compose_sheet_locks_once_presented_and_reports_one_result() {
+    let mut sheet = ComposeSheet::new();
+    assert_eq!(sheet.state(), SheetState::Editing);
+    sheet.set_initial_text("Draft").unwrap();
+    assert!(sheet.present(), "the first presentation shows the sheet");
+    assert!(!sheet.present(), "it is not shown twice");
+    assert_eq!(sheet.add_image("late.png"), Err(ComposeError::Locked), "only the user changes the post now");
+    assert_eq!(sheet.set_initial_text("again"), Err(ComposeError::Locked));
+    assert_eq!(sheet.finish(true), Some(ComposeResult::Done));
+    assert_eq!(sheet.state(), SheetState::Closed);
+    assert_eq!(sheet.result(), Some(ComposeResult::Done));
+    assert_eq!(sheet.finish(false), None, "a closed sheet reports nothing more");
+    assert_eq!(sheet.draft().text(), "Draft");
+}
+
+#[test]
+fn headless_compose_sheet_an_empty_or_cancelled_post_reports_cancelled() {
+    let mut cancelled = ComposeSheet::new();
+    cancelled.set_initial_text("Keep me out").unwrap();
+    cancelled.present();
+    assert_eq!(cancelled.finish(false), Some(ComposeResult::Cancelled));
+
+    let mut empty = ComposeSheet::new();
+    empty.present();
+    assert_eq!(empty.finish(true), Some(ComposeResult::Cancelled), "sending nothing is a cancel");
+    assert_eq!(ComposeDraft::new().dismiss(true), ComposeResult::Cancelled);
+}
