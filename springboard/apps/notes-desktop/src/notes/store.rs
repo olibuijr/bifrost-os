@@ -188,11 +188,13 @@ pub struct Prefs {
     pub sort: SortKey,
     /// move a checklist item to the bottom of its list when ticked
     pub checked_to_bottom: bool,
+    /// the list shows section headers by date (Today, Yesterday, Previous 7 Days, months, years)
+    pub group_by_date: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false }
+        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, group_by_date: false }
     }
 }
 
@@ -204,6 +206,7 @@ pub fn load_prefs(dir: &Path) -> Prefs {
         match line.split_once('=') {
             Some(("sort", v)) => p.sort = SortKey::parse(v.trim()).unwrap_or_default(),
             Some(("checked_to_bottom", v)) => p.checked_to_bottom = v.trim() == "1",
+            Some(("group_by_date", v)) => p.group_by_date = v.trim() == "1",
             _ => {}
         }
     }
@@ -211,7 +214,10 @@ pub fn load_prefs(dir: &Path) -> Prefs {
 }
 
 pub fn save_prefs(dir: &Path, p: Prefs) -> io::Result<()> {
-    springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), format!("sort={}\nchecked_to_bottom={}\n", p.sort.name(), p.checked_to_bottom as u8))
+    springboard::shell::fsutil::write_atomic(
+        &dir.join(PREFS_FILE),
+        format!("sort={}\nchecked_to_bottom={}\ngroup_by_date={}\n", p.sort.name(), p.checked_to_bottom as u8, p.group_by_date as u8),
+    )
 }
 
 /// Writes the note as `<title>.md` under `<dir>/.export` for sharing and
@@ -591,9 +597,10 @@ mod tests {
     fn prefs_round_trip_and_tolerate_garbage() {
         let dir = scratch("prefs");
         assert_eq!(load_prefs(&dir), Prefs::default());
-        save_prefs(&dir, Prefs { sort: SortKey::Title, checked_to_bottom: true }).unwrap();
-        assert_eq!(load_prefs(&dir), Prefs { sort: SortKey::Title, checked_to_bottom: true });
-        std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\n").unwrap();
+        let saved = Prefs { sort: SortKey::Title, checked_to_bottom: true, group_by_date: true };
+        save_prefs(&dir, saved).unwrap();
+        assert_eq!(load_prefs(&dir), saved);
+        std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\ngroup_by_date=0\n").unwrap();
         assert_eq!(load_prefs(&dir), Prefs::default());
         let _ = std::fs::remove_dir_all(&dir);
     }

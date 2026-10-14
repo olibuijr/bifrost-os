@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.16.0 — 2026-10-14
+
+- Note > Attach File... (any file type, up to 32 MB) stores the file beside the note and inserts a link to it at the
+  caret. The file keeps its extension, and moves, duplicates and erases with its note.
+- List menu > Group by Date splits the note list into Today, Yesterday, Previous 7 Days, Previous 30 Days, then one
+  section per month (and per year for older notes), newest first. Pinned notes stay in their own section. The setting
+  is kept with the other list settings.
+- Not in this version: attached files show as a text link, not a file chip; no audio recording; Group by Date is not
+  in the View menu or Settings yet, and it is not checked on Midget.
+
 ## 1.15.0 — 2026-10-13
 
 - Note > Print... (Cmd+P) prints the open note as plain text in Helvetica, wrapped to the page, through the shared print

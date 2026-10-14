@@ -68,6 +68,9 @@ pub fn fit(w: usize, h: usize, max_w: usize) -> (usize, usize) {
     (((w as f32 * scale).round() as usize).max(1), ((h as f32 * scale).round() as usize).max(1))
 }
 
+/// Largest file Attach File accepts (any type).
+pub const MAX_FILE_BYTES: usize = 32 * 1024 * 1024;
+
 /// Decodes (bounded) and scales to fit `max_w`.
 pub fn decode_fitted(bytes: &[u8], max_w: usize) -> Option<Image> {
     if !acceptable(bytes) {
@@ -94,6 +97,42 @@ pub fn import(dir: &Path, id: &str, bytes: &[u8]) -> io::Result<String> {
     let name = folders::next_attachment(dir, id, ext);
     springboard::shell::fsutil::write_atomic(&dir.join(&name), bytes)?;
     Ok(name)
+}
+
+/// The stored extension for a file named `name`: its own extension in lower case when that is a plain word of 1 to 8
+/// letters or digits, else `bin`.
+pub fn extension_of(name: &str) -> String {
+    let ext = match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => ext,
+        _ => "",
+    };
+    let plain = !ext.is_empty() && ext.len() <= 8 && ext.chars().all(|c| c.is_ascii_alphanumeric());
+    if plain { ext.to_ascii_lowercase() } else { "bin".to_string() }
+}
+
+/// The name a file shows in the note: its base name, without the characters that would break the Markdown link.
+pub fn display_name(name: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or("");
+    let clean: String = base.chars().filter(|c| !c.is_control() && !matches!(c, '[' | ']' | '(' | ')')).collect();
+    let clean = clean.trim();
+    if clean.is_empty() { "File".to_string() } else { clean.to_string() }
+}
+
+/// Stores a file of any type beside note `id` in `dir` and returns the stored file name. The name keeps the file's
+/// extension, so the attachment is listed and moves with the note. Files over `MAX_FILE_BYTES` are refused.
+pub fn import_file(dir: &Path, id: &str, name: &str, bytes: &[u8]) -> io::Result<String> {
+    if bytes.len() > MAX_FILE_BYTES {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "File is too large"));
+    }
+    std::fs::create_dir_all(dir)?;
+    let stored = folders::next_attachment(dir, id, &extension_of(name));
+    springboard::shell::fsutil::write_atomic(&dir.join(&stored), bytes)?;
+    Ok(stored)
+}
+
+/// The Markdown link line for an attached file: its display name, linking to the stored file.
+pub fn file_line(name: &str, stored: &str) -> String {
+    format!("[{}]({stored})", display_name(name))
 }
 
 /// Decodes every image the note's text refers to and that exists in `dir`.
@@ -197,6 +236,37 @@ mod tests {
         assert!(import(&dir, "100", &png_header(9000, 9000)).is_err());
         assert_eq!(folders::attachments(&dir, "100").len(), 3);
         assert!(load_images(&dir, "x\n![image](100-1.png)\n![image](missing.png)", 800).is_empty(), "a header-only file does not decode");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn file_names_keep_a_safe_extension() {
+        assert_eq!(extension_of("Report.PDF"), "pdf");
+        assert_eq!(extension_of("archive.tar.gz"), "gz");
+        assert_eq!(extension_of("README"), "bin");
+        assert_eq!(extension_of(".hidden"), "bin");
+        assert_eq!(extension_of("odd.ext/with slash"), "bin");
+        assert_eq!(extension_of("long.abcdefghi"), "bin");
+    }
+
+    #[test]
+    fn display_names_drop_paths_and_link_characters() {
+        assert_eq!(display_name("/home/a/Plan [v2].pdf"), "Plan v2.pdf");
+        assert_eq!(display_name("C:\\docs\\notes.txt"), "notes.txt");
+        assert_eq!(display_name("   "), "File");
+        assert_eq!(file_line("Plan (final).pdf", "100-2.pdf"), "[Plan final.pdf](100-2.pdf)");
+    }
+
+    #[test]
+    fn any_file_is_stored_beside_the_note_and_listed() {
+        let dir = scratch("file");
+        let stored = import_file(&dir, "200", "Budget.xlsx", b"sheet").unwrap();
+        assert_eq!(stored, "200-1.xlsx");
+        assert_eq!(import_file(&dir, "200", "Photo.png", &png_header(4, 4)).unwrap(), "200-2.png");
+        assert_eq!(std::fs::read(dir.join("200-1.xlsx")).unwrap(), b"sheet");
+        assert_eq!(folders::attachments(&dir, "200"), vec!["200-1.xlsx".to_string(), "200-2.png".to_string()]);
+        let big = vec![1u8; MAX_FILE_BYTES + 1];
+        assert!(import_file(&dir, "200", "huge.bin", &big).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

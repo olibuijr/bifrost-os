@@ -11,8 +11,9 @@
 //! and export as `.md` or text.
 
 pub mod attach;
-pub mod folders;
 mod chrome;
+pub mod folders;
+pub mod grouping;
 pub mod icon;
 pub mod rpc;
 pub mod sketch;
@@ -148,6 +149,7 @@ enum Act {
     DeleteFolder,
     Sort(store::SortKey),
     ToggleCheckedBottom,
+    ToggleGroupByDate,
     SortCheckedNow,
     ShareMd,
     ShareText,
@@ -321,6 +323,8 @@ pub struct Notes {
     /// indices into `notes` shown by the list (the search result)
     shown: Vec<usize>,
     shown_pinned: usize,
+    /// Group by Date section headers: the first row of each section and its title (empty when grouping is off)
+    group_heads: Vec<(usize, String)>,
     screen: Screen,
     list_scroll: Scroller,
     scroll: Scroller,
@@ -422,6 +426,7 @@ impl Notes {
             rows: vec![],
             shown: vec![],
             shown_pinned: 0,
+            group_heads: Vec::new(),
             screen: Screen::List,
             list_scroll: Scroller::new(),
             scroll: Scroller::new(),
@@ -625,6 +630,7 @@ impl Notes {
         self.shown = ranked.into_iter().filter(|&i| self.visible(i, searching, cutoff)).collect();
         self.shown_pinned = self.shown.iter().filter(|&&i| self.is_pinned(&self.notes[i].id)).count();
         let now = self.wall.now(t);
+        self.group_heads = self.date_heads(now);
         let text_w = self.list_px(ui).1 - 2.0 * ui.pt(SPACE_S + SPACE_L);
         self.appearance = LABEL.now();
         self.rows = self
@@ -648,6 +654,28 @@ impl Notes {
         self.reveal = None;
         self.fit_scroll(ui);
         self.dirty = true;
+    }
+
+    /// The Group by Date headers of the shown rows: the first row of each section with its title. Pinned rows are
+    /// not grouped. Empty when the setting is off.
+    fn date_heads(&self, now: i64) -> Vec<(usize, String)> {
+        if !self.prefs.group_by_date {
+            return Vec::new();
+        }
+        let pins = self.shown_pinned;
+        let order = &self.shown[pins..];
+        let mut row = pins;
+        let mut heads = Vec::new();
+        for section in grouping::group(&self.notes, order, now, self.wall.offset as i64) {
+            heads.push((row, section.title));
+            row += section.notes.len();
+        }
+        heads
+    }
+
+    /// Height of the Group by Date headers above shown row `i`.
+    fn heads_above(&self, i: usize) -> f32 {
+        self.group_heads.iter().filter(|(row, _)| *row <= i).count() as f32 * SECTION_PT
     }
 
     fn kb_top(&self, ui: &Ui) -> f32 {
@@ -700,7 +728,7 @@ impl Notes {
         let m = ui.pt(SPACE_S);
         let pins = self.shown_pins();
         let section = if pins > 0 { SECTION_PT + if i >= pins { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
-        (lx + m, ui.pt(list_top_pt() + section + ROW_PT * i as f32) - self.list_scroll.offset(), lw - 2.0 * m, ui.pt(ROW_PT))
+        (lx + m, ui.pt(list_top_pt() + section + ROW_PT * i as f32 + self.heads_above(i)) - self.list_scroll.offset(), lw - 2.0 * m, ui.pt(ROW_PT))
     }
 
     fn shown_pins(&self) -> usize {
@@ -843,7 +871,8 @@ impl Notes {
         let bottom = self.content_bottom(ui);
         let pins = self.shown_pins();
         let section = if pins > 0 { SECTION_PT + if pins < self.shown.len() { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
-        let (list_h, text_h) = (ui.pt(list_top_pt() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L), ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0));
+        let heads = self.group_heads.len() as f32 * SECTION_PT;
+        let (list_h, text_h) = (ui.pt(list_top_pt() + section + heads) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L), ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0));
         self.list_scroll.set_max(list_h - bottom);
         self.scroll.set_max(text_h - bottom);
     }
@@ -1462,6 +1491,7 @@ impl Notes {
             items.push((format!("Sort by {}", k.label()), Act::Sort(k), self.prefs.sort == k));
         }
         items.push(("Move Checked to Bottom".to_string(), Act::ToggleCheckedBottom, self.prefs.checked_to_bottom));
+        items.push(("Group by Date".to_string(), Act::ToggleGroupByDate, self.prefs.group_by_date));
         let (mx, my, mw, mh) = self.title_rect(ui);
         self.show_menu(ui, items, mx + mw - ui.pt(MENU_W_PT), my + mh + ui.pt(SPACE_XS));
     }
@@ -1689,6 +1719,11 @@ impl Notes {
                 self.prefs.checked_to_bottom = !self.prefs.checked_to_bottom;
                 self.save_prefs();
             }
+            Act::ToggleGroupByDate => {
+                self.prefs.group_by_date = !self.prefs.group_by_date;
+                self.save_prefs();
+                self.rebuild(ui, t);
+            }
             Act::SortCheckedNow => {
                 let new = md::checked_to_bottom(self.editor.text());
                 let caret = self.editor.caret();
@@ -1830,13 +1865,29 @@ impl Notes {
 
     /// Inserts the image paragraph for file `name` at the caret (the note is then saved as changed).
     fn insert_image(&mut self, ui: &Ui, name: &str, t: f64) {
-        let para = self.editor.paragraph_of(self.editor.caret());
-        let at_start = self.editor.caret() == para.start;
-        let line = format!("{}{}\n", if at_start { "" } else { "\n" }, md::image_line(name));
-        let caret = self.editor.caret();
-        self.editor.replace_range(ui, caret..caret, &line, t, false);
+        self.insert_paragraph(ui, &md::image_line(name), t);
         self.load_images(ui);
         self.changed(ui, t);
+    }
+
+    /// Attaches any file to the open note (Note > Attach File...): the bytes are stored beside the note and a link to
+    /// the stored file is inserted on its own paragraph at the caret.
+    pub fn attach_file(&mut self, ui: &Ui, name: &str, bytes: &[u8], t: f64) -> std::io::Result<()> {
+        let Screen::Editor(i) = self.screen else { return Err(std::io::Error::other("No open note")) };
+        let id = self.notes[i].id.clone();
+        let stored = attach::import_file(&self.note_dir(&id), &id, name, bytes)?;
+        self.insert_paragraph(ui, &attach::file_line(name, &stored), t);
+        self.changed(ui, t);
+        Ok(())
+    }
+
+    /// Puts `line` on its own paragraph at the caret: a blank line first unless the caret starts a paragraph.
+    fn insert_paragraph(&mut self, ui: &Ui, line: &str, t: f64) {
+        let para = self.editor.paragraph_of(self.editor.caret());
+        let at_start = self.editor.caret() == para.start;
+        let text = format!("{}{}\n", if at_start { "" } else { "\n" }, line);
+        let caret = self.editor.caret();
+        self.editor.replace_range(ui, caret..caret, &text, t, false);
     }
 
     /// Insert Table (editor menu): a header row, its rule and one empty row, as a Markdown pipe table, on
@@ -2471,13 +2522,23 @@ impl Notes {
         let places: Vec<String> = (0..n).map(|i| self.loc_of(&self.notes[self.shown[i]].id).to_string()).collect();
         let pinned: Vec<bool> = (0..n).map(|i| self.is_pinned(&self.notes[self.shown[i]].id)).collect();
         let mut content = s.rows(ui.pt(nav_bottom_pt()) as usize, bottom as usize);
+        // section headers: Pinned and Notes, or the Group by Date titles (which replace Notes)
+        let mut heads: Vec<(usize, String)> = Vec::new();
         if pins > 0 {
-            for (label, row) in [("Pinned", 0), ("Notes", pins)] {
-                if row < n {
-                    let (rx, ry, ..) = rects[row];
-                    let img = self.labels.get(ui, label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
-                    content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
-                }
+            heads.push((0, "Pinned".to_string()));
+        }
+        if self.group_heads.is_empty() {
+            if pins > 0 {
+                heads.push((pins, "Notes".to_string()));
+            }
+        } else {
+            heads.extend(self.group_heads.iter().cloned());
+        }
+        for (row, label) in heads {
+            if row < n {
+                let (rx, ry, ..) = rects[row];
+                let img = self.labels.get(ui, label.as_str(), MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
+                content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
             }
         }
         for i in 0..n {

@@ -158,9 +158,9 @@
    "area": "menu",
    "apple": "MainMenu: Edit > Attach File, Record Audio; Window > Photo Browser",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1484",
-   "note": "Photo and sketch only",
-   "wire": "Add Attach File... (open panel, any type) storing the file beside the note via notes/attach.rs and rendering a file chip; audio recording through the shell audio capture service later."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1875",
+   "note": "Photo, sketch and any file (Note > Attach File...); files show as a text link, with no file chip and no audio recording",
+   "wire": "Render a file chip for [name](file) links in the editor; audio recording through the shell audio capture service later."
   },
   {
    "feature": "Attachment browser",
@@ -193,10 +193,10 @@
    "feature": "Group notes by date",
    "area": "view",
    "apple": "MainMenu: View > Group by Date; Settings: Group notes by date",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Section the note list into Today / Previous 7 Days / Previous 30 Days / month headers when sorted by date; Prefs flag + list menu toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:661",
+   "note": "List menu > Group by Date headers (Today to years) over the shown rows, saved in Prefs; not in the View menu or Settings yet, not checked on Midget",
+   "wire": "Add the View menu entry and the Settings pane toggle; verify the section headers on Midget."
   },
   {
    "feature": "Gallery view",

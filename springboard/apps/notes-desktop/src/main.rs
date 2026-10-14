@@ -24,6 +24,8 @@ struct NotesApp {
     export: Option<(u32, Vec<u8>)>,
     /// the open panel asked for by Import (Cmd+O)
     import: Option<u32>,
+    /// the open panel asked for by Attach File (any type), attached to the open note when it answers
+    attach: Option<u32>,
     /// Core Search: the `modified` stamp of each note as last indexed, by note id
     indexed: std::collections::HashMap<String, i64>,
     next_index: f64,
@@ -125,6 +127,7 @@ const MENU_DELETE: u32 = 2;
 const MENU_IMPORT: u32 = 3;
 const MENU_FIND: u32 = 4;
 const MENU_PRINT: u32 = 5;
+const MENU_ATTACH: u32 = 6;
 /// the menu bar extra's entry: New Quick Note (its own id space, from `status_item_action`)
 const QUICK_NEW: u32 = 1;
 
@@ -227,6 +230,8 @@ impl App for NotesApp {
                 AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(n.is_editing()),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_ATTACH, "Attach File...").enabled(n.is_editing()),
             ],
         }]
     }
@@ -252,6 +257,11 @@ impl App for NotesApp {
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         if id == MENU_IMPORT {
             self.open_import(ctx);
+            return false;
+        }
+        if id == MENU_ATTACH {
+            // any file type: the open panel takes no filter
+            self.attach = Some(ctx.open_document(DocMode::Read, "Attach File", &[]));
             return false;
         }
         let now = bifrost_app::proto::sys::now_ms();
@@ -422,6 +432,28 @@ impl App for NotesApp {
                 ctx.release_document(doc.grant);
                 true
             }
+            DocumentEvent::Opened(mut doc) if self.attach == Some(doc.request) => {
+                self.attach = None;
+                if doc.size > notes::attach::MAX_FILE_BYTES as u64 {
+                    ctx.log(&format!("attach: {} is too large ({} bytes)", doc.name, doc.size));
+                    ctx.release_document(doc.grant);
+                    return false;
+                }
+                let mut bytes = Vec::new();
+                if let Err(e) = (&mut doc.file).take(notes::attach::MAX_FILE_BYTES as u64 + 1).read_to_end(&mut bytes) {
+                    ctx.log(&format!("attach: {e}"));
+                    ctx.release_document(doc.grant);
+                    return false;
+                }
+                let Some(n) = &mut self.notes else { return false };
+                let result = n.attach_file(&ctx.ui, &doc.name, &bytes, bifrost_app::proto::sys::now_ms());
+                if let Err(e) = result {
+                    ctx.log(&format!("attach: {e}"));
+                }
+                // one attachment is one use of the file: the app keeps no grant to it
+                ctx.release_document(doc.grant);
+                true
+            }
             DocumentEvent::SaveTo(mut doc) => {
                 match self.export.take() {
                     Some((request, bytes)) if request == doc.request => match doc.file.write_all(&bytes) {
@@ -445,6 +477,9 @@ impl App for NotesApp {
             DocumentEvent::Failed { request, code } => {
                 if self.import == Some(request) {
                     self.import = None;
+                }
+                if self.attach == Some(request) {
+                    self.attach = None;
                 }
                 if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
                     self.export = None;
@@ -520,5 +555,5 @@ impl App for NotesApp {
 
 
 fn main() {
-    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None });
+    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, attach: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None });
 }

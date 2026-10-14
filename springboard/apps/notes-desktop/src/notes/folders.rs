@@ -1,8 +1,8 @@
 //! Folders for notes, persisted as subdirectories of the notes directory.
 //! Notes outside any folder live in the root ("All Notes" shows root and
 //! every folder). Deleting a note moves it to `.Recently Deleted`, stamping
-//! the move time on the file so it can be purged after 30 days. Image
-//! attachments sit beside their note as `<id>-<n>.png|jpg` and travel with it.
+//! the move time on the file so it can be purged after 30 days. Attachments
+//! sit beside their note as `<id>-<n>.<extension>` and travel with it.
 
 use super::store::{self, Note};
 use std::io;
@@ -66,8 +66,9 @@ pub fn rename(dir: &Path, old: &str, new: &str) -> io::Result<String> {
     Ok(new)
 }
 
-/// Attachment files of note `id` in `dir`: `<id>-<digits>.<png|jpg|jpeg|sketch>` (a sketch's `.sketch` file is the
-/// drawing behind its picture, and moves, copies and erases with it).
+/// Attachment files of note `id` in `dir`: `<id>-<digits>.<extension>`. Pictures are `png` and `jpg`, a sketch's
+/// `sketch` file is the drawing behind its picture, and files from Attach File keep their own extension. All of them
+/// move, copy and erase with the note.
 pub fn attachments(dir: &Path, id: &str) -> Vec<String> {
     let prefix = format!("{id}-");
     let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
@@ -75,7 +76,9 @@ pub fn attachments(dir: &Path, id: &str) -> Vec<String> {
         .flatten()
         .filter_map(|e| e.file_name().into_string().ok())
         .filter(|n| {
-            n.strip_prefix(&prefix).and_then(|rest| rest.split_once('.')).is_some_and(|(num, ext)| !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) && ["png", "jpg", "jpeg", "sketch"].contains(&ext.to_ascii_lowercase().as_str()))
+            n.strip_prefix(&prefix)
+                .and_then(|rest| rest.split_once('.'))
+                .is_some_and(|(num, ext)| !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) && is_extension(ext))
         })
         .collect();
     names.sort();
@@ -92,6 +95,11 @@ pub fn next_attachment(dir: &Path, id: &str, ext: &str) -> String {
         .max()
         .unwrap_or(0);
     (top + 1..).map(|n| format!("{id}-{n}.{ext}")).find(|n| !dir.join(n).exists()).unwrap()
+}
+
+/// A file extension an attachment may carry: 1 to 8 ASCII letters or digits, so a name never holds a path.
+fn is_extension(ext: &str) -> bool {
+    !ext.is_empty() && ext.len() <= 8 && ext.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
 /// Moves a note file and its attachments between directories.
