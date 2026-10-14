@@ -124,6 +124,63 @@ impl Ledger {
         v.sort_by_key(|t| t.id);
         v
     }
+
+    /// Merges the purchase records the store lists for the customer (`AppStore.sync`). A record matches a local purchase
+    /// when the product and the purchase day are equal, and each local purchase matches at most one record in a sync, so
+    /// two purchases of one product on one day stay two purchases. An unmatched record is added as a new purchase. A
+    /// matched record takes the store's renewal facts when it has any, and its revocation day when that day is earlier
+    /// than the local one. Local purchases the store does not list are kept.
+    pub fn sync(&mut self, remote: &[RemoteRecord]) -> SyncReport {
+        let mut report = SyncReport::default();
+        let mut claimed: Vec<u64> = Vec::new();
+        for r in remote {
+            let found = self
+                .transactions
+                .iter()
+                .position(|t| t.product == r.product && t.purchased == r.purchased && !claimed.contains(&t.id));
+            match found {
+                Some(i) => {
+                    let t = &mut self.transactions[i];
+                    claimed.push(t.id);
+                    if r.renewal.is_some() {
+                        t.renewal = r.renewal;
+                    }
+                    if let Some(day) = r.revoked {
+                        if t.revoked.map_or(true, |local| day < local) {
+                            t.revoked = Some(day);
+                            report.revoked += 1;
+                        }
+                    }
+                }
+                None => {
+                    let id = self.record(&r.product, r.purchased, r.renewal);
+                    claimed.push(id);
+                    report.added += 1;
+                    if let Some(day) = r.revoked {
+                        self.revoke(id, day);
+                        report.revoked += 1;
+                    }
+                }
+            }
+        }
+        report
+    }
+}
+
+/// One purchase record as the store lists it for the customer, to be merged into a ledger by [`Ledger::sync`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct RemoteRecord {
+    pub product: String,
+    pub purchased: i64,
+    pub renewal: Option<Renewal>,
+    pub revoked: Option<i64>,
+}
+
+/// What a sync changed: purchases added, and revocation days recorded or moved earlier.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SyncReport {
+    pub added: usize,
+    pub revoked: usize,
 }
 
 impl Default for Ledger {
@@ -212,5 +269,78 @@ mod tests {
         assert_eq!(ids, vec![newest, middle, first]);
         assert_eq!(l.latest_for("pro").map(|t| t.id), Some(newest));
         assert!(l.latest_for("missing").is_none());
+    }
+
+    fn remote(product: &str, purchased: i64, renewal: Option<Renewal>, revoked: Option<i64>) -> RemoteRecord {
+        RemoteRecord { product: product.to_string(), purchased, renewal, revoked }
+    }
+
+    #[test]
+    fn sync_adds_unknown_records_and_keeps_local_purchases_the_store_does_not_list() {
+        let mut l = Ledger::new();
+        l.record("theme", 2, None);
+        let report = l.sync(&[remote("pro", 5, None, None)]);
+        assert_eq!(report, SyncReport { added: 1, revoked: 0 });
+        assert!(l.is_entitled("pro", 6));
+        assert!(l.is_entitled("theme", 6), "a purchase the store does not list is kept");
+    }
+
+    #[test]
+    fn sync_matches_by_product_and_day_so_a_second_sync_adds_nothing() {
+        let mut l = Ledger::new();
+        let records = [remote("pro", 5, None, None)];
+        l.sync(&records);
+        let again = l.sync(&records);
+        assert_eq!(again, SyncReport::default());
+        assert_eq!(l.all_for("pro").len(), 1);
+    }
+
+    #[test]
+    fn sync_takes_the_store_revocation_only_when_it_is_earlier() {
+        let mut l = Ledger::new();
+        let id = l.record("pro", 5, None);
+        l.revoke(id, 20);
+        let earlier = l.sync(&[remote("pro", 5, None, Some(10))]);
+        assert_eq!(earlier.revoked, 1);
+        assert!(!l.is_entitled("pro", 12));
+        let later = l.sync(&[remote("pro", 5, None, Some(30))]);
+        assert_eq!(later.revoked, 0, "a later store revocation does not move the local day");
+        assert!(l.is_entitled("pro", 9));
+    }
+
+    #[test]
+    fn sync_refreshes_the_renewal_of_a_matched_subscription() {
+        let mut l = Ledger::new();
+        l.record("pro", 5, Some(Renewal::new(30)));
+        l.sync(&[remote("pro", 5, Some(Renewal::new(60)), None)]);
+        assert!(l.is_entitled("pro", 45), "the renewed period from the store is used");
+    }
+
+    #[test]
+    fn sync_keeps_two_same_day_purchases_of_one_product_apart() {
+        let mut l = Ledger::new();
+        let two = [remote("coins", 5, None, None), remote("coins", 5, None, None)];
+        assert_eq!(l.sync(&two), SyncReport { added: 2, revoked: 0 });
+        assert_eq!(l.all_for("coins").len(), 2);
+        assert_eq!(l.sync(&two), SyncReport::default(), "a repeat sync matches each purchase once");
+        assert_eq!(l.all_for("coins").len(), 2);
+    }
+
+    #[test]
+    fn sync_records_the_revocation_of_an_added_record() {
+        let mut l = Ledger::new();
+        let report = l.sync(&[remote("pro", 5, None, Some(8))]);
+        assert_eq!(report, SyncReport { added: 1, revoked: 1 });
+        assert!(l.is_entitled("pro", 7));
+        assert!(!l.is_entitled("pro", 8));
+    }
+
+    #[test]
+    fn sync_keeps_the_local_renewal_when_the_store_sends_none() {
+        let mut l = Ledger::new();
+        l.record("pro", 5, Some(Renewal::new(30)));
+        l.sync(&[remote("pro", 5, None, None)]);
+        assert!(l.is_entitled("pro", 20));
+        assert!(!l.is_entitled("pro", 30));
     }
 }
