@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "About pane intent (settings_intents.rs); the App Intents runtime that serves it is not wired. built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "accessibility widget, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Accessibility pane intent only; the glanceable widget itself is not built. built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Users & Groups pane intent (local account); built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -158,9 +158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Appearance pane intent; built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple account intents, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Account intent opens the BifrOSt Account card on the root page; no sign-in intents; built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -218,9 +218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Battery pane intent; built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -238,9 +238,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Passcode and Passwords pane intents; no biometric sensor intents (hardware); built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -278,9 +278,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Bluetooth pane intent only; the widget is not built; built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -299,8 +299,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no optical disc settings",
+   "status": "n/a",
+   "note": "no optical drive on the target hardware, so no disc settings",
    "rea": []
   },
   {
@@ -319,8 +319,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no optical disc settings",
+   "status": "n/a",
+   "note": "no optical drive on the target hardware, so no disc intents",
    "rea": []
   },
   {
@@ -398,9 +398,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Control Centre pane intent; built on os/team-m-01-settings; not yet verified on Midget",
    "rea": []
   },
   {
