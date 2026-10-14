@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+- Quit Process and Force Quit Process ask first, in a sheet with Cancel, Force Quit and Quit. Return chooses the default button and Escape closes the sheet.
+- The signal sheet takes the arrow keys and Return.
+- Inspect Process fills the window with a panel: Memory, Statistics, and Open Files and Ports (the open files, then the TCP and UDP sockets with their endpoints and state). Reveal in Files shows the program in Files. Done and Escape close it.
+- Process > Sample Duration chooses 3, 10 or 30 seconds.
+- View > Run System Diagnostics adds a short system-wide sample: every thread of every process, five looks 200 ms apart.
+- With Show Deltas on, the CPU time, bytes and GPU time columns sort by what each process did since its baseline. The optional Since Baseline column on the CPU tab shows how long the baseline has been running.
+- View > Columns adds Ports (open sockets), Private Memory and Idle Wake Ups (voluntary context switches per second, on the Energy tab).
+- The sidebar and View > Filter Processes add Applications in the Last 8 Hours, by process start time.
+- The Memory tab's footer shows the last minute of memory pressure as bars, green, yellow or red.
+- The 12 hr Average column keeps its means across launches.
+- The GPU tab reads per-process shares from the vendor GPU tool when the driver publishes no DRM counters.
+
 ## 0.4.0
 
 - View > Columns chooses the columns of each tab (CPU Time, Parent PID, Virtual Size, 12 hr Average, Preventing Sleep, Bytes Read and Written, GPU Time, Packets In and Out) and remembers the choice.

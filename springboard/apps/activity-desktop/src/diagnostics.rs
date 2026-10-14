@@ -164,7 +164,7 @@ pub fn gather(dir: &Path, procs: &[ProcSample], progress: &Progress) -> Outcome 
     done += 1;
     progress.set(done, total);
 
-    // a short look at every thread of every process, what Run Spindump gives the reference app
+    // a short look at every thread of every process, the system-wide report the reference app's diagnostics give
     let pids: Vec<u32> = procs.iter().map(|p| p.pid).collect();
     let sample = sample_proc::sample_system(&pids, sample_proc::SYSTEM_ROUNDS, sample_proc::SYSTEM_INTERVAL_MS, progress);
     if progress.cancelled() {

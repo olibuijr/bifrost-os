@@ -470,8 +470,12 @@ fn read_voluntary(pid: u32) -> Option<u64> {
     Some(total)
 }
 
-/// The per-process engine share from `nvidia-smi pmon` (the `sm` column, percent), by pid. The header lines start with
-/// `#`; a process with no figure shows `-`. A process on several GPUs adds up.
+/// The command of the vendor's GPU management tool. It reports each process's engine share when the driver publishes
+/// no DRM counters, as the proprietary drivers do.
+const GPU_TOOL: &str = "nvidia-smi";
+
+/// The per-process engine share from the vendor GPU tool's process table (its `sm` column, percent), by pid. The header
+/// lines start with `#`; a process with no figure shows `-`. A process on several GPUs adds up.
 pub fn parse_pmon(text: &str) -> HashMap<u32, f32> {
     let mut shares = HashMap::new();
     for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
@@ -483,9 +487,9 @@ pub fn parse_pmon(text: &str) -> HashMap<u32, f32> {
     shares
 }
 
-/// Reads the NVIDIA per-process engine shares once. None when `nvidia-smi` cannot be run (no NVIDIA driver here).
-fn read_nvidia() -> Option<HashMap<u32, f32>> {
-    let out = Command::new("nvidia-smi").args(["pmon", "-c", "1", "-s", "u"]).output().ok()?;
+/// Reads the per-process engine shares once from the vendor GPU tool. None when the tool cannot be run (no such driver).
+fn read_gpu_tool_shares() -> Option<HashMap<u32, f32>> {
+    let out = Command::new(GPU_TOOL).args(["pmon", "-c", "1", "-s", "u"]).output().ok()?;
     out.status.success().then(|| parse_pmon(&String::from_utf8_lossy(&out.stdout)))
 }
 
@@ -565,10 +569,10 @@ pub struct Sampler {
     pub scan_wakeups: bool,
     /// The boot time in seconds since the epoch (zero when unknown), to age the processes.
     boot: u64,
-    /// The NVIDIA engine share of each process, read while the GPU is scanned (see `parse_pmon`).
-    nvidia: HashMap<u32, f32>,
-    /// No `nvidia-smi` on this machine: it is not asked again.
-    no_nvidia: bool,
+    /// The vendor tool's engine share of each process, read while the GPU is scanned (see `parse_pmon`).
+    tool_shares: HashMap<u32, f32>,
+    /// The vendor tool is not on this machine: it is not asked again.
+    no_gpu_tool: bool,
 }
 
 /// How long the list of sleep blockers is trusted before logind is asked again (milliseconds).
@@ -656,15 +660,15 @@ impl Sampler {
             self.sleep_blockers.clear();
             self.blockers_read_at = None;
         }
-        // NVIDIA's proprietary driver publishes no DRM counters, so its per-process shares come from nvidia-smi
+        // a proprietary driver publishes no DRM counters, so its per-process shares come from the vendor tool
         if !self.scan_gpu {
-            self.nvidia.clear();
-        } else if !self.no_nvidia {
-            match read_nvidia() {
-                Some(shares) => self.nvidia = shares,
+            self.tool_shares.clear();
+        } else if !self.no_gpu_tool {
+            match read_gpu_tool_shares() {
+                Some(shares) => self.tool_shares = shares,
                 None => {
-                    self.no_nvidia = true;
-                    self.nvidia.clear();
+                    self.no_gpu_tool = true;
+                    self.tool_shares.clear();
                 }
             }
         }
@@ -699,7 +703,7 @@ impl Sampler {
                     (Some(prev), Some(now), Some(d)) => (now.saturating_sub(prev) as f64 / 1e9 / d * 100.0) as f32,
                     _ => 0.0,
                 };
-                let gpu = if gpu == 0.0 { self.nvidia.get(&pid).copied().unwrap_or(0.0) } else { gpu };
+                let gpu = if gpu == 0.0 { self.tool_shares.get(&pid).copied().unwrap_or(0.0) } else { gpu };
                 // wake-ups per second, from the switches counted at the last reading
                 let wakeups = match (before.and_then(|b| b.voluntary), voluntary, dt) {
                     (Some(prev), Some(now), Some(d)) => now.saturating_sub(prev) as f64 / d,
@@ -870,7 +874,7 @@ mod tests {
     }
 
     #[test]
-    fn nvidia_pmon_lines_give_each_process_its_engine_share() {
+    fn gpu_tool_lines_give_each_process_its_engine_share() {
         let text = "# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command\n\
                     # Idx           #    C/G     %      %      %      %      %      %    name\n\
                     \x20   0       1234     G     12      3      0      0      0      0    Xorg\n\

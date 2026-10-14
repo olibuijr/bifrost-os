@@ -33,9 +33,9 @@
    "area": "view",
    "apple": "View menu process filters",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:256",
-   "note": "All nine filters are in the sidebar and View > Filter Processes: Windowed Processes (owners of an on-screen window from the shell window list, polled each reading; native clients without an owner pid are not matched), Selected Processes (the selection and everything it started, via ppid) and GPU Processes (GPU share above 0) join the existing six. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Check Windowed Processes on the lab machine, and add the Application in the last 8 hours filter (needs a process start-time history)."
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:250",
+   "note": "All ten filters are in the sidebar and View > Filter Processes. Windowed Processes (owners of an on-screen window from the shell window list, polled each reading; native clients without an owner pid are not matched), Selected Processes (the selection and everything it started, via ppid), GPU Processes and Applications in the Last 8 Hours (start time from /proc/<pid>/stat and the boot time from /proc/stat, so no start-time history is kept) are built on the branch. Not yet verified on Midget.",
+   "wire": "Check Windowed Processes and Applications in the Last 8 Hours on the lab machine."
   },
   {
    "feature": "Search / filter processes by name",
@@ -50,82 +50,82 @@
    "feature": "Quit Process and Force Quit",
    "area": "menu",
    "apple": "View > Quit Process (toolbar stop button)",
-   "status": "parity",
-   "bifrost": "springboard/apps/activity-desktop/src/window.rs:208",
-   "note": "SIGTERM / SIGKILL via toolbar and Process menu; no confirmation sheet.",
-   "wire": "Show a confirmation sheet (Quit / Force Quit / Cancel) before signalling, as the reference does, in window.rs signal_selected."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:740",
+   "note": "Quit Process and Force Quit Process open a confirmation sheet with Cancel, Force Quit and Quit (window.rs quit_sheet_hit, draw.rs draw_quit_sheet). Return chooses the default button (Force Quit when chosen from its menu item), Escape closes the sheet. Only processes of the signed-in user can be signalled. Not yet verified on Midget.",
+   "wire": "Check the sheet on the lab machine: Return and Escape, and Force Quit as the default from its menu item."
   },
   {
    "feature": "Send Signal to Process",
    "area": "menu",
    "apple": "View > Send Signal to Process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/window.rs:553",
-   "note": "Process > Send Signal... opens a sheet listing the eight signals with what each does, Cancel and Send; the submenu stays. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Check the sheet on the lab machine (keyboard: Return to send, arrow keys to choose) and reuse it for the Quit and Force Quit confirmation."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:797",
+   "note": "Process > Send Signal... opens a sheet listing the eight signals with what each does, Cancel and Send. The arrow keys move the choice, Return sends and Escape closes. The submenu sends directly. Not yet verified on Midget.",
+   "wire": "Check the sheet on the lab machine with the keyboard and with the pointer."
   },
   {
    "feature": "Inspect Process window (stats, memory, open files and ports)",
    "area": "panel",
    "apple": "ProcessInspector.nib: Memory, Statistics, Open Files and Ports tabs",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/inspect.rs:52",
-   "note": "The inspector card now also shows the parent process (name and pid), page faults (minor and major) and context switches (voluntary and involuntary), read from /proc/<pid>/stat and status. Still a card in place of the graph, with no Memory/Statistics/Open Files segments and no reveal-in-file-manager link. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Turn the inspector into its own window with Memory / Statistics / Open Files and Ports segments, plus a Reveal in Files button for exe."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:876",
+   "note": "The inspector is a panel in the window with Memory, Statistics and Open Files and Ports segments (inspect.rs detail_rows and file_and_port_lines; draw.rs draw_inspector). Ports lists the TCP and UDP sockets with endpoints and state, read from the process's own socket tables. Reveal in Files (window.rs reveal_in_files; main.rs holds the read grant) shows the program in Files. Done and Escape close it. Not a separate window: the SDK opens one window per app. Not yet verified on Midget.",
+   "wire": "A separate inspector window needs the SDK to open a second window; the panel stays until then."
   },
   {
    "feature": "Sample Process",
    "area": "menu",
    "apple": "View > Sample Process (Sample.nib)",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs:145",
-   "note": "Process > Sample Process (and a toolbar Stop) looks at every thread of the selected process every 20 ms for 10 s on a background thread and shows the report (kernel wait stack, else wchan, else state, counted per thread) in the window, with Copy and Save.... No user-space call graph, and the duration is fixed. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Add a duration choice (3, 10, 30 s) and, where ptrace is permitted, user-space frames from /proc/<pid>/task/<tid>/syscall and a symbolizer."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:442",
+   "note": "Process > Sample Duration chooses 3, 10 or 30 seconds (sample_proc.rs DURATIONS) and remembers the choice. The sample watches every thread every 20 ms and reports the kernel wait stack, else wchan, else state, counted per thread. No user-space call graph and no symbolizer. Not yet verified on Midget.",
+   "wire": "Add user-space frames from /proc/<pid>/task/<tid>/syscall and an ELF symbolizer, where ptrace is permitted."
   },
   {
    "feature": "Run Spindump / System Diagnostics",
    "area": "menu",
    "apple": "View > Run Spindump, Run System Diagnostics",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/diagnostics.rs:127",
-   "note": "View > Run System Diagnostics gathers 13 /proc files, the process list, journal tail, kernel log, disk usage and failed units into a zip (progress card with Stop), then opens the save panel. A zip chosen in the save panel, not a tarball on the Desktop; no system-wide stack sampling like spindump. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Add a system-wide sampling pass (every process, the Sample Process routine) and an option to write to the Desktop without the panel once the shell grants that."
+   "bifrost": "springboard/apps/activity-desktop/src/diagnostics.rs:173",
+   "note": "View > Run System Diagnostics also writes system-sample.txt: five looks, 200 ms apart, at every thread of every process (sample_proc.rs sample_system), each thread named with its process. The archive is still saved through the save panel. Not yet verified on Midget.",
+   "wire": "Add an option to write the archive to the Desktop without the panel once the shell grants that."
   },
   {
    "feature": "Show Deltas for Process",
    "area": "menu",
    "apple": "View > Show Deltas for Process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/window.rs:471",
-   "note": "Process > Show Deltas for Process stores a baseline for the selected pid (dropped when it exits); CPU Time, Bytes Read, Bytes Written and GPU Time count from it and the name carries a (deltas) mark. Sorting still uses the absolute figure. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Sort by the delta figure while a baseline is set, and keep several baselines visible with a column that shows the elapsed time."
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:612",
+   "note": "With Show Deltas on, sorting by CPU Time, Bytes Read, Bytes Written or GPU Time counts from each baseline (model.rs visible_scoped; processes without a baseline count as zero). The optional Since Baseline column on the CPU tab shows how long each baseline has been running (window.rs since_text). Several baselines can be on at once. Not yet verified on Midget.",
+   "wire": "Check the deltas sort and the Since Baseline column on the lab machine."
   },
   {
    "feature": "Columns submenu (choose visible columns)",
    "area": "menu",
    "apple": "View > Columns",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:57",
-   "note": "View > Columns lists the optional columns of the current tab as checkable items (required ones are disabled) and stores the choice in app defaults (ColumnSet). Offers CPU Time, Parent PID, Virtual Size, 12 hr Average, Preventing Sleep, Bytes Read/Written, GPU Time, Packets In/Out. No Ports, Kind, Private or Purgeable memory, Idle Wake Ups. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Add the remaining reference columns that have a Linux source: Ports (open sockets per pid), Private Mem (smaps_rollup Private_*), Idle Wake Ups (voluntary context switches per second)."
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:77",
+   "note": "View > Columns offers Ports (open sockets), Private Memory (private pages from smaps_rollup, a dash when another user's process does not allow it) and Idle Wake Ups (voluntary context switches per second, Energy tab), on top of the earlier optional columns. Each reading is taken only while its column is shown. No Kind or Purgeable column: neither has a Linux source. Not yet verified on Midget.",
+   "wire": "Check the dash for unreadable Private Memory and the wake-up rate on the lab machine."
   },
   {
    "feature": "Update Frequency",
    "area": "menu",
    "apple": "View > Update Frequency",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:165",
-   "note": "View > Update Frequency 1/2/5 s, persisted in app defaults.",
-   "wire": "Add View > Update Frequency radio items (1s/2s/5s) feeding next_wake in window.rs:161; persist it."
+   "bifrost": "springboard/apps/activity-desktop/src/main.rs:200",
+   "note": "View > Update Frequency has 1, 2 and 5 second radio items (main.rs), feeds the next reading (window.rs set_frequency and next_wake) and is stored in app defaults. Not yet verified on Midget.",
+   "wire": "Check the radio items and the restored choice after a relaunch on the lab machine."
   },
   {
    "feature": "CPU Load / History graphs",
    "area": "view",
    "apple": "CPU tab footer graph, Window > CPU History",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:312",
-   "note": "View > CPU History swaps the CPU graph for one strip per core (from the cpuN lines of /proc/stat), kept in app defaults. No floating CPU History window. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Add Window > CPU History as a floating panel when the SDK has a panel window level for apps."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:692",
+   "note": "View > CPU History swaps the CPU graph for one strip per core, kept in app defaults. No floating CPU History window: the SDK opens one window per app and the shell protocol has no floating app panel.",
+   "wire": "Needs an app panel request in the shell protocol before a floating CPU History window can be added."
   },
   {
    "feature": "Floating CPU Usage window and Keep on Top",
@@ -133,35 +133,35 @@
    "apple": "Window > CPU Usage, Keep CPU Windows on Top",
    "status": "gap",
    "bifrost": "",
-   "note": "",
-   "wire": "Add a small always-on-top window via the SDK floating-panel level showing per-core bars."
+   "note": "Not built. The SDK opens only the app's main window and the shell protocol (proto ToShell) has no floating app panel with a window level, so a floating per-core window needs a shell change first.",
+   "wire": "Add a small always-on-top window via the SDK floating-panel level showing per-core bars, once the shell can host an app panel."
   },
   {
    "feature": "Dock icon modes (CPU/Network/Disk/Memory graph)",
    "area": "settings",
    "apple": "View > Dock Icon",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:588",
-   "note": "View > Dock Icon (Application Icon, CPU, Memory, Disk, Network) puts the live figure on the Dock badge (at most four characters) with a progress bar under it, through the dock service; remembered in app defaults. The tile does not draw the scrolling graph the reference shows. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Add an image content to the dock service so the app can draw the live graph into the tile, then render the history strip there."
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:726",
+   "note": "View > Dock Icon (Application Icon, CPU, Memory, Disk, Network) puts the live figure on the Dock badge (at most four characters) with a progress bar under it, through the dock service; remembered in app defaults. The tile does not draw the scrolling graph the reference shows, because the dock service takes only a text badge, a progress bar, a bounce and menu items. Not yet verified on Midget.",
+   "wire": "Needs an image content for the dock tile in the shell's dock service; the SDK dock_tile module sends only badge, progress, bounce and menu."
   },
   {
    "feature": "Memory pressure and memory breakdown",
    "area": "view",
    "apple": "Memory tab footer: pressure graph, app/wired/compressed, cached, swap",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:244",
-   "note": "The Memory graph card shows App, Kernel, Shared, Cached Files, Compressed (zswap) and Swap Used from /proc/meminfo; pressure is still read from PSI in inspect.rs. The split is derived from meminfo, not the reference categories, and there is no pressure graph in the footer. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Draw the PSI pressure history as a small graph in the Memory footer and colour it green, yellow or red by threshold."
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:498",
+   "note": "The Memory tab's footer shows the last minute of memory pressure (PSI) as bars, green below 5 %, yellow below 15 %, red above (model.rs pressure_level), with the latest figure. The breakdown (App, Kernel, Shared, Cached Files, Compressed, Swap) is still derived from /proc/meminfo, not the reference categories. Not yet verified on Midget.",
+   "wire": "Match the reference memory categories where Linux gives the same figure."
   },
   {
    "feature": "Energy impact and preventing-sleep columns",
    "area": "view",
    "apple": "Energy tab: Energy Impact, average, App Nap, Preventing Sleep",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:57",
-   "note": "The Energy tab has a Preventing Sleep column (blocking sleep or idle locks from logind ListInhibitors via busctl, read every 10 s only while the column is shown) and an optional 12 hr Average column per process name (moving mean with a 12 hour time constant, since the app started, not stored). Energy impact is still a CPU and disk estimate; no App Nap column. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Persist the per-name averages across launches in app storage, and add an App Nap analogue from cgroup freezer or cpu.idle state."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:674",
+   "note": "The 12 hr Average means persist in energy-averages.txt in the app's storage: written every minute and read at launch (model.rs EnergyAverages to_text and from_text). Energy impact is still a CPU and disk estimate. No App Nap column: a Linux analogue (cgroup freezing) needs privileges an ordinary app does not have, so it is not built. Not yet verified on Midget.",
+   "wire": "Decide an App Nap analogue from cgroup state that an ordinary user can read."
   },
   {
    "feature": "Disk tab: bytes per process and graph",
@@ -178,7 +178,7 @@
    "apple": "Network tab: sent/received bytes and packets per process",
    "status": "partial",
    "bifrost": "springboard/apps/activity-desktop/src/sample.rs:272",
-   "note": "The Network tab keeps interface rows and adds optional Packets In and Packets Out columns from /proc/net/dev. Still per interface, not per process. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "note": "Not changed in 0.5.0: the Network tab is still per interface. Per-process bytes need the sock_diag netlink dump (tcp_info byte counters); the inspector's socket tables give endpoints only.",
    "wire": "Attribute traffic per process with sock_diag (inode to pid via /proc/<pid>/fd) and the byte counters from the tcp_info netlink reply."
   },
   {
@@ -186,9 +186,9 @@
    "area": "view",
    "apple": "Window > GPU History, GPU columns",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:318",
-   "note": "A GPU tab (% GPU, GPU Time, graph of the machine total) reads the DRM client usage counters in /proc/<pid>/fdinfo, only while the tab or the GPU filter is shown. Needs a kernel driver that publishes drm-engine-* (amdgpu, i915, xe, msm, panfrost, v3d); the NVIDIA proprietary driver does not. The history is the tab graph, not a separate floating GPU History window. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Add a Window > GPU History floating panel with one strip per engine, and an nvidia-smi fallback for the proprietary driver."
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:702",
+   "note": "A GPU tab (% GPU, GPU Time, graph of the machine total) reads the DRM client counters in /proc/<pid>/fdinfo, only while the tab or the GPU filter is shown. Where the driver publishes no DRM counters (a proprietary driver), the per-process share falls back to the engine column of the vendor GPU tool's process table (sample.rs parse_pmon), read only while the GPU is shown and not asked again when the tool is absent. No floating GPU History window: the SDK opens one window per app. Not yet verified on Midget.",
+   "wire": "Add a Window > GPU History floating panel once the shell can host an app panel."
   },
   {
    "feature": "Footer totals (processes, CPU, memory)",
@@ -204,9 +204,9 @@
    "area": "menu",
    "apple": "Edit > Copy",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:378",
-   "note": "Edit > Copy (cmd+C) copies the row as tab-separated text of the columns the tab shows (View > Columns), counting from the baseline when Show Deltas is on. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Handle Edit > Copy in main.rs menu_action to put the selected row's columns as tab-separated text on the pasteboard."
+   "bifrost": "springboard/apps/activity-desktop/src/main.rs:186",
+   "note": "Edit > Copy (cmd+C) copies the selected row as tab-separated text of the columns the tab shows (window.rs copy_text), counting from the baseline when Show Deltas is on and including the Since Baseline column when shown. Not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Help book",
