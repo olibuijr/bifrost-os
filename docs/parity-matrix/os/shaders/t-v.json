@@ -207,9 +207,9 @@
    "description": "",
    "role": "Video enhancement (deghosting, virtual shutter angle, common video-effect kernels)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no video enhancement pipeline beyond frame_interp.rs and upscale.rs; role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/frame_interp.rs (interpolate)",
+   "status": "partial",
+   "note": "Frame interpolation exists on the CPU; the deghosting and virtual shutter kernels of the video enhancement library are not implemented.",
    "rea": [],
    "method": "assessed"
   },
@@ -292,8 +292,8 @@
    "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Spatial computing shader of an Apple XR compositor or spatial media stack; BifrOSt has no XR hardware or compositor to run it.",
    "rea": [],
    "method": "assessed"
   },

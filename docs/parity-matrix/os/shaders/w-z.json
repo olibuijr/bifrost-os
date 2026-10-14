@@ -19,8 +19,8 @@
    "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Spatial computing shader of an Apple XR compositor or spatial media stack; BifrOSt has no XR hardware or compositor to run it.",
    "rea": [],
    "method": "assessed"
   },
