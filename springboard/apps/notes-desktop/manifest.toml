@@ -1,6 +1,6 @@
 id = "is.olibuijr.notes.desktop"
 name = "Notes"
-version = "1.16.0"
+version = "1.17.0"
 exec = "bifrost-notes"
 icon = "icon.png"
 min_shell = "0.4.84"
