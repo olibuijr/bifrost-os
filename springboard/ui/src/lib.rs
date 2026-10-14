@@ -701,6 +701,7 @@ pub mod imstate;
 pub mod video_settings;
 pub mod video_transition;
 pub mod audio_render;
+pub mod audio_parameters;
 pub mod plugin_host;
 pub mod plugin_view;
 pub mod state_machine;
