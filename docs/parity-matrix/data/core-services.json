@@ -73,9 +73,9 @@
     {
       "feature": "Apple Events (inter-process messages with replies)",
       "apple": "AESendMessage, AEInstallEventHandler, AECreateAppleEvent, AEProcessMessage",
-      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies)",
+      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies); springboard/sdk/src/app_events.rs; springboard/sdk/src/event_descriptor.rs (Descriptor::coerce, ObjectSpecifier::resolve)",
       "status": "partial",
-      "note": "springboard/sdk/src/app_events.rs: typed AppEvent (class, id, record) sent over the control socket with reply descriptor and timeout, plus AppleEventHandlers. No AEDesc coercion or object specifiers. Host unit tests only, not yet checked on Midget."
+      "note": "springboard/sdk/src/app_events.rs sends a typed AppEvent (class, id, record) over the control socket with reply descriptor and timeout, plus AppleEventHandlers. event_descriptor.rs adds typed descriptors with coercion (text, integer, real, boolean, list) and object specifiers (index, name, identifier, first, last, nested in a container), tested headless in springboard/sdk/tests/parity_sdk-complete-44.rs. Gap: no wire encoding of descriptors into the control socket and no Midget check."
     },
     {
       "feature": "Search index of documents (Search Kit)",
