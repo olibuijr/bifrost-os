@@ -91,8 +91,8 @@
       "area": "menu",
       "apple": "File > New Message",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:471",
-      "note": "Direct room by Matrix user id (File > New Message, Cmd+N, + button); no group rooms or user directory search",
+      "bifrost": "springboard/apps/messages-desktop/src/api.rs:94",
+      "note": "Direct room for one Matrix user id, or a private group room when several are given, separated by commas (File > New Message, Cmd+N, + button); no user directory search; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "New Message toolbar item that creates a direct room with an invite in api.rs and selects it"
     },
     {
@@ -118,8 +118,8 @@
       "area": "menu",
       "apple": "Tapback",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:504",
-      "note": "Tapback list in the message context menu and chips under the bubble that toggle your own reaction; no per-user list on hover",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:600",
+      "note": "Tapback list in the message context menu and chips under the bubble that toggle your own reaction; Show Reactions in the context menu lists who gave each emoji; no hover list; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Send and show reaction annotations on bubbles"
     },
     {
@@ -127,8 +127,8 @@
       "area": "menu",
       "apple": "Reply",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:614",
-      "note": "Reply in the message context menu; quoted line in the bubble; no tap-to-jump to the original",
+      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:366",
+      "note": "Reply in the message context menu; quoted line in the bubble; tapping the quoted line scrolls to the original message; no highlight of the original; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Reply relation in send, quoted header in bubble drawing"
     },
     {
@@ -136,8 +136,8 @@
       "area": "menu",
       "apple": "Edit / Undo Send",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:522",
-      "note": "Edit and Undo Send in the context menu of own messages; no edit history view",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:600",
+      "note": "Edit and Undo Send in the context menu of own messages; Edit History in the context menu of an edited message lists the earlier versions seen since the app started; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Context menu on own bubbles: redact, and replace-edit"
     },
     {
@@ -154,8 +154,8 @@
       "area": "panel",
       "apple": "Info panel",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:358",
-      "note": "Details panel with the first 8 members and Rename; no avatars or shared media",
+      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:847",
+      "note": "Details panel with the first 8 members, the shared pictures by name (loaded messages only) and Rename; no avatars or picture thumbnails; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Info panel with members and rename"
     },
     {
@@ -172,8 +172,8 @@
       "area": "menu",
       "apple": "Pin",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:479",
-      "note": "Pinned rooms sort first and are tagged on the row; no pin limit or reordering",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:523",
+      "note": "Pinned rooms sort first in the order they were pinned, at most nine pins, Move Pin Up and Down in the Conversation menu and the row context menu; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Pinned rooms sort first"
     },
     {
@@ -190,8 +190,8 @@
       "area": "menu",
       "apple": "Conversation menu",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:491",
-      "note": "Mark as Unread / Read in the Conversation menu and context menu; local mark, not synced to the server",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:568",
+      "note": "Mark as Unread / Read in the Conversation menu and context menu; stored on the account as room account data (m.marked_unread) and read back from the sync, so other clients show it; opening the room clears it; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Mark as Unread item"
     },
     {
@@ -199,8 +199,8 @@
       "area": "menu",
       "apple": "Edit > Emoji & Symbols",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:499",
-      "note": "Emoji button and Edit > Emoji & Symbols open a 40-emoji grid; no search or recents",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:588",
+      "note": "Emoji button and Edit > Emoji & Symbols open a 64-emoji grid with a search field (words or the emoji itself; Return picks the first) and the recently used emoji first, saved in the data directory; no categories or skin tones; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Emoji button in the composer"
     },
     {
@@ -208,8 +208,8 @@
       "area": "menu",
       "apple": "MainMenu Conversation",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:569",
-      "note": "File, Edit and Conversation menus with Cmd+N, Cmd+F, Cmd+, Cmd+Shift+P/D/U, Cmd+I, Cmd+Backspace",
+      "bifrost": "springboard/apps/messages-desktop/src/window.rs:612",
+      "note": "File, Edit and Conversation menus with Cmd+N, Cmd+F, Cmd+, Cmd+Shift+P/D/U, Cmd+I, Cmd+Backspace; Move Pin Up and Move Pin Down; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "App::main_menu with New Message, Delete Conversation, Mark as Unread"
     },
     {
