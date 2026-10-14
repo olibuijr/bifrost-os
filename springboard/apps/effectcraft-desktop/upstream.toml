@@ -1,5 +1,5 @@
 repo = "storytold/effectcraft"
-url = "https://github.com/storytold/effectcraft/releases/download/v0.7.0/effectcraft-0.9.2-linux-x86_64.tar.gz"
+url = "https://github.com/storytold/effectcraft/releases/download/v0.9.2/effectcraft-0.9.2-linux-x86_64.tar.gz"
 sha256 = "916d35d7dc0fd5650b57f576e6556256d05dedf93e83a9740c1892319bb4ac1c"
 binary = "effectcraft-0.9.2-linux-x86_64/bin/effectcraft"
 licenses = "effectcraft-0.9.2-linux-x86_64/share/doc/effectcraft"

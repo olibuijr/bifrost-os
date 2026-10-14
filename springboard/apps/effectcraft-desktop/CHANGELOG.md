@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.3
+
+- Upstream effectcraft v0.9.2.
+  ## What's Changed
+  * Share docking transactions and preserve viewer lifecycle by @skylartaylor in https://github.com/storytold/effectcraft/pull/689
+  * ci: refactor workflows to use storytold/craft-common-actions by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/801
+  * #678: dropped Photoshop files show the Import Photoshop File dialog by @vangel76 in https://github.com/storytold/effectcraft/pull/734
+  * #729: import STL 3D models (binary and ASCII) by @vangel76 in https://github.com/storytold/effectcraft/pull/735
+
 ## 0.9.2
 
 - Upstream effectcraft v0.9.2.
