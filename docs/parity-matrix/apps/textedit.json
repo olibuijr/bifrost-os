@@ -276,9 +276,9 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Spacing…",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1170, springboard/apps/textedit-desktop/src/main.rs:1188, springboard/apps/textedit-desktop/src/layout.rs:112, springboard/apps/textedit-desktop/src/rtf.rs:296",
-   "note": "Format > Text > Spacing... sets the line spacing (a number from 1 to 3, the nearest preset is kept) and the space before and after each paragraph in points. The space is kept in RTF (sb and sa), in HTML (margins), and laid out and printed. Not carried by .docx and .odt yet. Line spacing is one of the presets, not any multiple.",
-   "wire": "Carry the space before and after in .docx (spacing before and after) and .odt (paragraph margins); arbitrary line multiples need a fractional value in Style.spacing."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1170, springboard/apps/textedit-desktop/src/main.rs:1188, springboard/apps/textedit-desktop/src/layout.rs:112, springboard/apps/textedit-desktop/src/rtf.rs:296, springboard/apps/textedit-desktop/src/docx.rs (paragraph_xml, parse), springboard/apps/textedit-desktop/src/odt.rs (paragraph_properties, para_styles)",
+   "note": "Format > Text > Spacing... sets the line spacing (a number from 1 to 3, the nearest preset is kept) and the space before and after each paragraph in points. The space is kept in RTF (sb and sa), in HTML (margins), in .docx (w:before, w:after) and in .odt (fo:margin-top and fo:margin-bottom), with unit tests in docx.rs and odt.rs, and laid out and printed. Line spacing is one of the presets, not any multiple. Not yet verified on Midget.",
+   "wire": "Arbitrary line multiples need a fractional value in Style.spacing; the presets are the only line spacing kept today."
   },
   {
    "feature": "Lists (bullets, numbers)",
@@ -303,9 +303,9 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Writing Direction",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:569 (set_writing_direction), springboard/apps/textedit-desktop/src/layout.rs:199 (x_offset), springboard/apps/textedit-desktop/src/rtf.rs:309 (\\rtlpar), springboard/apps/textedit-desktop/src/main.rs:1770",
-   "note": "Format > Text > Left to Right and Right to Left set the paragraph direction on the selected paragraphs (one undo entry); a right to left paragraph's left-aligned lines start at the right edge, and the direction is kept in RTF (\\rtlpar). Not done: the direction in HTML, .docx and .odt, and the bidi reordering of mixed-direction runs (the kit model ui/src/bidi.rs is not used by the app yet). Tested in text.rs and layout.rs unit tests; not yet verified on Midget.",
-   "wire": "Run bifrost_ui::bidi visual order in layout.rs for mixed runs; carry the direction in html.rs (dir), .docx (w:bidi) and .odt (style:writing-mode)."
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:569 (set_writing_direction), springboard/apps/textedit-desktop/src/layout.rs:199 (x_offset), springboard/apps/textedit-desktop/src/rtf.rs:309 (\\rtlpar), springboard/apps/textedit-desktop/src/docx.rs (w:bidi), springboard/apps/textedit-desktop/src/odt.rs (style:writing-mode), springboard/apps/textedit-desktop/src/main.rs:1770",
+   "note": "Format > Text > Left to Right and Right to Left set the paragraph direction on the selected paragraphs (one undo entry); a right to left paragraph's left-aligned lines start at the right edge, and the direction is kept in RTF (\\rtlpar) and in .docx (w:bidi) and .odt (style:writing-mode), with unit tests. Not done: the direction in HTML, and the bidi reordering of mixed-direction runs (the kit model ui/src/bidi.rs is not used by the app yet). Tested in text.rs and layout.rs unit tests; not yet verified on Midget.",
+   "wire": "Run bifrost_ui::bidi visual order in layout.rs for mixed runs; carry the direction in html.rs (dir)."
   },
   {
    "feature": "Show/Hide Ruler, Copy/Paste Ruler",

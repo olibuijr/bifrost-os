@@ -6,7 +6,7 @@
 
 use crate::links;
 use crate::properties::{self, Properties};
-use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, FAMILY_NAMES, LINE_BREAK, PAGE_BREAK, SPACINGS};
+use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, FAMILY_NAMES, LINE_BREAK, MAX_PARAGRAPH_SPACE, PAGE_BREAK, SPACINGS};
 use crate::xml::{self, Token};
 use crate::{rtf, zipdoc};
 use std::collections::HashMap;
@@ -138,7 +138,16 @@ fn parse(document: &str, lists: &HashMap<String, ListKind>, targets: &HashMap<St
     let mut seen_paragraph = false;
     let (mut in_ppr, mut in_rpr, mut in_text) = (false, false, false);
     let cell_style = |para: &Style, run: &Style, heading: Option<f32>, size_set: bool, link: u16| {
-        let mut s = Style { align: para.align, spacing: para.spacing, list: para.list, link, ..*run };
+        let mut s = Style {
+            align: para.align,
+            spacing: para.spacing,
+            list: para.list,
+            link,
+            space_before: para.space_before,
+            space_after: para.space_after,
+            rtl: para.rtl,
+            ..*run
+        };
         if let Some(h) = heading {
             s.bold = true;
             if !size_set {
@@ -153,7 +162,16 @@ fn parse(document: &str, lists: &HashMap<String, ListKind>, targets: &HashMap<St
                 "w:p" => {
                     if seen_paragraph {
                         // the break ends the paragraph before, which keeps that paragraph's properties
-                        cells.push(Cell { ch: '\n', style: Style { align: para.align, spacing: para.spacing, list: para.list, ..Style::default() } });
+                        let style = Style {
+                            align: para.align,
+                            spacing: para.spacing,
+                            list: para.list,
+                            space_before: para.space_before,
+                            space_after: para.space_after,
+                            rtl: para.rtl,
+                            ..Style::default()
+                        };
+                        cells.push(Cell { ch: '\n', style });
                     }
                     seen_paragraph = true;
                     link = 0;
@@ -187,7 +205,16 @@ fn parse(document: &str, lists: &HashMap<String, ListKind>, targets: &HashMap<St
                     if let Some(line) = xml::attr(&attrs, "w:line").and_then(|v| v.parse::<f32>().ok()).filter(|&l| auto && l > 0.0) {
                         para.spacing = rtf::nearest_spacing(line / 240.0);
                     }
+                    // the space before and after are in twentieths of a point
+                    let points = |name: &str| xml::attr(&attrs, name).and_then(|v| v.parse::<f32>().ok()).filter(|&t| t >= 0.0).map(|t| (t / 20.0).round().min(MAX_PARAGRAPH_SPACE as f32) as u8);
+                    if let Some(before) = points("w:before") {
+                        para.space_before = before;
+                    }
+                    if let Some(after) = points("w:after") {
+                        para.space_after = after;
+                    }
                 }
+                "w:bidi" if in_ppr => para.rtl = on(&attrs),
                 "w:numId" if in_ppr => {
                     if let Some(id) = xml::attr(&attrs, "w:val").filter(|id| *id != "0") {
                         para.list = lists.get(id).copied().unwrap_or(ListKind::Bullet);
@@ -346,9 +373,22 @@ fn paragraph_xml(cells: &[Cell], style: &Style, addresses: &mut Vec<String>, out
         ListKind::Bullet => out.push_str("<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"1\"/></w:numPr>"),
         ListKind::Numbered => out.push_str("<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"2\"/></w:numPr>"),
     }
-    if style.spacing > 0 {
-        let multiple = SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0);
-        out.push_str(&format!("<w:spacing w:line=\"{}\" w:lineRule=\"auto\"/>", (multiple * 240.0).round() as i32));
+    if style.rtl {
+        out.push_str("<w:bidi/>");
+    }
+    if style.spacing > 0 || style.space_before > 0 || style.space_after > 0 {
+        let mut attrs = String::new();
+        if style.space_before > 0 {
+            attrs += &format!(" w:before=\"{}\"", style.space_before as u32 * 20);
+        }
+        if style.space_after > 0 {
+            attrs += &format!(" w:after=\"{}\"", style.space_after as u32 * 20);
+        }
+        if style.spacing > 0 {
+            let multiple = SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0);
+            attrs += &format!(" w:line=\"{}\" w:lineRule=\"auto\"", (multiple * 240.0).round() as i32);
+        }
+        out.push_str(&format!("<w:spacing{attrs}/>"));
     }
     let jc = match style.align {
         Align::Left => "left",
@@ -526,6 +566,29 @@ mod tests {
         let good = hyperlink_targets("<Relationships><Relationship Id=\"rId2\" Type=\"x/hyperlink\" Target=\"https://example.org\"/><Relationship Id=\"rId3\" Type=\"x/image\" Target=\"a.png\"/></Relationships>");
         assert_eq!(good.get("rId2").map(String::as_str), Some("https://example.org"));
         assert!(!good.contains_key("rId3"));
+    }
+
+    #[test]
+    fn paragraph_space_and_writing_direction_round_trip() {
+        let spaced = Style { space_before: 12, space_after: 6, spacing: 1, rtl: true, ..Style::default() };
+        let cells = vec![cell('a', spaced), cell('\n', spaced), cell('b', Style::default())];
+        let package = write(&cells);
+        let back = read(&package).unwrap();
+        assert_eq!(back, cells);
+        assert!(back[0].style.rtl && back[0].style.space_before == 12 && back[0].style.space_after == 6);
+        assert!(!back[2].style.rtl && back[2].style.space_before == 0, "a paragraph without the properties has none");
+    }
+
+    #[test]
+    fn a_foreign_paragraph_reads_its_twentieths_of_a_point_and_direction() {
+        let body = "<w:document><w:body>\
+<w:p><w:pPr><w:bidi/><w:spacing w:before=\"240\" w:after=\"120\"/></w:pPr><w:r><w:t>one</w:t></w:r></w:p>\
+<w:p><w:pPr><w:spacing w:before=\"0\"/></w:pPr><w:r><w:t>two</w:t></w:r></w:p>\
+</w:body></w:document>";
+        let cells = parse(body, &HashMap::new(), &HashMap::new());
+        assert_eq!(text_of(&cells), "one\ntwo");
+        assert!(cells[0].style.rtl && cells[0].style.space_before == 12 && cells[0].style.space_after == 6);
+        assert!(!cells[4].style.rtl && cells[4].style.space_before == 0 && cells[4].style.space_after == 0);
     }
 
     #[test]

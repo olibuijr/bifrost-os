@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0 — 2026-10-14
+
+- Format > Text > Spacing: the space before and after a paragraph is kept in `.odt` (paragraph margins) and `.docx`
+  (paragraph spacing), as well as RTF and HTML.
+- Format > Text > Left to Right and Right to Left: the paragraph direction is kept in `.docx` (bidi paragraphs) and `.odt`
+  (writing mode), as well as RTF.
+
 ## 1.5.0 — 2026-10-14
 
 - Format > Text > Left to Right and Right to Left set the writing direction of the selected paragraphs (one undo entry).
