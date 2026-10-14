@@ -73,9 +73,9 @@
     {
       "feature": "Spotlight shortcut search and launch",
       "apple": "Spotlight integration, App Shortcuts in Spotlight and Shortcuts app",
-      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, Spotlight Shortcuts section)",
+      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line_with, parse_reply)",
       "status": "partial",
-      "note": "lists parameterless shortcuts without launching the app; choosing one launches the app and calls intent.<id> with up to 8 s retry; no parameter prompts or disambiguation"
+      "note": "Parameterless shortcuts are listed, and their request lines and replies are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the 8 s launch retry, parameter prompts and disambiguation have no tests."
     },
     {
       "feature": "Indexing entities for Spotlight",
@@ -117,7 +117,7 @@
       "apple": "Widgets, Live Activities, and Controls (intent-driven)",
       "bifrost": "springboard/ui/src/live_activity.rs, springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/widgets.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (live_activity.rs, widgets_timeline.rs, widgets.rs); not wired into the shell or apps, not tested on Midget. springboard/sdk/src/widgets.rs is a drawing adapter for controls, not a widget extension point"
+      "note": "The live activity life cycle (scheduled start, stale content, end and dismissal times) is tested headless in springboard/ui/tests/parity_sdk-tests-01.rs. Gap: the timeline and control adapters have no tests yet, nothing is wired into the shell or apps, and nothing is run on Midget."
     },
     {
       "feature": "Schema domains and visual presentation",

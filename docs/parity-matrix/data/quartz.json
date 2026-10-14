@@ -24,9 +24,9 @@
   {
    "feature": "Slideshow (IKSlideshow)",
    "apple": "IKSlideshow, IKSlideshowDataSource",
-   "bifrost": "springboard/src/shell/photos/slideshow.rs",
+   "bifrost": "springboard/src/shell/photos/slideshow.rs (Slideshow, ken_burns)",
    "status": "partial",
-   "note": "Cross-fade and Ken Burns drift over an album or selection, with auto-hiding controls. Lives in Photos only; no SDK slideshow type and no screen saver hook."
+   "note": "Slide timing, cross-fade layers, pausing, stepping, the control timeout and the drift geometry are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the slideshow lives in Photos only, with no SDK type and no screen saver hook."
   },
   {
    "feature": "Core Image filters and filter browser (CIFilter, IKFilterBrowserView, IKFilterUIView)",

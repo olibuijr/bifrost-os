@@ -94,9 +94,9 @@
   {
    "feature": "Slideshow",
    "apple": "No PhotoKit class; Photos app slideshow and project extensions",
-   "bifrost": "springboard/src/shell/photos/slideshow.rs (cross-fade and Ken Burns timing)",
+   "bifrost": "springboard/src/shell/photos/slideshow.rs (Slideshow::tick, Slideshow::layers, ken_burns)",
    "status": "partial",
-   "note": "A built-in slideshow of an album or selection. No API for apps to start or drive one."
+   "note": "The cross-fade and drift timing are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: there is no API for apps to start or drive a slideshow."
   },
   {
    "feature": "Photos project extensions (macOS)",

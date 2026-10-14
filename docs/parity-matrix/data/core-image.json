@@ -159,7 +159,7 @@
       "apple": "CIDepthBlurEffect, CIDepthToDisparity, CIDisparityToDepth, CIMaskedVariableBlur",
       "bifrost": "springboard/render/src/depth_blur.rs (depth blur from a depth map, disparity and depth conversion) over springboard/render/src/blur_filters.rs (masked variable blur); springboard/sdk/src/image_effects.rs (app API, depth blur)",
       "status": "partial",
-      "note": "built on parity/team-j-core-image; not yet verified on Midget. Blur grows with the distance from a focus depth that the app supplies. It does not estimate depth from a stereo pair or a single image, and it has no lens shape."
+      "note": "Blur weights, falloff, disparity conversions and the masked variable blur are tested headless in springboard/render/tests/parity_sdk-tests-01.rs. Gap: the app API in image_effects is untested, depth is not estimated from a stereo pair or a single image, the blur has no lens shape, and nothing is verified on Midget yet."
     },
     {
       "feature": "Built-in filter catalogue (every filter by name, category and input keys)",

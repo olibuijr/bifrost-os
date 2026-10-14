@@ -38,9 +38,9 @@
     {
       "feature": "Custom authentication UI around the system check",
       "apple": "Building a custom auth interface around the view (framework default UI is system-managed)",
-      "bifrost": "springboard/src/shell/login.rs (capsule password field, Backend::authenticate); springboard/src/privd/auth.rs; docs/privd-protocol.md",
+      "bifrost": "springboard/src/shell/login.rs (Login, Backend, parse_reply, parse_lock_message); springboard/src/privd/auth.rs (lockout_secs, parse_hint, parse_fails); docs/privd-protocol.md",
       "status": "partial",
-      "note": "custom login UI exists, but only password checks run through privd; no biometric or paired-device unlock"
+      "note": "The login window's name, hint, lockout and reply handling and the privd lockout and hint rules are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: only password checks run through privd, with no biometric or paired-device unlock."
     }
   ],
   "gaps": [
