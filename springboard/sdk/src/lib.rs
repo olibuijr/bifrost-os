@@ -191,6 +191,7 @@ pub mod transfer;
 pub mod transfer_drag;
 pub mod layout;
 pub mod control;
+pub mod intent_form;
 pub mod intents;
 pub mod intent_presentation;
 pub mod system_audio;
