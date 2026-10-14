@@ -542,6 +542,121 @@ mod physics_tests {
     }
 }
 
+/// Headless model tests: the rubber band, the velocity window, flings, springs and the scroll model are pure
+/// arithmetic, so they run with no display and no clock (every time is passed in).
+#[cfg(test)]
+mod headless_model_tests {
+    use super::*;
+
+    fn near(a: f32, b: f32, tol: f32) -> bool {
+        (a - b).abs() <= tol
+    }
+
+    #[test]
+    fn rubber_band_follows_the_finger_then_levels_off_below_the_view_size() {
+        assert_eq!(rubber(0.0, 100.0), 0.0);
+        assert_eq!(rubber(-5.0, 100.0), 0.0);
+        assert!(near(rubber(100.0, 1000.0), 52.1327, 0.001), "1000 * (1 - 1 / (100 * 0.55 / 1000 + 1))");
+        let far = rubber(10_000.0, 100.0);
+        assert!(far < 100.0 && far > 90.0, "the overshoot never reaches the view size");
+    }
+
+    #[test]
+    fn displayed_offset_is_the_finger_inside_the_range_and_rubber_banded_outside() {
+        assert_eq!(displayed_offset(50.0, 100.0, 100.0), 50.0);
+        assert!(near(displayed_offset(-10.0, 100.0, 100.0), -5.21327, 0.001));
+        assert!(near(displayed_offset(110.0, 100.0, 100.0), 105.21327, 0.001));
+    }
+
+    #[test]
+    fn velocity_is_the_displacement_over_the_window_and_older_samples_are_dropped() {
+        let mut v = VelocityTracker::default();
+        v.push(0.0, 0.0);
+        v.push(50.0, 50.0);
+        assert_eq!(v.velocity(50.0), 1000.0, "50 points in 50 ms");
+        let mut old = VelocityTracker::default();
+        old.push(0.0, 0.0);
+        old.push(200.0, 10.0);
+        assert_eq!(old.velocity(200.0), 0.0, "one sample left in the window");
+        let mut still = VelocityTracker::default();
+        still.push(0.0, 5.0);
+        still.push(50.0, 5.0);
+        assert_eq!(still.velocity(50.0), 0.0, "a still finger has no velocity");
+        assert_eq!(VELOCITY_WINDOW_MS, 100.0);
+    }
+
+    #[test]
+    fn a_fling_decelerates_to_the_stop_speed_and_stays_inside_its_range() {
+        let f = Fling { from: 0.0, velocity: 1000.0, min: 0.0, max: 1000.0 };
+        assert!(near(f.duration() as f32, 1.954, 0.001), "ln(1000 / 20) / decay rate");
+        assert_eq!(f.offset_at(0.0), 0.0);
+        let clamped = Fling { max: 300.0, ..f };
+        assert_eq!(clamped.offset_at(10.0), 300.0, "the edge stops the fling");
+        assert!(f.offset_at(0.5) > 0.0 && f.offset_at(0.5) < f.offset_at(1.0));
+    }
+
+    #[test]
+    fn a_motion_reports_when_it_has_finished() {
+        let fling = Motion::Fling(Fling { from: 0.0, velocity: 1000.0, min: 0.0, max: 1000.0 });
+        assert!(!fling.at(0.5).1);
+        assert!(fling.at(2.0).1);
+        let bounce = Motion::Bounce { from: -20.0, to: 0.0, velocity: 0.0 };
+        assert_eq!(bounce.at(0.0), (-20.0, false));
+        assert_eq!(bounce.at(10.0), (0.0, true), "a settled spring rests exactly on the edge");
+    }
+
+    #[test]
+    fn scroll_physics_clamps_the_offset_to_the_content_range() {
+        let mut p = ScrollPhysics::new(100.0, 1000.0);
+        assert_eq!(p.max_offset(), 900.0);
+        p.set_offset(950.0);
+        assert_eq!(p.offset(), 900.0);
+        p.set_offset(-5.0);
+        assert_eq!(p.offset(), 0.0);
+        assert_eq!(ScrollPhysics::new(500.0, 100.0).max_offset(), 0.0, "content shorter than the view cannot scroll");
+    }
+
+    #[test]
+    fn a_drag_past_the_top_rubber_bands_and_release_springs_back_to_the_edge() {
+        let mut p = ScrollPhysics::new(100.0, 1000.0);
+        p.drag(0.0, -30.0);
+        assert!(near(p.offset(), -14.1631, 0.001));
+        match p.release(0.0) {
+            Some(Motion::Bounce { from, to, .. }) => {
+                assert!(near(from, -14.1631, 0.001));
+                assert_eq!(to, 0.0);
+            }
+            other => panic!("expected a bounce back to the top, got {other:?}"),
+        }
+        assert_eq!(p.offset(), 0.0, "the model's finger follows the spring's end");
+    }
+
+    #[test]
+    fn a_still_release_stops_without_a_fling() {
+        let mut p = ScrollPhysics::new(100.0, 1000.0);
+        p.drag(0.0, 10.0);
+        p.drag(10.0, 0.0);
+        assert_eq!(p.release(10.0), None);
+        assert_eq!(p.offset(), 10.0);
+    }
+
+    #[test]
+    fn a_fast_release_inside_the_range_flings() {
+        let mut p = ScrollPhysics::new(100.0, 1000.0);
+        p.drag(0.0, 0.0);
+        p.drag(50.0, 50.0);
+        match p.release(50.0) {
+            Some(Motion::Fling(f)) => {
+                assert_eq!(f.from, 50.0);
+                assert_eq!(f.velocity, 1000.0);
+                assert_eq!((f.min, f.max), (0.0, 900.0));
+            }
+            other => panic!("expected a fling, got {other:?}"),
+        }
+        assert!(STOP_SPEED == 20.0 && RUBBER_C == 0.55);
+    }
+}
+
 #[cfg(test)]
 mod view_tests {
     use super::*;

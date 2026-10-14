@@ -31,9 +31,9 @@
     {
       "feature": "Popover tip",
       "apple": "View.popoverTip(_:arrowEdge:action:), TipNSPopover",
-      "bifrost": "springboard/sdk/src/widgets.rs:969 (popover), springboard/ui/src/split.rs:71 (place_popover), springboard/render/src/ui.rs:82 (MATERIAL_POPOVER)",
+      "bifrost": "springboard/ui/src/split.rs (place_popover); springboard/sdk/src/widgets.rs (popover); springboard/render/src/ui.rs (MATERIAL_POPOVER); springboard/ui/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "A popover with an arrow, anchor placement and transient dismiss exists (widgets.rs:965-968). There is no tip content, no action callback and no anchor modifier on SDK views. An app would have to wire the popover to the anchor view by hand."
+      "note": "Popover placement below, above, left and right of an anchor, with a flip when a side has no room and clamping on screen, has headless tests (a_popover_goes_below_its_anchor_when_there_is_room, a_popover_flips_to_the_opposite_edge_when_the_preferred_side_has_no_room, a_popover_on_the_right_edge_opens_to_the_left, a_popover_stays_on_screen). There is no tip content, no action callback and no anchor modifier on SDK views, so an app wires the popover to its anchor by hand."
     },
     {
       "feature": "Tip groups",
@@ -59,9 +59,9 @@
     {
       "feature": "Tooltips",
       "apple": "No TipKit symbol. Tooltips are an AppKit behaviour (NSView.toolTip), not part of TipKit.",
-      "bifrost": "springboard/sdk/src/widgets.rs:47-48 (Material::ToolTip), springboard/render/src/glass.rs:34",
+      "bifrost": "springboard/sdk/src/widgets.rs (Material::ToolTip, model_kind, blur_pt); springboard/render/src/glass.rs; springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "The ToolTip material exists. docs/bifrost-ui.md:362 says menu items have no tooltips. No control shows a tooltip on hover."
+      "note": "The ToolTip material exists with its window-model kind and six-point blur (the_tool_tip_material_is_listed_maps_to_its_window_model_kind_and_blurs_six_points). docs/bifrost-ui.md says menu items have no tooltips, and no control shows a tooltip on hover."
     },
     {
       "feature": "UIKit and AppKit tip views",
