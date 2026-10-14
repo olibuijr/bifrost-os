@@ -7,6 +7,21 @@ use std::{
     process::{Command, Stdio},
 };
 pub use super::account::Account;
+/// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
+/// [`Policy::held`] lists them.
+pub const ENTITLEMENT_NAMES: [&str; 10] = [
+    "network",
+    "storage",
+    "audio",
+    "notifications",
+    "documents",
+    "keychain",
+    "accessibility",
+    "display-config",
+    "remote-desktop",
+    bifrost_core::log::ENTITLEMENT,
+];
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Policy {
     pub network: bool,
@@ -36,6 +51,28 @@ impl Policy {
         self.log_store = id.starts_with("is.olibuijr.") && kind == crate::shell::kinds::SYSTEM_APP && entitlements.iter().any(|e| e == bifrost_core::log::ENTITLEMENT);
         self
     }
+    /// Whether the policy holds the named permission or entitlement, spelled as in the manifest. An unknown name is
+    /// held by no one. The query reports what the manifest granted; each service still checks the policy on every call.
+    pub fn holds(&self, name: &str) -> bool {
+        match name {
+            "network" => self.network,
+            "storage" => self.storage,
+            "audio" => self.audio,
+            "notifications" => self.notifications,
+            "documents" => self.documents,
+            "keychain" => self.keychain,
+            "accessibility" => self.accessibility,
+            "display-config" => self.display_config,
+            "remote-desktop" => self.remote,
+            other => other == bifrost_core::log::ENTITLEMENT && self.log_store,
+        }
+    }
+
+    /// The names the policy holds, in [`ENTITLEMENT_NAMES`] order.
+    pub fn held(&self) -> Vec<&'static str> {
+        ENTITLEMENT_NAMES.into_iter().filter(|name| self.holds(name)).collect()
+    }
+
     pub fn from_permissions(id: &str, permissions: &[String]) -> io::Result<Self> {
         let mut p = Self::default();
         for permission in permissions {
