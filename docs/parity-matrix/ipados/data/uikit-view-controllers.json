@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/uikit/view-controllers",
  "macos_since": "",
  "status": "partial",
- "bifrost": "springboard/sdk/src/view/app.rs (ViewController, ControllerHost), springboard/ui/src/nav.rs, springboard/ui/src/sheet.rs, springboard/ui/src/split.rs",
- "summary": "A view controller with load_view, view_did_load and view_did_layout hooks sits in the responder chain; navigation stacks, toolbars, alerts, sheets, split views and popover placement exist as models. Presentation controllers with detents, container controllers for tabs and pages, search controllers, pickers and activity sheets are missing or only exist inside the shell.",
+ "bifrost": "springboard/sdk/src/view/app.rs (ViewController, ControllerHost), springboard/ui/src/nav.rs, springboard/ui/src/sheet.rs, springboard/ui/src/split.rs, springboard/ui/src/tab_controller.rs, springboard/sdk/src/tabs.rs",
+ "summary": "A tab bar controller with tabs, tab groups and a search tab adapts between a bottom bar and a sidebar by width. A view controller with load_view, view_did_load and view_did_layout hooks sits in the responder chain; navigation stacks, toolbars, alerts, sheets, split views and popover placement exist as models. Presentation controllers with detents, container controllers for pages, search controllers, pickers and activity sheets are missing or only exist inside the shell.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -38,9 +38,9 @@
   {
    "feature": "Tab bar controller",
    "apple": "UITabBarController, UITab, UITabGroup, UISearchTab",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "no tab container. Needed as the default top-level navigation of tablet apps; build as a ViewController with a bottom tab bar view and a sidebar adaptive mode"
+   "bifrost": "springboard/ui/src/tab_controller.rs, springboard/sdk/src/tabs.rs",
+   "status": "partial",
+   "note": "Tab bar controller model: screens, groups (a bar item opening a list on a compact width, a header in the sidebar), a trailing search tab, keyboard step and Command-number selection, and the bar or sidebar layout by width. The shell and SDK do not draw it yet; built on parity/team-p-tab-bar; not yet verified on the tablet"
   },
   {
    "feature": "Page view controller",
@@ -135,7 +135,6 @@
   }
  ],
  "gaps": [
-  "Tab bar controller with sidebar adaptation",
   "Bottom sheet presentation with detents",
   "Interactive back swipe and finger-driven transitions",
   "Collapsing split view onto a navigation stack in compact width",
