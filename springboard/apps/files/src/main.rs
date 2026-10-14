@@ -33,7 +33,7 @@ use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::AtomicBool,
         mpsc::{self, Receiver, Sender},
         Arc,
     },
@@ -790,16 +790,11 @@ mod tests {
     }
 
     #[test]
-    fn worker_feed_queues_completion_on_the_dispatch_main_queue() {
+    fn worker_feed_wakes_the_dispatch_main_queue() {
         let (tx, rx) = feed::<u8>();
         tx.send(7).unwrap();
         assert_eq!(rx.try_recv(), Ok(7));
-
-        let ran = Arc::new(AtomicBool::new(false));
-        let completion = ran.clone();
-        DispatchQueue::main().async_(move || completion.store(true, Ordering::Release));
-        assert!(DispatchQueue::drain_main());
-        assert!(ran.load(Ordering::Acquire));
+        assert!(bifrost_app::dispatch::drain_main(), "Feed::send must enqueue an event-driven main-queue wake");
     }
 
     #[test]
