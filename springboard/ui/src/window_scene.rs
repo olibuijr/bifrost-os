@@ -1,5 +1,5 @@
 //! Window scene geometry shared by the desktop and the tablet: the size restrictions a scene declares
-//! (`UIWindowScene.sizeRestrictions`), the cascade that places a new scene window on a screen, and the clamp that keeps
+//! (the size limits a scene declares), the cascade that places a new scene window on a screen, and the clamp that keeps
 //! a window inside its restrictions and inside the screen.
 //!
 //! Units are logical points, like the rest of the model. The cascade is the same on both form factors: a new window

@@ -5,8 +5,8 @@ lead builds and checks it later.
 
 This covers two rows of the tablet platform parity data (`docs/parity-matrix/ipados/data/`):
 
-- `uikit-app-scene-lifecycle.json`, "UIScene, UIWindowScene, UISceneSession, UISceneDelegate, multiple instances".
-- `uikit-windows-multitasking.json`, "UIWindowScene, multiple windows of one app".
+- `uikit-app-scene-lifecycle.json`, the scene row ("scene sessions, scene delegate, multiple instances").
+- `uikit-windows-multitasking.json`, the scene row ("multiple windows of one app").
 
 ## What is built
 
@@ -16,7 +16,7 @@ The model has four layers. Each one lives in its own module, and the shared file
 |---|---|---|
 | App side | `springboard/sdk/src/scene_session.rs` | `SceneSessions` registry, `SceneDelegate` callbacks, `SceneState`, `SceneEvent`, wire codecs for the `scenes` service |
 | Shell service | `springboard/src/shell/services/scene_services.rs` | `SceneWindows` table and the `scenes` service: request, reopen, list, focus, close |
-| Shared geometry | `springboard/ui/src/window_scene.rs` | `SizeRestrictions` (`UIWindowScene.sizeRestrictions`), `cascade` placement, `contains` |
+| Shared geometry | `springboard/ui/src/window_scene.rs` | `SizeRestrictions` (the size limits a scene declares), `cascade` placement, `contains` |
 | Window server | `springboard/wm/src/scene_stack.rs` | Back-to-front stack of one app's scene surfaces: raise, remove, front, hit order |
 
 ### Scene sessions in the app

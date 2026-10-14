@@ -1,4 +1,4 @@
-//! Scene sessions (`UIScene`, `UISceneSession`, `UISceneDelegate`): one app keeps several windows, and each window is a
+//! Scene sessions: one app keeps several windows, and each window is a
 //! scene with its own session, state, user info and restorable state.
 //!
 //! The app owns its sessions in a [`SceneSessions`] registry and implements [`SceneDelegate`] to receive the lifecycle
@@ -43,12 +43,12 @@ pub const METHOD_FOCUS: &str = "focus";
 pub const METHOD_LIST: &str = "list";
 /// `reopen {scene, frame}`: put back a window that the app saved before a relaunch, with its identifier and frame.
 pub const METHOD_REOPEN: &str = "reopen";
-/// The role of a window scene, the only role a window of an app has here (`UIWindowSceneSessionRoleApplication`).
+/// The role of a window scene, the only role a window of an app has here (the application role of a window scene).
 pub const ROLE_WINDOW_APPLICATION: &str = "windowApplication";
 /// The most scenes one registry holds at once, unless the app sets another limit.
 pub const DEFAULT_LIMIT: usize = 8;
 
-/// The state of a scene session (`UISceneActivationState`, plus `Unattached` for a session that is gone).
+/// The state of a scene session (the activation state of a scene, plus `Unattached` for a session that is gone).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SceneState {
     Unattached,
@@ -57,7 +57,7 @@ pub enum SceneState {
     Background,
 }
 
-/// A lifecycle callback of `UISceneDelegate`.
+/// A lifecycle callback of a scene delegate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SceneEvent {
     WillConnect,
@@ -253,7 +253,7 @@ impl SceneSessions {
         self.settle(delegate);
     }
 
-    /// Ends a scene (`UISceneSession` destruction): it disconnects and leaves the registry. Returns the scene.
+    /// Ends a scene (session destruction): it disconnects and leaves the registry. Returns the scene.
     pub fn close(&mut self, delegate: &mut dyn SceneDelegate, persistent_id: &str) -> Result<SceneSession, SceneError> {
         let index = self
             .scenes
