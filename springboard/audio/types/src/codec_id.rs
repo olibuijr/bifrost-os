@@ -13,7 +13,7 @@ pub enum CodecId {
     Mp3,
     /// Free Lossless Audio Codec, code `flac`.
     Flac,
-    /// Apple Lossless (ALAC), code `alac`.
+    /// Lossless compressed PCM (ALAC), code `alac`.
     Alac,
 }
 
