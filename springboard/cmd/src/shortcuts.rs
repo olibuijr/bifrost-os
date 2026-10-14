@@ -3,13 +3,16 @@
 //!
 //! `list` prints each shortcut's id, name and step count. `view` prints a shortcut's reminder and its steps in order.
 //! `run` performs the steps the command line can reach: copying text (`wl-copy`), showing a folder in Files (the
-//! shell's `open-folder` request) and running a shell script. Other steps need the shell's own services (Wi-Fi, Low
-//! Power, Do Not Disturb, brightness, apps, screenshots, timers, notifications) and are not run. Like the app, `run`
-//! stops at the first step that does not run, reports the rest as not run, and exits with 1.
+//! shell's `open-folder` request), running a shell script (its output goes to the next step), saving the previous
+//! output to a file in Documents and showing a result, plus the steps that only work on text (Text, Set Variable, If and
+//! Repeat, see `springboard::shortcuts::flow`). Other steps need the shell's own services (Wi-Fi, Low Power, Do Not
+//! Disturb, brightness, apps, screenshots, timers, notifications) or an answer from the user and are not run. Like the
+//! app, `run` stops at the first step that does not run, reports the rest as not run, and exits with 1.
 
 use crate::{open, pasteboard};
-use springboard::shortcuts::{Action, Shortcut};
-use std::path::PathBuf;
+use springboard::shortcuts::flow::{self, Done, Host};
+use springboard::shortcuts::{clean_file, Action, Shortcut};
+use std::path::{Path, PathBuf};
 use std::process::Command as Process;
 
 pub const USAGE: &str = "usage: shortcuts [-h] | list | view NAME-OR-ID | run NAME-OR-ID";
@@ -102,22 +105,69 @@ fn actions_word(n: usize) -> String {
     }
 }
 
-/// Performs `s`'s steps in order with `perform`. The first step that does not run stops the shortcut: the steps after
-/// it are reported as not run, as the app does.
-pub fn run_steps(s: &Shortcut, mut perform: impl FnMut(&Action) -> Result<String, String>) -> Vec<Step> {
-    let mut out = Vec::new();
-    let mut stopped = false;
-    for a in &s.actions {
-        let line = a.line();
-        if stopped {
-            out.push(Step { line, outcome: Err("not run, an earlier step stopped the shortcut".into()) });
-            continue;
+/// Performs `s`'s steps in order with `perform`, which only reports what it did. The first step that does not run stops
+/// the shortcut: the steps after it are reported as not run, as the app does. Blocks (If, Repeat) and variables work as
+/// in `flow::run`; this form has no step output, so use `run_shortcut` to pass output from step to step.
+pub fn run_steps(s: &Shortcut, perform: impl FnMut(&Action) -> Result<String, String>) -> Vec<Step> {
+    struct Plain<F>(F);
+    impl<F: FnMut(&Action) -> Result<String, String>> Host for Plain<F> {
+        fn perform(&mut self, action: &Action, _input: &str) -> Result<Done, String> {
+            (self.0)(action).map(|message| Done { message, output: None })
         }
-        let outcome = perform(a);
-        stopped = outcome.is_err();
-        out.push(Step { line, outcome });
     }
-    out
+    steps_of(flow::run(&s.actions, &mut Plain(perform)))
+}
+
+/// Runs `s` from the command line: the steps it can reach (see `Cli`), with output passed from step to step.
+pub fn run_shortcut(s: &Shortcut) -> Vec<Step> {
+    steps_of(flow::run(&s.actions, &mut Cli))
+}
+
+fn steps_of(steps: Vec<flow::Step>) -> Vec<Step> {
+    steps.into_iter().map(|st| Step { line: st.line, outcome: st.outcome }).collect()
+}
+
+/// The host of a command-line run. Steps the command line cannot reach say so, and stop the shortcut.
+struct Cli;
+
+impl Host for Cli {
+    fn perform(&mut self, action: &Action, input: &str) -> Result<Done, String> {
+        match action {
+            Action::RunScript(script) => {
+                let out = run_script(script)?;
+                Ok(Done::with_output(&format!("ran {script}"), out.trim_end()))
+            }
+            Action::ShowResult(text) => Ok(Done::said(text)),
+            Action::SaveFile(name) => {
+                let home = std::env::var("HOME").map_err(|_| "HOME is not set".to_string())?;
+                save_file(Path::new(&home), name, input).map(|message| Done::said(&message))
+            }
+            other => perform(other).map(|message| Done::said(&message)),
+        }
+    }
+}
+
+/// Runs a shell script and returns what it printed. `Err` says how it failed.
+fn run_script(script: &str) -> Result<String, String> {
+    let out = Process::new("sh").arg("-c").arg(script).output().map_err(|e| format!("sh: {e}"))?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    } else {
+        Err(format!("{script} exited with {}", out.status))
+    }
+}
+
+/// Writes `text` to the file `name` in `home`'s Documents folder (made if missing). The name is cleaned first, so it can
+/// never leave that folder.
+fn save_file(home: &Path, name: &str, text: &str) -> Result<String, String> {
+    let file = clean_file(name);
+    if file.is_empty() {
+        return Err("the file needs a name".into());
+    }
+    let dir = home.join("Documents");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    std::fs::write(dir.join(&file), text).map_err(|e| format!("{file}: {e}"))?;
+    Ok(format!("saved {file} in Documents"))
 }
 
 /// Performs one step from the command line. `Ok` says what was done; `Err` says why it did not run.
@@ -139,25 +189,9 @@ pub fn perform(a: &Action) -> Result<String, String> {
             Ok(format!("showed {name}"))
         }
         Action::RunScript(script) => {
-            let out = Process::new("sh").arg("-c").arg(script).output().map_err(|e| format!("sh: {e}"))?;
-            if out.status.success() {
-                Ok(format!("ran {script}"))
-            } else {
-                Err(format!("{script} exited with {}", out.status))
-            }
+            run_script(script)?;
+            Ok(format!("ran {script}"))
         }
-        Action::Text(_)
-        | Action::AskInput(_)
-        | Action::GetUrl(_)
-        | Action::SaveFile(_)
-        | Action::ShowResult
-        | Action::SetVariable(_)
-        | Action::If(..)
-        | Action::Otherwise
-        | Action::Repeat(_)
-        | Action::Menu(_)
-        | Action::MenuItem(_)
-        | Action::End => Err(format!("{} runs inside the Shortcuts app, not from the command line", a.title())),
         other => Err(format!("{} needs the shell's services and cannot run from the command line yet", other.title())),
     }
 }
@@ -172,7 +206,7 @@ mod tests {
     }
 
     fn named(name: &str, actions: Vec<Action>) -> Shortcut {
-        Shortcut { name: name.into(), color: 0, actions, schedule: None, ..Shortcut::default() }
+        Shortcut::new(name, 0, actions)
     }
 
     fn two() -> Vec<Shortcut> {
@@ -250,5 +284,46 @@ mod tests {
             Err("Show Notification needs the shell's services and cannot run from the command line yet".into())
         );
         assert!(perform(&Action::Dnd(true)).unwrap_err().contains("Set Do Not Disturb"));
+    }
+
+    #[test]
+    fn a_run_passes_text_from_step_to_step_and_shows_the_result() {
+        let s = named(
+            "Greet",
+            vec![
+                Action::Text("Ada".into()),
+                Action::SetVariable("Name".into()),
+                Action::ShowResult("Hello, {Name}".into()),
+            ],
+        );
+        let steps = run_shortcut(&s);
+        assert_eq!(steps.last().unwrap().outcome, Ok("Hello, Ada".into()));
+    }
+
+    #[test]
+    fn a_step_that_needs_the_user_stops_the_run() {
+        let s = named("Ask", vec![Action::AskInput("Name?".into()), Action::ShowResult("{Output}".into())]);
+        let steps = run_shortcut(&s);
+        assert!(steps[0].outcome.as_ref().unwrap_err().contains("Ask for Input"));
+        assert!(steps[1].outcome.is_err(), "the result is not shown after a step that did not run");
+    }
+
+    #[test]
+    fn a_script_prints_into_the_next_step() {
+        let s = named("Say", vec![Action::RunScript("echo hi there".into()), Action::ShowResult("got {Output}".into())]);
+        let steps = run_shortcut(&s);
+        assert_eq!(steps[1].outcome, Ok("got hi there".into()));
+    }
+
+    #[test]
+    fn a_saved_file_stays_in_the_documents_folder() {
+        let home = std::env::temp_dir().join(format!("shortcuts-cmd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!(save_file(&home, "notes.txt", "hello"), Ok("saved notes.txt in Documents".into()));
+        assert_eq!(std::fs::read_to_string(home.join("Documents/notes.txt")).unwrap(), "hello");
+        assert_eq!(save_file(&home, "../escape.txt", "x"), Ok("saved escape.txt in Documents".into()));
+        assert!(!home.join("escape.txt").exists());
+        assert!(save_file(&home, "///", "x").is_err());
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

@@ -4,7 +4,6 @@
 //! per frame, and a missing service only logs.
 
 use springboard::shortcuts::{Daily, Shortcut};
-use std::path::{Path, PathBuf};
 use bifrost_app::login_items_approval as login;
 use bifrost_app::notification_schedule::{self as reminder, Schedule};
 use bifrost_app::Ctx;
@@ -60,44 +59,6 @@ pub fn set_login(ctx: &Ctx, on: bool) -> u32 {
     }
 }
 
-/// The folder inside the app's data directory that Save File steps write to.
-pub const SAVED_DIR: &str = "Saved";
-
-/// Writes `content` to `Saved/<name>` in the app's data directory and returns the path. The name must be a plain file
-/// name: not empty, not starting with a dot, without separators or control characters.
-pub fn save_file(data_dir: &Path, name: &str, content: &str) -> Result<PathBuf, String> {
-    let name = name.trim();
-    if name.is_empty() || name.starts_with('.') || name.contains(['/', '\\']) || name.chars().any(char::is_control) {
-        return Err(format!("\"{name}\" is not a usable file name"));
-    }
-    let dir = data_dir.join(SAVED_DIR);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("could not create the folder for saved files: {e}"))?;
-    let path = dir.join(name);
-    std::fs::write(&path, content).map_err(|e| format!("could not save {name}: {e}"))?;
-    Ok(path)
-}
-
-/// A battery charge from the text of a `capacity` file: a whole percent, 0 to 100.
-pub fn parse_capacity(text: &str) -> Option<u8> {
-    text.trim().parse::<u8>().ok().filter(|p| *p <= 100)
-}
-
-/// The charge of the first battery under a power-supply directory (`BAT0`, `BAT1`, ...), or `None` without one.
-pub fn battery_in(root: &Path) -> Option<u8> {
-    let mut names: Vec<String> = std::fs::read_dir(root)
-        .ok()?
-        .filter_map(|e| e.ok()?.file_name().into_string().ok())
-        .filter(|n| n.starts_with("BAT"))
-        .collect();
-    names.sort();
-    names.into_iter().find_map(|n| parse_capacity(&std::fs::read_to_string(root.join(n).join("capacity")).ok()?))
-}
-
-/// The battery charge of this machine, or `None` on one without a battery.
-pub fn battery_percent() -> Option<u8> {
-    battery_in(Path::new("/sys/class/power_supply"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,11 +74,11 @@ mod tests {
     }
 
     fn with_time(name: &str, hour: u8, minute: u8) -> Shortcut {
-        Shortcut { name: name.into(), color: 0, actions: Vec::new(), schedule: Some(Daily { hour, minute }), ..Shortcut::default() }
+        Shortcut { schedule: Some(Daily { hour, minute }), ..Shortcut::new(name, 0, Vec::new()) }
     }
 
     fn plain(name: &str) -> Shortcut {
-        Shortcut { name: name.into(), color: 0, actions: Vec::new(), schedule: None, ..Shortcut::default() }
+        Shortcut::new(name, 0, Vec::new())
     }
 
     /// (service, method, body) of each call the ctx sent, in order.
@@ -207,46 +168,5 @@ mod tests {
         assert_eq!(sent[1], ("login-items".into(), "unregister".into(), "null".into()));
         ask_login(&ctx);
         assert_eq!(calls(&ctx)[0].1, "status");
-    }
-
-    fn scratch(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("shortcuts-services-{}-{tag}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
-    }
-
-    #[test]
-    fn a_saved_file_lands_in_the_saved_folder() {
-        let d = scratch("save");
-        let path = save_file(&d, " note.txt ", "hello").unwrap();
-        assert_eq!(path, d.join("Saved").join("note.txt"));
-        assert_eq!(std::fs::read_to_string(path).unwrap(), "hello");
-        save_file(&d, "note.txt", "again").unwrap();
-        assert_eq!(std::fs::read_to_string(d.join("Saved/note.txt")).unwrap(), "again", "a second save replaces the file");
-    }
-
-    #[test]
-    fn a_file_name_that_could_leave_the_folder_is_refused() {
-        let d = scratch("names");
-        for bad in ["", "  ", ".hidden", "..", "a/b", "a\\b", "tab\there"] {
-            assert!(save_file(&d, bad, "x").is_err(), "{bad:?}");
-        }
-        assert!(!d.join("Saved").exists(), "nothing was created");
-    }
-
-    #[test]
-    fn the_battery_charge_is_read_from_the_first_battery() {
-        let d = scratch("battery");
-        assert_eq!(battery_in(&d), None);
-        assert_eq!(battery_in(&d.join("missing")), None);
-        for (name, cap) in [("AC", "1"), ("BAT1", "55\n"), ("BAT0", "37\n")] {
-            std::fs::create_dir_all(d.join(name)).unwrap();
-            std::fs::write(d.join(name).join("capacity"), cap).unwrap();
-        }
-        assert_eq!(battery_in(&d), Some(37));
-        assert_eq!(parse_capacity("100"), Some(100));
-        assert_eq!(parse_capacity("101"), None);
-        assert_eq!(parse_capacity("full"), None);
     }
 }

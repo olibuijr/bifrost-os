@@ -25,7 +25,7 @@ fn main() {
         Cmd::Run(what) => {
             let i = cli::resolve(&list, &what).unwrap_or_else(|e| die("shortcuts", &e, 1));
             let mut failed = false;
-            for (k, step) in cli::run_steps(&list[i], cli::perform).iter().enumerate() {
+            for (k, step) in cli::run_shortcut(&list[i]).iter().enumerate() {
                 match &step.outcome {
                     Ok(done) => println!("{}. {}: {done}", k + 1, step.line),
                     Err(why) => {

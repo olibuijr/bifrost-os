@@ -13,6 +13,20 @@
 - The shortcut file keeps older lines readable: folder, glyph, menu key and automation are extra fields at the end of the line. The SDK glyph set gains chevron.up.
 - Needs system 0.4.84, as before.
 
+## 1.8.0 — 2026-10-13
+
+- Steps can carry text and pass it on. New kinds in the Add Action list: Text, Ask for Input, Get Contents of URL, Save File, Show Result and Set Variable. Each step's output is the next step's input; `{Output}` in a step's text stands for the previous output and `{Name}` for a variable set with Set Variable. Tapping a step with text opens a field to type it.
+- If and Repeat add blocks. Add Action inserts the whole block (If with Otherwise and End If, Repeat with End Repeat); steps inside are indented, and removing the opener removes the block. If tests the previous output (has a value, is empty, contains, is); Repeat runs 1 to 20 times. A run is limited to 200 steps.
+- Run works inside the app. Running a shortcut walks its steps and shows each one with what happened in the result panel. Text, variables, blocks, Copy Text, Show Notification and Show Result run in the app. A step that needs the shell (Wi-Fi, Low Power, Do Not Disturb, brightness, apps, screenshots, timers) stops the shortcut with a reason, and the steps after it are listed as not run.
+- Editor: a Name row renames the shortcut, Duplicate Shortcut adds a copy after it (without the daily reminder), Export Shortcut writes it to a file, and the up and down buttons on each step reorder the steps. A Folder row files the shortcut under Favorites, Home or Work, and a Glyph row picks the glyph shown on its tile.
+- Sidebar: Gallery, with seven starter shortcuts to add, and one row per folder with the number of shortcuts in it. Import from File in the Gallery reads an exported file.
+- The grid has a search field in the toolbar. It matches names, steps and folders.
+- Menus: File (New Shortcut, Duplicate, Import, Export, Delete), Edit (Rename, Find) and Shortcuts (Run, Gallery and one item per shortcut; the first nine have Control-Command-digit keys that work while the app is in front).
+- The list file keeps the glyph and the folder as two more fields on a shortcut's line; older files read as before, and older versions of the app ignore the new fields.
+- The `shortcuts` command runs the new steps it can reach: Text, Set Variable, If and Repeat, a shell script whose output goes to the next step, Save File in Documents and Show Result.
+- Adds the documents permission, for Import and Export.
+- Needs system 0.4.84, as before.
+
 ## 1.7.0 — 2026-10-13
 
 - The action library gains four kinds, in the Add Action list after Start Timer: Show Notification (a message from a list), Copy Text (a text from a list, put on the clipboard), Open Folder (a folder in the home directory: Desktop, Documents, Downloads, Pictures or Music) and Run Shell Script (a command from a list). Their values are picked from their lists, so a saved value always has a known meaning.
