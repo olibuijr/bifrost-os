@@ -103,7 +103,7 @@
    "apple": "AudioHardwareBox",
    "bifrost": "springboard/sdk/src/audio_box.rs",
    "status": "partial",
-   "note": "built on parity/team-k-core-audio; not yet verified on Midget. Pure model: AudioBox with its devices, BoxRegistry with enable, disable, acquire and release rules (an acquired box cannot be disabled). Enable state is not applied to hardware; the sound server owns the containers."
+   "note": "AudioBox with its devices and BoxRegistry with enable, disable, acquire and release rules (an acquired box cannot be disabled, a device belongs to one box) are tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: enable state is not applied to hardware because the sound server owns the containers; that needs the lab machine."
   },
   {
    "feature": "Remote and streaming device transports",

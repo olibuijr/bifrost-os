@@ -124,7 +124,7 @@
       "apple": "USB Devices (VZXHCIController)",
       "bifrost": "springboard/core/src/guest_usb.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. usbhost access is not exposed to VMs"
+      "note": "The passthrough policy (ordered rules with default deny, hub refusal, the attach limit, detach and reattach, host keys for identical devices) is tested headless in core/tests/parity_sdk-complete-08.rs. Gap: usbhost access is not exposed to VMs, and host bus enumeration and hot-plug need the lab machine."
     },
     {
       "feature": "Rosetta for Linux",
