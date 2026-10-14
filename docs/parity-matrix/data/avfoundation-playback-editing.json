@@ -73,9 +73,9 @@
   {
    "feature": "Now Playing and remote commands",
    "apple": "Playback integration (MPNowPlayingInfoCenter)",
-   "bifrost": "springboard/src/shell/music/system.rs, springboard/sdk/src/widgets.rs",
+   "bifrost": "springboard/src/shell/services/now_playing.rs (transport_for, extrapolate, scrub_target_ms); tests: springboard/tests/parity_sdk-tests-01b.rs; springboard/src/shell/music/system.rs, springboard/sdk/src/widgets.rs",
    "status": "partial",
-   "note": "Music integrates with the shell; widgets::player draws the mini player (docs/bifrost-ui.md)"
+   "note": "Play, pause, skip and scrub mapping is tested headless (headless_now_playing_* in springboard/tests). Music integrates with the shell; widgets::player draws the mini player (docs/bifrost-ui.md)"
   },
   {
    "feature": "Offline playback and storage",

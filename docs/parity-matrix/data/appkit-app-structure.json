@@ -59,9 +59,9 @@
     {
       "feature": "Pasteboard",
       "apple": "NSPasteboard, rich types, file URLs",
-      "bifrost": "springboard/sdk/src/pasteboard.rs; docs/bifrost-ui.md",
+      "bifrost": "springboard/sdk/src/pasteboard.rs; tests: springboard/sdk/tests/parity_sdk-tests-01b.rs; docs/bifrost-ui.md",
       "status": "partial",
-      "note": "Shell publishes only one text-like type to Wayland selection; other types stay inside BifrOSt"
+      "note": "Named boards, per-type data, types and change counts are tested headless (headless_clipboard_* in sdk/tests). Shell publishes only one text-like type to Wayland selection; other types stay inside BifrOSt"
     },
     {
       "feature": "iCloud / ubiquitous data",
@@ -101,9 +101,9 @@
     {
       "feature": "App extensions",
       "apple": "Share, Quick Look, widget, Finder-sync and other extension points",
-      "bifrost": "springboard/sdk/src/share.rs; springboard/sdk/src/peek.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/status_item.rs",
+      "bifrost": "springboard/sdk/src/share.rs; springboard/sdk/src/peek.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/status_item.rs; tests: springboard/sdk/tests/parity_sdk-tests-01b.rs",
       "status": "partial",
-      "note": "Individual extension-like APIs exist; no general extension host or packaging model"
+      "note": "Share targets and the preview panel's items and steps are tested headless (headless_share_sheet_* and headless_app_extensions_* in sdk/tests). Individual extension-like APIs exist; no general extension host or packaging model"
     }
   ],
   "gaps": [

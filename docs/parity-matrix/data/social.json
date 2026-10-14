@@ -24,23 +24,23 @@
   {
    "feature": "Post contents (initial text, images, URLs)",
    "apple": "setInitialText(_:), add(_:) for images and URLs, removeAllImages(), removeAllURLs()",
-   "bifrost": "springboard/sdk/src/share.rs (Payload::Text, Url, File; at most 8 items); wired: springboard/src/shell/compose_sheet.rs (sheet_for, hand_off_text)",
+   "bifrost": "springboard/sdk/src/share.rs (Payload::Text, Url, File); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs, springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/compose_sheet.rs (sheet_for, hand_off_text)",
    "status": "partial",
-   "note": "Items can be passed to the share menu, but no post composer edits or attaches them. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "Text, URL and file items reach the share menu and Copy (headless_share_sheet_* in sdk/tests). The draft caps images and links at 8 each (headless_compose_draft_* in ui/tests). No composer edits or attaches items in the share sheet. Not yet verified on Midget."
   },
   {
    "feature": "Completion result",
    "apple": "completionHandler, SLComposeViewControllerResult",
-   "bifrost": "springboard/sdk/src/share.rs (App::share_done via show_picker); springboard/src/shell/sharing.rs; wired: springboard/src/shell/compose_sheet.rs (compose_done), springboard/src/shell/sharing.rs (share_finish)",
+   "bifrost": "springboard/sdk/src/share.rs (SharingServicePicker::share_done, show_picker); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs; springboard/src/shell/sharing.rs; wired: springboard/src/shell/compose_sheet.rs (compose_done), springboard/src/shell/sharing.rs (share_finish)",
    "status": "partial",
-   "note": "Reports the chosen app id, 'copy', or None when dismissed. It has no posted, cancelled or done states. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "A chosen app or Copy reports did_choose then did_share_items; a dismissed menu reports None; an answer for another request is ignored (headless_share_sheet_completion_* and headless_share_sheet_a_dismissed_* in sdk/tests). The share menu has no posted or cancelled states. The compose sheet's Done and Cancelled result is not reported through the share menu."
   },
   {
    "feature": "Sharing service objects and picker delegate (NSSharingService, NSSharingServicePicker)",
    "apple": "NSSharingService(named:), NSSharingService.sharingServices(forItems:), title, canPerform(withItems:), perform(withItems:), NSSharingServicePickerDelegate.sharingServicePicker(_:didChoose:), NSSharingServiceDelegate didShareItems / didFailToShareItems",
-   "bifrost": "springboard/sdk/src/share.rs (SharingService, SharingServicePicker, SharingServicePickerDelegate, SharingServiceDelegate, ShareError); shell side springboard/src/shell/sharing.rs (targets, handles, copy_text)",
+   "bifrost": "springboard/sdk/src/share.rs (SharingService, SharingServicePicker, SharingServicePickerDelegate, SharingServiceDelegate, ShareError); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs; shell side springboard/src/shell/sharing.rs (targets, handles, copy_text)",
    "status": "partial",
-   "note": "Host unit tests only: services are built from the same rules the shell's menu uses, canPerform checks each item kind, and a share_done answer reaches did_choose and did_share_items or did_fail_to_share_items. Copy performs through the clipboard. No image property, and perform for an app or Compose Post goes through the menu because the shell has no message for one named target. Parity needs a Midget check of the menu."
+   "note": "Headless tests (headless_share_sheet_* in sdk/tests) and host unit tests: services are built from the same rules the shell's menu uses, canPerform checks each item kind, and a share_done answer reaches did_choose and did_share_items or did_fail_to_share_items. Copy performs through the clipboard. No image property, and perform for an app or Compose Post goes through the menu because the shell has no message for one named target. Parity needs a Midget check of the menu."
   },
   {
    "feature": "HTTP request assembly for a service",
@@ -66,9 +66,9 @@
   {
    "feature": "Receiving shared content in an extension",
    "apple": "SLComposeServiceViewController (share extension)",
-   "bifrost": "springboard/sdk/src/share.rs (manifest handles and schemes; Input::Open; App::document)",
+   "bifrost": "springboard/sdk/src/share.rs (manifest handles and schemes; Input::Open; App::document); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs",
    "status": "partial",
-   "note": "An app can receive shared URLs, text and files. There is no separate extension process."
+   "note": "Inbound request flags, text carried as data URLs, and handles matched by type and scheme are tested headless (headless_share_sheet_inbound_*, headless_share_sheet_text_travels_*, headless_share_sheet_files_* in sdk/tests). An app can receive shared URLs, text and files. There is no separate extension process."
   },
   {
    "feature": "Social service types",

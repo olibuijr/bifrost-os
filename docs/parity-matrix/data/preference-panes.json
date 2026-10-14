@@ -46,7 +46,7 @@
    "feature": "Help menu entries from a pane",
    "apple": "updateHelpMenu(with:), NSPrefPaneHelpMenuInfoPListKey, NSPrefPaneHelpMenuTitleKey, NSPrefPaneHelpMenuAnchorKey",
    "bifrost": "springboard/src/shell/desktop_bar.rs:193 (Help menu rows), springboard/proto/src/lib.rs:646 (AppMenu)",
-   "status": "partial",
+   "status": "gap",
    "note": "The shell Help menu has fixed rows (BifrOSt Information, Search, App Switcher, Back, Home); app menus cannot use the Help title (desktop_bar.rs:338 keeps Help shell-supplied), and there is no anchor or help-book lookup."
   },
   {
