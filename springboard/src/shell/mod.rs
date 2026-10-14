@@ -11,6 +11,7 @@ pub mod applib;
 pub mod apphost;
 pub mod touch_frames;
 pub mod intents;
+pub mod media_intents;
 pub mod kinds;
 mod apps;
 mod appgrid;
