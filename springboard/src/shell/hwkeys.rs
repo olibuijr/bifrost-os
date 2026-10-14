@@ -187,6 +187,11 @@ impl HwKeys {
         self.text.set_layout(layout);
     }
 
+    /// True while a Shift key is held (Photos extends the selection to the last tapped photo with it).
+    pub fn shift_held(&self) -> bool {
+        self.shift > 0
+    }
+
     /// True while any Ctrl, Alt or Meta key is held (the app switcher commits when the last one is released).
     pub fn mods_held(&self) -> bool {
         self.ctrl + self.alt + self.meta > 0
@@ -598,6 +603,12 @@ impl Shell {
     /// True while Photos is the front app: its menus show, and its Cmd key equivalents are taken.
     pub fn photos_front(&self) -> bool {
         self.screen_on && self.screen == Screen::App(AppId::Photos) && !self.is_locked()
+    }
+    /// Tells Photos whether Shift is held, so a tap on the grid extends the selection. The shell calls it on every key event.
+    pub fn set_photos_shift(&mut self, held: bool) {
+        if let Some(p) = self.photos.as_mut() {
+            p.set_shift(held);
+        }
     }
     pub fn hw_window_shortcut(&self, sc: Shortcut) -> bool {
         cfg!(feature = "desktop-wayland") && matches!(sc, Shortcut::Close | Shortcut::Minimize) && self.desk_active() && !self.is_locked()

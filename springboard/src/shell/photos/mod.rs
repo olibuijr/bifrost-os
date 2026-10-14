@@ -32,7 +32,11 @@ pub mod zoom;
 #[cfg(test)]
 mod commands_tests;
 #[cfg(test)]
+mod adjust_tests;
+#[cfg(test)]
 mod favorites_tests;
+#[cfg(test)]
+mod selection_tests;
 #[cfg(test)]
 mod sort_tests;
 
@@ -322,7 +326,8 @@ impl EditPane {
 const EDIT_SLIDER_ROWS: usize = 5;
 
 /// The editor panel's height in rows: aspect, filters, tabs, then the sliders.
-const EDIT_PANEL_ROWS: f32 = 3.0 + EDIT_SLIDER_ROWS as f32;
+/// The Adjust pane's Auto button sits in the row under its sliders.
+const EDIT_PANEL_ROWS: f32 = 4.0 + EDIT_SLIDER_ROWS as f32;
 
 /// The edit mode's sliders.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -498,6 +503,10 @@ pub struct Photos {
     /// the active month filter: its title and `[start, end)` in Unix seconds
     filter: Option<(String, (i64, i64))>,
     selection: Selection,
+    /// the photo the last tap in selection mode landed on: a Shift tap selects the run from it
+    anchor: Option<PathBuf>,
+    /// whether Shift is held, as the shell last reported it on a key event
+    shift: bool,
     /// the first tap on a permanent multi-delete asks to confirm
     confirm_purge: bool,
     /// the text card on screen, the photo it is about, the finger on it and why it refused the text
@@ -645,6 +654,8 @@ impl Photos {
             view: vec![],
             filter: None,
             selection: Selection::default(),
+            anchor: None,
+            shift: false,
             confirm_purge: false,
             entry: None,
             entry_photo: None,
@@ -1787,10 +1798,7 @@ impl Photos {
         match target {
             Target::Cell(i) => {
                 if self.selection.active {
-                    if let Some(p) = self.photos().get(i).cloned() {
-                        self.selection.toggle(&p.path);
-                        self.confirm_purge = false;
-                    }
+                    self.select_cell(i);
                 } else {
                     self.open_viewer(i);
                 }
@@ -1812,6 +1820,7 @@ impl Photos {
                 } else {
                     self.selection.begin();
                 }
+                self.anchor = None;
                 self.confirm_purge = false;
             }
             Target::SelShare => {
@@ -2332,6 +2341,7 @@ impl Photos {
                 5 => Some(if x < w / 2.0 { Target::EditCopy } else { Target::EditPaste }),
                 _ => None,
             },
+            row if pane == EditPane::Adjust && row == 3 + EDIT_SLIDER_ROWS => Some(Target::EditTool(Tool::AutoEnhance)),
             row => pane.sliders().get(row - 3).map(|&s| Target::Slide(s)),
         }
     }
@@ -2930,6 +2940,11 @@ impl Photos {
             let kx = edit::slider_pos(slider.value(&cur), x0, x1, lo, hi);
             s.fill_rrect(kx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(22.0), flat(ui), WHITE);
         }
+        if pane == EditPane::Adjust {
+            let auto = Tool::AutoEnhance;
+            let color = if auto.is_on(&cur) { BLUE } else { WHITE };
+            self.label(s, ui, auto.label(), 15.0, if auto.is_on(&cur) { Weight::Semibold } else { Weight::Regular }, tint(Target::EditTool(auto), color), w / 2.0, panel + row * (3.5 + EDIT_SLIDER_ROWS as f32));
+        }
         if pane == EditPane::Tools {
             let third = w / 3.0;
             for (i, t) in [Tool::RotateLeft, Tool::FlipHorizontal, Tool::FlipVertical].into_iter().enumerate() {
@@ -2987,21 +3002,53 @@ impl Photos {
     /// along) and rescans so the copy shows.
     fn duplicate_current(&mut self) {
         let Some(p) = self.viewing().cloned() else { return };
-        match library::duplicate(&p.path) {
-            Ok(copy) => {
-                let (from, to) = (p.path.display().to_string(), copy.display().to_string());
-                for key in ["edit", "rate"] {
-                    if let Some(v) = self.prefs.get(&format!("{key}:{from}")).map(str::to_string).filter(|v| !v.is_empty()) {
-                        let _ = self.pref_set(&format!("{key}:{to}"), &v);
+        self.duplicate_photos(&[p]);
+    }
+
+    /// Copies each photo with its edit, rating and details (Image > Duplicate, for the open photo or the selection),
+    /// then rescans once so the copies are listed.
+    fn duplicate_photos(&mut self, photos: &[Photo]) {
+        let mut copied = false;
+        for p in photos {
+            match library::duplicate(&p.path) {
+                Ok(copy) => {
+                    copied = true;
+                    let (from, to) = (p.path.display().to_string(), copy.display().to_string());
+                    for key in ["edit", "rate"] {
+                        if let Some(v) = self.prefs.get(&format!("{key}:{from}")).map(str::to_string).filter(|v| !v.is_empty()) {
+                            let _ = self.pref_set(&format!("{key}:{to}"), &v);
+                        }
                     }
+                    // the title, caption, keywords, place and corrected time come along too
+                    let writes = meta::transfer_writes(&self.prefs, &p.path, &copy, true);
+                    self.write_prefs(&writes);
                 }
-                // the title, caption, keywords, place and corrected time come along too
-                let writes = meta::transfer_writes(&self.prefs, &p.path, &copy, true);
-                self.write_prefs(&writes);
-                self.rescan();
+                Err(e) => eprintln!("photos: could not duplicate {}: {e}", p.name()),
             }
-            Err(e) => eprintln!("photos: could not duplicate {}: {e}", p.name()),
         }
+        if copied {
+            self.rescan();
+        }
+    }
+
+    /// Tells Photos whether Shift is held. The shell calls this on every key event, before the touch it modifies.
+    pub fn set_shift(&mut self, held: bool) {
+        self.shift = held;
+    }
+
+    /// Selects or deselects grid cell `i` in selection mode. With Shift held, every photo from the last one tapped
+    /// through `i` is selected instead, and a tap that is not a range toggles just its own photo.
+    fn select_cell(&mut self, i: usize) {
+        let Some(path) = self.view.get(i).map(|p| p.path.clone()) else { return };
+        let from = self.anchor.as_ref().and_then(|a| self.view.iter().position(|p| &p.path == a));
+        match from {
+            Some(from) if self.shift => self.selection.select_range(&self.view, from, i),
+            _ => {
+                self.selection.toggle(&path);
+            }
+        }
+        self.anchor = Some(path);
+        self.confirm_purge = false;
     }
 
     fn save_to_files(&mut self) {

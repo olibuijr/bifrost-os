@@ -174,7 +174,8 @@ impl Photos {
             Undo => self.stack.undo_label().is_some(),
             Redo => self.stack.redo_label().is_some(),
             Copy | Info | Print | CopyEdits => viewing,
-            Duplicate | Export => viewing && self.album != Album::Trash,
+            Duplicate => has && self.album != Album::Trash,
+            Export => viewing && self.album != Album::Trash,
             SelectAll => grid && !self.view.is_empty(),
             DeselectAll => self.selection.active && !self.selection.is_empty(),
             Find | FilterDate | Import | ShowHidden | AspectGrid | AlbumsByName => true,
@@ -390,7 +391,7 @@ impl Photos {
                 self.info_revert = false;
                 self.command_writes(ui, "Revert to Original", writes, &targets);
             }
-            Duplicate => self.duplicate_current(),
+            Duplicate => self.duplicate_photos(&targets),
             CopyEdits => {
                 let clip = self.viewing().cloned().map(|p| self.recipe(&p).unwrap_or_default());
                 if clip.is_some() {
