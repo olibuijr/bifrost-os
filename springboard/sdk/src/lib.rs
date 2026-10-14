@@ -168,6 +168,8 @@ pub mod quick_look;
 pub mod permission_kit;
 pub mod authorization;
 pub mod audio_session;
+pub mod audio_application;
+pub mod audio_player_control;
 pub mod now_playing;
 pub mod thumbnails;
 pub mod thumbnail_error;
