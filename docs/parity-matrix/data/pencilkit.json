@@ -10,9 +10,9 @@
   {
    "feature": "Canvas view capturing pen and finger input",
    "apple": "PKCanvasView",
-   "bifrost": "springboard/src/shell/markup.rs (Markup::touch, line 162); springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (sketch_touch, draw_sketch)",
+   "bifrost": "springboard/src/shell/markup.rs (Markup::touch, line 162); springboard/tests/parity_sdk-tests-05.rs; springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (sketch_touch, draw_sketch)",
    "status": "partial",
-   "note": "Both capture Down/Move/Up touch events and stamp strokes onto a pixel buffer. No SDK view class, no low-latency pen path, and no separate pen input. Apps cannot embed a canvas. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "Both capture Down/Move/Up touch events and stamp strokes onto a pixel buffer. The markup editor's touch path is tested headless in springboard/tests/parity_sdk-tests-05.rs: a press stamps a dot, a drag inks a line, and touches outside the picture draw nothing. No SDK view class, no low-latency pen path, and no separate pen input. Apps cannot embed a canvas. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
   },
   {
    "feature": "Drawing model (PKDrawing) and save as data",
@@ -38,23 +38,23 @@
   {
    "feature": "Tool picker (PKToolPicker)",
    "apple": "PKToolPicker",
-   "bifrost": "springboard/src/shell/markup.rs:27 (TOOLS) and the colour row; springboard/apps/freeform-desktop/src/freeform.rs (palette)",
+   "bifrost": "springboard/ui/src/tool_picker.rs (ToolPicker: tool set, selection, colour and width per inking tool, visibility); springboard/ui/tests/parity_sdk-tests-05.rs; springboard/src/shell/markup.rs:27 (TOOLS) and the colour row; springboard/apps/freeform-desktop/src/freeform.rs (palette)",
    "status": "partial",
-   "note": "Each editor draws its own tool and colour row. There is no system tool palette that apps can attach to a canvas, and no custom tool registration."
+   "note": "ToolPicker (re-exported by the SDK) holds the tool set, selection, colour and width of each inking tool, and is tested headless in ui/tests/parity_sdk-tests-05.rs. The markup editor and Freeform do not use it yet, and no view attaches a picker to a canvas, so each editor draws its own tool and colour row."
   },
   {
    "feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)",
    "apple": "PKInkingTool, PKEraserTool",
-   "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink); springboard/ui/src/drawing.rs (Drawing::erase_strokes_at, stroke-level erasing model); built on parity/team-j-pencilkit; not yet verified on Midget",
+   "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser), :27 (TOOLS); springboard/tests/parity_sdk-tests-05.rs; springboard/apps/freeform-desktop/src/freeform.rs:183 (enum Tool: Pen, Pencil, Marker, Eraser, plus lasso and shapes); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink); springboard/ui/src/drawing.rs (Drawing::erase_strokes_at, stroke-level erasing model); built on parity/team-j-pencilkit; not yet verified on Midget",
    "status": "partial",
-   "note": "Shell has four tools, Freeform has three. The ui drawing model has a stroke-level eraser (erase_strokes_at) that no editor calls yet. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "The markup editor's four tools have distinct widths and opacity, tested headless in springboard/tests/parity_sdk-tests-05.rs. Freeform has the same four plus a lasso and shapes. The stroke-level eraser (Drawing::erase_strokes_at) is tested in the ui crate, but no editor calls it yet. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Lasso selection and transform (PKLassoTool)",
    "apple": "PKLassoTool",
-   "bifrost": "springboard/ui/src/lasso.rs",
+   "bifrost": "springboard/ui/src/lasso.rs; springboard/ui/tests/parity_sdk-tests-05.rs",
    "status": "partial",
-   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No selection of existing strokes, moving, or scaling of strokes."
+   "note": "The loop's even-odd hit test (concave loops included), stroke selection, selection bounds, and moving or scaling the selected strokes are tested headless in ui/tests/parity_sdk-tests-05.rs. Freeform imports the model for its lasso tool. The selection outline and handles belong to the shell and apps and are not part of the model; not yet verified on Midget."
   },
   {
    "feature": "Undo for drawings",
