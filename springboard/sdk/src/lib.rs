@@ -148,6 +148,8 @@ pub mod pasteboard_types;
 pub mod pasteboard_promise;
 pub mod item_provider;
 pub mod dnd;
+pub mod spring_loaded;
+pub mod paste_control;
 pub mod review;
 pub mod app_transaction;
 pub mod transfer;
