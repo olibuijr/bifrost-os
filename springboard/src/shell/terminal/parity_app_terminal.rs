@@ -69,3 +69,13 @@ fn edit_title_panel_takes_enter_to_save() {
     assert_eq!(sh.term.as_ref().unwrap().custom_title(), Some("logs"));
     assert_eq!(sh.terminal_ui.panel, Panel::None);
 }
+
+#[test]
+fn terminal_help_opens_the_shortcut_list_and_closes() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(28, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Help);
+    assert!(sh.terminal_ui.message.is_empty());
+    sh.terminal_close_panel(2100.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
+}

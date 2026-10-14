@@ -235,6 +235,7 @@ impl Shell {
             Panel::Processes => "Processes",
             Panel::Command => "New Command",
             Panel::Title => "Edit Title",
+            Panel::Help => "Terminal Help",
             _ => "Terminal",
         };
         if panel == Panel::Form {
@@ -279,11 +280,11 @@ impl Shell {
             button(
                 s,
                 ui,
-                if panel == Panel::More { "Done" } else { "×" },
+                if matches!(panel, Panel::More | Panel::Help) { "Done" } else { "×" },
                 (
-                    px + pw - ui.pt(if panel == Panel::More { 80.0 } else { 44.0 }),
+                    px + pw - ui.pt(if matches!(panel, Panel::More | Panel::Help) { 80.0 } else { 44.0 }),
                     py,
-                    ui.pt(if panel == Panel::More { 80.0 } else { 44.0 }),
+                    ui.pt(if matches!(panel, Panel::More | Panel::Help) { 80.0 } else { 44.0 }),
                     title_h,
                 ),
                 false,
@@ -573,6 +574,17 @@ impl Shell {
                     killable,
                 );
             }
+            Panel::Help => {
+                let mut list = s.rows(content_top as usize, content_bottom as usize);
+                for (i, (action, keys)) in help::SHORTCUTS.iter().enumerate() {
+                    let y = content_top + ui.pt(i as f32 * 44.0) - self.terminal_ui.scroll;
+                    if y + ui.pt(44.0) < content_top || y >= content_bottom {
+                        continue;
+                    }
+                    text(&mut list, ui, action, px + ui.pt(16.0), y, pw - ui.pt(170.0), WHITE);
+                    text(&mut list, ui, keys, px + pw - ui.pt(150.0), y, ui.pt(134.0), SECONDARY);
+                }
+            }
             Panel::More => {
                 let mut list = s.rows(content_top as usize, content_bottom as usize);
                 for (i, label) in MENU.iter().enumerate() {
@@ -692,6 +704,7 @@ impl Shell {
                 Panel::Processes => "Select a process to inspect or terminate.",
                 Panel::Command => "The command runs in a new tab that closes when it ends.",
                 Panel::Title => "Leave the name empty to use the automatic title.",
+                Panel::Help => "Shortcuts that work while the Terminal is in front.",
                 _ => "Changes to text size and theme are saved automatically.",
             }
         };

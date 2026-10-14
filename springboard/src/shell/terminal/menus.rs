@@ -66,7 +66,7 @@ impl Shell {
             self.ui.s,
             bottom,
             self.terminal_ui.panel == Panel::Form,
-            self.terminal_ui.panel == Panel::More,
+            matches!(self.terminal_ui.panel, Panel::More | Panel::Help),
         )
     }
 
@@ -268,6 +268,7 @@ impl Shell {
                 }
             }
             27 => self.terminal_open_title(t),
+            28 => self.terminal_open_help(t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self

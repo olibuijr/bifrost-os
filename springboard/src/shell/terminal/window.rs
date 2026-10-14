@@ -237,6 +237,11 @@ impl Shell {
                     self.terminal_menu_action(i, t);
                 }
             }
+            Panel::Help => {
+                if ly < 44.0 && lx >= w - 80.0 {
+                    self.terminal_close_panel(t);
+                }
+            }
             _ => {}
         }
     }
