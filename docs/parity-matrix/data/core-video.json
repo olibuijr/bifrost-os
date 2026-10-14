@@ -45,9 +45,9 @@
     {
       "feature": "GPU presenter and frame submission",
       "apple": "CVDisplayLink with OpenGL or Metal rendering, CVOpenGLBuffer, CVOpenGLBufferAttach",
-      "bifrost": "springboard/src/gpu/wl.rs (Presenter, line 147); springboard/src/gpu/scanout.rs; springboard/src/gpu/overlay.rs",
-      "status": "os",
-      "note": "GPU-first presenter and scanout exist; apps do not render into presenter buffers through an SDK call"
+      "bifrost": "springboard/sdk/src/display_link.rs (DisplayLink, tick, presented); springboard/sdk/src/pixel_buffer.rs (PixelBuffer, lock, unlock); springboard/src/gpu/wl.rs (Presenter, line 147); springboard/src/gpu/scanout.rs; springboard/src/gpu/overlay.rs",
+      "status": "partial",
+      "note": "Apps get refresh timing and lockable pixel buffers, with tests. They still cannot submit a frame to the GPU presenter, which the system drives."
     },
     {
       "feature": "Texture caches for GPU import (Metal, OpenGL, OpenGL ES)",
@@ -59,9 +59,9 @@
     {
       "feature": "dma-buf surfaces for windows",
       "apple": "CVPixelBufferCreateWithIOSurface, CVPixelBufferGetIOSurface",
-      "bifrost": "springboard/src/bare/wayland.rs (dma-buf wl_buffer around a presenter drawable, line 48); springboard/src/bare/scanout.rs (scanout render buffer)",
-      "status": "os",
-      "note": "shared memory between the GPU and the compositor is a system feature, not an app API; IOSurface itself is Apple-only"
+      "bifrost": "springboard/sdk/src/system/dma_buf.rs (Descriptor, Plane, validate, fourcc); springboard/src/bare/wayland.rs (dma-buf wl_buffer around a presenter drawable, line 48); springboard/src/bare/scanout.rs (scanout render buffer)",
+      "status": "partial",
+      "note": "Linear one-plane 32-bit RGB descriptors are checked for stride and file bounds, with tests. Passing the file descriptor to the compositor stays a system feature, and IOSurface is not available here."
     },
     {
       "feature": "Core Video result codes and error type",
