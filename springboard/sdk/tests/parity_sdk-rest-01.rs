@@ -100,7 +100,7 @@ type Pictures = Rc<RefCell<Vec<DecodedFrame>>>;
 fn collector() -> (Pictures, Box<dyn FnMut(DecodedFrame)>) {
     let pictures: Pictures = Rc::new(RefCell::new(Vec::new()));
     let sink = Rc::clone(&pictures);
-    (pictures, Box::new(move |f| sink.borrow_mut().push(f)))
+    (pictures, Box::new(move |f: DecodedFrame| sink.borrow_mut().push(f)))
 }
 
 fn open(codec: Codec, extradata: Vec<u8>, refuse_samples: bool) -> (DecompressionSession, Arc<Mutex<Trace>>, Pictures) {
