@@ -269,6 +269,22 @@ pub fn scan_file(path: &Path) -> Option<Scanned> {
     Some(Scanned { path: path.to_path_buf(), tags, duration_ms, has_cover, added: added_of(path) })
 }
 
+/// The encoded picture embedded in one file's tags, when it has one within the size cap. A file that does not read has none.
+pub fn artwork_of(path: &Path) -> Option<Vec<u8>> {
+    audiofile::read_tags(path).ok()?.cover.filter(|c| c.len() <= MAX_COVER)
+}
+
+/// The MIME type of an encoded picture, named by its signature: PNG or JPEG. Other formats give None.
+pub fn artwork_format(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else {
+        None
+    }
+}
+
 /// Scans every file, keeping one cover per album: later songs of an album
 /// that already has a cover drop theirs, so the peak stays at one picture per album.
 pub fn scan_all(paths: &[PathBuf]) -> Vec<Scanned> {
@@ -373,6 +389,11 @@ impl Library {
     /// The album a song belongs to.
     pub fn album_of(&self, song: usize) -> Option<usize> {
         self.albums.iter().position(|a| a.songs.contains(&song))
+    }
+
+    /// The encoded cover picture of album `album` (an index into `albums`), when one was read.
+    pub fn cover_of(&self, album: usize) -> Option<&[u8]> {
+        self.covers.get(album)?.as_deref()
     }
 
     pub fn is_empty(&self) -> bool {
