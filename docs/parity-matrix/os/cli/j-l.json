@@ -879,9 +879,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no equivalent: leaks reports the leaks of a running process through the malloc debug interface; valgrind only checks a program it launches, so the row stays gap",
+   "bifrost": "packaging/arch/runtime-packages.txt (valgrind, memcheck leak report)",
+   "status": "partial",
+   "note": "valgrind is listed in the runtime package list and its memcheck tool reports leaks for a program launched under it. Attaching to a running process as leaks(1) does is not supported, and neither step is verified on Midget.",
    "rea": [],
    "method": "assessed"
   },
