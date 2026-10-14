@@ -56,6 +56,8 @@ impl Place {
 pub enum Command {
     /// File > Import: copy songs into the library
     Import,
+    /// File > New Playlist Folder: a folder in the Playlists tab
+    NewFolder,
     PlayPause,
     Next,
     Previous,
@@ -77,9 +79,12 @@ pub enum Command {
     SortBy(SortKey),
     /// show or hide the lyrics on the Now Playing sheet
     Lyrics,
+    /// Song > Get Info: edit the playing song's title, artist and album
+    GetInfo,
 }
 
 const IMPORT: u32 = 1;
+const NEW_FOLDER: u32 = 2;
 const PLAY_PAUSE: u32 = 10;
 const NEXT: u32 = 11;
 const PREVIOUS: u32 = 12;
@@ -92,6 +97,7 @@ const PLAY_LAST: u32 = 21;
 const NEW_PLAYLIST: u32 = 22;
 const FAVOURITE: u32 = 23;
 const LYRICS: u32 = 24;
+const GET_INFO: u32 = 25;
 const RATE_BASE: u32 = 30;
 const SHOW_BASE: u32 = 40;
 const SORT_BASE: u32 = 60;
@@ -104,6 +110,7 @@ impl Command {
     pub fn id(self) -> u32 {
         match self {
             Command::Import => IMPORT,
+            Command::NewFolder => NEW_FOLDER,
             Command::PlayPause => PLAY_PAUSE,
             Command::Next => NEXT,
             Command::Previous => PREVIOUS,
@@ -116,6 +123,7 @@ impl Command {
             Command::NewPlaylist => NEW_PLAYLIST,
             Command::Favourite => FAVOURITE,
             Command::Lyrics => LYRICS,
+            Command::GetInfo => GET_INFO,
             Command::Rate(n) => RATE_BASE + u32::from(n.min(RATE_MAX)),
             Command::Show(p) => SHOW_BASE + Place::ALL.iter().position(|q| *q == p).unwrap_or(0) as u32,
             Command::SortBy(k) => SORT_BASE + SortKey::ALL.iter().position(|q| *q == k).unwrap_or(0) as u32,
@@ -127,6 +135,7 @@ impl Command {
     pub fn from_id(id: u32) -> Option<Command> {
         let fixed = [
             Command::Import,
+            Command::NewFolder,
             Command::PlayPause,
             Command::Next,
             Command::Previous,
@@ -139,6 +148,7 @@ impl Command {
             Command::NewPlaylist,
             Command::Favourite,
             Command::Lyrics,
+            Command::GetInfo,
         ];
         if let Some(c) = fixed.into_iter().find(|c| c.id() == id) {
             return Some(c);
@@ -208,6 +218,8 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
     song_items.extend(add_to);
     song_items.extend(rate);
     song_items.push(item(Command::Favourite, "Favourite", "cmd+l").enabled(song).checked(s.favourite));
+    song_items.push(AppMenuItem::separator());
+    song_items.push(item(Command::GetInfo, "Get Info", "cmd+i").enabled(song));
     let controls = vec![
         item(Command::PlayPause, if s.playing { "Pause" } else { "Play" }, "").enabled(s.has_track),
         item(Command::Next, "Next", "cmd+right").enabled(s.has_track),
@@ -228,7 +240,7 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
     view.push(AppMenuItem::submenu("Sort Songs By"));
     view.extend(SortKey::ALL.iter().map(|k| item(Command::SortBy(*k), k.label(), "").depth(1).checked(*k == s.sort)));
     vec![
-        AppMenu { title: "File".into(), items: vec![item(Command::Import, "Import\u{2026}", "cmd+o")] },
+        AppMenu { title: "File".into(), items: vec![item(Command::Import, "Import\u{2026}", "cmd+o"), AppMenuItem::separator(), item(Command::NewFolder, "New Playlist Folder", "")] },
         AppMenu { title: "Song".into(), items: song_items },
         AppMenu { title: "Controls".into(), items: controls },
         AppMenu { title: "View".into(), items: view },
@@ -251,7 +263,7 @@ mod tests {
     #[test]
     fn every_command_id_reads_back_to_the_same_command() {
         let mut cmds = vec![Command::Import, Command::PlayPause, Command::Next, Command::Previous, Command::Shuffle, Command::Repeat, Command::VolumeUp, Command::VolumeDown];
-        cmds.extend([Command::PlayNext, Command::PlayLast, Command::NewPlaylist, Command::Favourite, Command::Lyrics]);
+        cmds.extend([Command::PlayNext, Command::PlayLast, Command::NewPlaylist, Command::Favourite, Command::Lyrics, Command::NewFolder, Command::GetInfo]);
         cmds.extend((0..=RATE_MAX).map(Command::Rate));
         cmds.extend(Place::ALL.map(Command::Show));
         cmds.extend(SortKey::ALL.map(Command::SortBy));

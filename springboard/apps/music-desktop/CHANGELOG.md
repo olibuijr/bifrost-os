@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.8.0 — 2026-10-14
+
+- Get Info. Song > Get Info, and Get Info in a song's "..." menu, opens a page with the song's Title, Artist and Album.
+  Tap a field to type a new value; an empty value takes the edit away, and Restore Original Tags drops them all. The
+  edits are kept in `info.txt` in the Music data folder by file path and laid over the tags at every scan. The audio
+  files are not written, so the changes show in Music only.
+- Playlist folders. File > New Playlist Folder, or New Playlist Folder in the Playlists list, makes a folder. A
+  playlist page's Move to Folder button (or its folder menu) puts the playlist in a folder; folders list their playlists
+  nested under them and Show or Hide them. The folders are kept in `Playlists/folders.txt`.
+- The mini player bar has a route button left of Play that lists the output devices, as the Now Playing sheet does.
+
 ## 1.7.0 — 2026-10-13
 
 - Song and Controls menus in the menu bar: Play/Pause, Next, Previous, Shuffle, Repeat and volume with shortcuts;
