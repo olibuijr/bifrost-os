@@ -70,6 +70,8 @@ pub mod affine;
 pub mod generators;
 pub mod spot_light;
 pub mod comic_filter;
+pub mod morphology;
+pub mod histogram;
 
 #[cfg(test)]
 mod tests {
