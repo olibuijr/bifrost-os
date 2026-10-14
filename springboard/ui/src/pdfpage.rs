@@ -220,7 +220,7 @@ pub fn thumbnail_grid(pages: &[PdfPage], area_width: f32, cell: (f32, f32), gap:
     pages
         .iter()
         .enumerate()
-        .map(|(index, page)| {
+        .map(|(index, page)| -> Result<ThumbnailCell, PageError> {
             let (w, h) = page.thumbnail_size(DisplayBox::Crop, cell)?;
             let origin_x = (index % columns) as f32 * (cell.0 + gap);
             let origin_y = (index / columns) as f32 * (cell.1 + gap);
