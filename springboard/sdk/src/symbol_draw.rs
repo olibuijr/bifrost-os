@@ -4,7 +4,7 @@
 //!
 //! ```ignore
 //! let style = SymbolStyle { weight: Weight::Semibold, mode: RenderingMode::Hierarchical, ..SymbolStyle::default() };
-//! let ring = bifrost_app::glyph_draw::ring(c, style.size(12.0), style.stroke(2.0), 0.0);
+//! let ring = bifrost_app::glyph_draw::ring(c, style.size(12.0), style.stroke(2.0));
 //! paint_layer(surface, rect, &style, 0, colour, ring);
 //! ```
 //!
