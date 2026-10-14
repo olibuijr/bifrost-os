@@ -17,9 +17,9 @@
   {
    "feature": "Authorization and privacy",
    "apple": "Accessing the contact store; NSContactsUsageDescription; contact access button and picker",
-   "bifrost": "springboard/ui/src/contact_access.rs, springboard/src/shell/services/contacts.rs (access, request), springboard/sdk/src/contacts.rs (access, request, decode_status, decode_picked)",
+   "bifrost": "springboard/ui/src/contact_access.rs (Access, Status, Choice, Access::request, change_in_settings, can_read, check_write); springboard/sdk/src/contacts.rs (access, request, decode_status, decode_picked, preview)",
    "status": "partial",
-   "note": "Four-state model per app: not determined, denied, authorized (every contact) and limited (a picked set, read-only), plus restricted. An app reads its status with access and asks with request, but request never grants. The shell sets grants; the access sheet and Settings row are not built yet. Grants reset on restart."
+   "note": "Four-state model per app (not determined, denied, authorized, limited read-only) plus the system restriction; the prompt is answered once, and change_in_settings covers later changes. Verified headless by the headless_* tests in springboard/ui/tests/parity_sdk-tests-02.rs. The SDK request only reports the status, the shell sets grants, the access sheet and Settings row are not built, and grants reset on restart."
   },
   {
    "feature": "Contact data model (CNContact, CNMutableContact)",
@@ -31,16 +31,16 @@
   {
    "feature": "Labeled values and predefined labels",
    "apple": "CNLabeledValue, CNContactProperty, localizedString(for:Label)",
-   "bifrost": "springboard/src/shell/contactstore.rs:LABELS; wired: springboard/apps/contacts-desktop/src/extras.rs (ValueKind, labels from contactstore::LABELS); src/exchange.rs (type_of, label mapping); springboard/ui/src/contact_fetch.rs:LabeledValue",
+   "bifrost": "springboard/ui/src/contact_fetch.rs (LabeledValue, LabeledValue::numbered, LABEL_HOME, LABEL_WORK, LABEL_OTHER, LABEL_PHONE_MOBILE, LABEL_PHONE_MAIN); springboard/sdk/src/contacts.rs (decode_contacts labeled entries)",
    "status": "partial",
-   "note": "Fixed English label sets (mobile, home, work, other) indexed by number. No custom labels, no localized label strings. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Wave sprint4/7: LabeledValue (label, value, identifier), DateComponents and label constants (home, work, other, mobile, main) in springboard/ui/src/contact_fetch.rs and the SDK; custom labels are carried as plain text."
+   "note": "Labeled entries carry a label, value and identifier numbered from 1, with the fixed English labels home, work, other, mobile and main; custom labels are kept as plain text and no label is localized. Verified headless by the headless_labeled_values_* and headless_predefined_labels_* tests in springboard/ui/tests/parity_sdk-tests-02.rs. The Contacts app still edits one value per property, and the shell label indexes are not covered by these tests."
   },
   {
    "feature": "Fetch with key-based property selection",
    "apple": "CNContactFetchRequest, CNContactPropertyNotFetchedExceptionName, Contact Keys",
-   "bifrost": "springboard/ui/src/contact_fetch.rs (project, Keys), springboard/src/shell/services/contacts.rs (fetch), springboard/sdk/src/contacts.rs (fetch, decode_contacts)",
+   "bifrost": "springboard/ui/src/contact_fetch.rs (project, Keys, Partial::get, Partial::text), springboard/sdk/src/contacts.rs (fetch, decode_contacts)",
    "status": "partial",
-   "note": "The contacts service returns each record with only the keys the app asked for, and fetch takes an optional query over any text of the contact. Not yet: a partial-contact error when a key was not fetched, and Midget testing. Search covers name, phone, email, notes, company and address."
+   "note": "The contacts service returns each record with only the keys the app asked for, and fetch takes an optional query over any text of the contact. Reading a field that was not fetched is a typed error (Error::NotFetched), verified headless by the headless_* tests in springboard/ui/tests/parity_sdk-tests-02.rs. Not yet tested on Midget. Search covers name, phone, email, notes, company and address."
   },
   {
    "feature": "Save requests (CNSaveRequest)",

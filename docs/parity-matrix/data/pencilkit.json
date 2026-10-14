@@ -1,125 +1,125 @@
 {
-  "framework": "PencilKit",
-  "doc": "https://developer.apple.com/documentation/pencilkit",
-  "macos_since": "10.15",
-  "status": "partial",
-  "bifrost": "springboard/src/shell/markup.rs (screenshot markup editor, shell-only); springboard/apps/freeform-desktop/src/freeform.rs (drawing app); springboard/sdk/src/glyphs.rs (pencil glyph only); pure models in springboard/ui/src/drawing.rs, lasso.rs, handwriting.rs and scribble.rs; no PencilKit-shaped type in springboard/sdk/src; built on parity/team-j-pencilkit; not yet verified on Midget",
-  "summary": "BifrOSt has two working drawing surfaces: the shell's screenshot markup editor (pen, marker, pencil, eraser, undo, PNG save) and the Freeform app (pen, marker, eraser, palette, undo, PNG save). Neither is exposed to apps through the SDK. The ui crate holds pure models for a stroke and drawing data model with a text save format, stroke-level erasing, lasso selection, handwriting line segmentation with a recogniser hook, and Scribble gesture resolution. No shell or app calls those models yet, and there is no handwriting recogniser, no pressure input from a device, and no SDK canvas view.",
-  "rea_evidence": "ev_d8cb7973764b54aa73ace7b160012147dcb953f7ba035402f0e5962ec1621650",
-  "features": [
-    {
-      "feature": "Canvas view capturing pen and finger input",
-      "apple": "PKCanvasView",
-      "bifrost": "springboard/src/shell/markup.rs (Markup::touch, line 162); springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (sketch_touch, draw_sketch)",
-      "status": "partial",
-      "note": "Both capture Down/Move/Up touch events and stamp strokes onto a pixel buffer. No SDK view class, no low-latency pen path, and no separate pen input. Apps cannot embed a canvas. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
-    },
-    {
-      "feature": "Drawing model (PKDrawing) and save as data",
-      "apple": "PKDrawing, PKDrawing.dataRepresentation",
-      "bifrost": "springboard/ui/src/drawing.rs; wired: springboard/apps/notes-desktop/src/notes/sketch.rs (save, load; <id>-<n>.sketch beside the picture)",
-      "status": "partial",
-      "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stroke list lives inside the shell and is not serialised. Both editors save a flattened PNG only (markup.rs Done, Freeform save to the screenshot directory). A drawing cannot be reopened as strokes. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
-    },
-    {
-      "feature": "Stroke and point model (PKStroke, PKStrokePath, PKStrokePoint)",
-      "apple": "PKStroke, PKStrokePath, PKStrokePoint",
-      "bifrost": "springboard/src/shell/markup.rs:41 (Stroke { tool, color, pts }); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (Pad, stroke_dabs)",
-      "status": "partial",
-      "note": "Points are x,y only, in image pixels. No per-point time, force, altitude or azimuth, and no path parameterisation or interpolation API. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
-    },
-    {
-      "feature": "Ink type (PKInk: type, colour, width)",
-      "apple": "PKInk",
-      "bifrost": "springboard/src/shell/markup.rs:29 (Tool::brush: width and opacity per tool); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (INK_COLOR, pen ink only)",
-      "status": "partial",
-      "note": "Width and opacity are fixed per tool. No ink catalogue and no per-stroke ink value, apart from colour from the markup palette. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
-    },
-    {
-      "feature": "Tool picker (PKToolPicker)",
-      "apple": "PKToolPicker",
-      "bifrost": "springboard/src/shell/markup.rs:27 (TOOLS) and the colour row; springboard/apps/freeform-desktop/src/freeform.rs (palette)",
-      "status": "partial",
-      "note": "Each editor draws its own tool and colour row. There is no system tool palette that apps can attach to a canvas, and no custom tool registration."
-    },
-    {
-      "feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)",
-      "apple": "PKInkingTool, PKEraserTool",
-      "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink); springboard/ui/src/drawing.rs (Drawing::erase_strokes_at, stroke-level erasing model); built on parity/team-j-pencilkit; not yet verified on Midget",
-      "status": "partial",
-      "note": "Shell has four tools, Freeform has three. The ui drawing model has a stroke-level eraser (erase_strokes_at) that no editor calls yet. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Lasso selection and transform (PKLassoTool)",
-      "apple": "PKLassoTool",
-      "bifrost": "springboard/ui/src/lasso.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No selection of existing strokes, moving, or scaling of strokes."
-    },
-    {
-      "feature": "Undo for drawings",
-      "apple": "PKCanvasView undoManager (stroke undo)",
-      "bifrost": "springboard/src/shell/markup.rs:215 (undo, rebuilds canvas from base and remaining strokes); springboard/ui/src/undo.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (Undo zone) to sketch.rs Pad::undo",
-      "status": "partial",
-      "note": "Stroke-level undo exists in the shell editor. The UI undo model in springboard/ui/src/undo.rs is not wired to the drawing editors. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
-    },
-    {
-      "feature": "Bezier path import (PKStroke from paths)",
-      "apple": "PKStroke init from path data, Bezier import article",
-      "bifrost": "springboard/ui/src/drawing.rs (Drawing::from_path)",
-      "status": "partial",
-      "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Strokes are polylines only. Curve data cannot be imported."
-    },
-    {
-      "feature": "Stroke slicing, animation and blending",
-      "apple": "Controlling stroke rendering for animation and editing",
-      "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice",
-      "status": "partial",
-      "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to slice, interpolate or animate strokes. Rendering is a single pass per stroke."
-    },
-    {
-      "feature": "Handwriting recognition (PKStrokeRecognizer)",
-      "apple": "PKStrokeRecognizer, handwriting to text",
-      "bifrost": "springboard/ui/src/handwriting.rs (segment_lines, recognize_lines, Recognizer trait); no recogniser implementation; built on parity/team-j-pencilkit; not yet verified on Midget",
-      "status": "partial",
-      "note": "Line layout is modelled: strokes group into lines by vertical overlap and read top to bottom, left to right, with unit tests. No letter recognition exists in BifrOSt, so an app or the shell must supply a Recognizer. Not wired into the shell or apps."
-    },
-    {
-      "feature": "Scribble on non-text views",
-      "apple": "Scribble interactions",
-      "bifrost": "springboard/ui/src/scribble.rs (classify, resolve: tap, scratch-out and write targets); built on parity/team-j-pencilkit; not yet verified on Midget",
-      "status": "partial",
-      "note": "Gesture model only: a short stroke is a tap, a tight zigzag is a scratch-out, anything else is writing for the view under its centre. Input routing into text fields and rendering are not built. Not wired into the shell or apps."
-    },
-    {
-      "feature": "Pressure, tilt and stylus input",
-      "apple": "PKStrokePoint force, altitude, azimuth",
-      "bifrost": "springboard/ui/src/drawing.rs (StrokePoint force",
-      "status": "partial",
-      "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Markup and Freeform handle only position on touch events. Stroke width is fixed per tool, not driven by pressure."
-    },
-    {
-      "feature": "Rendering to an image",
-      "apple": "PKDrawing.image(from:scale:)",
-      "bifrost": "springboard/src/shell/markup.rs (Done saves the marked-up PNG over the capture); springboard/apps/freeform-desktop/src/freeform.rs (saves a PNG); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (render, encode)",
-      "status": "partial",
-      "note": "Both editors write PNG files. There is no SDK call that renders a drawing to an image at a chosen scale. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
-    },
-    {
-      "feature": "Backward-compatible ink types (PKContentVersion)",
-      "apple": "PKContentVersion",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "Depends on PencilKit's ink format versions. BifrOSt has no drawing format to version."
-    }
-  ],
-  "gaps": [
-    "No SDK canvas view or drawing model: apps cannot capture, store or reopen strokes (the ui models are not exposed through springboard/sdk/src).",
-    "No serialised drawing format in the shell or Freeform: both editors save flattened PNG only. The ui crate's text format is not used by them yet.",
-    "No handwriting recogniser: the line layout and Recognizer hook exist in springboard/ui/src/handwriting.rs, but nothing recognises letters.",
-    "No Scribble input path into text fields: the gesture model exists in springboard/ui/src/scribble.rs, but nothing routes stylus strokes to views.",
-    "No pressure, tilt or altitude data from the input device: the stroke point model carries those fields, but the shell and Freeform only read touch position.",
-    "No system tool picker that apps can attach to a canvas; the markup tools and palette are private to the shell.",
-    "The shell markup editor (springboard/src/shell/markup.rs) and the Freeform app each keep their own stroke code, so they do not use the shared ui drawing module."
-  ]
+ "framework": "PencilKit",
+ "doc": "https://developer.apple.com/documentation/pencilkit",
+ "macos_since": "10.15",
+ "status": "partial",
+ "bifrost": "springboard/src/shell/markup.rs (screenshot markup editor, shell-only); springboard/apps/freeform-desktop/src/freeform.rs (drawing app); springboard/sdk/src/glyphs.rs (pencil glyph only); pure models in springboard/ui/src/drawing.rs, lasso.rs, handwriting.rs and scribble.rs; no PencilKit-shaped type in springboard/sdk/src; built on parity/team-j-pencilkit; not yet verified on Midget",
+ "summary": "BifrOSt has two working drawing surfaces: the shell's screenshot markup editor (pen, marker, pencil, eraser, undo, PNG save) and the Freeform app (pen, marker, eraser, palette, undo, PNG save). Neither is exposed to apps through the SDK. The ui crate holds pure models for a stroke and drawing data model with a text save format, stroke-level erasing, lasso selection, handwriting line segmentation with a recogniser hook, and Scribble gesture resolution. No shell or app calls those models yet, and there is no handwriting recogniser, no pressure input from a device, and no SDK canvas view.",
+ "rea_evidence": "ev_d8cb7973764b54aa73ace7b160012147dcb953f7ba035402f0e5962ec1621650",
+ "features": [
+  {
+   "feature": "Canvas view capturing pen and finger input",
+   "apple": "PKCanvasView",
+   "bifrost": "springboard/src/shell/markup.rs (Markup::touch, line 162); springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (sketch_touch, draw_sketch)",
+   "status": "partial",
+   "note": "Both capture Down/Move/Up touch events and stamp strokes onto a pixel buffer. No SDK view class, no low-latency pen path, and no separate pen input. Apps cannot embed a canvas. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+  },
+  {
+   "feature": "Drawing model (PKDrawing) and save as data",
+   "apple": "PKDrawing, PKDrawing.dataRepresentation",
+   "bifrost": "springboard/ui/src/drawing.rs; wired: springboard/apps/notes-desktop/src/notes/sketch.rs (save, load; <id>-<n>.sketch beside the picture)",
+   "status": "partial",
+   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stroke list lives inside the shell and is not serialised. Both editors save a flattened PNG only (markup.rs Done, Freeform save to the screenshot directory). A drawing cannot be reopened as strokes. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+  },
+  {
+   "feature": "Stroke and point model (PKStroke, PKStrokePath, PKStrokePoint)",
+   "apple": "PKStroke, PKStrokePath, PKStrokePoint",
+   "bifrost": "springboard/ui/src/drawing.rs (Stroke, StrokePoint, Stroke::slice, Stroke::resampled, Stroke::blend, Drawing::bounds); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (Pad, stroke_dabs)",
+   "status": "partial",
+   "note": "The drawing model keeps each point's time offset, size, opacity, force, azimuth and altitude, and slices, resamples and blends strokes by arc length; verified headless by the headless_* tests in springboard/ui/tests/parity_sdk-tests-02.rs. The shell and the sketch pad still stamp x,y points only, and there is no SDK path object. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+  },
+  {
+   "feature": "Ink type (PKInk: type, colour, width)",
+   "apple": "PKInk",
+   "bifrost": "springboard/ui/src/drawing.rs (Ink, InkKind, Drawing::to_text, Drawing::from_text); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (INK_COLOR, pen ink only)",
+   "status": "partial",
+   "note": "Each stroke carries an ink with a kind (pen, marker or pencil), a packed colour and a width, saved and read back by the drawing text form; verified headless by the headless_ink_kinds and headless_blending tests in springboard/ui/tests/parity_sdk-tests-02.rs. The shell and the sketch pad still fix width and opacity per tool, and the ink catalogue is not built. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+  },
+  {
+   "feature": "Tool picker (PKToolPicker)",
+   "apple": "PKToolPicker",
+   "bifrost": "springboard/src/shell/markup.rs:27 (TOOLS) and the colour row; springboard/apps/freeform-desktop/src/freeform.rs (palette)",
+   "status": "partial",
+   "note": "Each editor draws its own tool and colour row. There is no system tool palette that apps can attach to a canvas, and no custom tool registration."
+  },
+  {
+   "feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)",
+   "apple": "PKInkingTool, PKEraserTool",
+   "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink); springboard/ui/src/drawing.rs (Drawing::erase_strokes_at, stroke-level erasing model); built on parity/team-j-pencilkit; not yet verified on Midget",
+   "status": "partial",
+   "note": "Shell has four tools, Freeform has three. The ui drawing model has a stroke-level eraser (erase_strokes_at) that no editor calls yet. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Lasso selection and transform (PKLassoTool)",
+   "apple": "PKLassoTool",
+   "bifrost": "springboard/ui/src/lasso.rs",
+   "status": "partial",
+   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No selection of existing strokes, moving, or scaling of strokes."
+  },
+  {
+   "feature": "Undo for drawings",
+   "apple": "PKCanvasView undoManager (stroke undo)",
+   "bifrost": "springboard/ui/src/undo.rs (UndoManager, register, undo, redo); springboard/src/shell/markup.rs:215 (undo, rebuilds canvas from base and remaining strokes); wired: springboard/apps/notes-desktop/src/notes/mod.rs (Undo zone) to sketch.rs Pad::undo",
+   "status": "partial",
+   "note": "The UI undo model (register, undo, redo, and a new edit clearing the redo history) is verified headless over a Drawing in springboard/ui/tests/parity_sdk-tests-02.rs. The shell editor has stroke-level undo with no redo, and the drawing editors are not yet wired to the UI undo model. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+  },
+  {
+   "feature": "Bezier path import (PKStroke from paths)",
+   "apple": "PKStroke init from path data, Bezier import article",
+   "bifrost": "springboard/ui/src/drawing.rs (Drawing::from_path)",
+   "status": "partial",
+   "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Strokes are polylines only. Curve data cannot be imported."
+  },
+  {
+   "feature": "Stroke slicing, animation and blending",
+   "apple": "Controlling stroke rendering for animation and editing",
+   "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice",
+   "status": "partial",
+   "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to slice, interpolate or animate strokes. Rendering is a single pass per stroke."
+  },
+  {
+   "feature": "Handwriting recognition (PKStrokeRecognizer)",
+   "apple": "PKStrokeRecognizer, handwriting to text",
+   "bifrost": "springboard/ui/src/handwriting.rs (segment_lines, recognize_lines, Recognizer trait); no recogniser implementation; built on parity/team-j-pencilkit; not yet verified on Midget",
+   "status": "partial",
+   "note": "Line layout is modelled: strokes group into lines by vertical overlap and read top to bottom, left to right, with unit tests. No letter recognition exists in BifrOSt, so an app or the shell must supply a Recognizer. Not wired into the shell or apps."
+  },
+  {
+   "feature": "Scribble on non-text views",
+   "apple": "Scribble interactions",
+   "bifrost": "springboard/ui/src/scribble.rs (classify, resolve: tap, scratch-out and write targets); built on parity/team-j-pencilkit; not yet verified on Midget",
+   "status": "partial",
+   "note": "Gesture model only: a short stroke is a tap, a tight zigzag is a scratch-out, anything else is writing for the view under its centre. Input routing into text fields and rendering are not built. Not wired into the shell or apps."
+  },
+  {
+   "feature": "Pressure, tilt and stylus input",
+   "apple": "PKStrokePoint force, altitude, azimuth",
+   "bifrost": "springboard/ui/src/drawing.rs (StrokePoint force",
+   "status": "partial",
+   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Markup and Freeform handle only position on touch events. Stroke width is fixed per tool, not driven by pressure."
+  },
+  {
+   "feature": "Rendering to an image",
+   "apple": "PKDrawing.image(from:scale:)",
+   "bifrost": "springboard/ui/src/drawing.rs (Drawing::image, Raster); springboard/src/shell/markup.rs (Done saves the marked-up PNG over the capture); springboard/apps/freeform-desktop/src/freeform.rs (saves a PNG); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (render, encode)",
+   "status": "partial",
+   "note": "Drawing::image renders the strokes to a raster at a chosen scale with source-over blending, verified pixel by pixel headless in springboard/ui/tests/parity_sdk-tests-02.rs. Per-point opacity, pressure and marker blend modes are not rendered yet, and no SDK call exposes the render. Both editors write PNG files. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+  },
+  {
+   "feature": "Backward-compatible ink types (PKContentVersion)",
+   "apple": "PKContentVersion",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "Depends on PencilKit's ink format versions. BifrOSt has no drawing format to version."
+  }
+ ],
+ "gaps": [
+  "No SDK canvas view or drawing model: apps cannot capture, store or reopen strokes (the ui models are not exposed through springboard/sdk/src).",
+  "No serialised drawing format in the shell or Freeform: both editors save flattened PNG only. The ui crate's text format is not used by them yet.",
+  "No handwriting recogniser: the line layout and Recognizer hook exist in springboard/ui/src/handwriting.rs, but nothing recognises letters.",
+  "No Scribble input path into text fields: the gesture model exists in springboard/ui/src/scribble.rs, but nothing routes stylus strokes to views.",
+  "No pressure, tilt or altitude data from the input device: the stroke point model carries those fields, but the shell and Freeform only read touch position.",
+  "No system tool picker that apps can attach to a canvas; the markup tools and palette are private to the shell.",
+  "The shell markup editor (springboard/src/shell/markup.rs) and the Freeform app each keep their own stroke code, so they do not use the shared ui drawing module."
+ ]
 }
