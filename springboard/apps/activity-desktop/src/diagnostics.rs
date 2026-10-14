@@ -13,6 +13,7 @@ use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 
 /// Most bytes kept of one file or one command's output.
 const MAX_BYTES: usize = 512 * 1024;
@@ -97,10 +98,11 @@ pub fn run_capture(program: &str, args: &[&str], timeout: Duration) -> Result<St
         let _ = child.wait();
         return Err(format!("{program}: no output"));
     };
-    let reader = std::thread::spawn(move || {
+    let (read_tx, read_rx) = std::sync::mpsc::channel();
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let mut bytes = Vec::new();
         let _ = stdout.take(MAX_BYTES as u64 + 1).read_to_end(&mut bytes);
-        bytes
+        let _ = read_tx.send(bytes);
     });
     let deadline = Instant::now() + timeout;
     let status: Result<std::process::ExitStatus, String> = loop {
@@ -115,7 +117,7 @@ pub fn run_capture(program: &str, args: &[&str], timeout: Duration) -> Result<St
             Err(e) => break Err(format!("{program}: {e}")),
         }
     };
-    let text = cap(String::from_utf8_lossy(&reader.join().unwrap_or_default()).into_owned());
+    let text = cap(String::from_utf8_lossy(&read_rx.recv().unwrap_or_default()).into_owned());
     match status {
         Ok(s) if s.success() || !text.is_empty() => Ok(text),
         Ok(s) => Err(format!("{program} exited with {s}")),

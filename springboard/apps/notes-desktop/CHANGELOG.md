@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.18.1 — 2026-10-14
+
+- Send print jobs through the shared Utility dispatch queue so the app UI never creates a raw worker thread.
+
 ## 1.18.0 — 2026-10-14
 
 - Note links open their note: the manifest registers the notes scheme, and an Open event with a notes://note/<id> link shows that note when it exists (src/main.rs, Input::Open). The lab machine has not yet verified the routing.

@@ -408,10 +408,7 @@ impl App for ScriptEditorApp {
         self.finish_run_if_done()
     }
 
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        if self.run.is_some() {
-            return Some(t + POLL_WAKE_SECS);
-        }
+    fn next_wake(&self, _t: f64) -> Option<f64> {
         self.docs.next_wake()
     }
 

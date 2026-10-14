@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- Added the SDK and design compliance test harness.
+
 ## 0.1.4
 
 - Added a 180 x 180 PNG app icon generated from the existing waveform artwork and removed the unused storage permission.

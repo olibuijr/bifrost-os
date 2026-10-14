@@ -12,8 +12,9 @@ use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::rgba;
 use bifrost_app::kit::ui::{
     Ui, Weight, BLACK, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SYSTEM_BLUE,
-    SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW,
+    SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW, SPACE_L, SPACE_S, SPACE_XXS,
 };
+use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SHADOW};
 use bifrost_app::kit::Image;
 use bifrost_app::widgets::{self, Material};
 use std::collections::HashMap;
@@ -25,15 +26,15 @@ pub const RADIUS_PT: f32 = 13.0;
 pub type Marks = HashMap<u64, Vec<Mark>>;
 /// Shade over the title bar of a note, so the bar reads apart from the body.
 fn title_shade() -> u32 {
-    rgba(0, 0, 0, 38)
+    SHADOW.now()
 }
 /// Shadow under the focused note.
 fn shadow_colour() -> u32 {
-    rgba(0, 0, 0, 60)
+    SHADOW.now()
 }
 /// The fill behind selected text.
 fn selection_fill() -> u32 {
-    rgba(10, 132, 255, 90)
+    FIND_HIGHLIGHT.now()
 }
 /// Opacity of a note that is not the focused one (translucent when inactive).
 pub const INACTIVE_ALPHA: f32 = 0.82;
@@ -203,7 +204,7 @@ fn draw_note(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
     let see_through = !focused && note.translucent;
 
     if focused {
-        c.shadow(rect, radius, ui.pt(8.0), (0.0, ui.pt(3.0)), shadow_colour());
+        c.shadow(rect, radius, ui.pt(SPACE_S), (0.0, ui.pt(SPACE_XXS + 1.0)), shadow_colour());
     } else if see_through {
         // inactive: the window behind shows through the note's material
         widgets::material(c, ui, frame, RADIUS_PT, Material::Popover);
@@ -437,7 +438,7 @@ fn draw_entry(c: &mut dyn Canvas, ui: &Ui, entry: &str, hint: &str, swatch_colou
     let pad = ui.pt(10.0);
     let (bx, by, bh) = (ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.h));
     let hint_img = ui.text(hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-    let swatch_px = ui.pt(16.0);
+    let swatch_px = ui.pt(SPACE_L);
     let right = bx + ui.pt(bar.w) - pad;
     widgets::blit(c, &hint_img, (right - hint_img.w as f32) as i32, (by + (bh - hint_img.h as f32) / 2.0) as i32);
     let mut taken = hint_img.w as f32 + 2.0 * pad;

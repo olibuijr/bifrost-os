@@ -6,7 +6,7 @@ use crate::model::{self, Severity, SPECTRAL_LOCUS, SRGB_AREA};
 use crate::window::{ColourUtility, Current, Panel, KEY_PT, LINE_PT, SIDE_PT};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::ui::system::{CONTROL_ACCENT, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 
 /// Corner radius of plates and cards, in points. The desktop's flat corners stop at 6.
@@ -116,7 +116,7 @@ fn paint_detail(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: 
     let cw = w.content_w();
     let y = w.title_y();
     let Some(c) = &w.current else {
-        text(labels, s, ui, "Colour Utility", MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y + 18.0, cw);
+        text(labels, s, ui, "Colour Utility", MAC_TITLE1_PT, Weight::Bold, LABEL.now(), x, y + 18.0, cw);
         let hint = if w.found.is_empty() {
             w.status.as_str()
         } else {
@@ -125,7 +125,7 @@ fn paint_detail(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: 
         text(labels, s, ui, hint, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y + 40.0, cw);
         return;
     };
-    text(labels, s, ui, &c.title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y + 18.0, cw);
+    text(labels, s, ui, &c.title, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), x, y + 18.0, cw);
     let path = c.path.display().to_string();
     text(labels, s, ui, &path, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y + 40.0, cw);
 

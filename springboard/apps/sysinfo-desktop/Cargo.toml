@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-sysinfo"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 
 [dependencies]
@@ -8,3 +8,6 @@ bifrost-app = { path = "../../sdk" }
 bifrost-core = { path = "../../core" }
 bifrost-render = { path = "../../render" }
 springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

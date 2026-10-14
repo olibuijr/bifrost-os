@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2
+
+- Standard editing commands now come from the shell Edit menu; app specific text actions are in Text. Added the SDK and design compliance test harness.
+
 ## 0.8.1
 
 - Exported the app icon at the required 180 x 180 pixel size.

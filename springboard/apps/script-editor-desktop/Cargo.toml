@@ -1,7 +1,10 @@
 [package]
 name = "bifrost-script-editor"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 [dependencies]
 bifrost-app = { path = "../../sdk" }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

@@ -10,7 +10,7 @@ use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect as KRect, Role, TextField};
 use bifrost_app::kit::ui::{
     CARD_BG, CARD_RADIUS_PT, CONTENT_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_CAPTION1_PT,
-    MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_TITLE1_PT, MAC_TITLE3_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE,
+    MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_TITLE1_PT, MAC_TITLE3_PT, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XS, SPACE_XXL, SPACE_XXXL, WHITE,
 };
 use bifrost_app::kit::{Scroller, Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
@@ -322,7 +322,7 @@ impl Tips {
             } else {
                 "No tips here yet."
             };
-            let centre = (s.w as f32 / 2.0, Self::list_top_px(ui) + ui.pt(40.0));
+            let centre = (s.w as f32 / 2.0, Self::list_top_px(ui) + ui.pt(SPACE_XXXL + SPACE_S));
             self.text(s, ui, message, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, centre);
             return;
         }
@@ -351,7 +351,7 @@ impl Tips {
             let badge_w = ui.pt(BADGE_W_PT);
             let badge_x = right - badge_w;
             let badge_y = at(16.0) - ui.pt(BADGE_H_PT) / 2.0;
-            s.fill_rrect(badge_x, badge_y, badge_w, ui.pt(BADGE_H_PT), ui.pt(4.0), LINK);
+            s.fill_rrect(badge_x, badge_y, badge_w, ui.pt(BADGE_H_PT), ui.pt(SPACE_XS), LINK);
             let centre = (badge_x + badge_w / 2.0, at(16.0));
             self.text(s, ui, "New", MAC_CAPTION1_PT, Weight::Bold, WHITE, Align::Centre, centre);
             right = badge_x - ui.pt(SPACE_S);
@@ -404,7 +404,7 @@ impl Tips {
             let mid = (x, at(92.0 + 22.0 * line as f32));
             self.text(s, ui, text, MAC_BODY_PT, Weight::Regular, LABEL.now(), Align::Left, mid);
         }
-        let hint = (x, s.h as f32 - ui.pt(24.0));
+        let hint = (x, s.h as f32 - ui.pt(SPACE_XXL));
         let hint_text = "Left and Right move to the next card. Escape returns to the list.";
         self.text(s, ui, hint_text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, hint);
     }

@@ -3120,7 +3120,7 @@ impl Music {
             let (left, _) = self.sheet_buttons(ui);
             let c = (left.0, left.1 + dy);
             if self.lyrics_on {
-                s.fill_rrect(c.0 - ui.pt(32.0), c.1 - ui.pt(SPACE_L), ui.pt(64.0), ui.pt(SPACE_XXXL), ui.pt(SPACE_S), white_at(70));
+                s.fill_rrect(c.0 - ui.pt(SPACE_XXXL), c.1 - ui.pt(SPACE_L), ui.pt(64.0), ui.pt(SPACE_XXXL), ui.pt(SPACE_S), white_at(70));
             }
             let color = if self.pressed == Some(Target::Lyrics) { white_at(140) } else if self.lyrics_on { WHITE } else { dim };
             self.label(s, ui, "Lyrics", MAC_CAPTION1_PT, Weight::Semibold, color, c.0, c.1, 0.5);

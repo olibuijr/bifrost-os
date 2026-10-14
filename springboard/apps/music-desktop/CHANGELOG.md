@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.1 — 2026-10-14
+
+- Use the shared spacing token for the artwork badge inset.
+
 ## 1.10.0 — 2026-10-14
 
 - View > Sort Songs By > Descending reverses the order of any sort key in the Songs list. A recent list keeps its

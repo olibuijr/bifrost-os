@@ -11,7 +11,9 @@ use crate::prefs::Favorite;
 use crate::richtext::{self, Style, TextColor};
 use crate::state::{is_multiline, Compose, Filter, Mail, Sheet, MAX_CHOICES};
 use crate::window::{MailWindow, Region};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
+use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXS, WHITE};
+use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SYSTEM_ORANGE};
 use bifrost_app::kit::{colors, rgba, Image, Surface, TextCache, Ui, Weight};
 
 pub const TOOLBAR_PT: f32 = 52.0;
@@ -43,8 +45,8 @@ const DOT_PT: f32 = 8.0;
 /// stay at the last).
 const INDENT_PT: f32 = 14.0;
 const MAX_INDENT_LEVELS: usize = 6;
-const RADIUS_PT: f32 = 8.0;
-const PANEL_RADIUS_PT: f32 = 12.0;
+const RADIUS_PT: f32 = m::ICON_RADIUS;
+const PANEL_RADIUS_PT: f32 = m::CARD_RADIUS;
 
 /// A rectangle in pixels: x, y, width, height.
 pub type Rect = [f32; 4];
@@ -156,7 +158,7 @@ fn favorite_items(mail: &Mail, ui: &Ui, y: f32, h: f32) -> Vec<(usize, Rect)> {
     for (i, fav) in mail.prefs.favorites.iter().enumerate() {
         let width = ui.measure(&favorite_label(mail, fav), MAC_FOOTNOTE_PT, Weight::Regular) + 2.0 * pad;
         items.push((i, [x, y + ui.pt(3.0), width, (h - ui.pt(6.0)).max(0.0)]));
-        x += width + ui.pt(4.0);
+        x += width + ui.pt(SPACE_XS);
     }
     items
 }
@@ -722,7 +724,7 @@ impl MailWindow {
             let subject = fit(ui, &label, MAC_BODY_PT, Weight::Regular, (right - text_x - flag_room - tag_w).max(0.0));
             if !tag.is_empty() {
                 let tag_x = right - flag_room - tag_w + inset;
-                put(s, &mut self.labels, ui, &tag, MAC_FOOTNOTE_PT, Weight::Regular, if selected { WHITE } else { LABEL_2.now() }, tag_x, y + row * 0.5 + ui.pt(2.0));
+                put(s, &mut self.labels, ui, &tag, MAC_FOOTNOTE_PT, Weight::Regular, if selected { WHITE } else { LABEL_2.now() }, tag_x, y + row * 0.5 + ui.pt(SPACE_XXS));
             }
             if let Some(color) = r.flags.color() {
                 s.fill_rrect(right - dot, y + row * 0.64 - dot / 2.0, dot, dot, dot / 2.0, flag_rgb(color));
@@ -843,8 +845,8 @@ impl MailWindow {
                 for (k, span) in matches.iter().enumerate().filter(|(_, m)| m.line == i) {
                     let before = ui.measure(&line[..span.start], MAC_BODY_PT, Weight::Regular);
                     let wide = ui.measure(&line[span.start..span.end], MAC_BODY_PT, Weight::Regular);
-                    let tint = if k == current { rgba(255, 159, 10, 150) } else { rgba(255, 214, 10, 110) };
-                    s.fill_rrect(x + before, y, wide, line_h, ui.pt(2.0), tint);
+                    let tint = if k == current { SYSTEM_ORANGE.now() } else { FIND_HIGHLIGHT.now() };
+                    s.fill_rrect(x + before, y, wide, line_h, ui.pt(m::ICON_RADIUS), tint);
                 }
                 put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), x, y);
             }
@@ -874,7 +876,7 @@ impl MailWindow {
             s.fill_rrect(r[0], r[1], r[2], r[3], ui.pt(RADIUS_PT), FIELD_BG.now());
             put_centred(s, &mut self.labels, ui, label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), r[0] + r[2] / 2.0, r[1] + r[3] / 2.0);
             rects[slot] = r;
-            right -= bw + ui.pt(4.0);
+            right -= bw + ui.pt(SPACE_XS);
         }
         self.find_hits = Some(rects);
         let count = if bar.text.is_empty() {
@@ -920,13 +922,13 @@ impl MailWindow {
     fn draw_styled_message(&mut self, s: &mut Surface, ui: &Ui, compose: &Compose, r: Rect, focused: bool) {
         let pad = ui.pt(SPACE_S);
         let tx = r[0] + pad;
-        let value_y = r[1] + ui.pt(20.0);
+        let value_y = r[1] + ui.pt(SPACE_XL);
         let line_h = ui.pt(BODY_LINE_PT);
         let rule = (ui.pt(1.0) as usize).max(1);
         let caret = ui.pt(1.0).max(1.0);
         let measure = |text: &str, style: Style| ui.measure(text, MAC_BODY_PT, style_weight(style));
         let lines = richtext::layout(compose.message(), &compose.styles, r[2] - 2.0 * pad, &measure);
-        let room = ((r[1] + r[3] - value_y - ui.pt(4.0)) / line_h).floor().max(1.0) as usize;
+        let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
         let first = lines.len().saturating_sub(room);
         let current = compose.misspelled.get(compose.misspelled_at);
         let mut end_x = tx;
@@ -952,7 +954,7 @@ impl MailWindow {
                         let before: String = chars[..a - run.start].iter().collect();
                         let word: String = chars[a - run.start..b - run.start].iter().collect();
                         let thick = if current == Some(mark) { 2 * rule } else { rule };
-                        s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(2.0)), px(measure(&word, run.style)), thick, colors::SYSTEM_RED.now());
+                        s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(SPACE_XXS)), px(measure(&word, run.style)), thick, colors::SYSTEM_RED.now());
                     }
                 }
                 x += wide;
@@ -988,7 +990,7 @@ impl MailWindow {
             s.fill_rrect(r[0], r[1], r[2], r[3], ui.pt(RADIUS_PT), FIELD_BG.now());
             let tx = r[0] + pad;
             put(s, &mut self.labels, ui, field.label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), tx, r[1] + ui.pt(5.0));
-            let value_y = r[1] + ui.pt(20.0);
+            let value_y = r[1] + ui.pt(SPACE_XL);
             if field.label == "From" || field.choice {
                 let hint = "Click to change";
                 let hint_w = ui.measure(hint, MAC_FOOTNOTE_PT, Weight::Regular);
@@ -1009,7 +1011,7 @@ impl MailWindow {
                     continue;
                 }
                 let lines = wrap(ui, &field.value, text_w, MAC_BODY_PT, Weight::Regular);
-                let room = ((r[1] + r[3] - value_y - ui.pt(4.0)) / line_h).floor().max(1.0) as usize;
+                let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
                 let start = lines.len().saturating_sub(room);
                 for (k, line) in lines[start..].iter().enumerate() {
                     put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), tx, value_y + k as f32 * line_h);

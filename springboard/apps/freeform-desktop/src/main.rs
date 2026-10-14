@@ -15,7 +15,7 @@ use arrange::Align;
 use bifrost_app::kit::{Damage, Event, Surface};
 use freeform::Shared;
 use ink::ShapeKind;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, Input, OpenOptions, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, Document, DocumentEvent, Input, OpenOptions, TouchKind};
 use bifrost_core::json::Json;
 use std::io::Read;
 use std::path::PathBuf;
@@ -178,6 +178,10 @@ impl App for FreeformApp {
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         let (frame, pointer) = match ev {
+            Input::Command(Command::Undo) => (self.menu_action(ctx, MENU_UNDO), None),
+            Input::Command(Command::Redo) => (self.menu_action(ctx, MENU_REDO), None),
+            Input::Command(Command::Copy) => (self.menu_action(ctx, MENU_COPY), None),
+            Input::Command(Command::Paste) => (self.menu_action(ctx, MENU_PASTE), None),
             Input::Activate(id) => match &mut self.app {
                 Some(c) => (c.activate_id(&ctx.ui, id), None),
                 None => return false,
@@ -219,14 +223,21 @@ impl App for FreeformApp {
         self.app.as_ref().map(|c| c.controls()).unwrap_or_default()
     }
 
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        let c = self.app.as_ref();
+        Commands::default()
+            .with(Command::Undo, c.is_some_and(|c| c.can_undo()))
+            .with(Command::Redo, c.is_some_and(|c| c.can_redo()))
+            .with(Command::Copy, c.is_some_and(|c| c.has_selection()))
+            .with(Command::Paste, true)
+    }
+
     /// The app's menus (the shell bar merges them into its own File and Edit menus). Export is off until the board has
     /// a stroke; the edit and arrange items follow the undo stacks and the selection.
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let app = self.app.as_ref();
         let has = app.is_some_and(|c| c.has_strokes());
         let selected = app.is_some_and(|c| c.has_selection());
-        let can_undo = app.is_some_and(|c| c.can_undo());
-        let can_redo = app.is_some_and(|c| c.can_redo());
         let boards = app.map(|c| c.board_count()).unwrap_or(1);
         let two = app.is_some_and(|c| c.has_units(2));
         let three = app.is_some_and(|c| c.has_units(3));
@@ -276,22 +287,13 @@ impl App for FreeformApp {
                     AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(has),
                 ],
             },
-            AppMenu {
-                title: "Edit".into(),
-                items: vec![
-                    AppMenuItem::new(MENU_UNDO, "Undo").key("cmd+z").enabled(can_undo),
-                    AppMenuItem::new(MENU_REDO, "Redo").key("cmd+shift+z").enabled(can_redo),
-                    AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(selected),
-                    AppMenuItem::new(MENU_PASTE, "Paste").key("cmd+v"),
-                    AppMenuItem::new(MENU_DUPLICATE, "Duplicate").key("cmd+d").enabled(selected || picked),
-                    AppMenuItem::new(MENU_DELETE, "Delete").enabled(selected || picked),
-                ],
-            },
             AppMenu { title: "Insert".into(), items: insert_items },
             AppMenu {
                 title: "Arrange".into(),
                 items: vec![
+                    AppMenuItem::new(MENU_DUPLICATE, "Duplicate").key("cmd+d").enabled(selected || picked),
+                    AppMenuItem::new(MENU_DELETE, "Delete").enabled(selected || picked),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_FRONT, "Bring to Front").key("cmd+alt+f").enabled(selected),
                     AppMenuItem::new(MENU_BACK, "Send to Back").key("cmd+alt+b").enabled(selected),
                     AppMenuItem::separator(),

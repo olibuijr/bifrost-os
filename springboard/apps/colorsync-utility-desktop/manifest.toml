@@ -1,6 +1,6 @@
 id = "is.olibuijr.colour-utility.desktop"
 name = "Colour Utility"
-version = "0.1.1"
+version = "0.1.2"
 exec = "bifrost-colour-utility"
 icon = "icon.png"
 min_shell = "0.6.5"

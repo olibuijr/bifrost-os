@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- Added the SDK and design compliance test harness.
+
 ## 0.5.1
 
 - Exported the app icon at the required 180 x 180 pixel size.

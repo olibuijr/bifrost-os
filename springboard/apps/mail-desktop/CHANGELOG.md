@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.1
+
+- Removed the duplicate Edit menu; message specific text actions now appear in Message. Added the SDK and design compliance test harness.
+
 ## 0.12.0 — 2026-10-14
 
 Reminders:

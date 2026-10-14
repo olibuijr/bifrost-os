@@ -48,7 +48,7 @@ impl Speaker {
             if let Some(mut stdin) = child.stdin.take() {
                 // a thread writes, so a long text cannot block the app; dropping the pipe ends the engine's input
                 let bytes = text.as_bytes().to_vec();
-                std::thread::spawn(move || {
+                bifrost_app::dispatch::DispatchQueue::global(bifrost_app::dispatch::Qos::Utility).async_(move || {
                     let _ = stdin.write_all(&bytes);
                 });
             }
