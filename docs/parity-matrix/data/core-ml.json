@@ -66,9 +66,9 @@
     {
       "feature": "Custom layers and custom models",
       "apple": "MLCustomLayer, MLCustomModel, Creating and Integrating a Model with Custom Layers",
-      "bifrost": "springboard/ui/src/cnn_layers.rs (CustomLayer",
+      "bifrost": "springboard/ui/src/cnn_layers.rs (CustomLayer, Layer::Custom, Network); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no model graph runtime to extend"
+      "note": "An app layer implements CustomLayer, states its output shape and runs inside a Network, all tested headless. Gap: there is no model file format, no custom model loading and no graph runtime to host a custom model, and the code is not wired into apps or the shell."
     },
     {
       "feature": "Domain frameworks built on Core ML",

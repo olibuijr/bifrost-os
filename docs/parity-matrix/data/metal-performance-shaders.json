@@ -94,16 +94,16 @@
   {
    "feature": "Neural network graphs and CNN layers",
    "apple": "MPSNNGraph, MPSCNNConvolutionNode, MPSCNNPoolingNode, MPSCNNFullyConnectedNode and the other layer nodes",
-   "bifrost": "springboard/ui/src/cnn_layers.rs (conv2d",
+   "bifrost": "springboard/ui/src/cnn_layers.rs (Network, Layer, conv2d, pool2d, dense, relu); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
    "status": "partial",
-   "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A search for inference, onnx and tensor across springboard returned nothing. No ML runtime exists."
+   "note": "A Network chains convolution, pooling, dense, relu and custom layers, checks every shape before it runs, and is tested headless. Gap: there is no graph object, no node classes for apps, no GPU path and no serialised model."
   },
   {
    "feature": "Recurrent neural network layers",
    "apple": "MPSRNNImageInferenceLayer, MPSRNNMatrixInferenceLayer, MPSRNNMatrixTrainingLayer",
-   "bifrost": "springboard/ui/src/cnn_layers.rs (RecurrentWeights",
+   "bifrost": "springboard/ui/src/cnn_layers.rs (RecurrentWeights, lstm_step, gru_step); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
    "status": "partial",
-   "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No recurrent layers."
+   "note": "LSTM and GRU single steps are implemented, and the tests check a bounded LSTM state over a sequence and the refusal of a hidden state of the wrong length. Gap: there is no sequence layer that runs many steps, no training layer and no matrix inference layer for apps."
   },
   {
    "feature": "Matrix and vector kernels (multiply, decomposition, solve, softmax)",
@@ -122,9 +122,9 @@
   {
    "feature": "Kernel base classes and keyed archiving",
    "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
-   "bifrost": "springboard/ui/src/image_kernels.rs, springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/ui/src/image_kernels.rs (ImageKernel, apply_chain), springboard/ui/src/cnn_layers.rs; tests: springboard/ui/tests/parity_sdk-complete-22.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (image_kernels.rs, cnn_layers.rs); not wired into the shell or apps, not tested on Midget. There is no kernel abstraction for apps to subclass. Serialisation exists, but for app data, not GPU kernels."
+   "note": "An app defines a kernel by implementing ImageKernel with its class, the built-in kernels implement it too, and apply_chain runs kernels in order; all tested headless. Gap: there is no GPU kernel dispatch, no keyed archiving of kernels, and the code is not wired into the shell or apps."
   }
  ],
  "gaps": [
