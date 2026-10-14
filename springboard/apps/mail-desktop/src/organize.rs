@@ -1,6 +1,7 @@
 //! Organising mail: the favorites bar of pinned mailboxes, smart mailboxes (saved searches), Remind Me and Send
 //! Later queues, the category classifier (primary, transactions, updates, promotions), and find in the message body.
 //! Pure std plus `search` and `message`; each list has a line-based stored form.
+#![allow(dead_code)] // wired by the compose and mailbox UI in the next step
 
 use crate::message::parse_headers;
 use crate::search::{Doc, Query};

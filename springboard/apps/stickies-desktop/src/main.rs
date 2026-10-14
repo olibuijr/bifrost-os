@@ -1550,6 +1550,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+mod rgb;
     use super::*;
 
     fn app_with(texts: &[&str]) -> StickiesApp {

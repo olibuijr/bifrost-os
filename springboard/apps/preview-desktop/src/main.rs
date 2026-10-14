@@ -2195,6 +2195,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+mod picture_tools;
     use super::*;
     use bifrost_app::kit::{pack, Image};
 
