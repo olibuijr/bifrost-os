@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- New: a job waiting or held on another computer says so in the Status column ("Waiting on the other computer", "Held on the other computer").
+- Tested: a printer whose device reports it offline reads as "Printer is offline" in its problem line.
+
 ## 0.6.0
 
 - New: the info pane has a Share Printer or Stop Sharing button beside Save, for a queue that can be shared. A pool and a queue that sends its jobs to another computer are not offered.

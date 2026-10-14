@@ -147,8 +147,8 @@
    "area": "job",
    "apple": "Waiting, Held, Printing, Stopped, Canceled, Failed, Completed plus reasons (Paused on server, Canceled on server)",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/model.rs:565 (job_reason_text); springboard/apps/printers-desktop/src/model.rs:598 (job_status_text)",
-   "note": "Status column appends reasons such as Canceled on server, Held for authentication, Waiting for a password and Queued in the printer (job_reason_text), and reads Canceling page N of M while a cancel of a printing job is on its way (job_status_text). Tested in model.rs. Not yet verified on Midget.",
+   "bifrost": "springboard/apps/printers-desktop/src/model.rs:565 (job_reason_text); springboard/apps/printers-desktop/src/model.rs:600 (job_status_text)",
+   "note": "Status column appends reasons such as Canceled on server, Waiting on the other computer, Held for authentication, Waiting for a password and Queued in the printer (job_reason_text), and reads Canceling page N of M while a cancel of a printing job is on its way (job_status_text). Tested in model.rs. Not yet verified on Midget.",
    "wire": "Add each newly reported job-state-reasons keyword to job_reason_text (model.rs:550) when the scheduler sends one the table does not name yet."
   },
   {

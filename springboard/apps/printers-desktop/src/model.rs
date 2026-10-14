@@ -567,6 +567,8 @@ pub fn job_reason_text(keyword: &str) -> Option<&'static str> {
         "cups-remote-canceled" => "Canceled on server",
         "cups-remote-stopped" => "Paused on server",
         "cups-remote-aborted" => "Failed on server",
+        "cups-remote-pending" => "Waiting on the other computer",
+        "cups-remote-pending-held" => "Held on the other computer",
         "cups-held-for-authentication" | "job-hold-until-authentication" => "Held for authentication",
         "job-canceled-by-user" => "Canceled by user",
         "job-canceled-at-device" => "Canceled at the printer",
@@ -1138,6 +1140,22 @@ mod tests {
         assert_eq!(job_status_text(&h, false), "Held");
         h.reasons = vec!["cups-held-for-authentication".into()];
         assert_eq!(job_status_text(&h, false), "Held for authentication");
+    }
+
+    #[test]
+    fn a_job_held_or_waiting_on_another_computer_says_where_it_waits() {
+        let mut waiting = job(4, JobState::Pending);
+        waiting.reasons = vec!["cups-remote-pending".into()];
+        assert_eq!(job_status_text(&waiting, false), "Waiting on the other computer");
+        let mut held = job(5, JobState::PendingHeld);
+        held.reasons = vec!["cups-remote-pending-held".into()];
+        assert_eq!(job_status_text(&held, false), "Held on the other computer");
+    }
+
+    #[test]
+    fn an_offline_report_reads_as_an_offline_printer() {
+        assert_eq!(reason_problem("offline-report"), Some(Problem { level: Level::Report, text: "Printer is offline".into() }));
+        assert_eq!(reason_problem("offline"), Some(Problem { level: Level::Report, text: "Printer is offline".into() }));
     }
 
     #[test]
