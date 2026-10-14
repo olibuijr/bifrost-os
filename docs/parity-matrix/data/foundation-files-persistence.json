@@ -59,9 +59,9 @@
     {
       "feature": "State restoration data",
       "apple": "NSUserActivity restoration, app state",
-      "bifrost": "springboard/sdk/src/restoration.rs",
+      "bifrost": "springboard/sdk/src/restoration.rs; springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "One restorable window per app, JSON file."
+      "note": "One restorable window per app in one JSON file; restored state keeps Data fields and a broken file is discarded (headless tests in parity_sdk-complete-19.rs). Gap: the app hook takes one identifier, so several windows per app need a new hook and a shell change."
     },
     {
       "feature": "Spotlight: indexing app content",

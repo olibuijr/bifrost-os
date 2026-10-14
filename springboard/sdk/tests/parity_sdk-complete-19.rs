@@ -1,8 +1,11 @@
 //! Parity sdk-complete-19: the Codable `Data` form. JSON and XML carry bytes as base64, a binary property list keeps
-//! them as data objects, and a struct with a `Data` field round-trips through every format. Headless: no file, no device.
+//! them as data objects, and a struct with a `Data` field round-trips through every format. The local saving tests
+//! use a temporary data directory: no account, no network, no device.
 
 use bifrost_app::binary_plist::{self, BValue};
 use bifrost_app::coding::{Data, JSONDecoder, JSONEncoder, PropertyListDecoder, PropertyListEncoder, Value};
+use bifrost_app::defaults::{self, UserDefaults};
+use bifrost_app::restoration::{self, RestorableState};
 
 #[derive(Clone, Debug, PartialEq)]
 struct Blob {
@@ -87,4 +90,72 @@ fn the_value_tree_maps_data_to_and_from_the_binary_form() {
 #[test]
 fn a_uid_still_has_no_codable_form() {
     assert!(binary_plist::to_value(&BValue::Uid(3)).is_err());
+}
+
+#[test]
+fn local_preferences_survive_a_relaunch_without_an_account() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut store = UserDefaults::open(dir.path());
+        store.set_int("level", 7);
+        store.set_string("player", "Ada");
+        store.set_data("slot", &[1, 2, 255]);
+    }
+    let relaunched = UserDefaults::open(dir.path());
+    assert_eq!(relaunched.int("level"), 7);
+    assert_eq!(relaunched.string("player").as_deref(), Some("Ada"));
+    assert_eq!(relaunched.data("slot"), Some(vec![1, 2, 255]));
+}
+
+#[test]
+fn a_removed_local_value_stays_removed_after_a_relaunch() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = UserDefaults::open(dir.path());
+    store.set_bool("music", true);
+    store.remove("music");
+    assert!(!UserDefaults::open(dir.path()).contains("music"));
+}
+
+#[test]
+fn a_registered_default_is_not_written_to_the_save_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = UserDefaults::open(dir.path());
+    store.register([("difficulty", defaults::Value::Int(2))]);
+    assert_eq!(store.int("difficulty"), 2, "the fallback is read");
+    assert!(!UserDefaults::open(dir.path()).contains("difficulty"), "and nothing is saved for it");
+}
+
+#[test]
+fn progress_and_window_state_are_kept_in_separate_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut progress = RestorableState::new();
+    progress.encode_for("level", &"forest".to_string());
+    assert!(restoration::save(dir.path(), "game", (640, 480), &progress, 0).unwrap());
+    UserDefaults::open(dir.path()).set_int("best", 3);
+
+    assert_ne!(restoration::FILE, defaults::FILE, "the two files never share a name");
+    assert!(dir.path().join(restoration::FILE).exists());
+    assert!(dir.path().join(defaults::FILE).exists());
+    let (state, size) = restoration::load(dir.path(), "game").expect("the saved window comes back");
+    assert_eq!(state.decode_for::<String>("level").as_deref(), Some("forest"));
+    assert_eq!(size, (640, 480));
+}
+
+#[test]
+fn restored_state_keeps_data_fields() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = RestorableState::new();
+    state.encode_for("thumbnail", &bifrost_app::coding::Data(vec![9, 8, 0]));
+    restoration::save(dir.path(), "viewer", (320, 200), &state, 0).unwrap();
+    let (back, _) = restoration::load(dir.path(), "viewer").expect("state comes back");
+    assert_eq!(back.decode_for::<bifrost_app::coding::Data>("thumbnail"), Some(bifrost_app::coding::Data(vec![9, 8, 0])));
+}
+
+#[test]
+fn an_unreadable_window_file_does_not_cost_the_preferences() {
+    let dir = tempfile::tempdir().unwrap();
+    UserDefaults::open(dir.path()).set_string("theme", "dark");
+    std::fs::write(restoration::path(dir.path()), "{ not json").unwrap();
+    assert!(restoration::load(dir.path(), "main").is_none(), "the broken window state is ignored");
+    assert_eq!(UserDefaults::open(dir.path()).string("theme").as_deref(), Some("dark"));
 }

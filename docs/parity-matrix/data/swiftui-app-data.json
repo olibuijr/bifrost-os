@@ -108,9 +108,9 @@
     {
       "feature": "Persistent storage",
       "apple": "AppStorage, SceneStorage, SwiftData-backed storage",
-      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/coding.rs",
+      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/coding.rs; springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "UserDefaults and state restoration cover AppStorage and SceneStorage; no SwiftData/Core Data object graph store"
+      "note": "UserDefaults and state restoration cover AppStorage and SceneStorage, and Codable values include Data (headless tests in parity_sdk-complete-19.rs); no SwiftData/Core Data object graph store is wired to apps."
     }
   ],
   "gaps": [
