@@ -66,16 +66,16 @@
     {
       "feature": "Toolbars",
       "apple": "toolbar, ToolbarItem, ToolbarItemGroup, toolbar customization",
-      "bifrost": "springboard/sdk/src/widgets.rs, springboard/ui/src/nav.rs",
+      "bifrost": "springboard/ui/src/nav.rs (Toolbar, ToolbarLayout); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/sdk/src/widgets.rs (toolbar)",
       "status": "partial",
-      "note": "widgets::toolbar with groups and overflow; no user toolbar customization"
+      "note": "Groups, overflow, validation and menu anchors are tested headless (headless_toolbar_* in ui/tests). No user toolbar customization."
     },
     {
       "feature": "Search",
       "apple": "searchable, search suggestions, search scopes",
-      "bifrost": "springboard/ui/src/search.rs, springboard/sdk/src/widgets.rs; wired: springboard/apps/news-desktop/src/news.rs (BAR_SEARCH, key, search_focused), springboard/apps/news-desktop/src/wire.rs (search_rows), springboard/ui/src/textfind.rs, springboard/sdk/src/widgets.rs (search_field)",
+      "bifrost": "springboard/ui/src/search.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/sdk/src/widgets.rs; wired: springboard/apps/news-desktop/src/news.rs (BAR_SEARCH, key, search_focused), springboard/apps/news-desktop/src/wire.rs (search_rows), springboard/ui/src/textfind.rs, springboard/sdk/src/widgets.rs (search_field)",
       "status": "partial",
-      "note": "search_field control; no scopes, tokens or suggestions modifier Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Field geometry, the clear button and its hit area are tested headless (headless_search_field_* in ui/tests). search_field control; no scopes, tokens or suggestions modifier Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "App extensions",

@@ -24,9 +24,9 @@
     {
       "feature": "Clipboard",
       "apple": "copyable, cuttable, pasteDestination, Transferable",
-      "bifrost": "springboard/sdk/src/pasteboard.rs",
+      "bifrost": "springboard/sdk/src/pasteboard.rs; tests: springboard/sdk/tests/parity_sdk-tests-01b.rs",
       "status": "partial",
-      "note": "pasteboard API; no Transferable-style protocol or edit-command modifiers"
+      "note": "Named boards, types, change counts and per-type data are tested headless (headless_clipboard_* in sdk/tests). No Transferable-style protocol or edit-command modifiers."
     },
     {
       "feature": "Drag and drop",
@@ -45,16 +45,16 @@
     {
       "feature": "System events (open URL, user activity)",
       "apple": "onOpenURL, onContinueUserActivity, handlesExternalEvents",
-      "bifrost": "springboard/sdk/src/workspace.rs",
+      "bifrost": "springboard/sdk/src/workspace.rs; tests: springboard/sdk/tests/parity_sdk-tests-01b.rs",
       "status": "partial",
-      "note": "open and launch/activation events; no handoff or user activity"
+      "note": "Workspace event names and content-type icons are tested headless (headless_system_events_* in sdk/tests). Open and launch/activation events; no handoff or user activity."
     },
     {
       "feature": "Accessibility fundamentals",
       "apple": "accessibilityElement, accessibilityChildren",
-      "bifrost": "springboard/src/shell/atspi/mod.rs, springboard/sdk/src/view/mod.rs",
+      "bifrost": "springboard/ui/src/ax.rs (Map, Announcements, role_name, Priority); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/src/shell/atspi/mod.rs; springboard/sdk/src/view/mod.rs",
       "status": "partial",
-      "note": "AT-SPI2 bridge with hierarchy and state; shell chrome not in tree; untested on live Orca (docs/bifrost-ui.md)"
+      "note": "Element map, role names, priorities and the announcement queue are tested headless (headless_accessibility_* in ui/tests). AT-SPI2 bridge with hierarchy and state; shell chrome not in tree; untested on live Orca (docs/bifrost-ui.md)"
     },
     {
       "feature": "Accessible appearance",

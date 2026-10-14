@@ -349,3 +349,259 @@ fn headless_compose_sheet_an_empty_or_cancelled_post_reports_cancelled() {
     assert_eq!(empty.finish(true), Some(ComposeResult::Cancelled), "sending nothing is a cancel");
     assert_eq!(ComposeDraft::new().dismiss(true), ComposeResult::Cancelled);
 }
+
+// ---- swiftui-app-data: search field geometry (bifrost_ui::search) ----
+
+use bifrost_ui::search::{hits_clear, layout as search_layout, GLYPH_PT, INSET_PT};
+use bifrost_ui::Rect;
+
+const FIELD: Rect = Rect { x: 100.0, y: 10.0, w: 200.0, h: 28.0 };
+
+#[test]
+fn headless_search_field_glyphs_sit_at_the_capsule_edges() {
+    let empty = search_layout(FIELD, false);
+    assert_eq!(empty.magnifier.x, FIELD.x + INSET_PT, "the magnifier is inset from the leading edge");
+    assert_eq!(empty.magnifier.w, GLYPH_PT);
+    assert_eq!(empty.magnifier.y + empty.magnifier.h / 2.0, FIELD.y + FIELD.h / 2.0, "glyphs are centred vertically");
+    assert!(empty.clear.is_none(), "the clear button shows only with text");
+    assert_eq!(empty.text.x, empty.magnifier.x + GLYPH_PT + 6.0, "text starts six points after the magnifier");
+}
+
+#[test]
+fn headless_search_field_with_text_shows_clear_and_narrows_the_text() {
+    let empty = search_layout(FIELD, false);
+    let full = search_layout(FIELD, true);
+    let clear = full.clear.expect("the clear button is present with text");
+    assert_eq!(clear.x + clear.w, FIELD.x + FIELD.w - INSET_PT, "the clear button is inset from the trailing edge");
+    assert!(full.text.w < empty.text.w, "the text gives room to the clear button");
+    assert!(full.text.x + full.text.w <= clear.x);
+    assert!(hits_clear(FIELD, true, 290.0, 24.0), "a press on the button clears the field");
+    assert!(hits_clear(FIELD, true, 290.0, 11.0), "the target is padded to the full height");
+    assert!(!hits_clear(FIELD, true, 150.0, 24.0), "the text area is not the button");
+    assert!(!hits_clear(FIELD, false, 290.0, 24.0), "nothing to clear");
+}
+
+// ---- swiftui-app-data: toolbars with groups and overflow (bifrost_ui::nav) ----
+
+use bifrost_ui::nav::{Toolbar, ToolbarItem, ToolbarKind};
+
+fn buttons(ids: &[u32]) -> Vec<ToolbarItem> {
+    ids.iter().map(|&id| ToolbarItem::button(id, "Action")).collect()
+}
+
+#[test]
+fn headless_toolbar_lays_every_button_when_the_bar_is_wide_enough() {
+    let bar = Toolbar::new(buttons(&[1, 2, 3]));
+    let layout = bar.layout(Rect { x: 0.0, y: 0.0, w: 500.0, h: 30.0 }, 40.0, 4.0);
+    let ids: Vec<u32> = layout.visible.iter().map(|(id, _)| *id).collect();
+    assert_eq!(ids, [1, 2, 3]);
+    assert!(layout.overflow.is_empty());
+    assert!(layout.overflow_button.is_none(), "no overflow button when nothing overflows");
+    let first = layout.rect_of(1).expect("button 1 is on the bar");
+    assert_eq!(first.x, 0.0);
+    assert_eq!(layout.hit(first.x + 1.0, first.y + 1.0), Some(1));
+}
+
+#[test]
+fn headless_toolbar_trailing_buttons_move_to_the_overflow_menu_when_narrow() {
+    let bar = Toolbar::new(buttons(&[1, 2, 3, 4, 5]));
+    let layout = bar.layout(Rect { x: 0.0, y: 0.0, w: 150.0, h: 30.0 }, 40.0, 4.0);
+    let visible: Vec<u32> = layout.visible.iter().map(|(id, _)| *id).collect();
+    assert_eq!(visible.len() + layout.overflow.len(), 5, "every button is either on the bar or in the menu");
+    assert!(!layout.overflow.is_empty(), "something overflows");
+    assert!(layout.overflow_button.is_some(), "the overflow button is shown");
+    for (i, id) in visible.iter().enumerate() {
+        assert_eq!(*id, i as u32 + 1, "the bar keeps the leading buttons in order");
+    }
+}
+
+#[test]
+fn headless_toolbar_buttons_of_one_group_share_a_capsule() {
+    let items = vec![
+        ToolbarItem::button(1, "Bold").in_group(1),
+        ToolbarItem::button(2, "Italic").in_group(1),
+        ToolbarItem::button(3, "Share").in_group(2),
+    ];
+    let layout = Toolbar::new(items).layout(Rect { x: 0.0, y: 0.0, w: 500.0, h: 30.0 }, 40.0, 4.0);
+    assert_eq!(layout.groups.len(), 2, "one capsule per group on the bar");
+    let (_, bold_italic) = layout.groups.iter().find(|(g, _)| *g == 1).expect("group 1 has a capsule");
+    assert!(bold_italic.w >= 80.0, "the capsule covers both buttons of the group");
+}
+
+#[test]
+fn headless_toolbar_validation_reports_only_real_changes() {
+    let mut bar = Toolbar::new(vec![ToolbarItem::button(1, "Open"), ToolbarItem::button(2, "Save")]);
+    assert!(bar.validate(|id| id != 2), "Save becomes disabled");
+    assert!(!bar.items[1].enabled);
+    assert!(bar.items[0].enabled);
+    assert!(!bar.validate(|id| id != 2), "a second pass with the same answer changes nothing");
+    assert_eq!(bar.items[0].kind, ToolbarKind::Button);
+}
+
+#[test]
+fn headless_toolbar_menu_anchor_sits_below_the_button() {
+    let layout = Toolbar::new(buttons(&[7])).layout(Rect { x: 10.0, y: 5.0, w: 300.0, h: 30.0 }, 40.0, 4.0);
+    let r = layout.rect_of(7).expect("button 7");
+    assert_eq!(layout.menu_anchor(7, 4.0), Some((r.x, r.y + r.h + 4.0)));
+    assert_eq!(layout.menu_anchor(99, 4.0), None);
+}
+
+// ---- swiftui-events-a11y-integration: accessibility fundamentals (bifrost_ui::ax) ----
+
+use bifrost_ui::ax::{role_name, Announcements, Map, Politeness, Priority};
+use bifrost_ui::Role;
+
+#[test]
+fn headless_accessibility_roles_have_their_spoken_names_and_priorities_parse() {
+    assert_eq!(role_name(Role::Button), "button");
+    assert_eq!(Priority::from_wire(2), Some(Priority::High));
+    assert_eq!(Priority::from_wire(0), Some(Priority::Low));
+    assert_eq!(Priority::from_wire(3), None);
+    assert_eq!(Priority::default(), Priority::Medium);
+}
+
+#[test]
+fn headless_accessibility_announcements_collapse_space_skip_repeats_and_speak_assertive_first() {
+    let mut queue = Announcements::with_capacity(8);
+    assert!(queue.post("  Saved   the note ", Politeness::Polite));
+    assert!(!queue.post("Saved the note", Politeness::Polite), "a repeat of the last announcement is dropped");
+    assert!(!queue.post("   ", Politeness::Polite), "blank text is dropped");
+    assert!(queue.post("Upload failed", Politeness::Assertive));
+    let first = queue.take_next().expect("an announcement is waiting");
+    assert_eq!(first.text, "Upload failed", "the assertive one is taken first");
+    assert_eq!(first.politeness, Politeness::Assertive);
+    assert_eq!(queue.take_next().map(|a| a.text), Some("Saved the note".to_string()));
+    assert!(queue.is_empty());
+}
+
+#[test]
+fn headless_accessibility_full_queue_drops_the_oldest_polite_announcement_first() {
+    let mut queue = Announcements::with_capacity(2);
+    queue.post("first polite", Politeness::Polite);
+    queue.post("urgent one", Politeness::Assertive);
+    queue.post("urgent two", Politeness::Assertive);
+    assert_eq!(queue.len(), 2);
+    assert_eq!(queue.take_next().map(|a| a.text), Some("urgent one".to_string()), "assertive announcements are never lost for polite ones");
+    assert_eq!(queue.take_next().map(|a| a.text), Some("urgent two".to_string()));
+    assert!(queue.take_next().is_none());
+}
+
+#[test]
+fn headless_accessibility_map_addresses_are_unique_and_list_under_their_scope() {
+    let mut map = Map::new();
+    let first = map.add("app", "button", "New Note", "", true, None, "7");
+    let second = map.add("app", "button", "New Note", "", true, None, "8");
+    assert_ne!(first, second, "a duplicate name gets its own address");
+    assert_eq!(map.len(), 2);
+    let element = map.get(&first).expect("the first element is in the map");
+    assert_eq!(element.name, "New Note");
+    assert_eq!(element.handle, "7", "the producer's handle is kept for acting on it");
+    let listing = map.listing("app");
+    assert!(listing.contains("New Note") && listing.contains("enabled"));
+    assert!(map.listing("other").is_empty(), "only elements under the scope are listed");
+}
+
+// ---- now-playing: content types and metadata (bifrost_ui::media_content) ----
+
+use bifrost_ui::media_content::{optional_text, ContentError, MediaContent, MediaDuration, MediaType};
+
+#[test]
+fn headless_now_playing_duration_labels_read_as_a_clock_or_live() {
+    assert_eq!(MediaDuration::finite_seconds(225.0).unwrap().label().as_deref(), Some("3:45"));
+    assert_eq!(MediaDuration::finite_seconds(3725.0).unwrap().label().as_deref(), Some("1:02:05"));
+    assert_eq!(MediaDuration::Live.label().as_deref(), Some("Live"));
+    assert_eq!(MediaDuration::Continuous.label(), None);
+    assert!(MediaDuration::finite_seconds(0.0).is_err());
+    assert!(MediaDuration::finite_seconds(f64::NAN).is_err());
+    assert!(MediaDuration::finite_seconds(-1.0).is_err());
+    assert_eq!(MediaDuration::finite_seconds(f64::INFINITY), Err(ContentError::InvalidDuration));
+}
+
+#[test]
+fn headless_now_playing_content_trims_text_and_needs_an_identifier_and_title() {
+    let song = MediaContent::new(" track-1 ", " Song ", MediaType::Audio, MediaDuration::Finite(200.0)).unwrap();
+    assert_eq!(song.id, "track-1");
+    assert_eq!(song.title, "Song");
+    assert!(!song.is_explicit);
+    assert_eq!(MediaContent::new("  ", "Song", MediaType::Audio, MediaDuration::Live), Err(ContentError::EmptyId));
+    assert_eq!(MediaContent::new("id", "  ", MediaType::Video, MediaDuration::Live), Err(ContentError::EmptyTitle));
+    assert_eq!(optional_text("  x  "), Some("x".to_string()));
+    assert_eq!(optional_text("   "), None);
+}
+
+#[test]
+fn headless_now_playing_subtitle_joins_artist_and_album_and_skips_what_is_missing() {
+    let mut song = MediaContent::new("t", "Song", MediaType::Audio, MediaDuration::Continuous).unwrap();
+    assert_eq!(song.subtitle(), "");
+    song.artist = Some("Artist".into());
+    assert_eq!(song.subtitle(), "Artist");
+    song.album = Some("Album".into());
+    assert_eq!(song.subtitle(), "Artist - Album");
+    song.artist = None;
+    assert_eq!(song.subtitle(), "Album");
+}
+
+#[test]
+fn headless_now_playing_progress_is_a_clamped_fraction_of_finite_items_only() {
+    let song = MediaContent::new("t", "Song", MediaType::Audio, MediaDuration::Finite(200.0)).unwrap();
+    assert_eq!(song.progress(50.0), Some(0.25));
+    assert_eq!(song.progress(500.0), Some(1.0), "past the end is clamped to 1");
+    assert_eq!(song.progress(-5.0), Some(0.0), "before the start is clamped to 0");
+    let live = MediaContent::new("l", "Radio", MediaType::Audio, MediaDuration::Live).unwrap();
+    assert_eq!(live.progress(10.0), None, "a live stream has no end to measure against");
+    assert!(!live.duration.is_seekable());
+}
+
+// ---- contacts: vCard serialization (bifrost_ui::contact_vcard) ----
+
+use bifrost_ui::contact_book::{Contact, LabeledValue};
+use bifrost_ui::contact_vcard::{base64_decode, base64_encode, contacts as parse_cards, serialize, Version};
+
+fn ada() -> Contact {
+    Contact {
+        given_name: "Ada".into(),
+        family_name: "Lovelace".into(),
+        phone_numbers: vec![LabeledValue::new(None, "+3545551234".into())],
+        email_addresses: vec![LabeledValue::new(Some("work"), "ada@example.test".into())],
+        ..Default::default()
+    }
+}
+
+#[test]
+fn headless_vcard_writes_a_card_in_the_requested_version() {
+    let v3 = serialize(&[ada()], Version::V3);
+    assert!(v3.starts_with("BEGIN:VCARD\r\nVERSION:3.0\r\n"), "3.0 cards open with the version line");
+    assert!(v3.contains("FN:Ada Lovelace\r\n"), "the formatted name joins given and family names");
+    assert!(v3.contains("END:VCARD"));
+    let v4 = serialize(&[ada()], Version::V4);
+    assert!(v4.contains("VERSION:4.0\r\n"));
+}
+
+#[test]
+fn headless_vcard_read_back_keeps_the_name_and_phone() {
+    let text = serialize(&[ada()], Version::V4);
+    let back = parse_cards(&text).expect("the card parses");
+    assert_eq!(back.len(), 1);
+    assert_eq!(back[0].given_name, "Ada");
+    assert_eq!(back[0].family_name, "Lovelace");
+    assert_eq!(back[0].phone_numbers[0].value, "+3545551234");
+}
+
+#[test]
+fn headless_vcard_several_contacts_make_several_cards() {
+    let mut other = ada();
+    other.given_name = "Grace".into();
+    other.family_name = "Hopper".into();
+    let text = serialize(&[ada(), other], Version::V3);
+    assert_eq!(text.matches("BEGIN:VCARD").count(), 2);
+    let back = parse_cards(&text).unwrap();
+    assert_eq!(back.iter().map(|c| c.given_name.as_str()).collect::<Vec<_>>(), ["Ada", "Grace"]);
+}
+
+#[test]
+fn headless_vcard_photo_bytes_are_base64_both_ways() {
+    assert_eq!(base64_encode(b"Man"), "TWFu");
+    assert_eq!(base64_encode(b""), "");
+    assert_eq!(base64_decode("TWFu"), Some(b"Man".to_vec()));
+    assert_eq!(base64_decode("TWFu").map(|b| b.len()), Some(3));
+}
