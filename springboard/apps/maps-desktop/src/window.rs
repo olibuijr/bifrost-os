@@ -1485,7 +1485,7 @@ impl Window {
             let (x, y) = to_px(h.lat, h.lon);
             let ring = (h.accuracy_m / metres_per_pt(h.lat, zoom).max(1e-9)) as f32 * p;
             if ring > ui.pt(14.0) {
-                let ring = ring.min(ui.pt(2000.0));
+                let ring = ring.min(c.w.max(c.h) as f32);
                 c.stroke_rrect(x - ring, y - ring, 2.0 * ring, 2.0 * ring, ring, 1.0, LINK);
             }
             Self::dot(&mut c, x, y, ui.pt(9.0), WHITE);

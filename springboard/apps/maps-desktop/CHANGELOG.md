@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-10-14
+
+- Clamp the location accuracy ring to the current map viewport instead of a fixed 2000 pt size.
+
 ## 0.5.0 - 2026-10-14
 
 - Transit requests take a departure time: the planner model has leave-at and arrive-by times, checked as a date
