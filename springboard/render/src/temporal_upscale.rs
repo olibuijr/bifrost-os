@@ -13,7 +13,8 @@
 //! 5. The output is `history * w + current * (1 - w)`, where `w` is the history weight of the accumulation mode.
 //!
 //! `Accumulation::Denoised` keeps more history (0.95 against 0.9), so noise in the input averages out over more
-//! frames. It has no separate denoising filter, so it trades responsiveness for stability and nothing more.
+//! frames. Before the colour is upscaled, it also runs a 3x3 box filter over the input colour (`box_denoise`), which
+//! removes single-pixel noise from every frame, not only from the history. Standard accumulation skips that filter.
 //! The model runs on the CPU and has no GPU pass, no colour-space argument beyond the spatial filter's linear mode,
 //! and no reactive mask.
 
@@ -42,6 +43,34 @@ impl Accumulation {
             Accumulation::Denoised => 0.95,
         }
     }
+
+    /// Whether the input colour is denoised before it is upscaled.
+    pub fn denoises(self) -> bool {
+        matches!(self, Accumulation::Denoised)
+    }
+}
+
+/// Spatial denoise of a `w` x `h` colour raster: each sample becomes the mean of its 3x3 neighbourhood. Edge samples
+/// repeat, so the mean of a flat raster is unchanged.
+pub fn box_denoise(buf: &[[f32; 3]], w: usize, h: usize) -> Vec<[f32; 3]> {
+    let mut out = Vec::with_capacity(w * h);
+    for y in 0..h {
+        for x in 0..w {
+            let mut sum = [0.0f32; 3];
+            for dy in -1isize..=1 {
+                for dx in -1isize..=1 {
+                    let nx = (x as isize + dx).clamp(0, w as isize - 1) as usize;
+                    let ny = (y as isize + dy).clamp(0, h as isize - 1) as usize;
+                    let p = buf[ny * w + nx];
+                    for c in 0..3 {
+                        sum[c] += p[c];
+                    }
+                }
+            }
+            out.push(sum.map(|s| s / 9.0));
+        }
+    }
+    out
 }
 
 /// Radical inverse of `index` in `base`: the digits of `index` mirrored around the radix point, in 0..1.
@@ -171,7 +200,14 @@ impl TemporalScaler {
         if color.len() != n || depth.len() != n || motion.len() != n {
             return Err(UpscaleError::LengthMismatch);
         }
-        let current = upscale_f32(color, self.in_w, self.in_h, self.out_w, self.out_h, ColorProcessing::Linear)?;
+        let denoised;
+        let source: &[[f32; 3]] = if self.mode.denoises() {
+            denoised = box_denoise(color, self.in_w, self.in_h);
+            &denoised
+        } else {
+            color
+        };
+        let current = upscale_f32(source, self.in_w, self.in_h, self.out_w, self.out_h, ColorProcessing::Linear)?;
         let out = match (&self.history, &self.prev_depth) {
             (Some(history), Some(prev_depth)) => self.accumulate(&current, history, prev_depth, depth, motion),
             _ => current,

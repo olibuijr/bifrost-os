@@ -10,16 +10,16 @@
     {
       "feature": "Temporal upscaling (MTLFXTemporalScaler)",
       "apple": "MTLFXTemporalScaler, MTLFXTemporalScalerDescriptor, encode(commandBuffer:)",
-      "bifrost": "springboard/render/src/temporal_upscale.rs",
+      "bifrost": "springboard/render/src/temporal_upscale.rs (TemporalScaler, resolve); tests: springboard/render/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Needs per-frame colour, depth and motion vectors. The presenter (springboard/src/gpu/wl.rs:147) receives CPU rasters uploaded on damage (docs/gpu-first.md, layer model) and no motion or depth buffers."
+      "note": "Jittered accumulation with depth rejection and neighbourhood clamping is a pure CPU model with host tests, and it is not wired into apps or the shell. Gap: the presenter (springboard/src/gpu/wl.rs:147) receives no motion or depth buffers and the scaler has no GPU pass, so it needs the lab machine to verify."
     },
     {
       "feature": "Temporal denoised upscaling (MTLFXTemporalDenoisedScaler)",
       "apple": "MTLFXTemporalDenoisedScaler, MTLFXTemporalDenoisedScalerDescriptor (macOS 26)",
-      "bifrost": "springboard/render/src/temporal_upscale.rs (Accumulation::Denoised)",
+      "bifrost": "springboard/render/src/temporal_upscale.rs (Accumulation::Denoised, box_denoise); tests: springboard/render/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No denoiser and no temporal history buffer in the GPU path."
+      "note": "Denoised accumulation runs a 3x3 box filter on the input colour and keeps 95 percent history, all in the CPU model with host tests. Gap: the box filter is not a learned denoiser, and the GPU path has no temporal history buffer, so the lab machine must verify it."
     },
     {
       "feature": "Spatial upscaling (MTLFXSpatialScaler)",
