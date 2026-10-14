@@ -96,7 +96,7 @@
    "apple": "AVSampleBufferDisplayLayer, AVSampleBufferAudioRenderer, AVSampleBufferRenderSynchronizer",
    "bifrost": "springboard/ui/src/render_synchronizer.rs",
    "status": "partial",
-   "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an internal MSE feed for the browser; no app renderer or synchronizer"
+   "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure timeline model with host unit tests: rate and anchor, re-anchoring, renderers by id and boundary crossings, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. Only an internal MSE feed for the browser; no app renderer or synchronizer"
   },
   {
    "feature": "Composite assets",

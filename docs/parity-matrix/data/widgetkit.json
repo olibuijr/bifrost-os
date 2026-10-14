@@ -117,7 +117,7 @@
    "apple": "Accessing location information in widgets, Making network requests in a widget extension",
    "bifrost": "springboard/ui/src/widget_access.rs",
    "status": "partial",
-   "note": "Team J (parity/team-j-notification-center): pure model with host unit tests: per-widget location grant and network host grants (subdomains match). Not wired into apps or the shell, not yet tested on Midget. The shell weather tile still reads Open-Meteo directly and does not consult the grant. No widget process exists, so the grant is shell-side only."
+   "note": "Team J (parity/team-j-notification-center): pure model with host unit tests: per-widget location grant and network host grants (subdomains match). Headless tests in springboard/ui/tests/parity_sdk-tests-13.rs cover host normalisation, subdomain matching, separate location and network grants and forgetting a widget. Not wired into apps or the shell, not yet tested on Midget. The shell weather tile still reads Open-Meteo directly and does not consult the grant. No widget process exists, so the grant is shell-side only."
   },
   {
    "feature": "Accessibility descriptions for widgets",
