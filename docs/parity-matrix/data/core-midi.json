@@ -52,9 +52,9 @@
     {
       "feature": "MIDI Networking (network sessions and hosts)",
       "apple": "MIDINetworkSession, MIDINetworkHost, MIDINetworkConnection (https://developer.apple.com/documentation/coremidi/midi-networking)",
-      "bifrost": "springboard/sdk/src/midi_network.rs",
+      "bifrost": "springboard/sdk/src/midi_network.rs (NetworkSession::disconnect, NetworkSession::disable)",
       "status": "partial",
-      "note": "Sprint 3: NetworkSession, Host, Connection, ConnectionPolicy and RTP-MIDI session packets (IN, OK, NO, BY) with host unit tests; no sockets or mDNS discovery, not wired into the shell, not yet checked on Midget."
+      "note": "NetworkSession, Host, Connection, ConnectionPolicy and RTP-MIDI session packets (IN, OK, NO, BY) with host unit tests; disconnect returns the BY packet for an accepted invitation and disable ends every connection. Headless tests: sdk/tests/parity_sdk-complete-11.rs (leaving_a_connection_sends_an_end_packet_for_its_invitation, disabling_the_session_ends_every_connection_and_stops_invitations). Gap: no sockets or mDNS discovery, so sessions cannot reach a real host; this needs the network and a check on Midget, and the shell is not wired."
     },
     {
       "feature": "MIDI Drivers (driver plug-ins and device lists)",

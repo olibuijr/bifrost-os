@@ -24,9 +24,9 @@
   {
    "feature": "Authentication prompt UI (LocalAuthenticationView)",
    "apple": "LocalAuthenticationView (SwiftUI)",
-   "bifrost": "springboard/ui/src/auth_view.rs",
+   "bifrost": "springboard/ui/src/auth_view.rs (Prompt, PromptError)",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (auth_view.rs); not wired into the shell or apps, not tested on Midget. The Rust shell has no SwiftUI. Only the system login and lock prompts exist; an app cannot show a reusable authentication sheet."
+   "note": "Prompt holds the reason and the fallback and cancel titles with the system's rules: an empty fallback title hides the button, and a blank reason or cancel title is refused. Headless tests: ui/tests/parity_sdk-complete-11.rs (a_prompt_needs_a_reason_and_a_cancel_title, an_empty_fallback_title_hides_the_fallback_button). Gap: no sheet is drawn and an app cannot show one yet, because the Rust shell has no sheet for this and only the system login and lock prompts exist; a check on Midget is still needed."
   },
   {
    "feature": "Keychain items protected by user presence or biometrics",

@@ -10,9 +10,9 @@
     {
       "feature": "Authentication view (biometric state icon)",
       "apple": "LAAuthenticationView",
-      "bifrost": "springboard/ui/src/auth_view.rs (AuthView",
+      "bifrost": "springboard/ui/src/auth_view.rs (AuthView, BiometryKind::from_sensor_name)",
       "status": "partial",
-      "note": "Wave 3 (w3-local-authentication-embedded-ui, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no biometric state source and no SDK view that shows one"
+      "note": "The icon state machine picks a key for each biometry kind and state, and a sensor name maps to its kind (unknown names map to nothing). Headless tests: ui/tests/parity_sdk-complete-11.rs (a_sensor_name_picks_its_biometry_kind_and_nothing_else, an_auth_view_follows_a_failed_then_successful_attempt). Gap: no biometric state source feeds the events and no SDK view draws the icon; both need the local authentication service and a check on Midget."
     },
     {
       "feature": "Creating the view from an authentication context",
