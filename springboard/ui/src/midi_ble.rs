@@ -8,7 +8,8 @@
 //!
 //! Pure model: no radio and no GATT write happen here. `encode` returns the bytes a transport writes to the
 //! characteristic, and `decode` reads the bytes a transport received. A system exclusive message that does not
-//! finish inside one packet is reported as `Truncated`; reassembling it across packets is left to the caller.
+//! finish inside one packet is reported as `Truncated` by `decode`; `SysExAssembler` joins it with the packets that
+//! continue it.
 
 /// The MIDI service and MIDI I/O characteristic UUID of a BLE MIDI peripheral.
 pub const MIDI_SERVICE: &str = "03B80E5A-EDE8-4B33-A751-6CE34EC4C700";
@@ -103,8 +104,24 @@ pub fn encode(timestamp: u16, messages: &[&[u8]], mtu: u16) -> Result<Vec<u8>, B
 }
 
 /// Reads one packet into its messages, in order. Running status is applied, and a real-time byte inside a packet is
-/// its own one-byte message that leaves the running status in place.
+/// its own one-byte message that leaves the running status in place. A packet that ends inside a system exclusive
+/// message is `Truncated`.
 pub fn decode(bytes: &[u8]) -> Result<Vec<BleMessage>, BleMidiError> {
+    let parsed = parse(bytes)?;
+    match parsed.open_sysex {
+        Some(_) => Err(BleMidiError::Truncated),
+        None => Ok(parsed.messages),
+    }
+}
+
+/// What one packet held: its complete messages, and the system exclusive message it ends inside, if any, with the
+/// timestamp that message started at and the data bytes received so far.
+struct Parsed {
+    messages: Vec<BleMessage>,
+    open_sysex: Option<(u16, Vec<u8>)>,
+}
+
+fn parse(bytes: &[u8]) -> Result<Parsed, BleMidiError> {
     let header = *bytes.first().ok_or(BleMidiError::Truncated)?;
     if header & 0x80 == 0 {
         return Err(BleMidiError::NotAPacket);
@@ -135,7 +152,9 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<BleMessage>, BleMidiError> {
                 running = None;
                 let mut m = vec![0xF0];
                 loop {
-                    let b = *bytes.get(i).ok_or(BleMidiError::Truncated)?;
+                    let Some(&b) = bytes.get(i) else {
+                        return Ok(Parsed { messages: out, open_sysex: Some((timestamp, m)) });
+                    };
                     i += 1;
                     if b == 0xF7 {
                         m.push(b);
@@ -166,7 +185,63 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<BleMessage>, BleMidiError> {
         };
         out.push(BleMessage { timestamp, bytes: msg });
     }
-    Ok(out)
+    Ok(Parsed { messages: out, open_sysex: None })
+}
+
+/// Joins system exclusive messages that span packets. Feed it the packets in the order the peripheral sends them. A
+/// message that does not finish in one packet waits for the next packet, whose data continues it after its header.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SysExAssembler {
+    open: Option<(u16, Vec<u8>)>,
+}
+
+impl SysExAssembler {
+    /// An assembler with no message waiting.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Whether a system exclusive message is waiting for the packet that finishes it.
+    pub fn is_open(&self) -> bool {
+        self.open.is_some()
+    }
+
+    /// Reads the next packet and returns the messages it completes, in order. A system exclusive message that is still
+    /// open at the end of the packet is kept for the next call and is not returned yet.
+    pub fn push(&mut self, bytes: &[u8]) -> Result<Vec<BleMessage>, BleMidiError> {
+        let header = *bytes.first().ok_or(BleMidiError::Truncated)?;
+        if header & 0x80 == 0 {
+            return Err(BleMidiError::NotAPacket);
+        }
+        let Some((timestamp, mut data)) = self.open.take() else {
+            let parsed = parse(bytes)?;
+            self.open = parsed.open_sysex;
+            return Ok(parsed.messages);
+        };
+        let mut i = 1;
+        while i < bytes.len() {
+            let b = bytes[i];
+            i += 1;
+            if b == 0xF7 {
+                data.push(b);
+                let mut messages = vec![BleMessage { timestamp, bytes: data }];
+                if i < bytes.len() {
+                    let mut rest = vec![header];
+                    rest.extend_from_slice(&bytes[i..]);
+                    let parsed = parse(&rest)?;
+                    self.open = parsed.open_sysex;
+                    messages.extend(parsed.messages);
+                }
+                return Ok(messages);
+            }
+            // Inside system exclusive a high-bit byte is a timestamp, not data.
+            if b & 0x80 == 0 {
+                data.push(b);
+            }
+        }
+        self.open = Some((timestamp, data));
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(test)]
