@@ -31,9 +31,9 @@
     {
       "feature": "Fetch requests and predicates",
       "apple": "NSFetchRequest, NSPredicate, NSSortDescriptor (https://developer.apple.com/documentation/coredata/nsfetchrequest)",
-      "bifrost": "springboard/core/src/migrate.rs, springboard/ui/src/fetch.rs, springboard/ui/src/history.rs; wired: springboard/apps/reminders-desktop/src/model.rs (impl Record for Reminder, Smart::predicate, Smart::count via fetch_indices); wired: springboard/apps/notes-desktop/src/notes/smart.rs (Smart::predicate, Smart::matches, Fields record); springboard/apps/notes-desktop/src/notes/mod.rs (visible, smart_cutoff); springboard/apps/notes-desktop/src/notes/chrome.rs (Smart Folders sidebar rows, count_in)",
+      "bifrost": "springboard/ui/src/fetch.rs (Field, Predicate, Op, SortDescriptor, FetchRequest, fetch, fetch_indices); wired: Smart Folders in springboard/apps/reminders-desktop/src/model.rs and springboard/apps/notes-desktop/src/notes/smart.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Queries are ordinary Rust iterator code over in-memory vectors. No fetch request object, no predicate language, no batch or offset fetching. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "FetchRequest carries a predicate (comparisons, case-insensitive containment, and, or, not), sort keys with direction, an offset and a limit over in-memory records; verified headless by the headless_* tests in springboard/ui/tests/parity_sdk-tests-02.rs. The request is a plain Rust model: there is no predicate language, no batched or persistent fetching, and it is not yet tested on Midget."
     },
     {
       "feature": "Asynchronous fetch results",
