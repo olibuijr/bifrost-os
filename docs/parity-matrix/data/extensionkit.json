@@ -45,9 +45,9 @@
     {
       "feature": "Share targets provided by other apps",
       "apple": "Share extensions (ExtensionKit host of ExtensionFoundation share UI)",
-      "bifrost": "springboard/sdk/src/share.rs (show_picker); springboard/src/shell/sharing.rs (targets from manifest handles and schemes)",
+      "bifrost": "springboard/sdk/src/share.rs (SharingService::sharing_services_for_items, can_perform, perform); springboard/src/shell/sharing.rs (targets from manifest handles and schemes); springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "Other apps can receive shared items when they declare handles or schemes in their manifest. Apps cannot ship their own share UI or a share view that the picker hosts. docs/bifrost-ui.md 'Share sheet' lists share-sheet extensions as a gap."
+      "note": "Installed apps that declare handles or schemes take shared items (the_share_menu_lists_apps_that_take_the_items_then_compose_and_copy, a_service_performs_only_when_it_takes_every_item, copy_puts_the_items_on_the_clipboard_one_per_line). Apps cannot ship their own share UI that the picker hosts. docs/bifrost-ui.md 'Share sheet' lists share-sheet extensions as a gap."
     },
     {
       "feature": "Actions declared by apps for other surfaces",
