@@ -38,9 +38,9 @@
    "area": "map",
    "apple": "Drag to pan, pinch, scroll and double-click to zoom, +/- keys",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/window.rs:613",
-   "note": "Drag pans, double click zooms in at the pointer, the plus/minus plates, Cmd+plus and Cmd+minus (View menu, main.rs:105), +/- and the arrow keys. The SDK has no scroll-wheel or pinch input event, so wheel and pinch zoom are not wired (MapView::zoom_at is ready for them).",
-   "wire": "Map Input::Touch drags to MapView::pan, scroll and pinch to zoom_at (view.rs:71), double-click to zoom in, and Cmd+plus and Cmd+minus to set_zoom (view.rs:53)."
+   "bifrost": "springboard/apps/maps-desktop/src/window.rs:759",
+   "note": "Drag pans, double click zooms in at the pointer, two fingers pinch the map about their midpoint (window.rs finger; the touch id comes from Input::Touch), the plus/minus plates, Cmd+plus and Cmd+minus (View menu, main.rs), +/- and the arrow keys. The SDK has no scroll-wheel event (TouchKind is Down, Move, Up and Cancel), so wheel zoom is not wired.",
+   "wire": "Add a scroll input event to the protocol and the SDK (pointer position and the two deltas) and map it to MapView::zoom_at (view.rs:71) in window.rs. Nothing else remains in this row."
   },
   {
    "feature": "Tile source and usage policy",
@@ -84,7 +84,7 @@
    "apple": "Recent and saved places stay searchable",
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/state.rs:379",
-   "note": "Saved places (Home, Work, Favorites, Collections, Recents, persisted in places.json) are searched offline first and shown above the geocoder rows. There is no bundled offline gazetteer.",
+   "note": "Saved places (Home, Work, Favorites, Collections) and Recents (recorded when a place is shown, state.rs:524; persisted in places.json) are searched offline first and shown above the geocoder rows. There is no bundled offline gazetteer.",
    "wire": "Persist searched and pinned places to the app data dir and pass them to search_offline as the suggestions source."
   },
   {
@@ -156,7 +156,7 @@
    "apple": "Explore, Driving, Transit and Satellite map types",
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/source.rs:12",
-   "note": "View > Map and Satellite (toolbar segmented pair and menu, Cmd+1 and Cmd+2); each type has its own tile source, cache folder and credit line. Transit and Hybrid are not offered.",
+   "note": "View > Map, Satellite and Hybrid (Cmd+1, Cmd+2, Cmd+3; the toolbar pair offers Map and Satellite). Hybrid is the imagery with a labels layer (source.rs LABELS_TEMPLATE, drawn over the base tiles by window.rs draw_map from map_labels) in its own cache folder. Each type has its own tile source, cache folder and credit line. Transit is not offered: there is no transit tile source.",
    "wire": "Add TileSource presets in source.rs for a standard and an imagery layer, keep a MapType setting in the window state and switch the template and cache key (source.rs:65)."
   },
   {
@@ -191,27 +191,27 @@
    "area": "library",
    "apple": "Curated guides and user collections of places",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/state.rs:680",
-   "note": "Collections: New Collection (takes the place on the card), Add to a collection buttons on the card, listed in the sidebar with a count, shown on the map when chosen. No drag from the card; no curated guides (editorial source).",
-   "wire": "Add Collection { name, places } to the persisted store, a New Collection command and drag from a place card into it; skip curated guides, which need an editorial source."
+   "bifrost": "springboard/apps/maps-desktop/src/main.rs:47",
+   "note": "Collections: New Collection (takes the place on the card), Add to a collection buttons on the card, Go > Add Place to Collection with a slot per collection (up to eight, state.rs MENU_COLLECTIONS), listed in the sidebar with a count, shown on the map when chosen. No drag from the card; no curated guides (editorial source).",
+   "wire": "Drag a place from the card onto a collection row in the sidebar (source_list drag). Curated guides need an editorial source and are not planned."
   },
   {
    "feature": "Share a place or route",
    "area": "share",
    "apple": "Share sheet, copy link, send to device",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/state.rs:761",
-   "note": "Copy Link (a maps: link with the coordinate), Copy Coordinates and the share sheet with the link (File menu, Edit card buttons, toolbar Share).",
-   "wire": "Add a Share menu with Copy Link (a maps: style URL with the coordinate), Copy Coordinates and the shell share sheet with the link."
+   "bifrost": "springboard/apps/maps-desktop/src/main.rs:146",
+   "note": "File > Share is a submenu: Copy Link (a maps: link with the coordinate), Copy Coordinates and the share sheet with the link. The card's Share button and the toolbar Share use the same action. Send to a device is not offered: the shell share sheet has no device target yet.",
+   "wire": "Add a Send to Device entry once the shell share sheet lists device targets; the Share submenu is already in place."
   },
   {
    "feature": "Print",
    "area": "share",
    "apple": "Print the map or directions",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/state.rs:870",
-   "note": "File > Print (Cmd+P) sends the directions with their steps, or the place with address and link, to the print service as text. The map picture itself is not printed yet.",
-   "wire": "Render the current view and the step list to a PDF through the shell print service from a Print command (Cmd+P)."
+   "bifrost": "springboard/apps/maps-desktop/src/printmap.rs:13",
+   "note": "File > Print (Cmd+P) prints the map as the loaded tiles show it (printmap.rs draw_tiles, window.rs map_picture) on the first page, then the place or the directions text with its steps on the pages after it, through the print service. The route and pin overlays are not in the picture yet.",
+   "wire": "Draw the route line and the pins into the picture with the same projection as draw_map, so a printed route shows its line."
   },
   {
    "feature": "Measure distance and scale bar",
@@ -236,9 +236,9 @@
    "area": "system",
    "apple": "maps:, map:, mapitem: handled by the app",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/links.rs:75",
-   "note": "manifest.toml registers maps and geo; Input::Open goes through window.rs:804 and state.rs:773: q, ll, z, saddr, daddr and dirflg. A route with a named end is looked up through the search first.",
-   "wire": "Register maps: and geo: schemes in the manifest and parse q, ll, daddr and saddr parameters into a search, a centre or a route."
+   "bifrost": "springboard/apps/maps-desktop/src/links.rs:109",
+   "note": "manifest.toml registers maps:, map: and geo:. Input::Open goes through window.rs and state.rs open_link: q, ll, z, saddr, daddr and dirflg are read for maps: and map:, and geo: positions and queries. A route with a named end is looked up through the search first. mapitem: (a private item-handle format) is not read.",
+   "wire": "Read mapitem: links only if the handle format is documented; nothing else remains in this row."
   },
   {
    "feature": "Document types",

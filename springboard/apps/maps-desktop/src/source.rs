@@ -7,21 +7,27 @@ use std::time::Duration;
 pub const DEFAULT_TEMPLATE: &str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 /// The imagery layer of the Satellite map type.
 pub const IMAGERY_TEMPLATE: &str = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+/// The place names and boundaries drawn over the imagery in the Hybrid map type (transparent tiles).
+pub const LABELS_TEMPLATE: &str =
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 
 /// The map types of the View menu. Each is a tile source preset with the credit its data requires.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MapType {
     Standard,
     Satellite,
+    /// the imagery with the place names drawn over it
+    Hybrid,
 }
 
 impl MapType {
-    pub const ALL: [MapType; 2] = [MapType::Standard, MapType::Satellite];
+    pub const ALL: [MapType; 3] = [MapType::Standard, MapType::Satellite, MapType::Hybrid];
 
     pub fn label(self) -> &'static str {
         match self {
             MapType::Standard => "Map",
             MapType::Satellite => "Satellite",
+            MapType::Hybrid => "Hybrid",
         }
     }
 
@@ -29,6 +35,7 @@ impl MapType {
         match self {
             MapType::Standard => "standard",
             MapType::Satellite => "satellite",
+            MapType::Hybrid => "hybrid",
         }
     }
 
@@ -40,7 +47,15 @@ impl MapType {
     pub fn template(self) -> &'static str {
         match self {
             MapType::Standard => DEFAULT_TEMPLATE,
-            MapType::Satellite => IMAGERY_TEMPLATE,
+            MapType::Satellite | MapType::Hybrid => IMAGERY_TEMPLATE,
+        }
+    }
+
+    /// The layer drawn over the base tiles, when the map type has one.
+    pub fn labels_template(self) -> Option<&'static str> {
+        match self {
+            MapType::Hybrid => Some(LABELS_TEMPLATE),
+            MapType::Standard | MapType::Satellite => None,
         }
     }
 
@@ -49,13 +64,22 @@ impl MapType {
         match self {
             MapType::Standard => "\u{a9} OpenStreetMap contributors",
             MapType::Satellite => "Imagery \u{a9} Esri, Maxar, Earthstar Geographics",
+            MapType::Hybrid => "Imagery \u{a9} Esri, Maxar, Earthstar Geographics; labels \u{a9} Esri",
         }
     }
 
     pub fn source(self, app_version: &str) -> TileSource {
         TileSource::new(self.template(), &user_agent(app_version)).expect("the preset tile templates are valid")
     }
+
+    /// The labels layer of the map type, read from its own cache folder.
+    pub fn labels_source(self, app_version: &str) -> Option<TileSource> {
+        self.labels_template().map(|t| TileSource::new(t, &user_agent(app_version)).expect("the preset labels template is valid"))
+    }
 }
+
+/// Labels change rarely, so a cached label tile is kept for a week before it is fetched again.
+pub const LABELS_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// Traffic tiles go stale quickly: a cached traffic tile older than this is fetched again.
 pub const TRAFFIC_MAX_AGE: Duration = Duration::from_secs(5 * 60);
@@ -169,7 +193,7 @@ mod tests {
     #[test]
     fn every_map_type_has_a_valid_source_its_own_cache_folder_and_a_credit() {
         let keys: Vec<String> = MapType::ALL.iter().map(|m| m.source("1.0.0").cache_key()).collect();
-        assert_eq!(keys, vec!["tile.openstreetmap.org", "server.arcgisonline.com"]);
+        assert_eq!(keys, vec!["tile.openstreetmap.org", "server.arcgisonline.com", "server.arcgisonline.com"]);
         for m in MapType::ALL {
             assert_eq!(MapType::from_key(m.key()), m);
             assert!(!m.attribution().is_empty());
@@ -187,6 +211,24 @@ mod tests {
         assert_eq!(base.cache_key(), traffic.cache_key());
         assert_ne!(base.cache_key(), traffic.overlay_cache_key());
         assert_eq!(traffic.overlay_cache_key(), "overlay-tile.openstreetmap.org");
+    }
+
+    #[test]
+    fn hybrid_is_the_imagery_with_a_labels_layer_in_its_own_folder() {
+        assert_eq!(MapType::Hybrid.template(), MapType::Satellite.template());
+        assert_eq!(MapType::Hybrid.label(), "Hybrid");
+        assert_eq!(MapType::from_key("hybrid"), MapType::Hybrid);
+        assert_eq!(MapType::Standard.labels_template(), None);
+        assert_eq!(MapType::Satellite.labels_template(), None);
+        assert!(MapType::Satellite.labels_source("1.0.0").is_none());
+        let labels = MapType::Hybrid.labels_source("1.0.0").expect("hybrid has labels");
+        let url = labels.url(TileId { z: 3, x: 4, y: 2 });
+        assert!(url.contains("World_Boundaries_and_Places") && url.ends_with("/tile/3/2/4"), "{url}");
+        // the labels share the imagery's host, so only the overlay folder keeps them apart
+        let imagery = MapType::Hybrid.source("1.0.0");
+        assert_eq!(labels.cache_key(), imagery.cache_key());
+        assert_ne!(labels.overlay_cache_key(), imagery.cache_key());
+        assert!(MapType::Hybrid.attribution().contains("labels"));
     }
 
     #[test]
