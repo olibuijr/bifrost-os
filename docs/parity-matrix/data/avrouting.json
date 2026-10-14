@@ -24,9 +24,9 @@
     {
       "feature": "Route addresses on the local network",
       "apple": "AVCustomRoutingController.knownRouteIPs, AVCustomRoutingPartialIP",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no receiver address registry in the SDK; network state is in netd only"
+      "bifrost": "springboard/ui/src/route_address.rs (RouteAddress, KnownRoutes)",
+      "status": "partial",
+      "note": "Full and partial (network) receiver addresses are parsed, compared and matched in a registry, tested headless in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no shell or netd feed fills the registry and no app-facing setter exists yet."
     },
     {
       "feature": "Custom action items in the picker",
@@ -47,7 +47,7 @@
       "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)",
       "bifrost": "springboard/src/shell/extras.rs (extension host shell, not a discovery extension point)",
       "status": "gap",
-      "note": "no extension point that lets an app report a receiver to the shell; springboard/src/shell/extras.rs was not read in depth"
+      "note": "The extension host runs app extensions but has no discovery point that reports a receiver to the shell. springboard/ui/src/route_picker.rs takes discovered receivers as input, and nothing supplies them yet. Blocked on a discovery extension point in the shell."
     },
     {
       "feature": "Playback arbitration between participants",

@@ -59,9 +59,9 @@
     {
       "feature": "Shortcuts app integration",
       "apple": "Adding User Interactivity with Siri Shortcuts and the Shortcuts App",
-      "bifrost": "springboard/apps/shortcuts-desktop (no intent listing found)",
-      "status": "gap",
-      "note": "Shortcuts does not list or run app intents. docs/bifrost-ui.md proposes reading intent.list and manifests."
+      "bifrost": "springboard/sdk/src/intents.rs (Intent, Param, Intent::manifest_toml, intent.list)",
+      "status": "partial",
+      "note": "Apps declare typed intents with a shortcut flag, serve them on the control socket as intent.list and intent.<id>, and write manifest text for a static listing. Gap: the Shortcuts app does not read those listings yet, so it cannot list or run another app's intents."
     },
     {
       "feature": "Siri voice input and spoken responses",

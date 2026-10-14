@@ -12,7 +12,7 @@
       "apple": "UNNotificationContentExtension, didReceive(_:), Customizing the Appearance of Notifications",
       "bifrost": "springboard/src/shell/notify/mod.rs (start_banner, Card::new), springboard/src/shell/notify/banner.rs",
       "status": "gap",
-      "note": "the shell draws every notification card; no app can supply a view controller or view for a delivered notification"
+      "note": "The shell draws every notification card itself. No app can supply a view controller or view for a delivered notification, and no extension process hosts one. Blocked on a notification content extension point in the shell."
     },
     {
       "feature": "Custom actions and response handling",

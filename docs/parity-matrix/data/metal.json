@@ -80,9 +80,9 @@
     {
       "feature": "Machine learning passes",
       "apple": "MTLTensor, MPSGraph inference in a command encoder",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no GPU inference path in the desktop"
+      "bifrost": "springboard/ui/src/ml_model.rs (Model::parse, Model::predict); springboard/ui/src/ml_tensor.rs (Tensor)",
+      "status": "partial",
+      "note": "A model of dense, relu and softmax layers runs as a prediction over tensor features, tested in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: the evaluator runs on the CPU and there is no GPU tensor or command encoder path."
     },
     {
       "feature": "Materials: blur and glass compositing",

@@ -87,9 +87,9 @@
   {
    "feature": "Remote notifications and APNs registration",
    "apple": "APS Environment entitlement, registerForRemoteNotifications, device token, Setting up a remote notification server",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "No device token, no push registration and no remote delivery path. The desktop has a cloud backend (~/Projects/bifrost-cloud) but no push channel to apps. APNs itself is Apple's service and has no direct counterpart; a BifrOSt push service would be new work."
+   "bifrost": "springboard/ui/src/push_registration.rs (Registry, valid_token)",
+   "status": "partial",
+   "note": "Device token checks, per-app registration with topic and expiry, and push routing with a payload limit are modelled and tested in push_registration and springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no push transport, no token issuance by a service and no delivery to apps."
   },
   {
    "feature": "Background push and notification service extension",
@@ -108,9 +108,9 @@
   {
    "feature": "Web push notifications",
    "apple": "Sending web push notifications in web apps and browsers",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "No Push API or service worker push in the Browser app (the webview is Servo, see docs/bifrost-ui.md). Needs a push service and browser support."
+   "bifrost": "springboard/ui/src/push_registration.rs (Subscription)",
+   "status": "partial",
+   "note": "A web push subscription (https origin and endpoint, both keys) is validated by push_registration::Subscription and tested in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no Push API or service worker in the Browser app (the webview is Servo, see docs/bifrost-ui.md) and no sender that encrypts payloads."
   },
   {
    "feature": "APS entitlements and push testing tools",

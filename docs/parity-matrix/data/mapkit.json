@@ -66,9 +66,9 @@
     {
       "feature": "Map snapshots (static images)",
       "apple": "MKMapSnapshotter, MKMapSnapshotter.Snapshot",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "would need a map renderer first; the renderer has no map layer"
+      "bifrost": "springboard/ui/src/map_snapshot.rs (Snapshot::tiles, Snapshot::point, Snapshot::fit_zoom, tile_path)",
+      "status": "partial",
+      "note": "The tiles that cover a snapshot, the pixel placement of tiles and pins, and the zoom that fits a set of coordinates are modelled and tested in map_snapshot and springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no tile source and no renderer that composes the image, so no snapshot is produced yet."
     },
     {
       "feature": "Map controls (compass, zoom, scale, user tracking)",
