@@ -52,9 +52,9 @@
   {
    "feature": "Image decoding for apps",
    "apple": "IKImageView input (CGImage-backed image loading); no direct Quartz decode call in this framework",
-   "bifrost": "springboard/render/src/imgdec.rs (decode, fit, cover, contain, is_image), springboard/sdk/src/graphics_imageio.rs (detect, decode, encode, encode_jpeg)",
+   "bifrost": "springboard/sdk/src/graphics_imageio.rs (detect, pixel_size, decode, encode, encode_jpeg); springboard/render/src/imgdec.rs (fit, cover, contain)",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. JPEG and PNG decode through imgdec for Shell apps. The SDK graphics_imageio wrapper adds an app-facing decode and PNG or JPEG encode. No app calls it yet."
+   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. The app-facing detect, decode, PNG and JPEG encode and their refusals are tested headless in springboard/sdk/tests/parity_sdk-tests-07-w7.rs. No app calls it yet."
   },
   {
    "feature": "Quick Look preview panel (QLPreviewPanel, QLPreviewItem, QLPreviewPanelDataSource)",

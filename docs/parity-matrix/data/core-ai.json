@@ -31,9 +31,9 @@
     {
       "feature": "Image input descriptors",
       "apple": "ImageDescriptor",
-      "bifrost": "springboard/render/src/imgdec.rs (PNG and JPEG decode)",
+      "bifrost": "springboard/render/src/imgdec.rs (fit, cover, contain); springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode)",
       "status": "partial",
-      "note": "Decoding exists. There is no descriptor for passing pixels to a model."
+      "note": "PNG and JPEG decode to 8-bit pixels and the screen fitting helpers are tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no descriptor for passing pixels to a model."
     },
     {
       "feature": "Compute streams",

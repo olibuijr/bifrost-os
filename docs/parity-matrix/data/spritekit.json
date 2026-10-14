@@ -31,9 +31,9 @@
   {
    "feature": "Textures and texture atlases",
    "apple": "SKTexture, SKTextureAtlas, SKMutableTexture",
-   "bifrost": "springboard/render/src/imgdec.rs (PNG and JPEG decode)",
+   "bifrost": "springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode); springboard/render/src/imgdec.rs (fit, cover, contain)",
    "status": "partial",
-   "note": "images decode to pixels; there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps"
+   "note": "Images decode to pixels, as tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps"
   },
   {
    "feature": "Actions",

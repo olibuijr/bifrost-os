@@ -52,9 +52,9 @@
     {
       "feature": "Alarms",
       "apple": "EKAlarm",
-      "bifrost": "springboard/apps/calendar-desktop/src/calendar/alerts.rs",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/alerts.rs (due, step, ALERT_MINUTES)",
       "status": "partial",
-      "note": "relative-offset alerts posted as notifications; no absolute or proximity alarms"
+      "note": "Relative-offset alarms, their alert text, time zones, recurrence with exceptions and the rebuild rule are tested headless in springboard/apps/calendar-desktop/tests/parity_sdk-tests-07-w7.rs. Gap: no absolute or proximity alarms."
     },
     {
       "feature": "Alarm scheduling service",
