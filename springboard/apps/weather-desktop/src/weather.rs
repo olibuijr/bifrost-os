@@ -78,6 +78,8 @@ const CTX_REMOVE: u32 = 1;
 const CTX_NOTIFY: u32 = 2;
 /// The Notifications switch's width (points) between the temperature and the remove button.
 const NOTIFY_W: f32 = 64.0;
+/// Extent of the two compact weather dials (not UI spacing).
+const DIAL_EXTENT_PT: f32 = 32.0;
 /// A finger must move this far (points) on a sidebar row before the row is dragged instead of tapped.
 const DRAG_START_PT: f32 = 6.0;
 /// The leading glyph slot of a sidebar row: its centre, from the row's left edge and middle (points). The list
@@ -1901,7 +1903,7 @@ fn draw_sun_arc(c: &mut Surface, ui: &Ui, origin: (f32, f32), progress: Option<f
 /// the wind comes from (`from`, degrees clockwise from north) when the service gave one.
 fn draw_wind_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), from: Option<f64>) {
     let (cx, top) = origin;
-    let (cy, radius) = (top + ui.pt(56.0), ui.pt(32.0));
+    let (cy, radius) = (top + ui.pt(56.0), ui.pt(DIAL_EXTENT_PT));
     for k in 0..16 {
         let (x, y) = insights::dial_point(k as f64 * 22.5, cx, cy, radius);
         let (size, alpha) = if k % 4 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(SPACE_XXS), 100) };
@@ -1926,7 +1928,7 @@ fn draw_wind_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), from: Option<f64
 /// needle at `angle` degrees from straight up when the service gave the change (see `insights::pressure_dial_angle`).
 fn draw_pressure_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), angle: Option<f64>) {
     let (cx, top) = origin;
-    let (cy, radius) = (top + ui.pt(56.0), ui.pt(32.0));
+    let (cy, radius) = (top + ui.pt(56.0), ui.pt(DIAL_EXTENT_PT));
     for k in 0..7 {
         let (x, y) = insights::dial_point(-90.0 + k as f64 * 30.0, cx, cy, radius);
         let (size, alpha) = if k % 3 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(SPACE_XXS), 100) };

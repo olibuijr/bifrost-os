@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.2
+
+- Named the dial extent as geometry rather than spacing so the wind and pressure diagrams keep their intended dimensions.
+
 ## 1.7.1 — 2026-10-14
 
 - Forecast charts use named scheme colours and scale their day-row layout with the card width; chart marks and spacing follow the appearance and shared spacing tokens.
