@@ -91,8 +91,8 @@ impl BackgroundConfiguration {
         BackgroundConfiguration {
             fill: StateValue {
                 normal: Some(normal),
-                highlighted: Some(highlighted),
-                selected: Some(selected),
+                highlighted: Some(Some(highlighted)),
+                selected: Some(Some(selected)),
                 disabled: None,
             },
             ..BackgroundConfiguration::clear()
