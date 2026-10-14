@@ -26,6 +26,7 @@ pub mod ff_effect;
 pub mod gamepad;
 pub mod usb_descriptors;
 pub mod usb_transfer;
+pub mod usb_claim;
 pub mod virtio;
 pub mod accessory_manager;
 pub mod script_io;

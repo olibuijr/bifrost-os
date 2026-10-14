@@ -4,7 +4,7 @@
   "macos_since": "10.13",
   "status": "partial",
   "bifrost": "none for app-facing accessory sessions; OS layer: springboard/src/bare/bluetooth.rs (device list, pairing, audio route flag), springboard/src/shell/pages.rs (bluetooth_spec, line 378), springboard/src/bare/input.rs (evdev input devices, shell only), springboard/src/media/v4l2.rs (camera devices, shell only)",
-  "summary": "Apple's framework connects apps to MFi hardware over Lightning, 30-pin or Bluetooth, with a per-protocol byte stream and connect/disconnect notifications; the doc notes iOS-family apps on Apple silicon Macs cannot use it. BifrOSt has no SDK type for accessory discovery, sessions, protocol matching or Wi-Fi accessory setup. The shell manages Bluetooth pairing and devices, but apps get no API for them.",
+  "summary": "Apple's framework connects apps to MFi hardware over Lightning, 30-pin or Bluetooth, with a per-protocol byte stream and connect/disconnect notifications; the doc notes iOS-family apps on Apple silicon Macs cannot use it. BifrOSt has an app view of an accessory (built from the USB accessory manager model), but no accessory discovery, sessions, protocol matching or Wi-Fi accessory setup reach apps. The shell manages Bluetooth pairing and devices, but apps get no API for them.",
   "rea_evidence": "ev_8107521ea624a0b2cff20b64e9290446d5423c8f9d9d6999327d89ec754fcab6",
   "features": [
     {
@@ -17,9 +17,9 @@
     {
       "feature": "Accessory object (identity and state)",
       "apple": "EAAccessory (name, manufacturer, modelNumber, serialNumber, protocolStrings, isConnected, connectionID) https://developer.apple.com/documentation/externalaccessory/eaaccessory",
-      "bifrost": "springboard/core/src/accessory_manager.rs (Accessory identity fields",
+      "bifrost": "springboard/sdk/src/external_accessory.rs (Accessory::from_core), springboard/core/src/accessory_manager.rs (Accessory identity fields)",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell has a Bluetooth device record with name, connection and pairing state. It is not exposed to apps and has no MFi protocol strings, manufacturer or connection ID. Wired accessories are not modelled."
+      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. Accessory::from_core builds the app view (identity, protocol strings, connection id, connected state) from the USB accessory manager record. Wired accessories are not modelled; no bus event feeds it."
     },
     {
       "feature": "Protocol matching (declared protocols)",
@@ -66,7 +66,7 @@
   ],
   "gaps": [
     "No SDK accessory manager or connect/disconnect events for apps (EAAccessoryManager).",
-    "No app-facing accessory object with protocol strings, manufacturer, model and connection ID (EAAccessory).",
+    "The app view of an accessory (Accessory::from_core) has no bus source yet, and the sandbox binds no accessory device nodes.",
     "No EASession byte stream for a declared accessory protocol, and no manifest key or sandbox grant for accessory protocols (app_policy.rs binds only /dev/snd and /dev/dri).",
     "No Bluetooth accessory picker callable from an app; the picker exists only in Settings (shell/pages.rs bluetooth_spec).",
     "No Wi-Fi unconfigured accessory browser or configuration flow.",
