@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.17.0 — 2026-10-14
+
+- Attachment browser model (notes/attachments.rs): every attachment of every note, newest note first, with its folder and caption. The browser grid is not drawn yet.
+- Rename attachment: a caption saved per file in a sidecar file (notes/attachments.rs, set_caption), so file names on disk never change. The caption is not shown yet.
+- Settings model (notes/settings.rs): default text size, dark note background, new note start and attachment tile size, saved beside the notes. There is no Settings pane yet and the values do not change the editor.
+- Note links (notes/note_url.rs): notes://note/<id> links are built and read back with the id validated. The scheme is not registered and links do not open notes yet.
+- Not in this version: the attachment grid, caption display, Small and Large tiles, the Settings pane, the note-link handler, speech, gallery view, separate note windows and locked-note changes are still missing.
+
 ## 1.16.0 — 2026-10-13
 
 - Import to Notes also reads HTML and RTF files, converting headings, emphasis, lists and paragraphs to Markdown (notes/import.rs); a file with no text is skipped and logged.
