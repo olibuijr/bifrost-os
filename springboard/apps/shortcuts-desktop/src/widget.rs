@@ -10,8 +10,8 @@ use crate::automation;
 use springboard::shortcuts as model;
 use bifrost_app::kit::ui::{
     Ui, Weight, CARD_BG, CARD_RADIUS_PT, CELL_RADIUS_PT, CONTROL_PRESSED, CONTENT_BG, LABEL, LABEL_2, LABEL_3, LINK,
-    MAC_TITLE3_PT, PRESSED, ROW_PRESSED, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK,
-    SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW, TOAST_FILL, WHITE,
+    MAC_TITLE3_PT, PRESSED, ROW_PRESSED, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_BROWN, SYSTEM_GREEN, SYSTEM_ORANGE,
+    SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_TEAL, SYSTEM_YELLOW, TOAST_FILL, WHITE,
 };
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -35,8 +35,24 @@ const RESULT_RADIUS_PT: f32 = 13.0;
 const RESULT_MS: f64 = 8000.0;
 
 /// Tile colours a shortcut can take, as the Shortcuts app offers them.
-pub const PALETTE: [u32; 8] =
-    [SYSTEM_RED, SYSTEM_ORANGE, SYSTEM_YELLOW, SYSTEM_GREEN, SYSTEM_TEAL, SYSTEM_BLUE, SYSTEM_PURPLE, SYSTEM_PINK];
+pub const PALETTE: [u32; 9] = [
+    SYSTEM_RED,
+    SYSTEM_ORANGE,
+    SYSTEM_YELLOW,
+    SYSTEM_GREEN,
+    SYSTEM_TEAL,
+    SYSTEM_BLUE,
+    SYSTEM_PURPLE,
+    SYSTEM_PINK,
+    SYSTEM_BROWN,
+];
+/// How long a finger rests on a tile before its menu opens, in milliseconds.
+const LONG_PRESS_MS: f64 = 500.0;
+/// The most variables the Insert Variable rows of an open text step offer.
+const MAX_CHIPS: usize = 6;
+/// The width of a tile's menu, in points, and the height of one of its rows.
+const CHOICE_MENU_W: f32 = 200.0;
+const CHOICE_ROW_H: f32 = 44.0;
 
 type Rect = (f32, f32, f32, f32);
 
@@ -64,7 +80,10 @@ const TITLE_MAX_W: f32 = 320.0;
 const SEARCH_W: f32 = 180.0;
 /// How far from the right edge a row's value ends, in points: past the stepper, and past the move buttons on a step.
 const VALUE_INSET: f32 = 96.0;
-const STEP_VALUE_INSET: f32 = 172.0;
+const STEP_VALUE_INSET: f32 = 216.0;
+/// The width of the drag grip at a step's right edge, in points. Every step row keeps this space, so the steppers and
+/// move buttons line up whether or not the row has a grip.
+const GRIP_W: f32 = 44.0;
 /// How far each level of a block indents its steps, in points.
 const INDENT_PT: f32 = 16.0;
 /// The width of a move button on a step row, in points.
@@ -144,6 +163,35 @@ enum Target {
     /// The search field of the toolbar, and its clear button.
     Search,
     SearchClear,
+    /// the drag grip of step `k`: dragging it moves the step to where the finger is released
+    Grip(usize),
+    /// the Menu Key row of the open shortcut: steps to the next key
+    MenuKey,
+    /// a variable row under an open text step: inserts `{name}` into the text (the index is into `variable_names`)
+    InsertVar(usize),
+    /// a row of the menu a long press opens on a tile
+    Choice(Choice),
+    /// a tap outside a tile's menu while it is open: closes the menu
+    ChoiceClose,
+}
+
+/// The rows of the menu a long press opens on a tile.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Choice {
+    Run,
+    Rename,
+    Duplicate,
+    Delete,
+}
+
+/// The rows of the tile menu, in order.
+const CHOICES: [(Choice, &str); 4] = [(Choice::Run, "Run"), (Choice::Rename, "Rename"), (Choice::Duplicate, "Duplicate"), (Choice::Delete, "Delete")];
+
+/// A step being dragged: the step's position and the position it would land on.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+struct Reorder {
+    from: usize,
+    to: usize,
 }
 
 /// What a menu asks the window to do.
@@ -174,6 +222,8 @@ enum Look {
     Move(bool),
     Swatch { color: u32, on: bool },
     GlyphCell { glyph: usize, on: bool },
+    /// the drag grip of a step: three short lines
+    Grip,
     /// A footer under a catalog row: the intent's description.
     Note(String),
 }
@@ -238,6 +288,12 @@ pub struct Shortcuts {
     export_request: Option<(String, String)>,
     /// whether the last tap asked to import a file
     import_request: bool,
+    /// the shortcut whose menu a long press opened on the grid, while the menu is showing
+    choice_menu: Option<usize>,
+    /// when the finger went down, in milliseconds, for the long press
+    press_t: f64,
+    /// the step a grip is dragging, and where it would land
+    reorder: Option<Reorder>,
 }
 
 const ROW_POS_FIRST: u8 = 1;
@@ -246,6 +302,12 @@ const ROW_POS_LAST: u8 = 2;
 /// Whether a step only closes or splits a block, and so has no remove or move buttons of its own.
 fn is_marker(a: &Action) -> bool {
     matches!(a, Action::Otherwise | Action::EndIf | Action::EndRepeat)
+}
+
+/// Whether a step can be dragged to another place: a plain step. A block's opener or end stays where it is, so the
+/// blocks keep their shape.
+fn can_drag(a: &Action) -> bool {
+    !is_marker(a) && !matches!(a, Action::If(_) | Action::Repeat(_) | Action::RepeatEach)
 }
 
 impl Shortcuts {
@@ -281,6 +343,9 @@ impl Shortcuts {
             edit: Edit::None,
             export_request: None,
             import_request: false,
+            choice_menu: None,
+            press_t: 0.0,
+            reorder: None,
         }
     }
 
@@ -500,9 +565,14 @@ impl Shortcuts {
         }
     }
 
+    /// Whether the toolbar has a search field: the grid, the Add Action list and the gallery search; the editor does not.
+    fn has_search(&self) -> bool {
+        !matches!(self.view, View::Editor(_))
+    }
+
     /// The unified toolbar (`NativeToolbar`): back, title, then the view's commands.
     fn bar(&self, ui: &Ui) -> Toolbar {
-        let search_room = if self.view == View::Grid { SEARCH_W + widgets::TOOLBAR_GAP_PT } else { 0.0 };
+        let search_room = if self.has_search() { SEARCH_W + widgets::TOOLBAR_GAP_PT } else { 0.0 };
         let room = (self.bar_bounds(ui).w - 5.0 * widgets::CAPSULE_PT - 4.0 * widgets::TOOLBAR_GAP_PT - search_room).clamp(40.0, TITLE_MAX_W);
         let mut items = vec![];
         if self.view != View::Grid {
@@ -510,9 +580,11 @@ impl Shortcuts {
         }
         items.push(ToolbarItem::custom(BAR_TITLE, "Title", room));
         items.push(ToolbarItem::flexible_space());
+        if self.has_search() {
+            items.push(ToolbarItem::custom(BAR_SEARCH, "Search", SEARCH_W));
+        }
         match self.view {
             View::Grid => {
-                items.push(ToolbarItem::custom(BAR_SEARCH, "Search", SEARCH_W));
                 items.push(ToolbarItem::icon(BAR_ADD, "New Shortcut", "plus").in_group(2).enabled(self.list.len() < MAX_SHORTCUTS));
                 items.push(ToolbarItem::button(BAR_EDIT, if self.edit_mode { "Done" } else { "Edit" }).selected(self.edit_mode));
             }
@@ -616,6 +688,7 @@ impl Shortcuts {
                     cells.push(Cell { target: None, rect: note, look: Look::Note(format!("No shortcuts match \"{}\".", &*self.query)) });
                     y += ui.pt(SPACE_XXXL);
                 }
+                self.choice_cells(ui, &mut cells);
             }
             View::Editor(i) => {
                 let Some(sc) = self.list.get(i) else { return (cells, y) };
@@ -634,28 +707,39 @@ impl Shortcuts {
                         *indent = INDENT_PT * depths[k] as f32;
                         *inset = STEP_VALUE_INSET;
                     }
-                    // while its text is typed, the field covers the row and the buttons go
+                    // while its text is typed, the field covers the row, the buttons go and the variables are offered
                     if self.edit == Edit::Value(k) {
+                        let names = model::variable_names(&sc.actions);
+                        let shown = names.len().min(MAX_CHIPS);
+                        for (v, name) in names.iter().take(MAX_CHIPS).enumerate() {
+                            let pos = if v + 1 == shown { ROW_POS_LAST } else { 0 };
+                            self.row(ui, &mut cells, &mut y, &format!("Insert {{{name}}}"), "", LABEL.now(), pos, Some(Target::InsertVar(v)));
+                        }
                         continue;
                     }
                     let marker = is_marker(a);
+                    let (gw, bw) = (ui.pt(GRIP_W), ui.pt(44.0));
+                    // the steppers and move buttons sit left of the grip, which is the row's right-most 44 pt
+                    let right = r.0 + r.2 - gw;
                     if !marker {
                         cells.push(Cell { target: Some(Target::Remove(k)), rect: (r.0, r.1, ui.pt(44.0), r.3), look: Look::Minus });
                     }
                     if a.adjustable() {
-                        let bw = ui.pt(44.0);
-                        cells.push(Cell { target: Some(Target::Inc(k)), rect: (r.0 + r.2 - bw, r.1, bw, r.3), look: Look::Stepper(true) });
-                        cells.push(Cell { target: Some(Target::Dec(k)), rect: (r.0 + r.2 - 2.0 * bw, r.1, bw, r.3), look: Look::Stepper(false) });
+                        cells.push(Cell { target: Some(Target::Inc(k)), rect: (right - bw, r.1, bw, r.3), look: Look::Stepper(true) });
+                        cells.push(Cell { target: Some(Target::Dec(k)), rect: (right - 2.0 * bw, r.1, bw, r.3), look: Look::Stepper(false) });
                     }
                     if !marker {
-                        let (mw, bw) = (ui.pt(MOVE_W), ui.pt(44.0));
-                        let base = r.0 + r.2 - 2.0 * bw - 2.0 * mw;
+                        let mw = ui.pt(MOVE_W);
+                        let base = right - 2.0 * bw - 2.0 * mw;
                         if k > 0 {
                             cells.push(Cell { target: Some(Target::Up(k)), rect: (base, r.1, mw, r.3), look: Look::Move(true) });
                         }
                         if k + 1 < n {
                             cells.push(Cell { target: Some(Target::Down(k)), rect: (base + mw, r.1, mw, r.3), look: Look::Move(false) });
                         }
+                    }
+                    if can_drag(a) {
+                        cells.push(Cell { target: Some(Target::Grip(k)), rect: (right, r.1, gw, r.3), look: Look::Grip });
                     }
                 }
                 if n < MAX_ACTIONS {
@@ -666,7 +750,9 @@ impl Shortcuts {
                 let when = sc.schedule.map(|d| d.label()).unwrap_or_else(|| "Off".into());
                 self.row(ui, &mut cells, &mut y, "Daily Reminder", &when, LABEL.now(), ROW_POS_FIRST, Some(Target::Schedule));
                 let folder = model::folder_name(sc.folder).unwrap_or("None");
-                self.row(ui, &mut cells, &mut y, "Folder", folder, LABEL.now(), ROW_POS_LAST, Some(Target::Folder));
+                self.row(ui, &mut cells, &mut y, "Folder", folder, LABEL.now(), 0, Some(Target::Folder));
+                let key = if sc.key == 0 { "None".to_string() } else { format!("Ctrl+Cmd+{}", sc.key) };
+                self.row(ui, &mut cells, &mut y, "Menu Key", &key, LABEL.now(), ROW_POS_LAST, Some(Target::MenuKey));
                 y += ui.pt(35.0) - ui.pt(SPACE_S);
                 cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Color".into()) });
                 y += ui.pt(SPACE_XXXL);
@@ -702,32 +788,59 @@ impl Shortcuts {
                 y += ui.pt(SPACE_L);
                 cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Built-in Actions".into()) });
                 y += ui.pt(SPACE_XXXL);
-                for (k, name) in KINDS.iter().enumerate() {
-                    let pos = (if k == 0 { ROW_POS_FIRST } else { 0 }) | if k + 1 == KINDS.len() { ROW_POS_LAST } else { 0 };
-                    let r = self.row(ui, &mut cells, &mut y, name, "", LABEL.now(), pos, Some(Target::Pick(k)));
+                // the search field narrows both lists; the positions of the rows are the built-in actions' own
+                let kinds: Vec<usize> = (0..KINDS.len()).filter(|&k| self.fits(KINDS[k])).collect();
+                for (j, &k) in kinds.iter().enumerate() {
+                    let pos = (if j == 0 { ROW_POS_FIRST } else { 0 }) | if j + 1 == kinds.len() { ROW_POS_LAST } else { 0 };
+                    let r = self.row(ui, &mut cells, &mut y, KINDS[k], "", LABEL.now(), pos, Some(Target::Pick(k)));
                     if let Some(Cell { look: Look::Row { chevron, .. }, .. }) = cells.iter_mut().rev().find(|c| c.rect == r) {
                         *chevron = true;
                     }
                 }
                 // the intents this app declares, with the title and description from the catalog
-                y += ui.pt(SPACE_L);
-                cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Intents".into()) });
-                y += ui.pt(SPACE_XXXL);
-                for (k, intent) in automation::declared().iter().enumerate() {
+                let declared = automation::declared();
+                let found: Vec<usize> = (0..declared.len()).filter(|&k| self.fits(&declared[k].title)).collect();
+                if !found.is_empty() {
+                    y += ui.pt(SPACE_L);
+                    cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Intents".into()) });
+                    y += ui.pt(SPACE_XXXL);
+                }
+                for k in found {
+                    let intent = &declared[k];
                     self.row(ui, &mut cells, &mut y, &intent.title, "", LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::Intent(k)));
                     let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
                     cells.push(Cell { target: None, rect: note, look: Look::Note(intent.description.clone()) });
                     y += ui.pt(SPACE_XXXL);
                 }
+                if kinds.is_empty() && declared.iter().all(|i| !self.fits(&i.title)) {
+                    let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
+                    cells.push(Cell { target: None, rect: note, look: Look::Note(format!("No actions match \"{}\".", &*self.query)) });
+                    y += ui.pt(SPACE_XXXL);
+                }
             }
             View::Gallery => {
                 y += ui.pt(SPACE_L);
-                cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Starter Shortcuts".into()) });
-                y += ui.pt(SPACE_XXXL);
-                for (n, starter) in model::starters().iter().enumerate() {
-                    self.row(ui, &mut cells, &mut y, &starter.shortcut.name, "Add", LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::Starter(n)));
+                let starters = model::starters();
+                let found: Vec<usize> = (0..starters.len()).filter(|&n| self.starter_fits(&starters[n])).collect();
+                // one heading per category that has a starter the search lets through, in the category order
+                for category in model::STARTER_CATEGORIES {
+                    let members: Vec<usize> = found.iter().copied().filter(|&n| starters[n].category == category).collect();
+                    if members.is_empty() {
+                        continue;
+                    }
+                    cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header(category.into()) });
+                    y += ui.pt(SPACE_XXXL);
+                    for n in members {
+                        let starter = &starters[n];
+                        self.row(ui, &mut cells, &mut y, &starter.shortcut.name, "Add", LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::Starter(n)));
+                        let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
+                        cells.push(Cell { target: None, rect: note, look: Look::Note(starter.summary.to_string()) });
+                        y += ui.pt(SPACE_XXXL);
+                    }
+                }
+                if found.is_empty() {
                     let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
-                    cells.push(Cell { target: None, rect: note, look: Look::Note(starter.summary.to_string()) });
+                    cells.push(Cell { target: None, rect: note, look: Look::Note(format!("No starters match \"{}\".", &*self.query)) });
                     y += ui.pt(SPACE_XXXL);
                 }
                 y += ui.pt(SPACE_L);
@@ -821,6 +934,81 @@ impl Shortcuts {
         }
     }
 
+    /// Whether `text` passes the search field: it contains what is typed, ignoring case. An empty search passes everything.
+    fn fits(&self, text: &str) -> bool {
+        let q = self.query.trim().to_lowercase();
+        q.is_empty() || text.to_lowercase().contains(&q)
+    }
+
+    /// Whether a starter passes the search: its name, its line or its heading contains the text.
+    fn starter_fits(&self, s: &model::Starter) -> bool {
+        self.fits(&s.shortcut.name) || self.fits(s.summary) || self.fits(s.category)
+    }
+
+    /// The rows of the menu a long press opened on a tile: under the tile when they fit in the window, above it otherwise.
+    fn choice_cells(&self, ui: &Ui, cells: &mut Vec<Cell>) {
+        let Some(i) = self.choice_menu else { return };
+        let Some((tx, ty, _, th)) = cells.iter().find(|c| c.target == Some(Target::Tile(i))).map(|c| c.rect) else { return };
+        let (w, h) = (ui.pt(CHOICE_MENU_W), ui.pt(CHOICE_ROW_H));
+        let gap = ui.pt(SPACE_S);
+        let below = ty + th + gap;
+        let y0 = if below + h * CHOICES.len() as f32 <= self.h as f32 {
+            below
+        } else {
+            (ty - gap - h * CHOICES.len() as f32).max(Self::top(ui))
+        };
+        let x = tx.min(self.w as f32 - w - ui.pt(SPACE_L)).max(Self::side(ui));
+        for (k, (choice, label)) in CHOICES.iter().enumerate() {
+            let pos = (if k == 0 { ROW_POS_FIRST } else { 0 }) | if k + 1 == CHOICES.len() { ROW_POS_LAST } else { 0 };
+            let tint = if *choice == Choice::Delete { SYSTEM_RED } else { LINK };
+            cells.push(Cell {
+                target: Some(Target::Choice(*choice)),
+                rect: (x, y0 + h * k as f32, w, h),
+                look: Look::Row { text: label.to_string(), value: String::new(), tint, pos, chevron: false, centre: false, indent: 0.0, inset: VALUE_INSET },
+            });
+        }
+    }
+
+    /// The step whose grip is nearest to height `y` (pixels), which is where a dragged step would land.
+    fn grip_nearest(&self, ui: &Ui, y: f32) -> Option<usize> {
+        let (cells, _) = self.layout(ui);
+        cells
+            .iter()
+            .filter_map(|c| match c.target {
+                Some(Target::Grip(k)) => Some((k, c.rect.1 + c.rect.3 / 2.0)),
+                _ => None,
+            })
+            .min_by(|a, b| (a.1 - y).abs().total_cmp(&(b.1 - y).abs()))
+            .map(|(k, _)| k)
+    }
+
+    /// Does what a row of the tile menu asks for the shortcut at `i`.
+    fn choose(&mut self, i: usize, choice: Choice) {
+        match choice {
+            Choice::Run => self.run_all(i),
+            Choice::Rename => {
+                if i < self.list.len() {
+                    self.view = View::Editor(i);
+                    self.scroll = 0.0;
+                    self.begin(Edit::Name);
+                }
+            }
+            Choice::Duplicate => match model::duplicate(&mut self.list, i) {
+                Some(_) => {
+                    self.save();
+                    self.toast = Some(("Duplicated".into(), self.now + 2000.0));
+                }
+                None => self.toast = Some((format!("A list holds at most {MAX_SHORTCUTS} shortcuts."), self.now + 3000.0)),
+            },
+            Choice::Delete => {
+                if i < self.list.len() {
+                    self.list.remove(i);
+                    self.save();
+                }
+            }
+        }
+    }
+
     // ---- typing -------------------------------------------------------------------------------------------------
 
     /// Whether the app needs the keyboard: a field is being typed into.
@@ -908,6 +1096,7 @@ impl Shortcuts {
             (Edit::Search, Target::Search | Target::SearchClear) => true,
             (Edit::Name, Target::Name) => true,
             (Edit::Value(a), Target::Value(b)) => a == b,
+            (Edit::Value(_), Target::InsertVar(_)) => true,
             _ => false,
         };
         if self.edit != Edit::None && !keeps {
@@ -985,7 +1174,11 @@ impl Shortcuts {
             Target::Side(id) => {
                 self.view = View::Grid;
                 match id {
-                    ROW_GALLERY => self.view = View::Gallery,
+                    ROW_GALLERY => {
+                        self.view = View::Gallery;
+                        // the grid's search does not narrow the gallery; the gallery has its own
+                        self.query.clear();
+                    }
                     ROW_ALL => self.filter = Filter::All,
                     f if f > ROW_FOLDER && f <= ROW_FOLDER + FOLDERS.len() as u32 => self.filter = Filter::Folder((f - ROW_FOLDER) as usize),
                     _ => {}
@@ -1045,8 +1238,36 @@ impl Shortcuts {
                 if let View::Editor(i) = self.view {
                     self.view = View::Picker(i);
                     self.scroll = 0.0;
+                    // the search of the grid does not narrow the Add Action list
+                    self.query.clear();
                 }
             }
+            Target::Grip(_) => {}
+            Target::MenuKey => {
+                if let View::Editor(i) = self.view {
+                    if let Some(next) = self.list.get(i).map(|s| model::next_key(s.key)) {
+                        match model::set_key(&mut self.list, i, next) {
+                            Ok(()) => self.save(),
+                            Err(why) => self.toast = Some((why, self.now + 3000.0)),
+                        }
+                    }
+                }
+            }
+            Target::InsertVar(v) => {
+                let name = match self.view {
+                    View::Editor(i) => self.list.get(i).and_then(|s| model::variable_names(&s.actions).get(v).cloned()),
+                    _ => None,
+                };
+                if let Some(name) = name {
+                    self.field.push_str(&format!("{{{name}}}"));
+                }
+            }
+            Target::Choice(choice) => {
+                if let Some(i) = self.choice_menu.take() {
+                    self.choose(i, choice);
+                }
+            }
+            Target::ChoiceClose => self.choice_menu = None,
             Target::Pick(k) => {
                 let added = Action::block(k);
                 let full = match self.editing() {
@@ -1143,18 +1364,34 @@ impl Shortcuts {
         self.now = t;
         match event {
             Event::Down(x, y) => {
-                self.pressed = self.hit(ui, x, y);
+                let hit = self.hit(ui, x, y);
+                // while a tile's menu is open, its rows take the tap and any other tap only closes the menu
+                self.pressed = match (self.choice_menu, hit) {
+                    (Some(_), Some(Target::Choice(_))) => hit,
+                    (Some(_), _) => Some(Target::ChoiceClose),
+                    (None, _) => hit,
+                };
                 self.down_y = y;
                 self.last_y = y;
+                self.press_t = t;
                 self.dragging = false;
                 self.dirty = true;
             }
             Event::Move(_, y) => {
                 if !self.dragging && (y - self.down_y).abs() > ui.pt(SPACE_M) {
                     self.dragging = true;
+                    // a grip starts a drag of its step; any other touch that moves scrolls
+                    if let Some(Target::Grip(k)) = self.pressed {
+                        self.reorder = Some(Reorder { from: k, to: k });
+                    }
                     self.pressed = None;
                 }
-                if self.dragging {
+                if let Some(r) = self.reorder {
+                    if let Some(to) = self.grip_nearest(ui, y) {
+                        self.reorder = Some(Reorder { to, ..r });
+                    }
+                    self.dirty = true;
+                } else if self.dragging {
                     let max = self.max_scroll(ui);
                     self.scroll = (self.scroll - (y - self.last_y)).clamp(0.0, max);
                     self.dirty = true;
@@ -1162,8 +1399,17 @@ impl Shortcuts {
                 self.last_y = y;
             }
             Event::Up(x, y) => {
+                if let Some(r) = self.reorder.take() {
+                    if r.to != r.from {
+                        let moved = self.editing().and_then(|s| model::move_step(&mut s.actions, r.from, r.to)).is_some();
+                        if moved {
+                            self.save();
+                        }
+                    }
+                }
                 if let Some(p) = self.pressed.take() {
-                    if !self.dragging && self.hit(ui, x, y) == Some(p) {
+                    let same = p == Target::ChoiceClose || self.hit(ui, x, y) == Some(p);
+                    if !self.dragging && same {
                         self.leave_edit_for(p);
                         self.activate(p);
                     }
@@ -1178,6 +1424,14 @@ impl Shortcuts {
 
     pub fn tick(&mut self, _ui: &Ui, t: f64) -> bool {
         self.now = t;
+        // a finger that rests on a tile for the long press opens the tile's menu, and the tap that follows does nothing
+        if let Some(Target::Tile(i)) = self.pressed {
+            if !self.dragging && self.choice_menu.is_none() && t - self.press_t >= LONG_PRESS_MS {
+                self.pressed = None;
+                self.choice_menu = Some(i);
+                self.dirty = true;
+            }
+        }
         if matches!(&self.toast, Some((_, until)) if t >= *until) {
             self.toast = None;
             self.dirty = true;
@@ -1192,10 +1446,12 @@ impl Shortcuts {
     pub fn next_wake(&self, _t: f64) -> Option<f64> {
         let toast = self.toast.as_ref().map(|(_, until)| *until);
         let panel = self.result.as_ref().map(|p| p.until);
-        match (toast, panel) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        // a tile under a resting finger opens its menu when the long press time has passed
+        let press = match self.pressed {
+            Some(Target::Tile(_)) if !self.dragging && self.choice_menu.is_none() => Some(self.press_t + LONG_PRESS_MS),
+            _ => None,
+        };
+        [toast, panel, press].into_iter().flatten().reduce(f64::min)
     }
 
     fn put(&mut self, s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, x: f32, y: f32, h: f32, align: i8) {
@@ -1317,7 +1573,15 @@ impl Shortcuts {
                             || text == "Add Action"
                             || matches!(
                                 c.target,
-                                Some(Target::Pick(_) | Target::Intent(_) | Target::Starter(_) | Target::Duplicate | Target::Export | Target::Import)
+                                Some(
+                                    Target::Pick(_)
+                                        | Target::Intent(_)
+                                        | Target::Starter(_)
+                                        | Target::Duplicate
+                                        | Target::Export
+                                        | Target::Import
+                                        | Target::Choice(_)
+                                )
                             );
                         let tx = if leading { x + ui.pt(SPACE_L) } else { x + ui.pt(46.0 + *indent) };
                         self.put(s, ui, text, MAC_BODY_PT, Weight::Regular, *tint, tx, y, ch, 0);
@@ -1366,6 +1630,24 @@ impl Shortcuts {
                     }
                     let side = cw.min(ch) * 0.7;
                     draw_mark(s, ui, *glyph, x + (cw - side) / 2.0, y + (ch - side) / 2.0, side * 0.75, LABEL.now());
+                }
+                Look::Grip => {
+                    let k = match c.target {
+                        Some(Target::Grip(k)) => k,
+                        _ => 0,
+                    };
+                    let dragged = self.reorder.is_some_and(|r| r.from == k);
+                    let col = if pressed || dragged { LINK } else { LABEL_3.now() };
+                    let (cx, cy, half, gap, t) = (x + cw / 2.0, y + ch / 2.0, ui.pt(7.0), ui.pt(4.0), ui.pt(SPACE_XXS));
+                    for dy in [-gap, 0.0, gap] {
+                        glyphs::line(s, (cx - half, cy + dy), (cx + half, cy + dy), t, col);
+                    }
+                    // while a step is dragged, a line marks the row it would land on
+                    if let Some(r) = self.reorder.filter(|r| r.to == k && r.to != r.from) {
+                        let left = (Self::side(ui) + ui.pt(SPACE_XL)).max(0.0);
+                        let line_y = if r.to < r.from { y } else { y + ch };
+                        s.fill_rect(left as usize, (line_y - t / 2.0).max(0.0) as usize, (x + cw - left).max(0.0) as usize, t.max(1.0) as usize, LINK);
+                    }
                 }
             }
         }
@@ -1783,7 +2065,7 @@ mod tests {
         let mut w = window("editor-rows");
         w.view = View::Editor(0);
         let (cells, _) = w.layout(&ui());
-        for t in [Target::Name, Target::Duplicate, Target::Export, Target::Folder, Target::Schedule, Target::Delete, Target::AddAction] {
+        for t in [Target::Name, Target::Duplicate, Target::Export, Target::Folder, Target::MenuKey, Target::Schedule, Target::Delete, Target::AddAction] {
             assert!(cells.iter().any(|c| c.target == Some(t)), "{t:?}");
         }
     }
@@ -1882,12 +2164,16 @@ mod tests {
     }
 
     #[test]
-    fn the_toolbar_shows_the_search_field_only_in_the_grid() {
+    fn the_toolbar_has_a_search_field_except_in_an_editor() {
         let mut w = window("bar");
         let ui = ui();
         assert!(w.bar_layout(&ui).rect_of(BAR_SEARCH).is_some());
         assert!(w.controls(&ui).iter().any(|n| n.role == Role::TextField && n.label == "Search"));
         w.view = View::Gallery;
+        assert!(w.bar_layout(&ui).rect_of(BAR_SEARCH).is_some(), "the gallery searches its starters");
+        w.view = View::Picker(0);
+        assert!(w.bar_layout(&ui).rect_of(BAR_SEARCH).is_some(), "the Add Action list is searched too");
+        w.view = View::Editor(0);
         assert!(w.bar_layout(&ui).rect_of(BAR_SEARCH).is_none());
         assert!(!w.controls(&ui).iter().any(|n| n.role == Role::TextField));
     }
@@ -1903,5 +2189,149 @@ mod tests {
         type_text(&mut w, "bed");
         let right = ui.pt(r.x + r.w - 10.0);
         assert_eq!(w.hit(&ui, right, mid_y), Some(Target::SearchClear), "the clear button shows once there is text");
+    }
+
+    /// The centre, in pixels, of the first cell with `target`.
+    fn centre_of(w: &Shortcuts, ui: &Ui, target: Target) -> (f32, f32) {
+        let (cells, _) = w.layout(ui);
+        let (x, y, cw, ch) = cells.iter().find(|c| c.target == Some(target)).unwrap().rect;
+        (x + cw / 2.0, y + ch / 2.0)
+    }
+
+    #[test]
+    fn a_long_press_opens_the_tile_menu_and_its_rows_act_on_the_tile() {
+        let mut w = window("long-press");
+        let ui = ui();
+        let (x, y) = centre_of(&w, &ui, Target::Tile(0));
+        w.touch(&ui, Event::Down(x, y), 0.0);
+        w.tick(&ui, 499.0);
+        assert_eq!(w.choice_menu, None, "a shorter rest is not a press");
+        w.tick(&ui, 500.0);
+        assert_eq!(w.choice_menu, Some(0));
+        w.touch(&ui, Event::Up(x, y), 600.0);
+        assert!(w.run_requests.is_empty(), "the lift after the press runs nothing");
+        let (cx, cy) = centre_of(&w, &ui, Target::Choice(Choice::Duplicate));
+        w.touch(&ui, Event::Down(cx, cy), 700.0);
+        w.touch(&ui, Event::Up(cx, cy), 700.0);
+        assert_eq!(w.list().len(), 5, "Duplicate copies the tile");
+        assert_eq!(w.choice_menu, None, "a row closes the menu");
+    }
+
+    #[test]
+    fn a_tap_outside_the_tile_menu_closes_it_and_does_nothing_else() {
+        let mut w = window("menu-outside");
+        let ui = ui();
+        let (x, y) = centre_of(&w, &ui, Target::Tile(0));
+        w.touch(&ui, Event::Down(x, y), 0.0);
+        w.tick(&ui, 600.0);
+        let (ox, oy) = centre_of(&w, &ui, Target::Tile(2));
+        w.touch(&ui, Event::Down(ox, oy), 700.0);
+        w.touch(&ui, Event::Up(ox, oy), 700.0);
+        assert_eq!(w.choice_menu, None);
+        assert!(w.run_requests.is_empty(), "the tile under the tap is not run");
+        assert_eq!(w.view, View::Grid);
+    }
+
+    #[test]
+    fn the_tile_menu_can_delete_and_rename_its_shortcut() {
+        let mut w = window("menu-delete");
+        w.choice_menu = Some(1);
+        w.choose(1, Choice::Delete);
+        assert_eq!(names(&w), vec!["Bedtime", "Quick Timer", "Capture"]);
+        w.choice_menu = Some(0);
+        w.choose(0, Choice::Rename);
+        assert_eq!(w.view, View::Editor(0));
+        assert!(w.wants_keyboard());
+        assert_eq!(&*w.field, "Bedtime", "the name field starts with the name");
+    }
+
+    #[test]
+    fn a_step_dragged_by_its_grip_lands_where_the_finger_is_released() {
+        let mut w = window("reorder");
+        let ui = ui();
+        w.list[0].actions = vec![Action::Wifi(true), Action::Screenshot, Action::Timer(5)];
+        w.view = View::Editor(0);
+        let (x, y0) = centre_of(&w, &ui, Target::Grip(0));
+        let (_, y2) = centre_of(&w, &ui, Target::Grip(2));
+        w.touch(&ui, Event::Down(x, y0), 0.0);
+        w.touch(&ui, Event::Move(x, y2), 10.0);
+        w.touch(&ui, Event::Up(x, y2), 20.0);
+        assert_eq!(w.list()[0].actions, vec![Action::Screenshot, Action::Timer(5), Action::Wifi(true)]);
+        assert!(std::fs::read_to_string(&w.path).unwrap().contains("screenshot"), "the new order is saved");
+    }
+
+    #[test]
+    fn a_grip_drag_never_moves_a_block_opener() {
+        let mut w = window("reorder-block");
+        let ui = ui();
+        w.list[0].actions = vec![Action::Dnd(true), Action::Repeat(2), Action::Wifi(true), Action::EndRepeat];
+        w.view = View::Editor(0);
+        let (cells, _) = w.layout(&ui);
+        assert!(!cells.iter().any(|c| c.target == Some(Target::Grip(1))), "a Repeat has no grip");
+        assert!(cells.iter().any(|c| c.target == Some(Target::Grip(0))));
+    }
+
+    #[test]
+    fn a_text_step_offers_its_variables_while_it_is_typed_into() {
+        let mut w = window("insert-var");
+        let ui = ui();
+        w.list[0].actions = vec![Action::SetVariable("Name".into()), Action::Text("Hi".into())];
+        w.view = View::Editor(0);
+        w.activate(Target::Value(1));
+        let (cells, _) = w.layout(&ui);
+        let chips: Vec<usize> = cells.iter().filter_map(|c| match c.target {
+            Some(Target::InsertVar(v)) => Some(v),
+            _ => None,
+        }).collect();
+        assert_eq!(chips, vec![0, 1], "Output first, then the variable Name sets");
+        w.activate(Target::InsertVar(1));
+        assert_eq!(&*w.field, "Hi{Name}");
+        assert!(w.wants_keyboard(), "the field stays open");
+    }
+
+    #[test]
+    fn the_menu_key_row_steps_through_the_keys_and_takes_a_key_from_another() {
+        let mut w = window("menu-key");
+        w.view = View::Editor(0);
+        w.activate(Target::MenuKey);
+        assert_eq!(w.list()[0].key, 2, "Bedtime had key 1");
+        assert_eq!(w.list()[1].key, 0, "Save Battery gave up key 2");
+        let saved = std::fs::read_to_string(&w.path).unwrap();
+        assert!(saved.lines().next().unwrap().ends_with("\t2"), "the key is saved with the line");
+    }
+
+    #[test]
+    fn the_add_action_search_narrows_the_built_in_actions() {
+        let mut w = window("picker-search");
+        w.view = View::Picker(0);
+        w.activate(Target::Search);
+        type_text(&mut w, "stop");
+        let (cells, _) = w.layout(&ui());
+        let picks: Vec<usize> = cells.iter().filter_map(|c| match c.target {
+            Some(Target::Pick(k)) => Some(k),
+            _ => None,
+        }).collect();
+        assert_eq!(picks, vec![20]);
+    }
+
+    #[test]
+    fn the_gallery_search_narrows_the_starters_and_the_headings_follow_the_categories() {
+        let mut w = window("gallery-search");
+        w.activate(Target::Side(ROW_GALLERY));
+        w.activate(Target::Search);
+        type_text(&mut w, "lunch");
+        let (cells, _) = w.layout(&ui());
+        let shown: Vec<usize> = cells.iter().filter_map(|c| match c.target {
+            Some(Target::Starter(n)) => Some(n),
+            _ => None,
+        }).collect();
+        assert_eq!(shown, vec![8]);
+        w.activate(Target::SearchClear);
+        let (cells, _) = w.layout(&ui());
+        let headings: Vec<String> = cells.iter().filter_map(|c| match &c.look {
+            Look::Header(t) => Some(t.clone()),
+            _ => None,
+        }).collect();
+        assert_eq!(headings, vec!["Focus", "Everyday", "Tools"]);
     }
 }

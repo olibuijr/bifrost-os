@@ -1,9 +1,10 @@
 //! The app's menus and the window commands they send. File holds New, Duplicate, Import, Export and Delete; Edit holds
-//! Rename and Find; Shortcuts holds Run, the Gallery and one item per shortcut, the first nine with a key (Control and
-//! Command with the digit) that runs it while the app is in front.
+//! Rename and Find; Shortcuts holds Run, the Gallery and one item per shortcut, each with its menu key (Control and
+//! Command with a digit) when it has one, which runs it while the app is in front.
 
 use crate::widget::Command;
 use bifrost_app::{AppMenu, AppMenuItem};
+use springboard::shortcuts as model;
 use springboard::shortcuts::Shortcut;
 
 const NEW: u32 = 1;
@@ -19,12 +20,9 @@ const GALLERY: u32 = 9;
 const RUN_BASE: u32 = 100;
 /// The most shortcuts the Shortcuts menu lists.
 pub const MENU_RUNS: usize = 12;
-/// How many shortcuts get a key: the digits 1 to 9.
-const KEYED: usize = 9;
-
-/// The key that runs shortcut number `i` (0-based) from the menu, if it has one.
-pub fn run_key(i: usize) -> Option<String> {
-    (i < KEYED).then(|| format!("ctrl+cmd+{}", i + 1))
+/// The key that runs a shortcut from the menu: Control and Command with its menu key (1 to 9), if it has one.
+pub fn run_key(key: u8) -> Option<String> {
+    (1..=model::MAX_KEY).contains(&key).then(|| format!("ctrl+cmd+{key}"))
 }
 
 /// The menus for a list, with the items that need an open shortcut enabled only when `open` is true.
@@ -38,7 +36,7 @@ pub fn build(list: &[Shortcut], open: bool) -> Vec<AppMenu> {
     }
     for (i, s) in list.iter().take(MENU_RUNS).enumerate() {
         let item = AppMenuItem::new(RUN_BASE + i as u32, &format!("Run {}", s.name));
-        shortcuts.push(match run_key(i) {
+        shortcuts.push(match run_key(s.key) {
             Some(key) => item.key(&key),
             None => item,
         });
@@ -128,9 +126,22 @@ mod tests {
         }
     }
 
+    /// Twenty shortcuts, the first nine with the menu keys 1 to 9.
+    fn keyed() -> Vec<Shortcut> {
+        (0..20)
+            .map(|n| {
+                let mut s = Shortcut::new(&format!("S{n}"), 0, vec![Action::Screenshot]);
+                if n < 9 {
+                    s.key = n as u8 + 1;
+                }
+                s
+            })
+            .collect()
+    }
+
     #[test]
     fn every_key_is_a_valid_combination_and_none_is_used_twice() {
-        let list: Vec<Shortcut> = (0..20).map(|n| Shortcut::new(&format!("S{n}"), 0, vec![Action::Screenshot])).collect();
+        let list = keyed();
         let menus = build(&list, true);
         let keys: Vec<&str> = all_items(&menus).into_iter().map(|i| i.key.as_str()).filter(|k| !k.is_empty()).collect();
         for k in &keys {
@@ -144,7 +155,7 @@ mod tests {
 
     #[test]
     fn the_run_items_list_the_shortcuts_and_stop_at_the_menu_limit() {
-        let list: Vec<Shortcut> = (0..20).map(|n| Shortcut::new(&format!("S{n}"), 0, Vec::new())).collect();
+        let list = keyed();
         let menus = build(&list, false);
         let runs: Vec<&AppMenuItem> = menus[2].items.iter().filter(|i| i.title.starts_with("Run S")).collect();
         assert_eq!(runs.len(), MENU_RUNS);
