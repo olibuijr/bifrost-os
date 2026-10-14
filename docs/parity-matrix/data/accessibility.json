@@ -17,9 +17,9 @@
   {
    "feature": "Element role mapping",
    "apple": "AccessibilityTechnology, NSAccessibility roles",
-   "bifrost": "springboard/src/shell/atspi/model.rs:37 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
+   "bifrost": "springboard/src/shell/atspi/model.rs:38 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, speech, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
    "status": "partial",
-   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles. Tests (springboard/tests/parity_sdk-tests-01c.rs): each_element_role_maps_to_one_atspi_role_and_role_name, a_checkbox_reads_its_checked_state_from_the_value_text, static_text_is_not_focusable_and_a_disabled_control_is_not_enabled. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window and ProgressIndicator map to AT-SPI roles, and the spoken words and rotor roles are tested headless in springboard/tests/parity_sdk-tests-03.rs (each_element_role_maps_to_its_own_atspi_role_number, the rotor and speech tests). The Settings and menu role mapping in axmap.rs is crate-private and not covered by those tests. No table, selection, or rotor roles. Earlier checks: springboard/tests/parity_sdk-tests-01c.rs. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Element hierarchy (parent, focus, checked state)",

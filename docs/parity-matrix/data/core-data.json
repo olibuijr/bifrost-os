@@ -82,7 +82,7 @@
       "apple": "Lightweight, staged and manual migrations, NSMigrationManager (https://developer.apple.com/documentation/coredata/migrating-your-data-model-automatically)",
       "bifrost": "springboard/src/shell/contactstore.rs (HEADER springboard-contacts-v1), springboard/src/shell/calendar/store.rs (HEADER springboard-calendar-v1), springboard/sdk/src/restoration.rs (foreign or corrupt state ignored)",
       "status": "partial",
-      "note": "Stores carry a version header and reject foreign files, but there is no migration path between versions and no mapping model."
+      "note": "Stores carry a version header and reject foreign files: the contacts and calendar files are tested headless in springboard/tests/parity_sdk-tests-03.rs, and restorable state ignores and removes a foreign or corrupt file in springboard/sdk/tests/parity_sdk-tests-03b.rs. There is no migration path between versions and no mapping model."
     },
     {
       "feature": "Preference storage",

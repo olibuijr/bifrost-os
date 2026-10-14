@@ -12,7 +12,7 @@
    "apple": "CNContactStore",
    "bifrost": "springboard/src/shell/contactstore.rs (load, load_checked, save), springboard/src/shell/services/contacts.rs (contacts service), springboard/sdk/src/contacts.rs (access, request, fetch, save)",
    "status": "partial",
-   "note": "The store is a shell module (the Contacts app reaches it by crate path, springboard/apps/contacts-desktop/src/contacts.rs:20). Apps reach it only through the contacts service and the SDK contacts module, behind a per-app grant. The store file itself is not visible to apps."
+   "note": "The store is a shell module, which the Contacts app reaches by crate path (springboard/apps/contacts-desktop/src/contacts.rs:26). Load, checked load, atomic save and the per-app grant that gates the service are tested headless in springboard/tests/parity_sdk-tests-03.rs. Apps reach the store only through the contacts service and the SDK contacts module, and the store file itself is not visible to apps."
   },
   {
    "feature": "Authorization and privacy",
@@ -26,7 +26,7 @@
    "apple": "CNContact, CNMutableContact",
    "bifrost": "springboard/src/shell/contactstore.rs:Contact; wired: springboard/apps/contacts-desktop/src/extras.rs; src/contacts.rs (card_entry, card_rows); springboard/src/shell/contactextras.rs; springboard/sdk/src/contacts.rs",
    "status": "partial",
-   "note": "Fixed fields: name, phone, email, notes, company, address, favorite, and three label indexes. The SDK and the `contacts` service now return labeled multi-values (phones, emails, URLs as label/value/identifier), a birthday and labeled dates from a sidecar file (springboard/src/shell/contactextras.rs); the Contacts app still edits one phone, one email and one address. No relations, social profiles, instant messages, URLs, images or nickname. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Multi-values are SDK-side only; verify on Midget."
+   "note": "Fixed fields: name, phone, email, notes, company, address, favorite, and three label indexes; the display name, initials and validity rules are tested headless in springboard/tests/parity_sdk-tests-03.rs. The SDK and the `contacts` service return labeled multi-values (phones, emails, URLs as label/value/identifier), a birthday and labeled dates from a sidecar file (springboard/src/shell/contactextras.rs), tested there too; the Contacts app still edits one phone, one email and one address. No relations, social profiles, instant messages, images or nickname. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Multi-values are SDK-side only; verify on Midget."
   },
   {
    "feature": "Labeled values and predefined labels",
@@ -47,7 +47,7 @@
    "apple": "CNSaveRequest",
    "bifrost": "springboard/src/shell/services/contacts.rs (apply_save), springboard/sdk/src/contacts.rs (SaveRequest, save, decode_saved), springboard/src/shell/contactstore.rs:save, springboard/src/shell/fsutil.rs (write_atomic)",
    "status": "partial",
-   "note": "Apps add, update and delete contacts in one save call through the contacts service and the SDK. Full access only: a limited grant is read-only. The whole call applies or none of it does, and the store is rewritten atomically only on success. No per-record change history."
+   "note": "Apps add, update and delete contacts in one save call through the contacts service and the SDK. Full access only: a limited grant is read-only. The whole call applies or none of it does, which springboard/tests/parity_sdk-tests-03.rs checks through apply_save; the store is rewritten atomically only on success. No per-record change history."
   },
   {
    "feature": "Containers and groups",
@@ -103,14 +103,14 @@
    "apple": "CNError, CNErrorDomain, CNErrorUserInfo keys",
    "bifrost": "springboard/sdk/src/contacts.rs:ContactsError (from_message, From<contact_access::Error>, decode_error); springboard/ui/src/contact_access.rs:Error; springboard/src/shell/services/contacts.rs:247 (read-only message); springboard/src/shell/contactstore.rs:save (io::Error InvalidInput)",
    "status": "partial",
-   "note": "Apps get a typed ContactsError from the SDK for access and read-only failures and for the access model errors. The store still reports fixed io text for file-level failures (invalid contact, file too large, unknown format). The CNErrorCode raw values are not mapped: they are not verified against Apple's reference, so apps match on the variant."
+   "note": "Apps get a typed ContactsError from the SDK for access, read-only and access-model failures; the mapping from shell messages and access errors is tested headless in springboard/sdk/tests/parity_sdk-tests-03b.rs. The store still reports fixed io text for file-level failures (invalid contact, file too large, unknown format). The CNErrorCode raw values are not mapped: they are not verified against Apple's reference, so apps match on the variant."
   },
   {
    "feature": "Notes and images",
    "apple": "CNContactNoteKey, com.apple.developer.contacts.notes, CNContactImageDataKey, CNContactThumbnailImageDataKey",
-   "bifrost": "springboard/src/shell/contactstore.rs:Contact.notes (MAX_NOTES 4000); springboard/ui/src/contact_book.rs: image_data, thumbnail_image_data and note keys; vCard PHOTO round trip in contact_vcard.rs. Thumbnail is not serialized.",
+   "bifrost": "springboard/src/shell/contactstore.rs:Contact.notes (MAX_NOTES 4000); springboard/ui/src/contact_photo.rs (Photos: the picture model, not stored by the shell yet); PHOTO output in springboard/ui/src/contact_vcard.rs. Thumbnail is not serialized.",
    "status": "partial",
-   "note": "Notes are plain text with a 4000-character limit, with no entitlement. No contact photo or thumbnail data."
+   "note": "Notes are plain text with a 4000-character limit, tested headless in springboard/tests/parity_sdk-tests-03.rs, with no entitlement. The UI kit has a picture model (PNG and JPEG detection, size cap, thumbnail fit), but the shell does not store pictures yet, so the Contacts app keeps no contact photo or thumbnail."
   }
  ],
  "gaps": [
