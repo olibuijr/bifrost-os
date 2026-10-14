@@ -39,7 +39,7 @@ class GuestExecTests(unittest.TestCase):
 
     def test_exec_reports_decoded_guest_error_on_nonzero_exit(self):
         fake = FakeQga([{"exited": True, "exitcode": 19, "out-data": "", "err-data": base64.b64encode(b"denied").decode()}])
-        with self.assertRaisesRegex(RuntimeError, "exit 19.*denied"):
+        with self.assertRaisesRegex(RuntimeError, "exited 19.*denied"):
             release_vm_test.Qga.run(fake, "false", timeout=1, poll_interval=0)
 
     def test_exec_times_out_for_a_still_running_pid(self):
