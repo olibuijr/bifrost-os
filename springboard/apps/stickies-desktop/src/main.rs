@@ -3,6 +3,7 @@
 //! on every change, and edits can be undone. Find searches all notes; spelling, substitutions and data detectors mark
 //! and change text as it is typed; a note prints, exports and imports as text, and imports rich text too.
 
+mod rgb;
 mod board;
 mod dates;
 mod history;
@@ -1550,7 +1551,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-mod rgb;
     use super::*;
 
     fn app_with(texts: &[&str]) -> StickiesApp {

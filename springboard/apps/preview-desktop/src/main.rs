@@ -7,6 +7,7 @@
 //! thread (`pdfjob`); pages and markup live in `document` and `canvas`, the pure state and maths in `model`
 //! and `pixels`, and the file writing in `export` and `pdfmarks`.
 
+mod picture_tools;
 mod canvas;
 mod document;
 mod export;
@@ -2195,7 +2196,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-mod picture_tools;
     use super::*;
     use bifrost_app::kit::{pack, Image};
 
