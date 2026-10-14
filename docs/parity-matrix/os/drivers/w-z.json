@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: hardware driver, kernel side",
+   "bifrost": "springboard/src/bare/pad_rumble.rs; springboard/src/shell/game_controllers_page.rs",
+   "status": "partial",
+   "note": "Gamepads that speak the xpad protocol are driven by the Linux xpad kernel module and appear as evdev input nodes. The shell's game controller page lists them and pad_rumble.rs drives their motors. No app-facing controller API exists.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
