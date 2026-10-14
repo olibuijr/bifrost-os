@@ -59,9 +59,9 @@
     {
       "feature": "Compression and decompression",
       "apple": "Compression (buffer, stream and filter APIs), Directories and Data Archives",
-      "bifrost": "springboard/sdk/src/compression.rs (encode_buffer, encode_buffer_threaded, decode_buffer), springboard/render/src/cg/pdf/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
+      "bifrost": "springboard/sdk/src/compression.rs (encode_buffer, encode_buffer_threaded, decode_buffer); springboard/sdk/tests/parity_sdk-tests-20.rs; springboard/render/src/cg/pdf/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
       "status": "partial",
-      "note": "DEFLATE and zlib encode and decode through the SDK compression module (bifrost_app::compression); the PNG writer still emits uncompressed blocks, and no LZFSE, LZ4, LZMA or Brotli codec exists. Tests in springboard/sdk/tests/parity_sdk-tests-04.rs: zlib_reference_bytes_decode_to_hello, every_level_and_algorithm_round_trips, stored_zlib_from_the_png_writer_decodes_through_the_codec. Not yet verified on Midget."
+      "note": "DEFLATE and zlib encode and decode through the SDK compression module (bifrost_app::compression); the PNG writer still emits uncompressed blocks, and no LZFSE, LZ4, LZMA or Brotli codec exists. Tests in springboard/sdk/tests/parity_sdk-tests-20.rs: zlib_header_second_byte_follows_the_level, every_codec_and_level_round_trips_every_sample, the_reference_zlib_bytes_decode_to_hello; springboard/sdk/tests/parity_sdk-tests-04.rs: zlib_reference_bytes_decode_to_hello, every_level_and_algorithm_round_trips, stored_zlib_from_the_png_writer_decodes_through_the_codec. Not yet verified on Midget."
     },
     {
       "feature": "Linear algebra (BLAS, LAPACK, sparse solvers)",
