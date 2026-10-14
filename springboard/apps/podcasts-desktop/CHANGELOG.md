@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.0 — 2026-10-14
+
+- Episode menu: Mark All as Played (or Mark All as Unplayed, when every episode of the show is played) marks every
+  episode of the show on screen in one step. It changes only the episodes whose flag differs and keeps the flags of
+  other shows. The item is off on the New Episodes, Up Next and other lists that are not a single show.
+
 ## 1.11.0 — 2026-10-14
 
 - Parity records: the Podcasts rows for downloads, Up Next, refresh, search, New Episodes, notes, chapters, show and

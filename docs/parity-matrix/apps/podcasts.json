@@ -91,8 +91,8 @@
    "area": "menu",
    "apple": "episode menu",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/library.rs:21",
-   "note": "Played flags stored (played.tsv), toggled from the Episode menu, context menu and episode page; unplayed dot and dimmed played rows in draw_rows; finished episodes are marked played. Needs a lab check.",
+   "bifrost": "springboard/apps/podcasts-desktop/src/library.rs (set_played, set_all_played); springboard/apps/podcasts-desktop/src/podcasts.rs (mark_show_played)",
+   "note": "Played flags stored (played.tsv), toggled from the Episode menu, context menu and episode page; Mark All as Played or Unplayed for the show on screen; unplayed dot and dimmed played rows in draw_rows; finished episodes are marked played. Tested headless in library.rs. Needs a lab check.",
    "wire": "Played flag in the store, menu items, dim played rows in draw_rows"
   },
   {
@@ -199,7 +199,7 @@
    "area": "menu",
    "apple": "MainMenu Controls/Episode",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1476",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs (main_menu, menu_action)",
    "note": "main_menu with File, View, Controls (play/pause, stop, skip, next, speed, sleep) and Episode menus with key equivalents; a context menu on episode rows. Play/Pause has no menu shortcut because Space is handled as a key so the text fields keep it.",
    "wire": "Implement App::main_menu with Controls (Play, Skip, Speed, Sleep) and Episode menus"
   },
