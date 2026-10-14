@@ -559,6 +559,32 @@ mod tests {
     }
 
     #[test]
+    fn a_user_password_opens_a_revision_two_document_and_a_wrong_one_is_refused() {
+        // the revision 2 key (algorithm 2) for a 40-bit RC4 file whose user password is "secret"
+        let id0 = b"0123456789abcdef".to_vec();
+        let o = vec![7u8; 32];
+        let p: i64 = -4;
+        let key_for = |password: &[u8]| -> Vec<u8> {
+            let mut input = padded(password);
+            input.extend_from_slice(&o);
+            input.extend_from_slice(&(p as u32).to_le_bytes());
+            input.extend_from_slice(&id0);
+            md5(&input)[..5].to_vec()
+        };
+        let u = rc4(&key_for(b"secret"), &PAD);
+        let mut enc = Dict::new();
+        enc.insert("Filter".into(), Obj::Name("Standard".into()));
+        enc.insert("V".into(), Obj::Int(1));
+        enc.insert("R".into(), Obj::Int(2));
+        enc.insert("O".into(), Obj::Str(o));
+        enc.insert("U".into(), Obj::Str(u));
+        enc.insert("P".into(), Obj::Int(p));
+        assert!(Crypt::open_with(&enc, &id0, b"secret").is_ok());
+        assert_eq!(Crypt::open_with(&enc, &id0, b"wrong").err().as_deref(), Some(PASSWORD_NEEDED));
+        assert_eq!(Crypt::open(&enc, &id0).err().as_deref(), Some(PASSWORD_NEEDED), "the empty password is wrong here");
+    }
+
+    #[test]
     fn rc4_vector() {
         assert_eq!(hex(&rc4(b"Key", b"Plaintext")), "bbf316e8d940af0ad3");
     }
