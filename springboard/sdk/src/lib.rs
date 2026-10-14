@@ -378,6 +378,7 @@ pub mod file_wrapper;
 pub mod bookmark;
 pub mod metadata_query;
 pub mod file_stat;
+pub mod file_descriptor;
 pub mod volume;
 pub mod identity;
 pub mod reachability;
