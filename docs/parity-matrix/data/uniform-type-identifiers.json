@@ -67,16 +67,16 @@
     {
       "feature": "Sharing payload type",
       "apple": "UTType on NSItemProvider and pasteboard",
-      "bifrost": "springboard/proto/src/rich.rs:111 (Payload::uti), springboard/src/shell/pasteboard.rs:7",
+      "bifrost": "springboard/proto/src/rich.rs:111 (Payload::uti), springboard/src/shell/pasteboard.rs:7; tests: springboard/proto/tests/parity_sdk-tests-01b.rs",
       "status": "partial",
-      "note": "text, URL and file payloads only"
+      "note": "Text, URL and file payloads have fixed or extension-derived types (headless_payload_types_* in proto/tests). Text, URL and file payloads only."
     },
     {
       "feature": "Open and share targets by type",
       "apple": "Document types and handled types in Info.plist",
-      "bifrost": "springboard/sdk/src/share.rs (manifest handles), springboard/src/shell/sharing.rs:35 (open_types); wired: springboard/src/shell/defaultapps.rs (CATEGORIES); springboard/src/shell/sharing.rs",
+      "bifrost": "springboard/src/shell/sharing.rs:35 (open_types, handles); tests: springboard/tests/parity_sdk-tests-01b.rs; springboard/sdk/src/share.rs (manifest handles); wired: springboard/src/shell/defaultapps.rs (CATEGORIES); springboard/src/shell/sharing.rs",
       "status": "partial",
-      "note": "receiving works from the manifest list; no per-app rank or default-handler API from the type Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Targets are matched by the type an item conforms to, and web links by scheme (headless_open_targets_* in springboard/tests). Receiving works from the manifest list; no per-app rank or default-handler API from the type. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Document read and write by type",

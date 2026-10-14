@@ -215,3 +215,59 @@ fn headless_widget_link_store_keeps_the_link_per_widget() {
 fn entry(date: f64, title: &str, text: &str) -> Entry<Text> {
     Entry { date, value: Text { title: title.into(), text: text.into() } }
 }
+
+// ---- now-playing: playback position and transport (springboard::shell::services::now_playing) ----
+
+use bifrost_ui::media_session::RemoteCommand;
+use springboard::shell::music::nowplaying::Target as Media;
+use springboard::shell::services::now_playing::{extrapolate, scrub_target_ms, transport_for};
+
+#[test]
+fn headless_now_playing_position_moves_on_while_playing_and_holds_when_paused() {
+    assert_eq!(extrapolate(1000, true, 250, Some(5000)), 1250, "the published position plus the time since it was set");
+    assert_eq!(extrapolate(4900, true, 500, Some(5000)), 5000, "never past the length");
+    assert_eq!(extrapolate(1000, false, 250, Some(5000)), 1000, "a paused session holds its position");
+    assert_eq!(extrapolate(10, true, 5, None), 15, "without a length there is no cap");
+}
+
+#[test]
+fn headless_now_playing_scrub_lands_on_the_fraction_of_the_length() {
+    assert_eq!(scrub_target_ms(200_000, 0.5), 100_000.0);
+    assert_eq!(scrub_target_ms(1000, 2.0), 1000.0, "the fraction is clamped to the bar");
+    assert_eq!(scrub_target_ms(1000, -1.0), 0.0);
+}
+
+#[test]
+fn headless_now_playing_transport_maps_play_pause_and_skips_to_remote_commands() {
+    assert_eq!(transport_for(Media::Play, true), Some(RemoteCommand::Pause));
+    assert_eq!(transport_for(Media::Play, false), Some(RemoteCommand::Play));
+    assert_eq!(transport_for(Media::Prev, false), Some(RemoteCommand::Previous));
+    assert_eq!(transport_for(Media::Next, true), Some(RemoteCommand::Next));
+    assert_eq!(transport_for(Media::Volume, true), None, "volume is not a transport command");
+    assert_eq!(transport_for(Media::Scrubber, true), None, "a scrub is a seek, not a command");
+}
+
+// ---- uniform type identifiers: open and share targets by type (springboard::shell::sharing) ----
+
+use bifrost_proto::Payload;
+use springboard::shell::sharing::{handles, Candidate};
+
+#[test]
+fn headless_open_targets_match_by_the_type_the_item_conforms_to() {
+    let photo_handles = vec!["public.png:owner".to_string(), "public.jpeg".to_string()];
+    let photos = Candidate { id: "photos", name: "Photos", handles: &photo_handles, schemes: &[] };
+    let png = Payload::File { grant: [1; 16], name: "a.png".into() };
+    assert!(handles(&photos, &png), "a PNG opens in an app that handles public.png");
+    assert!(!handles(&photos, &Payload::Text("hi".into())), "text is not an image");
+    assert!(handles(&photos, &Payload::Url("file:///home/a/photo.jpeg".into())), "a file URL is typed by its extension");
+    assert!(!handles(&photos, &Payload::Url("mailto:someone@example.test".into())), "a non-file URL has no type");
+}
+
+#[test]
+fn headless_open_targets_web_links_match_the_handled_scheme() {
+    let browser_handles = vec!["public.html:owner".to_string()];
+    let browser_schemes = vec!["https".to_string()];
+    let browser = Candidate { id: "browser", name: "Browser", handles: &browser_handles, schemes: &browser_schemes };
+    assert!(handles(&browser, &Payload::Url("https://example.com/x".into())));
+    assert!(!handles(&browser, &Payload::Url("ftp://example.com/x".into())));
+}
