@@ -31,7 +31,7 @@
     {
       "feature": "Content types and metadata (MusicContent, PodcastContent, MovieContent, TVShowContent, BookContent, RadioContent, GenericContent, MediaType, MediaDuration)",
       "apple": "MediaContentRepresentable, MusicContent, PodcastContent, MovieContent, TVShowContent, BookContent, RadioContent, HomeMediaContent, GenericContent, MediaType, MediaDuration",
-      "bifrost": "springboard/ui/src/media_content.rs; wired: springboard/src/shell/now_playing_menu.rs",
+      "bifrost": "springboard/ui/src/media_content.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/now_playing_menu.rs",
       "status": "partial",
       "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The service track carries no title, artist, kind or artwork fields, so the card cannot receive typed metadata from an app. Duration is in the snapshot (duration_ms) and live streams have a Live marker. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
@@ -40,7 +40,7 @@
       "apple": "Artwork, ArtworkRepresentation, AnimatedArtwork",
       "bifrost": "springboard/ui/src/media_artwork.rs, springboard/sdk/src/now_playing.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
+      "note": "verified on Midget 0.7.25 by 8 tests. Headless tests (headless_now_playing_* in ui/tests) cover duration labels, text trimming, subtitles and progress. Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
     },
     {
       "feature": "Play, pause, stop and toggle commands",
