@@ -1159,6 +1159,7 @@ mod tests {
         let mut app = board(&ui);
         let id = app.items.add(Item::new(ItemKind::Sticky, 100.0, 100.0, 100.0, 100.0));
         app.snap = true;
+        app.tool = Tool::Lasso;
         let top = app.canvas_top(&ui) as f32;
         app.touch(&ui, Event::Down(110.0, top + 110.0), 0.0);
         app.touch(&ui, Event::Move(137.0, top + 128.0), 0.0);

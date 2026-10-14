@@ -128,8 +128,9 @@
         let mut sh = desktop_shell();
         sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
         sh.desk_open(AppId::Terminal, 0.);
-        let m = sh.desk_metrics();
-        sh.desk.as_mut().unwrap().place(&m, 0, desk::Rect { x: 100, y: 1200, w: 800, h: 900 });
+        // `Desk::place` clamps windows into the visible work area; assign the edge case directly so the bottom really
+        // runs under the keyboard and the lift/restore path has a meaningful original position.
+        sh.desk.as_mut().unwrap().wins[0].r.y = 1200;
         sh
     }
 
@@ -141,6 +142,7 @@
         let lifted = sh.desk.as_ref().unwrap().wins[0].r;
         assert!(lifted.y < 1200, "the front window moves up");
         assert!(lifted.y + lifted.h <= sh.kb_top() as i32, "its bottom edge clears the keyboard");
+        assert_eq!(sh.desk_kb_lift, Some((AppId::Terminal, 1200, lifted.y)), "the original position is recorded for restoration");
         sh.set_keyboard(false, 1100.);
         assert_eq!(sh.desk.as_ref().unwrap().wins[0].r.y, 1200, "it goes back down when the keyboard does");
         assert!(sh.desk_kb_lift.is_none());
@@ -555,6 +557,7 @@
     fn the_lock_screen_signs_in_with_touch_alone() {
         keyboard::fake_process(500.0);
         let mut sh = login_shell(login::Reply::Ok("tok".into()));
+        sh.set_keyboard(false, 0.0);
         sh.anim = None;
         sh.login_ensure(0.0);
         sh.login.as_mut().unwrap().touch_keyboard = true;
@@ -586,6 +589,7 @@
     fn a_click_on_the_lock_screen_picture_keeps_the_keyboard_down_on_a_desktop() {
         keyboard::fake_process(500.0);
         let mut sh = login_shell(login::Reply::Unavailable);
+        sh.set_keyboard(false, 0.0);
         sh.anim = None;
         sh.login_ensure(0.0);
         sh.login.as_mut().unwrap().touch_keyboard = false;

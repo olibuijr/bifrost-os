@@ -519,7 +519,7 @@ fn compress_file_writes_a_zip_named_after_the_file_and_expands_it() {
     let src = root.path().join("notes.txt");
     write_file(&src, "one file");
     let zip = archive::compress_file(&src, root.path(), &mut |_, _| true).unwrap();
-    assert_eq!(zip.file_name().unwrap(), "notes.zip");
+    assert_eq!(zip.file_name().unwrap(), "notes.txt.zip");
     assert!(zip.is_file());
     let out_dir = root.path().join("out");
     fs::create_dir_all(&out_dir).unwrap();

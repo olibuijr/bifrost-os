@@ -62,11 +62,11 @@ mod tests {
 
     #[test]
     fn cells_stack_from_the_top_with_the_gap_between_them() {
-        let cells = cells(&METRICS, 3);
-        assert_eq!(cells.len(), 3);
-        assert_eq!((cells[0].x, cells[0].y, cells[0].w, cells[0].h), (608, 56, 184, 40));
-        assert_eq!(cells[1].y, 56 + 44);
-        assert_eq!(cells[2].index, 2);
+        let result = cells(&METRICS, 3);
+        assert_eq!(result.len(), 3);
+        assert_eq!((result[0].x, result[0].y, result[0].w, result[0].h), (608, 56, 184, 40));
+        assert_eq!(result[1].y, 56 + 44);
+        assert_eq!(result[2].index, 2);
         assert!(cells(&METRICS, 0).is_empty());
     }
 

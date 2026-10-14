@@ -406,7 +406,8 @@ fn a_camera_on_the_view_side_faces_forward_and_the_other_side_faces_backward() {
 #[test]
 fn a_camera_with_an_unspecified_position_is_in_neither_list() {
     let mut coordinator = Coordinator::new(CameraPosition::Front, Vec::new());
-    let map = coordinator.update(&[camera("external", CameraPosition::Unspecified, "wide")]).unwrap();
+    assert!(coordinator.update(&[camera("external", CameraPosition::Unspecified, "wide")]).is_none());
+    let map = coordinator.device_directions();
     assert!(map.is_empty());
     assert_eq!(map.direction_of("external"), None);
 }

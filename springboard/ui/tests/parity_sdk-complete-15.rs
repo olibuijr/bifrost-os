@@ -87,7 +87,7 @@ fn headless_point_opacity_fades_a_stroke_along_its_length() {
 
 #[test]
 fn headless_a_single_point_stroke_paints_a_dot_at_its_force_width() {
-    let stroke = Stroke { ink: ink(4.0), points: vec![point(5.0, 5.0, 1.0, 1.0)] };
+    let stroke = Stroke { ink: ink(4.0), points: vec![point(5.5, 5.5, 1.0, 1.0)] };
     let pixels = render(stroke);
     assert_eq!(alpha(&pixels, 5, 5), 255, "the dot is solid at its centre");
     assert!(alpha(&pixels, 5, 7) > 0, "a full-force dot of width 4 reaches two points out");

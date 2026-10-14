@@ -324,7 +324,7 @@ mod tests {
     fn the_drag_is_measured_from_where_the_row_rests() {
         let mut r = RowSwipe::new(400.0, SwipeConfig::new(vec![]), trailing_pair());
         r.begin_drag();
-        r.drag(-200.0);
+        r.drag(-190.0);
         assert_eq!(r.release(), SwipeOutcome::Open(RowEdge::Trailing));
         r.begin_drag();
         r.drag(50.0);

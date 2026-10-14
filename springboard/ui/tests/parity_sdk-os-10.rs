@@ -75,7 +75,7 @@ fn the_default_action_at_the_end_of_an_item_is_to_pause() {
 #[test]
 fn a_queue_takes_inserts_and_removals_in_item_order() {
     let mut queue = QueuePlayer::new(vec![tone(1.0), tone(2.0)]);
-    assert_eq!(queue.items().len(), 2);
+    assert_eq!(queue.items().len(), 1, "the current item is not in the pending queue");
     queue.insert(tone(3.0), Some(0));
     assert_eq!(queue.items()[1].duration_us(), 3 * SECOND_US);
     let removed = queue.remove(1).expect("the inserted item");
@@ -89,7 +89,7 @@ fn a_queue_takes_inserts_and_removals_in_item_order() {
 fn a_looper_holds_the_same_asset_for_every_pass() {
     let asset = Asset::from_pcm("test://loop", Pcm::sine(8000, 1, 220.0, 1.0));
     let looper = QueuePlayer::looper(asset);
-    assert_eq!(looper.items().len(), 2);
+    assert_eq!(looper.items().len(), 1, "the repeated item after the current pass stays queued");
     assert!(looper.items().iter().all(|item| item.duration_us() == SECOND_US));
 }
 

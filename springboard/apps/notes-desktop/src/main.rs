@@ -495,7 +495,7 @@ impl App for NotesApp {
             }
             // a notes://note/<id> link, from another app or from a note: shows that note when it still exists
             Input::Open(url) => {
-                let Some(id) = notes::notes::note_url::note_id(&url) else { return false };
+                let Some(id) = notes::note_url::note_id(&url) else { return false };
                 n.show_note(&ctx.ui, id, bifrost_app::proto::sys::now_ms())
             }
             Input::Touch { kind, x, y, t, .. } => {

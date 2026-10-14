@@ -176,7 +176,7 @@ pub const OPTIONAL_COLUMNS: [(SortKey, &str); 3] = [(SortKey::User, "User"), (So
 /// The columns of a tab without the ones whose bit is set in `hidden` (bit i = `OPTIONAL_COLUMNS[i]`). The name and
 /// figure columns always stay.
 pub fn visible_columns(tab: Tab, hidden: i64) -> Vec<Column> {
-    tab.columns()
+    tab.columns(&ColumnSet::default())
         .into_iter()
         .filter(|c| !OPTIONAL_COLUMNS.iter().enumerate().any(|(i, (k, _))| hidden & (1 << i) != 0 && c.key == Some(*k)))
         .collect()

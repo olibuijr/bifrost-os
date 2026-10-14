@@ -175,7 +175,7 @@ mod tests {
         assert_eq!(l.hit(10.0, LIST_TOP_PT + ROW_H_PT + 1.0, 0, 3), Hit::Row(1));
         assert_eq!(l.hit(10.0, LIST_TOP_PT + ROW_H_PT + 1.0, 5, 8), Hit::Row(6), "scrolled list");
         assert_eq!(l.hit(10.0, LIST_TOP_PT + 2.0 * ROW_H_PT + 1.0, 0, 2), Hit::None, "past the last entry");
-        assert_eq!(l.hit(10.0, 20.0, 0, 3), Hit::Search);
+        assert_eq!(l.hit(20.0, 20.0, 0, 3), Hit::Search);
     }
 
     #[test]

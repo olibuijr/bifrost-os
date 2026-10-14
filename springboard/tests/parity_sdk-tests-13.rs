@@ -56,7 +56,7 @@ fn headless_an_intent_needs_a_title_and_an_id_with_safe_characters() {
 
 #[test]
 fn headless_a_shortcut_read_from_a_manifest_is_runnable_when_it_takes_no_required_input() {
-    let m = Manifest::parse("id = \"is.example.notes\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\n").expect("the manifest parses");
+    let m = Manifest::parse("id = \"is.example.notes\"\nname = \"Notes\"\nexec = \"notes\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\n").expect("the manifest parses");
     assert!(m.intents[0].runnable());
 }
 

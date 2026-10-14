@@ -68,7 +68,7 @@ struct Note {
 
 impl SearchableEntity for Note {
     fn entity_identifier(&self) -> String {
-        format!("note.{}", self.id)
+        if self.id.is_empty() { String::new() } else { format!("note.{}", self.id) }
     }
 
     fn domain_identifier(&self) -> String {

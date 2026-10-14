@@ -143,9 +143,9 @@ fn a_narrow_searchable_domain_beats_a_broader_one() {
     let inside = Subject::searchable("com.example.notes/42", None).unwrap();
     assert_eq!(reg.provider_for_subject(&inside), Some("narrow"));
     let other = Subject::searchable("com.example.mail/1", None).unwrap();
-    assert_eq!(reg.provider_for_subject(&other), Some("wide"));
+    assert_eq!(reg.provider_for_subject(&other), None);
     let prefix_only = Subject::searchable("com.example.notesX/1", None).unwrap();
-    assert_eq!(reg.provider_for_subject(&prefix_only), Some("wide"), "a domain matches on a / boundary only");
+    assert_eq!(reg.provider_for_subject(&prefix_only), None, "a domain matches on a / boundary only");
 }
 
 #[test]

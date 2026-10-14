@@ -8,7 +8,7 @@ use bifrost_app::error::AppError;
 use bifrost_app::kit::{Font, Ui};
 use bifrost_app::proto::{Configure, LoginOp, LoginStatus, ToShell};
 use bifrost_app::service_bundle::{
-    find_login_item, helper_from_entry, helper_path_ok, helper_status, locate_job_plist, JobKind, LAUNCH_AGENTS_DIR,
+    find_login_item, helper_from_entry, helper_path_ok, helper_status, locate_job_plist, HelperItem, JobKind, LAUNCH_AGENTS_DIR,
     LAUNCH_DAEMONS_DIR, LOGIN_ITEMS_DIR,
 };
 use bifrost_app::service_management::{

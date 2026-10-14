@@ -3834,7 +3834,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
         assert_eq!(p.sheet, Some(Sheet::Info));
         let labels: Vec<&str> = p.info.iter().map(|(l, _)| l.as_str()).collect();
-        assert_eq!(labels, ["Name", "Date", "File Size"], "a PNG has no EXIF");
+        assert_eq!(labels, ["Name", "Date", "Size", "File Size"], "PNG dimensions are available without EXIF");
         assert_eq!(p.info[0].1, "IMG_0000.png");
         frame(&mut p, &ui);
         tap(&mut p, &ui, 100.0, 100.0, 2000.0);

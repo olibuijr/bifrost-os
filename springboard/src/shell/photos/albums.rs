@@ -231,7 +231,10 @@ impl Selection {
 
     /// Select All, or Deselect All when every photo of `photos` is already selected. True when all are selected now.
     pub fn toggle_all(&mut self, photos: &[Photo]) -> bool {
-        if !photos.is_empty() && photos.iter().all(|p| self.contains(&p.path)) {
+        if photos.is_empty() {
+            return false;
+        }
+        if photos.iter().all(|p| self.contains(&p.path)) {
             self.paths.clear();
             false
         } else {

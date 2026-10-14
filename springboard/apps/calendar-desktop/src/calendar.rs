@@ -130,8 +130,6 @@ enum Target {
     CopyPhone,
     /// A read-only row: the invitees of an imported event and how each one answered.
     Invitees,
-    Repeat,
-    Alert,
     Toggle(Slot),
     DateStep(i32),
     MonthStep(i32),

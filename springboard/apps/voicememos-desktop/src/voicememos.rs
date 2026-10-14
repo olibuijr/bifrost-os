@@ -460,7 +460,7 @@ impl VoiceMemos {
         }
         self.input_id = id;
         self.input_name = name;
-        self.inputs = listing.devices.iter().filter(|d| d.input).map(|d| (d.id.clone(), d.name.clone())).collect();
+        self.inputs = listing.devices.iter().filter(|d| d.can_input).map(|d| (d.id.clone(), d.name.clone())).collect();
     }
 
     /// Chooses the input device for recording (the Recording menu's Input submenu). The shell reports the change and

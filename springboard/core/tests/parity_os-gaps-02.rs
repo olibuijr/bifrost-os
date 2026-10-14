@@ -55,11 +55,11 @@ fn wiki_links_are_found_in_order_without_duplicates_or_empty_targets() {
 #[test]
 fn a_chain_with_a_step_for_every_older_version_passes_its_check() {
     let plan: Plan<Vec<u32>> = Plan::new(2)
-        .step(0, "to one", |mut d| {
+        .step(0, "to one", |mut d: Vec<u32>| {
             d.push(1);
             Ok(d)
         })
-        .step(1, "to two", |mut d| {
+        .step(1, "to two", |mut d: Vec<u32>| {
             d.push(2);
             Ok(d)
         });

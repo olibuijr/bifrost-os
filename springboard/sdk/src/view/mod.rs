@@ -1028,6 +1028,10 @@ impl<S: Responder> Window<S> {
     pub fn needs_display(&self) -> bool {
         self.full || any_dirty(self.root())
     }
+    /// Schedules a full repaint when the caller has replaced the backing canvas.
+    pub(crate) fn invalidate_all(&mut self) {
+        self.full = true;
+    }
     /// Paints what changed and returns the merged damage. After `layout` (or the first call) the whole window is
     /// repainted. Otherwise each dirty view's frame is cleared to the window background and the view and its subtree
     /// are drawn again; sibling views must not overlap.

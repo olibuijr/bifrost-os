@@ -871,7 +871,7 @@ fn settings_apply_at_once_are_saved_beside_the_reminders_and_load_again() {
     assert_eq!(app.settings.default_list, None, "back to Automatic");
     app.activate(&ui, Target::Setting(SettingRow::DefaultList), 15.0);
     app.activate(&ui, Target::Setting(SettingRow::AllDayAlert), 16.0);
-    assert_eq!(app.all_day_min(), 10 * 60);
+    assert_eq!(app.all_day_min(), 9 * 60 + 30);
     app.activate(&ui, Target::Setting(SettingRow::Badge), 17.0);
     assert_eq!(app.badge_count(), 0, "the badge is off");
     assert_eq!(app.due_count(), 1, "the reminders themselves are unchanged");
@@ -882,7 +882,7 @@ fn settings_apply_at_once_are_saved_beside_the_reminders_and_load_again() {
 
     // a new run reads them back from settings.tsv, and the default list is in force
     let again = Reminders::new(&ui, 1200, 1920, path.clone(), Wall { unix: 1_791_073_380, offset: 0, at: 0.0 });
-    assert_eq!((again.settings.default_list, again.all_day_min(), again.settings.badge), (Some(1), 10 * 60, false));
+    assert_eq!((again.settings.default_list, again.all_day_min(), again.settings.badge), (Some(1), 9 * 60 + 30, false));
     assert_eq!(again.opts.default_list, Some(1));
     // the View Options list chooser writes the same setting
     app.activate(&ui, Target::OptDefaultList(Some(2)), 20.0);

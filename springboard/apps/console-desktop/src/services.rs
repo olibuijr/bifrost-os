@@ -208,6 +208,7 @@ mod tests {
             category: "sync".into(),
             level: Level::Error,
             message: "sync failed".into(),
+            invocation: String::new(),
         };
         assert_eq!(copy_line(&e), "bifrost-notes[4242] Error is.olibuijr.notes:sync sync failed");
         let bare = LogEntry { message: "hi".into(), ..LogEntry::default() };

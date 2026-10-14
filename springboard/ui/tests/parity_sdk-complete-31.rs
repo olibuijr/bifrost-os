@@ -109,7 +109,7 @@ fn a_picture_object_records_its_size_and_date() {
     picture.set(AttributeKey::Width, AttributeValue::Integer(4032)).unwrap();
     picture.set(AttributeKey::Height, AttributeValue::Integer(3024)).unwrap();
     picture.set(AttributeKey::Added, AttributeValue::Date(1_700_000_000)).unwrap();
-    assert_eq!(picture.attributes().keys(), vec![AttributeKey::Width, AttributeKey::Height, AttributeKey::Added]);
+    assert_eq!(picture.attributes().keys(), vec![AttributeKey::Added, AttributeKey::Width, AttributeKey::Height]);
 }
 
 #[test]

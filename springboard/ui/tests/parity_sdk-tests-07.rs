@@ -479,7 +479,9 @@ impl PlayerHandle for FakePlayer {
 const BOUNDS: Rect = Rect { x: 0.0, y: 0.0, w: 600.0, h: 400.0 };
 
 fn styled(style: ControlsStyle) -> PlayerView {
-    PlayerView { controls_style: style, ..PlayerView::new() }
+    let mut view = PlayerView::new();
+    view.controls_style = style;
+    view
 }
 
 fn rect_of(view: &PlayerView, chrome: Chrome) -> Rect {

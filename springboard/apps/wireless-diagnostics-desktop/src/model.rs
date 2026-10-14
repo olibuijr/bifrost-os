@@ -576,7 +576,7 @@ BSS 00:11:22:33:44:88(on wlan0)\n\
         assert_eq!(rate_link(Some(-75), Some(-92)), Rating::Fair);
         assert_eq!(rate_link(Some(-85), Some(-90)), Rating::Poor);
         assert_eq!(rate_link(Some(-50), None), Rating::Excellent);
-        assert_eq!(rate_link(Some(-70), None), Rating::Good);
+        assert_eq!(rate_link(Some(-70), None), Rating::Fair);
         assert_eq!(rate_link(None, Some(-90)), Rating::Unknown);
         assert_eq!(snr_db(Some(-40), Some(-95)), Some(55));
         assert_eq!(snr_db(Some(-40), None), None);

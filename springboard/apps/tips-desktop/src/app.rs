@@ -297,7 +297,8 @@ impl Tips {
     }
 
     fn draw_bar(&mut self, s: &mut Surface, ui: &Ui) {
-        widgets::toolbar_band(s, ui, KRect { x: 0.0, y: 0.0, w: s.w as f32 / ui.pt(1.0), h: UNIFIED_BAR_PT });
+        let width = s.w as f32 / ui.pt(1.0);
+        widgets::toolbar_band(s, ui, KRect { x: 0.0, y: 0.0, w: width, h: UNIFIED_BAR_PT });
         let title = match self.open {
             Some(index) => TIPS[index].collection.title(),
             None => self.scope.title(),

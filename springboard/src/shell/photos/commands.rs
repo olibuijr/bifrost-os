@@ -453,7 +453,8 @@ mod tests {
         assert_eq!(PhotoCommand::from_chord(19, false, true), Some(PhotoCommand::RotateRight));
         assert_eq!(PhotoCommand::from_chord(6, false, false), Some(PhotoCommand::Rate(5)));
         assert_eq!(PhotoCommand::from_chord(13, true, false), Some(PhotoCommand::ZoomIn));
-        assert_eq!(PhotoCommand::from_chord(5, false, false), None, "Cmd+4 is bound, Cmd+5 is not the key of 4");
+        assert_eq!(PhotoCommand::from_chord(5, false, false), Some(PhotoCommand::Rate(4)), "evdev code 5 is the 4 key");
+        assert_eq!(PhotoCommand::from_chord(7, false, false), None, "the 6 key has no rating command");
     }
 
     #[test]

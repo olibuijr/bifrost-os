@@ -143,7 +143,7 @@ fn the_parent_chain_stops_when_a_parent_is_missing_or_repeats() {
 fn two_snapshots_give_the_exits_and_the_starts_between_them() {
     let before = table();
     let mut after = table();
-    after.retain(|p| p.pid != 20);
+    after.retain(|p| p.pid != 20 && p.pid != 30);
     after.push(ProcStat { pid: 40, comm: "editor".into(), state: 'R', ppid: 10 });
     let events = snapshot_events(&before, &after);
     assert_eq!(

@@ -1572,6 +1572,7 @@ mod tests {
         assert!(b.use_as_default());
         let c = b.new_note(0.0, 0.0, 1);
         assert_eq!(b.find(c).unwrap().rgb, Some((10, 20, 30)));
+        b.raise(a);
         b.find_mut(a).unwrap().set_preset(Colour::Pink);
         assert!(b.use_as_default());
         let d = b.new_note(0.0, 0.0, 2);
@@ -1843,7 +1844,7 @@ mod tests {
     fn rich_text_colours_become_inks() {
         let rtf = r"{\rtf1\ansi{\colortbl;\red255\green0\blue0;}plain \cf1 red\cf0  plain}";
         let runs = runs_from_rtf(rtf);
-        assert!(runs.iter().any(|(t, s)| t.contains("red") && s.ink == Ink::Red));
+        assert!(runs.iter().any(|(t, s)| t.contains("red") && s.ink == Ink::Red), "{runs:?}");
         assert!(runs.iter().any(|(t, s)| t.contains("plain") && s.ink == Ink::Black));
         assert_eq!(ink_of_colour(Some(ColorToken::Yellow)), Ink::Black, "yellow text is not readable on a note");
         assert_eq!(ink_of_colour(Some(ColorToken::Orange)), Ink::Red);

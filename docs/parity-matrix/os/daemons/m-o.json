@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
+   "status": "os",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
    "method": "rule"
   },
@@ -40,8 +40,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
+   "status": "os",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
    "method": "rule"
   },
@@ -103,8 +103,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
+   "status": "os",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
    "method": "rule"
   },
@@ -124,8 +124,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
+   "status": "os",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
    "method": "rule"
   }

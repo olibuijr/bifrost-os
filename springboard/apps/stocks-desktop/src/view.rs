@@ -328,7 +328,7 @@ mod tests {
     fn ages_read_in_plain_words() {
         assert_eq!(age_text(5.0), "just now");
         assert_eq!(age_text(90.0), "1 min ago");
-        assert_eq!(age_text(3 * 3600.0 + 5.0), "3 h ago");
+        assert_eq!(age_text(3.0 * 3600.0 + 5.0), "3 h ago");
     }
 
     #[test]

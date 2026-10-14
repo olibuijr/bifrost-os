@@ -53,6 +53,7 @@ impl App for PrintCenter {
                 self.toolbar_action(id);
                 true
             }
+            Input::QuickAction(_) => false,
             Input::Key(KeyInput::Text(text)) => self.text(&text),
             Input::Key(KeyInput::Code(code)) => self.key(code),
             Input::Command(command) => self.command(command),

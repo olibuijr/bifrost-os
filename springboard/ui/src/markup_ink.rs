@@ -138,7 +138,7 @@ impl InkCanvas {
         if let Some(stroke) = self.active.as_mut() {
             stroke.points.push(point);
         }
-        if self.tool == InkTool::Eraser {
+        if self.active.as_ref().is_some_and(|stroke| stroke.tool == InkTool::Eraser) {
             self.erase_last_segment();
         }
     }

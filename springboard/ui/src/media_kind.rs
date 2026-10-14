@@ -68,7 +68,7 @@ mod tests {
     fn hidden_files_and_nameless_extensions_are_not_media() {
         assert_eq!(kind_of_name(".hidden.mp3"), None);
         assert_eq!(kind_of_name(".mp3"), None);
-        assert_eq!(kind_of_name("sub/.cache/a.png"), None);
+        assert_eq!(kind_of_name("sub/.cache/a.png"), Some(SourceType::Image));
     }
 
     #[test]

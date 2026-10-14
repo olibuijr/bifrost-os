@@ -40,7 +40,7 @@ fn a_newline_ends_a_line_and_an_empty_paragraph_is_an_empty_line() {
 #[test]
 fn resizing_the_view_rewraps_the_text_without_any_invalidation() {
     let text = "abcdef ghij";
-    let mut view = TextView::new(text, 100.0, 20.0, 100.0);
+    let mut view = TextView::new(text, 120.0, 20.0, 100.0);
     assert_eq!(view.lines(&m).len(), 1);
     view.resize(40.0, 100.0, &m);
     assert!(view.lines(&m).len() > 1);

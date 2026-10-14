@@ -887,7 +887,7 @@ fn wl_shape(k: bifrost_ui::cursor::Kind) -> cursor_device::Shape {
     use bifrost_ui::cursor::Kind as K;
     match k {
         K::Arrow => cursor_device::Shape::Default,
-        K::IBeam => cursor_device::Shape::Text,
+        K::IBeam | K::VerticalIBeam => cursor_device::Shape::Text,
         K::Crosshair => cursor_device::Shape::Crosshair,
         K::OpenHand => cursor_device::Shape::Grab,
         K::ClosedHand => cursor_device::Shape::Grabbing,

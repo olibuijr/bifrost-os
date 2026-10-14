@@ -397,24 +397,6 @@ pub mod tests_support {
     }
 }
 
-/// Documents for the tests of other modules.
-#[cfg(test)]
-pub mod tests_support {
-    use super::*;
-
-    /// A one-page document showing `img`.
-    pub fn picture_of(img: Image) -> Document {
-        let size = (img.w, img.h);
-        Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![size], Source::Picture(Rc::new(img)), Vec::new(), false)
-    }
-
-    /// A document of `n` pages of 4 by 4 pixels, all showing the same picture.
-    pub fn pictures(n: usize) -> Document {
-        let img = Image { w: 4, h: 4, px: vec![0; 16] };
-        Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![(4, 4); n], Source::Picture(Rc::new(img)), Vec::new(), false)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

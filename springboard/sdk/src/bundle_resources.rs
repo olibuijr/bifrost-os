@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn links_route_to_the_installed_app_that_claims_them() {
-        let f = AssociationFile::parse(r#"{"applinks":{"details":[{"appIDs":["ABCDE12345.is.olibuijr.notes"],"components":[{"/":"/share/*"},{"/":"/share/private/*","exclude":true}]},{"appIDs":["ABCDE12345.is.olibuijr.tv"],"components":[{"/":"*"}]}]}}"#).unwrap();
+        let f = AssociationFile::parse(r#"{"applinks":{"details":[{"appIDs":["ABCDE12345.is.olibuijr.notes"],"components":[{"/":"/share/private/*","exclude":true},{"/":"/share/*"}]},{"appIDs":["ABCDE12345.is.olibuijr.tv"],"components":[{"/":"*"}]}]}}"#).unwrap();
         let installed = ["is.olibuijr.tv", "is.olibuijr.notes"];
         assert_eq!(f.route("/share/a/b", &installed), Some("is.olibuijr.notes".into()));
         assert_eq!(f.route("/share/private/x", &installed), Some("is.olibuijr.tv".into()), "the excluded rule passes it on to the next detail");

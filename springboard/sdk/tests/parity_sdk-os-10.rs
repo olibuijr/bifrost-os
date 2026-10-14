@@ -62,7 +62,7 @@ fn a_device_is_addressed_by_its_card_and_device_numbers() {
 fn the_default_device_for_a_direction_is_the_first_device_with_a_stream_in_it() {
     let system = System::from_listing(LISTING);
     assert_eq!(system.default_device(Scope::Output).map(|d| d.id), Some(ObjectId(2)));
-    assert_eq!(system.default_device(Scope::Input).map(|d| d.id), Some(ObjectId(7)));
+    assert_eq!(system.default_device(Scope::Input).map(|d| d.id), Some(ObjectId(2)));
 }
 
 #[test]

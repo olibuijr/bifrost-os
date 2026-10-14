@@ -15,7 +15,7 @@ use bifrost_ui::Rect;
 // ---- audio: default devices ----
 
 fn speakers() -> AudioDevice {
-    AudioDevice { can_input: false, can_sound_effects: false, ..AudioDevice::new("speakers", "Speakers") }
+    AudioDevice { can_input: false, ..AudioDevice::new("speakers", "Speakers") }
 }
 
 fn microphone() -> AudioDevice {

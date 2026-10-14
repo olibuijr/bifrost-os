@@ -101,6 +101,7 @@ impl Summary {
 pub fn priority_of(x_priority: Option<&str>, importance: Option<&str>) -> Priority {
     match x_priority.and_then(|v| v.trim().chars().next()) {
         Some('1' | '2') => return Priority::High,
+        Some('3') => return Priority::Normal,
         Some('4' | '5') => return Priority::Low,
         _ => {}
     }

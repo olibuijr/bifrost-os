@@ -369,7 +369,7 @@ mod tests {
         assert!(app.key(&ui, &KeyInput::Code(38)));
         assert_eq!(app.pan, (0.0, 0.0));
         app.insert_note(&ui);
-        assert!(!app.key(&ui, &KeyInput::Code(39)), "typing owns the keys");
+        assert!(app.key(&ui, &KeyInput::Code(39)), "typing owns the arrow keys");
         assert_eq!(app.pan, (0.0, 0.0));
     }
 

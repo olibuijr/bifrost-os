@@ -2255,21 +2255,21 @@ mod model_tests {
         let top = app.canvas_top(&ui) as f32;
         app.model = Drawing::from_strokes(vec![Stroke {
             ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
-            points: vec![StrokePoint::at(5.0, 5.0)],
+            points: vec![StrokePoint::at(5.0, 5.0), StrokePoint::at(105.0, 45.0)],
         }]);
         // the selection is dragged with the lasso tool active, as a user does
         app.tool = Tool::Lasso;
         app.selection = Some(Selection::default());
         app.lassoing = true;
-        for (x, y) in [(0.0, 0.0), (30.0, 0.0), (30.0, 30.0), (0.0, 30.0)] {
+        for (x, y) in [(0.0, 0.0), (110.0, 0.0), (110.0, 50.0), (0.0, 50.0)] {
             app.lasso.add(x, y);
         }
         app.canvas_up(&ui, 0.0, top);
         assert!(app.selection_contains(5.0, 5.0));
 
-        app.canvas_down(&ui, 5.0, top + 5.0);
-        app.canvas_move(&ui, 15.0, top + 5.0);
-        app.canvas_up(&ui, 15.0, top + 5.0);
+        app.canvas_down(&ui, 55.0, top + 25.0);
+        app.canvas_move(&ui, 65.0, top + 25.0);
+        app.canvas_up(&ui, 65.0, top + 25.0);
         assert_eq!(app.model.strokes()[0].points[0].x, 15.0);
     }
 
@@ -2415,11 +2415,14 @@ mod model_tests {
         assert_eq!(app.pointer_for(&ui, 10.0, top + 10.0), Kind::DisappearingItem);
         app.tool = Tool::Lasso;
         assert_eq!(app.pointer_for(&ui, 10.0, top + 10.0), Kind::Arrow);
-        app.model = two_lines();
-        select_at(&mut app, 5.0, 5.0);
-        assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::OpenHand, "over the selected stroke");
+        app.model = Drawing::from_strokes(vec![Stroke {
+            ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
+            points: vec![StrokePoint::at(5.0, 5.0), StrokePoint::at(105.0, 45.0)],
+        }]);
+        app.selection = Some(Selection::from_indices(vec![0]));
+        assert_eq!(app.pointer_for(&ui, 55.0, top + 25.0), Kind::OpenHand, "over the selected stroke, away from its handles");
         app.moving = Some((0.0, 0.0));
-        assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::ClosedHand, "while it is dragged");
+        assert_eq!(app.pointer_for(&ui, 55.0, top + 25.0), Kind::ClosedHand, "while it is dragged");
     }
 
     #[test]

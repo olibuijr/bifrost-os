@@ -1406,8 +1406,9 @@ mod tests {
         let share = w.share_rect();
         assert!(share.x > save.x + save.w, "the sharing button sits to the right of Save");
         assert_eq!(w.hit_body(share.x + 4.0, share.y + 4.0), Target::Share);
+        let requests_before_share = w.in_flight;
         assert!(w.activate(Target::Share));
-        assert_eq!(w.in_flight, 1, "the button asks the scheduler to change the sharing once");
+        assert_eq!(w.in_flight, requests_before_share + 1, "the button asks the scheduler to change the sharing once");
     }
 
     #[test]

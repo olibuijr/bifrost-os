@@ -17,7 +17,7 @@ pub enum FormError {
 }
 
 /// The editable state of one intent. Values are kept in declaration order.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IntentForm {
     intent: Intent,
     values: Vec<Option<Json>>,

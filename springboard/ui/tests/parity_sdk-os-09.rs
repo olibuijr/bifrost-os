@@ -270,7 +270,7 @@ fn a_press_of_a_button_is_accepted() {
 
 #[test]
 fn an_unknown_control_is_reported_by_its_identifier() {
-    let mut registry = ControlRegistry::new();
+    let registry = ControlRegistry::new();
     assert_eq!(registry.value("missing"), Err(ControlError::Unknown { identifier: "missing".to_string() }));
     assert_eq!(registry.press("missing"), Err(ControlError::Unknown { identifier: "missing".to_string() }));
 }

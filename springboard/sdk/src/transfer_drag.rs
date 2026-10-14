@@ -113,7 +113,7 @@ mod tests {
     impl Transferable for Note {
         fn transfer_representations() -> Representations<Note> {
             Representations::new()
-                .data(PLAIN, Visibility::All, |n| n.0.clone().into_bytes(), |b| String::from_utf8(b.to_vec()).ok().map(Note))
+                .data(PLAIN, Visibility::All, |n: &Note| n.0.clone().into_bytes(), |b| String::from_utf8(b.to_vec()).ok().map(Note))
                 .proxy(HTML, Visibility::All, |n| format!("<p>{}</p>", n.0).into_bytes())
         }
     }
@@ -147,11 +147,11 @@ mod tests {
         let (got, mut target) = inbox();
         let dragged = draggable(&Note::transfer_representations(), &Note("hello".into())).unwrap();
         let mut session = Session::begin(op::COPY | op::MOVE, dragged.items).expect("a session begins");
-        session.moved(Some(&mut target));
+        session.moved(None, Some(&mut target));
         assert!(target.is_targeted());
         assert_eq!(session.operation(), op::COPY);
         target.deliver(&dragged.data);
-        assert_eq!(session.drop_on(Some(&mut target)), op::COPY);
+        assert_eq!(session.drop_on(None, Some(&mut target)), op::COPY);
         assert_eq!(session.state(), State::Dropped);
         assert_eq!(session.log, [Callback::Entered(1), Callback::Perform(1), Callback::Conclude(1)]);
         assert_eq!(*got.borrow(), [Note("hello".into())]);
@@ -163,12 +163,12 @@ mod tests {
         let mut target = DropTarget::new(2, Note::transfer_representations(), |_| false);
         let dragged = draggable(&Note::transfer_representations(), &Note("x".into())).unwrap();
         let mut session = Session::begin(op::COPY, dragged.items).unwrap();
-        session.moved(Some(&mut target));
-        session.moved(None);
+        session.moved(None, Some(&mut target));
+        session.moved(Some(&mut target), None);
         assert!(!target.is_targeted());
-        session.moved(Some(&mut target));
+        session.moved(None, Some(&mut target));
         target.deliver(&dragged.data);
-        assert_eq!(session.drop_on(Some(&mut target)), op::NONE);
+        assert_eq!(session.drop_on(None, Some(&mut target)), op::NONE);
         assert_eq!(session.state(), State::Cancelled);
     }
 
@@ -178,10 +178,10 @@ mod tests {
         let mut target = target.wanting(op::MOVE);
         let dragged = draggable(&Note::transfer_representations(), &Note("x".into())).unwrap();
         let mut copy_only = Session::begin(op::COPY, dragged.items.clone()).unwrap();
-        copy_only.moved(Some(&mut target));
+        copy_only.moved(None, Some(&mut target));
         assert_eq!(copy_only.operation(), op::NONE);
         let mut movable = Session::begin(op::MOVE, dragged.items).unwrap();
-        movable.moved(Some(&mut target));
+        movable.moved(None, Some(&mut target));
         assert_eq!(movable.operation(), op::MOVE);
     }
 }

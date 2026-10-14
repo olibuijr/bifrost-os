@@ -4,12 +4,12 @@
 
 use bifrost_ui::analyzer_input::{AnalyzerInput, AudioFormat};
 use bifrost_ui::embedding::{DistanceType, Embedding, EmbeddingError};
-use bifrost_ui::features::{DictionaryProvider, FeatureValue};
+use bifrost_ui::features::{DictionaryProvider, FeatureProvider, FeatureValue};
 use bifrost_ui::ml_model::Model;
 use bifrost_ui::ml_runtime::{AnalysisRuntime, RuntimeError};
 use bifrost_ui::ml_tensor::Tensor;
 use bifrost_ui::sound_analyzer::{
-    ResultLog, SoundAnalysisError, SoundAnalyzer, SoundClassifier, SoundRequest, SoundResultsObserving,
+    ResultLog, SoundAnalysisError, SoundAnalyzer, SoundClassifier, SoundRequest,
 };
 use bifrost_ui::text_classifier::{ClassifierError, TextClassifier};
 

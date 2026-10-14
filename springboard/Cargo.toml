@@ -116,6 +116,10 @@ bifrost-render = { path = "render", features = ["testkit"] }
 name = "app_policy_probe"
 required-features = ["desktop-wayland"]
 
+[[test]]
+name = "parity_sdk-tests-11"
+required-features = ["desktop-wayland"]
+
 [[bin]]
 name = "bootweave"
 path = "bootweave/supervisor.rs"

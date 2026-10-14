@@ -420,7 +420,7 @@ fn headless_reset_restores_the_default_order_and_shows_everything() {
 
 #[test]
 fn headless_required_ids_the_app_does_not_offer_are_ignored() {
-    let t = ToolbarCustomization::new(vec![1, 2], vec![7]);
+    let mut t = ToolbarCustomization::new(vec![1, 2], vec![7]);
     assert_eq!(t.hide(7), Err(ToolbarError::UnknownItem));
     assert_eq!(t.visible(), vec![1, 2]);
 }

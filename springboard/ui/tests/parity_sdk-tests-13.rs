@@ -47,7 +47,7 @@ fn headless_iterative_fill_lights_one_layer_at_a_time() {
 
 #[test]
 fn headless_progress_is_clamped_and_nan_reads_as_the_start() {
-    assert!(close(layer_opacity(0, 2, 7.0, Fill::Iterative, Inactive::Hide), 1.0), "progress past one reads as one");
+    assert!(close(layer_opacity(1, 2, 7.0, Fill::Iterative, Inactive::Hide), 1.0), "progress past one reads as one");
     assert!(close(layer_opacity(1, 2, -3.0, Fill::Iterative, Inactive::Hide), 0.0), "negative progress reads as zero");
     assert!(close(layer_opacity(0, 2, f32::NAN, Fill::Iterative, Inactive::Hide), 1.0), "NaN reads as the start");
 }

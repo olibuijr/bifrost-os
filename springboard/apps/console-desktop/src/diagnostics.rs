@@ -41,6 +41,7 @@ pub fn hang_row(unix: i64, message: &str) -> LogEntry {
         category: "heartbeat".into(),
         level: Level::Fault,
         message: message.into(),
+        invocation: String::new(),
     }
 }
 
@@ -128,6 +129,7 @@ pub fn daily_rows(crash_times: &[i64], hangs: &[(i64, u64)]) -> Vec<LogEntry> {
             category: "daily".into(),
             level: if day.crashes > 0 { Level::Fault } else { Level::Error },
             message: summary(day),
+            invocation: String::new(),
         })
         .collect()
 }

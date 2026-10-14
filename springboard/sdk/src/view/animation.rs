@@ -333,7 +333,7 @@ impl<S: Responder> Window<S> {
                 let mut anim = t.animation(b.get(p), a.get(p));
                 // a retargeted spring keeps the speed of the one it replaces
                 let distance = a.get(p) - b.get(p);
-                if matches!(anim.curve, Curve::Spring { .. }) && distance.abs() > 1e-6 {
+                if matches!(anim.curve, Curve::Spring { .. }) && distance.abs() > 1e-6 && t.initial_velocity == 0.0 {
                     anim.velocity = carried / distance;
                 }
                 Track { id, prop: p, anim, started: false, shown: b.get(p), colors: None, shown_color: None, group }

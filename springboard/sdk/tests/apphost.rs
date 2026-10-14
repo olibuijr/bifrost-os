@@ -77,10 +77,25 @@ fn frames_touches_damage_and_exit() {
 
 #[test]
 fn a_crash_is_reported_and_the_last_frame_stays() {
+    let _ = springboard::shell::apphost::late_crashes();
     let mut h = spawn("apps-sdk-test-b");
     pump_until(&mut h, |_, frame| frame);
     h.touch(TouchKind::Down, 0, -1.0, 0.0, 0);
     pump_until(&mut h, |h, _| !h.running());
-    assert_eq!(h.status(), Status::Exited(3));
+    let end = Instant::now() + Duration::from_secs(2);
+    let mut code = match h.status() {
+        Status::Exited(code) if code != 0 => Some(code),
+        _ => None,
+    };
+    while Instant::now() < end && code.is_none() {
+        code = springboard::shell::apphost::late_crashes()
+            .into_iter()
+            .find(|(id, _)| id == "is.olibuijr.testapp")
+            .map(|(_, code)| code);
+        if code.is_none() {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+    assert_eq!(code, Some(3));
     assert!(h.frame().is_some(), "the crash screen is the last frame");
 }

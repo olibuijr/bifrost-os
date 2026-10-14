@@ -479,7 +479,7 @@ mod tests {
         let gone = reg.close(&mut log, &b).unwrap();
         assert_eq!(gone.persistent_id, b);
         assert_eq!(gone.state, S::Unattached);
-        assert_eq!(events(&log), vec![E::WillResignActive, E::DidEnterBackground, E::DidDisconnect]);
+        assert_eq!(events(&log), vec![E::WillResignActive, E::DidEnterBackground, E::DidDisconnect, E::DidBecomeActive]);
         assert_eq!(reg.list().len(), 1);
         assert_eq!(reg.focused().unwrap().persistent_id, a);
         assert_eq!(reg.get(&a).unwrap().state, S::ForegroundActive);

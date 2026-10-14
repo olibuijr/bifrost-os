@@ -49,7 +49,7 @@ fn suggestions_are_the_fitting_logins_newest_first_then_by_account() {
         login("other.org", "carol", 50),
         login("example.com", "anna", 10),
     ];
-    let accounts: Vec<&str> = suggestions(&logins, "https://example.com/signin").iter().map(|l| l.account.as_str()).collect();
+    let accounts: Vec<&str> = suggestions(&logins, "https://login.example.com/signin").iter().map(|l| l.account.as_str()).collect();
     assert_eq!(accounts, vec!["bob", "alice", "anna"]);
 }
 

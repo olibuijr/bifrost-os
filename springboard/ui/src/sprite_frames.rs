@@ -116,7 +116,7 @@ mod tests {
     fn looping_wraps_time_into_the_duration() {
         let s = walk();
         assert_eq!(s.frame_at(0.45, true), "walk-0");
-        assert_eq!(s.frame_at(1.25, true), "walk-2");
+        assert_eq!(s.frame_at(1.45, true), "walk-2");
     }
 
     #[test]

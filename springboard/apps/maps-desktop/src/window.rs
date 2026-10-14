@@ -1957,7 +1957,7 @@ mod tests {
 
     /// 1000 m north of (64, -21), a right turn, 1000 m east.
     fn l_route() -> Route {
-        let b = (64.0 + 1000.0 / 111_194.9, -21.0);
+        let b: (f64, f64) = (64.0 + 1000.0 / 111_194.9, -21.0);
         let c = (b.0, b.1 + 1000.0 / (111_194.9 * b.0.to_radians().cos()));
         let step = |name: &str, maneuver: &str, distance_m: f64| route::Step { name: name.into(), maneuver: maneuver.into(), distance_m };
         Route {

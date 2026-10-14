@@ -73,6 +73,7 @@ fn a_session_carries_bytes_in_both_directions_and_closes_its_output() {
     assert_eq!(session.output_status(), StreamStatus::NotOpen);
     session.receive(b"ok");
     let mut buf = [0u8; 4];
+    session.input_stream().open();
     assert_eq!(session.input_stream().read(&mut buf), Ok(2));
     assert_eq!(&buf[..2], b"ok");
     session.output_stream().open();
@@ -104,9 +105,9 @@ fn access_criteria(vendor: u16) -> MatchingCriteria {
 fn an_access_listener_hears_only_the_vendor_it_matches() {
     let mut manager = AccessAccessoryManager::new();
     assert_eq!(manager.register(1, access_criteria(0x1234)), Ok(Vec::new()));
-    manager.attach(AccessAccessory::new(0, usb_device(0x9999)));
+    manager.attach(AccessAccessory::new(1, usb_device(0x9999)));
     assert!(manager.take_events(1).is_empty());
-    let id = manager.attach(AccessAccessory::new(0, usb_device(0x1234)));
+    let id = manager.attach(AccessAccessory::new(2, usb_device(0x1234)));
     assert_eq!(manager.take_events(1), vec![AccessEvent::Connected(id)]);
 }
 

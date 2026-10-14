@@ -525,7 +525,7 @@ mod headless_vcard_tests {
 
     #[test]
     fn a_card_with_no_name_or_company_is_counted_as_invalid() {
-        let got = import("BEGIN:VCARD\r\nVERSION:3.0\r\nTEL:555 1234\r\nEND:VCARD\r\n").unwrap();
+        let got = import("BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n").unwrap();
         assert_eq!(got.invalid, 1);
         assert!(got.contacts.is_empty());
     }

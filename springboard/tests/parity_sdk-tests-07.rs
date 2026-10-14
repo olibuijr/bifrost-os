@@ -37,7 +37,7 @@ fn gps_tiff(lat_deg: u32, lon_deg: u32, lat_ref: u8, lon_ref: u8) -> Vec<u8> {
     entry(&mut t, 4, 5, 3, offset_bytes(104));
     t.extend_from_slice(&0u32.to_le_bytes());
     assert_eq!(t.len(), 80);
-    for (n, d) in [(lat_deg, 1), (30, 1), (0, 1), (lon_deg, 1), (30, 1), (0, 1)] {
+    for (n, d) in [(lat_deg, 1u32), (30, 1), (0, 1), (lon_deg, 1), (30, 1), (0, 1)] {
         t.extend_from_slice(&n.to_le_bytes());
         t.extend_from_slice(&d.to_le_bytes());
     }

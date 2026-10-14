@@ -152,16 +152,22 @@ pub fn build_ax(nodes: &[Node], ext: &[NodeExt], texts: &[AxText], metas: &[AxMe
             n.value = bifrost_ui::ax::masked(t.len);
         }
     }
-    for i in 0..out.len() {
-        let mut at = out[i].parent;
-        let mut steps = 0;
-        while let Some(p) = at {
-            steps += 1;
-            if steps > out.len() {
-                out[i].parent = None;
+    let mut cyclic = Vec::new();
+    for node in &out {
+        let mut path = Vec::new();
+        let mut at = Some(node.id);
+        while let Some(id) = at {
+            if let Some(start) = path.iter().position(|seen| *seen == id) {
+                cyclic.extend_from_slice(&path[start..]);
                 break;
             }
-            at = out.iter().find(|n| n.id == p).and_then(|n| n.parent);
+            path.push(id);
+            at = out.iter().find(|parent| parent.id == id).and_then(|parent| parent.parent);
+        }
+    }
+    for node in &mut out {
+        if cyclic.contains(&node.id) {
+            node.parent = None;
         }
     }
     out

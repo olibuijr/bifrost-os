@@ -89,6 +89,7 @@ mod tests {
     fn step_edge_gives_full_response_on_the_inner_column() {
         // Columns 0 and 1 are black, columns 2 and 3 are white.
         let mut img = Image::new(4, 4);
+        img.px.fill(0xff00_0000);
         for y in 0..4 {
             for x in 2..4 {
                 img.px[y * 4 + x] = 0xffff_ffff;

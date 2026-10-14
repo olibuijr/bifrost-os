@@ -26,7 +26,7 @@ pub const DOMAIN: &str = "is.olibuijr.contacts.desktop";
 /// The name a contact is known by in messages and in the index title.
 pub fn label(c: &Contact) -> String {
     let name = c.display_name().trim();
-    if name.is_empty() {
+    if c.name.trim().is_empty() && c.company.trim().is_empty() && c.phone.trim().is_empty() && c.email.trim().is_empty() {
         "contact".to_string()
     } else {
         name.to_string()

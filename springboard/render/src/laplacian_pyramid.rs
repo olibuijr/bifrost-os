@@ -98,9 +98,12 @@ pub fn laplacian_pyramid(src: &Plane, levels: usize) -> Vec<LaplacianLevel> {
 /// match its size. For a pyramid made by [`laplacian_pyramid`] the result equals the original plane.
 pub fn collapse(levels: &[LaplacianLevel]) -> Option<Plane> {
     let (last, finer) = levels.split_last()?;
+    if last.width.checked_mul(last.height)? != last.values.len() {
+        return None;
+    }
     let mut current = Plane { width: last.width, height: last.height, pixels: to_bytes(&last.values)? };
     for level in finer.iter().rev() {
-        if level.values.len() != level.width * level.height {
+        if level.width.checked_mul(level.height)? != level.values.len() {
             return None;
         }
         let expanded = expand(&current, level.width, level.height);

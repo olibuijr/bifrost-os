@@ -66,7 +66,7 @@ mod spelling {
     #[test]
     fn headless_a_transposed_pair_is_one_edit_away() {
         let list = WordList::new("en", ["the", "tea", "ten"]);
-        assert_eq!(list.suggest("teh"), vec!["tea", "the"]);
+        assert_eq!(list.suggest("teh"), vec!["tea", "ten", "the"]);
     }
 
     #[test]

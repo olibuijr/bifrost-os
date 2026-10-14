@@ -41,6 +41,7 @@ pub fn pstore_entry(file: &str, size: u64, modified_us: i64) -> LogEntry {
         category: file.into(),
         level: Level::Fault,
         message: format!("Kernel crash record {file} ({})", size_text(size)),
+        invocation: String::new(),
     }
 }
 

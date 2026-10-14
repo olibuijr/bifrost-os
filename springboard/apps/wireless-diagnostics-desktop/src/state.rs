@@ -229,8 +229,8 @@ mod tests {
         d.apply_reading(reading(None, None));
         assert_eq!(d.history.len(), 2);
         assert_eq!(d.history.latest(), Some(-45));
-        assert_eq!(d.noise(), Some(-95));
-        assert_eq!(d.rating(), Rating::Excellent);
+        assert_eq!(d.noise(), None, "noise is from the latest reading, not a stale sample");
+        assert_eq!(d.rating(), Rating::Unknown, "no current signal has no current rating");
     }
 
     #[test]

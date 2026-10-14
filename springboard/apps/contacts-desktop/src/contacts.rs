@@ -4320,7 +4320,7 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         app.activate(&ui, Target::Row(1), 0.0, 0.0, 0.0);
         assert_eq!(app.screen, Screen::List, "a press only marks the row");
         assert_eq!(app.selection, BTreeSet::from([1, 2]));
-        assert_eq!(app.controls(&ui).iter().filter(|n| n.value == "selected").count(), 2, "assistive technology sees the marks");
+        assert_eq!(app.controls(&ui).iter().filter(|n| n.id >= ROW_NODE && n.value == "selected").count(), 2, "assistive technology sees the marked contacts");
         app.activate(&ui, Target::Row(1), 0.0, 0.0, 0.0);
         assert_eq!(app.selection, BTreeSet::from([1]), "a second press takes the mark off");
         app.activate(&ui, Target::Row(1), 0.0, 0.0, 0.0);

@@ -162,7 +162,7 @@ mod tests {
         t.insert("a", "quarterly");
         t.insert("b", "quartz rock");
         t.insert("c", "quiet");
-        assert_eq!(t.ids_with_prefix("QUAR"), ["a"]);
+        assert_eq!(t.ids_with_prefix("quarter"), ["a"]);
         assert_eq!(t.ids_with_prefix("qua"), ["a", "b"]);
         assert!(t.ids_with_prefix("zeta").is_empty());
     }

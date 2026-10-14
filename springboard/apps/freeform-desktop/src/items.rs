@@ -740,7 +740,7 @@ pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictu
                 draw_text(px, cw, ch, ui, &it.text, NOTE_PT * z, Weight::Regular, INK, r, ui.pt(PAD_PT) * z, caret_cell.map(|_| caret));
             }
             Kind::Table => paint_table(px, cw, ch, ui, it, caret_cell, caret, z),
-            Kind::Link => paint_link(px, cw, ch, ui, it, caret_cell.is_some(), z),
+            Kind::Link => paint_link(px, cw, ch, ui, it, caret_cell.map(|_| caret), z),
             Kind::File => paint_file(px, cw, ch, ui, it, z),
             Kind::Picture => match pictures.get(&it.id) {
                 Some(img) => blit(px, cw, ch, img, it.x.round() as i32, it.y.round() as i32, r),
@@ -781,13 +781,13 @@ fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_c
     }
 }
 
-fn paint_link(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, editing: bool, z: f32) {
+fn paint_link(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret: Option<usize>, z: f32) {
     let r = it.rect();
     let pad = ui.pt(PAD_PT) * z;
     fill(px, cw, ch, r, LINK_FILL);
     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), LINK_INK);
-    if editing {
-        draw_text(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, LINK_INK, r, pad, true);
+    if let Some(caret) = caret {
+        draw_text(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, LINK_INK, r, pad, Some(caret));
         return;
     }
     let max = r.w - 2.0 * pad;

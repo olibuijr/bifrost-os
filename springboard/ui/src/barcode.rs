@@ -253,8 +253,8 @@ mod tests {
 
     #[test]
     fn checksum() {
-        assert!(ean_checksum(&[4, 0, 0, 6, 3, 8, 1, 3, 3, 3, 9, 3, 6]));
-        assert!(!ean_checksum(&[4, 0, 0, 6, 3, 8, 1, 3, 3, 3, 9, 3, 5]));
+        assert!(ean_checksum(&[4, 0, 0, 6, 3, 8, 1, 3, 3, 3, 9, 3, 1]));
+        assert!(!ean_checksum(&[4, 0, 0, 6, 3, 8, 1, 3, 3, 3, 9, 3, 6]));
         assert!(!ean_checksum(&[1, 2, 3]));
     }
 

@@ -876,7 +876,8 @@ mod tests {
     fn transformed_path_fills_at_the_new_place() {
         let mut p = Path::new();
         p.add_rect(0.0, 0.0, 2.0, 2.0);
-        let t = Affine::scale(2.0, 2.0).translated_by(3.0, 0.0);
+        // Scale first, then move three device-space units: x maps to 2x + 3.
+        let t = Affine::scale(2.0, 2.0).concatenating(&Affine::translation(3.0, 0.0));
         let l = Canvas::new(10, 4).draw(|c, _| c.fill(&p.transformed(&t), RED, FillRule::NonZero));
         assert_eq!(l.get(3, 0) >> 24, 255);
         assert_eq!(l.get(8, 3) >> 24, 0);

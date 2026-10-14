@@ -109,7 +109,7 @@ impl ColorToken {
     /// 8-bit RGB of the current appearance (RTF colour table export).
     pub fn rgb(self) -> (u8, u8, u8) {
         let c = self.now();
-        ((c >> 16) as u8, (c >> 8) as u8, c as u8)
+        (c as u8, (c >> 8) as u8, (c >> 16) as u8)
     }
     /// The token whose current colour is nearest to an RGB triple (RTF colour table import). An exact match wins.
     pub fn nearest_rgb(r: u8, g: u8, b: u8) -> ColorToken {

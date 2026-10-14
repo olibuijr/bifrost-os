@@ -1,12 +1,14 @@
 //! The Adjust pane's Auto button: it sits in the row under the sliders and toggles Auto Enhance.
 
-use super::tests::photos;
+use super::tests::{photos, pump_until};
 use super::*;
 
 #[test]
 fn the_adjust_pane_has_an_auto_button_under_its_sliders() {
     let (mut p, _dir, ui) = photos("adjust-auto", 1);
     p.open_viewer(0);
+    p.tick(&ui, 0.0);
+    pump_until(&mut p, &ui, |p| p.full.len() == 1);
     p.activate(&ui, Target::Edit, 0.0);
     let top = p.edit_panel_top(&ui);
     let row = ui.pt(EDIT_ROW_PT);

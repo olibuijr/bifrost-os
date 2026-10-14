@@ -635,7 +635,7 @@ mod tests {
 <w:num w:numId=\"7\"><w:abstractNumId w:val=\"3\"/></w:num></w:numbering>";
         let lists = list_kinds(numbering);
         assert_eq!(lists.get("7"), Some(&ListKind::Numbered));
-        let cells = parse(document, &lists);
+        let cells = parse(document, &lists, &HashMap::new());
         assert_eq!(text_of(&cells), "Title\none \ttwo3\n\nitem\nkept");
         assert!(cells[0].style.bold && cells[0].style.size == 20.0 && cells[0].style.align == Align::Center, "a heading");
         let one = &cells[6];

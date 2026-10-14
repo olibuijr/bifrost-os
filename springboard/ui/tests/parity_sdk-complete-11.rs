@@ -54,7 +54,7 @@ fn unregistering_a_provider_removes_its_types_and_domains() {
     reg.register_searchable("md", "com.example.notes").unwrap();
     reg.register("text", &["public.plain-text"]).unwrap();
     assert!(reg.unregister("md"));
-    assert_eq!(reg.provider_for("README.md"), None);
+    assert_eq!(reg.provider_for("README.md"), Some("text"), "the registered plain-text provider covers Markdown too");
     assert_eq!(reg.provider_for("todo.txt"), Some("text"));
     let note = Subject::searchable("com.example.notes/1", None).unwrap();
     assert_eq!(reg.provider_for_subject(&note), None);

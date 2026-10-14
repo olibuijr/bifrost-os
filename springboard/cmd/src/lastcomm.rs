@@ -163,7 +163,7 @@ mod tests {
         put_u32(&mut raw, 8, 1001);
         put_u32(&mut raw, 24, 1_700_000_000);
         put_u32(&mut raw, 28, 1.25f32.to_bits());
-        put_u16(&mut raw, 32, 10_000);
+        put_u16(&mut raw, 32, 0x24e2); // 10,000 ticks as a 13-bit mantissa plus exponent
         put_u16(&mut raw, 34, 2_000);
         let len = command.len().min(16);
         raw[48..48 + len].copy_from_slice(&command[..len]);

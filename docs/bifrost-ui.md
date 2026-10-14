@@ -1560,7 +1560,8 @@ after a change to read a new value; the harness drives one window, not the shell
 - Sizes are the `MAC_*_PT` text styles (`SizeClass`), colours are named tokens resolved with `Pair::now()` (Light and Dark);
   no literal sizes or colours.
 - RTF (`to_rtf`/`from_rtf`): `\b \i \ul \strike \fsN`, colour table, hyperlink fields, `\par`, `\'hh`, `\uN` incl. surrogates.
-  HTML (`to_html`/`from_html`): `b strong i em u s del a h1-h3 small br p`, colour as `span data-color`, entities.
+  RTF colour-table bytes preserve RGB order on import/export. HTML (`to_html`/`from_html`): `b strong i em u s del a h1-h3 small br p`,
+  colour as `span data-color`, entities.
 - `RichTextView`: `RichText` (content, selection, typing attributes) with `insert_text`, `delete_backward`, `toggle(Trait)`,
   `key_command(char, shift)` for Cmd+B/I/U and Cmd+Z / Cmd+Shift+Z, every edit one step on an `UndoManager`. `draw` renders
   the content through the framesetter (`richlayout::TextLayout`) with selection and caret; `layout(ui, width)` gives pixel

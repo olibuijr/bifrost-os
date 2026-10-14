@@ -1880,6 +1880,7 @@ mod tests {
     #[test]
     fn replace_in_the_focused_note_without_focus_changes_nothing() {
         let mut app = app_with(&["foo"]);
+        app.board.as_mut().unwrap().focus = None;
         app.find = Some("foo".into());
         app.replace = "baz".into();
         assert!(app.replace(Scope::FocusedNote));

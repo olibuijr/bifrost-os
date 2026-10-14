@@ -111,12 +111,12 @@ fn headless_today_view_flows_medium_and_small_tiles_into_the_column() {
     let placed = today_layout(1.0, 400, &[(Kind::Clock, true), (Kind::Battery, true), (Kind::Wifi, true)]);
     assert_eq!(placed.len(), 3);
     let top = (SEARCH_TOP_PT + SEARCH_H_PT + GAP_PT).round() as i32;
-    assert_eq!(placed[0].rect.w, 329.0);
-    assert_eq!(placed[0].rect.h, 155.0);
-    assert_eq!(placed[0].rect.x, 35.0, "the column is centred: (400 - 329) / 2");
-    assert_eq!(placed[0].rect.y, top as f32);
+    assert_eq!(placed[0].rect.w, 329);
+    assert_eq!(placed[0].rect.h, 155);
+    assert_eq!(placed[0].rect.x, 35, "the column is centred: (400 - 329) / 2");
+    assert_eq!(placed[0].rect.y, top);
     assert_eq!(placed[1].rect.x, placed[0].rect.x, "a small tile starts the left side of the next row");
-    assert_eq!(placed[2].rect.x, placed[0].rect.x + 329.0 - 155.0, "the second small tile sits to the right");
+    assert_eq!(placed[2].rect.x, placed[0].rect.x + 329 - 155, "the second small tile sits to the right");
     assert_eq!(placed[1].rect.y, placed[2].rect.y);
     assert!(placed.iter().all(|p| p.on));
 }
@@ -127,7 +127,7 @@ fn headless_today_view_switched_off_widgets_follow_a_section_gap() {
     assert_eq!(placed.len(), 2);
     assert!(!placed[1].on, "the off tile is marked off");
     // Clock: 84 + 155 + 16 = 255 for the next row, then the section gap of 16 before the off tile.
-    assert_eq!(placed[1].rect.y, 271.0);
+    assert_eq!(placed[1].rect.y, 271);
 }
 
 // ---- widgetkit: smart stacks and relevance in the store (springboard::shell::services::widgets_timeline) ----

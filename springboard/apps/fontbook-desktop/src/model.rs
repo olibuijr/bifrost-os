@@ -862,7 +862,8 @@ mod tests {
         assert!(lib.create_smart("Named", Rule::NameContains("int".into())));
         assert_eq!(names(lib.visible(&Source::Smart("Named".into()), "")), ["Inter"]);
         assert!(lib.rename_collection("Named", "Interish"));
-        assert_eq!(lib.smart_names(), ["Interish"]);
+        assert!(lib.smart_names().contains(&"Interish".to_string()));
+        assert!(!lib.smart_names().contains(&"Named".to_string()), "renaming removes the old name");
         assert!(lib.delete_smart("interish"));
         assert!(!lib.delete_smart("interish"));
         assert_eq!(names(lib.visible(&Source::Smart("Missing".into()), "")), Vec::<String>::new());

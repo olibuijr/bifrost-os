@@ -115,6 +115,7 @@ impl App for MapsApp {
             Input::Context { x, y } => w.context(&ctx.ui, x, y),
             Input::Open(url) => w.open_link(ctx, &url, now),
             Input::ContextAction(_) => false,
+            Input::QuickAction(_) => false,
         };
         self.sync_keyboard(ctx);
         handled

@@ -407,7 +407,7 @@ fn full_access_fetches_the_named_fields_only_and_blank_values_are_null() {
     let rows = reply.get("contacts").and_then(Json::as_array).unwrap();
     assert!(rows[0].get("given_name").is_none(), "a key that was not named is not returned");
     assert_eq!(rows[1].get("emails"), Some(&Json::Null));
-    assert_eq!(rows[0].get("emails").and_then(Json::as_array).map(Vec::len), Some(1));
+    assert_eq!(rows[0].get("emails").and_then(Json::as_array).map(|values| values.len()), Some(1));
 }
 
 #[test]

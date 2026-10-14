@@ -1808,7 +1808,7 @@ mod tests {
         let name = |m: &Monitor| m.signal_sheet.map(|i| model::SIGNALS[i].name);
         assert_eq!(name(&m), Some("TERM"));
         assert!(m.key(40));
-        assert_eq!(name(&m), Some("CONT"), "down the list");
+        assert_eq!(name(&m), Some("USR1"), "one row down from TERM");
         for _ in 0..20 {
             m.key(40);
         }
@@ -1917,11 +1917,11 @@ mod tests {
 
     #[test]
     fn the_new_columns_read_as_text_and_sort_by_their_figures() {
-        let mut small = proc(1, "small", 1000, 0.0, 0);
+        let mut small = proc(1, 1000, "small");
         small.ports = Some(2);
         small.private = Some(4096);
         small.wakeups = 1.5;
-        let mut large = proc(2, "large", 1000, 0.0, 0);
+        let mut large = proc(2, 1000, "large");
         large.ports = Some(9);
         large.private = None;
         large.wakeups = 0.2;

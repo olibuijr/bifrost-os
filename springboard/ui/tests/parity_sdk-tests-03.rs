@@ -519,7 +519,7 @@ fn landscape_swaps_the_paper_and_the_printable_area() {
 fn margins_set_the_printable_rect_and_never_go_negative() {
     let none = PrintInfo { paper: PaperSize::Letter, margins: [0.0; 4], ..Default::default() };
     assert_eq!(none.imageable(), (0.0, 0.0, 612.0, 792.0));
-    let wide = PrintInfo { margins: [400.0, 400.0, 400.0, 400.0], ..Default::default() };
+    let wide = PrintInfo { margins: [500.0, 500.0, 500.0, 500.0], ..Default::default() };
     assert_eq!(wide.imageable().2, 0.0);
     assert_eq!(wide.imageable().3, 0.0);
 }

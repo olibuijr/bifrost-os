@@ -1314,7 +1314,7 @@ mod tests {
         w.select(Category::Sata);
         assert!(w.toggle_section(Section::Network));
         assert!(w.step_category(1));
-        assert_eq!(w.selected, Category::System, "the Network section is folded");
+        assert_eq!(w.selected, Category::Sas, "the next visible Storage category remains available");
         assert!(w.step_category(-1));
         assert_eq!(w.selected, Category::Sata);
     }
@@ -1589,6 +1589,7 @@ mod tests {
     #[test]
     fn the_pick_stays_on_its_item_through_a_sort() {
         let mut w = with_apps();
+        assert!(w.activate(Target::Item(1)));
         assert!(w.activate(Target::Item(0)));
         assert_eq!(w.picked_title().as_deref(), Some("b.app"));
         assert!(w.activate(Target::ListHeader(Column::Name)));

@@ -2,7 +2,7 @@
 //! (save), delete, id allocation and the debounced autosave timer. Every test works in its own directory under the
 //! cargo test target directory and opens no window.
 
-use bifrost_notes::notes::store::{self, Autosave, Note};
+use notes::notes::store::{self, Autosave, Note};
 use std::fs;
 use std::path::{Path, PathBuf};
 

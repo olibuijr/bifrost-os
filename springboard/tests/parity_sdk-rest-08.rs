@@ -61,7 +61,7 @@ fn a_panic_line_names_the_message_and_its_location() {
 #[test]
 fn the_first_start_in_a_directory_has_no_previous_run_to_report() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(previous_run_note(dir.path()), None);
+    assert_eq!(previous_run_note(dir.path().to_str().unwrap()), None);
     assert!(dir.path().join("last_start").exists(), "the start marker is written");
 }
 
@@ -69,16 +69,16 @@ fn the_first_start_in_a_directory_has_no_previous_run_to_report() {
 fn a_run_that_recorded_a_controlled_exit_is_clean_at_the_next_start() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().to_str().unwrap();
-    assert_eq!(previous_run_note(dir.path()), None);
+    assert_eq!(previous_run_note(dir.path().to_str().unwrap()), None);
     try_write_last_exit(path, 0, "quit").unwrap();
-    assert_eq!(previous_run_note(dir.path()), None);
+    assert_eq!(previous_run_note(dir.path().to_str().unwrap()), None);
 }
 
 #[test]
 fn a_run_without_a_controlled_exit_is_unclean_at_the_next_start() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(previous_run_note(dir.path()), None);
-    let note = previous_run_note(dir.path()).expect("the earlier start left no exit record");
+    assert_eq!(previous_run_note(dir.path().to_str().unwrap()), None);
+    let note = previous_run_note(dir.path().to_str().unwrap()).expect("the earlier start left no exit record");
     assert!(note.contains("unclean"), "note was {note:?}");
 }
 
@@ -86,7 +86,7 @@ fn a_run_without_a_controlled_exit_is_unclean_at_the_next_start() {
 fn a_start_reads_and_clears_the_previous_exit_record() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("last_exit"), "4 restore\n").unwrap();
-    assert_eq!(previous_run_note(dir.path()), None);
+    assert_eq!(previous_run_note(dir.path().to_str().unwrap()), None);
     assert!(!dir.path().join("last_exit").exists(), "the next run starts without a record");
 }
 
