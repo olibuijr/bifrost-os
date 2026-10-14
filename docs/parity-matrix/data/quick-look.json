@@ -12,14 +12,14 @@
    "apple": "QLPreviewController, QLPreviewPanel-style data source (Quick Look UI, macOS 10.5+; https://developer.apple.com/documentation/quicklook/qlpreviewcontroller)",
    "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, make_key_and_order_front, close); wired: springboard/src/shell/preview_panel.rs; springboard/apps/files/src/system.rs (Files Space)",
    "status": "partial",
-   "note": "The model and tests exist. The shell decodes ToShell::Preview (springboard/proto/src/peek.rs, 0x1e0 and 0x1e1) but no handler was found under springboard/src, so nothing is drawn. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+   "note": "The model and tests exist. The shell decodes ToShell::Preview (springboard/proto/src/peek.rs, 0x1e0 and 0x1e1) but no handler was found under springboard/src, so nothing is drawn. Model tests (springboard/sdk/tests/parity_sdk-tests-01c.rs): the_panel_steps_without_wrapping_and_the_index_stays_in_range, a_data_source_pull_keeps_its_order_and_is_capped_at_the_wire_limit, each_item_starts_ready_and_a_new_list_resets_the_states. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
   },
   {
    "feature": "Preview items (URL and title)",
    "apple": "QLPreviewItem protocol (https://developer.apple.com/documentation/quicklook/qlpreviewitem)",
    "bifrost": "springboard/proto/src/peek.rs (PreviewItem, MAX_ITEMS), re-exported by springboard/sdk/src/peek.rs",
    "status": "partial",
-   "note": "URL and title only. No previewItemDisplayState, transition source frames or full-screen mode."
+   "note": "URL and title only. No previewItemDisplayState, transition source frames or full-screen mode. Wire tests (springboard/proto/tests/parity_sdk-tests-01c.rs): a_preview_list_round_trips_with_its_index, the_list_is_capped_and_the_index_follows_the_cap, an_overlong_title_is_cut_on_a_character_boundary."
   },
   {
    "feature": "Thumbnail generation and cache",

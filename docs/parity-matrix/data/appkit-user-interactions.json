@@ -10,9 +10,9 @@
   {
    "feature": "Mouse, Keyboard, and Trackpad",
    "apple": "NSEvent, NSResponder, key events, tracking areas, trackpad touches",
-   "bifrost": "springboard/ui/src/responder.rs, springboard/ui/src/keys.rs, springboard/ui/src/focus.rs, springboard/ui/src/wheel.rs, springboard/ui/src/tracking.rs, springboard/ui/src/trackpad_gesture.rs",
-   "status": "partial",
-   "note": "responder chain, key combos and focus loop exist (verified on Midget 0.7.25 by 17 tests). Scroll wheel (ui::wheel, with phases and momentum), tracking areas (ui::tracking) and two-finger events (ui::trackpad_gesture) are host-tested models; the app input path is still only Down/Move/Up/Cancel, so none of them reach apps yet, and nextKeyView is not overridable (docs/bifrost-ui.md ~line 1184). built on parity/team-k-appkit-user-interactions; not yet verified on Midget."
+   "bifrost": "springboard/ui/src/responder.rs, springboard/ui/src/keys.rs, springboard/ui/src/focus.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 17 tests. responder chain, key combos and focus loop exist; app input is only Down/Move/Up/Cancel, no wheel, hover, tracking areas or nextKeyView (docs/bifrost-ui.md ~line 870)"
   },
   {
    "feature": "Menus, Cursors, and the Dock",
