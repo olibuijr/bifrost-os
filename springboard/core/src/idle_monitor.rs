@@ -67,6 +67,16 @@ impl IdleMonitor {
         }
     }
 
+    /// The time in milliseconds at which `poll` next reports `BecameIdle`. None when idle detection is off or the monitor
+    /// is already idle. A caller can sleep until this time instead of polling on every frame.
+    pub fn next_check_at(&self) -> Option<u64> {
+        if self.timeout_ms == 0 || self.idle {
+            None
+        } else {
+            Some(self.last_activity_ms.saturating_add(self.timeout_ms))
+        }
+    }
+
     /// Checks the timeout at `now_ms`. Returns `BecameIdle` once, when the gap first reaches the timeout.
     pub fn poll(&mut self, now_ms: u64) -> Option<IdleEvent> {
         if self.timeout_ms == 0 || self.idle {
