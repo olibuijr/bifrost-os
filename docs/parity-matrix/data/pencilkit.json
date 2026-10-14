@@ -68,14 +68,14 @@
    "apple": "PKStroke init from path data, Bezier import article",
    "bifrost": "springboard/ui/src/drawing.rs (Drawing::from_path)",
    "status": "partial",
-   "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Strokes are polylines only. Curve data cannot be imported."
+   "note": "Drawing::from_path makes one stroke per subpath, flattening curves to points within a tolerance; the shape and the subpath split are tested in the drawing unit tests. Gap: a stroke keeps only points, so imported curves are not kept as curves, and the shell does not import paths yet."
   },
   {
    "feature": "Stroke slicing, animation and blending",
    "apple": "Controlling stroke rendering for animation and editing",
-   "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice",
+   "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice, Stroke::resampled, Stroke::blend)",
    "status": "partial",
-   "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to slice, interpolate or animate strokes. Rendering is a single pass per stroke."
+   "note": "Stroke::slice, resampled and blend cut and interpolate strokes by arc length, tested headless in springboard/ui/tests/parity_sdk-tests-02.rs. Gap: there is no time-based animation driver, and the shell and sketch pad do not animate or blend strokes yet."
   },
   {
    "feature": "Handwriting recognition (PKStrokeRecognizer)",
