@@ -30,6 +30,9 @@ use bifrost_app::controls::geo::{format_distance, Coordinate, DistanceUnits};
 use bifrost_app::controls::chart_marks::Frame;
 use bifrost_app::controls::location_auth::AuthorizationStatus;
 use crate::insights;
+use crate::insights::HourlyColumn;
+use crate::places;
+use bifrost_app::{AppMenuItem, ContextItem};
 use bifrost_app::controls::weather_model::{illuminated_fraction, MoonPhase, Wind, WeatherError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap, HashSet};
@@ -79,16 +82,37 @@ const ROW: f32 = 56.0;
 const HEAD: f32 = 28.0;
 const QUOTE_ROW: f32 = 60.0;
 const REMOVE_W: f32 = 48.0;
-const HOURLY_TOP: f32 = 296.0;
-const HOURLY_H: f32 = 116.0;
+/// The next-hour card: its top and height (the summary and the four quarter-hour bars inside it).
+const NEXT_TOP: f32 = 296.0;
+const NEXT_H: f32 = 100.0;
+const HOURLY_TOP: f32 = NEXT_TOP + NEXT_H + 12.0;
+/// The hourly strip: the columns (hour, glyph, temperature, chance) and the sunrise and sunset markers.
+const HOURLY_H: f32 = 130.0;
 const HOUR_W: f32 = 60.0;
-const DAILY_TOP: f32 = 424.0;
+const DAILY_TOP: f32 = HOURLY_TOP + HOURLY_H + 12.0;
 const DAY_ROW: f32 = 44.0;
 const DAILY_H: f32 = 28.0 + 10.0 * DAY_ROW + 8.0;
 const DETAILS_TOP: f32 = DAILY_TOP + DAILY_H + 16.0;
 const TILE_H: f32 = 104.0;
 const TILE_GAP: f32 = 12.0;
-const DETAILS_H: f32 = 3.0 * TILE_H + 2.0 * TILE_GAP;
+/// The detail tiles: nine, in two columns (five rows with the last one alone).
+const TILE_ROWS: f32 = 5.0;
+const DETAILS_H: f32 = TILE_ROWS * TILE_H + (TILE_ROWS - 1.0) * TILE_GAP;
+/// The wind dial in the wind tile: its radius and how far its centre sits from the tile's right edge (points).
+const DIAL_R: f32 = 20.0;
+const DIAL_INSET: f32 = 40.0;
+/// Menu item ids (the Location menu) and the sidebar's context-menu ids.
+const MENU_SEARCH: u32 = 1;
+const MENU_DELETE: u32 = 2;
+const MENU_MOVE_UP: u32 = 3;
+const MENU_MOVE_DOWN: u32 = 4;
+const MENU_CELSIUS: u32 = 5;
+const MENU_FAHRENHEIT: u32 = 6;
+const MENU_REFRESH: u32 = 7;
+const CTX_SHOW: u32 = 11;
+const CTX_UP: u32 = 12;
+const CTX_DOWN: u32 = 13;
+const CTX_REMOVE: u32 = 14;
 /// The temperature chart card, below the detail tiles: its plot area and the axis labels' room, in points.
 const CHART_TOP: f32 = DETAILS_TOP + DETAILS_H + 16.0;
 const CHART_H: f32 = 176.0;
@@ -187,6 +211,10 @@ pub struct Weather {
     side_query: SearchQuery,
     /// a sidebar target under the finger
     side_pressed: Option<SideTarget>,
+    /// set when a drag moved a place during the press, so the release is not a tap
+    side_moved: bool,
+    /// the sidebar place a context menu was opened on
+    context_row: Option<usize>,
     h: i32,
     store: Store,
     fetcher: Arc<dyn Fetch>,
@@ -246,6 +274,8 @@ impl Weather {
             pt_px: ui.pt(1.0),
             side_query: SearchQuery::new(),
             side_pressed: None,
+            side_moved: false,
+            context_row: None,
             h,
             watch: store.load_watchlist(),
             selected: selected.min(places.len() - 1),
@@ -303,7 +333,19 @@ impl Weather {
     // ---- Golden Gate chrome: sidebar and toolbar ----
 
     fn sidebar(&self) -> SourceList {
-        let items = self.places.iter().enumerate().map(|(i, p)| SidebarItem::row(PLACE_ID + i as u32, &p.name)).collect();
+        // each row shows the place's last known temperature on the right, in the temperature setting
+        let items = self
+            .places
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let row = SidebarItem::row(PLACE_ID + i as u32, &p.name);
+                match self.forecasts.get(&p.key()) {
+                    Some(f) => row.with_trailing(&self.units.degrees(f.current.temp)),
+                    None => row,
+                }
+            })
+            .collect();
         let mut list = SourceList::new(items, SIDEBAR_ROW_PT, SIDEBAR_ROW_PT);
         list.set_selected((self.screen != Screen::Stocks).then_some(PLACE_ID + self.selected as u32));
         list
@@ -386,6 +428,118 @@ impl Weather {
         }
         nodes.extend(self.detail_controls(ui, dx));
         nodes
+    }
+
+    // ---- the Location menu, the sidebar's context menu and reordering ----
+
+    /// The Location menu of the desktop bar: search, delete, move, the temperature setting and refresh.
+    pub fn menu(&self) -> Vec<AppMenuItem> {
+        let last = self.places.len().saturating_sub(1);
+        vec![
+            AppMenuItem::new(MENU_SEARCH, "Search for a City...").key("cmd+f"),
+            AppMenuItem::new(MENU_DELETE, "Delete Location").key("cmd+backspace").enabled(self.places.len() > 1),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_MOVE_UP, "Move Location Up").key("cmd+alt+up").enabled(self.selected > 0),
+            AppMenuItem::new(MENU_MOVE_DOWN, "Move Location Down").key("cmd+alt+down").enabled(self.selected < last),
+            AppMenuItem::separator(),
+            AppMenuItem::submenu("Temperature"),
+            AppMenuItem::new(MENU_CELSIUS, "Celsius").depth(1).checked(self.units == Units::Celsius),
+            AppMenuItem::new(MENU_FAHRENHEIT, "Fahrenheit").depth(1).checked(self.units == Units::Fahrenheit),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_REFRESH, "Refresh Forecast").key("cmd+r"),
+        ]
+    }
+
+    /// Runs a Location menu item; true when the item belongs to this menu and a frame is needed.
+    pub fn menu_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
+        match id {
+            MENU_SEARCH => self.open_search(ui, t),
+            MENU_DELETE => {
+                if self.places.len() > 1 {
+                    self.activate(ui, Target::Remove(self.selected), 0.0, t);
+                }
+            }
+            MENU_MOVE_UP => {
+                self.move_place(self.selected, self.selected.saturating_sub(1));
+            }
+            MENU_MOVE_DOWN => {
+                self.move_place(self.selected, self.selected + 1);
+            }
+            MENU_CELSIUS => self.activate(ui, Target::Units(Units::Celsius), 0.0, t),
+            MENU_FAHRENHEIT => self.activate(ui, Target::Units(Units::Fahrenheit), 0.0, t),
+            MENU_REFRESH => self.refresh(),
+            _ => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// The sidebar's context menu for a secondary click at window point (x, y): show, move and remove for the place
+    /// under it. None when the click is not on a sidebar place.
+    pub fn context_menu(&mut self, ui: &Ui, x: f32, y: f32) -> Option<Vec<ContextItem>> {
+        if x >= self.side {
+            return None;
+        }
+        let SideTarget::Place(i) = self.side_hit(ui, x, y)? else { return None };
+        self.context_row = Some(i);
+        let last = self.places.len().saturating_sub(1);
+        let item = |id: u32, label: &str, enabled: bool| ContextItem { id, label: label.into(), enabled };
+        Some(vec![
+            item(CTX_SHOW, "Show Forecast", true),
+            item(CTX_UP, "Move Up", i > 0),
+            item(CTX_DOWN, "Move Down", i < last),
+            item(CTX_REMOVE, "Remove Location", self.places.len() > 1),
+        ])
+    }
+
+    /// Runs a choice of the sidebar context menu on the place it was opened on; true when a frame is needed.
+    pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
+        let Some(i) = self.context_row.take() else { return false };
+        match id {
+            CTX_SHOW => self.activate(ui, Target::Place(i), 0.0, t),
+            CTX_UP => {
+                self.move_place(i, i.saturating_sub(1));
+            }
+            CTX_DOWN => {
+                self.move_place(i, i + 1);
+            }
+            CTX_REMOVE => {
+                if self.places.len() > 1 {
+                    self.activate(ui, Target::Remove(i), 0.0, t);
+                }
+            }
+            _ => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// Moves a saved place to another position in the list, keeping the selection on the same place. True when the
+    /// list changed and was saved.
+    fn move_place(&mut self, from: usize, to: usize) -> bool {
+        if !places::move_item(&mut self.places, from, to) {
+            return false;
+        }
+        self.selected = places::follow_move(self.selected, from, to);
+        self.store.save_locations(&self.places);
+        self.store.save_settings(self.units, self.selected);
+        self.dirty = true;
+        true
+    }
+
+    /// Shows the Locations page with its search field focused (the sidebar search and the Search menu item).
+    fn open_search(&mut self, ui: &Ui, t: f64) {
+        if self.screen != Screen::Places {
+            self.activate(ui, Target::Places, 0.0, t);
+        }
+        let at = self.field_rect(ui).0 + ui.pt(SPACE_M);
+        self.activate(ui, Target::Field, at, t);
+    }
+
+    /// Asks for every forecast again, at the next tick (a place whose request is still in flight is left alone).
+    fn refresh(&mut self) {
+        self.tried.clear();
+        self.maintain_at = f64::NEG_INFINITY;
     }
 
     /// The Locations sidebar's rows, in window points.
@@ -475,10 +629,7 @@ impl Weather {
             UNITS_FAHRENHEIT => Target::Units(Units::Fahrenheit),
             FIELD_ID => Target::Field,
             SIDE_SEARCH => {
-                if self.screen != Screen::Places {
-                    self.activate(ui, Target::Places, 0.0, t);
-                }
-                self.activate(ui, Target::Field, at, t);
+                self.open_search(ui, t);
                 return true;
             }
             _ if id >= QUOTE_REMOVE_ID => Target::RemoveQuote((id - QUOTE_REMOVE_ID) as usize),
@@ -795,7 +946,7 @@ impl Weather {
     fn fit_scroll(&mut self, ui: &Ui) {
         let view = (self.bottom(ui) - ui.pt(self.list_top())).max(0.0);
         self.scroll.set_max((ui.pt(self.content_h()) - view).max(0.0));
-        let hours = self.forecasts.get(&self.place().key()).map_or(0, |f| f.hours.len());
+        let hours = self.forecasts.get(&self.place().key()).map_or(0, |f| insights::hourly_columns(&f.hours, &f.days).len());
         self.hscroll.set_max((hours as f32 * ui.pt(HOUR_W) + ui.pt(SPACE_L) - self.card_w(ui)).max(0.0));
     }
 
@@ -981,22 +1132,34 @@ impl Weather {
         // the sidebar: the search capsule opens Locations with its field focused; a row shows that place
         if matches!(ev, Event::Down(..)) && x < self.side {
             self.side_pressed = self.side_hit(ui, x, y);
+            self.side_moved = false;
             return;
         }
         if let Some(pressed) = self.side_pressed {
-            if let Event::Up(..) = ev {
-                self.side_pressed = None;
-                if self.side_hit(ui, x, y) == Some(pressed) {
-                    match pressed {
-                        SideTarget::Search => {
-                            if self.screen != Screen::Places {
-                                self.activate(ui, Target::Places, 0.0, t);
-                            }
-                            self.activate(ui, Target::Field, self.field_rect(ui).0 + ui.pt(SPACE_M), t);
+            match ev {
+                // a drag over another place moves the dragged place to it; the press then follows the place
+                Event::Move(..) => {
+                    if let (SideTarget::Place(from), Some(SideTarget::Place(to))) = (pressed, self.side_hit(ui, x, y)) {
+                        if from != to && self.move_place(from, to) {
+                            self.side_pressed = Some(SideTarget::Place(to));
+                            self.side_moved = true;
                         }
-                        SideTarget::Place(i) => self.activate(ui, Target::Place(i), 0.0, t),
                     }
                 }
+                Event::Up(..) => {
+                    self.side_pressed = None;
+                    // the release of a drag is not a tap
+                    if std::mem::take(&mut self.side_moved) {
+                        return;
+                    }
+                    if self.side_hit(ui, x, y) == Some(pressed) {
+                        match pressed {
+                            SideTarget::Search => self.open_search(ui, t),
+                            SideTarget::Place(i) => self.activate(ui, Target::Place(i), 0.0, t),
+                        }
+                    }
+                }
+                _ => {}
             }
             return;
         }
@@ -1092,6 +1255,23 @@ impl Weather {
         s.blit(img, left.round() as i32, (mid - img.h as f32 / 2.0).round() as i32, 255, 255);
     }
 
+    /// The wind tile's compass dial, centred at (`cx`, `cy`) in pixels: a ring of dots, an N mark and a pointer of dots
+    /// toward the bearing the wind comes from. Dots only, like the temperature line, so the card stays flat.
+    fn wind_dial(&mut self, s: &mut Surface, ui: &Ui, cx: f32, cy: f32, from_deg: f64) {
+        let dot = ui.pt(2.0);
+        for k in 0..24 {
+            let (dx, dy) = insights::bearing_offset(k as f64 * 15.0, DIAL_R as f64);
+            s.fill_rrect(cx + ui.pt(dx as f32) - dot / 2.0, cy + ui.pt(dy as f32) - dot / 2.0, dot, dot, dot / 2.0, fade(WHITE, 110));
+        }
+        let needle = ui.pt(3.0);
+        for k in 1..=8 {
+            let (dx, dy) = insights::bearing_offset(from_deg, DIAL_R as f64 * 0.8 * k as f64 / 8.0);
+            s.fill_rrect(cx + ui.pt(dx as f32) - needle / 2.0, cy + ui.pt(dy as f32) - needle / 2.0, needle, needle, needle / 2.0, WHITE);
+        }
+        let (nx, ny) = insights::bearing_offset(0.0, DIAL_R as f64 + 9.0);
+        self.put(s, ui, "N", MAC_CAPTION1_PT, Weight::Semibold, WHITE, Align::Centre, cx + ui.pt(nx as f32), cy + ui.pt(ny as f32));
+    }
+
     fn draw_field(&self, s: &mut Surface, ui: &Ui, t: f64) {
         let (x, y, w, h) = self.field_rect(ui);
         s.fill_rrect(x, y, w, h, ui.pt(RADIUS), CARD_BG.now());
@@ -1154,18 +1334,56 @@ impl Weather {
         // hourly strip: drawn into its own image so the columns clip at the card
         c.fill_rrect(card_x, p(HOURLY_TOP), card_w, ui.pt(HOURLY_H), ui.pt(RADIUS), card);
         self.put(&mut c, ui, "HOURLY FORECAST", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(HOURLY_TOP + 16.0));
+        // next hour: one sentence and the four quarter-hour amounts as bars scaled to the largest of them
+        c.fill_rrect(card_x, p(NEXT_TOP), card_w, ui.pt(NEXT_H), ui.pt(RADIUS), card);
+        self.put(&mut c, ui, "NEXT HOUR", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(NEXT_TOP + 16.0));
+        let snowy = matches!(Sky::from_code(f.current.code), Sky::Snow);
+        let next = insights::next_hour(&f.quarters, &f.current.time, snowy);
+        let summary = next.as_ref().map_or("No minute forecast".to_string(), |n| n.summary.clone());
+        let summary = ui.fit(&summary, MAC_BODY_PT, card_w - ui.pt(2.0 * SPACE_L));
+        self.put(&mut c, ui, &summary, MAC_BODY_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), p(NEXT_TOP + 38.0));
+        if let Some(next) = next {
+            let inner = self.w as f32 / ui.pt(1.0) - 2.0 * (MARGIN + SPACE_L);
+            let slot = inner / next.bars.len() as f32;
+            let scale = next.bars.iter().copied().fold(0.5_f64, f64::max);
+            let baseline = p(NEXT_TOP + 84.0);
+            for (k, mm) in next.bars.iter().enumerate() {
+                let h = (26.0 * (mm / scale)) as f32;
+                if h <= 0.0 {
+                    continue;
+                }
+                let x = card_x + ui.pt(SPACE_L + slot * k as f32 + slot * 0.25);
+                c.fill_rrect(x, baseline - ui.pt(h), ui.pt(slot * 0.5), ui.pt(h), ui.pt(2.0), WHITE);
+            }
+        }
+        // each column is an hour, or a sunrise or sunset between two hours; an hour shows its chance of rain under the
+        // temperature when that chance is ten percent or more
+        let columns = insights::hourly_columns(&f.hours, &f.days);
         let mut strip = Image { w: card_w as usize, h: ui.pt(HOURLY_H - 30.0) as usize, px: vec![0; card_w as usize * ui.pt(HOURLY_H - 30.0) as usize] };
         {
             let mut ss = Surface { w: strip.w, h: strip.h, stride: strip.w, px: &mut strip.px, y0: 0 };
-            for (i, hr) in f.hours.iter().enumerate() {
-                let mid = ui.pt(SPACE_S) + (i as f32 + 0.5) * ui.pt(HOUR_W) - self.hscroll.offset();
+            for (col, item) in columns.iter().enumerate() {
+                let mid = ui.pt(SPACE_S) + (col as f32 + 0.5) * ui.pt(HOUR_W) - self.hscroll.offset();
                 if mid < -ui.pt(HOUR_W) || mid > card_w + ui.pt(HOUR_W) {
                     continue;
                 }
-                let label = if i == 0 { "Now".to_string() } else { hr.label.clone() };
-                self.put(&mut ss, ui, &label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
-                glyph::draw(&mut ss, Sky::from_code(hr.code), hr.day, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_L));
-                self.put(&mut ss, ui, &units.degrees(hr.temp), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(68.0));
+                match item {
+                    HourlyColumn::Hour(i) => {
+                        let hr = &f.hours[*i];
+                        let label = if *i == 0 { "Now".to_string() } else { hr.label.clone() };
+                        self.put(&mut ss, ui, &label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
+                        glyph::draw(&mut ss, Sky::from_code(hr.code), hr.day, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_L));
+                        self.put(&mut ss, ui, &units.degrees(hr.temp), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(68.0));
+                        if let Some(chance) = insights::chance_label(hr.chance) {
+                            self.put(&mut ss, ui, &chance, MAC_CAPTION1_PT, Weight::Regular, dim, Align::Centre, mid, ui.pt(88.0));
+                        }
+                    }
+                    HourlyColumn::Sun { rise, time } => {
+                        let name = if *rise { "Sunrise" } else { "Sunset" };
+                        self.put(&mut ss, ui, name, MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Centre, mid, ui.pt(SPACE_M));
+                        self.put(&mut ss, ui, time, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(68.0));
+                    }
+                }
             }
         }
         c.blit(&strip, card_x as i32, p(HOURLY_TOP + 30.0) as i32, 255, 255);
@@ -1184,6 +1402,10 @@ impl Weather {
             let label = if i == 0 { "Today" } else { d.label.as_str() };
             self.put(&mut c, ui, label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), mid);
             glyph::draw(&mut c, Sky::from_code(d.code), true, (card_x + ui.pt(100.0), mid), ui.pt(SPACE_M));
+            // the day's chance of precipitation sits under its glyph (hidden below ten percent)
+            if let Some(chance) = insights::chance_label(d.chance) {
+                self.put(&mut c, ui, &chance, MAC_CAPTION1_PT, Weight::Regular, dim, Align::Centre, card_x + ui.pt(100.0), mid + ui.pt(SPACE_M + 4.0));
+            }
             self.put(&mut c, ui, &units.degrees(d.min), MAC_BODY_PT, Weight::Medium, dim, Align::Right, bar_x - ui.pt(SPACE_M), mid);
             c.fill_rrect(bar_x, mid - ui.pt(SPACE_XXS), bar_w, ui.pt(SPACE_XS), ui.pt(SPACE_XXS), fade(WHITE, 60));
             let (x0, x1) = (((d.min - lo as f64) as f32 / span).clamp(0.0, 1.0), ((d.max - lo as f64) as f32 / span).clamp(0.0, 1.0));
@@ -1209,13 +1431,27 @@ impl Weather {
         let sun = |d: Option<&data::Day>, rise: bool| d.map(|d| if rise { d.sunrise.clone() } else { d.sunset.clone() }).filter(|s| !s.is_empty()).unwrap_or_else(|| "--:--".into());
         let delta = f.current.feels.round() - f.current.temp.round();
         let feels_note = if delta.abs() < 1.0 { "Similar to the actual temperature" } else if delta < 0.0 { "Wind makes it feel colder" } else { "Humidity makes it feel warmer" };
+        let gust_note = match f.current.gust_kmh {
+            Some(g) => format!("Gusts {}", wind_text(g, self.units)),
+            None => "Current speed".to_string(),
+        };
+        let today_mm = today.map_or(0.0, |d| d.precip_mm);
+        let (precip_value, precip_note) = insights::precipitation_text(today_mm, f.days.get(1).map(|d| d.precip_mm), self.units);
+        let (visibility_value, visibility_note) = insights::visibility_text(f.hours.first().and_then(|h| h.visibility_m), self.units);
+        let (pressure_value, pressure_note) = match f.current.pressure_hpa {
+            Some(hpa) => insights::pressure_text(hpa, f.pressure_trend_hpa, self.units),
+            None => ("\u{2013}".to_string(), "Not available".to_string()),
+        };
         let tiles = [
             ("UV INDEX", format!("{}", uv.round() as i32), uv_note.to_string()),
             ("SUNRISE", sun(today, true), format!("Sunset: {}", sun(today, false))),
-            ("WIND", wind, "Current speed".to_string()),
+            ("WIND", wind, gust_note),
             ("HUMIDITY", format!("{}%", f.current.humidity), "Relative humidity".to_string()),
             ("FEELS LIKE", units.degrees(f.current.feels), feels_note.to_string()),
             ("MOON", moon_value, moon_note),
+            ("PRECIPITATION", precip_value, precip_note),
+            ("VISIBILITY", visibility_value, visibility_note),
+            ("PRESSURE", pressure_value, pressure_note),
         ];
         let tile_w = (card_w - ui.pt(TILE_GAP)) / 2.0;
         for (i, (name, value, note)) in tiles.iter().enumerate() {
@@ -1226,6 +1462,12 @@ impl Weather {
             self.put(&mut c, ui, value, MAC_LARGE_TITLE_PT, Weight::Medium, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(54.0));
             let note = ui.fit(note, MAC_FOOTNOTE_PT, tile_w - ui.pt(28.0));
             self.put(&mut c, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(86.0));
+            // the wind tile's compass dial sits at its right, pointing toward where the wind comes from
+            if i == 2 {
+                if let Some(dir) = f.current.wind_dir {
+                    self.wind_dial(&mut c, ui, tx + tile_w - ui.pt(DIAL_INSET), ty + ui.pt(TILE_H / 2.0), dir);
+                }
+            }
         }
         // temperature chart: the hours as a line over labelled rules (points are in the card's own frame)
         let card_pt = self.w as f32 / ui.pt(1.0) - 2.0 * MARGIN;
@@ -1596,6 +1838,9 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod location_menu_tests;
 
 #[cfg(test)]
 mod wire_tests {

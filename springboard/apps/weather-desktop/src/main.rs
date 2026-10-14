@@ -3,11 +3,12 @@
 //! asks for it with `wants_keyboard` and receives typed keys as `Input::Key`.
 
 mod insights;
+mod places;
 mod services;
 mod weather;
 
 use bifrost_app::kit::{Damage, Event, Surface};
-use bifrost_app::{network_path, widgets_timeline, App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{network_path, widgets_timeline, App, AppMenu, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use springboard::shell::music::radio::{Fetch, Http};
@@ -113,6 +114,16 @@ impl App for WeatherApp {
             Input::Activate(id) => {
                 c.activate_control(&ctx.ui, id, bifrost_app::proto::sys::now_ms());
             }
+            // a secondary click on a sidebar place offers its menu; a choice runs on that place
+            Input::Context { x, y } => {
+                let Some(items) = c.context_menu(&ctx.ui, x, y) else { return false };
+                ctx.context_menu(x, y, items);
+            }
+            Input::ContextAction(id) => {
+                if !c.context_action(&ctx.ui, id, bifrost_app::proto::sys::now_ms()) {
+                    return false;
+                }
+            }
             Input::Open(_) => return false,
             _ => return false,
         }
@@ -157,6 +168,21 @@ impl App for WeatherApp {
             }
             _ => false,
         }
+    }
+
+    /// The Location menu in the desktop bar, while Weather is in front.
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let Some(w) = &self.w else { return Vec::new() };
+        vec![AppMenu { title: "Location".into(), items: w.menu() }]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let Some(c) = &mut self.w else { return false };
+        let handled = c.menu_action(&ctx.ui, id, bifrost_app::proto::sys::now_ms());
+        if handled {
+            self.sync(ctx);
+        }
+        handled
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
