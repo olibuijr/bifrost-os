@@ -106,6 +106,10 @@ impl App for AutomatorApp {
         self.auto.wake_at(t)
     }
 
+    fn wake_fd(&self) -> Option<i32> {
+        self.auto.wake_fd()
+    }
+
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
         draw::controls(&self.auto, &ctx.ui)
     }

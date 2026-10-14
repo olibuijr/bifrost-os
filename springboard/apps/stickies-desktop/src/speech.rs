@@ -3,6 +3,7 @@
 //! and stops with Stop Speaking, a new Start Speaking or when the app quits.
 
 use crate::model::Note;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::cell::RefCell;
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
@@ -54,9 +55,9 @@ impl Speaker {
             let spawned = Command::new(engine).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
             let Ok(mut child) = spawned else { continue };
             if let Some(mut stdin) = child.stdin.take() {
-                // a thread writes, so a long note cannot block the app; dropping the pipe ends the engine's input
+                // Utility dispatch writes so a long note cannot block the app; killing the child closes the pipe.
                 let bytes = text.as_bytes().to_vec();
-                std::thread::spawn(move || {
+                DispatchQueue::global(Qos::Utility).async_(move || {
                     let _ = stdin.write_all(&bytes);
                 });
             }

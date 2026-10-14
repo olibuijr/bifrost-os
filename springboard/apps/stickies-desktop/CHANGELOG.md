@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.4 — 2026-10-14
+
+- Write speech input on the shared utility dispatch queue; stopping speech closes the pipe and ends the writer.
+
 ## 0.8.3 — 2026-10-14
 
 - Use shared radius and spacing tokens; use the named white color for text on dark custom notes.

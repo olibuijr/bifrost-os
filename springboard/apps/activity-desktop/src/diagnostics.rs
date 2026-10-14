@@ -2,7 +2,7 @@
 //! list as the monitor last saw it, the tail of the system journal, the kernel log and the disk usage) into a folder,
 //! zips it in the app's storage and hands the archive to the window, which asks where to save it. Every source that is
 //! not readable is named in `summary.txt` instead of failing the run. The gathering is pure file and process work, so
-//! it runs on the job thread.
+//! it runs on the job's utility dispatch worker.
 
 use crate::job::{Outcome, Progress};
 use crate::sample::ProcSample;

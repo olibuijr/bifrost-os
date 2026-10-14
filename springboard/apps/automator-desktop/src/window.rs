@@ -10,6 +10,9 @@ use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::{widgets, TouchKind};
+use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
+use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 /// The library column (points).
@@ -32,8 +35,8 @@ pub const HINT_LINE_PT: f32 = 15.0;
 pub const LOG_LINE_PT: f32 = 16.0;
 /// Padding between the blocks of the editor (points).
 pub const PAD_PT: f32 = 8.0;
-/// How soon the loop comes back while a run is in progress (milliseconds).
-const RUN_WAKE_MS: f64 = 50.0;
+/// Fallback only if the worker wake socket cannot be created (milliseconds).
+const RUN_WAKE_FALLBACK_MS: f64 = 50.0;
 
 pub const B_NEW: u32 = 1;
 pub const B_OPEN: u32 = 2;
@@ -84,6 +87,9 @@ pub struct Automator {
     pub log: Vec<LogLine>,
     /// The messages of the run in progress, while one runs.
     running: Option<Receiver<Message>>,
+    /// Worker progress signals wake the shell through this nonblocking socket pair.
+    wake_rx: Option<UnixStream>,
+    wake_tx: Option<UnixStream>,
     /// The last result as the footer says it: an error, or how the run finished.
     pub status: String,
     /// The window size, in points.
@@ -108,12 +114,18 @@ fn home_folder() -> String {
 
 impl Automator {
     pub fn new(home: String) -> Automator {
+        let (wake_rx, wake_tx) = UnixStream::pair()
+            .ok()
+            .filter(|(rx, tx)| rx.set_nonblocking(true).is_ok() && tx.set_nonblocking(true).is_ok())
+            .map_or((None, None), |(rx, tx)| (Some(rx), Some(tx)));
         Automator {
             workflow: Workflow::default(),
             selected: None,
             focus: None,
             log: Vec::new(),
             running: None,
+            wake_rx,
+            wake_tx,
             status: String::new(),
             // The app host configures the actual client size before the first frame.
             size: (0.0, 0.0),
@@ -518,17 +530,24 @@ impl Automator {
         self.status.clear();
         let steps = self.workflow.steps.clone();
         let (tx, rx) = mpsc::channel();
+        let wake_tx = self.wake_tx.as_ref().and_then(|wake| wake.try_clone().ok());
         DispatchQueue::global(Qos::UserInitiated).async_(move || {
             let result = model::execute(&steps, &mut |line: LogLine| {
                 let _ = tx.send(Message::Log(line));
+                signal_worker(&wake_tx);
             });
             let _ = tx.send(Message::Done(result));
+            signal_worker(&wake_tx);
         });
         self.running = Some(rx);
     }
 
     /// Takes what the run has reported since the last look. True when the screen needs a frame.
     pub fn poll(&mut self) -> bool {
+        if let Some(wake) = &mut self.wake_rx {
+            let mut bytes = [0u8; 64];
+            while wake.read(&mut bytes).is_ok_and(|n| n > 0) {}
+        }
         let Some(rx) = &self.running else { return false };
         let mut changed = false;
         let mut finished = None;
@@ -560,9 +579,20 @@ impl Automator {
         changed
     }
 
-    /// When the loop should come back: soon while a run is in progress.
+    /// The shell polls this descriptor for worker progress and completion.
+    pub fn wake_fd(&self) -> Option<i32> {
+        self.wake_rx.as_ref().map(AsRawFd::as_raw_fd)
+    }
+
+    /// When the loop should come back: only use a timer if wake-fd setup failed.
     pub fn wake_at(&self, t: f64) -> Option<f64> {
-        self.is_running().then_some(t + RUN_WAKE_MS)
+        (self.is_running() && self.wake_rx.is_none()).then_some(t + RUN_WAKE_FALLBACK_MS)
+    }
+}
+
+fn signal_worker(wake: &Option<UnixStream>) {
+    if let Some(wake) = wake {
+        let _ = (&*wake).write(&[1]);
     }
 }
 
@@ -719,7 +749,7 @@ mod tests {
         a.add_step(Kind::Transform);
         a.start_run();
         assert!(a.is_running());
-        assert_eq!(a.wake_at(100.0), Some(100.0 + RUN_WAKE_MS));
+        assert_eq!(a.wake_at(100.0), None);
     }
 
     #[test]
