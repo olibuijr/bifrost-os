@@ -205,6 +205,18 @@ pub struct Terminal {
     mouse_reporting: bool,
 }
 
+/// Most matches a case-sensitive search passes over before it reports none.
+const MAX_CASE_SKIPS: usize = 256;
+
+/// Whether `hit` is not past `from` in the search direction, so the search went round the end of the scrollback (a
+/// search from a match only finds matches beyond it, so the match itself counts as wrapped).
+fn wrapped(from: termcore::search::Match, hit: termcore::search::Match, dir: termcore::search::Direction) -> bool {
+    match dir {
+        termcore::search::Direction::Newer => (hit.line, hit.start) <= (from.line, from.start),
+        termcore::search::Direction::Older => (hit.line, hit.start) >= (from.line, from.start),
+    }
+}
+
 /// Half a blink period of the caret, in milliseconds (on for one half, off for the next).
 pub const BLINK_MS: f64 = 500.0;
 
@@ -302,6 +314,11 @@ impl Terminal {
         let bytes = termcore::mouse::encode(event, cell.0, cell.1, self.term.mouse_sgr());
         self.write(&bytes);
         true
+    }
+
+    /// Whether a program asked for drags (?1002 or ?1003) and this session passes mouse reports on.
+    pub fn reports_drag(&self) -> bool {
+        self.mouse_reporting && self.term.mouse_mode().reports(termcore::mouse::MouseEvent::Drag)
     }
 
     /// Types `text` into the shell as a paste (bracketed when enabled).
@@ -553,9 +570,15 @@ impl Terminal {
     }
 
     pub fn find(&mut self, query: &str, dir: termcore::search::Direction, restart: bool) -> bool {
+        self.find_with(query, dir, restart, true, true)
+    }
+
+    /// Like `find`, with the Find bar's options. `ignore_case` off passes over matches whose letters differ in case;
+    /// `wrap` off stops at the newest or oldest line instead of going round again.
+    pub fn find_with(&mut self, query: &str, dir: termcore::search::Direction, restart: bool, ignore_case: bool, wrap: bool) -> bool {
         self.find = query.chars().map(fold).collect();
-        let hit = termcore::search::find(self.term.line_count(), |i| self.term.line(i), query,
-            if restart { None } else { self.search_match }, dir);
+        let from = if restart { None } else { self.search_match };
+        let hit = self.next_match(query, from, dir, ignore_case, wrap);
         self.search_match = hit;
         self.selection = hit.map(|m| {
             let y = self.term.show_line(m.line);
@@ -564,16 +587,68 @@ impl Terminal {
         hit.is_some()
     }
 
+    /// The next match of `query` after `from` in direction `dir`, honouring the options of `find_with`.
+    fn next_match(
+        &self,
+        query: &str,
+        from: Option<termcore::search::Match>,
+        dir: termcore::search::Direction,
+        ignore_case: bool,
+        wrap: bool,
+    ) -> Option<termcore::search::Match> {
+        let count = self.term.line_count();
+        let mut from = from;
+        let mut first: Option<termcore::search::Match> = None;
+        // Each pass starts after the match before it, so a match in the wrong case is passed over once. A search that
+        // comes back to the first match it found has nothing exact left.
+        for _ in 0..MAX_CASE_SKIPS {
+            let hit = termcore::search::find(count, |i| self.term.line(i), query, from, dir)?;
+            if !wrap && from.is_some_and(|m| wrapped(m, hit, dir)) {
+                return None;
+            }
+            if ignore_case || self.exact(hit, query) {
+                return Some(hit);
+            }
+            if first == Some(hit) {
+                return None;
+            }
+            first.get_or_insert(hit);
+            from = Some(hit);
+        }
+        None
+    }
+
+    /// Whether the cells of match `hit` spell `query` with the same letter case.
+    fn exact(&self, hit: termcore::search::Match, query: &str) -> bool {
+        let got: String = self
+            .term
+            .line(hit.line)
+            .iter()
+            .skip(hit.start)
+            .take(hit.end.saturating_sub(hit.start))
+            .filter(|c| c.attrs & attr::SPACER == 0)
+            .map(|c| if c.ch == '\0' { ' ' } else { c.ch })
+            .collect();
+        got == query
+    }
+
     /// (position of the current match, matches in all) of `query`; (0, 0) when there are none. Capped at 999.
     pub fn match_position(&self, query: &str) -> (usize, usize) {
-        let find = |from| termcore::search::find(self.term.line_count(), |i| self.term.line(i), query, from, termcore::search::Direction::Newer);
-        let Some(first) = find(None) else { return (0, 0) };
+        self.match_position_with(query, true)
+    }
+
+    /// `match_position` with the case option of `find_with`.
+    pub fn match_position_with(&self, query: &str, ignore_case: bool) -> (usize, usize) {
+        let newer = termcore::search::Direction::Newer;
+        let Some(first) = self.next_match(query, None, newer, ignore_case, true) else {
+            return (0, 0);
+        };
         let (mut total, mut at, mut m) = (1, 0, first);
         if Some(m) == self.search_match {
             at = 1;
         }
         while total < 999 {
-            match find(Some(m)) {
+            match self.next_match(query, Some(m), newer, ignore_case, true) {
                 Some(next) if next != first => {
                     total += 1;
                     m = next;

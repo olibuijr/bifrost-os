@@ -32,14 +32,15 @@ impl Shell {
             .as_ref()
             .map(|q| q.text())
             .unwrap_or_default();
+        let (ignore_case, wrap) = (self.terminal_ui.find_ignore_case, self.terminal_ui.find_wrap);
         let found = self
             .term
             .as_mut()
-            .is_some_and(|term| term.find(query, dir, restart));
+            .is_some_and(|term| term.find_with(query, dir, restart, ignore_case, wrap));
         self.terminal_ui.message = if query.is_empty() {
             String::new()
         } else if found {
-            let (at, total) = self.term.as_ref().map_or((0, 0), |term| term.match_position(&query));
+            let (at, total) = self.term.as_ref().map_or((0, 0), |term| term.match_position_with(query, ignore_case));
             if total == 0 { String::new() } else { format!("{at} of {total}") }
         } else {
             "No matches".into()

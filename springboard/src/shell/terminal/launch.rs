@@ -183,6 +183,78 @@ impl Shell {
             self.terminal_close_panel(t);
         }
     }
+
+    /// Runs `man -k` for the selected word in a new tab (Search Man Pages for Selection).
+    pub(super) fn terminal_man_search(&mut self, t: f64) {
+        let selection = self.term.as_ref().and_then(|term| term.selected_text());
+        let Some(argv) = selection.as_deref().and_then(man_search_for_selection) else {
+            self.terminal_ui.message = "Select a command name first".into();
+            return;
+        };
+        if self.terminal_run_argv(&argv) {
+            self.terminal_close_panel(t);
+        }
+    }
+
+    /// Shows Look Up for the selected word in the popover (Look Up Selection).
+    pub(super) fn terminal_look_up(&mut self, t: f64) {
+        let term = self
+            .term
+            .as_ref()
+            .and_then(|term| term.selected_text())
+            .and_then(|text| bifrost_ui::look_up::term_of(&text));
+        match term {
+            Some(term) => {
+                self.open_look_up(term);
+                self.terminal_close_panel(t);
+            }
+            None => self.terminal_ui.message = "Select a word first".into(),
+        }
+    }
+
+    /// Brings the Terminal up in a new tab in `dir` (New Terminal at Folder, from the Services menu). The first tab of a
+    /// Terminal that was not running is used for the folder.
+    pub(crate) fn terminal_open_in_folder(&mut self, dir: &str, t: f64) {
+        let (app, front) = (super::super::AppId::Terminal, super::super::Screen::App(super::super::AppId::Terminal));
+        let had_tabs = self.term.len();
+        if self.desk_active() {
+            self.desk_open_or_start(app, t);
+        } else if self.screen != front {
+            self.open(app, t);
+        }
+        if had_tabs == 0 && self.term.len() == 1 {
+            let quoted = dir.replace('\'', "'\\''");
+            if let Some(term) = self.term.as_mut() {
+                term.write(format!("cd '{quoted}'\r").as_bytes());
+            }
+        } else {
+            self.new_terminal_tab(Some(dir.to_string()));
+        }
+        self.terminal_ui.message.clear();
+        self.dirty = true;
+    }
+
+    /// Opens a link tapped in the output: a web link in the browser, the others (ssh, telnet, manual pages) in a new tab.
+    pub(crate) fn terminal_open_tapped(&mut self, url: &str, t: f64) {
+        if url.starts_with("http://") || url.starts_with("https://") {
+            self.terminal_ui.message = match self.desktop_open_url(url, t) {
+                Ok(()) => "Opened link".into(),
+                Err(e) => format!("Could not open link: {e}"),
+            };
+        } else if !self.terminal_open_link(url, t) {
+            self.terminal_ui.message = "That link cannot be opened".into();
+        }
+    }
+}
+
+/// `man -k word` for the first word of `selection`: a keyword search over the page names and descriptions.
+pub fn man_search_for_selection(selection: &str) -> Option<Vec<String>> {
+    let word = selection.split_whitespace().next()?.trim_end_matches([',', '.', ';', ':']);
+    let plain = !word.is_empty()
+        && word.len() <= 64
+        && word.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && word.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '+' | '-' | ':'));
+    plain.then(|| vec!["man".to_string(), "-k".to_string(), word.to_string()])
 }
 
 #[cfg(test)]
@@ -259,6 +331,16 @@ mod tests {
         assert_eq!(man_for_selection("$(id)"), None);
         assert_eq!(man_for_selection("   "), None);
         assert_eq!(man_for_selection(""), None);
+    }
+
+    #[test]
+    fn a_keyword_search_takes_the_first_plain_word() {
+        assert_eq!(man_search_for_selection("printf the"), v(&["man", "-k", "printf"]));
+        assert_eq!(man_search_for_selection("tar,"), v(&["man", "-k", "tar"]));
+        assert_eq!(man_search_for_selection("--help"), None);
+        assert_eq!(man_search_for_selection("$(id)"), None);
+        assert_eq!(man_search_for_selection("a/b"), None, "a path is not a page name");
+        assert_eq!(man_search_for_selection("  "), None);
     }
 
     #[test]

@@ -109,8 +109,8 @@ pub fn detect_urls(row: &str) -> Vec<(usize, usize, String)> {
     let mut out = vec![];
     let mut i = 0;
     while i < chars.len() {
-        let rest: String = chars[i..].iter().take(8).collect();
-        let scheme = ["https://", "http://", "ftp://", "file://", "mailto:", "ssh://"]
+        let rest: String = chars[i..].iter().take(16).collect();
+        let scheme = ["https://", "http://", "ftp://", "file://", "mailto:", "ssh://", "telnet://", "x-man-page://"]
             .iter()
             .any(|s| rest.starts_with(s));
         if !scheme || (i > 0 && chars[i - 1].is_alphanumeric()) {
@@ -164,6 +164,12 @@ mod tests {
         assert_eq!(u[0].2, "https://a.io/x_(y)");
         assert_eq!(u[1].2, "http://b.dev");
         assert!(detect_urls("xhttps://no").is_empty());
+    }
+
+    #[test]
+    fn terminal_links_are_found_in_output() {
+        let u = detect_urls("ssh://me@host telnet://bbs.example.org:23 x-man-page://1/ls.");
+        assert_eq!(u.iter().map(|(_, _, url)| url.as_str()).collect::<Vec<_>>(), ["ssh://me@host", "telnet://bbs.example.org:23", "x-man-page://1/ls"]);
     }
 
     #[test]
