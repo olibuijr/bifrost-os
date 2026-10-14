@@ -1,6 +1,7 @@
 //! Podcasts as an installed BifrOSt app: the former in-shell Podcasts, hosted through the SDK.
 //! Playback goes through the audio service (`bifrost_app::audio`); text comes from the hardware keyboard.
 
+mod chapters;
 mod feed;
 mod icon;
 mod info;

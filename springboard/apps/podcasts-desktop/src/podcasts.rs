@@ -6,6 +6,7 @@
 use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
+use crate::chapters;
 use crate::feed::{self, Show, Store};
 use crate::info;
 use crate::library::{self, Library};
@@ -68,6 +69,9 @@ const CHAPTER_ROW_PT: f32 = 30.0;
 const TRANSCRIPTS_KEPT: usize = 4;
 const TRANSCRIPT_LIMIT: usize = 4 << 20;
 const SEARCH_LIMIT: usize = 1 << 20;
+/// The largest chapters file read, and how many episodes are remembered as already asked for theirs.
+const CHAPTERS_LIMIT: usize = 1 << 20;
+const CHAPTERS_ASKED: usize = 256;
 /// Two clicks on a row this close together play the episode, in milliseconds.
 const DOUBLE_CLICK_MS: f64 = 450.0;
 /// One line of notes or transcript text, and the top of the episode page's buttons, in points.
@@ -162,6 +166,8 @@ enum Target {
     Chapter(usize),
     /// the sheet's transcript area (it scrolls)
     Panel,
+    /// one line of the sheet's transcript, by the cue it belongs to; tapping it seeks to the cue
+    Line(usize),
     /// the Follow button of a search result
     Follow(usize),
     /// the search field above the results
@@ -233,6 +239,8 @@ enum Msg {
     Search(Result<Vec<search::Hit>, String>),
     /// the transcript cues of an episode (by URL)
     Transcript(String, Result<Vec<Cue>, String>),
+    /// the chapters of an episode (by URL), read from the JSON file its feed links to
+    Chapters(String, Result<Vec<feed::Chapter>, String>),
 }
 
 /// The wrapped lines of the open detail or transcript: what they are for, the width (bits), and each line with the
@@ -332,6 +340,9 @@ pub struct Podcasts {
     sheet_panel: SheetPanel,
     transcripts: Vec<(String, Vec<Cue>)>,
     transcript_loading: Option<String>,
+    /// chapters read from linked JSON files (episode URL, chapters), and the episodes whose file was already asked for
+    json_chapters: Vec<(String, Vec<feed::Chapter>)>,
+    chapters_asked: Vec<String>,
     /// wrapped lines of the open detail or transcript, and the width they were wrapped for (bits), cached
     wrapped: Option<Wrapped>,
     /// pixels from the list top to the end of the scrolling content of a panel
@@ -423,6 +434,8 @@ impl Podcasts {
             sheet_panel: SheetPanel::None,
             transcripts: Vec::new(),
             transcript_loading: None,
+            json_chapters: Vec::new(),
+            chapters_asked: Vec::new(),
             wrapped: None,
             body_h: 0.0,
             import: None,
@@ -673,6 +686,7 @@ impl Podcasts {
                                 }
                                 show.episodes = episodes;
                                 self.store.save(&self.shows);
+                                self.apply_chapters();
                                 self.after_refresh(&url);
                             }
                         }
@@ -726,6 +740,18 @@ impl Podcasts {
                         Err(e) => self.error = format!("Cannot load the transcript: {e}"),
                     }
                     self.wrapped = None;
+                }
+                Msg::Chapters(url, r) => {
+                    // a missing or unreadable chapters file is not worth an error line: the episode just has none
+                    if let Some(list) = r.ok().filter(|l| !l.is_empty()) {
+                        self.json_chapters.retain(|(u, _)| *u != url);
+                        self.json_chapters.push((url, list));
+                        if self.json_chapters.len() > chapters::KEPT {
+                            self.json_chapters.remove(0);
+                        }
+                        self.apply_chapters();
+                        self.wrapped = None;
+                    }
                 }
             }
         }
@@ -1321,6 +1347,40 @@ impl Podcasts {
         });
     }
 
+    /// Fetches the chapters file of the playing episode and of the open episode page when the feed links to one
+    /// instead of listing the chapters itself.
+    fn want_chapters(&mut self) {
+        let mut want: Vec<(String, String)> = Vec::new();
+        let open = self.detail_episode().map(|(_, e)| e);
+        for ep in self.playing_episode().into_iter().chain(open) {
+            if chapters::wanted(ep, &self.chapters_asked) && !want.iter().any(|(u, _)| *u == ep.url) {
+                want.push((ep.url.clone(), ep.chapters_url.clone()));
+            }
+        }
+        for (episode, link) in want {
+            self.chapters_asked.push(episode.clone());
+            if self.chapters_asked.len() > CHAPTERS_ASKED {
+                self.chapters_asked.remove(0);
+            }
+            let (net, inbox) = (self.net.clone(), self.inbox.clone());
+            DispatchQueue::global(Qos::Utility).async_(move || {
+                let r = net.get(&link, CHAPTERS_LIMIT).map_err(|e| e.to_string()).map(|bytes| chapters::parse(&String::from_utf8_lossy(&bytes)));
+                deliver(&inbox, Msg::Chapters(episode, r));
+            });
+        }
+    }
+
+    /// Gives the episodes the chapters read from their linked files (a feed refresh replaces the episodes).
+    fn apply_chapters(&mut self) {
+        for (url, list) in &self.json_chapters {
+            for show in &mut self.shows {
+                for ep in show.episodes.iter_mut().filter(|e| e.url == *url && e.chapters.is_empty()) {
+                    ep.chapters = list.clone();
+                }
+            }
+        }
+    }
+
     /// Opens or closes a panel of the Now Playing sheet.
     fn toggle_panel(&mut self, panel: SheetPanel) {
         self.sheet_panel = if self.sheet_panel == panel { SheetPanel::None } else { panel };
@@ -1711,6 +1771,20 @@ impl Podcasts {
 
     // hit testing and input ---------------------------------------------
 
+    /// The transcript cue whose text is under `y`, when the transcript panel shows timed lines.
+    fn transcript_cue_at(&self, ui: &Ui, y: f32) -> Option<usize> {
+        let link = self.playing_episode()?.transcript.clone();
+        let (key, _, lines) = self.wrapped.as_ref()?;
+        if *key != format!("t:{link}") {
+            return None;
+        }
+        let p = self.panel_rect(ui);
+        let line = transcript::line_at(y - p.1 - ui.pt(SPACE_L) + self.panel_scroll.offset(), ui.pt(LINE_PT), lines.len())?;
+        let cue = lines.get(line)?.1?;
+        let cues = &self.transcripts.iter().find(|(u, _)| *u == link)?.1;
+        transcript::start_of(cues, cue).map(|_| cue)
+    }
+
     fn title(&self) -> String {
         if self.field.is_some() {
             "New Podcast".into()
@@ -1855,6 +1929,11 @@ impl Podcasts {
                     let row = ((y - p.1 - ui.pt(SPACE_S) + self.panel_scroll.offset()) / ui.pt(CHAPTER_ROW_PT)).floor();
                     if row >= 0.0 && (row as usize) < count {
                         return Some(Target::Chapter(row as usize));
+                    }
+                }
+                if self.sheet_panel == SheetPanel::Transcript {
+                    if let Some(cue) = self.transcript_cue_at(ui, y) {
+                        return Some(Target::Line(cue));
                     }
                 }
                 return Some(Target::Panel);
@@ -2046,6 +2125,15 @@ impl Podcasts {
                 }
             }
             Target::Panel => {}
+            Target::Line(cue) => {
+                let ms = self.playing_episode().map(|e| e.transcript.clone()).and_then(|link| {
+                    let cues = &self.transcripts.iter().find(|(u, _)| *u == link)?.1;
+                    transcript::start_of(cues, cue)
+                });
+                if let Some(ms) = ms {
+                    self.seek_to(ms as f64);
+                }
+            }
             Target::SkipFwd => self.skip(false, self.prefs.settings.forward_s as f64),
             Target::List => {}
         }
@@ -2164,7 +2252,7 @@ impl Podcasts {
                     self.scrubbing = Some(self.scrub_ms(ui, x));
                     return;
                 }
-                if matches!(self.pressed, Some(Target::Row(_) | Target::List | Target::Panel | Target::Chapter(_) | Target::Opt(_) | Target::Detail(_) | Target::Follow(_))) {
+                if matches!(self.pressed, Some(Target::Row(_) | Target::List | Target::Panel | Target::Line(_) | Target::Chapter(_) | Target::Opt(_) | Target::Detail(_) | Target::Follow(_))) {
                     self.scrolling = true;
                     self.drag_scroller().down(y, t);
                 }
@@ -2226,6 +2314,7 @@ impl Podcasts {
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.now = t;
         self.pump();
+        self.want_chapters();
         if self.refresh.pump() {
             self.dirty = true;
         }
