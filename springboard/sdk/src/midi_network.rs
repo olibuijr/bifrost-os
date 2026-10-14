@@ -208,6 +208,37 @@ impl NetworkSession {
         self.connections.len() != before
     }
 
+    /// Ends the connection to `host`. Returns the `BY` packet for the accepted invitation that made the connection, or
+    /// None when there is no such invitation. None also means no connection to `host` existed, and then nothing changes.
+    pub fn disconnect(&mut self, host: &Host) -> Option<Vec<u8>> {
+        let token = self.accepted_token(host);
+        if !self.remove_connection(host) {
+            return None;
+        }
+        token.map(|token| self.end_packet(token))
+    }
+
+    /// Turns the session off. Every connection ends and each returns its `BY` packet; the pending invitations are dropped.
+    pub fn disable(&mut self) -> Vec<Vec<u8>> {
+        let hosts: Vec<Host> = self.connections.iter().map(|c| c.host.clone()).collect();
+        let packets: Vec<Vec<u8>> = hosts.iter().filter_map(|host| self.disconnect(host)).collect();
+        self.enabled = false;
+        self.invitations.clear();
+        packets
+    }
+
+    fn accepted_token(&self, host: &Host) -> Option<u32> {
+        self.invitations
+            .iter()
+            .rev()
+            .find(|(_, h, s)| h == host && *s == Invitation::Accepted)
+            .map(|(token, _, _)| *token)
+    }
+
+    fn end_packet(&self, token: u32) -> Vec<u8> {
+        SessionPacket { command: Command::EndSession, initiator_token: token, ssrc: self.ssrc, name: String::new() }.encode()
+    }
+
     /// The invitation to send to `host`'s control port. `None` while the session is disabled.
     pub fn invite(&mut self, host: &Host, token: u32) -> Option<Vec<u8>> {
         if !self.enabled {

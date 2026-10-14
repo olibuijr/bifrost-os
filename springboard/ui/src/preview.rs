@@ -144,6 +144,14 @@ impl Registry {
         Ok(())
     }
 
+    /// Removes `provider` with every type and searchable domain it registered. Returns false when it had none.
+    pub fn unregister(&mut self, provider: &str) -> bool {
+        let before = self.entries.len() + self.searchable.len();
+        self.entries.retain(|(p, _)| p != provider);
+        self.searchable.retain(|(p, _)| p != provider);
+        before != self.entries.len() + self.searchable.len()
+    }
+
     /// The provider for a file name, looked up through its type. `None` for an unknown extension or no match.
     pub fn provider_for(&self, file_name: &str) -> Option<&str> {
         self.provider_for_type(uttype::type_for_extension(file_name)?)

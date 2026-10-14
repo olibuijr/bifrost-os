@@ -157,9 +157,47 @@ impl PreviewPanel {
         }
     }
 
+    /// Handles a key the panel receives. The arrows step through the list without wrapping. Space and Escape change
+    /// the visibility, which needs the app's context, so they are returned for the app to pass to
+    /// [`PreviewPanel::toggle`] or [`PreviewPanel::close`].
+    pub fn handle_key(&mut self, key: PanelKey) -> PanelKeyAction {
+        match key {
+            PanelKey::Left => {
+                self.step(-1);
+                PanelKeyAction::Stepped
+            }
+            PanelKey::Right => {
+                self.step(1);
+                PanelKeyAction::Stepped
+            }
+            PanelKey::Space => PanelKeyAction::Toggle,
+            PanelKey::Escape => PanelKeyAction::Close,
+        }
+    }
+
     pub(crate) fn message(&self) -> ToShell {
         ToShell::Preview { items: self.items.clone(), index: self.index as u32 }
     }
+}
+
+/// The keys a preview panel answers to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelKey {
+    Left,
+    Right,
+    Space,
+    Escape,
+}
+
+/// What the app must do after [`PreviewPanel::handle_key`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelKeyAction {
+    /// The index moved, or stayed at the end of the list it was already at.
+    Stepped,
+    /// Show the panel when hidden, hide it when shown: call [`PreviewPanel::toggle`].
+    Toggle,
+    /// Hide the panel: call [`PreviewPanel::close`].
+    Close,
 }
 
 /// `QLPreviewViewStyle`: the layout of an embedded preview. `normal` is for larger, full-sized previews and `compact`
@@ -198,6 +236,11 @@ impl PreviewView {
 
     pub fn style(&self) -> ViewStyle {
         self.style
+    }
+
+    /// Changes the layout. The item and its display state are kept.
+    pub fn set_style(&mut self, style: ViewStyle) {
+        self.style = style;
     }
 
     /// `previewItem`: the item on show, if any.

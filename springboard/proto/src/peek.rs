@@ -14,6 +14,22 @@ pub struct PreviewItem {
     pub title: String,
 }
 
+impl PreviewItem {
+    pub fn new(url: impl Into<String>, title: impl Into<String>) -> Self {
+        PreviewItem { url: url.into(), title: title.into() }
+    }
+
+    /// The last path segment of an absolute path or `file://` URL that names a file. None for other URLs and for a
+    /// URL that ends in a slash. Percent escapes are not decoded.
+    pub fn file_name(&self) -> Option<&str> {
+        let path = self.url.strip_prefix("file://").unwrap_or(self.url.as_str());
+        if !path.starts_with('/') {
+            return None;
+        }
+        path.rsplit('/').next().filter(|name| !name.is_empty())
+    }
+}
+
 fn cut(s: &str, max: usize) -> &str {
     let mut n = s.len().min(max);
     while !s.is_char_boundary(n) {
