@@ -4,7 +4,7 @@
 use std::{
     error::Error,
     path::Path,
-    sync::mpsc,
+    sync::mpsc::{self, Receiver},
     thread,
     time::Duration,
 };
@@ -138,6 +138,7 @@ pub struct Compositor {
     commands: channel::Sender<Command>,
     pub socket: String,
     thread: Option<thread::JoinHandle<()>>,
+    stopped: Receiver<()>,
 }
 
 impl Compositor {
@@ -145,6 +146,7 @@ impl Compositor {
     pub fn start(socket: &str, w: i32, h: i32) -> Result<Self, Box<dyn Error>> {
         let (tx, rx) = channel::channel::<Command>();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
+        let (stopped_tx, stopped_rx) = mpsc::channel();
         let name = socket.to_string();
         let thread = thread::spawn(move || {
             let run = || -> Result<(), Box<dyn Error>> {
@@ -152,6 +154,10 @@ impl Compositor {
                 let display: Display<WmState> = Display::new()?;
                 let mut state = WmState::new(&mut event_loop, display, Some(&name));
                 let backend = std::rc::Rc::new(std::cell::RefCell::new(Headless::new(&mut state, w, h)?));
+                // Unlike the DRM backend, the offscreen backend has no initial scanout to produce. Avoid
+                // rendering an empty scene before the first client request: EGL work here can delay protocol
+                // dispatch, including the registry/sync roundtrip clients use to start.
+                state.dirty = false;
                 let b = backend.clone();
                 state.session.hooks.capture = Some(Box::new(move |state, spec| b.borrow_mut().capture(state, spec, CLEAR)));
                 let b = backend.clone();
@@ -162,8 +168,12 @@ impl Compositor {
                 })?;
                 let b = backend.clone();
                 event_loop.handle().insert_source(Timer::from_duration(FRAME), move |_, _, state| {
-                    if let Err(e) = b.borrow_mut().render(state) {
-                        eprintln!("bifrost-wm: render: {e}");
+                    if state.dirty {
+                        state.dirty = false;
+                        if let Err(e) = b.borrow_mut().render(state) {
+                            state.dirty = true;
+                            eprintln!("bifrost-wm: render: {e}");
+                        }
                     }
                     TimeoutAction::ToDuration(FRAME)
                 })?;
@@ -174,24 +184,50 @@ impl Compositor {
             if let Err(e) = run() {
                 ready_tx.send(Err(e.to_string())).ok();
             }
+            let _ = stopped_tx.send(());
         });
         // the first EGL start on a machine compiles its shader cache: allow it a minute
-        let socket = ready_rx.recv_timeout(Duration::from_secs(60))??;
-        Ok(Compositor { commands: tx, socket, thread: Some(thread) })
+        let socket = match ready_rx.recv_timeout(Duration::from_secs(60)) {
+            Ok(Ok(socket)) => socket,
+            Ok(Err(error)) => return Err(error.into()),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "headless compositor did not become ready within 60 seconds").into());
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "headless compositor exited before signaling readiness").into());
+            }
+        };
+        Ok(Compositor { commands: tx, socket, thread: Some(thread), stopped: stopped_rx })
     }
 
     pub fn run<T: Send + 'static>(&self, f: impl FnOnce(&mut WmState, &mut Headless) -> T + Send + 'static) -> T {
         let (tx, rx) = mpsc::channel();
-        self.commands.send(Box::new(move |s, b| { tx.send(f(s, b)).ok(); })).expect("compositor thread");
-        rx.recv_timeout(Duration::from_secs(20)).expect("compositor answered")
+        if self.commands.send(Box::new(move |s, b| { tx.send(f(s, b)).ok(); })).is_err() {
+            panic!("headless compositor event loop exited before accepting command");
+        }
+        match rx.recv_timeout(Duration::from_secs(20)) {
+            Ok(value) => value,
+            Err(mpsc::RecvTimeoutError::Timeout) => panic!("headless compositor did not answer command within 20 seconds"),
+            Err(mpsc::RecvTimeoutError::Disconnected) => panic!("headless compositor event loop exited before answering command"),
+        }
     }
 }
 
 impl Drop for Compositor {
     fn drop(&mut self) {
         let _ = self.commands.send(Box::new(|s, _| s.loop_signal.stop()));
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
+        match self.stopped.recv_timeout(Duration::from_secs(5)) {
+            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                if let Some(t) = self.thread.take() {
+                    let _ = t.join();
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // A wedged renderer must not turn a bounded compositor test into a process-wide hang. Dropping
+                // the JoinHandle detaches only this compositor worker; its socket is unique to its test/run.
+                eprintln!("bifrost-wm: headless worker did not stop within 5 seconds; detaching it");
+                drop(self.thread.take());
+            }
         }
     }
 }
