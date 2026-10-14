@@ -368,6 +368,66 @@ fn fold75(line: &str) -> String {
     out
 }
 
+/// Headless model tests: vCard text in, contacts out, and back. They read and write strings in memory.
+#[cfg(test)]
+mod headless_vcard_tests {
+    use super::*;
+
+    fn ada() -> Contact {
+        Contact {
+            id: 1,
+            name: "Ada Lovelace".into(),
+            phone: "555 1234".into(),
+            email: "ada@example.test".into(),
+            notes: String::new(),
+            favorite: false,
+            company: "Analytical".into(),
+            address: String::new(),
+            labels: [0; 3],
+        }
+    }
+
+    #[test]
+    fn a_3_0_card_is_read_into_a_contact_with_its_company_phone_and_email() {
+        let text = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\nORG:Analytical\r\nTEL;TYPE=CELL:555 1234\r\nEMAIL;TYPE=WORK:ada@example.test\r\nEND:VCARD\r\n";
+        let got = import(text).unwrap();
+        assert_eq!(got.invalid, 0);
+        assert_eq!(got.contacts.len(), 1);
+        let c = &got.contacts[0];
+        assert!(c.name.contains("Lovelace") && c.name.contains("Ada"));
+        assert_eq!(c.company, "Analytical");
+        assert_eq!(c.phone, "555 1234");
+        assert_eq!(c.email, "ada@example.test");
+        assert_eq!(c.id, 0, "identifiers are assigned by the store");
+    }
+
+    #[test]
+    fn a_card_with_no_name_or_company_is_counted_as_invalid() {
+        let got = import("BEGIN:VCARD\r\nVERSION:3.0\r\nTEL:555 1234\r\nEND:VCARD\r\n").unwrap();
+        assert_eq!(got.invalid, 1);
+        assert!(got.contacts.is_empty());
+    }
+
+    #[test]
+    fn a_group_card_is_skipped_and_counted() {
+        let got = import("BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Friends\r\nMEMBER:urn:uuid:0001\r\nEND:VCARD\r\n").unwrap();
+        assert_eq!((got.groups, got.contacts.len()), (1, 0));
+    }
+
+    #[test]
+    fn an_exported_card_names_its_version_and_reads_back_to_the_same_person() {
+        let v3 = export(&[ada()], &Extras::default(), Version::V3);
+        assert!(v3.starts_with("BEGIN:VCARD"));
+        assert!(v3.contains("VERSION:3.0") && v3.contains("ORG:Analytical"));
+        let v4 = export(&[ada()], &Extras::default(), Version::V4);
+        assert!(v4.contains("VERSION:4.0"));
+        let back = import(&v3).unwrap();
+        assert_eq!(back.contacts.len(), 1);
+        assert_eq!(back.contacts[0].email, "ada@example.test");
+        assert_eq!(back.contacts[0].company, "Analytical");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
