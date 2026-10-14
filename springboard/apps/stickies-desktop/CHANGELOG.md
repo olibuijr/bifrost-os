@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- Edit > Ignore Case (on by default, kept across launches) makes Find, Find Next, Replace and Replace All match letters of either case, or only the same case when it is off.
+- Edit > Replace All in Current Note replaces every match in the focused note and leaves the other notes alone. It is one undo step.
+- File > Import Text keeps the text colours of a rich text file: red and orange text becomes Red, blue and green keep their colour, and yellow or any other colour becomes Black.
+- File > Paper Size (A4, Letter, Legal, A5, A3) and File > Orientation (Portrait or Landscape) choose how Print lays out the note. The choice lasts for the session.
+
 ## 0.5.0
 
 - Edit > Replace... opens the find bar with a replace field (Tab switches between the two). Return replaces the current match and steps to the next; Edit > Replace All replaces every match in every note.
