@@ -116,6 +116,7 @@ pub mod messaging;
 pub mod service_management;
 pub mod login_items_approval;
 pub mod crash_report;
+pub mod bug_report;
 pub mod exception_handler;
 pub mod call_stack_tree;
 pub mod hitch_ratio;
