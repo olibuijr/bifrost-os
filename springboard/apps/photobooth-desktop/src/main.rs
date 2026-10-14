@@ -20,6 +20,7 @@ use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use menu::{Command, MenuState};
 use model::{Button, Effect, Layout, Mode, Rect, Timer};
 use slideshow::Slideshow;
+use warp::Strength;
 use springboard::media::v4l2::{self, CameraInfo, Device, Frame};
 use springboard::shell::camera::jpeg;
 use springboard::shell::photos::library::{civil, Date};
@@ -50,12 +51,21 @@ const KEY_DELETE: u32 = 46;
 const PREF_AUTO_FLIP: &str = "autoFlip";
 const PREF_SCREEN_FLASH: &str = "screenFlash";
 const PREF_CAMERA: &str = "camera";
+const PREF_DISTORTION: &str = "distortion";
 
 /// A capture in this session: its file, a small thumbnail for the strip and the image shown when it is selected.
 struct Capture {
     path: PathBuf,
     thumb: Image,
     shown: Image,
+}
+
+/// The capture that Delete took away last: where it sat in the strip, its picture and the file's bytes, so that
+/// Undo Delete can write the file back.
+struct Removed {
+    index: usize,
+    capture: Capture,
+    bytes: Vec<u8>,
 }
 
 struct Burst {
@@ -107,6 +117,10 @@ struct PhotoBooth {
     screen_flash: bool,
     /// View > Full Screen Viewfinder: the bars are hidden and the picture fills the window
     full_screen: bool,
+    /// Edit > Undo Delete: the capture Delete took away last
+    undo: Option<Removed>,
+    /// View > Distortion Strength: how far Bulge and Twirl pull
+    distortion: Strength,
     slideshow: Option<Slideshow>,
     /// the slide fitted to the window, kept until the slide or the window size changes: (index, width, height)
     slide: Option<((usize, usize, usize), Image)>,
@@ -145,6 +159,8 @@ impl PhotoBooth {
             auto_flip: true,
             screen_flash: true,
             full_screen: false,
+            undo: None,
+            distortion: Strength::Normal,
             slideshow: None,
             slide: None,
             backdrop: Backdrop::None,
@@ -233,7 +249,7 @@ impl PhotoBooth {
         if self.auto_flip {
             img = warp::flip_horizontal(&img);
         }
-        Some(self.effect.apply(img))
+        Some(self.effect.apply(img, self.distortion))
     }
 
     /// Picks a backdrop. A backdrop needs a picture of the empty scene, so the person gets a few seconds to step out.
@@ -449,15 +465,25 @@ impl PhotoBooth {
         self.export = Some((request, path));
     }
 
-    /// Removes the selected capture's file and takes it out of the strip; the next capture is selected.
+    /// Removes the selected capture's file and takes it out of the strip; the next capture is selected. The file's bytes
+    /// are kept in memory so that Undo Delete can write them back.
     fn delete_selected(&mut self) {
         let Some(index) = self.selected.filter(|i| *i < self.captures.len()) else {
             self.status = "Select a capture to delete".to_string();
             return;
         };
-        if let Err(e) = std::fs::remove_file(&self.captures[index].path) {
-            // a file that is already gone is not a reason to keep the capture in the strip
-            if e.kind() != std::io::ErrorKind::NotFound {
+        let path = self.captures[index].path.clone();
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => Some(bytes),
+            // a file that is already gone is not a reason to keep the capture in the strip; there is nothing to put back
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => {
+                self.status = format!("Could not delete: {e}");
+                return;
+            }
+        };
+        if bytes.is_some() {
+            if let Err(e) = std::fs::remove_file(&path) {
                 self.status = format!("Could not delete: {e}");
                 return;
             }
@@ -465,7 +491,26 @@ impl PhotoBooth {
         let gone = self.captures.remove(index);
         self.slide = None;
         self.selected = model::selection_after_delete(index, self.captures.len());
-        self.status = format!("Deleted {}", gone.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+        self.status = format!("Deleted {}", file_name_of(&path));
+        self.undo = bytes.map(|bytes| Removed { index, capture: gone, bytes });
+    }
+
+    /// Edit > Undo Delete: writes the last deleted capture's file back and returns it to its place in the strip.
+    fn undo_delete(&mut self) {
+        let Some(removed) = self.undo.take() else { return };
+        match std::fs::write(&removed.capture.path, &removed.bytes) {
+            Ok(()) => {
+                let index = removed.index.min(self.captures.len());
+                self.status = format!("Restored {}", file_name_of(&removed.capture.path));
+                self.captures.insert(index, removed.capture);
+                self.selected = Some(index);
+                self.slide = None;
+            }
+            Err(e) => {
+                self.status = format!("Could not restore: {e}");
+                self.undo = Some(removed);
+            }
+        }
     }
 
     /// View > Slideshow: all captures of the session, one after the other, over the whole window.
@@ -505,6 +550,12 @@ impl PhotoBooth {
                 ctx.open_url(&format!("file://{}", self.library.display()));
             }
             Command::Delete => self.delete_selected(),
+            Command::UndoDelete => self.undo_delete(),
+            Command::Distortion(strength) => {
+                self.distortion = strength;
+                ctx.defaults_mut().set_string(PREF_DISTORTION, strength.key());
+                self.view = None;
+            }
             Command::AutoFlip => {
                 self.auto_flip = !self.auto_flip;
                 ctx.defaults_mut().set_bool(PREF_AUTO_FLIP, self.auto_flip);
@@ -557,6 +608,11 @@ fn strip_slot(strip: Rect, k: usize) -> Rect {
     }
 }
 
+/// The file name of `path` as text, empty when it has none.
+fn file_name_of(path: &std::path::Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
 fn now_date() -> Date {
     let unix = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     civil(unix, springboard::bare::timezone::offset_at(unix).unwrap_or(0))
@@ -607,6 +663,7 @@ impl App for PhotoBooth {
             self.auto_flip = defaults.bool(PREF_AUTO_FLIP);
             self.screen_flash = defaults.bool(PREF_SCREEN_FLASH);
             self.camera_path = defaults.string(PREF_CAMERA);
+            self.distortion = defaults.string(PREF_DISTORTION).and_then(|key| Strength::from_key(&key)).unwrap_or(Strength::Normal);
         }
         self.start();
     }
@@ -696,6 +753,8 @@ impl App for PhotoBooth {
             full_screen: self.full_screen,
             slideshow: !browsing,
             backdrop: self.backdrop,
+            distortion: self.distortion,
+            can_undo: self.undo.is_some() && browsing,
             cameras: &cameras,
             current_camera: self.current_camera(),
         })
@@ -1019,4 +1078,78 @@ impl PhotoBooth {
 
 fn main() {
     bifrost_app::run(PhotoBooth::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A folder for one test's files under the app's target folder, removed when the test ends.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(name: &str) -> Scratch {
+            let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("scratch folder");
+            Scratch(dir)
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn booth_with(paths: &[PathBuf]) -> PhotoBooth {
+        let mut booth = PhotoBooth::new();
+        booth.captures = paths
+            .iter()
+            .map(|path| {
+                let img = Image { w: 2, h: 2, px: vec![0; 4] };
+                Capture { path: path.clone(), thumb: img.clone(), shown: img }
+            })
+            .collect();
+        booth
+    }
+
+    #[test]
+    fn delete_then_undo_puts_the_file_back_in_its_place() {
+        let dir = Scratch::new("photobooth-undo");
+        let paths: Vec<PathBuf> = ["a.jpg", "b.jpg", "c.jpg"].iter().map(|n| dir.0.join(n)).collect();
+        for (i, path) in paths.iter().enumerate() {
+            std::fs::write(path, [i as u8; 3]).unwrap();
+        }
+        let mut booth = booth_with(&paths);
+        booth.selected = Some(1);
+        booth.delete_selected();
+        assert!(!paths[1].exists());
+        assert_eq!(booth.captures.len(), 2);
+        assert_eq!(booth.selected, Some(1), "the capture that moved up is selected");
+        booth.undo_delete();
+        assert_eq!(std::fs::read(&paths[1]).unwrap(), vec![1u8; 3]);
+        assert_eq!(booth.captures.len(), 3);
+        assert_eq!(booth.captures[1].path, paths[1]);
+        assert_eq!(booth.selected, Some(1));
+        assert!(booth.undo.is_none());
+    }
+
+    #[test]
+    fn a_file_already_gone_leaves_the_strip_and_has_nothing_to_undo() {
+        let dir = Scratch::new("photobooth-gone");
+        let mut booth = booth_with(&[dir.0.join("gone.jpg")]);
+        booth.selected = Some(0);
+        booth.delete_selected();
+        assert!(booth.captures.is_empty());
+        assert!(booth.undo.is_none());
+    }
+
+    #[test]
+    fn undo_with_nothing_deleted_changes_nothing() {
+        let mut booth = PhotoBooth::new();
+        booth.undo_delete();
+        assert!(booth.captures.is_empty());
+        assert!(booth.undo.is_none());
+    }
 }

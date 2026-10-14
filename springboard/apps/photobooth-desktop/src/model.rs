@@ -176,12 +176,13 @@ impl Effect {
         chain
     }
 
-    /// The picture with this effect: the colour filters first, then the distortion if the effect has one.
-    pub fn apply(self, img: Image) -> Image {
+    /// The picture with this effect: the colour filters first, then the distortion if the effect has one, pulled as far
+    /// as `strength` says. Mirror has no strength.
+    pub fn apply(self, img: Image, strength: warp::Strength) -> Image {
         let img = if self.steps().is_empty() { img } else { self.chain().apply(&img).unwrap_or(img) };
         match self {
-            Effect::Bulge => warp::bulge(&img),
-            Effect::Twirl => warp::twirl(&img),
+            Effect::Bulge => warp::bulge(&img, strength),
+            Effect::Twirl => warp::twirl(&img, strength),
             Effect::Mirror => warp::mirror_left(&img),
             _ => img,
         }
@@ -380,17 +381,31 @@ mod tests {
         assert_eq!(distortions, [Effect::Bulge, Effect::Twirl, Effect::Mirror]);
         for effect in distortions {
             assert!(effect.chain().is_empty(), "{effect:?}");
-            let out = effect.apply(img.clone());
+            let out = effect.apply(img.clone(), warp::Strength::Normal);
             assert_eq!((out.w, out.h), (60, 40), "{effect:?}");
             assert_ne!(out, img, "{effect:?}");
         }
     }
 
     #[test]
+    fn the_strength_changes_the_bulge_and_the_twirl_but_not_the_mirror() {
+        let mut px = Vec::new();
+        for y in 0..40usize {
+            for x in 0..40usize {
+                px.push(pack(x as u8 * 6, y as u8 * 6, 90, 255));
+            }
+        }
+        let ramp = Image { w: 40, h: 40, px };
+        assert_ne!(Effect::Bulge.apply(ramp.clone(), warp::Strength::Subtle), Effect::Bulge.apply(ramp.clone(), warp::Strength::Strong));
+        assert_ne!(Effect::Twirl.apply(ramp.clone(), warp::Strength::Subtle), Effect::Twirl.apply(ramp.clone(), warp::Strength::Strong));
+        assert_eq!(Effect::Mirror.apply(ramp.clone(), warp::Strength::Subtle), Effect::Mirror.apply(ramp, warp::Strength::Strong));
+    }
+
+    #[test]
     fn apply_runs_the_colour_chain_and_leaves_the_original_alone() {
         let img = solid(3, 3, pack(10, 20, 30, 255));
-        assert_eq!(Effect::None.apply(img.clone()), img);
-        assert_ne!(Effect::Invert.apply(img.clone()), img);
+        assert_eq!(Effect::None.apply(img.clone(), warp::Strength::Normal), img);
+        assert_ne!(Effect::Invert.apply(img.clone(), warp::Strength::Normal), img);
     }
 
     #[test]

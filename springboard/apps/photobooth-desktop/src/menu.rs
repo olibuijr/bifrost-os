@@ -2,6 +2,7 @@
 //! to the command it stands for. The window state they depend on is passed in as plain values.
 
 use crate::backdrop::Backdrop;
+use crate::warp::Strength;
 use bifrost_app::{AppMenu, AppMenuItem};
 
 const TAKE_PHOTO: u32 = 1;
@@ -13,7 +14,9 @@ const FULL_SCREEN: u32 = 6;
 const SLIDESHOW: u32 = 7;
 const SCREEN_FLASH: u32 = 8;
 const RETAKE_SCENE: u32 = 9;
+const UNDO_DELETE: u32 = 10;
 const BACKDROP_BASE: u32 = 100;
+const STRENGTH_BASE: u32 = 300;
 const CAMERA_BASE: u32 = 200;
 /// The most cameras the Camera menu lists.
 pub const MAX_CAMERAS: usize = 32;
@@ -25,12 +28,14 @@ pub enum Command {
     Export,
     ShowLibrary,
     Delete,
+    UndoDelete,
     AutoFlip,
     FullScreen,
     Slideshow,
     ScreenFlash,
     RetakeScene,
     Backdrop(Backdrop),
+    Distortion(Strength),
     Camera(usize),
 }
 
@@ -41,12 +46,14 @@ pub fn decode(id: u32) -> Option<Command> {
         EXPORT => Command::Export,
         SHOW_LIBRARY => Command::ShowLibrary,
         DELETE => Command::Delete,
+        UNDO_DELETE => Command::UndoDelete,
         AUTO_FLIP => Command::AutoFlip,
         FULL_SCREEN => Command::FullScreen,
         SLIDESHOW => Command::Slideshow,
         SCREEN_FLASH => Command::ScreenFlash,
         RETAKE_SCENE => Command::RetakeScene,
         n if (BACKDROP_BASE..BACKDROP_BASE + Backdrop::ALL.len() as u32).contains(&n) => Command::Backdrop(Backdrop::ALL[(n - BACKDROP_BASE) as usize]),
+        n if (STRENGTH_BASE..STRENGTH_BASE + Strength::ALL.len() as u32).contains(&n) => Command::Distortion(Strength::ALL[(n - STRENGTH_BASE) as usize]),
         n if (CAMERA_BASE..CAMERA_BASE + MAX_CAMERAS as u32).contains(&n) => Command::Camera((n - CAMERA_BASE) as usize),
         _ => return None,
     })
@@ -64,6 +71,9 @@ pub struct MenuState<'a> {
     pub full_screen: bool,
     pub slideshow: bool,
     pub backdrop: Backdrop,
+    pub distortion: Strength,
+    /// a capture was deleted this session and can be put back
+    pub can_undo: bool,
     /// the names of the cameras the system lists
     pub cameras: &'a [String],
     /// the index in `cameras` of the one in use
@@ -75,16 +85,18 @@ pub fn menus(s: &MenuState) -> Vec<AppMenu> {
         AppMenuItem::new(TAKE_PHOTO, "Take Photo").key("cmd+t").enabled(s.live),
         AppMenuItem::new(EXPORT, "Export...").key("cmd+e").enabled(s.selected),
         AppMenuItem::separator(),
-        AppMenuItem::new(SHOW_LIBRARY, "Show Photo Booth Library"),
+        AppMenuItem::new(SHOW_LIBRARY, "Show Photo Booth Library").key("cmd+shift+l"),
     ];
     let edit = vec![
+        AppMenuItem::new(UNDO_DELETE, "Undo Delete").key("cmd+z").enabled(s.can_undo),
+        AppMenuItem::separator(),
         AppMenuItem::new(DELETE, "Delete").key("cmd+backspace").enabled(s.selected),
         AppMenuItem::separator(),
         AppMenuItem::new(AUTO_FLIP, "Auto Flip").checked(s.auto_flip),
     ];
     let mut view = vec![
-        AppMenuItem::new(SLIDESHOW, "Slideshow").enabled(s.has_captures).checked(s.slideshow),
-        AppMenuItem::new(FULL_SCREEN, "Full Screen Viewfinder").checked(s.full_screen),
+        AppMenuItem::new(SLIDESHOW, "Slideshow").key("cmd+shift+p").enabled(s.has_captures).checked(s.slideshow),
+        AppMenuItem::new(FULL_SCREEN, "Full Screen Viewfinder").key("cmd+ctrl+f").checked(s.full_screen),
         AppMenuItem::new(SCREEN_FLASH, "Screen Flash").checked(s.screen_flash),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Backdrop"),
@@ -93,6 +105,10 @@ pub fn menus(s: &MenuState) -> Vec<AppMenu> {
         view.push(AppMenuItem::new(BACKDROP_BASE + i as u32, backdrop.title()).checked(s.backdrop == *backdrop).depth(1));
     }
     view.push(AppMenuItem::new(RETAKE_SCENE, "Retake Empty Scene").enabled(s.backdrop != Backdrop::None && s.live));
+    view.push(AppMenuItem::submenu("Distortion Strength"));
+    for (i, strength) in Strength::ALL.iter().enumerate() {
+        view.push(AppMenuItem::new(STRENGTH_BASE + i as u32, strength.title()).checked(s.distortion == *strength).depth(1));
+    }
 
     let mut camera = Vec::new();
     for (i, name) in s.cameras.iter().take(MAX_CAMERAS).enumerate() {
@@ -123,6 +139,8 @@ mod tests {
             full_screen: false,
             slideshow: false,
             backdrop: Backdrop::None,
+            distortion: Strength::Normal,
+            can_undo: false,
             cameras,
             current_camera: None,
         }
@@ -232,6 +250,44 @@ mod tests {
             assert_eq!((item.title.as_str(), item.depth, item.checked), (backdrop.title(), 1, *backdrop == Backdrop::Forest));
         }
         assert!(find(&m, "Retake Empty Scene").enabled);
+    }
+
+    #[test]
+    fn undo_delete_is_enabled_only_after_a_delete_and_uses_command_z() {
+        let none: Vec<String> = Vec::new();
+        let mut s = state(&none);
+        assert!(!find(&menus(&s), "Undo Delete").enabled);
+        s.can_undo = true;
+        let m = menus(&s);
+        assert!(find(&m, "Undo Delete").enabled);
+        assert_eq!(find(&m, "Undo Delete").key, "cmd+z");
+        assert_eq!(decode(find(&m, "Undo Delete").id), Some(Command::UndoDelete));
+    }
+
+    #[test]
+    fn the_distortion_strength_submenu_checks_the_chosen_strength() {
+        let none: Vec<String> = Vec::new();
+        let mut s = state(&none);
+        s.distortion = Strength::Strong;
+        let m = menus(&s);
+        let view = m.iter().find(|m| m.title == "View").unwrap();
+        let header = view.items.iter().position(|i| i.submenu && i.title == "Distortion Strength").unwrap();
+        for (k, strength) in Strength::ALL.iter().enumerate() {
+            let item = &view.items[header + 1 + k];
+            assert_eq!((item.title.as_str(), item.depth, item.checked), (strength.title(), 1, *strength == Strength::Strong));
+            assert_eq!(decode(item.id), Some(Command::Distortion(*strength)));
+        }
+    }
+
+    #[test]
+    fn the_shortcuts_of_the_daily_commands_are_set() {
+        let none: Vec<String> = Vec::new();
+        let mut s = state(&none);
+        s.has_captures = true;
+        let m = menus(&s);
+        assert_eq!(find(&m, "Show Photo Booth Library").key, "cmd+shift+l");
+        assert_eq!(find(&m, "Slideshow").key, "cmd+shift+p");
+        assert_eq!(find(&m, "Full Screen Viewfinder").key, "cmd+ctrl+f");
     }
 
     #[test]
