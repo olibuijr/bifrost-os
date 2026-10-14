@@ -17,9 +17,9 @@
     {
       "feature": "Passing a buffer to another process",
       "apple": "IOSurfaceCreateMachPort, IOSurfaceLookupFromMachPort, IOSurfaceCreateXPCObject",
-      "bifrost": "springboard/proto/src/sys.rs (socketpair_pair, SCM_RIGHTS); springboard/src/shell/apphost.rs:437 (sends one descriptor)",
-      "status": "os",
-      "note": "Linux fd passing over SOCK_SEQPACKET replaces Mach ports; used by the shell, not exposed to apps"
+      "bifrost": "springboard/sdk/src/buffer_handoff.rs (SharedBuffer, send_buffer, receive_buffer); springboard/proto/src/sys.rs (socketpair_pair, SCM_RIGHTS); springboard/src/shell/apphost.rs:437 (sends one descriptor)",
+      "status": "partial",
+      "note": "An app sends a shared buffer as one descriptor over a connected channel, and the receiver maps the same memory; empty, oversized, descriptor-less, extra-descriptor and closed-peer cases are typed errors, tested headless in sdk/tests/parity_sdk-rest-10.rs. Gap: the shell does not yet relay a buffer between two apps, and there is no lookup by ID, so this needs Midget with two running apps."
     },
     {
       "feature": "Global buffer lookup by ID",
@@ -33,7 +33,7 @@
       "apple": "IOSurface as a texture or framebuffer for Metal and Core Animation",
       "bifrost": "springboard/src/bare/wayland.rs (DmaBuf wl_buffer, dmabuf_formats); springboard/src/gpu/desktop.rs:74 (GBM buffer exported as dma-buf)",
       "status": "os",
-      "note": "compositor-side only; the triage note that zero-copy from a GPU context is a follow-up is confirmed at docs/bifrost-ui.md:767"
+      "note": "Stays os. The GBM buffer is allocated and exported as a dma-buf inside the shell (springboard/src/gpu/desktop.rs, Bo), and the Wayland import is made by the shell's presenter, with the formats and modifiers it advertises. Blocker for an app-facing type: the SDK has no GPU buffer allocator or import call, although the app sandbox already grants /dev/dri (springboard/src/bare/app_policy.rs); the zero-copy follow-up is at docs/bifrost-ui.md:767"
     },
     {
       "feature": "Pixel format, stride and plane layout",
