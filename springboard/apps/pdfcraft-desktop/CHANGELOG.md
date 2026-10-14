@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.7.2
+
+- Upstream pdfcraft v0.7.1.
+  ## What's Changed
+  * Adopt shared panel docking with document-aware visibility by @skylartaylor in https://github.com/storytold/pdfcraft/pull/966
+  * Print: Windows lists its printers and spools jobs by @Mawfyy in https://github.com/storytold/pdfcraft/pull/847
+  * M10: Windows printing prints at actual size, off the UI thread (follow-up to #847) by @echelon in https://github.com/storytold/pdfcraft/pull/1007
+  * ci: refactor workflows to use storytold/craft-common-actions by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/1073
+
 ## 0.7.1
 
 - Upstream pdfcraft v0.7.1.
