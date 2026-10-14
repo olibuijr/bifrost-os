@@ -120,6 +120,7 @@ pub const MENU_CHECK_CONNECTION: u32 = 74;
 pub const MENU_PASTE_MATCH: u32 = 75;
 pub const MENU_EXPORT_PDF: u32 = 76;
 pub const MENU_ALL_HEADERS: u32 = 77;
+pub const MENU_IGNORE_FOLLOW_UP: u32 = 78;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -348,6 +349,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
         AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
         AppMenuItem::new(MENU_REMIND, "Remind Me...").enabled(open),
+        AppMenuItem::new(MENU_IGNORE_FOLLOW_UP, "Ignore Follow-Up").enabled(mail.open.is_some_and(|uid| mail.has_reminder(uid))),
         AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(open),
         AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(open),
         AppMenuItem::new(MENU_JUNK, "Move to Junk").key("cmd+shift+j").enabled(open),
@@ -1079,6 +1081,7 @@ impl MailWindow {
                     }
                 }
             }
+            MENU_IGNORE_FOLLOW_UP => self.ignore_follow_up(),
             MENU_FIND_IN_MESSAGE => {
                 if self.mail.open.is_some() {
                     if self.mail.find.is_none() {
@@ -2046,6 +2049,16 @@ impl MailWindow {
             PromptKind::EditAccount(id) => self.submit_edit_account(ctx, &id, &prompt.form),
             PromptKind::RemoveAccount(id) => self.submit_remove_account(ctx, &id, &prompt.form),
         }
+    }
+
+    /// Message > Ignore Follow-Up: the open message's reminders are dropped, so it does not come back on its own.
+    fn ignore_follow_up(&mut self) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(account) = self.mail.current().map(|a| a.id.clone()) else { return };
+        let Some(message_id) = self.mail.row(uid).and_then(|r| r.summary.message_id.clone()) else { return };
+        let dropped = self.mail.queue.drop_reminders(&account, &message_id);
+        self.save_queue_file();
+        self.mail.status = if dropped == 0 { "No reminder is set for this message".into() } else { "The follow-up is ignored".into() };
     }
 
     /// Remind Me: the message is noted with the time it should come back.

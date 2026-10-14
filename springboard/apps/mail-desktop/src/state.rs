@@ -1225,6 +1225,13 @@ impl Mail {
         Ok(())
     }
 
+    /// True when message `uid` has a reminder waiting in the queue for the shown account.
+    pub fn has_reminder(&self, uid: u32) -> bool {
+        let Some(message_id) = self.row(uid).and_then(|r| r.summary.message_id.as_deref()) else { return false };
+        let Some(account) = self.current().map(|a| a.id.as_str()) else { return false };
+        self.queue.reminders.iter().any(|r| r.account == account && r.message_id == message_id)
+    }
+
     /// Message > Redirect: asks who should get the open message.
     pub fn open_redirect(&mut self) {
         self.open_prompt(PromptKind::Redirect, vec![Field::new("To", "name@example.com, other@example.com", "")]);
