@@ -59,9 +59,9 @@
     {
       "feature": "Contextual embedding (NLContextualEmbedding)",
       "apple": "NLContextualEmbedding, NLContextualEmbeddingKey",
-      "bifrost": "springboard/ui/src/embedding.rs",
+      "bifrost": "springboard/ui/src/embedding.rs (Embedding::from_vector_text); tests: springboard/ui/tests/parity_sdk-complete-25.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (embedding.rs); not wired into the shell or apps, not tested on Midget. no on-device contextual model and no asset loader; Apple downloads per-script assets, which has no BifrOSt counterpart yet"
+      "note": "Vocabularies load from text vector files (from_vector_text) and the neighbour, distance and sentence-vector queries are tested headless in ui/tests/parity_sdk-complete-25.rs. Gap: no on-device contextual model and no per-script asset download, which Apple provides and BifrOSt has not built; no shell or app client yet."
     },
     {
       "feature": "Custom text models (NLModel, Create ML text classifier and word tagger)",

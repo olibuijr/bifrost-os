@@ -73,9 +73,9 @@
     {
       "feature": "Domain frameworks built on Core ML",
       "apple": "Vision, Natural Language, Speech, Sound Analysis (named in the Core ML overview)",
-      "bifrost": "springboard/ui/src/text_classifier.rs, springboard/ui/src/sound_classify.rs, springboard/ui/src/embedding.rs",
+      "bifrost": "springboard/ui/src/text_classifier.rs (TextClassifier::sentiment), springboard/ui/src/sound_classify.rs, springboard/ui/src/embedding.rs; tests: springboard/ui/tests/parity_sdk-complete-25.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (text_classifier.rs, sound_classify.rs, embedding.rs); not wired into the shell or apps, not tested on Midget. no image classification, speech, sound or sentiment API; the spellcheck module is dictionary-based"
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (text_classifier.rs, sound_classify.rs, embedding.rs); not wired into the shell or apps, not tested on Midget. Sentiment is a two-label word-list preset (TextClassifier::sentiment) tested headless in ui/tests/parity_sdk-complete-25.rs. Gap: no image classification or speech API, and the spellcheck module is dictionary-based."
     },
     {
       "feature": "Text prediction on the on-screen keyboard",
