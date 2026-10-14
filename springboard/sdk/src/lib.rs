@@ -311,6 +311,7 @@ pub mod accessory_access;
 pub mod error;
 pub mod coding;
 pub mod peer_session;
+pub mod service_client;
 pub mod peer_mesh;
 pub mod peer_identity;
 pub mod nearby_service;

@@ -47,7 +47,7 @@
       "apple": "No direct Distributed counterpart (remote invocation across processes)",
       "bifrost": "springboard/mcp/src/ (agent MCP server); tools/app-control.py; tools/pi-bifrost-control/client.ts",
       "status": "os",
-      "note": "agents reach the desktop and apps through MCP and per-app control sockets, not through a shared invocation layer apps can call"
+      "note": "The blocker is the design, not a missing API: agents reach apps through per-app control sockets that accept one JSON-RPC request per connection and only the owning user's connections, and through the MCP server, a host tool. No shared invocation layer exists that one app could call on another."
     }
   ],
   "gaps": [
