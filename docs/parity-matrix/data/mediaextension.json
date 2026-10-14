@@ -38,9 +38,9 @@
     {
       "feature": "RAW processors (MERAWProcessor, MERAWProcessorExtension, MERAWProcessingParameter)",
       "apple": "MERAWProcessor, MERAWProcessorExtension, MERAWProcessorPixelBufferManager, MERAWProcessingParameter, MERAWProcessorNotification",
-      "bifrost": "springboard/render/src/raw_params.rs",
+      "bifrost": "springboard/render/src/raw_params.rs (RawParameter, RawProcessingParameters)",
       "status": "partial",
-      "note": "Wave 3 (w3-mediaextension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No RAW camera format decoding, no processing parameters, no RAW processor extension point."
+      "note": "Parameter ranges, clamping, reset, enable flags and key checks are tested in render/tests/parity_sdk-tests-19.rs. Gap: no RAW decoding and no processor extension point, so the parameters are not yet passed to a processor."
     },
     {
       "feature": "Out-of-process extension hosting and entitlements (format reader and video decoder entitlements)",
