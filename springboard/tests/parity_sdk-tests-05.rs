@@ -28,7 +28,7 @@ fn swatch_at(i: usize) -> (f32, f32) {
 }
 
 fn ui() -> Ui {
-    let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+    let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
     Ui::new(Font::parse(data).unwrap(), 1.0)
 }
 
@@ -169,6 +169,18 @@ fn headless_choosing_a_swatch_after_the_eraser_returns_to_the_pen() {
     assert_eq!(m.tool(), Tool::Pen, "a colour ends the eraser");
     stroke(&mut m, &ui, STROKE_AT_200.0, STROKE_AT_200.1);
     assert!(changed(&m, &base).iter().all(|(_, p)| near(*p, COLORS[6])), "the next stroke uses the chosen colour");
+}
+
+#[test]
+fn headless_tapping_a_tool_button_selects_that_tool() {
+    let ui = ui();
+    let (mut m, _) = editor();
+    tap(&mut m, &ui, MARKER_AT);
+    assert_eq!(m.tool(), Tool::Marker);
+    tap(&mut m, &ui, PEN_AT);
+    assert_eq!(m.tool(), Tool::Pen, "the pen button selects the pen again");
+    tap(&mut m, &ui, PENCIL_AT);
+    assert_eq!(m.tool(), Tool::Pencil);
 }
 
 #[test]
