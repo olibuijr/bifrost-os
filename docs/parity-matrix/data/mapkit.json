@@ -80,9 +80,9 @@
     {
       "feature": "User location on a map",
       "apple": "UserAnnotation, MapUserLocationButton, DefaultUserAnnotationContent",
-      "bifrost": "springboard/ui/src/mapview.rs (UserTracking",
+      "bifrost": "springboard/ui/src/map_user_location.rs (UserLocation); springboard/ui/src/mapview.rs (UserTracking, MapCamera::follow); springboard/ui/src/location_auth.rs; springboard/ui/src/location.rs (LocationFix); tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no location service API was found in the SDK index (searched for location and geolocation terms)"
+      "note": "UserLocation joins location authorization, the latest valid fix and the tracking button: tracking stays off without access, follows only a fix of at most 120 s age and 1000 m accuracy, and turns the camera to the heading in the heading state, all tested headless. Gap: no location sensor or location service feeds fixes into the model, and the user marker is not drawn; both need the lab machine."
     },
     {
       "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",

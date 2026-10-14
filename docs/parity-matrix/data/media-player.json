@@ -54,7 +54,7 @@
       "apple": "MPMediaPickerController",
       "bifrost": "springboard/ui/src/media_picker.rs",
       "status": "partial",
-      "note": "built on parity/team-a-10; not yet verified on Midget. Pure model of a library picker: kinds accepted, one or many selection with a limit, playable filter, title and fuzzy search, and a confirmed choice returned to the app. No SDK widget or shell sheet draws it yet."
+      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify."
     },
     {
       "feature": "Volume control and route button",

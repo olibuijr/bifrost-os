@@ -1004,6 +1004,7 @@ pub mod map_overlay;
 pub mod poi_filter;
 pub mod route;
 pub mod mapview;
+pub mod map_user_location;
 pub mod mapshape;
 pub mod reverse_lookup;
 pub mod map_item;

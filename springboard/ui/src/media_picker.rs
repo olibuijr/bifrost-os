@@ -119,6 +119,35 @@ impl MediaPicker {
         &self.chosen
     }
 
+    /// How many more items the rule allows. `None` when the selection has no limit.
+    pub fn remaining(&self) -> Option<usize> {
+        match self.selection {
+            Selection::One => Some(1usize.saturating_sub(self.chosen.len())),
+            Selection::Many { max } => max.map(|max| max.saturating_sub(self.chosen.len())),
+        }
+    }
+
+    /// Chooses every listed item that can be chosen and is not chosen yet, until the limit is reached. Returns how many
+    /// were added. A single choice selects nothing.
+    pub fn choose_all(&mut self) -> usize {
+        if self.selection == Selection::One {
+            return 0;
+        }
+        let candidates: Vec<u64> = self.visible().into_iter().filter(|&id| self.can_choose(id) && !self.chosen.contains(&id)).collect();
+        let mut added = 0;
+        for id in candidates {
+            if self.toggle(id) == Ok(true) {
+                added += 1;
+            }
+        }
+        added
+    }
+
+    /// Drops every chosen item.
+    pub fn clear_choice(&mut self) {
+        self.chosen.clear();
+    }
+
     /// The choice handed back to the app. Fails when nothing is chosen.
     pub fn confirm(&self) -> Result<Vec<u64>, Error> {
         if self.chosen.is_empty() {
