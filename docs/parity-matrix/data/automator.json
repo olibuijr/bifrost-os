@@ -45,9 +45,9 @@
     {
       "feature": "Runnable intents from other apps",
       "apple": "AMAction offering actions to workflows; Shortcuts listing actions from installed apps",
-      "bifrost": "springboard/src/shell/intents.rs (manifest [[intent]] parsing); docs/bifrost-ui.md section 'App Intents' (line 936)",
+      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line_with, parse_reply); springboard/src/shell/apphost.rs (Manifest::parse reads the [[intent]] tables); docs/bifrost-ui.md section 'App Intents' (line 936)",
       "status": "partial",
-      "note": "The shell lists shortcut = true intents in Spotlight and runs parameterless ones. The Shortcuts app does not yet list or run intents from other apps (documented gap in docs/bifrost-ui.md around line 978)."
+      "note": "The shell reads [[intent]] tables from manifests, lists shortcut = true intents with no required parameter in Search and builds the request that runs one. Headless tests in springboard/tests/parity_sdk-tests-13.rs cover manifest parsing, runnability and the request and reply lines. Gap: the Shortcuts app does not yet list or run intents from other apps (documented gap in docs/bifrost-ui.md around line 978)."
     },
     {
       "feature": "Workflow errors",

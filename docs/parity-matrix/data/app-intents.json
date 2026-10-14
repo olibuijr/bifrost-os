@@ -110,7 +110,7 @@
       "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)",
       "bifrost": "springboard/ui/src/focus_filter.rs; wired: springboard/ui/src/focus_filter.rs, springboard/src/shell/services/focus_filter.rs, springboard/sdk/src/focus_filter.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model of per-Focus app contexts, the active context and change generations, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Widgets, controls and Live Activities",

@@ -38,9 +38,9 @@
     {
       "feature": "Variable color effect",
       "apple": "variableColor (VariableColorSymbolEffect)",
-      "bifrost": "springboard/ui/src/symbol_layers.rs",
+      "bifrost": "springboard/ui/src/symbol_layers.rs (layer_opacity, cycle_progress)",
       "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no variable layers in glyphs.rs; each glyph is one colour"
+      "note": "Cumulative and iterative fills, dimmed or hidden inactive layers and reversing cycles are a pure model, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on Midget. No variable layers in glyphs.rs; each glyph is one colour"
     },
     {
       "feature": "Content transitions (replace, automatic)",
@@ -66,9 +66,9 @@
     {
       "feature": "Symbol weights, scales and rendering modes",
       "apple": "Symbol images with weight, scale and rendering modes (per the Symbols doc overview, the effects target symbol layers)",
-      "bifrost": "springboard/ui/src/symbol_layers.rs",
+      "bifrost": "springboard/ui/src/symbol_layers.rs (Weight, Scale, RenderingMode, rendering_opacity, palette_slot)",
       "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. one weight and no hierarchical or palette rendering, as docs/bifrost-ui.md records under Symbols"
+      "note": "Nine weight steps, three scale steps and the hierarchical and palette rules are a pure model, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs. Not wired into apps or the shell, not yet tested on Midget. The glyph renderer still draws one weight and no hierarchical or palette rendering, as docs/bifrost-ui.md records under Symbols"
     },
     {
       "feature": "Generic implicit animation of views",
