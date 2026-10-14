@@ -4,10 +4,11 @@
 //! the same rectangles, so a tap lands on what is drawn.
 
 use crate::export::Format;
-use crate::extras::Extras;
+use crate::extras::{Extras, ScreenFacts};
 use crate::model::{self, Category, Content, Item, Row, Section, Stored, SECTIONS};
 use crate::recents::{self, Recent};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
+use bifrost_app::displays::DisplayInfo;
 use bifrost_app::controls::search;
 use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -243,6 +244,10 @@ pub struct SysInfo {
     pub sort: Option<(Column, bool)>,
     /// The title of the picked item before a refresh, so the pick stays on it when the new facts land.
     pub pick_after_load: Option<String>,
+    /// The display service's list request, while its answer is awaited.
+    pub screens_request: Option<u32>,
+    /// The display list is asked for again (at the start, after a refresh, after the displays changed).
+    pub screens_stale: bool,
 }
 
 impl SysInfo {
@@ -278,6 +283,8 @@ impl SysInfo {
             keyboard_wanted: false,
             sort: None,
             pick_after_load: None,
+            screens_request: None,
+            screens_stale: true,
         }
     }
 
@@ -331,11 +338,20 @@ impl SysInfo {
     /// Takes a finished read. The scroll stays where it is, clamped to the new length.
     pub fn apply(&mut self, report: Report, extras: Extras) {
         let picked = self.pick_after_load.take().or_else(|| self.picked_title());
+        // the display list comes from the display service, not from the read: it stays with the window
+        let screens = std::mem::take(&mut self.extras.screens);
         self.report = report;
         self.extras = extras;
+        self.extras.screens = screens;
         self.loaded = true;
         self.clamp_scrolls();
         self.restore_pick(picked);
+    }
+
+    /// Takes the displays the display service listed: their refresh rate and scale go under the matching connectors in
+    /// the Displays category. A new list replaces the old one.
+    pub fn set_screens(&mut self, list: &[DisplayInfo]) {
+        self.extras.screens = list.iter().map(ScreenFacts::from_info).collect();
     }
 
     /// The title of the picked item of the list, if the category has one.
@@ -359,6 +375,7 @@ impl SysInfo {
             return false;
         }
         self.pick_after_load = self.picked_title();
+        self.screens_stale = true;
         self.stored = None;
         self.notice = None;
         self.start_load();
@@ -1602,6 +1619,17 @@ mod tests {
         assert_eq!(items[0].title, "y");
         sort_items(&mut items, Column::Details, true);
         assert_eq!(items[0].title, "x");
+    }
+
+    #[test]
+    fn the_display_list_survives_a_fresh_read_and_a_refresh_asks_for_it_again() {
+        let mut w = loaded();
+        w.screens_stale = false;
+        w.extras.screens = vec![ScreenFacts::new("eDP-1", 60.0, 1.0)];
+        w.apply(Report::default(), Extras::default());
+        assert_eq!(w.extras.screens, vec![ScreenFacts::new("eDP-1", 60.0, 1.0)]);
+        w.set_screens(&[]);
+        assert!(w.extras.screens.is_empty(), "a new list replaces the old one");
     }
 
     #[test]

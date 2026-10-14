@@ -16,7 +16,9 @@ mod window;
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::proto::{AnnouncePriority, DocErrorCode, DocMode};
+use bifrost_app::displays;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_core::json::Json;
 use export::Format;
 use std::io::{Read, Write};
 use window::{
@@ -42,6 +44,7 @@ impl App for SysInfo {
             self.load_recents(ctx.defaults().string(recents::KEY));
             self.start_load();
         }
+        self.sync(ctx);
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -148,6 +151,35 @@ impl App for SysInfo {
         self.poll_load(t)
     }
 
+    /// The display list the display service answered with: the refresh rate and scale of each display.
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.screens_request != Some(request) {
+            return false;
+        }
+        self.screens_request = None;
+        let changed = match displays::decode_list(result) {
+            Ok(list) => {
+                self.set_screens(&list);
+                true
+            }
+            Err(e) => {
+                ctx.log(&format!("displays: {e}"));
+                false
+            }
+        };
+        self.sync(ctx);
+        changed
+    }
+
+    /// The display service says the displays changed: the list is asked for again.
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, _body: &Json) -> bool {
+        if service == displays::SERVICE && event == displays::RECONFIGURED {
+            self.screens_stale = true;
+            self.sync(ctx);
+        }
+        false
+    }
+
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.is_loading().then_some(t + 50.0)
     }
@@ -176,6 +208,10 @@ impl SysInfo {
         if wanted != self.keyboard_wanted {
             ctx.wants_keyboard(wanted);
             self.keyboard_wanted = wanted;
+        }
+        if self.screens_stale && self.screens_request.is_none() {
+            self.screens_request = Some(displays::list(ctx, displays::Kind::Active));
+            self.screens_stale = false;
         }
     }
 

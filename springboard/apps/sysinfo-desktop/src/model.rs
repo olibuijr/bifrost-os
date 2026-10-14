@@ -5,7 +5,7 @@
 //! A category shows either a card of key and value rows (the processor, the operating system) or a list of items,
 //! one per device, disk or app, each with a detail card of its own. `Content` holds both shapes.
 
-use crate::extras::{split_locale, uptime_label, Extras};
+use crate::extras::{split_locale, uptime_label, Extras, ScreenFacts};
 use crate::probe::{self, day_label, usb_parent, usb_position, usb_tree, NetDetail};
 use bifrost_core::sysinfo::{clock_label, size_label, usb_speed, Disk, Display, InstalledApp, NetInterface, PciDevice, PowerSource, Report, Summary, UsbDevice};
 
@@ -353,7 +353,7 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
         Category::Graphics => Content::list(r.graphics().into_iter().enumerate().map(|(i, d)| graphics_item(i, d, x)).collect()),
         Category::Pci => Content::list(r.pci.iter().map(pci_item).collect()),
         Category::Usb => Content::list(usb_tree(&r.usb).into_iter().map(|(depth, d)| usb_item(depth, d, x)).collect()),
-        Category::Displays => Content::list(r.displays.iter().map(display_item).collect()),
+        Category::Displays => Content::list(r.displays.iter().map(|d| display_item(d, &x.screens)).collect()),
         Category::Audio => Content::list(x.hw.audio.iter().map(audio_item).collect()),
         Category::Bluetooth => Content::list(x.hw.bluetooth.iter().map(bluetooth_item).collect()),
         Category::Camera => Content::list(x.hw.cameras.iter().map(camera_item).collect()),
@@ -624,17 +624,45 @@ fn usb_item(depth: usize, d: &UsbDevice, x: &Extras) -> Item {
     item(format!("{}{name}", "    ".repeat(depth)), summary, detail)
 }
 
-fn display_item(d: &Display) -> Item {
+fn display_item(d: &Display, screens: &[ScreenFacts]) -> Item {
     let state = match (d.connected, d.mode.is_empty()) {
         (false, _) => "Not connected".to_string(),
         (true, true) => "Connected".to_string(),
         (true, false) => format!("Connected · {}", d.mode),
     };
-    item(
-        d.connector.clone(),
-        state,
-        vec![kv("Connector", d.connector.clone()), kv("Status", if d.connected { "Connected" } else { "Not connected" }), kv("Mode", or_dash(&d.mode))],
-    )
+    let mut detail = vec![kv("Connector", d.connector.clone()), kv("Status", if d.connected { "Connected" } else { "Not connected" }), kv("Mode", or_dash(&d.mode))];
+    if let Some(screen) = screen_for(&d.connector, screens) {
+        if screen.refresh_hz > 0 {
+            detail.push(kv("Refresh rate", format!("{} Hz", screen.refresh_hz)));
+        }
+        if screen.scale_percent > 0 {
+            detail.push(kv("Scale", scale_label(screen.scale_percent)));
+        }
+    }
+    item(d.connector.clone(), state, detail)
+}
+
+/// The display service's entry for a connector. The service names a display by its own label, so the match is by name
+/// either way round (the connector "eDP-1" holds the label "eDP-1", or the label "Built-in" is part of it); a label
+/// that is empty matches nothing.
+pub fn screen_for<'a>(connector: &str, screens: &'a [ScreenFacts]) -> Option<&'a ScreenFacts> {
+    let connector = connector.to_lowercase();
+    screens.iter().find(|s| {
+        let name = s.name.trim().to_lowercase();
+        !name.is_empty() && (name == connector || connector.contains(&name) || name.contains(&connector))
+    })
+}
+
+/// A scale in percent as the desktop writes it: 200 is "2x", 125 is "1.25x", 150 is "1.5x".
+pub fn scale_label(percent: u32) -> String {
+    let (whole, part) = (percent / 100, percent % 100);
+    if part == 0 {
+        format!("{whole}x")
+    } else if part % 10 == 0 {
+        format!("{whole}.{}x", part / 10)
+    } else {
+        format!("{whole}.{part:02}x")
+    }
 }
 
 fn audio_item(c: &probe::AudioCard) -> Item {
@@ -1230,6 +1258,35 @@ mod tests {
         assert_eq!(mb_label(1536), "1536 MB");
         assert_eq!(memory_label(512 << 20), "512 MB");
         assert_eq!(memory_label(6 << 30), "6.0 GB");
+    }
+
+    #[test]
+    fn displays_show_the_refresh_rate_and_scale_the_service_reports() {
+        let mut r = Report::default();
+        r.displays = vec![Display { connector: "eDP-1".into(), connected: true, mode: "2880x1800".into() }, Display { connector: "HDMI-A-1".into(), connected: false, mode: String::new() }];
+        let mut x = Extras::default();
+        x.screens = vec![ScreenFacts::new("eDP-1", 120.0, 2.0)];
+        let c = content(Category::Displays, &r, &x);
+        assert!(c.items[0].detail.contains(&kv("Refresh rate", "120 Hz")));
+        assert!(c.items[0].detail.contains(&kv("Scale", "2x")));
+        assert!(!c.items[1].detail.iter().any(|(k, _)| k == "Scale"), "a display the service did not list gets no scale");
+    }
+
+    #[test]
+    fn scale_labels_read_as_the_desktop_writes_them() {
+        assert_eq!(scale_label(100), "1x");
+        assert_eq!(scale_label(200), "2x");
+        assert_eq!(scale_label(125), "1.25x");
+        assert_eq!(scale_label(150), "1.5x");
+    }
+
+    #[test]
+    fn a_screen_matches_its_connector_by_name_and_an_empty_name_matches_nothing() {
+        let screens = [ScreenFacts::new("", 60.0, 1.0), ScreenFacts::new("Built-in", 60.0, 1.0)];
+        assert!(screen_for("eDP-1", &screens).is_none());
+        let screens = [ScreenFacts::new("eDP-1", 144.0, 1.0)];
+        assert_eq!(screen_for("eDP-1", &screens).map(|s| s.refresh_hz), Some(144));
+        assert_eq!(screen_for("edp-1", &screens).map(|s| s.refresh_hz), Some(144), "case does not matter");
     }
 
     #[test]

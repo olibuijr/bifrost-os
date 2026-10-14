@@ -3,6 +3,7 @@
 //! `Extras::collect` only reads the files and hands the text to them.
 
 use crate::probe::Hardware;
+use bifrost_app::displays::DisplayInfo;
 use std::path::Path;
 
 /// One loaded kernel module (a line of `/proc/modules`).
@@ -11,6 +12,25 @@ pub struct Module {
     pub name: String,
     pub size_bytes: u64,
     pub used_by: usize,
+}
+
+/// A display as the display service describes it, for the Displays category: its name, refresh rate and scale. The
+/// rate and scale are whole numbers so the facts compare exactly: the rate in hertz, the scale in percent (200 is 2x).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScreenFacts {
+    pub name: String,
+    pub refresh_hz: u32,
+    pub scale_percent: u32,
+}
+
+impl ScreenFacts {
+    pub fn new(name: &str, refresh_hz: f32, scale: f32) -> ScreenFacts {
+        ScreenFacts { name: name.to_string(), refresh_hz: refresh_hz.round().max(0.0) as u32, scale_percent: (scale * 100.0).round().max(0.0) as u32 }
+    }
+
+    pub fn from_info(info: &DisplayInfo) -> ScreenFacts {
+        ScreenFacts::new(&info.name, info.refresh_hz(), info.mode.scale())
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -28,6 +48,9 @@ pub struct Extras {
     pub locale: String,
     /// The detail `probe` reads: processor caches, memory modules, volumes, network addressing and the rest.
     pub hw: Hardware,
+    /// The displays the display service lists, with their refresh rate and scale. Set by the window when the list
+    /// arrives, not by `collect`, so a fresh read keeps the list the window already has.
+    pub screens: Vec<ScreenFacts>,
 }
 
 impl Extras {
@@ -48,6 +71,7 @@ impl Extras {
             startup,
             locale: std::env::var("LANG").unwrap_or_default(),
             hw: Hardware::collect(),
+            screens: Vec::new(),
         }
     }
 }
@@ -163,6 +187,13 @@ mod tests {
     fn desktop_name_reads_the_main_group_only() {
         assert_eq!(desktop_name("[Desktop Entry]\nName=Sync\nExec=x\n[Desktop Action a]\nName=Other"), Some("Sync".into()));
         assert_eq!(desktop_name("[Desktop Entry]\nExec=x"), None);
+    }
+
+    #[test]
+    fn screen_facts_round_to_whole_hertz_and_percent() {
+        let s = ScreenFacts::new("eDP-1", 59.94, 1.25);
+        assert_eq!((s.name.as_str(), s.refresh_hz, s.scale_percent), ("eDP-1", 60, 125));
+        assert_eq!(ScreenFacts::new("x", -1.0, 0.0), ScreenFacts { name: "x".into(), refresh_hz: 0, scale_percent: 0 });
     }
 
     #[test]
