@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.2 — 2026-10-14
+
+- Use scheme-aware popover material for board search and the inspector, and named layout/type tokens.
+
 ## 1.12.1 — 2026-10-14
 
 - Draw board search with the shared Golden Gate search field and make its clear button interactive.

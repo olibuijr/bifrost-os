@@ -4,6 +4,7 @@
 //! open board, so it lives under `freeform.rs` and reaches its fields.
 use super::*;
 use crate::items::NOTE_COLORS;
+use bifrost_app::controls::prefs_layout::m;
 
 /// Two presses on one item closer together than this (milliseconds) are a double tap.
 const DOUBLE_TAP_MS: f64 = 450.0;
@@ -330,7 +331,7 @@ impl Freeform {
             let side = ui.pt(NOTE_PT_SIDE);
             return Item { text, color: NOTE_COLORS[3], ..Item::new(ItemKind::Sticky, x, y, side, side) };
         }
-        Item { text, ..Item::new(ItemKind::Text, x, y, ui.pt(360.0), ui.pt(TEXT_BOX_PT.1)) }
+        Item { text, ..Item::new(ItemKind::Text, x, y, ui.pt(TEXT_BOX_PT.0), ui.pt(TEXT_BOX_PT.1)) }
     }
 
     /// Edit > Paste with only text on the pasteboard: it lands on the board as an item centred at the pointer (see
@@ -927,7 +928,13 @@ impl Freeform {
     pub(super) fn draw_search(&self, s: &mut Surface, ui: &Ui) {
         let Some(search) = &self.search else { return };
         let (panel, field, rows) = self.search_layout(ui);
-        s.fill_rrect(panel.x, panel.y, panel.w, panel.h, ui.pt(6.0), SIDEBAR_BG.now());
+        widgets::material(
+            s,
+            ui,
+            bifrost_app::controls::Rect { x: panel.x / ui.pt(1.0), y: panel.y / ui.pt(1.0), w: panel.w / ui.pt(1.0), h: panel.h / ui.pt(1.0) },
+            m::CARD_RADIUS,
+            widgets::Material::Popover,
+        );
         let line = ui.pt(1.0).max(1.0);
         s.fill_rect(panel.x as usize, (field.y + field.h) as usize, panel.w as usize, line as usize, SEPARATOR_C.now());
         let hint = if search.rename { "Board name" } else { "Search boards" };
@@ -947,7 +954,7 @@ impl Freeform {
         for (i, (row, id)) in rows.iter().zip(hits.iter()).enumerate() {
             let chosen = i == search.sel;
             if chosen {
-                s.fill_rrect(row.x + ui.pt(SPACE_XS), row.y, row.w - 2.0 * ui.pt(SPACE_XS), row.h, ui.pt(4.0), TINT);
+                s.fill_rrect(row.x + ui.pt(SPACE_XS), row.y, row.w - 2.0 * ui.pt(SPACE_XS), row.h, ui.pt(m::SELECTION_RADIUS), TINT);
             }
             let title = self.boards.entries().iter().find(|e| e.id == *id).map(|e| e.title.clone()).unwrap_or_default();
             let shown = ui.fit(&title, MAC_CALLOUT_PT, row.w - 2.0 * pad);

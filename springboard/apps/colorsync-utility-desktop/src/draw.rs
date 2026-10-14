@@ -6,13 +6,12 @@ use crate::model::{self, Severity, SPECTRAL_LOCUS, SRGB_AREA};
 use crate::window::{ColourUtility, Current, Panel, KEY_PT, LINE_PT, SIDE_PT};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::ui::system::{CONTROL_ACCENT, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
+use bifrost_app::widgets;
 
 /// Corner radius of plates and cards, in points. The desktop's flat corners stop at 6.
 const CARD_R: f32 = 6.0;
-/// Inset of the selected row's plate from the sidebar edges.
-const ROW_INSET_PT: f32 = 6.0;
 /// Padding inside the body card.
 const BODY_PAD_PT: f32 = 12.0;
 /// Largest side of the gamut chart, in points.
@@ -86,28 +85,9 @@ fn segment(s: &mut Surface, ui: &Ui, a: (f32, f32), b: (f32, f32), color: u32) {
 pub fn paint(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: &Ui) {
     s.fill_rrect(0.0, 0.0, s.w as f32, s.h as f32, 0.0, CONTENT_BG.now());
     let side = w.sidebar_rect();
-    fill(s, ui, side, 0.0, SIDEBAR_BG.now());
-    paint_list(w, labels, s, ui);
+    widgets::source_list(s, ui, side, &w.sidebar(), w.side_scroll, None);
     rule(s, ui, SIDE_PT, side.y, 0.0, side.h);
     paint_detail(w, labels, s, ui);
-}
-
-/// The profile files: each row shows the file name and the group it is installed for.
-fn paint_list(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: &Ui) {
-    let side = w.sidebar_rect();
-    for (i, found) in w.found.iter().enumerate() {
-        let r = w.row_rect(i);
-        if r.y + r.h < side.y || r.y > side.y + side.h {
-            continue;
-        }
-        if w.selected == Some(i) {
-            let plate = Rect { x: ROW_INSET_PT, y: r.y + 3.0, w: SIDE_PT - 2.0 * ROW_INSET_PT, h: r.h - 6.0 };
-            fill(s, ui, plate, CARD_R, SEGMENT_ON.now());
-        }
-        let name = found.path.file_name().and_then(|n| n.to_str()).unwrap_or("profile");
-        text(labels, s, ui, name, MAC_BODY_PT, Weight::Regular, LABEL.now(), 16.0, r.y + 15.0, SIDE_PT - 32.0);
-        text(labels, s, ui, found.group.title(), MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), 16.0, r.y + 31.0, SIDE_PT - 32.0);
-    }
 }
 
 /// The title, the file path, the panel tabs and the body of the panel shown.

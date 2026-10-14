@@ -22,11 +22,11 @@ use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, Tip
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{
-    Ui, Weight, BLACK, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT,
+    Ui, Weight, BLACK, DETAIL_BG, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT,
     TOAST_FILL, WHITE,
 };
 use bifrost_app::kit::ui::{SPACE_L, SPACE_S, SPACE_XXL, SPACE_XXXL};
-use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, SEPARATOR_C, SIDEBAR_BG, LABEL_2};
+use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, SEPARATOR_C, LABEL_2};
 use bifrost_app::kit::{Event, Surface, TextCache};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
@@ -1182,7 +1182,13 @@ impl Freeform {
     fn draw_inspector(&self, s: &mut Surface, ui: &Ui) {
         let top = self.canvas_top(ui);
         let x = self.board_px(ui);
-        s.fill_rrect(x as f32, top as f32, (self.w - x) as f32, (self.h - top).max(0) as f32, 0.0, SIDEBAR_BG.now());
+        widgets::material(
+            s,
+            ui,
+            Rect { x: x as f32 / ui.pt(1.0), y: top as f32 / ui.pt(1.0), w: (self.w - x) as f32 / ui.pt(1.0), h: (self.h - top).max(0) as f32 / ui.pt(1.0) },
+            0.0,
+            widgets::Material::Sidebar,
+        );
         s.fill_rect(x as usize, top as usize, ui.pt(1.0).max(1.0) as usize, (self.h - top).max(0) as usize, SEPARATOR_C.now());
         let head = ui.text("Inspector", MAC_CALLOUT_PT, Weight::Semibold, LABEL.now());
         s.blit(&head, ui.pt(self.panel_x(ui) + SPACE_M) as i32, ui.pt(UNIFIED_BAR_PT + SPACE_M) as i32, 255, 255);
@@ -1983,7 +1989,7 @@ impl Freeform {
         for (_, (x, y)) in arrange::handle_points(b, gap) {
             let (x0, y0) = (x - side / 2.0, y + top - side / 2.0);
             s.fill_rrect(x0, y0, side, side, 0.0, TINT);
-            s.fill_rrect(x0 + line, y0 + line, side - 2.0 * line, side - 2.0 * line, 0.0, WHITE);
+            s.fill_rrect(x0 + line, y0 + line, side - 2.0 * line, side - 2.0 * line, 0.0, DETAIL_BG.now());
         }
     }
 

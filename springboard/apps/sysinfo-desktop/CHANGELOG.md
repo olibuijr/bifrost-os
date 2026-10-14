@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2 — 2026-10-14
+
+- Derive window geometry from the configured content size rather than a fixed-resolution fallback.
+
 ## 0.8.1
 
 - Routed Copy and Select All through the shell Edit menu; app search and speech actions have separate menus. Added the compliance test harness.

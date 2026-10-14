@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4 — 2026-10-14
+
+- Use the macOS Title 2 type token for repertoire glyph samples.
+
 ## 0.6.3 — 2026-10-14
 
 - Draw font collections with the shared Golden Gate source-list widget.

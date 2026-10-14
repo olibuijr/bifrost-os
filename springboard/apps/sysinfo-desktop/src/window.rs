@@ -267,7 +267,7 @@ impl SysInfo {
             list_scroll: 0.0,
             side_scroll: 0.0,
             labels: TextCache::default(),
-            size: (1200.0, 780.0),
+            size: (0.0, 0.0),
             loaded: false,
             started: false,
             load: None,

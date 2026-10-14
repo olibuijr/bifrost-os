@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6 — 2026-10-14
+
+- Include the 180 x 180 waveform app icon in the source package.
+
 ## 0.1.5
 
 - Added the SDK and design compliance test harness.
