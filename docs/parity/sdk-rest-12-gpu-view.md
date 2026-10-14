@@ -1,4 +1,4 @@
-# Parity sdk-rest-12: GPU drawable setup and sprite batching (MetalKit rows)
+# Parity sdk-rest-12: GPU drawable setup and sprite batching (GPU view rows)
 
 Mirrors the drawable side of the GPU view framework (device and drawable setup, and per-frame draw batching for 2D draws).
 
