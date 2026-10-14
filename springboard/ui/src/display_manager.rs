@@ -68,13 +68,14 @@ impl DisplayManager {
 
     /// Asks for a mode that meets `criteria`, given the modes the panel reports. The best mode has the requested dynamic
     /// range and the rate closest to the content rate; on a tie the higher rate wins, so content is never slowed down.
-    /// A new request replaces a switch that is still pending.
+    /// A new request replaces a switch that is still pending. A request that no mode can meet cancels the pending switch.
     pub fn request(&mut self, criteria: Criteria, modes: &[Mode]) -> Decision {
         if !criteria.refresh_rate.is_finite() || criteria.refresh_rate <= 0.0 {
             return Decision::Unsupported;
         }
         self.criteria = Some(criteria);
         let Some(best) = best_mode(criteria, modes) else {
+            self.pending = None;
             return Decision::Unsupported;
         };
         if let Some(current) = self.current {

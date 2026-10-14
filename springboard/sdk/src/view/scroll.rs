@@ -67,6 +67,12 @@ impl ScrollView {
         self.physics.set_offset(y);
         self.base.dirty = true;
     }
+    /// Scroll-to-target: jumps so that the document rectangle `top..top + height` sits at `anchor`
+    /// in the viewport. The offset is clamped as `scroll_to` clamps it.
+    pub fn reveal(&mut self, top: f32, height: f32, anchor: bifrost_ui::scroll::Anchor) {
+        let offset = bifrost_ui::scroll::offset_for_rect(top, height, self.base.frame.h, self.doc_h, anchor);
+        self.scroll_to(offset);
+    }
     /// The touch is at `y`: past the slop it pans the content, one to one with the finger.
     fn finger(&mut self, y: f32) {
         let Some(y0) = self.down_y else { return };

@@ -18,6 +18,33 @@ const SPRING_W: f32 = 0.012;
 const RUBBER_D: f32 = 1000.0;
 const SAMPLES: usize = 16;
 
+/// Where a revealed rectangle is placed in the viewport: the edge or the middle of the target meets that viewport place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Anchor {
+    /// the rectangle's top edge meets the viewport's top edge
+    Leading,
+    /// the rectangle's middle meets the viewport's middle
+    Center,
+    /// the rectangle's bottom edge meets the viewport's bottom edge
+    Trailing,
+}
+
+/// The offset that places `top..top + height` (document points) at `anchor` in a viewport `viewport_h` tall, for a
+/// document `content_h` tall. The offset is clamped to the scrollable range `0..=content_h - viewport_h`, so a target
+/// near an edge lands at the edge. Non-finite input gives offset zero.
+pub fn offset_for_rect(top: f32, height: f32, viewport_h: f32, content_h: f32, anchor: Anchor) -> f32 {
+    if ![top, height, viewport_h, content_h].iter().all(|v| v.is_finite()) {
+        return 0.0;
+    }
+    let max = (content_h - viewport_h).max(0.0);
+    let wanted = match anchor {
+        Anchor::Leading => top,
+        Anchor::Center => top + height / 2.0 - viewport_h / 2.0,
+        Anchor::Trailing => top + height - viewport_h,
+    };
+    wanted.clamp(0.0, max)
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Touch {
     y0: f32,
