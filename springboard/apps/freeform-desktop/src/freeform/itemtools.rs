@@ -220,6 +220,7 @@ impl Freeform {
         self.selection = None;
         self.pick = Some(Pick::Item(id));
         self.edit = cell.map(|c| (id, c));
+        self.caret = usize::MAX;
         self.items_changed(ui);
         id
     }
@@ -445,6 +446,7 @@ impl Freeform {
             self.push_undo();
             self.edit = Some((id, cell));
         }
+        self.caret = usize::MAX;
         self.pick = Some(Pick::Item(id));
         self.repaint(ui, None);
     }
@@ -621,29 +623,37 @@ impl Freeform {
         let kind = self.items.get(id).map(|i| i.kind);
         match key {
             KeyInput::Text(text) => {
-                if self.items.insert_text(id, cell, text) {
+                self.type_at_caret(ui, id, cell, text);
+                true
+            }
+            KeyInput::Code(8) => {
+                if let Some(at) = self.items.backspace(id, cell, self.caret) {
+                    self.caret = at;
                     self.items_changed(ui);
                 }
                 true
             }
-            KeyInput::Code(8) => {
-                if self.items.backspace(id, cell) {
-                    self.items_changed(ui);
-                }
+            KeyInput::Code(code @ (35 | 36 | 37 | 39)) => {
+                let len = self.items.text_len(id, cell);
+                let at = self.caret.min(len);
+                self.caret = match *code {
+                    35 => len,
+                    36 => 0,
+                    37 => at.saturating_sub(1),
+                    _ => (at + 1).min(len),
+                };
+                self.repaint(ui, None);
                 true
             }
             KeyInput::Code(13) => {
                 match kind {
-                    Some(ItemKind::Text | ItemKind::Sticky) => {
-                        if self.items.insert_text(id, cell, "\n") {
-                            self.items_changed(ui);
-                        }
-                    }
+                    Some(ItemKind::Text | ItemKind::Sticky) => self.type_at_caret(ui, id, cell, "\n"),
                     Some(ItemKind::Table) => {
                         let cols = self.items.get(id).map_or(1, |i| i.cols.max(1));
                         let count = self.items.get(id).map_or(0, |i| i.cells.len());
                         if cell + cols < count {
                             self.edit = Some((id, cell + cols));
+                            self.caret = usize::MAX;
                             self.repaint(ui, None);
                         } else {
                             self.finish_edit(ui);
@@ -657,6 +667,7 @@ impl Freeform {
                 let count = self.items.get(id).map_or(0, |i| i.cells.len());
                 if kind == Some(ItemKind::Table) && count > 0 {
                     self.edit = Some((id, (cell + 1) % count));
+                    self.caret = usize::MAX;
                     self.repaint(ui, None);
                     return true;
                 }
@@ -667,6 +678,14 @@ impl Freeform {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Types `text` into the cell of the item being edited, at the caret, and moves the caret after it.
+    fn type_at_caret(&mut self, ui: &Ui, id: u32, cell: usize, text: &str) {
+        if let Some(at) = self.items.insert_text(id, cell, self.caret, text) {
+            self.caret = at;
+            self.items_changed(ui);
         }
     }
 
@@ -698,9 +717,7 @@ impl Freeform {
             return true;
         }
         let Some((id, cell)) = self.edit else { return false };
-        if self.items.insert_text(id, cell, text) {
-            self.items_changed(ui);
-        }
+        self.type_at_caret(ui, id, cell, text);
         true
     }
 
@@ -1071,6 +1088,43 @@ mod tests {
         app.touch(&ui, Event::Down(t.x + t.w - 5.0, top + t.y + 5.0), 0.0);
         app.touch(&ui, Event::Up(t.x + t.w - 5.0, top + t.y + 5.0), 0.0);
         assert_eq!(app.edit, Some((id, 2)), "the top right cell");
+    }
+
+    #[test]
+    fn left_and_right_move_the_caret_and_typing_goes_where_it_is() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.insert_text_box(&ui);
+        app.key(&ui, &KeyInput::Text("ac".into()));
+        app.key(&ui, &KeyInput::Code(37));
+        app.key(&ui, &KeyInput::Text("b".into()));
+        assert_eq!(text_of(&app, first(&app)), "abc", "the letter goes in before the caret");
+        app.key(&ui, &KeyInput::Code(36));
+        app.key(&ui, &KeyInput::Text(">".into()));
+        assert_eq!(text_of(&app, first(&app)), ">abc", "Home moves the caret to the start");
+        app.key(&ui, &KeyInput::Code(35));
+        app.key(&ui, &KeyInput::Code(8));
+        assert_eq!(text_of(&app, first(&app)), ">ab", "End moves the caret to the end, where Backspace takes the last letter");
+        app.key(&ui, &KeyInput::Code(39));
+        app.key(&ui, &KeyInput::Code(39));
+        assert_eq!(app.caret, 3, "Right stops at the end of the text");
+    }
+
+    #[test]
+    fn the_caret_stays_inside_the_table_cell_being_typed_into() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.insert_table(&ui);
+        let id = first(&app);
+        app.key(&ui, &KeyInput::Text("ab".into()));
+        for _ in 0..3 {
+            app.key(&ui, &KeyInput::Code(37));
+        }
+        app.key(&ui, &KeyInput::Text("x".into()));
+        assert_eq!(app.items.get(id).unwrap().cells[0], "xab", "Left stops at the start of the cell");
+        app.key(&ui, &KeyInput::Code(9));
+        app.key(&ui, &KeyInput::Text("c".into()));
+        assert_eq!(app.items.get(id).unwrap().cells[1], "c", "Tab starts the next cell with the caret at its end");
     }
 
     #[test]
