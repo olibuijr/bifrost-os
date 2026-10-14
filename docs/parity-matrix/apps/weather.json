@@ -22,7 +22,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:313",
    "note": "Each sidebar row shows the place's last known temperature on the right; no condition glyph in the row yet (SidebarItem has no icon slot for a drawn glyph).",
-   "wire": "Store each place's last Summary (data.rs:271) and draw its temperature and condition glyph on the right of the row in weather.rs side_rows (weather.rs:391), using shell::weather::glyph."
+   "wire": "Verify the two-line rows, temperature and sky glyph on Midget; the glyph is drawn over a slot the list reserves with an invisible dot."
   },
   {
    "feature": "Search and add a location",
@@ -40,25 +40,25 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:952",
    "note": "Delete or Backspace removes the selected place from the main page (code 46 mapped in main.rs). The sidebar secondary-click menu is still missing.",
-   "wire": "Handle the Delete key in weather.rs key() (weather.rs:933) for the selected sidebar row and add a secondary-click menu with Remove."
+   "wire": "Verify the Delete key and the sidebar context menu on Midget; the per-row remove button and the swipe already worked."
   },
   {
    "feature": "Reorder locations",
    "area": "view",
    "apple": "Drag rows to reorder the list",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Places keep the order they were added.",
-   "wire": "Add drag handling to the sidebar source_list rows in weather.rs touch() (weather.rs:973) and persist the order in data::Store (data.rs:358)."
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1108",
+   "note": "built on parity/team-d-weather; not yet verified on Midget",
+   "wire": "Verify the sidebar drag on Midget; there is no keyboard reordering and no drag on the Locations page."
   },
   {
    "feature": "My Location",
    "area": "location",
    "apple": "First entry follows the device location and asks for permission (NSLocationUsageDescription)",
    "status": "gap",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:108",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:142",
    "note": "The shell gives apps no location service yet; the authorization is fixed at NotDetermined and the Locations note says so.",
-   "wire": "When the shell exposes a location service, replace the LOCATION constant (weather.rs:108) by a request through bifrost_app::controls::location, insert a My Location place first and refresh it on movement; insights::location_note (insights.rs:163) already words the states."
+   "wire": "When the shell exposes a location service, replace the LOCATION constant (weather.rs:142) by a request through bifrost_app::controls::location, insert a My Location place first and refresh it on movement; insights::location_note (insights.rs:167) already words the states."
   },
   {
    "feature": "Current conditions",
@@ -76,7 +76,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Precipitation chance under each hour's glyph (rounded to 5, hidden below 10). Sunrise and sunset markers between the hours are still missing.",
-   "wire": "Add precipitation_probability and the day's sunrise and sunset to the hourly query (data.rs:243) and draw the percentage under the glyph and sun markers between the hours in weather.rs:1154."
+   "wire": "Verify on Midget; the strip shows no chance below 10%."
   },
   {
    "feature": "10-day forecast",
@@ -85,7 +85,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Range bar already scaled to the ten-day extremes; the daily precipitation chance is now under each day's glyph.",
-   "wire": "Draw a min-max range bar per day scaled to the ten-day extremes in weather.rs:1173 and add precipitation_probability_max to the daily query (data.rs:243)."
+   "wire": "Verify on Midget; the range bar was already drawn, the chance of precipitation under each glyph is new."
   },
   {
    "feature": "Minute-by-minute next-hour precipitation",
@@ -94,7 +94,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Next Hour card above the hourly strip: summary sentence and four quarter-hour bars from minutely_15 precipitation (details.rs next_hour_summary, next_hour_bars). Quarter-hour resolution, not per minute.",
-   "wire": "Request minutely_15 precipitation in forecast_url (data.rs:243), add Forecast.minutes in data.rs:169 and draw a Next Hour card above the hourly strip."
+   "wire": "Verify on Midget; the service gives 15-minute steps, so the card has four bars and a summary sentence, not a per-minute chart."
   },
   {
    "feature": "Condition-driven backdrop",
@@ -121,7 +121,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Sun path arc with the sun at its position between sunrise and sunset.",
-   "wire": "Draw the day arc with the sun position from the two times in weather.rs:1214."
+   "wire": "Verify the day arc on Midget."
   },
   {
    "feature": "Wind tile",
@@ -130,7 +130,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Note gives the compass point and gusts; a dotted compass dial marks the direction the wind comes from. No arrow needle or tick labels besides N.",
-   "wire": "Add wind_direction_10m and wind_gusts_10m to the current query (data.rs:243), extend data::Current (data.rs:136) and draw a compass dial in the tile."
+   "wire": "Verify the compass dial on Midget; the dial draws a pointer toward the bearing the wind comes from."
   },
   {
    "feature": "Humidity tile",
@@ -139,7 +139,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Note shows the dew point in the temperature unit.",
-   "wire": "Add dew_point_2m to the current query (data.rs:243) and show it as the tile note."
+   "wire": "Verify the dew point note on Midget."
   },
   {
    "feature": "Feels like tile",
@@ -166,7 +166,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Next 24 hours total with tomorrow's amount as the note, mm or in following the unit setting. Snow is not separated from rain.",
-   "wire": "Add precipitation_sum to the daily and precipitation to the hourly query (data.rs:243), a Precipitation tile in weather.rs:1212 and mm or in following the unit setting."
+   "wire": "The tile shows today's total and the next 24 hours; it does not split snow from rain or list the coming days."
   },
   {
    "feature": "Visibility tile",
@@ -175,7 +175,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "Visibility in km or mi from the hourly series with a descriptive note.",
-   "wire": "Add visibility to the hourly query (data.rs:243) and a Visibility tile in weather.rs:1212 with km or mi."
+   "wire": "Verify on Midget against the reference tile."
   },
   {
    "feature": "Pressure tile",
@@ -184,16 +184,16 @@
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
    "note": "hPa or inHg with a Rising, Falling or Steady note from the three-hour change. No trend dial.",
-   "wire": "Add pressure_msl to the current query (data.rs:243) and a Pressure tile in weather.rs:1212 with hPa or inHg and a rising or falling note."
+   "wire": "Draw the reference's trend dial; the tile has the value and a rising, falling or steady note."
   },
   {
    "feature": "Air quality",
    "area": "detail",
    "apple": "Air Quality index card with level and main pollutant",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No air quality source.",
-   "wire": "Query the air-quality endpoint of the forecast service (european_aqi, pm2_5) in data.rs, add Forecast.air and an Air Quality card after the tiles in weather.rs:1212."
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1608",
+   "note": "built on parity/team-d-weather; not yet verified on Midget",
+   "wire": "Name the main pollutant and add the advice text; the card shows the European index, its band and PM2.5."
   },
   {
    "feature": "Averages",
@@ -218,7 +218,7 @@
    "area": "maps",
    "apple": "Precipitation, Temperature and Air Quality map overlays with a Map button in the toolbar",
    "status": "gap",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1275",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1682",
    "note": "The Map card is a latitude and longitude grid with a scale bar and says no tiles are loaded.",
    "wire": "Use bifrost-maps (springboard/apps/maps-desktop tiles, cache, source) to draw base tiles under the card and add radar overlay tiles from a configurable raster layer URL with a layer switch (Precipitation, Temperature, Air Quality) in the toolbar."
   },
@@ -235,10 +235,10 @@
    "feature": "Notifications",
    "area": "alerts",
    "apple": "Notifications for severe weather, precipitation starting, rain tomorrow (per-location setting)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The app posts nothing.",
-   "wire": "Post shell notifications from the 15-minute refresh (weather.rs:112) when an alert or next-hour rain appears and add a per-place Notifications switch in the Locations page."
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/notify.rs:46",
+   "note": "built on parity/team-d-weather; not yet verified on Midget",
+   "wire": "Alert notifications need an alert feed (see Severe weather alerts) and rain tomorrow is not announced; rain starting within the hour is posted per place."
   },
   {
    "feature": "Units setting",
@@ -280,19 +280,19 @@
    "feature": "URL scheme and user activity",
    "area": "system",
    "apple": "weather: URL scheme, user activities WeatherIntent and handoff",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No URL handler or activity registered.",
-   "wire": "Declare a weather:// scheme in manifest.toml and handle open requests in main.rs (main.rs:180) selecting or adding the place named in the URL."
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1178",
+   "note": "built on parity/team-d-weather; not yet verified on Midget",
+   "wire": "Register the user activity and handoff; weather:// links select or add a place."
   },
   {
    "feature": "Share and assistant intents",
    "area": "system",
    "apple": "Share forecast, Weather intent for assistants and shortcuts",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No sharing and no control methods.",
-   "wire": "Expose current(place) and forecast(place) as app control methods (bifrost-app-control) so Shortcuts and the assistant read them, and add a Share button to the toolbar."
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1197",
+   "note": "built on parity/team-d-weather; not yet verified on Midget",
+   "wire": "Declare App::intents for Shortcuts and the assistant; the Share button and the weather.* control methods exist."
   },
   {
    "feature": "Stocks watchlist",

@@ -7,5 +7,6 @@ min_shell = "0.4.84"
 summary = "Forecasts from Open-Meteo, places and a stocks watchlist."
 category = "Utilities"
 architecture = "x86_64-linux"
-permissions = ["storage", "network"]
+permissions = ["storage", "network", "notifications"]
+schemes = ["weather"]
 window = "full-size"

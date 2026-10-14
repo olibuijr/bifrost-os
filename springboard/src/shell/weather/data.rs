@@ -6,8 +6,12 @@
 //! turns a typed name into coordinates. Both are served over HTTPS and the
 //! crate has a TLS client (`deildu::http`), so the `https://` URLs are used.
 //! Every answer is kept under the Weather data directory (the raw JSON per
-//! location), so the last forecast still shows with no network. Fetching
-//! happens on worker threads (see `Weather`).
+//! location), so the last forecast still shows with no network. Two further
+//! Open-Meteo hosts fill in the rest: the air-quality host (`european_aqi`,
+//! `pm2_5`, asked on every refresh) and the archive host (the daily highs of
+//! this date over the last ten years, asked once per place and date), each
+//! kept in its own small file next to the forecast. Fetching happens on
+//! worker threads (see `Weather`).
 //!
 //! Stocks-lite uses Stooq's CSV quote endpoint: no key, one request for the
 //! whole watchlist, answers `Symbol,Date,Time,Open,High,Low,Close,Volume`.
@@ -24,11 +28,19 @@ use std::path::{Path, PathBuf};
 pub const FORECAST_API: &str = "https://api.open-meteo.com/v1/forecast";
 pub const GEOCODE_API: &str = "https://geocoding-api.open-meteo.com/v1/search";
 pub const QUOTE_API: &str = "https://stooq.com/q/l/";
+pub const AIR_API: &str = "https://air-quality-api.open-meteo.com/v1/air-quality";
+pub const ARCHIVE_API: &str = "https://archive-api.open-meteo.com/v1/archive";
 const BODY_LIMIT: usize = 512 * 1024;
 const LOCATIONS_FILE: &str = "locations.tsv";
 const SETTINGS_FILE: &str = "settings.txt";
 const WATCHLIST_FILE: &str = "watchlist.txt";
 pub const SUMMARY_FILE: &str = "summary.txt";
+/// How many past years the "average high for this date" looks at.
+pub const AVERAGE_YEARS: i32 = 10;
+/// The fewest past years that make an average worth showing.
+const AVERAGE_MIN_SAMPLES: usize = 3;
+/// The minute forecast shown is this many 15-minute steps: the next hour.
+pub const MINUTE_STEPS: usize = 4;
 pub const MAX_LOCATIONS: usize = 12;
 pub const MAX_WATCH: usize = 20;
 const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -140,16 +152,21 @@ pub struct Current {
     pub day: bool,
     pub humidity: u8,
     pub wind_kmh: f64,
-    /// the direction the wind comes from, degrees clockwise from north (0 when the answer has none)
-    pub wind_dir: f64,
-    /// the strongest gust in km/h (0 when the answer has none)
-    pub gust_kmh: f64,
-    /// dew point in Celsius (the temperature when the answer has none)
-    pub dew: f64,
-    /// sea-level pressure in hPa (0 when the answer has none)
-    pub pressure_hpa: f64,
-    /// the place's local clock at the reading, "13:15" (empty when the answer has none)
-    pub clock: String,
+    /// bearing the wind blows from, degrees clockwise from north (None when the answer has none)
+    pub wind_dir: Option<f64>,
+    pub wind_gust_kmh: Option<f64>,
+    /// dew point, Celsius
+    pub dew_point: Option<f64>,
+    /// mean sea level pressure, hPa
+    pub pressure_hpa: Option<f64>,
+}
+
+/// The sun crossing the horizon during an hour.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SunEvent {
+    pub rise: bool,
+    /// local "06:12"
+    pub time: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -159,12 +176,23 @@ pub struct Hour {
     pub temp: f64,
     pub code: u8,
     pub day: bool,
-    /// chance of precipitation in percent (0 when the answer has none)
+    /// chance of precipitation, percent (0 when the answer has none)
     pub precip_prob: u8,
-    /// precipitation of the hour in millimetres
+    /// precipitation in the hour, mm
     pub precip_mm: f64,
-    /// visibility in metres (0 when the answer has none)
-    pub visibility_m: f64,
+    /// visibility, metres
+    pub visibility_m: Option<f64>,
+    /// mean sea level pressure, hPa
+    pub pressure_hpa: Option<f64>,
+    /// the sunrise or sunset that falls in this hour
+    pub sun: Option<SunEvent>,
+}
+
+impl Hour {
+    /// An hour with only the basics; the extra measurements are absent.
+    pub fn basic(label: &str, temp: f64, code: u8, day: bool) -> Hour {
+        Hour { label: label.into(), temp, code, day, precip_prob: 0, precip_mm: 0.0, visibility_m: None, pressure_hpa: None, sun: None }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -179,10 +207,32 @@ pub struct Day {
     /// local "06:12" (empty when the answer has none)
     pub sunrise: String,
     pub sunset: String,
-    /// highest chance of precipitation of the day in percent
+    /// precipitation total of the day, mm
+    pub precip_sum: f64,
+    /// highest chance of precipitation in the day, percent (0 when the answer has none)
     pub precip_prob: u8,
-    /// precipitation total of the day in millimetres
-    pub precip_mm: f64,
+}
+
+/// Air quality now, on the European index.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Air {
+    pub aqi: u16,
+    /// fine particles (PM2.5), micrograms per cubic metre
+    pub pm25: f64,
+}
+
+impl Air {
+    /// The European Air Quality Index band: 0 to 20 Good, then Fair, Moderate, Poor, Very Poor, Extremely Poor.
+    pub fn category(&self) -> &'static str {
+        match self.aqi {
+            0..=20 => "Good",
+            21..=40 => "Fair",
+            41..=60 => "Moderate",
+            61..=80 => "Poor",
+            81..=100 => "Very Poor",
+            _ => "Extremely Poor",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -190,10 +240,15 @@ pub struct Forecast {
     pub current: Current,
     pub hours: Vec<Hour>,
     pub days: Vec<Day>,
-    /// precipitation in millimetres per 15 minutes from the current quarter hour (empty when the answer has none)
+    /// the place's local date "2026-10-04" and time "2026-10-04T13:15" of the current conditions
+    pub date: String,
+    pub time: String,
+    /// precipitation in mm for each of the next 15-minute steps (empty when the service has no minute data)
     pub minutes: Vec<f64>,
-    /// pressure change over the next three hours in hPa (0 when unknown)
-    pub pressure_change: f64,
+    /// air quality now, from its own endpoint (None until fetched)
+    pub air: Option<Air>,
+    /// the mean daily high of this date over the last ten years, Celsius, from the archive endpoint
+    pub average_high: Option<f64>,
 }
 
 impl Forecast {
@@ -221,8 +276,35 @@ fn numbers(v: Option<&Json>) -> Option<Vec<f64>> {
     v?.array()?.iter().map(|n| n.number()).collect()
 }
 
+/// The first `n` bytes of `s` ("2026-10-04T13:15" -> "2026-10-04" for 10), or all of it when it is shorter.
+fn head(s: &str, n: usize) -> &str {
+    s.get(..n).unwrap_or(s)
+}
+
+/// `time` ("2026-10-04T13:20") rounded down to its 15-minute step ("2026-10-04T13:15").
+fn quarter_floor(time: &str) -> Option<String> {
+    let minute: u32 = time.get(14..16)?.parse().ok()?;
+    Some(format!("{}{:02}", time.get(..14)?, minute / 15 * 15))
+}
+
+/// The precipitation of the next 15-minute steps in the `minutely_15` block, starting at the step `now` falls in.
+fn parse_minutes(root: &Json, now: &str) -> Vec<f64> {
+    let (Some(block), Some(start)) = (root.get("minutely_15"), quarter_floor(now)) else { return vec![] };
+    let (Some(times), Some(values)) = (block.get("time").and_then(Json::array), block.get("precipitation").and_then(Json::array)) else { return vec![] };
+    let Some(from) = times.iter().position(|t| t.string().is_some_and(|t| head(t, 16) >= start.as_str())) else { return vec![] };
+    (from..times.len().min(values.len())).take(MINUTE_STEPS).map(|i| values[i].number().unwrap_or(0.0).max(0.0)).collect()
+}
+
+/// The sunrise or sunset that falls in the hour starting at `hour` ("2026-10-04T07:00").
+fn sun_in_hour(hour: &str, rises: &[String], sets: &[String]) -> Option<SunEvent> {
+    let key = hour.get(..13)?;
+    let find = |list: &[String]| list.iter().find(|s| s.get(..13) == Some(key)).and_then(|s| s.get(11..16)).map(str::to_string);
+    find(rises).map(|time| SunEvent { rise: true, time }).or_else(|| find(sets).map(|time| SunEvent { rise: false, time }))
+}
+
 /// The forecast in an Open-Meteo answer: the next 24 hours from the current
-/// one and the days.
+/// one and the days. Air quality and the climate average come from their own
+/// endpoints and are left empty here.
 pub fn parse_forecast(text: &str) -> Option<Forecast> {
     let root = json::parse(text)?;
     let cur = root.get("current")?;
@@ -234,62 +316,111 @@ pub fn parse_forecast(text: &str) -> Option<Forecast> {
         day: num("is_day").is_none_or(|d| d != 0.0),
         humidity: num("relative_humidity_2m").unwrap_or(0.0).clamp(0.0, 100.0) as u8,
         wind_kmh: num("wind_speed_10m").unwrap_or(0.0),
-        wind_dir: num("wind_direction_10m").unwrap_or(0.0),
-        gust_kmh: num("wind_gusts_10m").unwrap_or(0.0),
-        dew: num("dew_point_2m").or(num("temperature_2m"))?,
-        pressure_hpa: num("pressure_msl").unwrap_or(0.0),
-        clock: cur.get("time").and_then(Json::string).and_then(|t| t.get(11..16)).unwrap_or("").to_string(),
+        wind_dir: num("wind_direction_10m").map(|d| d.rem_euclid(360.0)),
+        wind_gust_kmh: num("wind_gusts_10m"),
+        dew_point: num("dew_point_2m"),
+        pressure_hpa: num("pressure_msl"),
     };
     let now = cur.get("time").and_then(Json::string).unwrap_or("");
     let hourly = root.get("hourly")?;
     let times = hourly.get("time")?.array()?;
     let (temps, codes) = (numbers(hourly.get("temperature_2m"))?, numbers(hourly.get("weather_code"))?);
     let flags = numbers(hourly.get("is_day")).unwrap_or_default();
+    let daily = root.get("daily")?;
+    let strings = |k: &str| -> Vec<String> { daily.get(k).and_then(Json::array).map(|a| a.iter().filter_map(|v| v.string().map(str::to_string)).collect()).unwrap_or_default() };
+    let (rises, sets) = (strings("sunrise"), strings("sunset"));
     let from = times.iter().position(|t| t.string().is_some_and(|t| t.get(..13).unwrap_or(t) >= now.get(..13).unwrap_or(now))).unwrap_or(0);
-    let column = |k: &str| hourly.get(k).and_then(|v| numbers(Some(v))).unwrap_or_default();
-    let (prob, mm, vis, press) = (column("precipitation_probability"), column("precipitation"), column("visibility"), column("pressure_msl"));
-    let pressure_change = match (press.get(from), press.get(from + 3)) {
-        (Some(a), Some(b)) => b - a,
-        _ => 0.0,
-    };
+    let hourly_at = |k: &str, i: usize| hourly.get(k).and_then(|v| v.array()?.get(i)?.number());
     let hours = (from..times.len().min(temps.len()).min(codes.len()))
         .take(24)
         .filter_map(|i| {
             let t = times[i].string()?;
-            Some(Hour { label: t.get(11..13)?.to_string(), temp: temps[i], code: codes[i] as u8, day: flags.get(i).is_none_or(|&d| d != 0.0), precip_prob: prob.get(i).map_or(0, |p| p.clamp(0.0, 100.0) as u8), precip_mm: mm.get(i).copied().unwrap_or(0.0), visibility_m: vis.get(i).copied().unwrap_or(0.0) })
+            Some(Hour {
+                label: t.get(11..13)?.to_string(),
+                temp: temps[i],
+                code: codes[i] as u8,
+                day: flags.get(i).is_none_or(|&d| d != 0.0),
+                precip_prob: hourly_at("precipitation_probability", i).unwrap_or(0.0).clamp(0.0, 100.0) as u8,
+                precip_mm: hourly_at("precipitation", i).unwrap_or(0.0).max(0.0),
+                visibility_m: hourly_at("visibility", i).filter(|v| *v >= 0.0),
+                pressure_hpa: hourly_at("pressure_msl", i),
+                sun: sun_in_hour(t, &rises, &sets),
+            })
         })
         .collect();
-    let daily = root.get("daily")?;
     let dates = daily.get("time")?.array()?;
     let (dcodes, max, min) = (numbers(daily.get("weather_code"))?, numbers(daily.get("temperature_2m_max"))?, numbers(daily.get("temperature_2m_min"))?);
     let days = (0..dates.len().min(dcodes.len()).min(max.len()).min(min.len()))
         .take(10)
         .filter_map(|i| {
             let clock = |k: &str| daily.get(k).and_then(|v| v.array()?.get(i)?.string()?.get(11..16).map(str::to_string)).unwrap_or_default();
-            let uv = daily.get("uv_index_max").and_then(|v| v.array()?.get(i)?.number()).unwrap_or(0.0);
-            let at = |k: &str| daily.get(k).and_then(|v| v.array()?.get(i)?.number()).unwrap_or(0.0);
-            Some(Day { label: weekday_label(dates[i].string()?)?, code: dcodes[i] as u8, max: max[i], min: min[i], uv, sunrise: clock("sunrise"), sunset: clock("sunset"), precip_prob: at("precipitation_probability_max").clamp(0.0, 100.0) as u8, precip_mm: at("precipitation_sum") })
+            let daily_at = |k: &str| daily.get(k).and_then(|v| v.array()?.get(i)?.number());
+            Some(Day {
+                label: weekday_label(dates[i].string()?)?,
+                code: dcodes[i] as u8,
+                max: max[i],
+                min: min[i],
+                uv: daily_at("uv_index_max").unwrap_or(0.0),
+                sunrise: clock("sunrise"),
+                sunset: clock("sunset"),
+                precip_sum: daily_at("precipitation_sum").unwrap_or(0.0).max(0.0),
+                precip_prob: daily_at("precipitation_probability_max").unwrap_or(0.0).clamp(0.0, 100.0) as u8,
+            })
         })
         .collect();
-    let minutes = parse_minutes(&root, now);
-    Some(Forecast { current, hours, days, minutes, pressure_change })
-}
-
-/// The 15-minute precipitation series from the quarter hour of `now` ("2026-10-04T13:15") on, up to one hour
-/// (four values); empty when the answer carries no `minutely_15` block.
-fn parse_minutes(root: &Json, now: &str) -> Vec<f64> {
-    let Some(block) = root.get("minutely_15") else { return vec![] };
-    let (Some(times), Some(values)) = (block.get("time").and_then(Json::array), numbers(block.get("precipitation"))) else { return vec![] };
-    let key = now.get(..16).unwrap_or(now);
-    let from = times.iter().position(|t| t.string().is_some_and(|t| t.get(..16).unwrap_or(t) >= key)).unwrap_or(0);
-    values.iter().skip(from).take(4).copied().collect()
+    Some(Forecast { current, hours, days, date: head(now, 10).to_string(), time: now.to_string(), minutes: parse_minutes(&root, now), air: None, average_high: None })
 }
 
 pub fn forecast_url(loc: &Location) -> String {
     format!(
-        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,pressure_msl,is_day&hourly=temperature_2m,weather_code,is_day,precipitation_probability,precipitation,visibility,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_probability_max,precipitation_sum&minutely_15=precipitation&forecast_days=10&timezone=auto",
+        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,pressure_msl,is_day&hourly=temperature_2m,weather_code,is_day,precipitation_probability,precipitation,visibility,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_sum,precipitation_probability_max&minutely_15=precipitation&forecast_minutely_15=8&forecast_days=10&timezone=auto",
         loc.lat, loc.lon
     )
+}
+
+pub fn air_url(loc: &Location) -> String {
+    format!("{AIR_API}?latitude={:.4}&longitude={:.4}&current=european_aqi,pm2_5&timezone=auto", loc.lat, loc.lon)
+}
+
+/// The air quality in an air-quality answer.
+pub fn parse_air(text: &str) -> Option<Air> {
+    let root = json::parse(text)?;
+    let cur = root.get("current")?;
+    let aqi = cur.get("european_aqi").and_then(Json::number).filter(|v| *v >= 0.0)?;
+    Some(Air { aqi: aqi.round().min(u16::MAX as f64) as u16, pm25: cur.get("pm2_5").and_then(Json::number).unwrap_or(0.0).max(0.0) })
+}
+
+/// The first and last day the archive request covers and the month and day ("10-04") of local date "2026-10-04":
+/// the same calendar day from `AVERAGE_YEARS` years ago to last year. 29 February is asked as 28 February, which
+/// exists in every year.
+fn average_window(date: &str) -> Option<(String, String, String)> {
+    let year: i32 = date.get(..4)?.parse().ok()?;
+    let md = date.get(5..10)?;
+    let ask = if md == "02-29" { "02-28" } else { md };
+    Some((format!("{}-{ask}", year - AVERAGE_YEARS), format!("{}-{ask}", year - 1), md.to_string()))
+}
+
+/// The archive request for the daily highs of the last ten years, ending last year on the same date.
+pub fn average_url(loc: &Location, date: &str) -> Option<String> {
+    let (start, end, _) = average_window(date)?;
+    Some(format!("{ARCHIVE_API}?latitude={:.4}&longitude={:.4}&start_date={start}&end_date={end}&daily=temperature_2m_max&timezone=auto", loc.lat, loc.lon))
+}
+
+/// The mean of the daily highs that fall on month and day `md` ("10-04") in an archive answer. None with fewer than
+/// three such days, which is too little to call an average.
+pub fn parse_average_high(text: &str, md: &str) -> Option<f64> {
+    let root = json::parse(text)?;
+    let daily = root.get("daily")?;
+    let dates = daily.get("time")?.array()?;
+    let highs = daily.get("temperature_2m_max")?.array()?;
+    let samples: Vec<f64> = dates
+        .iter()
+        .zip(highs)
+        .filter(|(d, _)| d.string().and_then(|d| d.get(5..10)) == Some(md))
+        .filter_map(|(_, h)| h.number())
+        .filter(|h| h.is_finite())
+        .collect();
+    (samples.len() >= AVERAGE_MIN_SAMPLES).then(|| samples.iter().sum::<f64>() / samples.len() as f64)
 }
 
 pub fn geocode_url(query: &str) -> String {
@@ -482,21 +613,62 @@ impl Store {
         format!("forecast-{}.json", loc.key())
     }
 
-    /// The cached forecast of a place and its age in seconds.
+    fn air_file(loc: &Location) -> String {
+        format!("air-{}.json", loc.key())
+    }
+
+    fn average_file(loc: &Location) -> String {
+        format!("average-{}.txt", loc.key())
+    }
+
+    /// The saved mean high ("MM-DD<TAB>celsius") when it is for the month and day of `date`.
+    fn load_average(&self, loc: &Location, date: &str) -> Option<f64> {
+        let text = self.read(&Self::average_file(loc));
+        let (md, value) = text.trim().split_once('\t')?;
+        (Some(md) == date.get(5..10)).then(|| value.parse().ok()).flatten()
+    }
+
+    /// The cached forecast of a place and its age in seconds, with the cached air quality and climate average.
     pub fn load_forecast(&self, loc: &Location) -> Option<(Forecast, u64)> {
         let path = self.dir.join(Self::forecast_file(loc));
-        let f = parse_forecast(&std::fs::read_to_string(&path).ok()?)?;
+        let mut f = parse_forecast(&std::fs::read_to_string(&path).ok()?)?;
+        f.air = parse_air(&self.read(&Self::air_file(loc)));
+        f.average_high = self.load_average(loc, &f.date);
         let age = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map_or(u64::MAX, |d| d.as_secs());
         Some((f, age))
     }
 
-    /// Fetches a place's forecast; a good answer replaces the cached one.
+    /// Fetches a place's forecast; a good answer replaces the cached one. The air quality and the ten-year average
+    /// high come from their own endpoints after it; when one is down, the forecast still returns, with the value
+    /// the cache last held.
     pub fn fetch_forecast(&self, loc: &Location, net: &dyn Fetch) -> io::Result<Forecast> {
         let body = net.get(&forecast_url(loc), BODY_LIMIT)?;
         let text = String::from_utf8_lossy(&body);
-        let f = parse_forecast(&text).ok_or_else(|| io::Error::other("unexpected forecast answer"))?;
+        let mut f = parse_forecast(&text).ok_or_else(|| io::Error::other("unexpected forecast answer"))?;
         self.write(&Self::forecast_file(loc), &text);
+        if let Ok(body) = net.get(&air_url(loc), BODY_LIMIT) {
+            let text = String::from_utf8_lossy(&body);
+            if parse_air(&text).is_some() {
+                self.write(&Self::air_file(loc), &text);
+            }
+        }
+        f.air = parse_air(&self.read(&Self::air_file(loc)));
+        // the average of a date does not change within the day, so it is asked once per place and date
+        if self.load_average(loc, &f.date).is_none() {
+            self.fetch_average(loc, &f.date, net);
+        }
+        f.average_high = self.load_average(loc, &f.date);
         Ok(f)
+    }
+
+    /// Asks the archive for the daily highs of this date over the last ten years and saves their mean.
+    fn fetch_average(&self, loc: &Location, date: &str, net: &dyn Fetch) {
+        let Some(url) = average_url(loc, date) else { return };
+        let Some(md) = date.get(5..10) else { return };
+        let Ok(body) = net.get(&url, BODY_LIMIT) else { return };
+        if let Some(mean) = parse_average_high(&String::from_utf8_lossy(&body), md) {
+            self.write(&Self::average_file(loc), &format!("{md}\t{mean}\n"));
+        }
     }
 }
 
@@ -514,54 +686,141 @@ pub fn fetch_quotes(symbols: &[String], net: &dyn Fetch) -> io::Result<Vec<Quote
 mod tests {
     use super::*;
 
-    const FORECAST: &str = r#"{"current":{"time":"2026-10-04T13:15","temperature_2m":7.4,"apparent_temperature":4.1,"relative_humidity_2m":81,"weather_code":61,"wind_speed_10m":22.5,"is_day":1},
-        "hourly":{"time":["2026-10-04T12:00","2026-10-04T13:00","2026-10-04T14:00"],"temperature_2m":[6.0,7.0,8.0],"weather_code":[3,61,2],"is_day":[1,1,0]},
-        "daily":{"time":["2026-10-04","2026-10-05"],"weather_code":[61,0],"temperature_2m_max":[8.2,10.0],"temperature_2m_min":[3.0,2.5],"uv_index_max":[2.4,3.0],"sunrise":["2026-10-04T07:41","2026-10-05T07:44"],"sunset":["2026-10-04T18:20","2026-10-05T18:17"]}}"#;
+    const FORECAST: &str = r#"{"current":{"time":"2026-10-04T13:20","temperature_2m":7.4,"apparent_temperature":4.1,"relative_humidity_2m":81,"weather_code":61,"wind_speed_10m":22.5,"wind_direction_10m":315,"wind_gusts_10m":41.0,"dew_point_2m":4.2,"pressure_msl":1008.4,"is_day":1},
+        "hourly":{"time":["2026-10-04T12:00","2026-10-04T13:00","2026-10-04T18:00"],"temperature_2m":[6.0,7.0,8.0],"weather_code":[3,61,2],"is_day":[1,1,0],"precipitation_probability":[20,70,null],"precipitation":[0.1,1.4,0.0],"visibility":[24000,9000,15000],"pressure_msl":[1009.0,1008.4,1004.0]},
+        "daily":{"time":["2026-10-04","2026-10-05"],"weather_code":[61,0],"temperature_2m_max":[8.2,10.0],"temperature_2m_min":[3.0,2.5],"uv_index_max":[2.4,3.0],"sunrise":["2026-10-04T07:41","2026-10-05T07:44"],"sunset":["2026-10-04T18:20","2026-10-05T18:17"],"precipitation_sum":[6.5,0.0],"precipitation_probability_max":[85,null]},
+        "minutely_15":{"time":["2026-10-04T13:00","2026-10-04T13:15","2026-10-04T13:30","2026-10-04T13:45","2026-10-04T14:00","2026-10-04T14:15"],"precipitation":[0.0,0.4,0.6,0.0,0.0,0.0]}}"#;
 
     #[test]
     fn parses_current_hours_from_now_and_days() {
         let f = parse_forecast(FORECAST).unwrap();
         assert_eq!((f.current.temp, f.current.humidity, f.current.code), (7.4, 81, 61));
-        assert_eq!(f.hours.iter().map(|h| h.label.as_str()).collect::<Vec<_>>(), ["13", "14"], "starts at the current hour");
+        assert_eq!(f.hours.iter().map(|h| h.label.as_str()).collect::<Vec<_>>(), ["13", "18"], "starts at the current hour");
         assert!(f.hours[0].day && !f.hours[1].day);
         assert_eq!(f.days[0].label, "Sun", "2026-10-04 is a Sunday");
         assert_eq!(f.days[1].label, "Mon");
         assert_eq!(f.days[1].max, 10.0);
         assert_eq!((f.days[0].uv, f.days[0].sunrise.as_str(), f.days[1].sunset.as_str()), (2.4, "07:41", "18:17"));
+        assert_eq!((f.date.as_str(), f.time.as_str()), ("2026-10-04", "2026-10-04T13:20"));
         assert!(parse_forecast("{}").is_none() && parse_forecast("nope").is_none());
     }
 
-    const DETAILED: &str = r#"{"current":{"time":"2026-10-04T13:15","temperature_2m":7.4,"relative_humidity_2m":81,"weather_code":61,"wind_speed_10m":22.5,"wind_direction_10m":225,"wind_gusts_10m":41.0,"dew_point_2m":4.2,"pressure_msl":1002.5},
-        "hourly":{"time":["2026-10-04T13:00","2026-10-04T14:00","2026-10-04T15:00","2026-10-04T16:00"],"temperature_2m":[6.0,7.0,8.0,8.0],"weather_code":[3,61,2,2],"precipitation_probability":[10,60,30,0],"precipitation":[0.0,1.2,0.1,0.0],"visibility":[24000,9000,10000,20000],"pressure_msl":[1002.5,1001.0,1000.5,999.5]},
-        "daily":{"time":["2026-10-04"],"weather_code":[61],"temperature_2m_max":[8.2],"temperature_2m_min":[3.0],"precipitation_probability_max":[70],"precipitation_sum":[4.5]},
-        "minutely_15":{"time":["2026-10-04T13:00","2026-10-04T13:15","2026-10-04T13:30","2026-10-04T13:45","2026-10-04T14:00","2026-10-04T14:15"],"precipitation":[0.0,0.2,0.4,0.0,0.1,0.3]}}"#;
-
     #[test]
-    fn parses_wind_dew_pressure_precipitation_visibility_and_minutes() {
-        let f = parse_forecast(DETAILED).unwrap();
-        assert_eq!((f.current.wind_dir, f.current.gust_kmh, f.current.dew, f.current.pressure_hpa), (225.0, 41.0, 4.2, 1002.5));
-        assert_eq!(f.current.clock, "13:15");
-        assert_eq!((f.hours[0].precip_prob, f.hours[1].precip_prob, f.hours[1].precip_mm, f.hours[1].visibility_m), (10, 60, 1.2, 9000.0));
-        assert_eq!((f.days[0].precip_prob, f.days[0].precip_mm), (70, 4.5));
-        assert_eq!(f.minutes, vec![0.2, 0.4, 0.0, 0.1], "four quarter hours from the current one");
-        assert!((f.pressure_change + 3.0).abs() < 1e-9, "1002.5 now, 999.5 three hours later");
-    }
-
-    #[test]
-    fn missing_detail_columns_default_to_zero() {
+    fn parses_wind_dew_point_pressure_and_the_hourly_extras() {
         let f = parse_forecast(FORECAST).unwrap();
-        assert_eq!((f.current.wind_dir, f.current.gust_kmh, f.current.pressure_hpa), (0.0, 0.0, 0.0));
-        assert_eq!(f.current.dew, f.current.temp, "no dew point falls back to the temperature");
-        assert!(f.minutes.is_empty() && f.pressure_change == 0.0);
-        assert_eq!((f.hours[0].precip_prob, f.days[0].precip_mm), (0, 0.0));
+        assert_eq!((f.current.wind_dir, f.current.wind_gust_kmh), (Some(315.0), Some(41.0)));
+        assert_eq!((f.current.dew_point, f.current.pressure_hpa), (Some(4.2), Some(1008.4)));
+        let now = &f.hours[0];
+        assert_eq!((now.precip_prob, now.precip_mm, now.visibility_m, now.pressure_hpa), (70, 1.4, Some(9000.0), Some(1008.4)));
+        assert_eq!(f.hours[1].precip_prob, 0, "a null chance is zero");
+        assert_eq!((f.days[0].precip_sum, f.days[0].precip_prob), (6.5, 85));
+        assert_eq!(f.days[1].precip_prob, 0);
     }
 
     #[test]
-    fn url_asks_for_the_detail_columns() {
-        let u = forecast_url(&Location { name: "A".into(), region: String::new(), lat: 1.0, lon: 2.0 });
-        for k in ["wind_gusts_10m", "dew_point_2m", "pressure_msl", "precipitation_probability", "visibility", "precipitation_sum", "minutely_15=precipitation"] {
-            assert!(u.contains(k), "{k}");
+    fn an_answer_without_the_extras_still_parses() {
+        let text = r#"{"current":{"time":"2026-10-04T13:15","temperature_2m":7.0,"weather_code":1},
+            "hourly":{"time":["2026-10-04T13:00"],"temperature_2m":[7.0],"weather_code":[1]},
+            "daily":{"time":["2026-10-04"],"weather_code":[1],"temperature_2m_max":[8.0],"temperature_2m_min":[2.0]}}"#;
+        let f = parse_forecast(text).unwrap();
+        assert_eq!((f.current.wind_dir, f.current.pressure_hpa, f.current.dew_point), (None, None, None));
+        assert_eq!(f.hours[0], Hour::basic("13", 7.0, 1, true));
+        assert!(f.minutes.is_empty() && f.air.is_none() && f.average_high.is_none());
+    }
+
+    #[test]
+    fn the_sun_event_lands_in_the_hour_it_happens() {
+        let f = parse_forecast(FORECAST).unwrap();
+        assert_eq!(f.hours[0].sun, None);
+        assert_eq!(f.hours[1].sun, Some(SunEvent { rise: false, time: "18:20".into() }), "sunset 18:20 is in the 18:00 hour");
+        let rises = ["2026-10-05T07:44".to_string()];
+        assert_eq!(sun_in_hour("2026-10-05T07:00", &rises, &[]), Some(SunEvent { rise: true, time: "07:44".into() }));
+        assert_eq!(sun_in_hour("2026-10-05T08:00", &rises, &[]), None);
+    }
+
+    #[test]
+    fn the_minute_forecast_starts_at_the_current_quarter_hour() {
+        let f = parse_forecast(FORECAST).unwrap();
+        // 13:20 is in the 13:15 step; the next four steps follow
+        assert_eq!(f.minutes, vec![0.4, 0.6, 0.0, 0.0]);
+        assert_eq!(quarter_floor("2026-10-04T13:59").as_deref(), Some("2026-10-04T13:45"));
+        assert_eq!(quarter_floor("2026-10-04T13:00").as_deref(), Some("2026-10-04T13:00"));
+        assert_eq!(quarter_floor("bad"), None);
+    }
+
+    #[test]
+    fn the_forecast_url_asks_for_every_field_the_screen_shows() {
+        let url = forecast_url(&Location { name: "A".into(), region: String::new(), lat: 64.1, lon: -21.9 });
+        for field in ["wind_direction_10m", "wind_gusts_10m", "dew_point_2m", "pressure_msl", "precipitation_probability", "visibility", "precipitation_sum", "precipitation_probability_max", "minutely_15=precipitation"] {
+            assert!(url.contains(field), "{field} in {url}");
         }
+    }
+
+    #[test]
+    fn air_quality_parses_and_is_banded_on_the_european_index() {
+        let air = parse_air(r#"{"current":{"time":"2026-10-04T13:00","european_aqi":34,"pm2_5":7.8}}"#).unwrap();
+        assert_eq!((air.aqi, air.pm25, air.category()), (34, 7.8, "Fair"));
+        for (aqi, name) in [(0, "Good"), (20, "Good"), (21, "Fair"), (41, "Moderate"), (61, "Poor"), (81, "Very Poor"), (101, "Extremely Poor")] {
+            assert_eq!(Air { aqi, pm25: 0.0 }.category(), name, "{aqi}");
+        }
+        assert!(parse_air(r#"{"current":{"pm2_5":7.8}}"#).is_none(), "no index, no reading");
+        assert!(parse_air("nope").is_none());
+        let loc = Location { name: "A".into(), region: String::new(), lat: 64.1, lon: -21.9 };
+        assert!(air_url(&loc).starts_with(AIR_API) && air_url(&loc).contains("european_aqi,pm2_5"));
+    }
+
+    #[test]
+    fn the_average_window_covers_ten_years_ending_last_year() {
+        assert_eq!(average_window("2026-10-04"), Some(("2016-10-04".into(), "2025-10-04".into(), "10-04".into())));
+        assert_eq!(average_window("2028-02-29"), Some(("2018-02-28".into(), "2027-02-28".into(), "02-29".into())), "29 February is asked as the 28th");
+        assert_eq!(average_window("junk"), None);
+        let loc = Location { name: "A".into(), region: String::new(), lat: 64.1, lon: -21.9 };
+        let url = average_url(&loc, "2026-10-04").unwrap();
+        assert!(url.starts_with(ARCHIVE_API) && url.contains("start_date=2016-10-04&end_date=2025-10-04") && url.contains("daily=temperature_2m_max"), "{url}");
+    }
+
+    #[test]
+    fn the_average_high_is_the_mean_of_the_same_calendar_day() {
+        let archive = r#"{"daily":{"time":["2023-10-04","2023-10-05","2024-10-04","2024-10-05","2025-10-04","2025-10-05"],"temperature_2m_max":[6.0,20.0,9.0,20.0,null,20.0]}}"#;
+        assert_eq!(parse_average_high(archive, "10-04"), None, "two usable years is too few");
+        let more = r#"{"daily":{"time":["2022-10-04","2023-10-04","2024-10-04","2025-10-04","2025-10-05"],"temperature_2m_max":[5.0,6.0,9.0,8.0,30.0]}}"#;
+        assert_eq!(parse_average_high(more, "10-04"), Some(7.0));
+        assert_eq!(parse_average_high(more, "11-01"), None);
+        assert_eq!(parse_average_high("nope", "10-04"), None);
+    }
+
+    #[test]
+    fn the_store_fills_air_and_average_from_their_endpoints_and_keeps_them() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        // a network that answers by endpoint and counts the archive asks
+        struct ByUrl(AtomicU32);
+        impl Fetch for ByUrl {
+            fn get(&self, url: &str, _: usize) -> io::Result<Vec<u8>> {
+                let body = if url.starts_with(AIR_API) {
+                    r#"{"current":{"european_aqi":55,"pm2_5":12.0}}"#.to_string()
+                } else if url.starts_with(ARCHIVE_API) {
+                    self.0.fetch_add(1, Ordering::SeqCst);
+                    r#"{"daily":{"time":["2022-10-04","2023-10-04","2024-10-04","2025-10-04"],"temperature_2m_max":[5.0,6.0,9.0,8.0]}}"#.to_string()
+                } else {
+                    FORECAST.to_string()
+                };
+                Ok(body.into_bytes())
+            }
+        }
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("target/test-weather-extra-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let st = Store::new(&dir);
+        let place = Location { name: "Oslo".into(), region: "Norway".into(), lat: 59.91, lon: 10.75 };
+        let net = ByUrl(AtomicU32::new(0));
+        let f = st.fetch_forecast(&place, &net).unwrap();
+        assert_eq!(f.air.as_ref().map(|a| a.aqi), Some(55));
+        assert_eq!(f.average_high, Some(7.0));
+        let again = st.fetch_forecast(&place, &net).unwrap();
+        assert_eq!(net.0.load(Ordering::SeqCst), 1, "the archive is asked once per place and date");
+        assert_eq!(again.average_high, Some(7.0));
+        let (cached, _) = st.load_forecast(&place).unwrap();
+        assert_eq!((cached.air, cached.average_high), (f.air, f.average_high), "a cold start shows them offline");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
