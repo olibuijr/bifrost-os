@@ -3,6 +3,10 @@
 ## 0.11.4 — 2026-10-14
 
 - Scale the magnifier handle to the shared legacy-control radius.
+- Viewer canvas and sidebar backgrounds follow the active appearance; the named document render bounds describe
+  off-screen page rendering rather than the app window. PDF work runs on a serial Utility dispatch queue rather than a
+  persistent blocking receiver thread. PDF paper placeholders and opaque picture redaction remain intentionally white
+  and black, respectively.
 
 ## 0.11.3 — 2026-10-14
 
@@ -15,7 +19,6 @@
 ## 0.11.1 — 2026-10-14
 
 - Add the generated app compliance harness.
-
 ## 0.11.0
 
 - The Inspector lists each piece of markup on its own row, with its kind, its page and the text of a note or text box,

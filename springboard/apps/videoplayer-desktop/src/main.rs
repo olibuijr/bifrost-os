@@ -12,7 +12,8 @@ mod movie;
 use bifrost_app::audio;
 use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S};
 use bifrost_app::controls::recording::{RecordError, Recorder};
-use bifrost_app::kit::{pack, rgba, Damage, Event, Image, Surface, Ui, Weight};
+use bifrost_app::kit::{Damage, Event, Image, Surface, Ui, Weight};
+use bifrost_app::kit::ui;
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::proto::DocMode;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
@@ -34,8 +35,6 @@ const MENU_SCREEN: u32 = 7;
 
 /// The extensions the open panel offers, as the media stack demuxes them.
 const MOVIE_TYPES: &[&str] = &["mp4", "m4v", "mov", "webm"];
-const BACKGROUND: u32 = pack(28, 28, 30, 255);
-const WHITE: u32 = pack(255, 255, 255, 255);
 const EMPTY_PT: f32 = 17.0;
 const NOTICE_PT: f32 = 15.0;
 
@@ -219,7 +218,7 @@ impl VideoPlayerApp {
             self.notice_img = None;
         } else if self.notice_img.as_ref().map_or(true, |(text, _)| *text != self.notice) {
             let max = (self.w as f32 - 2.0 * ui.pt(SPACE_L)).max(0.0);
-            let img = ui.text(&ui.fit(&self.notice, NOTICE_PT, max), NOTICE_PT, Weight::Regular, WHITE);
+            let img = ui.text(&ui.fit(&self.notice, NOTICE_PT, max), NOTICE_PT, Weight::Regular, ui::WHITE);
             self.notice_img = Some((self.notice.clone(), img));
         }
     }
@@ -230,13 +229,13 @@ impl VideoPlayerApp {
         let (width, height) = (img.w as f32 + 2.0 * pad, img.h as f32 + 2.0 * pad);
         let x = (s.w as f32 - width) / 2.0;
         let y = s.h as f32 - height - ui.pt(SPACE_M);
-        s.fill_rrect(x, y, width, height, height / 2.0, rgba(0, 0, 0, 160));
+        s.fill_rrect(x, y, width, height, height / 2.0, ui::MATERIAL_HUD.now());
         s.blit(img, (x + pad) as i32, (y + pad) as i32, 255, 255);
     }
 
     fn draw_empty(&self, s: &mut Surface) {
         let (w, h) = (s.w, s.h);
-        s.fill_rect(0, 0, w, h, BACKGROUND);
+        s.fill_rect(0, 0, w, h, ui::CONTENT_BG.now());
         if let Some(img) = &self.empty {
             s.blit(img, (w as i32 - img.w as i32) / 2, (h as i32 - img.h as i32) / 2, 255, 255);
         }
@@ -251,7 +250,7 @@ impl App for VideoPlayerApp {
     fn configure(&mut self, ctx: &Ctx) {
         self.w = ctx.cfg.w as i32;
         self.h = ctx.cfg.h as i32;
-        self.empty = Some(ctx.ui.text("Open a movie from the Movie menu.", EMPTY_PT, Weight::Regular, WHITE));
+        self.empty = Some(ctx.ui.text("Open a movie from the Movie menu.", EMPTY_PT, Weight::Regular, ui::WHITE));
         if let Some(m) = &mut self.movie {
             m.set_size(self.w, self.h);
         }

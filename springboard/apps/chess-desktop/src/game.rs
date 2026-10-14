@@ -153,6 +153,11 @@ impl Game {
         self.moves.len()
     }
 
+    /// The legal move sequence from the starting position, for restoring a saved game.
+    pub fn moves_played_list(&self) -> &[Move] {
+        &self.moves
+    }
+
     pub fn last_move(&self) -> Option<Move> {
         self.moves.last().copied()
     }

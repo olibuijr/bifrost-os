@@ -34,7 +34,7 @@ use document::Document;
 use export::Raster;
 use model::{Adjust, History, Mark, MarkKind, Norm, Pixels, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE, MARK_RED};
 use password::Ask;
-use pdfjob::{Inbox, Job, Reply};
+use pdfjob::{Inbox, Jobs, Reply};
 use prefs::Prefs;
 use recents::Recents;
 use signature::Signature;
@@ -42,7 +42,6 @@ use springboard::shell::books::engine;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::mpsc::Sender;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// File > Open and the Open Recent items. The ids sit above every `Action` id.
@@ -78,12 +77,12 @@ enum Gesture {
     Slider { which: usize, before: Option<Snapshot> },
 }
 
-/// A PDF on its way from its worker: the worker's job sender and the inbox its replies come back in.
+/// A PDF on its way from its utility queue: submitted jobs and the inbox its replies come back in.
 struct Loading {
     path: PathBuf,
     /// The password the file is opened with; empty when none was asked for.
     password: Vec<u8>,
-    jobs: Sender<Job>,
+    jobs: Jobs,
     inbox: Inbox,
 }
 

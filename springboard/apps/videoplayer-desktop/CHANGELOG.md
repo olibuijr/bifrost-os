@@ -3,6 +3,7 @@
 ## 0.2.4 — 2026-10-14
 
 - Size notice and subtitle text margins from shared spacing tokens so captions remain readable across window scales.
+- Empty-state and caption HUD surfaces use shared appearance-aware material and background colours.
 
 ## 0.2.3 — 2026-10-14
 
@@ -15,7 +16,6 @@
 ## 0.2.1 — 2026-10-14
 
 - Add the Video Player store icon.
-
 ## 0.2.0 — 2026-10-13
 
 - Open Movie intent (`open-movie`, parameter `path`): the shell hands the Video Player a movie file by path. The shell uses it to open a finished screen recording, which the player plays like a movie from the open panel.
