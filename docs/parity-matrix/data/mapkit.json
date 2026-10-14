@@ -31,9 +31,9 @@
     {
       "feature": "Forward geocoding (place name to coordinate)",
       "apple": "MKGeocodingRequest",
-      "bifrost": "springboard/src/shell/weather/data.rs:248 (geocode_url), :253 (parse_places), :456 (search_places)",
+      "bifrost": "springboard/src/shell/weather/data.rs (geocode_url, parse_places, search_places)",
       "status": "partial",
-      "note": "text search via Open-Meteo, returns up to 6 places with name, region, lat and lon; not Apple's geocoder and no map display"
+      "note": "Place-name text search asks for six matches and returns places with name, region, lat and lon; tested headless in springboard/tests/parity_sdk-tests-21.rs. Not the reference geocoder: no placemark or address parts, no map display and no reverse geocoding."
     },
     {
       "feature": "Reverse geocoding (coordinate to address)",
@@ -45,9 +45,9 @@
     {
       "feature": "Local search and search completion",
       "apple": "MKLocalSearch, MKLocalSearchCompleter, MKLocalPointsOfInterestRequest",
-      "bifrost": "springboard/src/shell/weather/data.rs:456 (search_places)",
+      "bifrost": "springboard/src/shell/weather/data.rs (search_places)",
       "status": "partial",
-      "note": "city and place text search only; no points-of-interest search, nearby search or completion list"
+      "note": "City and place text search is tested headless in springboard/tests/parity_sdk-tests-21.rs: the query is trimmed, and a failed or non-list answer is an error. Gap: no points-of-interest search, nearby search or completion list."
     },
     {
       "feature": "Points of interest and map features",

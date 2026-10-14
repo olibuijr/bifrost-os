@@ -24,16 +24,16 @@
     {
       "feature": "Coordinates and location values",
       "apple": "CLLocation, CLLocationCoordinate2D, CLLocationSourceInformation, CLFloor, CLVisit",
-      "bifrost": "springboard/src/shell/weather/data.rs:116 (Location struct)",
+      "bifrost": "springboard/src/shell/weather/data.rs (Location)",
       "status": "partial",
-      "note": "Weather keeps lat and lon for a saved place (typed by name). It is a private struct of the Weather app with no accuracy, timestamp, altitude, course or speed, and no floor or visit data."
+      "note": "A saved place is a public struct in the shell's Weather data module with a name, region, latitude and longitude, and a two-decimal cache key; the values, the saved list and the key are tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: no accuracy, timestamp, altitude, course, speed, floor or visit data, and no SDK type."
     },
     {
       "feature": "Forward geocoding (place name to coordinates)",
       "apple": "CLGeocoder (geocodeAddressString), CLPlacemark, Converting between coordinates and user-friendly place names",
-      "bifrost": "springboard/src/shell/weather/data.rs:25 (GEOCODE_API), springboard/src/shell/weather/data.rs:253 (parse_places)",
+      "bifrost": "springboard/src/shell/weather/data.rs (GEOCODE_API, geocode_url, parse_places)",
       "status": "partial",
-      "note": "Open-Meteo place search returns name, admin1, country and coordinates. It is used only by the Weather app, not exposed through springboard/sdk/src, and it does not return a placemark with address parts."
+      "note": "The place-name request is trimmed, percent-encoded and asks for six English matches, and each answer becomes a name, region and coordinates; tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: only the Weather app's data module uses it, not springboard/sdk/src, and no placemark carries address parts."
     },
     {
       "feature": "Reverse geocoding (coordinates to placemark)",
