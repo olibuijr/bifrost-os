@@ -2,9 +2,9 @@
   "framework": "Image I/O",
   "doc": "https://developer.apple.com/documentation/imageio",
   "macos_since": "10.8",
-  "status": "os",
-  "bifrost": "springboard/render/src/imgdec.rs (decode, PNG and JPEG), springboard/src/pngenc.rs (PNG encode), springboard/src/shell/camera/jpeg.rs (JPEG encode with EXIF), springboard/src/shell/photos/exif.rs (EXIF read); no SDK module",
-  "summary": "Image decoding (PNG and JPEG), PNG and JPEG writing, EXIF reading and writing, and thumbnail downsampling exist inside the system layer and the Photos and Browser apps. Apps get no SDK API for images: no CGImageSource or CGImageDestination equivalent, no GIF, HEIC, WebP or TIFF, no XMP, no animation, and no colour profile handling.",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/graphics_imageio.rs, springboard/sdk/src/image_source.rs, springboard/sdk/src/image_metadata.rs, springboard/sdk/src/image_animation.rs, springboard/sdk/src/picture_writer.rs over springboard/render/src/cg/imageio (all formats); springboard/src/shell/photos/exif.rs and springboard/src/shell/camera/jpeg.rs remain the system-layer readers and writers",
+  "summary": "Decoding and writing for PNG, JPEG, GIF, BMP, ICO and TIFF (WebP is read only) live in springboard/render/src/cg/imageio, with EXIF, TIFF and GPS metadata, orientation, thumbnails and animation frames. Apps now reach them through the SDK: graphics_imageio and image_source for pixels and sizes, image_metadata for EXIF, GPS and upright decode, image_animation for frames and delays, and picture_writer for writing with metadata. Not yet verified on Midget. No XMP or IPTC, no HEIC, TGA or RAW, and no colour profile or HDR handling.",
   "rea_evidence": "ev_1f78cc989db83cafeda1ab3033c6d43e407a9f6ef4ead529ffeb323eb64aa9ff",
   "features": [
     {
@@ -12,14 +12,14 @@
       "apple": "CGImageSource",
       "bifrost": "springboard/sdk/src/image_source.rs; wired: springboard/apps/files/src/views/options.rs (picture_thumb)",
       "status": "partial",
-      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decodes JPEG and PNG into premultiplied RGBA. Internal only, no SDK type. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Reads the header first (format and size, refusing oversized pictures), then decodes any format of the cg::imageio codecs (PNG, JPEG, GIF, BMP, ICO, TIFF; WebP read only) into premultiplied RGBA. Apps reach it through bifrost_app::image_source."
     },
     {
       "feature": "Image destination: encode and write",
       "apple": "CGImageDestination",
-      "bifrost": "springboard/src/pngenc.rs:9 (encode_rgb, uncompressed zlib), springboard/src/shell/camera/jpeg.rs:284 (encode_rgb, encode_pixels), springboard/src/shell/photos/edit.rs:343 (save_copy)",
-      "status": "os",
-      "note": "Writes PNG (stored deflate blocks, no compression) and JPEG at a quality setting. Only the Photos edit copy and the camera use them."
+      "bifrost": "springboard/sdk/src/picture_writer.rs (PictureWriter over cg::imageio::ImageDestination), springboard/sdk/src/graphics_imageio.rs (encode, encode_jpeg); system layer: springboard/src/pngenc.rs:9, springboard/src/shell/camera/jpeg.rs:284, springboard/src/shell/photos/edit.rs:343",
+      "status": "partial",
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Apps write PNG, JPEG, GIF, BMP, TIFF and ICO with orientation, date, location, quality, frame delay and loop count. WebP is read only. The Photos and camera code still use their own encoders."
     },
     {
       "feature": "Format coverage (GIF, HEIC, WebP, TIFF, TGA, DNG, RAW)",
@@ -33,7 +33,7 @@
       "apple": "CGImageSource thumbnail options (kCGImageSourceCreateThumbnail*)",
       "bifrost": "springboard/sdk/src/image_source.rs, springboard/render/src/imgdec.rs (fit_dims); wired: springboard/apps/files/src/views/options.rs (picture_thumb, blit_thumb)",
       "status": "partial",
-      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Thumbnails and fitted sizes exist. No API for an app to request a thumbnail size from a file. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Thumbnails fit a box without enlarging. The codec thumbnail path (ImageSource::thumbnail_at) also applies the EXIF orientation. No per-file thumbnail request for apps beyond the box size."
     },
     {
       "feature": "Decode size limits",
@@ -45,30 +45,30 @@
     {
       "feature": "EXIF metadata read (camera, date, exposure, size)",
       "apple": "EXIF Dictionary Keys (kCGImagePropertyExif*)",
-      "bifrost": "springboard/src/shell/photos/exif.rs:113 (EXIF reader for the info sheet); wired: springboard/apps/files/src/info.rs (exif_rows, exif_rows_from), using springboard/src/shell/photos/exif.rs",
-      "status": "os",
-      "note": "Photos app only. Not exposed to SDK apps. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/sdk/src/image_metadata.rs (read: PictureInfo with camera, date, exposure, f-number, ISO, focal length, dpi); system layer: springboard/src/shell/photos/exif.rs:113, wired in springboard/apps/files/src/info.rs",
+      "status": "partial",
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Exposed to SDK apps through image_metadata::read. Reads what the cg::imageio EXIF reader fills; maker notes and XMP packets are skipped as opaque."
     },
     {
       "feature": "EXIF orientation applied on decode",
       "apple": "kCGImagePropertyOrientation",
-      "bifrost": "springboard/src/shell/photos/mod.rs (decode_upright; test decoding_applies_the_exif_orientation), springboard/src/shell/photos/exif.rs:178 (orientation)",
-      "status": "os",
-      "note": "Applied in the Photos app. Browser decode does not read it."
+      "bifrost": "springboard/sdk/src/image_metadata.rs (decode_upright, orientation via cg::imageio::orient_image); springboard/render/src/cg/imageio/mod.rs (orient_image); system layer: springboard/src/shell/photos/mod.rs (decode_upright)",
+      "status": "partial",
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. SDK apps get upright pixels from image_metadata::decode_upright and thumbnails from image_source apply the same rotation through the codec."
     },
     {
       "feature": "EXIF write",
       "apple": "CGImageDestination with EXIF properties",
-      "bifrost": "springboard/src/shell/camera/jpeg.rs:249 (exif_block: Orientation, DateTime, DateTimeOriginal)",
-      "status": "os",
-      "note": "Camera capture only. Orientation, date and time only."
+      "bifrost": "springboard/sdk/src/picture_writer.rs (date_taken, orientation); springboard/render/src/cg/imageio/exif.rs (build_block); system layer: springboard/src/shell/camera/jpeg.rs:249",
+      "status": "partial",
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Writes DateTimeOriginal and Orientation for JPEG, PNG and TIFF. Other EXIF tags are not exposed through the SDK writer."
     },
     {
       "feature": "GPS dictionary",
       "apple": "GPS Dictionary Keys",
-      "bifrost": "springboard/src/shell/photos/exif.rs (GPS read for the info sheet)",
-      "status": "os",
-      "note": "Read only. No write, no SDK API."
+      "bifrost": "springboard/sdk/src/image_metadata.rs (Location read, decimal_to_dms, dms_to_decimal); springboard/sdk/src/picture_writer.rs (location write); springboard/render/src/cg/imageio/exif.rs (GPS_TAGS)",
+      "status": "partial",
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Latitude and longitude are read and written as decimal degrees. Altitude is not exposed to SDK apps."
     },
     {
       "feature": "XMP, IPTC and 8BIM metadata",
@@ -80,9 +80,9 @@
     {
       "feature": "Animated GIF and APNG frames",
       "apple": "CGAnimateImageAtURLWithBlock, CGAnimateImageDataWithBlock, kCGImageAnimationDelayTime",
-      "bifrost": "springboard/core/src/gifframes.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-image-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame iteration or delay API."
+      "bifrost": "springboard/sdk/src/image_animation.rs (read: frames, delay_ms, loop_count); springboard/sdk/src/picture_writer.rs (frame writing); springboard/core/src/gifframes.rs",
+      "status": "partial",
+      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Apps read every frame with its delay and loop count, and write animated GIFs with picture_writer. APNG frame access is not verified."
     },
     {
       "feature": "Colour profiles and HDR gain maps",
@@ -128,12 +128,12 @@
     }
   ],
   "gaps": [
-    "No SDK module for images: apps cannot decode, encode or read metadata through bifrost_app.",
-    "Only PNG and JPEG are decodable and writable; GIF, WebP, HEIC, TIFF, TGA and RAW are not.",
-    "PNG writing is uncompressed (stored zlib blocks), so output files are large.",
-    "No animated GIF or APNG frame access.",
-    "No XMP or IPTC metadata; EXIF read and write is limited to what the Photos and camera code uses.",
+    "No XMP or IPTC metadata in the SDK; the metadata block carries EXIF, TIFF and GPS only.",
+    "HEIC, TGA and RAW are not recognised by the codecs; WebP is read only.",
+    "The Photos and camera code still use their own encoders (springboard/src/pngenc.rs writes uncompressed PNG) and are not moved onto picture_writer.",
+    "APNG frame access is not verified.",
     "No colour profile (ICC) or HDR gain map handling; images are treated as sRGB.",
-    "No tiled or streaming image provider for very large pictures."
+    "No tiled or streaming image provider for very large pictures.",
+    "Not yet verified on Midget: every row built on parity/team-n-image-i-o."
   ]
 }
