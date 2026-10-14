@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-10-14
+
+- Files dropped on the window go to the open conversation, as Attach File sends them: a picture as a picture, any other file as a file message. A drop is taken only when the account is signed in and a conversation is open.
+- Tapping the quoted line of a reply outlines the message it jumps to, until the next press or the next conversation.
+- Headless tests in tests/parity_app-messages.rs cover the reply outline, the drop policy, search, pins, the mute and unread switches, leaving a conversation, sign-out, and the reply and edit starts.
+- Not yet: end-to-end encryption, a user directory search in New Message, server-side message search, skin tones, avatars in the details panel.
+
 ## 0.4.0 — 2026-10-14
 
 - Emoji picker: a strip of groups under the search field (All, Faces, Hands, Nature, Food, Things, Signs). A group shows its own emoji, with its recently used ones first; a search still finds emoji in every group.

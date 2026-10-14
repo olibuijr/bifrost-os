@@ -59,6 +59,10 @@ impl App for MessagesApp {
         self.window.as_mut().is_some_and(|messages| messages.document(ctx, ev))
     }
 
+    fn drag(&mut self, ctx: &Ctx, ev: bifrost_app::dnd::Event) -> bool {
+        self.window.as_mut().is_some_and(|messages| messages.drag(ctx, ev))
+    }
+
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.window.as_mut().is_some_and(|messages| messages.tick(ctx, t))
     }

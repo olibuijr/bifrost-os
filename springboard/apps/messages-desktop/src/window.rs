@@ -11,6 +11,7 @@ use crate::sync::{self, Event};
 use bifrost_app::kit::{Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::proto::{DocMode, CHORD_CTRL, CHORD_META};
+use bifrost_app::dnd::{self, DragPhase, Payload};
 use bifrost_app::proto::ContextItem;
 use bifrost_app::{AppMenu, AppMenuItem, Ctx, DocumentEvent, KeyInput, TouchKind};
 use bifrost_core::json::Json;
@@ -96,6 +97,22 @@ struct Press {
     region: Region,
 }
 
+/// A file drag over the window, or one just dropped on it. Files that arrive before the drop wait in `files`; after the
+/// drop they go to `room`, the conversation the drop landed on.
+struct FileDrop {
+    session: u32,
+    /// True when the drag carries files, as the items of its first event and of its drop say.
+    offered: bool,
+    room: Option<String>,
+    files: Vec<(String, Vec<u8>)>,
+}
+
+impl FileDrop {
+    fn new(session: u32) -> FileDrop {
+        FileDrop { session, offered: false, room: None, files: Vec::new() }
+    }
+}
+
 pub struct MessagesWindow {
     pub model: Messages,
     transport: Arc<dyn Transport>,
@@ -108,6 +125,8 @@ pub struct MessagesWindow {
     pending: HashMap<u32, Pending>,
     /// The file the user is choosing, with the room it is for.
     picking: Option<(u32, String)>,
+    /// The file drag in progress, if any.
+    file_drop: Option<FileDrop>,
     /// The signed-in login, to forget it at sign-out.
     account: Option<Account>,
     /// Where the per-conversation choices are saved.
@@ -159,6 +178,7 @@ impl MessagesWindow {
             wake_tx,
             pending: HashMap::new(),
             picking: None,
+            file_drop: None,
             account: None,
             data_dir: ctx.data_dir.clone(),
             ctx_target: None,
@@ -174,6 +194,7 @@ impl MessagesWindow {
             labels: TextCache::default(),
             dirty: true,
         };
+        dnd::register_types(ctx, &["public.data"]);
         let request = passwords::list(ctx);
         window.pending.insert(request, Pending::Accounts);
         window.model.status = "Loading saved accounts...".into();
@@ -445,34 +466,119 @@ impl MessagesWindow {
         match ev {
             DocumentEvent::Opened(mut doc) if self.picking.as_ref().is_some_and(|(r, _)| *r == doc.request) => {
                 let Some((_, room)) = self.picking.take() else { return false };
-                let picture = protocol::image_mime(&doc.name);
                 let bytes = read_file(&mut doc.file, doc.size);
                 ctx.release_document(doc.grant);
-                match bytes {
-                    Ok(bytes) => {
-                        if let Some(api) = self.api.clone() {
-                            self.stick_bottom = true;
-                            let name = doc.name.clone();
-                            match picture {
-                                Some(mime) => {
-                                    self.model.status = "Sending picture...".into();
-                                    sync::spawn(self.tx.clone(), self.wake(), move || sync::send_image(api, room, name, mime, bytes));
-                                }
-                                None => {
-                                    self.model.status = "Sending file...".into();
-                                    let mime = protocol::file_mime(&name);
-                                    sync::spawn(self.tx.clone(), self.wake(), move || sync::send_file(api, room, name, mime, bytes));
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => self.model.status = format!("The file could not be read: {e}"),
+                self.send_read_file(room, doc.name, bytes);
+                self.dirty = true;
+                true
+            }
+            DocumentEvent::Opened(mut doc) if self.is_dropping(doc.request) => {
+                let bytes = read_file(&mut doc.file, doc.size);
+                ctx.release_document(doc.grant);
+                self.drop_arrived(doc.request, doc.name, bytes);
+                self.dirty = true;
+                true
+            }
+            DocumentEvent::OpenedMany { request, docs } if self.is_dropping(request) => {
+                for mut doc in docs {
+                    let bytes = read_file(&mut doc.file, doc.size);
+                    ctx.release_document(doc.grant);
+                    self.drop_arrived(request, doc.name, bytes);
                 }
                 self.dirty = true;
                 true
             }
             _ => false,
         }
+    }
+
+    /// Sends a file that was read from disk to a room, or reports why it could not be read.
+    fn send_read_file(&mut self, room: String, name: String, bytes: Result<Vec<u8>, String>) {
+        match bytes {
+            Ok(bytes) => self.send_bytes(room, name, bytes),
+            Err(e) => self.model.status = format!("The file could not be read: {e}"),
+        }
+    }
+
+    /// Sends the bytes of a file to a room: a picture goes as a picture, anything else as a file.
+    fn send_bytes(&mut self, room: String, name: String, bytes: Vec<u8>) {
+        let Some(api) = self.api.clone() else { return };
+        self.stick_bottom = true;
+        match protocol::image_mime(&name) {
+            Some(mime) => {
+                self.model.status = "Sending picture...".into();
+                sync::spawn(self.tx.clone(), self.wake(), move || sync::send_image(api, room, name, mime, bytes));
+            }
+            None => {
+                self.model.status = "Sending file...".into();
+                let mime = protocol::file_mime(&name);
+                sync::spawn(self.tx.clone(), self.wake(), move || sync::send_file(api, room, name, mime, bytes));
+            }
+        }
+    }
+
+    /// True when `request` is the session of the file drag this window is taking in.
+    fn is_dropping(&self, request: u32) -> bool {
+        self.file_drop.as_ref().is_some_and(|d| d.session == request)
+    }
+
+    /// The state of the drag `session`. A drag that replaces another starts fresh.
+    fn drop_state(&mut self, session: u32) -> &mut FileDrop {
+        let slot = self.file_drop.get_or_insert_with(|| FileDrop::new(session));
+        if slot.session != session {
+            *slot = FileDrop::new(session);
+        }
+        slot
+    }
+
+    /// A file of the drag arrives. Before the drop it waits; after the drop it goes straight to the conversation the
+    /// drop landed on.
+    fn drop_arrived(&mut self, session: u32, name: String, bytes: Result<Vec<u8>, String>) {
+        let Some(state) = self.file_drop.as_mut().filter(|d| d.session == session) else { return };
+        let Some(room) = state.room.clone() else {
+            match bytes {
+                Ok(bytes) => state.files.push((name, bytes)),
+                Err(e) => self.model.status = format!("The file could not be read: {e}"),
+            }
+            return;
+        };
+        self.send_read_file(room, name, bytes);
+    }
+
+    /// A drag over the window or a drop on it. Files dropped while a conversation is on screen are sent to it; any other
+    /// data is refused, as the drag offers no files.
+    pub fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
+        let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
+        let state = self.drop_state(session);
+        if !items.is_empty() {
+            state.offered = items.iter().any(|item| matches!(item.payload, Payload::File { .. }));
+        }
+        let offered = state.offered;
+        match phase {
+            DragPhase::Entered | DragPhase::Updated => {
+                let op = if offered && self.model.accepts_drop() { dnd::dragop::COPY } else { 0 };
+                dnd::reply(ctx, session, op);
+            }
+            DragPhase::Exited => {
+                if self.is_dropping(session) {
+                    self.file_drop = None;
+                }
+            }
+            DragPhase::Perform => {
+                let target = (offered && self.model.accepts_drop()).then(|| self.model.selected.clone()).flatten();
+                let state = self.drop_state(session);
+                state.room = target.clone();
+                let held = std::mem::take(&mut state.files);
+                dnd::performed(ctx, session, target.is_some());
+                if let Some(room) = target {
+                    for (name, bytes) in held {
+                        self.send_bytes(room.clone(), name, bytes);
+                    }
+                }
+            }
+        }
+        self.dirty = true;
+        true
     }
 
     // conversation commands ---------------------------------------------------------------------------------------
@@ -533,6 +639,7 @@ impl MessagesWindow {
         let Some(offset) = self.message_offset(ui, id) else { return };
         self.stick_bottom = false;
         self.timeline_scroll.jump_to(offset);
+        self.model.highlight_message(id);
     }
 
     fn open_emoji(&mut self, message: Option<String>) {
@@ -841,6 +948,7 @@ impl MessagesWindow {
     pub fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64) -> bool {
         match kind {
             TouchKind::Down => {
+                self.model.clear_highlight();
                 let region = self.region(&ctx.ui, x, y);
                 if let Some(scroll) = self.scroller(region) {
                     scroll.down(y, t);

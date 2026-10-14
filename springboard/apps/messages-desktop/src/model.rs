@@ -526,9 +526,35 @@ pub struct Messages {
     pub emoji_query: String,
     /// The group the emoji picker shows; None is All.
     pub emoji_group: Option<EmojiGroup>,
+    /// The message a jump to a quoted line has just brought on screen. Its bubble is outlined until the next press.
+    pub highlight: Option<String>,
 }
 
 impl Messages {
+    /// Outlines the message `id` of the room on screen, after a jump to it. False when the room has no such message.
+    pub fn highlight_message(&mut self, id: &str) -> bool {
+        if !self.selected_room().is_some_and(|r| r.timeline.iter().any(|m| m.id == id)) {
+            return false;
+        }
+        self.highlight = Some(id.to_string());
+        true
+    }
+
+    /// True while the message `id` is the outlined one.
+    pub fn is_highlighted(&self, id: &str) -> bool {
+        self.highlight.as_deref() == Some(id)
+    }
+
+    /// Takes the outline off, as the next press on the window does.
+    pub fn clear_highlight(&mut self) {
+        self.highlight = None;
+    }
+
+    /// True when a file dropped on the window goes to the conversation on screen: the account is signed in and a
+    /// conversation is open.
+    pub fn accepts_drop(&self) -> bool {
+        self.signed_in() && self.selected.is_some()
+    }
     pub fn signed_in(&self) -> bool {
         !self.user_id.is_empty()
     }
@@ -801,6 +827,7 @@ impl Messages {
     pub fn select(&mut self, id: &str) -> Option<(String, String)> {
         if self.selected.as_deref() != Some(id) {
             self.compose = None;
+            self.highlight = None;
         }
         self.selected = Some(id.to_string());
         self.prefs.unread_marks.retain(|x| x != id);

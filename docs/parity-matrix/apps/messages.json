@@ -28,9 +28,9 @@
       "area": "menu",
       "apple": "composer + button, drag in",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:429",
-      "note": "Any file via Attach File (pictures as pictures, others as file messages); dragging files in needs SDK drop events, which do not exist",
-      "wire": "Accept any file in the picker (send a file message) and handle drop events"
+      "bifrost": "springboard/apps/messages-desktop/src/window.rs:465 (document); springboard/apps/messages-desktop/src/window.rs:550 (drag)",
+      "note": "Any file via Attach File (pictures as pictures, others as file messages); files dropped on the window go to the open conversation when signed in (the drop policy is tested headless in tests/parity_app-messages.rs; the drop flow itself is not yet verified on Midget)",
+      "wire": ""
     },
     {
       "feature": "Paste into composer",
@@ -101,7 +101,7 @@
       "apple": "Conversation > Delete",
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/window.rs:600",
-      "note": "Leave and forget after a confirmation, from the Conversation menu or the row context menu",
+      "note": "Leave and forget after a confirmation, from the Conversation menu or the row context menu; forgetting a room also drops its pin, mute and unread mark (tested headless in tests/parity_app-messages.rs)",
       "wire": "Room row context menu that leaves and forgets the room"
     },
     {
@@ -110,7 +110,7 @@
       "apple": "search field",
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/model.rs:621",
-      "note": "Search field filters rooms by name and loaded message text (Cmd+F); no server-side search",
+      "note": "Search field filters rooms by name and loaded message text (Cmd+F), tested headless in tests/parity_app-messages.rs; no server-side search",
       "wire": "Search field filtering rooms and loaded timeline text"
     },
     {
@@ -127,9 +127,9 @@
       "area": "menu",
       "apple": "Reply",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:334 (quote hit), springboard/apps/messages-desktop/src/draw.rs:683 (quoted line)",
-      "note": "Reply in the message context menu; quoted line in the bubble; tapping the quoted line scrolls to the original message; no highlight of the original; built on parity/team-d-messages; not yet verified on Midget",
-      "wire": "Reply relation in send, quoted header in bubble drawing"
+      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:334 (quote hit), springboard/apps/messages-desktop/src/draw.rs:683 (quoted line), springboard/apps/messages-desktop/src/draw.rs:684 (outline of the message jumped to)",
+      "note": "Reply in the message context menu; quoted line in the bubble; tapping the quoted line scrolls to the original message and outlines it until the next press (the outline state and reply start are tested headless in tests/parity_app-messages.rs; the stroke is not yet verified on Midget)",
+      "wire": ""
     },
     {
       "feature": "Edit and unsend",
@@ -137,7 +137,7 @@
       "apple": "Edit / Undo Send",
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/model.rs:726 (begin_edit); springboard/apps/messages-desktop/src/window.rs:563 (unsend)",
-      "note": "Edit and Undo Send in the context menu of own messages; Edit History in the context menu of an edited message lists the earlier versions seen since the app started; built on parity/team-d-messages; not yet verified on Midget",
+      "note": "Edit and Undo Send in the context menu of own messages; Edit History in the context menu of an edited message lists the earlier versions seen since the app started; only own text messages start an edit (tested headless in tests/parity_app-messages.rs); not yet verified on Midget",
       "wire": "Context menu on own bubbles: redact, and replace-edit"
     },
     {
@@ -164,7 +164,7 @@
       "apple": "Hide Alerts",
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/window.rs:511",
-      "note": "Hide Alerts skips notifications and the badge count; saved in the data directory",
+      "note": "Hide Alerts skips notifications and the badge count; saved in the data directory; the per-conversation switch is tested headless in tests/parity_app-messages.rs",
       "wire": "Per-room mute flag that skips ctx.notify"
     },
     {
@@ -173,7 +173,7 @@
       "apple": "Pin",
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/model.rs:565",
-      "note": "Pinned rooms sort first in the order they were pinned, at most nine pins, Move Pin Up and Down in the Conversation menu and the row context menu; built on parity/team-d-messages; not yet verified on Midget",
+      "note": "Pinned rooms sort first in the order they were pinned, at most nine pins, Move Pin Up and Down in the Conversation menu and the row context menu; the order and the limit are tested headless in tests/parity_app-messages.rs; not yet verified on Midget",
       "wire": "Pinned rooms sort first"
     },
     {
@@ -182,7 +182,7 @@
       "apple": "Settings > Accounts",
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/window.rs:754",
-      "note": "Settings panel (Cmd+,) shows account and homeserver; Sign Out ends the session and removes the saved login; one account only",
+      "note": "Settings panel (Cmd+,) shows account and homeserver; Sign Out ends the session, removes the saved login and forgets the rooms but keeps the choices (tested headless in tests/parity_app-messages.rs); one account only",
       "wire": "Settings window listing the account with Sign Out"
     },
     {
@@ -191,7 +191,7 @@
       "apple": "Conversation menu",
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/model.rs:599",
-      "note": "Mark as Unread / Read in the Conversation menu and context menu; stored on the account as room account data (m.marked_unread) and read back from the sync, so other clients show it; opening the room clears it; built on parity/team-d-messages; not yet verified on Midget",
+      "note": "Mark as Unread / Read in the Conversation menu and context menu; stored on the account as room account data (m.marked_unread) and read back from the sync, so other clients show it; opening the room clears it; the switch and the server clear are tested headless in tests/parity_app-messages.rs; not yet verified on Midget",
       "wire": "Mark as Unread item"
     },
     {
