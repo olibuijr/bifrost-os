@@ -61,7 +61,7 @@
       "apple": "Not part of GameSave; nearest Apple counterpart is iCloud Drive",
       "bifrost": "none in bifrost-os; the account backend is in ~/Projects/bifrost-cloud (outside this repo)",
       "status": "gap",
-      "note": "Blocked: the upload and restore path lives in the bifrost-cloud backend outside this repository, and no client in bifrost-os calls it, so there is no code here to test. Until a PC client exists, no app can reach its save directory through the backup. Downgraded from partial: the backend is not GameSave parity."
+      "note": "Blocked: bifrost-cloud has a device_backups table (crates/cloud-server/src/generated_tables.rs) but its route list in crates/cloud-server/src/api.rs has no backup upload or restore route, so an SDK client would have no endpoint to call. Until the backend exposes one, no app can reach its save directory through a cloud backup."
     }
   ],
   "gaps": [

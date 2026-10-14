@@ -121,6 +121,7 @@ pub mod gss_context;
 pub mod gss_message;
 pub mod gss_krb5;
 pub mod archive;
+pub mod tar_package;
 pub mod dispatch_data;
 pub mod dispatch_io;
 pub mod predicate_validating;
