@@ -12,7 +12,7 @@
       "apple": "CMIOExtensionProvider, CMIOExtensionProviderSource, CMIOExtensionProviderProperties; article: Creating a camera extension with Core Media I/O",
       "bifrost": "none",
       "status": "gap",
-      "note": "No mechanism lets an app or service publish a virtual camera to other apps. No SDK module and no loopback device wiring found (no v4l2loopback reference in the tree)."
+      "note": "Blocked: a virtual camera needs a loopback capture device, which the shell does not create, and a way for the shell to publish that device to other apps. Neither exists in this repository, so nothing was written for this row."
     },
     {
       "feature": "Devices (device, device source, device properties)",

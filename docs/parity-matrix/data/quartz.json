@@ -110,7 +110,7 @@
    "apple": "QCComposition, QCCompositionLayer, QCView, QCRenderer, QCPlugIn, QCPlugInContext, QCCompositionRepository",
    "bifrost": "none found",
    "status": "gap",
-   "note": "No node-based composition runtime, no composition layer or view, and no custom patch API. The Quartz Composer status (deprecation and removal) was not checked against the official docs, so this row only records the absence of a counterpart."
+   "note": "Blocked: a node-graph composition runtime (patch graph, renderer and plug-in host) is not in this repository, and no part of it was written this round. The deprecation status was not checked against the official documentation."
   }
  ],
  "gaps": [

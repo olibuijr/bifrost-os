@@ -115,9 +115,9 @@
     {
       "feature": "External player items",
       "apple": "MPContentItem, MPPlayableContentManager",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no API for apps to publish content items to the system; the playable content manager is deprecated by Apple"
+      "bifrost": "springboard/ui/src/content_items.rs (ContentItem, ContentTree)",
+      "status": "partial",
+      "note": "The item tree (containers, playable items, streaming and explicit flags, clamped playback progress, playback resolution) is tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: no SDK call publishes items to the shell and no player reads them."
     },
     {
       "feature": "Deprecated movie player",
