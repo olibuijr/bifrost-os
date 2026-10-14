@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Exported the existing vector icon as the required 180 × 180 PNG.
+
 ## 0.1.1 — 2026-10-14
 
 - Step titles use the shared large-title widget, layout initializes from the configured window size, and the switch knob uses a scheme-aware surface colour.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Exported the existing icon at the required 180 × 180 PNG size.
+
 ## 0.1.1 — 2026-10-14
 
 - Radio readings and scan results return through the main dispatch queue; idle polling threads and periodic window wakes are gone.
