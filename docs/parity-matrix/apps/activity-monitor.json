@@ -150,8 +150,8 @@
    "area": "view",
    "apple": "Memory tab footer: pressure graph, app/wired/compressed, cached, swap",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:480",
-   "note": "Pressure from PSI is drawn as a minute of bars in the Memory footer (draw.rs); the detail line shows cached, shared, buffers, compressed (zswap) and swap. No separate App, Wired and Compressed rows, and no full pressure graph.",
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:498 (draw_pressure); springboard/apps/activity-desktop/src/draw.rs:282 (detail line); springboard/apps/activity-desktop/src/sample.rs:58 (Memory breakdown)",
+   "note": "The Memory footer draws the PSI pressure share as a minute of bars (draw.rs draw_pressure) and a detail line of App, Kernel, Shared, Cached Files, Compressed and Swap Used (draw.rs detail line; sample.rs Memory::app, wired, file_cache, tested in meminfo_breakdown_splits_programs_kernel_shared_and_cache). The categories are Linux counters, so App and Kernel are estimates; no full pressure graph.",
    "wire": "Match the reference memory categories where Linux gives the same figure."
   },
   {
@@ -159,7 +159,7 @@
    "area": "view",
    "apple": "Energy tab: Energy Impact, average, App Nap, Preventing Sleep",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/window.rs:674",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:514 (EnergyAverages, to_text, from_text)",
    "note": "The 12 hr Average means persist in energy-averages.txt in the app's storage: written every minute and read at launch (model.rs EnergyAverages to_text and from_text). Energy impact is still a CPU and disk estimate. No App Nap column: a Linux analogue (cgroup freezing) needs privileges an ordinary app does not have, so it is not built. Not yet verified on Midget.",
    "wire": "Decide an App Nap analogue from cgroup state that an ordinary user can read."
   },
@@ -186,7 +186,7 @@
    "area": "view",
    "apple": "Window > GPU History, GPU columns",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:702",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:702; springboard/apps/activity-desktop/src/sample.rs:479 (parse_pmon)",
    "note": "A GPU tab (% GPU, GPU Time, graph of the machine total) reads the DRM client counters in /proc/<pid>/fdinfo, only while the tab or the GPU filter is shown. Where the driver publishes no DRM counters (a proprietary driver), the per-process share falls back to the engine column of the vendor GPU tool's process table (sample.rs parse_pmon), read only while the GPU is shown and not asked again when the tool is absent. No floating GPU History window: the SDK opens one window per app. Not yet verified on Midget.",
    "wire": "Add a Window > GPU History floating panel once the shell can host an app panel."
   },
@@ -204,7 +204,7 @@
    "area": "menu",
    "apple": "Edit > Copy",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/main.rs:186",
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:848 (copy_text); springboard/apps/activity-desktop/src/model.rs:444 (row_text)",
    "note": "Edit > Copy (cmd+C) copies the selected row as tab-separated text of the columns the tab shows (window.rs copy_text), counting from the baseline when Show Deltas is on and including the Since Baseline column when shown. Not yet verified on Midget.",
    "wire": ""
   },
