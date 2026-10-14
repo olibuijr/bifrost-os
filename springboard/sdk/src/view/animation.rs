@@ -39,21 +39,32 @@ impl Prop {
 pub struct Timing {
     pub duration: f32,
     pub curve: Curve,
+    /// Springs only: the speed the spring starts at, as a fraction of the distance per second, positive towards the
+    /// target. Zero starts from rest, as `CASpringAnimation.initialVelocity` does by default.
+    pub initial_velocity: f32,
 }
 
 impl Timing {
     /// 0.25 s ease-in-out, like an implicit `CATransaction`.
-    pub const DEFAULT: Timing = Timing { duration: DEFAULT_DURATION, curve: Curve::EaseInOut };
+    pub const DEFAULT: Timing = Timing { duration: DEFAULT_DURATION, curve: Curve::EaseInOut, initial_velocity: 0.0 };
     pub fn new(duration: f32, curve: Curve) -> Timing {
-        Timing { duration, curve }
+        Timing { duration, curve, initial_velocity: 0.0 }
     }
-    /// `CASpringAnimation`: lasts as long as the spring takes to settle.
+    /// `CASpringAnimation`: lasts as long as the spring takes to settle, and starts from rest.
     pub fn spring(damping_ratio: f32, response: f32) -> Timing {
-        Timing { duration: -1.0, curve: Curve::Spring { damping_ratio, response } }
+        Timing::spring_with_velocity(damping_ratio, response, 0.0)
+    }
+    /// `CASpringAnimation` with an `initialVelocity`: the spring starts already moving, as a fling or a drag leaves it.
+    pub fn spring_with_velocity(damping_ratio: f32, response: f32, initial_velocity: f32) -> Timing {
+        Timing { duration: -1.0, curve: Curve::Spring { damping_ratio, response }, initial_velocity }
     }
     fn animation(self, from: f32, to: f32) -> Animation {
         match self.curve {
-            Curve::Spring { damping_ratio, response } if self.duration < 0.0 => Animation::spring(from, to, 0.0, damping_ratio, response),
+            Curve::Spring { damping_ratio, response } if self.duration < 0.0 => {
+                let mut anim = Animation::spring(from, to, 0.0, damping_ratio, response);
+                anim.velocity = self.initial_velocity;
+                anim
+            }
             c => Animation::new(from, to, 0.0, self.duration, c),
         }
     }
@@ -668,6 +679,22 @@ mod tests {
         w.tick(60.0);
         assert_eq!(frame(&w, id).x, 80.0);
         assert_eq!(w.next_wake(60.0), None);
+    }
+
+    #[test]
+    fn a_spring_with_initial_velocity_moves_ahead_of_one_from_rest() {
+        let (mut rest, rest_id) = win();
+        rest.animate(Timing::spring(0.6, 0.5), |w| w.view_mut::<Container>(rest_id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        let (mut fling, fling_id) = win();
+        let pushed = Timing::spring_with_velocity(0.6, 0.5, 4.0);
+        assert_eq!(pushed.initial_velocity, 4.0);
+        assert_eq!(Timing::spring(0.6, 0.5).initial_velocity, 0.0);
+        fling.animate(pushed, |w| w.view_mut::<Container>(fling_id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        rest.tick(0.0);
+        fling.tick(0.0);
+        rest.tick(0.05);
+        fling.tick(0.05);
+        assert!(frame(&fling, fling_id).x > frame(&rest, rest_id).x, "a fling of four distances a second starts ahead");
     }
 
     #[test]
