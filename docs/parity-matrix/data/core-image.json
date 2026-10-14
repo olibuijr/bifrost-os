@@ -166,7 +166,7 @@
       "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
       "bifrost": "springboard/render/src/filter_catalogue.rs",
       "status": "partial",
-      "note": "Registry of the 28 built filters by reference name with category and input keys, filter_names(category) and attributes. Covers only filters that exist; not wired to a CIFilter object. Not yet tested on Midget."
+      "note": "Registry of the 28 built filters by reference name with category and input keys, filter_names(category) and attributes. Covers only filters that exist; not wired to a CIFilter object. Not yet tested on Midget. Headless tests in springboard/render/tests/parity_sdk-tests-07.rs: headless_catalogue_holds_the_28_built_filters_with_unique_reference_names, headless_detectors_and_render_destinations_are_not_catalogued, headless_category_listing_filters_by_category_in_catalogue_order, headless_attributes_use_the_reference_keys_and_defaults, headless_filter_info_carries_its_category_and_attribute_ranges, headless_filters_without_inputs_list_no_attributes, headless_every_default_lies_inside_its_range."
     }
   ],
   "gaps": [
