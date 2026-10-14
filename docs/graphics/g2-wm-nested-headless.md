@@ -13,6 +13,8 @@ Contract: `docs/graphics-architecture.md`; wave row: `docs/graphics-waves.md` (G
   waits for the submission, and reads the whole target back as BGRA rows, top first.
 - `resize(w, h)`: reallocates the target when the size changes.
 - Pure helpers: `bgra_to_rgba`, `rgba_at`, `full_damage`. The GLES `Headless` type is unchanged.
+- The shared Wayland client dispatcher flushes replies immediately after dispatch, independently of rendering. This
+  keeps initial registry and sync roundtrips responsive even if first-frame GPU setup takes time.
 
 ### Nested (`nested.rs`)
 
