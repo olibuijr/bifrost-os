@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/quartz",
   "macos_since": "10.4",
   "status": "partial",
-  "bifrost": "springboard/src/shell/photos/ (viewer, edit, slideshow, thumbs), springboard/sdk/src/peek.rs, springboard/ui/src/print.rs, springboard/src/shell/books/engine/pdf/, springboard/render/src/imgdec.rs, springboard/src/shell/camera/mod.rs",
-  "summary": "BifrOSt covers the viewing and editing side of ImageKit only inside shell apps (Photos viewer, edit mode and slideshow), a Quick Look preview model and thumbnail cache in the SDK, and PDF text extraction for Books. No app-facing SDK API exists for image views, slideshows, Core Image filters, PDF documents, PDF annotations or Quartz Composer.",
+  "bifrost": "springboard/src/shell/photos/ (viewer, edit, slideshow, thumbs), springboard/sdk/src/peek.rs, springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/graphics_imageio.rs, springboard/ui/src/print.rs, springboard/render/src/cg/pdf/, springboard/render/src/imgdec.rs, springboard/src/shell/camera/mod.rs",
+  "summary": "BifrOSt covers the viewing and editing side of ImageKit only inside shell apps (Photos viewer, edit mode and slideshow), a Quick Look preview model and thumbnail cache in the SDK, PDF reading and writing through the SDK document and writer wrappers, PNG and JPEG decode and encode, and PDF text extraction for Books. No app-facing SDK API exists yet for image views, slideshows, Core Image filters, PDF outlines or selections, or Quartz Composer.",
   "rea_evidence": "ev_785e790b371318807d1dd7aa7f8f22ed4ec659d31eb5ce193106fc12c14d19a5",
   "features": [
     {
@@ -52,9 +52,9 @@
     {
       "feature": "Image decoding for apps",
       "apple": "IKImageView input (CGImage-backed image loading); no direct Quartz decode call in this framework",
-      "bifrost": "springboard/render/src/imgdec.rs (decode, fit, cover, contain, is_image)",
+      "bifrost": "springboard/render/src/imgdec.rs (decode, fit, cover, contain, is_image), springboard/sdk/src/graphics_imageio.rs (detect, decode, encode, encode_jpeg)",
       "status": "partial",
-      "note": "JPEG and PNG decode into premultiplied RGBA with fit and cover scaling. Used by the shell apps; not exposed as an SDK image type."
+      "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. JPEG and PNG decode through imgdec for Shell apps. The SDK graphics_imageio wrapper adds an app-facing decode and PNG or JPEG encode. No app calls it yet."
     },
     {
       "feature": "Quick Look preview panel (QLPreviewPanel, QLPreviewItem, QLPreviewPanelDataSource)",
@@ -80,9 +80,9 @@
     {
       "feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)",
       "apple": "PDFDocument, PDFPage, PDFOutline, PDFSelection",
-      "bifrost": "springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/obj.rs, springboard/render/src/cg/pdf/extract.rs",
-      "status": "os",
-      "note": "The Books engine parses PDF objects and page trees and extracts text lines and images in reading order. It is internal to Books; apps get no document, page, outline or selection API."
+      "bifrost": "springboard/sdk/src/graphics_pdf.rs (Document), springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/obj.rs, springboard/render/src/cg/pdf/extract.rs",
+      "status": "partial",
+      "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Apps can open a PDF, read the page count and sizes, and render a page to an image through graphics_pdf::Document. The PDF engine keeps outline, selection and text extraction private; Books uses extract.rs directly."
     },
     {
       "feature": "PDF display view (PDFView, PDFThumbnailView)",
@@ -101,9 +101,9 @@
     {
       "feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)",
       "apple": "QuartzFilter, QuartzFilterManager, QuartzFilterView, Quartz Filter Constants",
-      "bifrost": "springboard/ui/src/print.rs (PrintOperation, Destination::Pdf); wired: springboard/src/shell/print_sheet.rs (write_pdf); no filters",
+      "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs, springboard/ui/src/print.rs (PrintOperation, Destination::Pdf), springboard/src/shell/print_sheet.rs (write_pdf)",
       "status": "partial",
-      "note": "Save as PDF copies the document file; printing goes through lp. There is no PDF page writer, no print-to-PDF filter pipeline and no filter manager. The print sheet is not drawn by the shell yet. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. PdfWriter creates files from pages of rectangles, lines and images. Preview saves edited PDFs with annotations through writer::save. No text, no print-to-PDF filter pipeline and no QuartzFilter manager; Save as PDF in the print sheet still copies the file."
     },
     {
       "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",
@@ -118,9 +118,9 @@
     "No parameterised image filter API (Core Image CIFilter) and no filter browser; Photos has five fixed colour filters.",
     "No scanner support (IKScannerDeviceView) and no SDK camera device browser or picture taker.",
     "The Quick Look panel model in springboard/sdk/src/peek.rs is not drawn by the shell (ToShell::Preview is decoded and ignored) and no app adopts it; no QLPreviewView.",
-    "No app-facing PDF document, page, outline or selection API (PDFKit PDFDocument, PDFPage, PDFSelection); the PDF engine is internal to Books and reflows pages.",
-    "No PDF annotation or form widget support (PDFAnnotation, widgets) in the engine or the SDK.",
-    "No PDF page writer and no print-to-PDF filter pipeline (QuartzFilter); Save as PDF is a file copy.",
+    "No PDF outline, selection or text access for apps (PDFOutline, PDFSelection); graphics_pdf::Document exposes page count, size and rendering only.",
+    "No PDF annotation or form widget support in the PDF engine, which reads no annotations or AcroForm fields; PDFCraft's annotation UI is not reachable from apps.",
+    "No PDF text in PdfWriter and no print-to-PDF filter pipeline (QuartzFilter); Save as PDF in the print sheet copies the file.",
     "No Quartz Composer equivalent (QCComposition, QCView, custom patches)."
   ]
 }
