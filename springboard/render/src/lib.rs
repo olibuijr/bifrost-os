@@ -62,6 +62,8 @@ pub mod halftone_tile_filters;
 pub mod filter_catalogue;
 pub mod gamma_fade;
 pub mod video_transfer;
+pub mod clip;
+pub mod affine;
 pub mod block_motion;
 pub mod kernel;
 pub mod gaussian_filter;
