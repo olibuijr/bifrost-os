@@ -26,7 +26,7 @@
       "apple": "LPLinkMetadata.title, iconProvider, imageProvider",
       "bifrost": "springboard/apps/news-desktop/src/pictures.rs (og_image, load)",
       "status": "partial",
-      "note": "News scrapes the og:image meta tag for its own article pictures; the logic is app-local and not an SDK API, and there is no icon lookup"
+      "note": "News reads the og:image meta tag for its article pictures; og_image, the RUV recipe rewrite, base64 and the corner rounding are tested headless in pictures::tests. Gap: the logic is app-local, not an SDK API, and there is no title or icon lookup."
     },
     {
       "feature": "Video of a link",
