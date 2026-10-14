@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.0 — 2026-10-14
+
+- Parity records: the Podcasts rows for downloads, Up Next, refresh, search, New Episodes, notes, chapters, show and
+  app settings, OPML, transcripts and menus now cite the code that does the work (feed refresh, the download queue,
+  Up Next moves, the search, the settings choices, the OPML and transcript parsers, and the main menu). No behaviour
+  change in this release.
+
 ## 1.10.0 — 2026-10-14
 
 - Up Next can be reordered by hand: press and hold an episode for half a second, then drag it to a new place. The
