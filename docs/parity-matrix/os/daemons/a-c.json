@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs",
+   "status": "partial",
+   "note": "Artwork is decoded on the worker threads of the Music app for its own library. No shared artwork service serves other apps.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AMPDeviceDiscoveryAgent.plist",
@@ -40,10 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Discovers mobile devices that the reference Music library syncs with. BifrOSt has no vendor device sync, so the job has no counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AMPDevicesAgent.plist",
@@ -61,10 +61,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Copies library contents to and from the vendor's mobile devices. BifrOSt has no vendor device sync and no library transfer service.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AMPLibraryAgent.plist",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs",
+   "status": "partial",
+   "note": "The Music app scans and indexes the local library (Artists, Albums, Songs) inside the app. It is not a shared library service, and library sharing is not built.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AMPSystemPlayerAgent.plist",
@@ -102,11 +102,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/src/shell/services/now_playing.rs",
+   "status": "partial",
+   "note": "The shell owns system playback state and transport commands for the audio service. It is not a separate player process, and no remote command endpoint is exposed to apps.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AOSHeartbeat.plist",
@@ -460,10 +460,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Plug-in helper for the reference phone app's call history, started by a notification from the vendor's telephony stack. BifrOSt has no cellular telephony, so there is no call history to serve.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.CallHistorySyncHelper.plist",
@@ -481,10 +481,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Syncs call history between the vendor's devices through the vendor's push and identity services. BifrOSt has no call history and no vendor device sync.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.CloudSettingsSyncAgent.plist",
@@ -544,10 +544,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Migrates sandbox containers when the reference system changes its container layout during an OS upgrade. BifrOSt has no OS-level container migration step, and its app data directories keep their own layout.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ContextStoreAgent.plist",
@@ -879,11 +879,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/src/shell/services/disks.rs",
+   "status": "partial",
+   "note": "The shell handles disk attach and mount in-process and posts volume mount notices on the notify bus. There is no prompt for unreadable or unsupported disks and no separate filesystem UI agent.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.Finder.plist",
@@ -1006,10 +1006,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "gap",
+   "note": "Build a game policy service that reads whether the frontmost app is a game and sets focus, notification and power policy while it runs. Gamepad input exists in springboard/src/shell/services/gamepad_service.rs, but no policy uses it.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.GenerativeFunctions.agentstored.plist",
@@ -1089,11 +1089,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs",
+   "status": "partial",
+   "note": "Note links (notes://note/<id>) are built and parsed, and the Notes app tests cover them. No backlink indicator and no linked-notes panel exist.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.LocalAuthentication.UIAgent.plist",
@@ -1425,11 +1425,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/ui/src/pip_window.rs",
+   "status": "partial",
+   "note": "The picture-in-picture controller and window placement exist as tested pure state. The shell does not yet draw the floating window or host it as a separate process.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.PackageUIKit.InstallStatus.plist",
@@ -1573,10 +1573,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Downloads the vendor's phishing and malware lists for the reference browser. BifrOSt's browser app has no vendor list service and no lookup servers to call.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SafeEjectGPUAgent.plist",
@@ -1846,10 +1846,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Shares presence and status between contacts through the vendor's cloud, push and identity services. BifrOSt has no cloud presence service.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.StorageManagement.Service.plist",
@@ -1908,11 +1908,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "The shell draws the menu bar and its status items in-process, with no separate server process. No host for third-party menu extras is provided.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.TMHelperAgent.plist",
@@ -2118,11 +2118,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/src/shell/account.rs",
+   "status": "partial",
+   "note": "The account picture is read from ~/.face or avatar.png in the data directory. It is not synced from the contact card, and nothing in the shell watches for contact changes.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.VoiceOver.plist",
@@ -2581,10 +2581,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Shows user notices for container events of the reference copy-on-write filesystem, such as encryption and volume prompts. BifrOSt volumes do not use that filesystem.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.appleaccountd.plist",
@@ -2812,10 +2812,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Runs the reference system's camera tracking services for hand, gaze and device tracking. BifrOSt targets PC and tablet hardware with no such sensor pipeline.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.askpermissiond.plist",
@@ -2854,10 +2854,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Relays screen-time requests to a family organiser through the vendor's messaging service and screen-time store. BifrOSt has no family account group.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.assessmentagent.plist",
@@ -2875,10 +2875,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Runs the managed assessment lock for classroom and enterprise exams, driven by configuration profiles. BifrOSt is not MDM-managed.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.assistant_cdmd.plist",
@@ -2980,10 +2980,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Stores and serves the vendor's animated avatars for messaging and calls. BifrOSt has no avatar service.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.avconferenced.plist",
@@ -3253,10 +3253,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Serves business messaging accounts through the vendor's business chat service and its servers. BifrOSt has no business messaging.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.cache_delete.plist",
@@ -3273,11 +3273,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/src/shell/storage.rs",
+   "status": "partial",
+   "note": "The shell trims disposable caches when free space falls below a threshold, with one call that frees every cache. It runs only on low space, with no daily sweep.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.calaccessd.plist",
@@ -3337,10 +3337,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Stores the reference phone app's call history and serves it to the sync helpers. BifrOSt has no cellular telephony, so no call log exists to store.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.callintelligenced.plist",
@@ -3379,10 +3379,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Verifies the identity of telephone callers through the vendor's verification service. BifrOSt has no telephony.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.campo.plist",
@@ -3399,11 +3399,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/apps/assistant-desktop",
+   "status": "partial",
+   "note": "The assistant app runs on demand and has no always-on background service. No on-device model service is provided, and the reference daemon is behind a feature flag of the reference system.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.cdpd.plist",
@@ -3421,10 +3421,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Holds the vendor's keychain trust circle and syncs secure objects through the vendor's cloud. BifrOSt keeps no vendor keychain.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.cfnetwork.AuthBrokerAgent.plist",
@@ -3631,10 +3631,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Syncs communication limits for family accounts through the vendor's cloud key-value store. BifrOSt has no family account group.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.cmio.ContinuityCaptureAgent.plist",
@@ -3736,10 +3736,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Runs the vendor's on-device sensitive-content analysis for messaging and keeps an analysis history. BifrOSt has no messaging app with that feature.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.companiond.plist",
@@ -3840,11 +3840,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/sdk/src/container_layout.rs",
+   "status": "partial",
+   "note": "Models the per-app Documents, Library, Caches and tmp folders, and refuses symbolic links when creating them. The shell does not create or use these folders yet, and no container manager process exists.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.controlcenter.plist",
@@ -3945,11 +3945,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/src/shell/spotindex.rs",
+   "status": "partial",
+   "note": "The shell indexes files and apps for search in-process. There is no importer plug-in host, so importers do not run in separate worker processes.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.UASharedPasteboardProgressUI.plist",
@@ -4113,11 +4113,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock",
+   "status": "partial",
+   "note": "The initramfs hook unlocks the encrypted system volume at boot. There is no prompt in the user session to unlock other encrypted volumes after login.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ctkbind.plist",
@@ -4366,10 +4366,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Issues app device-attestation tokens through the vendor's attestation servers. BifrOSt has no vendor attestation.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.devicemanagementclient.ManagedAppsAgent.plist",
@@ -4429,10 +4429,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Hosts the vendor's diagnostic extensions and their feedback collection flow, with a wake key for the vendor's messaging service. BifrOSt has no extension host, and its crash and log tools are separate.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.diagnostics_agent.plist",
@@ -4534,10 +4534,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Device management agent for enterprise declarative configuration and remote management. BifrOSt is not MDM-managed.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.donotdisturbd.plist",
@@ -4597,10 +4597,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "n/a",
+   "note": "Asks the user to allow developer UI automation for the reference test tooling. BifrOSt drives its apps through its own control sockets and has no automation consent gate.",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.dt.CommandLineTools.installondemand.plist",
