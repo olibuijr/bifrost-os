@@ -5,7 +5,6 @@
 //! answered in `service_reply`. `color.rs` holds the pure conversions, `loupe.rs` the magnifier geometry and pointer
 //! state, `window.rs` the state and layout, and `draw.rs` the painting.
 
-mod aperture;
 mod color;
 mod draw;
 mod loupe;

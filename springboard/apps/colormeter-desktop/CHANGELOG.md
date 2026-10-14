@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- Changed: the aperture model that was kept beside the window (an odd-size aperture type, its bounds and an update gate) is removed. The window already reads the aperture, the loupe outline and Update Continuously through its own tested state, so the unused copy only duplicated them.
+- Changed: the matrix notes for the aperture, Update Continuously and the menu rows describe what the window does now. The aperture slider, the loupe outline and the View menu are wired; the checks on Midget remain.
+
 ## 0.3.0
 
 - New: View and Color menus. View has Update Continuously, Display In (Native, sRGB, Display P3, Adobe RGB, Generic RGB), Display Values (hexadecimal, 8-bit and 16-bit decimal, percent), Magnification, Show Mouse Location, Lock Position (cmd+L), Lock X Coordinate (cmd+X), Lock Y Coordinate (cmd+Y) and aperture size steps. Color has Copy Color as Text (shift+cmd+C) and Copy Color as Image (alt+cmd+C). The menus and the toolbar share the same actions.
