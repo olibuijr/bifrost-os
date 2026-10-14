@@ -4,7 +4,7 @@
 //! data directory. No drawing here.
 
 use crate::swatch::{self, Rgb};
-use bifrost_app::attributed::AttributedString;
+use bifrost_app::attributed::{AttributedString, ColorToken};
 use bifrost_app::controls::text::TextBuffer;
 use bifrost_core::json::{self, Json};
 use std::ops::Range;
@@ -721,18 +721,36 @@ impl Note {
     }
 }
 
-/// The rich text runs of an RTF document: its text with the bold, italic, underline and strikethrough of each part.
-/// Other formatting is left at the note's defaults.
+/// The rich text runs of an RTF document: its text with the bold, italic, underline, strikethrough and text colour of
+/// each part. Other formatting is left at the note's defaults.
 pub fn runs_from_rtf(rtf: &str) -> Vec<(String, Style)> {
     let attributed = AttributedString::from_rtf(rtf);
     let runs: Vec<(String, Style)> = attributed
         .runs()
         .map(|(text, attrs)| {
-            let style = Style { bold: attrs.bold, italic: attrs.italic, underline: attrs.underline, strike: attrs.strikethrough, ..Style::default() };
+            let style = Style {
+                bold: attrs.bold,
+                italic: attrs.italic,
+                underline: attrs.underline,
+                strike: attrs.strikethrough,
+                ink: ink_of_colour(attrs.color),
+                ..Style::default()
+            };
             (text.to_string(), style)
         })
         .collect();
     runs
+}
+
+/// The Font > Text Colour an RTF colour becomes: the nearest of the five inks. Yellow and the default label colours
+/// are black, since yellow text cannot be read on a sticky note.
+fn ink_of_colour(colour: Option<ColorToken>) -> Ink {
+    match colour {
+        Some(ColorToken::Red | ColorToken::Orange) => Ink::Red,
+        Some(ColorToken::Blue) => Ink::Blue,
+        Some(ColorToken::Green) => Ink::Green,
+        _ => Ink::Black,
+    }
 }
 
 /// The byte ranges of the web addresses in `text`: words that start with `http://`, `https://` or `www.`, without
@@ -947,15 +965,14 @@ impl Board {
         ids
     }
 
-    /// Every place `query` occurs, note by note in stacking order. The comparison ignores ASCII case.
-    pub fn matches(&self, query: &str) -> Vec<Match> {
+    /// Every place `query` occurs, note by note in stacking order. With `ignore_case` the comparison ignores ASCII case.
+    pub fn matches(&self, query: &str, ignore_case: bool) -> Vec<Match> {
         let mut out = Vec::new();
         if query.is_empty() {
             return out;
         }
-        let needle = query.to_ascii_lowercase();
         for note in &self.notes {
-            let hay = note.text.to_ascii_lowercase();
+            let (hay, needle) = fold(&note.text, query, ignore_case);
             let mut pos = 0;
             while let Some(i) = hay[pos..].find(&needle) {
                 let start = pos + i;
@@ -967,8 +984,8 @@ impl Board {
     }
 
     /// The match after (or before) the focused note's selection, wrapping round the board.
-    pub fn find_step(&self, query: &str, forward: bool) -> Option<Match> {
-        let all = self.matches(query);
+    pub fn find_step(&self, query: &str, forward: bool, ignore_case: bool) -> Option<Match> {
+        let all = self.matches(query, ignore_case);
         let index_of = |id: u64| self.notes.iter().position(|n| n.id == id).unwrap_or(0);
         let here = match self.focused() {
             Some(n) => {
@@ -995,26 +1012,31 @@ impl Board {
     }
 
     /// Replaces the selection of the focused note with `with` when the selection is a match of `query` (ignoring
-    /// ASCII case). False when it is not, so Replace on a stray selection changes nothing.
-    pub fn replace_selected(&mut self, query: &str, with: &str, now: u64) -> bool {
+    /// ASCII case when `ignore_case` is set). False when it is not, so Replace on a stray selection changes nothing.
+    pub fn replace_selected(&mut self, query: &str, with: &str, ignore_case: bool, now: u64) -> bool {
         let Some(note) = self.focused_mut() else { return false };
-        if query.is_empty() || !note.has_selection() || !note.selected_text().eq_ignore_ascii_case(query) {
+        let selected = note.selected_text();
+        let same = if ignore_case { selected.eq_ignore_ascii_case(query) } else { selected == query };
+        if query.is_empty() || !note.has_selection() || !same {
             return false;
         }
         note.type_text(with, now);
         true
     }
 
-    /// Replaces every match of `query` in every note with `with` (Replace All). Returns how many were replaced.
-    pub fn replace_all(&mut self, query: &str, with: &str, now: u64) -> usize {
+    /// Replaces every match of `query` with `with` (Replace All): in every note, or only in the note `only`. Returns how
+    /// many were replaced.
+    pub fn replace_all(&mut self, query: &str, with: &str, ignore_case: bool, only: Option<u64>, now: u64) -> usize {
         if query.is_empty() {
             return 0;
         }
-        let needle = query.to_ascii_lowercase();
         let mut total = 0;
         for note in &mut self.notes {
+            if only.is_some_and(|id| note.id != id) {
+                continue;
+            }
             // lower-casing ASCII keeps every byte offset, so the positions in `hay` index `note.text` too
-            let hay = note.text.to_ascii_lowercase();
+            let (hay, needle) = fold(&note.text, query, ignore_case);
             let mut out = String::with_capacity(note.text.len());
             let (mut pos, mut count) = (0, 0);
             while let Some(i) = hay[pos..].find(&needle) {
@@ -1033,6 +1055,16 @@ impl Board {
             total += count;
         }
         total
+    }
+}
+
+/// The text and the query as a search compares them. Ignoring case lower-cases ASCII only, which keeps every byte
+/// offset, so an offset found in the folded text is also an offset in the note's own text.
+fn fold(text: &str, query: &str, ignore_case: bool) -> (String, String) {
+    if ignore_case {
+        (text.to_ascii_lowercase(), query.to_ascii_lowercase())
+    } else {
+        (text.to_string(), query.to_string())
     }
 }
 
@@ -1539,14 +1571,25 @@ mod tests {
     fn replace_selected_only_replaces_a_selection_that_matches() {
         let mut b = Board::default();
         let a = b.add_text("Foo and foo", 0.0, 0.0, 0);
-        assert!(!b.replace_selected("foo", "bar", 1), "nothing is selected");
+        assert!(!b.replace_selected("foo", "bar", true, 1), "nothing is selected");
         b.find_mut(a).unwrap().set_caret(0, false);
         b.find_mut(a).unwrap().set_caret(3, true);
-        assert!(!b.replace_selected("and", "bar", 1), "the selection is another word");
-        assert!(b.replace_selected("foo", "bar", 2), "case is ignored");
+        assert!(!b.replace_selected("and", "bar", true, 1), "the selection is another word");
+        assert!(b.replace_selected("foo", "bar", true, 2), "case is ignored");
         assert_eq!(b.find(a).unwrap().text, "bar and foo");
         assert_eq!(b.find(a).unwrap().modified, 2);
-        assert!(!b.replace_selected("", "x", 3));
+        assert!(!b.replace_selected("", "x", true, 3));
+    }
+
+    #[test]
+    fn replace_selected_respects_case_when_it_is_not_ignored() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo", 0.0, 0.0, 0);
+        b.find_mut(a).unwrap().set_caret(0, false);
+        b.find_mut(a).unwrap().set_caret(3, true);
+        assert!(!b.replace_selected("foo", "bar", false, 1), "Foo is not foo when case counts");
+        assert!(b.replace_selected("Foo", "bar", false, 2));
+        assert_eq!(b.find(a).unwrap().text, "bar");
     }
 
     #[test]
@@ -1555,18 +1598,37 @@ mod tests {
         let a = b.add_text("Foo bar FOO", 0.0, 0.0, 0);
         let c = b.add_text("none here", 0.0, 0.0, 0);
         let d = b.add_text("foo", 0.0, 0.0, 0);
-        assert_eq!(b.replace_all("foo", "x", 9), 3);
+        assert_eq!(b.replace_all("foo", "x", true, None, 9), 3);
         assert_eq!(b.find(a).unwrap().text, "x bar x");
         assert_eq!(b.find(c).unwrap().text, "none here");
         assert_eq!(b.find(c).unwrap().modified, 0, "an untouched note keeps its date");
         assert_eq!((b.find(d).unwrap().text.as_str(), b.find(d).unwrap().modified), ("x", 9));
-        assert_eq!(b.replace_all("zzz", "y", 9), 0);
-        assert_eq!(b.replace_all("", "y", 9), 0);
+        assert_eq!(b.replace_all("zzz", "y", true, None, 9), 0);
+        assert_eq!(b.replace_all("", "y", true, None, 9), 0);
         // deleting with an empty replacement, and a replacement that contains the search text
-        assert_eq!(b.replace_all("x", "", 10), 3);
+        assert_eq!(b.replace_all("x", "", true, None, 10), 3);
         assert_eq!(b.find(a).unwrap().text, " bar ");
         b.add_text("a", 0.0, 0.0, 0);
-        assert_eq!(b.replace_all("a", "aa", 11), 2);
+        assert_eq!(b.replace_all("a", "aa", true, None, 11), 2);
+    }
+
+    #[test]
+    fn replace_all_in_one_note_leaves_the_others_alone() {
+        let mut b = Board::default();
+        let a = b.add_text("foo one", 0.0, 0.0, 0);
+        let c = b.add_text("foo two", 0.0, 0.0, 0);
+        assert_eq!(b.replace_all("foo", "bar", true, Some(a), 4), 1);
+        assert_eq!(b.find(a).unwrap().text, "bar one");
+        assert_eq!(b.find(c).unwrap().text, "foo two", "the other note keeps its text");
+        assert_eq!(b.find(c).unwrap().modified, 0);
+    }
+
+    #[test]
+    fn replace_all_with_case_counted_matches_only_the_same_case() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo foo FOO", 0.0, 0.0, 0);
+        assert_eq!(b.replace_all("foo", "x", false, None, 1), 1);
+        assert_eq!(b.find(a).unwrap().text, "Foo x FOO");
     }
 
     #[test]
@@ -1575,11 +1637,19 @@ mod tests {
         let a = b.add_text("Foo bar foo", 0.0, 0.0, 0);
         let c = b.add_text("nothing", 0.0, 0.0, 0);
         let d = b.add_text("FOO", 0.0, 0.0, 0);
-        let m = b.matches("foo");
+        let m = b.matches("foo", true);
         assert_eq!(m, vec![Match { note: a, start: 0, end: 3 }, Match { note: a, start: 8, end: 11 }, Match { note: d, start: 0, end: 3 }]);
-        assert!(b.matches("").is_empty());
-        assert!(b.matches("zzz").is_empty());
+        assert!(b.matches("", true).is_empty());
+        assert!(b.matches("zzz", true).is_empty());
         let _ = c;
+    }
+
+    #[test]
+    fn find_with_case_counted_skips_other_cases() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo foo FOO", 0.0, 0.0, 0);
+        assert_eq!(b.matches("foo", false), vec![Match { note: a, start: 4, end: 7 }]);
+        assert_eq!(b.matches("FOO", false), vec![Match { note: a, start: 8, end: 11 }]);
     }
 
     #[test]
@@ -1588,23 +1658,24 @@ mod tests {
         let a = b.add_text("foo bar foo", 0.0, 0.0, 0);
         let c = b.add_text("foo", 0.0, 0.0, 0);
         b.focus = None;
-        let first = b.find_step("foo", true).unwrap();
+        let first = b.find_step("foo", true, true).unwrap();
         assert_eq!((first.note, first.start), (a, 0));
         b.select_match(&first);
         assert_eq!(b.focus, Some(a));
         assert_eq!(b.find(a).unwrap().selected_text(), "foo");
-        let second = b.find_step("foo", true).unwrap();
+        let second = b.find_step("foo", true, true).unwrap();
         assert_eq!((second.note, second.start), (a, 8));
         b.select_match(&second);
-        let third = b.find_step("foo", true).unwrap();
+        let third = b.find_step("foo", true, true).unwrap();
         assert_eq!((third.note, third.start), (c, 0));
         // raising moved note c to the front; stepping on from it wraps to the first match
         b.select_match(&third);
-        let wrapped = b.find_step("foo", true).unwrap();
+        let wrapped = b.find_step("foo", true, true).unwrap();
         assert_eq!((wrapped.note, wrapped.start), (a, 0));
-        let back = b.find_step("foo", false).unwrap();
+        let back = b.find_step("foo", false, true).unwrap();
         assert_eq!((back.note, back.start), (a, 8));
-        assert!(b.find_step("zzz", true).is_none());
+        assert!(b.find_step("zzz", true, true).is_none());
+        assert!(b.find_step("FOO", true, false).is_none(), "the case-counted search finds no upper case foo in these notes");
     }
 
     #[test]
@@ -1720,6 +1791,17 @@ mod tests {
         assert!(bold_run.is_some_and(|s| s.bold));
         assert!(runs.iter().any(|(t, s)| t.contains("it") && s.italic));
         assert!(runs.iter().any(|(t, s)| t.contains("plain") && !s.bold));
+    }
+
+    #[test]
+    fn rich_text_colours_become_inks() {
+        let rtf = r"{\rtf1\ansi{\colortbl;\red255\green0\blue0;}plain \cf1 red\cf0  plain}";
+        let runs = runs_from_rtf(rtf);
+        assert!(runs.iter().any(|(t, s)| t.contains("red") && s.ink == Ink::Red));
+        assert!(runs.iter().any(|(t, s)| t.contains("plain") && s.ink == Ink::Black));
+        assert_eq!(ink_of_colour(Some(ColorToken::Yellow)), Ink::Black, "yellow text is not readable on a note");
+        assert_eq!(ink_of_colour(Some(ColorToken::Orange)), Ink::Red);
+        assert_eq!(ink_of_colour(None), Ink::Black);
     }
 
     #[test]

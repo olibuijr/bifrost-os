@@ -3,7 +3,6 @@
 //! on every change, and edits can be undone. Find searches all notes; spelling, substitutions and data detectors mark
 //! and change text as it is typed; a note prints, exports and imports as text, and imports rich text too.
 
-mod rgb;
 mod board;
 mod dates;
 mod history;
@@ -23,7 +22,7 @@ use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::layout::UNIFIED_BAR_PT;
-use bifrost_app::print::{PrintError, PrintOperation};
+use bifrost_app::print::{Orientation, PaperSize, PrintError, PrintInfo, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_META, CHORD_SHIFT};
 use bifrost_app::widgets;
 use bifrost_core::json::Json;
@@ -100,6 +99,22 @@ const MENU_SMART_DASHES: u32 = 97;
 const MENU_DETECT_DATES: u32 = 98;
 const MENU_DETECT_ADDRESSES: u32 = 99;
 const MENU_DETECT_PHONES: u32 = 100;
+const MENU_IGNORE_CASE: u32 = 101;
+const MENU_REPLACE_IN_NOTE: u32 = 102;
+const MENU_PORTRAIT: u32 = 103;
+const MENU_LANDSCAPE: u32 = 104;
+const MENU_PAPER_BASE: u32 = 105; // 105..=109, one per entry of PAPERS
+
+/// The paper sizes Page Setup offers, in menu order.
+const PAPERS: [PaperSize; 5] = [PaperSize::A4, PaperSize::Letter, PaperSize::Legal, PaperSize::A5, PaperSize::A3];
+
+/// What a replace changes: the selected match, every match in the focused note, or every match in every note.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scope {
+    Selection,
+    FocusedNote,
+    AllNotes,
+}
 
 /// The buttons of the delete confirmation.
 const SHEET_CANCEL: u32 = 1;
@@ -237,6 +252,8 @@ struct StickiesApp {
     last_press: Option<(u64, f64)>,
     /// The board as it was when a press began, for the undo step of a move or resize.
     before_drag: Option<Board>,
+    /// The page Print lays the note out for: paper and orientation, set by File > Page Setup for this session.
+    page: PrintInfo,
     /// The spelling checker, made the first time it is needed.
     spelling: Option<Spelling>,
     /// The switches of the Spelling, Substitutions and Data Detectors menus.
@@ -266,6 +283,7 @@ impl StickiesApp {
             style_clip: None,
             last_press: None,
             before_drag: None,
+            page: PrintInfo::default(),
             spelling: None,
             prefs: Prefs::default(),
             marks: Marks::new(),
@@ -672,7 +690,7 @@ impl StickiesApp {
                     return false;
                 }
             }
-            KeyInput::Code(13) => return self.replace(false),
+            KeyInput::Code(13) => return self.replace(Scope::Selection),
             KeyInput::Code(27) => {
                 self.find = None;
                 self.replacing = false;
@@ -682,11 +700,11 @@ impl StickiesApp {
         true
     }
 
-    /// Replaces the selected match (and steps to the next), or every match with `all`, and records one undo step
-    /// when something was replaced. With no find text the find bar opens instead.
-    fn replace(&mut self, all: bool) -> bool {
+    /// Replaces the matches in `scope` and records one undo step when something was replaced. With no find text the
+    /// find bar opens instead.
+    fn replace(&mut self, scope: Scope) -> bool {
         let before = self.board.clone();
-        if self.replace_step(all, Self::now()) > 0 {
+        if self.replace_step(scope, Self::now()) > 0 {
             if let Some(before) = before {
                 self.history.push("Replace", before);
             }
@@ -695,19 +713,27 @@ impl StickiesApp {
     }
 
     /// The replacement itself, with no undo step. Returns how many matches were replaced.
-    fn replace_step(&mut self, all: bool, now: u64) -> usize {
+    fn replace_step(&mut self, scope: Scope, now: u64) -> usize {
         let query = self.find.clone().unwrap_or_else(|| self.last_find.clone());
         if query.is_empty() {
             self.find = Some(String::new());
             return 0;
         }
         let with = self.replace.clone();
+        let ignore_case = self.prefs.find_ignore_case;
         let Some(board) = &mut self.board else { return 0 };
-        let done = if all { board.replace_all(&query, &with, now) } else { usize::from(board.replace_selected(&query, &with, now)) };
+        let done = match scope {
+            Scope::Selection => usize::from(board.replace_selected(&query, &with, ignore_case, now)),
+            Scope::FocusedNote => match board.focus {
+                Some(id) => board.replace_all(&query, &with, ignore_case, Some(id), now),
+                None => 0,
+            },
+            Scope::AllNotes => board.replace_all(&query, &with, ignore_case, None, now),
+        };
         if done > 0 {
             self.dirty = true;
         }
-        if !all {
+        if scope == Scope::Selection {
             self.step_find(true);
         }
         done
@@ -800,8 +826,9 @@ impl StickiesApp {
             self.find = Some(String::new());
             return;
         }
+        let ignore_case = self.prefs.find_ignore_case;
         let Some(board) = &mut self.board else { return };
-        if let Some(found) = board.find_step(&query, forward) {
+        if let Some(found) = board.find_step(&query, forward, ignore_case) {
             board.select_match(&found);
         }
     }
@@ -827,7 +854,7 @@ impl StickiesApp {
     fn print(&self, ctx: &Ctx) {
         let Some(note) = self.board.as_ref().and_then(|b| b.focused()) else { return };
         let title = if note.title().is_empty() { "Sticky Note".to_string() } else { note.title() };
-        let message = match PrintOperation::text(title, note.text.clone()).run() {
+        let message = match PrintOperation::text(title, note.text.clone()).with_info(self.page.clone()).run() {
             Ok(_) => "Sent to the printer".to_string(),
             Err(PrintError::NoCups) => "The printing service is not running".to_string(),
             Err(PrintError::NoPrinter) => "No printer is set up".to_string(),
@@ -1151,10 +1178,21 @@ impl StickiesApp {
                     _ => false,
                 }
             }
-            MENU_REPLACE | MENU_REPLACE_ALL => {
+            MENU_REPLACE | MENU_REPLACE_ALL | MENU_REPLACE_IN_NOTE => {
                 self.colour_entry = None;
                 self.link_entry = None;
-                self.replace(id == MENU_REPLACE_ALL)
+                let scope = match id {
+                    MENU_REPLACE_ALL => Scope::AllNotes,
+                    MENU_REPLACE_IN_NOTE => Scope::FocusedNote,
+                    _ => Scope::Selection,
+                };
+                self.replace(scope)
+            }
+            MENU_IGNORE_CASE => {
+                self.prefs.find_ignore_case = !self.prefs.find_ignore_case;
+                let prefs = self.prefs;
+                prefs.save(&mut ctx.defaults_mut());
+                true
             }
             MENU_ADD_LINK => {
                 let open = self.board.as_ref().and_then(|b| b.focused()).is_some();
@@ -1194,6 +1232,16 @@ impl StickiesApp {
                 self.print(ctx);
                 false
             }
+            MENU_PORTRAIT | MENU_LANDSCAPE => {
+                self.page.orientation = if id == MENU_LANDSCAPE { Orientation::Landscape } else { Orientation::Portrait };
+                false
+            }
+            MENU_PAPER_BASE..=109 => {
+                if let Some(paper) = PAPERS.get((id - MENU_PAPER_BASE) as usize) {
+                    self.page.paper = *paper;
+                }
+                false
+            }
             MENU_IMPORT => self.import_panel(ctx),
             MENU_EXPORT => {
                 let focus = self.board.as_ref().and_then(|b| b.focus);
@@ -1206,20 +1254,28 @@ impl StickiesApp {
 
     fn file_menu(&self, has_focus: bool) -> AppMenu {
         let any = self.board.as_ref().is_some_and(|b| !b.notes.is_empty());
-        AppMenu {
-            title: "File".into(),
-            items: vec![
-                AppMenuItem::new(MENU_NEW, "New Sticky Note").key("cmd+n"),
-                AppMenuItem::new(MENU_DUPLICATE, "Duplicate Sticky Note").key("cmd+d").enabled(has_focus),
-                AppMenuItem::new(MENU_DELETE, "Delete Sticky Note").key("cmd+shift+backspace").enabled(has_focus),
-                AppMenuItem::separator(),
-                AppMenuItem::new(MENU_IMPORT, "Import Text...").key("cmd+o"),
-                AppMenuItem::new(MENU_EXPORT, "Export Sticky Note...").enabled(has_focus),
-                AppMenuItem::new(MENU_EXPORT_ALL, "Export All Sticky Notes...").enabled(any),
-                AppMenuItem::separator(),
-                AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(has_focus),
-            ],
+        let mut items = vec![
+            AppMenuItem::new(MENU_NEW, "New Sticky Note").key("cmd+n"),
+            AppMenuItem::new(MENU_DUPLICATE, "Duplicate Sticky Note").key("cmd+d").enabled(has_focus),
+            AppMenuItem::new(MENU_DELETE, "Delete Sticky Note").key("cmd+shift+backspace").enabled(has_focus),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_IMPORT, "Import Text...").key("cmd+o"),
+            AppMenuItem::new(MENU_EXPORT, "Export Sticky Note...").enabled(has_focus),
+            AppMenuItem::new(MENU_EXPORT_ALL, "Export All Sticky Notes...").enabled(any),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(has_focus),
+            AppMenuItem::separator(),
+            AppMenuItem::submenu("Paper Size"),
+        ];
+        for (i, paper) in PAPERS.iter().enumerate() {
+            let id = MENU_PAPER_BASE + i as u32;
+            items.push(AppMenuItem::new(id, paper.media()).checked(self.page.paper == *paper).depth(1));
         }
+        items.push(AppMenuItem::submenu("Orientation"));
+        let portrait = self.page.orientation == Orientation::Portrait;
+        items.push(AppMenuItem::new(MENU_PORTRAIT, "Portrait").checked(portrait).depth(1));
+        items.push(AppMenuItem::new(MENU_LANDSCAPE, "Landscape").checked(!portrait).depth(1));
+        AppMenu { title: "File".into(), items }
     }
 
     fn edit_menu(&self, ctx: &Ctx) -> AppMenu {
@@ -1252,6 +1308,8 @@ impl StickiesApp {
                 AppMenuItem::new(MENU_USE_SELECTION, "Use Selection for Find").key("cmd+e").enabled(has_selection),
                 AppMenuItem::new(MENU_REPLACE, "Replace").enabled(can_replace),
                 AppMenuItem::new(MENU_REPLACE_ALL, "Replace All").enabled(can_replace),
+                AppMenuItem::new(MENU_REPLACE_IN_NOTE, "Replace All in Current Note").enabled(can_replace && has_focus),
+                AppMenuItem::new(MENU_IGNORE_CASE, "Ignore Case").checked(p.find_ignore_case),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_ADD_LINK, "Add Link...").key("cmd+k").enabled(has_focus),
                 AppMenuItem::new(MENU_OPEN_LINK, "Open Link").enabled(has_link),
@@ -1520,7 +1578,8 @@ impl App for StickiesApp {
         if let Some(board) = &self.board {
             board::draw(canvas, &ctx.ui, board, &self.marks);
             if let Some(query) = &self.find {
-                board::draw_find(canvas, &ctx.ui, query, &self.replace, self.replacing, board.matches(query).len());
+                let found = board.matches(query, self.prefs.find_ignore_case).len();
+                board::draw_find(canvas, &ctx.ui, query, &self.replace, self.replacing, found);
             }
             if let Some(entry) = &self.colour_entry {
                 board::draw_colour_entry(canvas, &ctx.ui, entry);
@@ -1768,7 +1827,7 @@ mod tests {
         let mut app = app_with(&["foo one", "Foo two"]);
         app.find = Some("foo".into());
         app.replace = "baz".into();
-        assert!(app.replace(true));
+        assert!(app.replace(Scope::AllNotes));
         let texts: Vec<&str> = app.board.as_ref().unwrap().notes.iter().map(|n| n.text.as_str()).collect();
         assert_eq!(texts, vec!["baz one", "baz two"]);
         assert!(app.undo());
@@ -1778,13 +1837,48 @@ mod tests {
     }
 
     #[test]
+    fn replace_all_in_the_focused_note_leaves_the_other_notes_alone() {
+        let mut app = app_with(&["foo one", "foo two"]);
+        let first = app.board.as_ref().unwrap().notes[0].id;
+        app.board.as_mut().unwrap().focus = Some(first);
+        app.find = Some("foo".into());
+        app.replace = "baz".into();
+        assert!(app.replace(Scope::FocusedNote));
+        let texts: Vec<&str> = app.board.as_ref().unwrap().notes.iter().map(|n| n.text.as_str()).collect();
+        assert_eq!(texts, vec!["baz one", "foo two"]);
+        assert!(app.undo(), "one undo step");
+        let texts: Vec<&str> = app.board.as_ref().unwrap().notes.iter().map(|n| n.text.as_str()).collect();
+        assert_eq!(texts, vec!["foo one", "foo two"]);
+    }
+
+    #[test]
+    fn page_setup_lists_each_paper_size_once() {
+        let names: Vec<&str> = PAPERS.iter().map(|p| p.media()).collect();
+        assert_eq!(names.len(), 5);
+        for (i, a) in names.iter().enumerate() {
+            assert!(!names[i + 1..].contains(a), "{a} is listed twice");
+        }
+        assert_eq!(PrintInfo::default().paper, PAPERS[0], "the first paper in the menu is the default");
+    }
+
+    #[test]
+    fn replace_in_the_focused_note_without_focus_changes_nothing() {
+        let mut app = app_with(&["foo"]);
+        app.find = Some("foo".into());
+        app.replace = "baz".into();
+        assert!(app.replace(Scope::FocusedNote));
+        assert_eq!(app.board.as_ref().unwrap().notes[0].text, "foo");
+        assert!(!app.history.can_undo());
+    }
+
+    #[test]
     fn replace_with_nothing_found_makes_no_undo_step_and_without_find_text_opens_the_bar() {
         let mut app = app_with(&["alpha"]);
         app.find = Some("zzz".into());
-        assert!(app.replace(true));
+        assert!(app.replace(Scope::AllNotes));
         assert!(!app.history.can_undo());
         app.find = None;
-        assert!(app.replace(false));
+        assert!(app.replace(Scope::Selection));
         assert_eq!(app.find.as_deref(), Some(""), "no find text: the bar opens");
         assert!(!app.history.can_undo());
     }
@@ -1825,7 +1919,7 @@ mod tests {
 
     #[test]
     fn replace_and_custom_colour_ids_do_not_clash_with_the_other_menu_ids() {
-        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL];
+        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
         for (i, a) in ids.iter().enumerate() {
             assert!(!(MENU_COLOUR_BASE..=15).contains(a) && !(MENU_ARRANGE_BASE..=56).contains(a) && !(MENU_INK_BASE..=64).contains(a));
             assert!(![MENU_INFO_CREATED, MENU_INFO_MODIFIED, MENU_ZOOM, MENU_TRANSLUCENT].contains(a));
