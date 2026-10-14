@@ -593,6 +593,18 @@ pub fn object_type_name(object_type: u8) -> Option<&'static str> {
 /// Reads the object type, sample rate and channel count of an AudioSpecificConfig. An object type of 31 is an escape
 /// followed by six more bits (32 plus their value), and a rate index of 15 is followed by the 24-bit rate itself.
 pub fn parse_asc(asc: &[u8]) -> Option<AudioSpecificConfig> {
+    read_asc(asc).map(|(config, _)| config)
+}
+
+/// The SBR output rate that an AudioSpecificConfig signals explicitly: the extension sampling frequency that follows the
+/// channel count of an SBR object (5 or 29). None when the config is not an SBR object, or when it stops before the
+/// extension (such a config is still valid and reports its core rate through [`parse_asc`]).
+pub fn sbr_output_rate(asc: &[u8]) -> Option<u32> {
+    read_asc(asc).and_then(|(_, output_rate)| output_rate)
+}
+
+/// Reads an AudioSpecificConfig and the explicit SBR output rate, when the config carries one.
+fn read_asc(asc: &[u8]) -> Option<(AudioSpecificConfig, Option<u32>)> {
     let mut pos = 0;
     let mut bits = |n: usize| -> Option<u32> {
         let mut v = 0;
@@ -611,7 +623,16 @@ pub fn parse_asc(asc: &[u8]) -> Option<AudioSpecificConfig> {
         i => *AAC_RATES.get(i as usize)?,
     };
     let channels = bits(4)? as u16;
-    Some(AudioSpecificConfig { object_type: object_type as u8, sample_rate: rate, channels: if channels == 7 { 8 } else { channels } })
+    let output_rate = match object_type {
+        5 | 29 => match bits(4) {
+            Some(15) => bits(24),
+            Some(i) => AAC_RATES.get(i as usize).copied(),
+            None => None,
+        },
+        _ => None,
+    };
+    let config = AudioSpecificConfig { object_type: object_type as u8, sample_rate: rate, channels: if channels == 7 { 8 } else { channels } };
+    Some((config, output_rate))
 }
 
 /// (sample rate, channels) from an AudioSpecificConfig.

@@ -10,6 +10,7 @@ extern crate alloc;
 
 pub mod address;
 pub mod buffer;
+pub mod codec_id;
 pub mod control;
 pub mod error;
 pub mod format;
@@ -20,6 +21,7 @@ pub mod value;
 
 pub use address::{Class, Element, FourCC, ObjectId, PropertyAddress, Scope, SYSTEM_OBJECT};
 pub use buffer::{Buffer, BufferList};
+pub use codec_id::CodecId;
 pub use error::AudioError;
 pub use format::{FormatFlags, FormatId, StreamFormat};
 pub use layout::{ChannelLayout, Label, LayoutError, Tag};

@@ -10,9 +10,9 @@
     {
       "feature": "AudioStreamBasicDescription and format flags",
       "apple": "AudioStreamBasicDescription, AudioFormatFlags",
-      "bifrost": "springboard/src/media/speaker.rs (SpeakerOut::new(rate, channels)), springboard/src/media/audiofile.rs (interleaved S16 at the stream's own rate and channel count); wired: springboard/apps/daw/src/rack.rs (describe), springboard/ui/src/audio_render.rs (StreamFormat)",
+      "bifrost": "springboard/src/media/speaker.rs (SpeakerOut::new(rate, channels)), springboard/src/media/audiofile.rs (interleaved S16 at the stream's own rate and channel count); springboard/audio/types/src/format.rs (StreamFormat, StreamFormat::validate); wired: springboard/apps/daw/src/rack.rs (describe), springboard/ui/src/audio_render.rs (StreamFormat)",
       "status": "partial",
-      "note": "The format is two integers (rate, channels) plus an implied S16 sample type. There is no bits-per-sample, bytes-per-frame or format-flag description. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "The audio types crate describes a stream with rate, format, flags, packet and frame sizes, channels and bits per channel, and StreamFormat::validate rejects inconsistent descriptions (tested headless in audio/types/tests/parity_sdk-complete-30.rs). Gap: the speaker and file paths still build S16 streams from a rate and channel pair, and the descriptions are not verified on Midget."
     },
     {
       "feature": "AudioBuffer and AudioBufferList",
@@ -59,16 +59,16 @@
     {
       "feature": "Audio format identifiers",
       "apple": "AudioFormatID, Audio Format Identifiers (kAudioFormatAPAC and others)",
-      "bifrost": "springboard/src/media/mp4.rs (fourcc match on sample description entries, line 484); springboard/src/media/audiofile.rs (MP3, AAC, FLAC, Ogg Vorbis, WAV decoders)",
+      "bifrost": "springboard/audio/types/src/codec_id.rs (CodecId::fourcc, CodecId::from_fourcc); springboard/src/media/mp4.rs (fourcc match on sample description entries, line 484); springboard/src/media/audiofile.rs (MP3, AAC, FLAC, Ogg Vorbis, WAV decoders)",
       "status": "partial",
-      "note": "Formats are recognised by container fourcc or file extension and decoded internally. There is no public format-ID enum, and APAC is not supported."
+      "note": "CodecId names linear PCM, AAC, MP3, FLAC and ALAC by four-character code and maps the codes back (tested headless in audio/types/tests/parity_sdk-complete-30.rs). Gap: the container readers still match fourcc locally, the decoders do not use CodecId, and APAC is not named or supported."
     },
     {
       "feature": "AAC object types and AudioSpecificConfig",
       "apple": "MPEG4ObjectID",
-      "bifrost": "springboard/src/media/mp4.rs (parse_asc, AudioSpecificConfig, object_type_name, asc_params); springboard/src/media/sbr.rs (supported, Sbr::process; SBR for HE-AAC)",
+      "bifrost": "springboard/src/media/mp4.rs (parse_asc, AudioSpecificConfig, object_type_name, asc_params, sbr_output_rate); springboard/src/media/sbr.rs (supported, Sbr::process; SBR for HE-AAC)",
       "status": "partial",
-      "note": "parse_asc reads the object type (with the 31 escape), the signalled sample rate (including the 24-bit form) and the channel count; object_type_name names AAC Main, LC, HE-AAC, HE-AAC v2 and USAC. The explicit SBR extension rate is not applied, so HE-AAC reports its core rate. Tests: an_aac_lc_config_names_its_object_type_rate_and_channels, an_he_aac_config_reports_the_sbr_object_type_and_its_core_rate, an_escaped_object_type_is_32_plus_its_six_bit_value, sbr_passes_the_core_through_when_the_block_holds_no_sbr_data (springboard/tests/parity_sdk-tests-10.rs). Not yet tested on Midget"
+      "note": "parse_asc reads the object type (with the 31 escape), the signalled sample rate (including the 24-bit form) and the channel count; object_type_name names AAC Main, LC, HE-AAC, HE-AAC v2 and USAC. sbr_output_rate reads the explicit SBR extension rate (including the 24-bit form), and a config that stops before the extension reports none (springboard/tests/parity_sdk-complete-30.rs). Gap: the decoder still outputs at the core rate and does not resample to the signalled rate. Tests: an_aac_lc_config_names_its_object_type_rate_and_channels, an_he_aac_config_reports_the_sbr_object_type_and_its_core_rate, an_escaped_object_type_is_32_plus_its_six_bit_value, sbr_passes_the_core_through_when_the_block_holds_no_sbr_data (springboard/tests/parity_sdk-tests-10.rs). Not yet tested on Midget"
     },
     {
       "feature": "Packet descriptions and packet dependencies",
