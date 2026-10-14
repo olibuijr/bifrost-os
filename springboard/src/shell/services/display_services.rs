@@ -33,6 +33,8 @@ pub const SERVICE: &str = "display";
 pub const EVENT_RECONFIGURED: &str = "reconfigured";
 /// The manifest permission that allows `set_mode`.
 pub const PERMISSION_CONFIG: &str = "display-config";
+/// The manifest capability required in addition to the person's screen-recording consent.
+pub const PERMISSION_SCREEN: &str = "screen";
 /// The id of the one display the shell drives.
 pub const DISPLAY_ID: DisplayId = 1;
 
@@ -449,9 +451,12 @@ fn mode_event(name: &str, applied: bool, with_revert_in: bool) -> Event {
     Event { app: None, event: name.into(), body: obj(fields) }
 }
 
-/// Lets a call through only when the person authorized screen recording for the app. The first call of an app that
-/// has not been asked queues the sheet and fails; a refusal fails with its reason.
+/// Lets a call through only when the app declares `screen` and the person authorized screen recording. The first call
+/// of an app that has not been asked queues the sheet and fails; a refusal fails with its reason.
 pub fn require_screen_recording(app_id: &str) -> Result<(), String> {
+    if !super::app_has_permission(app_id, PERMISSION_SCREEN) {
+        return Err("the screen permission is not declared by this app".into());
+    }
     match privacy_permissions::access(app_id).status(Media::Screen) {
         Status::Authorized => Ok(()),
         Status::NotDetermined => {

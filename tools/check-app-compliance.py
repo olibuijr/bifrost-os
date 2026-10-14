@@ -81,12 +81,15 @@ FIXED = ['SECONDARY', 'FILL', 'FILL_PRESSED', 'FILL_GRAY', 'FILL_TERTIARY', 'SID
 SPACING = {'2': 'SPACE_XXS', '4': 'SPACE_XS', '8': 'SPACE_S', '12': 'SPACE_M', '16': 'SPACE_L',
            '20': 'SPACE_XL', '24': 'SPACE_XXL', '32': 'SPACE_XXXL', '40': 'SPACE_HUGE'}
 RESOLUTIONS = '480|600|640|720|768|800|900|960|1000|1024|1080|1200|1280|1366|1440|1600|1920|2560'
-KNOWN_PERMS = {'network', 'storage', 'audio', 'notifications', 'documents', 'keychain', 'remote-desktop'}
+KNOWN_PERMS = {'network', 'storage', 'audio', 'camera', 'screen', 'notifications', 'documents', 'keychain', 'remote-desktop'}
+PERM_APP = {'camera': 'photobooth-desktop', 'screen': 'colormeter-desktop'}
 # permission -> code that shows it is used
 PERM_USE = {
     'network': r'\b(http|https|TcpStream|TcpListener|UdpSocket|ureq|fetch|download|open_url|webview|WebProcessPool|net)\b',
     'documents': r'\b(open_document|save_document|commit_document|reopen_document|Document|DocumentEvent)\b',
     'audio': r'\b(audio|Audio|pcm|Pcm|play|sound|Sound|alsa|cpal|speaker|microphone|record)\b',
+    'camera': r'\b(v4l2::|Device::open|CameraInfo|camera_path|camera)\b',
+    'screen': r'\b(screen_sample|Media::Screen|require_screen_recording)\b',
     'notifications': r'\b(notify|usernotif|set_badge|notification|notification_schedule)\b',
     'keychain': r'\bkeychain\b',
     'storage': r'\b(data_dir|std::fs|fs::|File::|UserDefaults|defaults|store)\b',
@@ -323,6 +326,8 @@ def check_app(app):
     for pm in sorted(perms):
         if pm not in KNOWN_PERMS:
             findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'unknown permission {pm!r}'))
+        elif pm in PERM_APP and app.name != PERM_APP[pm]:
+            findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'permission {pm!r} is restricted to {PERM_APP[pm]}'))
         elif pm in PERM_USE and not re.search(PERM_USE[pm], code_all):
             findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'permission {pm!r} requested but no code uses it'))
 
