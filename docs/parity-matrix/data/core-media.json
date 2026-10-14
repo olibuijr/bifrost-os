@@ -31,9 +31,9 @@
     {
       "feature": "Time representation",
       "apple": "CMTime (rational value/timescale, invalid/indefinite/infinity), CMTimeRange, CMTimeMapping (https://developer.apple.com/documentation/coremedia/cmtime)",
-      "bifrost": "springboard/src/media/demux/mod.rs:89 (i64 microseconds); springboard/src/media/mp4.rs:46 (f64 milliseconds); springboard/src/media/player.rs:47 (Clock, f64 ms)",
+      "bifrost": "springboard/src/media/demux/mod.rs:89 (i64 microseconds); springboard/src/media/mp4.rs:46 (f64 milliseconds); springboard/src/media/player.rs:47 (Clock, f64 ms); springboard/src/media/time.rs (MediaTime, TimeRange)",
       "status": "partial",
-      "note": "Two internal units (microseconds in the demuxer, milliseconds in the mp4 sample and player clock). No rational time, no timescale conversion, no invalid or indefinite values, no time ranges type for apps."
+      "note": "MediaTime is a rational value and timescale with invalid, indefinite and infinite states, exact addition, rounding conversions to microseconds and milliseconds, and TimeRange tests containment and overlap (tests in media::time). The demuxer, sample table and player still keep their own units and do not yet use MediaTime, and apps get no time type."
     },
     {
       "feature": "Reference clocks and timebases",
@@ -66,9 +66,9 @@
     {
       "feature": "Audio sample decode and conversion",
       "apple": "CMSampleBufferCopyPCMDataIntoAudioBufferList, CMAudioSampleBuffer packet descriptions (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
-      "bifrost": "springboard/src/media/aac.rs; springboard/src/media/aacstream.rs (Frame at :37); springboard/src/media/convert.rs; springboard/src/media/sbr.rs",
+      "bifrost": "springboard/src/media/aac.rs; springboard/src/media/aacstream.rs (Frame at :37); springboard/src/media/convert.rs; springboard/src/media/sbr.rs; springboard/src/media/pcm_channels.rs (ChannelBuffers)",
       "status": "partial",
-      "note": "AAC-LC decode and conversion to 48 kHz stereo S16. Packet descriptions and PCM copy into an AudioBufferList equivalent are not exposed. Codec coverage is AAC-only in the audio path."
+      "note": "AAC-LC decode and conversion to 48 kHz stereo S16. Interleaved PCM splits into per-channel buffers and joins back (ChannelBuffers, tested in media::pcm_channels). Packet descriptions are not exposed, and codec coverage is AAC-only in the audio path."
     },
     {
       "feature": "Audio output to the speaker",
@@ -87,9 +87,9 @@
     {
       "feature": "Container metadata and tags",
       "apple": "CMMetadata, CMTag, CMTagCollection, metadata identifiers and data-type registry (https://developer.apple.com/documentation/coremedia/cmmetadata)",
-      "bifrost": "springboard/src/media/id3.rs; springboard/src/media/ilst.rs",
+      "bifrost": "springboard/src/media/id3.rs; springboard/src/media/ilst.rs; springboard/src/media/metadata.rs (KeySpace, Identifier, Collection)",
       "status": "partial",
-      "note": "ID3 and iTunes-style tag readers exist. No metadata identifier or key-space registry, no tag collections, no typed tags."
+      "note": "ID3 and MP4 item readers map onto common identifiers in a key-space registry, with typed values checked by identifier and unknown keys counted (tests in media::metadata). The readers still return their own fields, the collection is not yet used by the apps, and no other container has metadata."
     },
     {
       "feature": "Text markup for legible media",

@@ -73,9 +73,9 @@
     {
       "feature": "Outline (table of contents)",
       "apple": "PDFOutline: child(at:), label, destination, action, isOpen",
-      "bifrost": "springboard/render/src/cg/pdf/page.rs (outline(): /Outlines flattened into title, destination page and level)",
+      "bifrost": "springboard/render/src/cg/pdf/page.rs (outline(): /Outlines flattened into title, destination page and level); springboard/render/src/cg/pdf/outline_tree.rs (outline_tree: nested OutlineNode)",
       "status": "partial",
-      "note": "Headless test the_outline_is_flattened_in_reading_order_with_levels_and_page_targets in springboard/render/tests/parity_sdk-tests-03.rs covers nested bookmarks, their levels and page targets, and a_document_without_an_outline_has_no_bookmarks covers the empty case. Books builds its table of contents from its own copy in springboard/src/shell/books/engine/pdf/mod.rs, which these tests do not cover. No outline tree object, actions or editing."
+      "note": "Headless test the_outline_is_flattened_in_reading_order_with_levels_and_page_targets in springboard/render/tests/parity_sdk-tests-03.rs covers the flattened outline, and springboard/render/tests/parity_sdk-complete-42.rs covers the nested tree built from it. Books builds its table of contents from its own copy in springboard/src/shell/books/engine/pdf/mod.rs, which these tests do not cover. No outline item actions or editing."
     },
     {
       "feature": "Selection and find",
