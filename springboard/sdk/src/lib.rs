@@ -31,9 +31,18 @@ pub mod kit {
     pub use bifrost_render::cg;
     /// The drawing vocabulary `draw_canvas` takes (`Canvas`, `RectF`, `ImageRef`, ...).
     pub use bifrost_render::canvas;
+    /// Per-pixel kernels an app runs on its own packed pixels: colour maps, warps, separable blends and chains of
+    /// unary image kernels (`ColorMap`, `run_chain`). The closure is the kernel; there is no kernel language.
+    pub use bifrost_render::kernel;
     /// Pixel buffer layouts and the 8-bit CMYK, grey and RGB conversions, plane splitting and interleaving.
     pub use bifrost_render::pixel_layout;
     pub use springboard::shell::list;
+    /// Loop regions for sampled playback: the loop modes (off, forward, ping-pong) and the read head through them.
+    pub use springboard::media::loop_region;
+    /// Push buffers: an app queues its own sample blocks by priority, and the output pulls exact-length blocks.
+    pub use springboard::media::push_queue;
+    /// Layering: sums sample layers through a gain and mute strip each, counting the samples it had to clip.
+    pub use springboard::media::mixer;
     pub use bifrost_render::appearance;
     /// The shared motion contract: durations per kind of animation (0 under Reduce Motion) and the curves.
     pub use bifrost_render::motion;
@@ -124,6 +133,7 @@ pub mod keyed_archive;
 pub mod value_types;
 pub mod colorsync;
 pub mod decimal;
+pub mod random;
 pub mod csv_writer;
 pub mod accounts;
 pub mod testing;

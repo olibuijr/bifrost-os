@@ -45,9 +45,9 @@
   {
    "feature": "Single sign-on in a web browser app",
    "apple": "ASWebAuthenticationSession browser handoff and support capabilities",
-   "bifrost": "springboard/core/src/auth_callback_routes.rs (CallbackRoutes: one owner per callback scheme, delivery only to the requesting app); springboard/core/src/auth_session.rs (scheme_of)",
+   "bifrost": "springboard/core/src/auth_callback_routes.rs (CallbackRoutes: one owner per callback scheme, delivery only to the requesting app; complete_session); springboard/core/src/auth_session.rs (scheme_of, WebSession::complete)",
    "status": "partial",
-   "note": "built on parity/team-n-authentication-services; not yet verified on Midget. Pure route table with host unit tests; the browser app does not yet act as a broker and the shell does not yet route redirects through it"
+   "note": "A redirect completes a web session only when the route table gives it to the requesting app and its scheme matches the session, in any letter case; tested headless in springboard/core/tests/parity_sdk-complete-32.rs. Gap: the browser app does not yet act as a broker and the shell does not route redirects through complete_session, so the flow needs the lab machine on Midget."
   },
   {
    "feature": "AutoFill credential provider",
