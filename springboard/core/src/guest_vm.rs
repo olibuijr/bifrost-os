@@ -190,6 +190,56 @@ pub struct GraphicsDevice {
     pub scanouts: Vec<Scanout>,
 }
 
+/// BifrOSt most network interfaces on one guest. This is a project choice, not a documented framework limit.
+pub const MAX_NETWORK_DEVICES: usize = 4;
+
+/// BifrOSt most serial ports on one guest. This is a project choice, not a documented framework limit.
+pub const MAX_SERIAL_PORTS: usize = 4;
+
+/// How a guest's network interface reaches the network.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NetworkAttachment {
+    /// The guest shares the host's address and is translated through network address translation.
+    Nat,
+    /// The guest reaches the host and other guests on this host only.
+    HostOnly,
+}
+
+/// A network interface. `mac` is a unicast, non-zero station address; `None` lets the launcher choose one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NetworkDevice {
+    pub attachment: NetworkAttachment,
+    pub mac: Option<[u8; 6]>,
+}
+
+/// The two input devices a guest may have.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InputKind {
+    Keyboard,
+    Pointing,
+}
+
+/// Where a serial port's output goes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SerialAttachment {
+    /// The output is dropped.
+    Discard,
+    /// The output is appended to the file at this absolute path.
+    File(String),
+}
+
+/// A serial port (a console the guest writes to).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SerialPort {
+    pub attachment: SerialAttachment,
+}
+
+/// A memory balloon. With free page reporting the guest tells the host which pages it no longer uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MemoryBalloon {
+    pub free_page_reporting: bool,
+}
+
 /// One device in a guest configuration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Device {
@@ -203,6 +253,14 @@ pub enum Device {
     DirectoryShare(DirectoryShare),
     /// A disk image. A guest may have several.
     Storage(StorageAttachment),
+    /// A network interface. A guest may have up to `MAX_NETWORK_DEVICES`.
+    Network(NetworkDevice),
+    /// A keyboard or a pointing device. A guest has at most one of each.
+    Input(InputKind),
+    /// A serial port. A guest may have up to `MAX_SERIAL_PORTS`.
+    Serial(SerialPort),
+    /// A memory balloon. A guest has at most one.
+    MemoryBalloon(MemoryBalloon),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -225,6 +283,16 @@ pub enum ConfigError {
     TooManyScanouts,
     /// A scanout has a zero side, or a side above `MAX_SCANOUT_PIXELS`.
     BadScanoutSize,
+    /// The guest has more than `MAX_NETWORK_DEVICES` network interfaces.
+    TooManyNetworkDevices,
+    /// A network address is multicast, all zero, or shared with another interface.
+    BadMacAddress,
+    /// Two network interfaces use the same address.
+    DuplicateMacAddress,
+    /// The guest has more than `MAX_SERIAL_PORTS` serial ports.
+    TooManySerialPorts,
+    /// A serial port's file is not an absolute path to a file name.
+    BadSerialPath,
 }
 
 /// The complete guest description a launcher receives.
@@ -298,8 +366,75 @@ impl GuestConfig {
                 tags.push(share.tag.as_str());
             }
         }
+        self.validate_inputs_and_balloon()?;
+        self.validate_networks()?;
+        self.validate_serial_ports()
+    }
+
+    fn count(&self, pick: impl Fn(&Device) -> bool) -> usize {
+        self.devices.iter().filter(|d| pick(*d)).count()
+    }
+
+    fn validate_inputs_and_balloon(&self) -> Result<(), ConfigError> {
+        let once: [(&'static str, fn(&Device) -> bool); 3] = [
+            ("keyboard", |d| matches!(d, Device::Input(InputKind::Keyboard))),
+            ("pointing", |d| matches!(d, Device::Input(InputKind::Pointing))),
+            ("memory balloon", |d| matches!(d, Device::MemoryBalloon(_))),
+        ];
+        for (name, pick) in once {
+            if self.count(pick) > 1 {
+                return Err(ConfigError::DuplicateDevice(name));
+            }
+        }
         Ok(())
     }
+
+    fn validate_networks(&self) -> Result<(), ConfigError> {
+        let mut macs: Vec<[u8; 6]> = Vec::new();
+        let mut interfaces = 0;
+        for device in &self.devices {
+            if let Device::Network(nic) = device {
+                interfaces += 1;
+                if let Some(mac) = nic.mac {
+                    if !mac_ok(mac) {
+                        return Err(ConfigError::BadMacAddress);
+                    }
+                    if macs.contains(&mac) {
+                        return Err(ConfigError::DuplicateMacAddress);
+                    }
+                    macs.push(mac);
+                }
+            }
+        }
+        if interfaces > MAX_NETWORK_DEVICES {
+            return Err(ConfigError::TooManyNetworkDevices);
+        }
+        Ok(())
+    }
+
+    fn validate_serial_ports(&self) -> Result<(), ConfigError> {
+        if self.count(|d| matches!(d, Device::Serial(_))) > MAX_SERIAL_PORTS {
+            return Err(ConfigError::TooManySerialPorts);
+        }
+        for device in &self.devices {
+            if let Device::Serial(SerialPort { attachment: SerialAttachment::File(path) }) = device {
+                if !serial_path_ok(path) {
+                    return Err(ConfigError::BadSerialPath);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A station address is unicast (the low bit of the first octet is clear) and not all zero.
+fn mac_ok(mac: [u8; 6]) -> bool {
+    mac != [0; 6] && mac[0] & 1 == 0
+}
+
+/// A serial file is an absolute path that names a file, not a directory.
+fn serial_path_ok(path: &str) -> bool {
+    path.starts_with('/') && path.len() > 1 && !path.ends_with('/') && !path.contains('\0')
 }
 
 #[cfg(test)]

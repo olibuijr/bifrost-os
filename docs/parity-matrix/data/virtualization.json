@@ -52,16 +52,16 @@
     {
       "feature": "Network devices",
       "apple": "Network (VZNATNetworkDeviceAttachment and similar)",
-      "bifrost": "tools/arch-vm.sh uses user-mode networking with a virtio-net device and an ssh hostfwd",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Network, NetworkDevice, NetworkAttachment, GuestConfig::validate); tools/arch-vm.sh uses user-mode networking with a virtio-net device and an ssh hostfwd",
       "status": "partial",
-      "note": "Dev harness only; netd (Wi-Fi, DHCP) has no VM attachment API"
+      "note": "The guest model describes NAT and host-only interfaces and checks addresses and the interface limit, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: netd (Wi-Fi, DHCP) has no VM attachment API and no launcher attaches these interfaces."
     },
     {
       "feature": "Storage devices",
       "apple": "Storage (block-storage devices, disk images)",
-      "bifrost": "tools/arch-vm.sh creates a raw ext4 image and passes it to QEMU; tools/arch-vm-iso.sh adds a blank target disk",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Storage, StorageAttachment); springboard/core/src/disk_image.rs (create_raw); tools/arch-vm.sh creates a raw ext4 image and passes it to QEMU; tools/arch-vm-iso.sh adds a blank target disk",
       "status": "partial",
-      "note": "Dev harness creates raw disk images; no SDK API for guest disk images"
+      "note": "Raw disk images are created and attached with caching, sync and read-only modes, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: no ext4 formatting, and no launcher attaches the images to a running guest."
     },
     {
       "feature": "Shared directories",
@@ -80,9 +80,9 @@
     {
       "feature": "Keyboard and pointing devices",
       "apple": "Keyboards and pointing devices (USB and virtio input)",
-      "bifrost": "tools/vm-click.py sends QMP input events; tools/arch-vm.sh key/tap/swipe",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Input, InputKind); tools/vm-click.py sends QMP input events; tools/arch-vm.sh key/tap/swipe",
       "status": "partial",
-      "note": "Dev automation only; the input path is not a reusable SDK feature"
+      "note": "The guest model allows one keyboard and one pointing device, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: the QMP input path is dev automation only and no app can send input to a guest."
     },
     {
       "feature": "Audio devices",
@@ -94,9 +94,9 @@
     {
       "feature": "Memory balloon",
       "apple": "Memory (VZMemoryBalloonDevice)",
-      "bifrost": "tools/arch-vm.sh virtio-balloon-pci with free-page-reporting",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::MemoryBalloon, MemoryBalloon); tools/arch-vm.sh virtio-balloon-pci with free-page-reporting",
       "status": "partial",
-      "note": "Dev harness only; no runtime resize API"
+      "note": "The guest model has at most one balloon with a free page reporting flag, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: no runtime resize API and no balloon target is applied to a running guest."
     },
     {
       "feature": "Randomization",
@@ -108,9 +108,9 @@
     {
       "feature": "Serial ports and consoles",
       "apple": "Serial ports, Consoles",
-      "bifrost": "tools/arch-vm.sh -serial file:... and the SERIAL log path",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Serial, SerialPort, SerialAttachment); tools/arch-vm.sh -serial file:... and the SERIAL log path",
       "status": "partial",
-      "note": "Serial output goes to a log file for debugging; no host-side console API"
+      "note": "The guest model describes serial ports that discard output or append it to an absolute file, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: there is no host-side console API and the harness writes its log through QEMU."
     },
     {
       "feature": "Sockets",

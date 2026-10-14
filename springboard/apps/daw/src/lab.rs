@@ -63,6 +63,10 @@ fn oversampled_peak(x: &[f32]) -> f32 {
 pub struct Metrics {
     pub seconds: f64,
     pub lufs: f64,
+    /// Loudest 400 ms window, LUFS.
+    pub momentary_max_lufs: f64,
+    /// Loudest 3 s window, LUFS.
+    pub short_term_max_lufs: f64,
     pub true_peak_db: f64,
     pub clipped: usize,
     pub crest_db: f64,
@@ -70,40 +74,70 @@ pub struct Metrics {
     pub bands: [f64; 4],
 }
 
-fn kweight(x: &[f32], sr: f32) -> (Vec<f32>, Vec<f32>) {
-    // pre-filter (high shelf +4 dB at 1681 Hz) then RLB high-pass at 38 Hz, as in BS.1770
+/// K-weighting of one channel: the pre-filter (high shelf +4 dB at 1681 Hz) then the RLB high-pass at 38 Hz, as in BS.1770.
+fn kweight(x: &[f32], sr: f32) -> Vec<f32> {
     let mut shelf = Biquad::new(FilterKind::Highshelf, sr, 1681.97, 0.7071752, 3.999844);
     let mut hp = Biquad::new(FilterKind::Highpass, sr, 38.13, 0.5003, 0.0);
-    x.iter().map(|&s| hp.process(shelf.process(s))).map(|y| (y, y)).unzip()
+    x.iter().map(|&s| hp.process(shelf.process(s))).collect()
 }
 
-/// Integrated loudness of a stereo signal (LUFS).
+/// Loudness of a stereo signal in LUFS for one mean-square power.
+fn to_lufs(ms: f64) -> f64 {
+    -0.691 + 10.0 * ms.log10()
+}
+
+/// Mean-square power of each K-weighted block of `block_secs`, a block starting every `hop_secs`, summed over both
+/// channels. Empty when the signal is shorter than one block.
+fn block_powers(left: &[f32], right: &[f32], sr: f32, block_secs: f64, hop_secs: f64) -> Vec<f64> {
+    let n = left.len().min(right.len());
+    let kl = kweight(&left[..n], sr);
+    let kr = kweight(&right[..n], sr);
+    let block = (block_secs * sr as f64) as usize;
+    let hop = ((hop_secs * sr as f64) as usize).max(1);
+    if block == 0 || n < block {
+        return vec![];
+    }
+    (0..=n - block)
+        .step_by(hop)
+        .map(|start| {
+            let sum: f64 = (start..start + block).map(|i| (kl[i] as f64).powi(2) + (kr[i] as f64).powi(2)).sum();
+            sum / block as f64
+        })
+        .collect()
+}
+
+fn mean(values: &[f64]) -> f64 {
+    values.iter().sum::<f64>() / values.len() as f64
+}
+
+/// Integrated loudness of a stereo signal (LUFS): 400 ms blocks every 100 ms, an absolute gate at -70 LUFS and a
+/// relative gate 10 LU below the mean of the blocks that pass the absolute gate.
 pub fn integrated_lufs(left: &[f32], right: &[f32], sr: f32) -> f64 {
-    let (kl, _) = kweight(left, sr);
-    let (kr, _) = kweight(right, sr);
-    let block = (0.4 * sr as f64) as usize;
-    let hop = (0.1 * sr as f64) as usize;
-    if kl.len() < block {
-        return f64::NEG_INFINITY;
-    }
-    let mut blocks = vec![];
-    let mut start = 0;
-    while start + block <= kl.len() {
-        let ms: f64 = (start..start + block).map(|i| (kl[i] as f64).powi(2) + (kr[i] as f64).powi(2)).sum::<f64>() / block as f64;
-        blocks.push(ms);
-        start += hop;
-    }
-    let to_lufs = |ms: f64| -0.691 + 10.0 * ms.log10();
-    let gated: Vec<f64> = blocks.iter().copied().filter(|&m| to_lufs(m) > -70.0).collect();
+    let gated: Vec<f64> = block_powers(left, right, sr, 0.4, 0.1).into_iter().filter(|&m| to_lufs(m) > -70.0).collect();
     if gated.is_empty() {
         return f64::NEG_INFINITY;
     }
-    let rel = to_lufs(gated.iter().sum::<f64>() / gated.len() as f64) - 10.0;
-    let final_: Vec<f64> = gated.into_iter().filter(|&m| to_lufs(m) > rel).collect();
-    if final_.is_empty() {
+    let rel = to_lufs(mean(&gated)) - 10.0;
+    let kept: Vec<f64> = gated.into_iter().filter(|&m| to_lufs(m) > rel).collect();
+    if kept.is_empty() {
         return f64::NEG_INFINITY;
     }
-    to_lufs(final_.iter().sum::<f64>() / final_.len() as f64)
+    to_lufs(mean(&kept))
+}
+
+/// The loudest window of a sliding measurement, in LUFS. Negative infinity when no window fits or all are silent.
+fn loudest(powers: &[f64]) -> f64 {
+    powers.iter().copied().map(to_lufs).fold(f64::NEG_INFINITY, f64::max)
+}
+
+/// Maximum momentary loudness (LUFS): the loudest 400 ms window, stepped every 100 ms. Ungated, as EBU Tech 3341 defines it.
+pub fn max_momentary_lufs(left: &[f32], right: &[f32], sr: f32) -> f64 {
+    loudest(&block_powers(left, right, sr, 0.4, 0.1))
+}
+
+/// Maximum short-term loudness (LUFS): the loudest 3 s window, stepped every 100 ms. Ungated, as EBU Tech 3341 defines it.
+pub fn max_short_term_lufs(left: &[f32], right: &[f32], sr: f32) -> f64 {
+    loudest(&block_powers(left, right, sr, 3.0, 0.1))
 }
 
 /// Full metrics of a stereo render.
@@ -147,6 +181,8 @@ pub fn measure(left: &[f32], right: &[f32], sr: u32) -> Metrics {
     Metrics {
         seconds: n as f64 / sr as f64,
         lufs: integrated_lufs(left, right, srf),
+        momentary_max_lufs: max_momentary_lufs(left, right, srf),
+        short_term_max_lufs: max_short_term_lufs(left, right, srf),
         true_peak_db: 20.0 * (tp.max(peak) as f64).max(1e-12).log10(),
         clipped,
         crest_db,
