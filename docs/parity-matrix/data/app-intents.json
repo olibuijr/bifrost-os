@@ -66,9 +66,9 @@
     {
       "feature": "App Shortcuts (AppShortcutsProvider)",
       "apple": "AppShortcutsProvider, AppShortcutsBuilder, shortcutTileColor, phrases",
-      "bifrost": "springboard/sdk/src/intents.rs (Intent::shortcut, Intent::manifest_toml, Intent::to_json)",
+      "bifrost": "springboard/sdk/src/intents.rs (Intent::shortcut, Intent::phrase, Intent::manifest_toml, Intent::to_json); tests: springboard/sdk/tests/parity_sdk-complete-38.rs, springboard/sdk/tests/parity_sdk-tests-01e.rs",
       "status": "partial",
-      "note": "shortcut = true marks an intent as a Spotlight shortcut; no phrase list, tile colour or parameter-bearing shortcuts. Host tests a_shortcut_intent_is_written_to_the_manifest_with_its_flag and a_shortcut_flag_is_listed_in_the_intent_json (sdk/tests/parity_sdk-tests-01e.rs). The shell reads the [[intent]] tables in springboard/src/shell/intents.rs, which is not part of this evidence."
+      "note": "shortcut = true marks an intent as a Spotlight shortcut, and phrases are trimmed, de-duplicated and written to the manifest and the intent JSON, all tested headless. Gap: tile colour and parameter-bearing shortcuts are not modelled, and the shell does not yet read the phrases from the [[intent]] tables in springboard/src/shell/intents.rs."
     },
     {
       "feature": "Spotlight shortcut search and launch",
@@ -80,9 +80,9 @@
     {
       "feature": "Indexing entities for Spotlight",
       "apple": "IndexedEntity, attributeSet, hideInSpotlight, CSSearchableIndex",
-      "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem)",
+      "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem), springboard/sdk/src/searchable_entity.rs (SearchableEntity, searchable_items); tests: springboard/sdk/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "a Core Search indexing API exists, but it is not tied to App Intents entities; no IndexedEntity protocol"
+      "note": "An app value can implement SearchableEntity to build the searchable item the index stores, with its identifiers, attributes, expiry and validation tested headless. Gap: the entity protocol is not tied to App Intents entity queries, a hide-from-search flag is not modelled, and the shell does not index entities yet."
     },
     {
       "feature": "Intent errors",

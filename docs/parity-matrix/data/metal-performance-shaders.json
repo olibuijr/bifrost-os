@@ -73,9 +73,9 @@
   {
    "feature": "Image arithmetic and pixel conversion",
    "apple": "MPSImageAdd, MPSImageSubtract, MPSImageMultiply, MPSImageDivide, MPSImageConversion, MPSImageTranspose",
-   "bifrost": "springboard/render/src/plane_arith.rs (combine",
+   "bifrost": "springboard/render/src/plane_arith.rs (combine, invert, convert_transfer, transpose); tests: springboard/render/tests/parity_sdk-complete-38.rs",
    "status": "partial",
-   "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Compositing is done on the CPU in gfx.rs. No GPU arithmetic kernels or colour-space conversion API."
+   "note": "Pixel arithmetic, inversion, sRGB and linear transfer conversion and transposition are a pure CPU model with host tests, not wired into apps or the shell. Gap: there are no GPU arithmetic kernels, no colour matrices or multi-channel formats, and the lab machine has not verified it."
   },
   {
    "feature": "Reduction filters (row and column min, max, sum, mean)",

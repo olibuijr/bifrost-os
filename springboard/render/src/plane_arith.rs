@@ -2,8 +2,64 @@
 //! read as a fraction of 255, the operation is applied to the fractions, and
 //! the result is rounded to the nearest 8-bit value and clamped to 0..=255.
 //! Two planes must have the same size. Plain std code over `filter::Plane`.
+//!
+//! Pixel conversion covers two more operations: `invert` and `convert_transfer`, which maps codes between linear light
+//! and the sRGB transfer curve (IEC 61966-2-1). Colour matrices and planar-to-interleaved packing are not modelled.
 
 use crate::filter::Plane;
+
+/// The transfer function that relates an 8-bit code to light.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Transfer {
+    /// The code is proportional to light.
+    Linear,
+    /// The code is sRGB encoded.
+    Srgb,
+}
+
+fn srgb_to_linear(v: f32) -> f32 {
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(v: f32) -> f32 {
+    if v <= 0.0031308 {
+        v * 12.92
+    } else {
+        1.055 * v.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// Converts every pixel of `src` from one transfer function to another, rounding each result to an 8-bit code.
+/// A round trip through the two curves can move a code by one step because each conversion rounds once.
+pub fn convert_transfer(src: &Plane, from: Transfer, to: Transfer) -> Plane {
+    let pixels = src
+        .pixels
+        .iter()
+        .map(|&code| {
+            let v = code as f32 / 255.0;
+            let light = match from {
+                Transfer::Linear => v,
+                Transfer::Srgb => srgb_to_linear(v),
+            };
+            let encoded = match to {
+                Transfer::Linear => light,
+                Transfer::Srgb => linear_to_srgb(light),
+            };
+            (encoded.clamp(0.0, 1.0) * 255.0).round() as u8
+        })
+        .collect();
+    Plane { width: src.width, height: src.height, pixels }
+}
+
+/// The photographic negative of `src`: each code `v` becomes `255 - v`.
+pub fn invert(src: &Plane) -> Plane {
+    let pixels = src.pixels.iter().map(|&v| 255 - v).collect();
+    Plane { width: src.width, height: src.height, pixels }
+}
 
 /// The operation applied to each pair of pixels `(a, b)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

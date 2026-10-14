@@ -31,9 +31,9 @@
     {
       "feature": "Fetch requests and predicates",
       "apple": "NSFetchRequest, NSPredicate, NSSortDescriptor (https://developer.apple.com/documentation/coredata/nsfetchrequest)",
-      "bifrost": "springboard/ui/src/fetch.rs (Field, Predicate, Op, SortDescriptor, FetchRequest, fetch, fetch_indices); wired: Smart Folders in springboard/apps/reminders-desktop/src/model.rs and springboard/apps/notes-desktop/src/notes/smart.rs",
+      "bifrost": "springboard/ui/src/fetch.rs (Field, Predicate, Op, SortDescriptor, FetchRequest, fetch, fetch_indices); tests: springboard/ui/tests/parity_sdk-complete-38.rs; wired: Smart Folders in springboard/apps/reminders-desktop/src/model.rs and springboard/apps/notes-desktop/src/notes/smart.rs",
       "status": "partial",
-      "note": "FetchRequest carries a predicate (comparisons, case-insensitive containment, and, or, not), sort keys with direction, an offset and a limit over in-memory records; verified headless by the headless_* tests in springboard/ui/tests/parity_sdk-tests-02.rs. The request is a plain Rust model: there is no predicate language, no batched or persistent fetching, and it is not yet tested on Midget."
+      "note": "FetchRequest carries a predicate (comparisons, set membership, inclusive ranges, case-insensitive containment and prefix match, and, or, not), sort keys with direction, an offset and a limit over in-memory records, verified headless by springboard/ui/tests/parity_sdk-tests-02.rs and parity_sdk-complete-38.rs. Gap: there is no predicate language or string parser, no batched or persistent fetching, and it is not yet tested on Midget."
     },
     {
       "feature": "Asynchronous fetch results",
