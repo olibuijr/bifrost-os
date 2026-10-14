@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no settings import from another system",
+   "status": "n/a",
+   "note": "Apple settings migration from another Apple system; no PC equivalent",
    "rea": []
   },
   {
@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "open-screen-time intent opens the Screen Time page; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "open-privacy intent opens the Privacy page; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -158,9 +158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "settings controller, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings.rs",
+   "status": "partial",
+   "note": "Settings app pages and actions; intent routing in springboard/src/shell/settings_intents.rs is not yet wired to the app RPC; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -198,9 +198,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "open-sharing intent opens the Sharing page; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -358,9 +358,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/apps/notes-desktop/manifest.toml",
+   "status": "partial",
+   "note": "Notes declares its own intents; no Siri domain intents; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -578,9 +578,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/apps/videoplayer-desktop/manifest.toml",
+   "status": "partial",
+   "note": "Video Player declares its own intents; no Siri domain intents; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -618,9 +618,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "open-software-update intent opens the Software Update page; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -658,9 +658,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "open-sound intent opens the Sounds page; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -739,8 +739,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "encrypted disk settings, no counterpart yet",
+   "status": "n/a",
+   "note": "Apple SD card hardware encryption; not on PC",
    "rea": []
   },
   {
@@ -759,8 +759,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "encrypted disk settings, no counterpart yet",
+   "status": "n/a",
+   "note": "Apple SSD hardware encryption; not on PC",
    "rea": []
   },
   {
@@ -778,9 +778,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "open-storage intent opens the Storage page; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -898,9 +898,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no speech settings page",
+   "bifrost": "springboard/src/shell/accessibility/speech.rs",
+   "status": "partial",
+   "note": "screen reader speech through espeak-ng at a fixed rate; no voice or rate settings page; built on os/team-m-05-settings; not yet verified on Midget",
    "rea": []
   },
   {
