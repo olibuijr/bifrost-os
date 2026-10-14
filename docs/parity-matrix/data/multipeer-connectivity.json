@@ -73,9 +73,9 @@
     {
       "feature": "Error reporting (MCError, MCErrorDomain)",
       "apple": "MCError, MCErrorDomain, MCError.Code",
-      "bifrost": "springboard/src/net/share.rs (Event::Failed(String))",
+      "bifrost": "springboard/src/net/share.rs (ShareError, Event::Failed(ShareError)); springboard/tests/parity_sdk-complete-18.rs",
       "status": "partial",
-      "note": "Failures reach the shell as a text string. There is no typed error domain or code list."
+      "note": "Every share failure is a typed ShareError with a fixed domain (net.share), stable codes, an io kind and a display message, tested headless. Gap: apps do not receive these errors yet because the SDK has no share API, and the wire carries no code."
     },
     {
       "feature": "Session limits (kMCSessionMaximumNumberOfPeers)",

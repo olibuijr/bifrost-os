@@ -17,9 +17,9 @@
   {
    "feature": "Menus, Cursors, and the Dock",
    "apple": "NSMenu, NSMenuItem, NSCursor, NSDockTile, NSStatusItem",
-   "bifrost": "springboard/ui/src/menu.rs, springboard/ui/src/cursor.rs, springboard/ui/src/cursor_art.rs, springboard/sdk/src/cursor_service.rs, springboard/sdk/src/dock_tile.rs, springboard/src/shell/desktop_bar.rs, springboard/sdk/src/status_item.rs, springboard/src/shell/desktop_dock.rs",
+   "bifrost": "springboard/ui/src/menu.rs, springboard/ui/src/cursor.rs, springboard/ui/src/cursor_art.rs, springboard/sdk/src/cursor_service.rs, springboard/sdk/src/dock_tile.rs, springboard/src/shell/desktop_bar.rs, springboard/sdk/src/status_item.rs, springboard/src/shell/desktop_dock.rs; springboard/ui/tests/parity_sdk-complete-18.rs",
    "status": "partial",
-   "note": "menu bar, validation, key equivalents, status items, Dock badge (Ctx::set_badge), Dock progress bar and the app's Dock menu items (sdk dock_tile set_menu, rendered in desktop_bar.rs Menu::Dock) exist. Cursor shapes (ui::cursor::Kind: frameResize, columnResize, rowResize, move, rotate, zoom, disappearingItem, operationNotAllowed) are pushed by the SDK cursor service; the layered outline and fill art in cursor_art.rs is not yet drawn by the compositor. built on parity/team-k-appkit-user-interactions; not yet verified on Midget."
+   "note": "menu bar, validation, key equivalents, status items, Dock badge (Ctx::set_badge), Dock progress bar and the app's Dock menu items (sdk dock_tile set_menu, rendered in desktop_bar.rs Menu::Dock) exist. The cursor stack, hide rules and the layered outline and fill art (composed to RGBA at 1x and 2x) are tested headless in parity_sdk-complete-18.rs. Gap: the compositor does not draw the composed art yet, which needs the lab machine."
   },
   {
    "feature": "Gestures",
