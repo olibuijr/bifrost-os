@@ -8,8 +8,19 @@ use std::path::Path;
 
 const HEADER: &str = "springboard-reminders-settings-v1";
 
-/// The all-day alert times the settings offer, in minutes after midnight.
-pub const ALL_DAY_CHOICES: [u16; 10] = [6 * 60, 7 * 60, 8 * 60, 9 * 60, 10 * 60, 11 * 60, 12 * 60, 17 * 60, 18 * 60, 20 * 60];
+/// The all-day alert times the settings offer, in minutes after midnight: every half hour from six in the morning to
+/// eight in the evening, so 6:00, 6:30, 7:00 and so on up to 20:00.
+pub const ALL_DAY_CHOICES: [u16; 29] = all_day_choices();
+
+const fn all_day_choices() -> [u16; 29] {
+    let mut out = [0u16; 29];
+    let mut i = 0;
+    while i < out.len() {
+        out[i] = 6 * 60 + 30 * i as u16;
+        i += 1;
+    }
+    out
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
@@ -164,11 +175,18 @@ mod tests {
     }
 
     #[test]
+    fn the_all_day_choices_are_every_half_hour_from_six_to_eight() {
+        assert_eq!(ALL_DAY_CHOICES.len(), 29);
+        assert_eq!((ALL_DAY_CHOICES[0], ALL_DAY_CHOICES[1], ALL_DAY_CHOICES[28]), (6 * 60, 6 * 60 + 30, 20 * 60));
+        assert!(ALL_DAY_CHOICES.windows(2).all(|w| w[1] - w[0] == 30), "no gap between two choices");
+    }
+
+    #[test]
     fn the_all_day_time_steps_through_the_choices_and_wraps() {
-        assert_eq!(next_all_day(9 * 60), 10 * 60);
-        assert_eq!(next_all_day(12 * 60), 17 * 60);
+        assert_eq!(next_all_day(9 * 60), 9 * 60 + 30, "the steps are half hours");
+        assert_eq!(next_all_day(12 * 60 + 30), 13 * 60);
         assert_eq!(next_all_day(20 * 60), 6 * 60, "the last choice wraps to the first");
-        assert_eq!(next_all_day(9 * 60 + 30), 6 * 60, "a time that is not offered goes to the first");
+        assert_eq!(next_all_day(5 * 60 + 30), 6 * 60, "a time before the first choice goes to the first");
         let mut t = ALL_DAY_CHOICES[0];
         for _ in 0..ALL_DAY_CHOICES.len() {
             t = next_all_day(t);
