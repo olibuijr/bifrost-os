@@ -38,9 +38,9 @@
     {
       "feature": "Sending a report to the developer",
       "apple": "Extension sends its report to the developer's own server after collection",
-      "bifrost": "springboard/src/shell/diag.rs (bundle shared with the developer: build info, crash.log, heartbeat); springboard/src/shell/diagnostics_page.rs (Diagnostics page)",
+      "bifrost": "springboard/src/shell/diag.rs (bundle shared with the developer, parse_log, upload_url, post); springboard/src/shell/diagnostics_page.rs (Diagnostics page)",
       "status": "partial",
-      "note": "A manual bundle the user shares. It covers the shell only. No app can send its own crash report through an SDK API."
+      "note": "The crash log parsing, the bundle layout and its HTTPS-only upload rule are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the bundle covers the shell only, and no app can send its own crash report through an SDK API."
     },
     {
       "feature": "Crash record written by the shell and the runtime",

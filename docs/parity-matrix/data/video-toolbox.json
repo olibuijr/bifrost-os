@@ -73,9 +73,9 @@
     {
       "feature": "RAW processing",
       "apple": "VTRAWProcessingSession",
-      "bifrost": "springboard/render/src/bayer.rs",
+      "bifrost": "springboard/render/src/bayer.rs (demosaic, CfaPattern)",
       "status": "partial",
-      "note": "Wave 5 (w5-video-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no camera-native or Bayer path in springboard/src/media; v4l2.rs converts only YUV formats it lists"
+      "note": "The Bayer tiles, the demosaic at frame edges, white balance and refusal of bad frames are tested headless in springboard/render/tests/parity_sdk-tests-01.rs. Gap: no camera-native or RAW container path in springboard/src/media, and v4l2.rs converts only the YUV formats it lists."
     },
     {
       "feature": "HDR per-frame metadata",

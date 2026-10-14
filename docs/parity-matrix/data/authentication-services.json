@@ -80,9 +80,9 @@
   {
    "feature": "Local account",
    "apple": "(no direct Apple counterpart; closest is the system user account)",
-   "bifrost": "springboard/src/shell/account.rs (full_name and username from the installer file), springboard/src/shell/login.rs (login screen)",
+   "bifrost": "springboard/src/shell/account.rs (parse, password_status_needs_set, password_change_problem), springboard/src/shell/login.rs (login screen)",
    "status": "partial",
-   "note": "reads name and username and detects an unset password (passwd -S NP/L); no account provider API for apps"
+   "note": "The installer record, the unset-password check and the password change rules are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: there is no account provider API for apps."
   },
   {
    "feature": "Apple TV custom authorization methods",
