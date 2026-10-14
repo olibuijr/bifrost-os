@@ -11,7 +11,8 @@
 //! registered for each action and which actions are switched off. It holds no closures: `add_handler` returns a token
 //! and the app keeps its own handler under that token. `dispatch` picks the token to run for an incoming action.
 //! Handler status values and the rate, rating and feedback commands are not routed through the centre yet: each
-//! command above is still its own value. Language option, skip interval and position commands are not modelled.
+//! command above is still its own value. Skip interval requests (`SkipIntervalCommand`) and position requests
+//! (`seek_target`) are modelled; the language option is not.
 
 /// Two playback rates closer than this are the same rate.
 pub const RATE_EPS: f32 = 1e-4;
@@ -226,6 +227,58 @@ impl RatingCommand {
         self.rating = value;
         Ok(value)
     }
+}
+
+/// Skips the playing item forward or backward by a preferred interval (`MPSkipIntervalCommand`). The app seeks by the
+/// interval it accepts; a disabled command refuses every request.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SkipIntervalCommand {
+    enabled: bool,
+    interval_secs: f64,
+}
+
+impl SkipIntervalCommand {
+    /// A skip of `interval_secs` seconds, enabled. None when the interval is not finite or not above zero.
+    pub fn new(interval_secs: f64) -> Option<Self> {
+        (interval_secs.is_finite() && interval_secs > 0.0).then_some(Self { enabled: true, interval_secs })
+    }
+
+    /// The preferred skip in seconds.
+    pub fn interval_secs(&self) -> f64 {
+        self.interval_secs
+    }
+
+    /// Whether the command accepts requests.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Switches the command on or off.
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    /// The position in milliseconds after one skip from `position_ms`, within an item of `duration_ms`. A forward skip
+    /// stops at the end; a backward skip stops at zero. A duration of zero means the length is unknown, so a forward
+    /// skip is not clamped.
+    pub fn request(&self, forward: bool, position_ms: u64, duration_ms: u64) -> Result<u64, CommandError> {
+        if !self.enabled {
+            return Err(CommandError::Disabled);
+        }
+        let step = (self.interval_secs * 1000.0).round() as u64;
+        Ok(if forward {
+            let target = position_ms.saturating_add(step);
+            if duration_ms == 0 { target } else { target.min(duration_ms) }
+        } else {
+            position_ms.saturating_sub(step)
+        })
+    }
+}
+
+/// Where a position request (`MPChangePlaybackPositionCommand`) lands: the requested position inside an item of
+/// `duration_ms`. A duration of zero means the length is unknown, so the position is kept as asked.
+pub fn seek_target(position_ms: u64, duration_ms: u64) -> u64 {
+    if duration_ms == 0 { position_ms } else { position_ms.min(duration_ms) }
 }
 
 /// A like or dislike style toggle for the playing item, with the titles the system shows for it.

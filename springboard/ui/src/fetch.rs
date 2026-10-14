@@ -1,7 +1,7 @@
 //! Fetch requests over in-memory records (`NativeFetchRequest`): a predicate, sort descriptors, an offset and a limit.
-//! A record exposes its fields by name. Predicates are a tree of comparisons, case-insensitive text containment and the
-//! boolean combinators. Matching and sorting are plain Rust over slices, so a list and the query behind it share one
-//! definition.
+//! A record exposes its fields by name. Predicates are a tree of comparisons, set membership (`OneOf`), inclusive ranges
+//! (`Between`), case-insensitive text matches (`Contains`, `StartsWith`) and the boolean combinators. Matching and
+//! sorting are plain Rust over slices, so a list and the query behind it share one definition.
 
 use std::cmp::Ordering;
 
@@ -74,6 +74,12 @@ pub enum Predicate {
     Compare { key: String, op: Op, value: Field },
     /// Case-insensitive substring match on a text field.
     Contains { key: String, text: String },
+    /// Case-insensitive prefix match on a text field.
+    StartsWith { key: String, text: String },
+    /// The field equals one of `values` (`IN`). A missing field never matches.
+    OneOf { key: String, values: Vec<Field> },
+    /// The field lies between `low` and `high`, both included (`BETWEEN`). A missing field never matches.
+    Between { key: String, low: Field, high: Field },
     And(Vec<Predicate>),
     Or(Vec<Predicate>),
     Not(Box<Predicate>),
@@ -86,6 +92,18 @@ impl Predicate {
 
     pub fn contains(key: &str, text: &str) -> Self {
         Predicate::Contains { key: key.into(), text: text.into() }
+    }
+
+    pub fn starts_with(key: &str, text: &str) -> Self {
+        Predicate::StartsWith { key: key.into(), text: text.into() }
+    }
+
+    pub fn one_of(key: &str, values: Vec<Field>) -> Self {
+        Predicate::OneOf { key: key.into(), values }
+    }
+
+    pub fn between(key: &str, low: Field, high: Field) -> Self {
+        Predicate::Between { key: key.into(), low, high }
     }
 
     pub fn and(self, other: Predicate) -> Self {
@@ -110,6 +128,16 @@ impl Predicate {
                 Some(Field::Text(s)) => s.to_lowercase().contains(&text.to_lowercase()),
                 _ => false,
             },
+            Predicate::StartsWith { key, text } => match record.field(key) {
+                Some(Field::Text(s)) => s.to_lowercase().starts_with(&text.to_lowercase()),
+                _ => false,
+            },
+            Predicate::OneOf { key, values } => {
+                record.field(key).is_some_and(|field| values.iter().any(|v| field.order(v) == Ordering::Equal))
+            }
+            Predicate::Between { key, low, high } => record
+                .field(key)
+                .is_some_and(|field| field.order(low) != Ordering::Less && field.order(high) != Ordering::Greater),
             Predicate::And(list) => list.iter().all(|p| p.matches(record)),
             Predicate::Or(list) => list.iter().any(|p| p.matches(record)),
             Predicate::Not(p) => !p.matches(record),
