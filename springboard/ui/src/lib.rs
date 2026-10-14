@@ -590,6 +590,7 @@ pub mod recognizer;
 pub mod identity;
 pub mod directory_node;
 pub mod directory_query;
+pub mod directory_contacts;
 pub mod access_control;
 pub mod permission_question;
 pub mod trust;
