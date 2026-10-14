@@ -11,8 +11,8 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes",
    "status": "partial",
-   "bifrost": "springboard/apps/fontbook-desktop/src/main.rs::begin_install; springboard/apps/fontbook-desktop/src/validate.rs::check",
-   "note": "Install preview with Install/Cancel and validation shown for .ttf and .otf files; Type 1, suitcases and .ttc collections are refused by validate.rs and not installed",
+   "bifrost": "springboard/apps/fontbook-desktop/src/main.rs::begin_install; springboard/apps/fontbook-desktop/src/validate.rs::check (collection tests in validate.rs)",
+   "note": "Install preview with Install/Cancel and validation for .ttf and .otf files. Validate File accepts .ttc collections and checks their first face with a warning; install still refuses .ttc, and Type 1 and suitcases are refused.",
    "wire": "Show an install preview with an Install button before model::install; extend validate.rs to collections"
   },
   {

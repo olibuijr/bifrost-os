@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-10-14
+
+- Font collections (.ttc) are validated: the table directory of the first face is checked the same way as a single
+  face, and the report warns that the other faces are not checked. Validate File... offers .ttc files in its panel.
+  Installing a collection is still refused, because the install and the family reader accept only .ttf and .otf.
+- Tests for collections (valid first face, broken first face, empty and cut-short headers) in validate.rs.
+- Still missing: installing collections, Type 1, a Libraries sidebar section, a slider for the sample size, rules on
+  style or language, and a choice of install location.
+
 ## 0.5.0 — 2026-10-14
 
 - Validate File...: the Font menu item opens a panel for a .ttf or .otf file and shows its

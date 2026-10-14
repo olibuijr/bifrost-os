@@ -940,7 +940,7 @@ impl App for FontBookApp {
                 self.mode = Mode::Validation;
             }
             MENU_VALIDATE_FILE => {
-                let options = OpenOptions { title: "Validate Font File".into(), filters: vec!["ttf".into(), "otf".into()], ..OpenOptions::default() };
+                let options = OpenOptions { title: "Validate Font File".into(), filters: vec!["ttf".into(), "otf".into(), "ttc".into()], ..OpenOptions::default() };
                 self.validate_file = Some(ctx.open_panel(&options));
             }
             MENU_EXPORT_FOLDER => {
