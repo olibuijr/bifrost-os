@@ -157,6 +157,30 @@ def strip_tests(text):
     return out
 
 
+def rust_function_body(lines, start):
+    """Return the brace-delimited body beginning at a Rust function declaration line."""
+    body, depth, opened = [], 0, False
+    for line in lines[start:]:
+        code = line.split('//')[0]
+        if not opened:
+            if '{' not in code:
+                continue
+            opened = True
+        body.append(code)
+        depth += code.count('{') - code.count('}')
+        if opened and depth == 0:
+            break
+    return '\n'.join(body)
+
+
+def res02_required(next_wake_body, code_all, spawn_sites):
+    """Flag worker-fed polling only when next_wake itself schedules a timed wait on pending work."""
+    timed_deadline = re.search(r'\b(?:Some|then_some)\s*\(\s*t\s*\+\s*(?:\d+(?:\.\d*)?|\.\d+)', next_wake_body)
+    pending_worker = re.search(r'\b(?:self\.)?(?:job|work|search|task|worker|pending|in_flight)\b', next_wake_body)
+    worker_channel = bool(spawn_sites or re.search(r'\b(try_recv|mpsc::)', code_all))
+    return bool(timed_deadline and pending_worker and worker_channel)
+
+
 def rust_files(app):
     for p in sorted((app / 'src').rglob('*.rs')) if (app / 'src').is_dir() else []:
         n = p.name
@@ -392,9 +416,8 @@ def check_app(app):
             if THREAD_SPAWN.search(code):
                 spawn_sites.append((p, i, raw))
             if re.search(r'\bfn\s+next_wake\b', code):
-                body = ' '.join(l.split('//')[0] for l in lines[i:i + 10])
-                if re.search(r'\bSome\(', body):
-                    next_wake_site = (p, i, raw)
+                body = rust_function_body(lines, i)
+                next_wake_site = (p, i, raw, body)
             if MENU_DECL.search(code) and MENU_DECL.search(code).group(1) == 'Edit' and re.search(r'AppMenu|MenuEntry|set_menus|main_menu', '\n'.join(lines[max(0, i - 3):i + 1]) + code):
                 add(p, i, 'CHR-01', f'menu "{MENU_DECL.search(code).group(1)}" duplicates the shell bar', raw)
             elif EDIT_MENU_CALL.search(code):
@@ -411,12 +434,8 @@ def check_app(app):
                     add(p, i, rule, f'{RULES[rule][2]} ({rx.search(code).group(0)})', raw)
     for p, i, raw in spawn_sites:
         add(p, i, 'RES-01', 'thread::spawn', raw)
-    # A receiver and a timed next_wake are not evidence of polling by themselves: workers may notify the SDK main
-    # queue (whose eventfd the runtime already waits on), or expose their own wake_fd. Keep RES-02 for apps that
-    # combine worker channels with timed wakeups but provide no event-driven notification path.
-    event_wakeup = re.search(r'\bDispatchQueue::main\(\)\.async_|\bfn\s+wake_fd\b', code_all)
-    if next_wake_site and (spawn_sites or re.search(r'\b(try_recv|mpsc::)', code_all)) and not event_wakeup:
-        add(*next_wake_site[:2], 'RES-02', 'next_wake returns Some(..) while a worker thread feeds the app', next_wake_site[2])
+    if next_wake_site and res02_required(next_wake_site[3], code_all, spawn_sites):
+        add(*next_wake_site[:2], 'RES-02', 'next_wake schedules a timed poll while worker work is pending', next_wake_site[2])
     if executable and not re.search(r'enable_sudden_termination', code_all) and not UNSAVED.search(code_all) and 'documents' not in perms:
         findings.append(('RES-03', f'{rel(app / "src")}:1', 'no unsaved state found and enable_sudden_termination() is never called'))
 

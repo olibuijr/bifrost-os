@@ -790,6 +790,19 @@ mod tests {
     }
 
     #[test]
+    fn worker_feed_queues_completion_on_the_dispatch_main_queue() {
+        let (tx, rx) = feed::<u8>();
+        tx.send(7).unwrap();
+        assert_eq!(rx.try_recv(), Ok(7));
+
+        let ran = Arc::new(AtomicBool::new(false));
+        let completion = ran.clone();
+        DispatchQueue::main().async_(move || completion.store(true, Ordering::Release));
+        assert!(DispatchQueue::drain_main());
+        assert!(ran.load(Ordering::Acquire));
+    }
+
+    #[test]
     fn expanded_folder_children_are_read_again_only_after_the_folder_changes() {
         let dir = temp("kids");
         std::fs::create_dir_all(dir.join("sub")).unwrap();
