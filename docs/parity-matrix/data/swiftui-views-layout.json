@@ -80,9 +80,9 @@
     {
       "feature": "Layout fundamentals (stacks, grids)",
       "apple": "https://developer.apple.com/documentation/swiftui/layout-fundamentals",
-      "bifrost": "springboard/ui/src/stack.rs, springboard/sdk/src/view/controls.rs (Stack)",
+      "bifrost": "springboard/ui/src/stack.rs (stack, distribute, grid, adaptive_columns, overlay, first_fitting)",
       "status": "partial",
-      "note": "HStack/VStack, grid, adaptive columns; no ZStack, LazyVGrid, ViewThatFits"
+      "note": "Stack and grid layout as pure functions: HStack/VStack spacing and flexible items, the four fixed distributions, adaptive columns, grid, a ZStack-style overlay and a ViewThatFits-style first_fitting.The SDK Stack view arranges its children with stack and distribute. No lazy grid. Tests: spare_space_is_shared_by_flexible_items_in_proportion_to_their_weight, equal_centering_keeps_the_centres_equally_far_apart, adaptive_columns_fit_as_many_minimum_cells_as_the_width_allows, a_grid_fills_rows_left_to_right, an_overlay_aligns_each_layer_to_the_anchor, view_that_fits_picks_the_first_candidate_that_fits_the_constrained_axes (springboard/ui/tests/parity_sdk-tests-10.rs)"
     },
     {
       "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
