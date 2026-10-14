@@ -20,7 +20,7 @@
    "area": "view",
    "apple": "Source list of saved places, each with a live temperature and condition",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs (sidebar, the sky glyph drawn over the row)",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:377 (sidebar, the sky glyph drawn over the row)",
    "note": "Each sidebar row shows the place's sky glyph, its sky in words and its last known temperature. Not yet verified on Midget.",
    "wire": "Verify the two-line rows, temperature and sky glyph on Midget."
   },
@@ -38,7 +38,7 @@
    "area": "view",
    "apple": "Delete from the list (Edit > Delete, swipe, context menu)",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs (context_items, the sidebar secondary-click menu with Remove)",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1149 (context_items, the sidebar secondary-click menu with Remove); springboard/apps/weather-desktop/src/weather.rs:1235 (the Delete key)",
    "note": "Delete or Backspace removes the selected place from the main page, and the sidebar secondary-click menu offers Remove. Not yet verified on Midget.",
    "wire": "Verify the Delete key and the sidebar context menu on Midget."
   },
@@ -47,8 +47,8 @@
    "area": "view",
    "apple": "Drag rows to reorder the list",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1108",
-   "note": "built on parity/team-d-weather; not yet verified on Midget",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1119 (reorder_places, a drag test at weather.rs:2131); springboard/apps/weather-desktop/src/insights.rs (move_item, follow_selection, drop_index)",
+   "note": "Dragging a sidebar row moves the place, keeps the same place selected and saves the order; the moves are tested headless in insights::tests. Not yet verified on Midget.",
    "wire": "Verify the sidebar drag on Midget; there is no keyboard reordering and no drag on the Locations page."
   },
   {
@@ -74,7 +74,7 @@
    "area": "forecast",
    "apple": "Scrolling strip of hours with temperature, condition and precipitation chance",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Precipitation chance under each hour's glyph (rounded to 5, hidden below 10). Sunrise and sunset markers between the hours are still missing.",
    "wire": "Verify on Midget; the strip shows no chance below 10%."
   },
@@ -83,7 +83,7 @@
    "area": "forecast",
    "apple": "Ten days with condition, range bar against the period's range, precipitation chance",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Range bar already scaled to the ten-day extremes; the daily precipitation chance is now under each day's glyph.",
    "wire": "Verify on Midget; the range bar was already drawn, the chance of precipitation under each glyph is new."
   },
@@ -92,7 +92,7 @@
    "area": "forecast",
    "apple": "Next-hour precipitation chart with a summary sentence",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Next Hour card above the hourly strip: summary sentence and four quarter-hour bars from minutely_15 precipitation (details.rs next_hour_summary, next_hour_bars). Quarter-hour resolution, not per minute.",
    "wire": "Verify on Midget; the service gives 15-minute steps, so the card has four bars and a summary sentence, not a per-minute chart."
   },
@@ -119,7 +119,7 @@
    "area": "detail",
    "apple": "Sunrise with sunset in the footer, path of the sun",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Sun path arc with the sun at its position between sunrise and sunset.",
    "wire": "Verify the day arc on Midget."
   },
@@ -128,7 +128,7 @@
    "area": "detail",
    "apple": "Wind speed, gusts and direction compass",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Note gives the compass point and gusts; a dotted compass dial marks the direction the wind comes from. No arrow needle or tick labels besides N.",
    "wire": "Verify the compass dial on Midget; the dial draws a pointer toward the bearing the wind comes from."
   },
@@ -137,7 +137,7 @@
    "area": "detail",
    "apple": "Humidity with dew point",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Note shows the dew point in the temperature unit.",
    "wire": "Verify the dew point note on Midget."
   },
@@ -164,7 +164,7 @@
    "area": "detail",
    "apple": "Rain or snow amount for 24 hours and the next days",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Today's total as the value; the note gives the next 24 hours, or how much of today's total is snow when there is snow. The coming days are not listed. Not yet verified on Midget.",
    "wire": "The tile lists today's total and the next 24 hours, with snow named when the day has it; it does not list the coming days."
   },
@@ -173,7 +173,7 @@
    "area": "detail",
    "apple": "Visibility distance with a note",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "Visibility in km or mi from the hourly series with a descriptive note.",
    "wire": "Verify on Midget against the reference tile."
   },
@@ -182,7 +182,7 @@
    "area": "detail",
    "apple": "Barometric pressure with a trend dial",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
    "note": "hPa or inHg with a Rising, Falling or Steady note from the three-hour change, and a trend dial whose needle follows that change (insights::pressure_dial_angle, weather.rs draw_pressure_dial). Not yet verified on Midget.",
    "wire": "Verify the trend dial on Midget against the reference tile."
   },
@@ -217,9 +217,9 @@
    "feature": "Weather maps",
    "area": "maps",
    "apple": "Precipitation, Temperature and Air Quality map overlays with a Map button in the toolbar",
-   "status": "gap",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1682",
-   "note": "The Map card is a latitude and longitude grid with a scale bar and says no tiles are loaded.",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/insights.rs (map_view, grid, coordinate_label, scale_text); springboard/apps/weather-desktop/src/weather.rs:1707 (the Map card)",
+   "note": "The Map card draws a latitude and longitude grid around the place with a centre mark and a scale bar; the grid is tested headless in insights::tests. Gap: no base map tiles, no Precipitation, Temperature or Air Quality overlays and no layer switch.",
    "wire": "Use bifrost-maps (springboard/apps/maps-desktop tiles, cache, source) to draw base tiles under the card and add radar overlay tiles from a configurable raster layer URL with a layer switch (Precipitation, Temperature, Air Quality) in the toolbar."
   },
   {
