@@ -9,7 +9,7 @@
 //! speaker route is the lead's to open, nothing here ever makes a sound on
 //! its own.
 
-use super::aac::{Resampler, OUT_RATE};
+use super::aac::{Resampler, OUT_RATE, SPEED_MAX, SPEED_MIN};
 use super::speaker::SpeakerOut;
 use super::audio_out::AudioOut;
 #[cfg(test)]
@@ -82,6 +82,8 @@ struct Shared {
     start_ms: f64,
     volume: f32,
     muted: bool,
+    /// playback speed, times normal (see `AudioPlayer::set_rate`)
+    speed: f32,
     // -- reported by the thread --
     /// the song the device is playing: (index into the queue, track)
     current: Option<(usize, Track)>,
@@ -135,6 +137,7 @@ impl AudioPlayer {
             start_ms: 0.0,
             volume: 0.6,
             muted: true,
+            speed: 1.0,
             position_ms: 0.0,
             duration_ms: None,
             error: None,
@@ -285,6 +288,28 @@ impl AudioPlayer {
         self.shared.lock().unwrap_or_else(|p| p.into_inner()).volume = v.clamp(0.0, 1.0);
     }
 
+    /// Playback speed, times normal (1.0), clamped to `SPEED_MIN`..=`SPEED_MAX`. A file that is playing reopens at its
+    /// position with the new speed, so the reported position stays in the song's own time. The pitch follows the
+    /// speed. Live streams always play at normal speed.
+    pub fn set_rate(&mut self, rate: f32) {
+        let rate = if rate.is_finite() { rate.clamp(SPEED_MIN, SPEED_MAX) } else { 1.0 };
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        if s.speed == rate {
+            return;
+        }
+        s.speed = rate;
+        let file = s.queue.current().is_some_and(|t| !t.is_live());
+        if file {
+            let at = s.position_ms;
+            Self::restart(&mut s, at);
+        }
+    }
+
+    /// The playback speed, times normal.
+    pub fn rate(&self) -> f32 {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).speed
+    }
+
     /// Whether the samples reach the device (false) or are zeroed (true,
     /// the default). Only the lead's audio routing turns this off.
     pub fn set_muted(&mut self, muted: bool) {
@@ -336,6 +361,8 @@ struct Engine {
     generation: u64,
     decoder: Option<Box<dyn AudioDecoder>>,
     resampler: Resampler,
+    /// the playback speed of the song being opened (see `AudioPlayer::set_rate`)
+    speed: f32,
     /// frames written to the device since its last discard
     written: u64,
     /// `written` when the song now playing started, and its start time
@@ -355,6 +382,11 @@ struct Engine {
     traced: std::time::Instant,
 }
 
+/// The song's position after `frames` output frames played from `start_ms` at `speed` times normal.
+fn media_position_ms(start_ms: f64, frames: u64, speed: f32) -> f64 {
+    start_ms + frames as f64 * 1000.0 / OUT_RATE as f64 * speed as f64
+}
+
 /// Length of the ramp after a flush: 10 ms at 48 kHz.
 const FADE_FRAMES: usize = 480;
 
@@ -370,7 +402,7 @@ fn fade_in(pcm: &mut [i16], frames: usize) {
 
 impl Engine {
     fn new(shared: Arc<Mutex<Shared>>, waker: Waker, out: Box<dyn AudioOut>, transport: Option<Arc<dyn Transport>>, tuning: Tuning) -> Self {
-        Engine { shared, waker, out, transport, tuning, generation: 0, decoder: None, resampler: Resampler::new(OUT_RATE, 2), written: 0, song_start: (0, 0.0), pending: Default::default(), paused: false, played_at_pause: 0, fade_in: true, drained: false, samples: Vec::new(), pcm: Vec::new(), traced: std::time::Instant::now() }
+        Engine { shared, waker, out, transport, tuning, generation: 0, decoder: None, resampler: Resampler::new(OUT_RATE, 2), speed: 1.0, written: 0, song_start: (0, 0.0), pending: Default::default(), paused: false, played_at_pause: 0, fade_in: true, drained: false, samples: Vec::new(), pcm: Vec::new(), traced: std::time::Instant::now() }
     }
 
     /// Opens the current song at `start_ms`; None (with the error noted)
@@ -392,6 +424,8 @@ impl Engine {
             let _ = d.seek_ms(start_ms);
         }
         self.resampler = Resampler::new(d.rate(), d.channels());
+        // a live stream plays at its own speed
+        self.resampler.set_speed(if track.is_live() { 1.0 } else { self.speed });
         Some(d)
     }
 
@@ -410,6 +444,7 @@ impl Engine {
 
     fn reopen(&mut self, start_ms: f64) {
         // queued audio plays out over silence, then the ring is dropped: no click, nothing stale
+        self.speed = self.shared.lock().unwrap_or_else(|p| p.into_inner()).speed;
         self.out.flush();
         self.fade_in = true;
         self.written = 0;
@@ -448,7 +483,8 @@ impl Engine {
             // a pause landed while a write was in flight: the position stays put
             return;
         }
-        let pos = start + played.saturating_sub(first) as f64 * 1000.0 / OUT_RATE as f64;
+        let speed = if s.current.as_ref().is_some_and(|c| c.1.is_live()) { 1.0 } else { self.speed };
+        let pos = media_position_ms(start, played.saturating_sub(first), speed);
         s.position_ms = match s.duration_ms {
             Some(d) => pos.min(d),
             None => pos,
@@ -661,6 +697,38 @@ mod tests {
             crate::bare::sys::wait(&[p.fd()], 20);
             p.drain();
         }
+    }
+
+    #[test]
+    fn the_reported_position_counts_media_time_at_the_playback_speed() {
+        assert_eq!(media_position_ms(1000.0, 48_000, 1.0), 2000.0);
+        assert_eq!(media_position_ms(1000.0, 48_000, 2.0), 3000.0);
+        assert_eq!(media_position_ms(0.0, 24_000, 0.5), 250.0);
+    }
+
+    #[test]
+    fn the_playback_speed_is_clamped_and_normal_when_unset() {
+        let mut p = player();
+        assert_eq!(p.rate(), 1.0);
+        p.set_rate(9.0);
+        assert_eq!(p.rate(), SPEED_MAX);
+        p.set_rate(f32::NAN);
+        assert_eq!(p.rate(), 1.0);
+        p.set_rate(0.1);
+        assert_eq!(p.rate(), SPEED_MIN);
+    }
+
+    #[test]
+    fn changing_the_speed_keeps_the_song_at_its_position() {
+        let mut p = player();
+        p.play_queue(tracks(), 1, false, 1);
+        let s = wait(&mut p, 1000, |s| s.position_ms > 150.0);
+        let at = s.position_ms;
+        p.set_rate(2.0);
+        assert_eq!(p.rate(), 2.0);
+        assert!(p.snapshot().position_ms >= at - 1.0, "the song reopens where it was");
+        assert_eq!(p.snapshot().index, Some(1), "the same song");
+        p.stop();
     }
 
     #[test]

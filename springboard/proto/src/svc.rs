@@ -241,6 +241,8 @@ pub mod audio {
         SetRepeat(Repeat),
         SetVolume(f32),
         SetMuted(bool),
+        /// the playback speed, times normal (1.0); the service clamps it and keeps it until changed
+        SetRate(f32),
         Stop,
         /// records the microphone into `path` (WAV); one recording at a time, explicit user action only
         RecordStart { path: String },
@@ -271,6 +273,7 @@ pub mod audio {
         pub const SET_REPEAT: u32 = 12;
         pub const SET_VOLUME: u32 = 13;
         pub const SET_MUTED: u32 = 14;
+        pub const SET_RATE: u32 = 18;
         pub const STOP: u32 = 15;
         pub const RECORD_START: u32 = 16;
         pub const RECORD_STOP: u32 = 17;
@@ -319,6 +322,7 @@ pub mod audio {
                 Cmd::SetRepeat(r) => Enc::tag(t::SET_REPEAT).u8(*r as u8),
                 Cmd::SetVolume(v) => Enc::tag(t::SET_VOLUME).f32(*v),
                 Cmd::SetMuted(m) => Enc::tag(t::SET_MUTED).bool(*m),
+                Cmd::SetRate(r) => Enc::tag(t::SET_RATE).f32(*r),
                 Cmd::Stop => Enc::tag(t::STOP),
                 Cmd::RecordStart { path } => Enc::tag(t::RECORD_START).str(path),
                 Cmd::RecordStop => Enc::tag(t::RECORD_STOP),
@@ -350,6 +354,7 @@ pub mod audio {
                 t::SET_REPEAT => Cmd::SetRepeat(repeat(d.u8()?)?),
                 t::SET_VOLUME => Cmd::SetVolume(d.f32()?),
                 t::SET_MUTED => Cmd::SetMuted(d.bool()?),
+                t::SET_RATE => Cmd::SetRate(d.f32()?),
                 t::STOP => Cmd::Stop,
                 t::RECORD_START => Cmd::RecordStart { path: d.str()? },
                 t::RECORD_STOP => Cmd::RecordStop,
@@ -419,6 +424,7 @@ pub mod audio {
                 Cmd::SeekMs(1234.5),
                 Cmd::SetRepeat(Repeat::One),
                 Cmd::SetVolume(0.5),
+                Cmd::SetRate(1.5),
                 Cmd::RecordStart { path: "/m.wav".into() },
             ];
             for c in cmds {

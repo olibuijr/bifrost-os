@@ -275,6 +275,10 @@ pub mod audio {
         pub fn set_muted(&mut self, m: bool) -> bool {
             self.send(Cmd::SetMuted(m))
         }
+        /// The playback speed, times normal (1.0). The service keeps it until it is set again.
+        pub fn set_rate(&mut self, rate: f32) -> bool {
+            self.send(Cmd::SetRate(rate))
+        }
         pub fn set_repeat(&mut self, r: Repeat) -> bool {
             self.send(Cmd::SetRepeat(r))
         }

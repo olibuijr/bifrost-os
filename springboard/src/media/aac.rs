@@ -119,21 +119,36 @@ impl Decoder {
 pub struct Resampler {
     in_rate: u32,
     channels: usize,
+    /// the playback speed in 16.16 fixed point (65536 is normal)
+    speed: u32,
     /// 16.16 position inside the virtual input stream `[last] + input`
     pos: u64,
     last: [i16; 2],
     primed: bool,
 }
 
+/// The slowest and fastest playback speeds the resampler takes (times normal).
+pub const SPEED_MIN: f32 = 0.25;
+pub const SPEED_MAX: f32 = 4.0;
+
 impl Resampler {
     pub fn new(in_rate: u32, channels: usize) -> Self {
-        Resampler { in_rate: in_rate.max(1), channels: channels.max(1), pos: 0, last: [0; 2], primed: false }
+        Resampler { in_rate: in_rate.max(1), channels: channels.max(1), speed: 1 << 16, pos: 0, last: [0; 2], primed: false }
     }
 
-    /// Adapts to a stream whose parameters changed mid-way.
+    /// Plays the input `speed` times as fast: 2.0 takes twice the input per output frame, which also raises the pitch,
+    /// as a tape does. Values outside `SPEED_MIN`..=`SPEED_MAX` are clamped; a non-finite value means normal speed.
+    pub fn set_speed(&mut self, speed: f32) {
+        let speed = if speed.is_finite() { speed.clamp(SPEED_MIN, SPEED_MAX) } else { 1.0 };
+        self.speed = (speed * 65536.0).round() as u32;
+    }
+
+    /// Adapts to a stream whose parameters changed mid-way. The speed is kept.
     pub fn retune(&mut self, in_rate: u32, channels: usize) {
         if (in_rate, channels) != (self.in_rate, self.channels) {
+            let speed = self.speed;
             *self = Resampler::new(in_rate, channels);
+            self.speed = speed;
         }
     }
 
@@ -152,7 +167,8 @@ impl Resampler {
             }
             return;
         }
-        let step = ((self.in_rate as u64) << 16) / OUT_RATE as u64;
+        // input frames per output frame, 16.16 fixed point: the rate ratio times the playback speed
+        let step = ((self.in_rate as u64 * self.speed as u64) / OUT_RATE as u64).max(1);
         let end = ((ext.len() - 1) as u64) << 16;
         while self.pos < end {
             let (i, w) = ((self.pos >> 16) as usize, (self.pos & 0xffff) as i64);
@@ -316,6 +332,37 @@ mod tests {
         let frames = out.len() / 2;
         assert!((frames as i64 - total_in / 2).abs() <= 2, "{frames} out for {total_in} in");
         assert!(out.iter().all(|&s| s == 1000));
+    }
+
+    #[test]
+    fn playback_speed_scales_the_frames_out_and_normal_speed_is_unchanged() {
+        let chunk: Vec<i16> = vec![500; 2 * 4801];
+        let frames_at = |speed: f32| {
+            let mut r = Resampler::new(OUT_RATE, 2);
+            r.set_speed(speed);
+            let mut out = Vec::new();
+            r.convert(&chunk, &mut out);
+            out.len() / 2
+        };
+        assert_eq!(frames_at(1.0), 4800, "normal speed keeps one output frame per input frame");
+        let fast = frames_at(2.0) as i64;
+        assert!((fast * 2 - 4800).abs() <= 2, "{fast} frames at 2x");
+        let slow = frames_at(0.5) as i64;
+        assert!((slow - 9600).abs() <= 2, "{slow} frames at 0.5x");
+    }
+
+    #[test]
+    fn playback_speed_is_clamped_and_survives_a_retune() {
+        let mut r = Resampler::new(48000, 2);
+        r.set_speed(100.0);
+        assert_eq!(r.speed, (SPEED_MAX * 65536.0) as u32);
+        r.set_speed(0.0);
+        assert_eq!(r.speed, (SPEED_MIN * 65536.0) as u32);
+        r.set_speed(f32::NAN);
+        assert_eq!(r.speed, 1 << 16);
+        r.set_speed(1.5);
+        r.retune(24000, 1);
+        assert_eq!(r.speed, 98304, "the new stream keeps the chosen speed");
     }
 
     #[test]

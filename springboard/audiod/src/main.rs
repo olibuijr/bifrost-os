@@ -124,6 +124,7 @@ impl Core {
                 WireRepeat::One => Repeat::One,
             }),
             Cmd::SetVolume(v) => self.player.set_volume(v),
+            Cmd::SetRate(r) => self.player.set_rate(r),
             Cmd::SetMuted(m) => {
                 self.muted = m;
                 self.player.set_muted(m);
