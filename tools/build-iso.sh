@@ -31,6 +31,8 @@ if [ "$CARGO" = 1 ]; then
 fi
 tools/build-efi-boot.sh "$CPROF"
 python3 tools/apply-archiso-profile.py "$PROFILE"
+# The installer copies its verified loader into the target ESP after pacstrap; the ISO boot copy itself is not in AIROOT.
+install -Dm644 packaging/archiso/bootweave.efi "$AIROOT/usr/share/bifrost/bootweave.efi"
 # The live installer and installed shell need these generated assets; never inherit a stale profile copy. Preparing the
 # assets (including any font fetches) is a separate build-time step, not an ISO-build/network fallback.
 ASSET_SRC=${BIFROST_ISO_ASSETS_DIR:-springboard/assets}
