@@ -888,3 +888,47 @@ mod upload_tests {
         assert_eq!(r.connects.load(Ordering::SeqCst), 0);
     }
 }
+
+/// Transport security of the URL client: only `https` and `http` schemes are accepted, TLS is chosen by the scheme
+/// alone, and redirects keep the scheme of the URL they resolve against. Headless: no connection is opened.
+#[cfg(test)]
+mod transport_security_tests {
+    use super::*;
+
+    #[test]
+    fn https_urls_use_tls_on_port_443_and_http_urls_do_not_on_port_80() {
+        let secure = parse_url("https://bifrost.example/ota/latest.json").unwrap();
+        assert!(secure.tls);
+        assert_eq!(secure.port, 443);
+        assert_eq!(secure.host, "bifrost.example");
+        assert_eq!(secure.target, "/ota/latest.json");
+        let plain = parse_url("http://bifrost.example").unwrap();
+        assert!(!plain.tls);
+        assert_eq!(plain.port, 80);
+        assert_eq!(plain.target, "/");
+    }
+
+    #[test]
+    fn an_explicit_port_is_kept_with_the_scheme_it_came_with() {
+        let secure = parse_url("https://bifrost.example:8443/x?y=1#frag").unwrap();
+        assert!(secure.tls);
+        assert_eq!(secure.port, 8443);
+        assert_eq!(secure.host_header, "bifrost.example:8443");
+        assert_eq!(secure.target, "/x?y=1", "the fragment is never sent");
+    }
+
+    #[test]
+    fn other_schemes_and_malformed_authorities_are_refused() {
+        for url in ["ftp://files.example/a", "file:///etc/hosts", "bifrost.example/no-scheme", "https://", "https://host:port/"] {
+            assert_eq!(parse_url(url).err(), Some(URLError::BadURL(url.to_string())), "{url}");
+        }
+    }
+
+    #[test]
+    fn a_redirect_resolves_against_the_scheme_and_host_of_the_request_it_answers() {
+        assert_eq!(resolve("https://bifrost.example/ota/a.json", "/b.json").unwrap(), "https://bifrost.example/b.json");
+        assert_eq!(resolve("https://bifrost.example/ota/a.json", "b.json").unwrap(), "https://bifrost.example/ota/b.json");
+        assert_eq!(resolve("http://bifrost.example:8080/x", "/y").unwrap(), "http://bifrost.example:8080/y");
+        assert_eq!(resolve("https://bifrost.example/", "https://cdn.example/z").unwrap(), "https://cdn.example/z");
+    }
+}
