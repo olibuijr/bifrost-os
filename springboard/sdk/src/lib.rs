@@ -161,6 +161,8 @@ pub mod sample_buffer;
 pub mod diagnostic_report;
 pub mod bug_report;
 pub mod exception_handler;
+pub mod schedulers;
+pub mod webdriver;
 pub mod call_stack_tree;
 pub mod hitch_ratio;
 pub mod daily_metric_report;

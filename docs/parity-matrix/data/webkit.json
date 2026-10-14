@@ -108,9 +108,9 @@
     {
       "feature": "WebDriver and automated testing",
       "apple": "WebDriver commands for Safari 11.1 and earlier and 12 and later; testing with WebDriver in Safari",
-      "bifrost": "none for web content; springboard/sdk/src/testing.rs covers XCTest-style app tests only (docs/bifrost-ui.md, 'Testing kit')",
-      "status": "gap",
-      "note": "no WebDriver server for pages; springboard/src/shell/browser/js/window.rs sets navigator.webdriver to false, which is a fingerprint stub and not a WebDriver implementation"
+      "bifrost": "springboard/sdk/src/webdriver.rs (ErrorCode, Locator, Timeouts, element_reference); springboard/sdk/src/testing.rs covers XCTest-style app tests only (docs/bifrost-ui.md, 'Testing kit')",
+      "status": "partial",
+      "note": "The W3C WebDriver wire model is tested headless in sdk/tests/parity_sdk-rest-08.rs: error codes with statuses, locator validation and bodies, timeouts and the element key. Gap: no HTTP session or automation endpoint in the browser shell, and navigator.webdriver is still a fixed false value; driving a real page needs the lab machine."
     },
     {
       "feature": "Safari support for web authors (optimizing sites, video delivery, Smart App Banners)",
