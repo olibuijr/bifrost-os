@@ -80,9 +80,9 @@
     {
       "feature": "Typed key storage in the keychain",
       "apple": "CryptoKit keys stored as keychain items (sample: Storing CryptoKit Keys in the Keychain)",
-      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/sdk/tests/parity_sdk-tests-01d.rs",
+      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/sdk/src/keychain_keys.rs (encode, decode, add, update, decode_reply); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-41.rs",
       "status": "partial",
-      "note": "The SDK keychain stores opaque secret bytes keyed by service and account, and a_keychain_add_is_sent_with_its_service_account_and_secret checks the add message headless. There are no typed key objects and no key references."
+      "note": "Typed keys are stored as a kind-tagged record in one keychain item, and the record is checked headless on read: wrong magic, unknown kind and bad key length are refused. Gap: there are no key references, and keys are not reachable from apps outside the keychain calls; the keychain round trip needs the shell on Midget."
     },
     {
       "feature": "Hardware-backed keys (SecureEnclave)",

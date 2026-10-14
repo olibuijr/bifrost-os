@@ -3,8 +3,10 @@
 //! is kept in the order it was first heard, and a later search adds to that list until `clear_found` empties it.
 //!
 //! `Inquiry` is the model: the caller feeds it the radio's reports and the elapsed seconds, and it returns the events
-//! an app's delegate would receive. It opens no radio and holds no timer. Nothing feeds it yet, so the matrix row that
-//! uses it is partial. Pure.
+//! an app's delegate would receive. It opens no radio and holds no timer. The reports arrive as the controller's
+//! `Device Found` event payload, which [`parse_device_found`] reads into a [`Report`]; [`Inquiry::feed`] takes such a
+//! payload directly. The socket that delivers the payload is the shell's job, so the matrix row that uses this model
+//! is partial. Pure.
 
 use bifrost_core::bt_address::{BdAddr, ClassOfDevice};
 
@@ -14,6 +16,80 @@ use crate::bluetooth_devices::RemoteDevice;
 pub const MIN_LENGTH_SECS: u32 = 1;
 /// Longest inquiry the model accepts, in seconds.
 pub const MAX_LENGTH_SECS: u32 = 61;
+
+/// Bytes of the `Device Found` payload before the extended inquiry data: address (6), address type (1), RSSI (1),
+/// flags (4) and the extended data length (2).
+const DEVICE_FOUND_HEADER: usize = 14;
+/// RSSI value the controller sends when it has no measurement.
+const RSSI_UNAVAILABLE: i8 = 127;
+/// Extended inquiry data field types used here: shortened and complete local name, and class of device.
+const EIR_NAME_SHORT: u8 = 0x08;
+const EIR_NAME_COMPLETE: u8 = 0x09;
+const EIR_CLASS_OF_DEVICE: u8 = 0x0D;
+
+/// One report from the radio: what a single `Device Found` event says about one device.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Report {
+    pub address: BdAddr,
+    pub class: Option<ClassOfDevice>,
+    pub name: Option<String>,
+    pub rssi: Option<i8>,
+}
+
+/// Why a `Device Found` payload could not be read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParseError {
+    /// The payload is shorter than its header, or its extended data is shorter than the length it declares.
+    Truncated,
+}
+
+/// Reads a `Device Found` event payload (the controller's management event, without its own header).
+///
+/// The address arrives least significant byte first and is returned in printing order. The extended inquiry data is
+/// a list of fields, each one a length byte followed by a type byte and its value. A zero length ends the list early.
+/// The name is the complete local name when the device sent one, and the shortened name otherwise. An RSSI of 127
+/// means the controller had no measurement, and the report then carries no RSSI.
+pub fn parse_device_found(payload: &[u8]) -> Result<Report, ParseError> {
+    if payload.len() < DEVICE_FOUND_HEADER {
+        return Err(ParseError::Truncated);
+    }
+    let mut address = [0u8; 6];
+    for (i, byte) in payload[..6].iter().enumerate() {
+        address[5 - i] = *byte;
+    }
+    let rssi = payload[7] as i8;
+    let eir_len = u16::from_le_bytes([payload[12], payload[13]]) as usize;
+    let eir = payload.get(DEVICE_FOUND_HEADER..DEVICE_FOUND_HEADER + eir_len).ok_or(ParseError::Truncated)?;
+
+    let mut class = None;
+    let mut complete_name = None;
+    let mut short_name = None;
+    let mut at = 0;
+    while at < eir.len() && eir[at] != 0 {
+        let field_len = eir[at] as usize;
+        let field = eir.get(at + 1..at + 1 + field_len).ok_or(ParseError::Truncated)?;
+        if let Some((&kind, value)) = field.split_first() {
+            match kind {
+                EIR_NAME_COMPLETE => complete_name = Some(name_text(value)),
+                EIR_NAME_SHORT => short_name = Some(name_text(value)),
+                EIR_CLASS_OF_DEVICE if value.len() == 3 => {
+                    let raw = u32::from_le_bytes([value[0], value[1], value[2], 0]);
+                    class = ClassOfDevice::new(raw);
+                }
+                _ => {}
+            }
+        }
+        at += field_len + 1;
+    }
+    let name = complete_name.or(short_name).filter(|n| !n.is_empty());
+    let rssi = (rssi != RSSI_UNAVAILABLE).then_some(rssi);
+    Ok(Report { address: BdAddr(address), class, name, rssi })
+}
+
+/// Text of a name field: UTF-8 with the trailing NUL padding removed.
+fn name_text(value: &[u8]) -> String {
+    String::from_utf8_lossy(value).trim_end_matches('\0').to_string()
+}
 
 /// What the delegate of an inquiry receives.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,6 +164,13 @@ impl Inquiry {
         dev.merge(class, name, rssi);
         self.found.push(dev);
         Some(Event::Found(address))
+    }
+
+    /// Takes one `Device Found` payload from the controller, as [`parse_device_found`] reads it, and returns the same
+    /// event that [`Inquiry::report`] would. A payload that cannot be read is an error and changes nothing.
+    pub fn feed(&mut self, payload: &[u8]) -> Result<Option<Event>, ParseError> {
+        let report = parse_device_found(payload)?;
+        Ok(self.report(report.address, report.class, report.name.as_deref(), report.rssi))
     }
 
     /// Ends a running search before its length. Returns `Complete` with `aborted` set, or nothing when idle.
