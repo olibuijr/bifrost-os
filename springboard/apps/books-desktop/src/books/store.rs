@@ -106,16 +106,19 @@ pub enum SortBy {
     Recent,
     Title,
     Author,
+    /// furthest along first
+    Progress,
 }
 
 impl SortBy {
-    pub const ALL: [SortBy; 3] = [SortBy::Recent, SortBy::Title, SortBy::Author];
+    pub const ALL: [SortBy; 4] = [SortBy::Recent, SortBy::Title, SortBy::Author, SortBy::Progress];
 
     pub fn name(self) -> &'static str {
         match self {
             SortBy::Recent => "Recent",
             SortBy::Title => "Title",
             SortBy::Author => "Author",
+            SortBy::Progress => "Progress",
         }
     }
 
@@ -128,13 +131,16 @@ impl SortBy {
     }
 }
 
-/// The sort key of a book: books without an author come last when sorting by author. `Recent` keeps the order the
+/// The sort key of a book: books without an author come last when sorting by author, and the books furthest along come
+/// first when sorting by progress (`progress` is the reader's place in 1/1000 of the book). `Recent` keeps the order the
 /// shelf already has, so its key is the same for every book.
-pub fn sort_key(sort: SortBy, title: &str, author: &str) -> (bool, String, String) {
+pub fn sort_key(sort: SortBy, title: &str, author: &str, progress: u16) -> (bool, std::cmp::Reverse<u16>, String, String) {
+    use std::cmp::Reverse;
     match sort {
-        SortBy::Recent => (false, String::new(), String::new()),
-        SortBy::Title => (false, title.to_lowercase(), String::new()),
-        SortBy::Author => (author.trim().is_empty(), author.trim().to_lowercase(), title.to_lowercase()),
+        SortBy::Recent => (false, Reverse(0), String::new(), String::new()),
+        SortBy::Title => (false, Reverse(0), title.to_lowercase(), String::new()),
+        SortBy::Author => (author.trim().is_empty(), Reverse(0), author.trim().to_lowercase(), title.to_lowercase()),
+        SortBy::Progress => (false, Reverse(progress), title.to_lowercase(), String::new()),
     }
 }
 
@@ -874,11 +880,11 @@ mod tests {
     #[test]
     fn sort_keys_order_by_title_and_author() {
         let mut books = vec![("Zebra", "Adams"), ("avocado", ""), ("Mango", "Brown"), ("Berry", "adams")];
-        books.sort_by_key(|(t, a)| sort_key(SortBy::Title, t, a));
+        books.sort_by_key(|(t, a)| sort_key(SortBy::Title, t, a, 0));
         assert_eq!(books.iter().map(|b| b.0).collect::<Vec<_>>(), ["avocado", "Berry", "Mango", "Zebra"]);
-        books.sort_by_key(|(t, a)| sort_key(SortBy::Author, t, a));
+        books.sort_by_key(|(t, a)| sort_key(SortBy::Author, t, a, 0));
         assert_eq!(books.iter().map(|b| b.0).collect::<Vec<_>>(), ["Berry", "Zebra", "Mango", "avocado"], "same author by title, no author last");
-        books.sort_by_key(|(t, a)| sort_key(SortBy::Recent, t, a));
+        books.sort_by_key(|(t, a)| sort_key(SortBy::Recent, t, a, 0));
         assert_eq!(books[0].0, "Berry", "Recent leaves a stable sort alone");
     }
 
