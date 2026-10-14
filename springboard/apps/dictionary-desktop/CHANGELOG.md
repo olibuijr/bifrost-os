@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- The manifest registers the dict: and x-dictionary: URL schemes, so the shell offers Dictionary for those links.
+- Find in Definition highlights each found word instead of the whole line, and Find Next/Previous step through every occurrence; the count is of occurrences.
+- Words in a definition that have a definition of their own are drawn as links.
+- Settings: drag a dictionary row to reorder the dictionaries (Up and Down stay).
+
 ## 0.2.0
 
 - Back and Forward history (toolbar, Go menu, cmd+[ and cmd+]), a scope bar with Select Next/Previous Dictionary, and tapping a word in a definition to follow it.

@@ -1,5 +1,5 @@
 //! The Dictionary app's logic without any drawing: lookup history, dictionary scope, the stored preferences (which
-//! dictionaries are used, in what order, under what label, and the text size), find-in-definition and URL parsing.
+//! dictionaries are used, in what order, under what label, and the text size), find-in-definition, cross-reference words, settings row dragging and URL parsing.
 
 use bifrost_ui::stardict::Hit;
 
@@ -206,6 +206,16 @@ impl Prefs {
         self.dicts.insert(to, d);
     }
 
+    /// True when the dictionary called `name` is used for lookups. One the preferences do not know yet counts as used.
+    pub fn is_enabled(&self, name: &str) -> bool {
+        self.dicts.iter().find(|d| d.name == name).map_or(true, |d| d.enabled)
+    }
+
+    /// Moves dictionary `from` to place `to` (clamped), as a drag in the settings list does.
+    pub fn move_to(&mut self, from: usize, to: usize) {
+        self.move_dict(from, to as i32 - from as i32);
+    }
+
     pub fn toggle(&mut self, index: usize) {
         if let Some(d) = self.dicts.get_mut(index) {
             d.enabled = !d.enabled;
@@ -265,13 +275,139 @@ pub fn in_scope(hits: &[Hit], scope: &Option<String>) -> Vec<Hit> {
     hits.iter().filter(|h| scope.as_ref().map_or(true, |s| &h.dictionary == s)).cloned().collect()
 }
 
-/// Indexes of the lines containing `query`, ignoring case. An empty query matches nothing.
-pub fn find_lines(lines: &[&str], query: &str) -> Vec<usize> {
-    let q = query.trim().to_lowercase();
+/// One occurrence of the find text: the line it is on and its byte range in that line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Match {
+    pub line: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Byte ranges of the non-overlapping occurrences of `query` in `text`, ignoring case. `query` is used as given, so
+/// the caller trims it. An empty query matches nothing.
+pub fn find_spans(text: &str, query: &str) -> Vec<(usize, usize)> {
+    let q: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
+    let mut out = Vec::new();
     if q.is_empty() {
-        return Vec::new();
+        return out;
     }
-    lines.iter().enumerate().filter(|(_, l)| l.to_lowercase().contains(&q)).map(|(i, _)| i).collect()
+    let mut from = 0;
+    while from < text.len() {
+        match match_len_at(&text[from..], &q) {
+            Some(len) => {
+                out.push((from, from + len));
+                from += len;
+            }
+            None => from += text[from..].chars().next().map_or(1, char::len_utf8),
+        }
+    }
+    out
+}
+
+/// The byte length of the prefix of `tail` that equals `q` when lowercased; None when `tail` does not start with it.
+fn match_len_at(tail: &str, q: &[char]) -> Option<usize> {
+    let mut at = 0;
+    for (i, c) in tail.char_indices() {
+        for lc in c.to_lowercase() {
+            if q.get(at) != Some(&lc) {
+                return None;
+            }
+            at += 1;
+        }
+        if at == q.len() {
+            return Some(i + c.len_utf8());
+        }
+    }
+    None
+}
+
+/// Every occurrence of `query` (trimmed, ignoring case) in the lines, in reading order.
+pub fn find_matches(lines: &[&str], query: &str) -> Vec<Match> {
+    let q = query.trim();
+    lines.iter().enumerate().flat_map(|(line, text)| find_spans(text, q).into_iter().map(move |(start, end)| Match { line, start, end })).collect()
+}
+
+/// The words of a line as byte ranges `(start, end)` without the punctuation around them, in order.
+pub fn word_spans(text: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut start: Option<usize> = None;
+    let close = |from: usize, to: usize, out: &mut Vec<(usize, usize)>| {
+        let chunk = &text[from..to];
+        let lead = chunk.len() - chunk.trim_start_matches(|c: char| !c.is_alphanumeric()).len();
+        let core = chunk[lead..].trim_end_matches(|c: char| !c.is_alphanumeric());
+        if !core.is_empty() {
+            out.push((from + lead, from + lead + core.len()));
+        }
+    };
+    for (i, c) in text.char_indices() {
+        match (c.is_whitespace(), start) {
+            (false, None) => start = Some(i),
+            (true, Some(s)) => {
+                close(s, i, &mut out);
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(s) = start {
+        close(s, text.len(), &mut out);
+    }
+    out
+}
+
+/// A stretch of a line drawn in one style: plain text, or a word that links to its own definition.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Run {
+    pub start: usize,
+    pub end: usize,
+    pub link: bool,
+}
+
+/// Splits `text` into runs covering all of it, in order. The words for which `is_link` is true form link runs.
+pub fn link_runs(text: &str, mut is_link: impl FnMut(&str) -> bool) -> Vec<Run> {
+    let mut runs = Vec::new();
+    let mut at = 0;
+    for (s, e) in word_spans(text) {
+        if !is_link(&text[s..e]) {
+            continue;
+        }
+        if s > at {
+            runs.push(Run { start: at, end: s, link: false });
+        }
+        runs.push(Run { start: s, end: e, link: true });
+        at = e;
+    }
+    if at < text.len() {
+        runs.push(Run { start: at, end: text.len(), link: false });
+    }
+    runs
+}
+
+/// The row of a `count` rows list under the vertical position `y` (all in points), or None outside the rows.
+pub fn row_at(y: f32, rows_top: f32, row_h: f32, count: usize) -> Option<usize> {
+    if y < rows_top || row_h <= 0.0 {
+        return None;
+    }
+    let i = ((y - rows_top) / row_h) as usize;
+    (i < count).then_some(i)
+}
+
+/// The place a dragged row lands in when it is let go with its pointer at `y`: the row under the pointer, clamped.
+pub fn drop_slot(y: f32, rows_top: f32, row_h: f32, count: usize) -> usize {
+    if count == 0 || row_h <= 0.0 {
+        return 0;
+    }
+    (((y - rows_top) / row_h).floor().max(0.0) as usize).min(count - 1)
+}
+
+/// The order of `count` rows while row `from` is dragged over place `to`: each entry is a row index.
+pub fn preview_order(count: usize, from: usize, to: usize) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..count).collect();
+    if from < count {
+        let row = order.remove(from);
+        order.insert(to.min(count - 1), row);
+    }
+    order
 }
 
 /// The match after (`delta` 1) or before (-1) `current`, wrapping around. `current` is a position in `matches`.
@@ -402,15 +538,84 @@ mod tests {
     }
 
     #[test]
-    fn find_matches_lines_and_wraps() {
-        let lines = ["Hello world", "nothing", "WORLD again"];
-        let m = find_lines(&lines, "world");
-        assert_eq!(m, [0, 2]);
-        assert!(find_lines(&lines, "  ").is_empty());
-        assert_eq!(step_match(&m, None, 1), Some(0));
-        assert_eq!(step_match(&m, None, -1), Some(1));
-        assert_eq!(step_match(&m, Some(1), 1), Some(0));
-        assert_eq!(step_match(&m, Some(0), -1), Some(1));
+    fn find_matches_every_occurrence_and_wraps() {
+        let lines = ["Hello world, world", "nothing", "WORLD again"];
+        let m = find_matches(&lines, " world ");
+        assert_eq!(m.iter().map(|x| (x.line, x.start, x.end)).collect::<Vec<_>>(), [(0, 6, 11), (0, 13, 18), (2, 0, 5)]);
+        assert!(find_matches(&lines, "  ").is_empty());
+        let all: Vec<usize> = (0..m.len()).collect();
+        assert_eq!(step_match(&all, None, 1), Some(0));
+        assert_eq!(step_match(&all, None, -1), Some(2));
+        assert_eq!(step_match(&all, Some(2), 1), Some(0));
+        assert_eq!(step_match(&all, Some(0), -1), Some(2));
         assert_eq!(step_match(&[], None, 1), None);
+    }
+
+    #[test]
+    fn find_spans_ignore_case_and_stay_on_char_boundaries() {
+        assert_eq!(find_spans("aaaa", "aa"), [(0, 2), (2, 4)]);
+        assert_eq!(find_spans("Caf\u{e9} CAF\u{c9}", "caf\u{e9}"), [(0, 5), (6, 11)]);
+        assert_eq!(find_spans("x\u{130}y", "y"), [(3, 4)]);
+        assert!(find_spans("abc", "").is_empty());
+        assert!(find_spans("ab", "abc").is_empty());
+        for (s, e) in find_spans("na\u{ef}ve na\u{ef}ve", "\u{ef}v") {
+            assert!("na\u{ef}ve na\u{ef}ve".is_char_boundary(s) && "na\u{ef}ve na\u{ef}ve".is_char_boundary(e));
+        }
+    }
+
+    #[test]
+    fn word_spans_drop_the_punctuation_around_words() {
+        let t = "  (see \"serendipity\", chance.) -- ok";
+        let words: Vec<&str> = word_spans(t).iter().map(|&(s, e)| &t[s..e]).collect();
+        assert_eq!(words, ["see", "serendipity", "chance", "ok"]);
+        assert!(word_spans("... ---").is_empty());
+        assert!(word_spans("").is_empty());
+    }
+
+    #[test]
+    fn link_runs_cover_the_whole_line() {
+        let t = "a fortunate chance, really";
+        let runs = link_runs(t, |w| w == "chance" || w == "really");
+        assert_eq!(
+            runs,
+            [
+                Run { start: 0, end: 12, link: false },
+                Run { start: 12, end: 18, link: true },
+                Run { start: 18, end: 20, link: false },
+                Run { start: 20, end: 26, link: true },
+            ]
+        );
+        assert_eq!(link_runs(t, |_| false), [Run { start: 0, end: t.len(), link: false }]);
+        assert!(link_runs("", |_| true).is_empty());
+        let joined: String = runs.iter().map(|r| &t[r.start..r.end]).collect();
+        assert_eq!(joined, t);
+    }
+
+    #[test]
+    fn dragging_a_settings_row_picks_the_slot_and_previews_the_order() {
+        assert_eq!(row_at(10.0, 40.0, 32.0, 3), None);
+        assert_eq!(row_at(40.0, 40.0, 32.0, 3), Some(0));
+        assert_eq!(row_at(135.0, 40.0, 32.0, 3), Some(3 - 1));
+        assert_eq!(row_at(136.0, 40.0, 32.0, 3), None);
+        assert_eq!(drop_slot(0.0, 40.0, 32.0, 3), 0);
+        assert_eq!(drop_slot(75.0, 40.0, 32.0, 3), 1);
+        assert_eq!(drop_slot(900.0, 40.0, 32.0, 3), 2);
+        assert_eq!(drop_slot(5.0, 40.0, 32.0, 0), 0);
+        assert_eq!(preview_order(4, 0, 2), [1, 2, 0, 3]);
+        assert_eq!(preview_order(4, 3, 0), [3, 0, 1, 2]);
+        assert_eq!(preview_order(3, 1, 1), [0, 1, 2]);
+        assert_eq!(preview_order(0, 0, 0), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn move_to_places_a_dictionary_and_enabled_defaults_on() {
+        let mut p = Prefs::default();
+        p.sync(&["A".into(), "B".into(), "C".into()]);
+        p.move_to(0, 2);
+        assert_eq!(p.dicts.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["B", "C", "A"]);
+        p.move_to(2, 0);
+        assert_eq!(p.dicts[0].name, "A");
+        p.toggle(1);
+        assert!(!p.is_enabled("B") && p.is_enabled("A") && p.is_enabled("unknown"));
     }
 }

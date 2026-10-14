@@ -1,6 +1,6 @@
 id = "is.olibuijr.dictionary.desktop"
 name = "Dictionary"
-version = "0.2.0"
+version = "0.3.0"
 exec = "bifrost-dictionary"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,6 +9,7 @@ category = "Reference"
 architecture = "x86_64-linux"
 permissions = ["storage"]
 window = "full-size"
+schemes = ["dict", "x-dictionary"]
 
 [[intent]]
 id = "look-up"
