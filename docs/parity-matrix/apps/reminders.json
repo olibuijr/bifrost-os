@@ -50,9 +50,9 @@
    "area": "view",
    "apple": "MainMenu: View > Show Smart List",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:221",
-   "note": "View > Show Smart List hides or shows each smart list tile; the choice is kept while the app runs; built on parity/team-d-reminders; not yet verified on Midget",
-   "wire": "Save the hidden smart lists with the settings so they survive a restart (Options is held in memory only), and check the View menu merge on Midget."
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:221; springboard/apps/reminders-desktop/src/app.rs:749",
+   "note": "View > Show Smart List hides or shows each smart list tile; the choice is saved in settings.tsv and kept across restarts; built on parity/team-d-reminders; not yet verified on Midget",
+   "wire": "Check the View menu merge on Midget."
   },
   {
    "feature": "Custom smart lists with filters (date, time, priority, tags, lists, flag)",
@@ -113,18 +113,18 @@
    "area": "menu",
    "apple": "Reminder > Indent/Outdent Reminder; View > Show/Hide All Subtasks",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:177",
-   "note": "Reminder > Indent and Outdent (Cmd+] and Cmd+[) on the selected reminder; View > Hide All Subtasks and Show All Subtasks; built on parity/team-d-reminders; not yet verified on Midget",
-   "wire": "Keep the collapsed state between runs, and apply Indent and Outdent to several selected reminders once the list has multi-select."
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:228; springboard/apps/reminders-desktop/src/app.rs:635",
+   "note": "Reminder > Indent and Outdent (Cmd+] and Cmd+[) on the selected reminder; View > Hide All Subtasks and Show All Subtasks, and the folded subtasks are saved in settings.tsv and stay folded after a restart; built on parity/team-d-reminders; not yet verified on Midget",
+   "wire": "Apply Indent and Outdent to several selected reminders once the list has multi-select."
   },
   {
    "feature": "Sort by manual, due, priority, title, creation date",
    "area": "view",
    "apple": "View > Sort By",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:570",
-   "note": "Creation Date sort (oldest first; reminders made before 1.14.0 count as the oldest) and a View > Sort By submenu with the current order checked; built on parity/team-d-reminders; not yet verified on Midget",
-   "wire": "Save the sort choice between runs; it is held in memory and starts at Manual."
+   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:570; springboard/apps/reminders-desktop/src/app.rs:737",
+   "note": "Creation Date sort (oldest first; reminders made before 1.14.0 count as the oldest) and a View > Sort By submenu with the current order checked; the order is saved in settings.tsv and kept across restarts; built on parity/team-d-reminders; not yet verified on Midget",
+   "wire": "Check the Sort By menu and the saved order on Midget."
   },
   {
    "feature": "Group by (none, due, priority, list, time)",
@@ -149,7 +149,7 @@
    "area": "menu",
    "apple": "File > New Section, New Section with Selection; Reminder > Move to Section; Edit Sections",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:750",
+   "bifrost": "springboard/apps/reminders-desktop/src/organize.rs:107",
    "note": "List > New Section, Reminder > Move to Section, a tap on a section header renames or deletes it, drag a reminder onto another section, sections written and read as Markdown headings; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Add New Section with Selection and an Edit Sections form to reorder sections; sections keep the order they were made in."
   },
@@ -167,7 +167,7 @@
    "area": "menu",
    "apple": "File > Pin List; AppIntents: Pinned Lists",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:739",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:756",
    "note": "List > Pin List / Unpin List and a Pin in Sidebar switch in the list form add a tile beside the smart lists (up to eight); built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Add a context item on the sidebar row, drag to reorder pinned tiles, and wire the Pinned Lists App Intent."
   },
@@ -203,7 +203,7 @@
    "area": "panel",
    "apple": "Localizable: Show Quick Reminder intent",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:92",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:94",
    "note": "A menu bar extra with New Quick Reminder and Add Reminder from Clipboard, which reads the text through quick::parse into the default list; there is no free-typing panel; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Open a text-entry panel from the menu bar extra; it needs a panel API for status items, which today offer menu entries only."
   },
@@ -212,9 +212,9 @@
    "area": "menu",
    "apple": "Reminder > Mark Due Date As; Mark All Overdue to Today",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/mark.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add a Mark Due Date As submenu and Mark All Overdue to Today in main_menu calling mark::mark_due / overdue_to_today; keep the returned Previous list as one undo step."
+   "bifrost": "springboard/apps/reminders-desktop/src/organize.rs:52; springboard/apps/reminders-desktop/src/app.rs:652",
+   "note": "Reminder > Mark Due Date As (Today, Tomorrow, This Weekend, Next Week) and Mark All Overdue as Today are in the Reminder menu, each one undo step; tested headless in organize.rs and actions_tests.rs; not yet verified on Midget.",
+   "wire": "Check the Mark Due Date As submenu on Midget."
   },
   {
    "feature": "Show Info inspector",
@@ -248,18 +248,18 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes (list document)",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:491",
-   "note": "File > Import List reads a Markdown checklist (subtasks, due days and section headings) into a new list through the open panel; Export List still writes the same format; built on parity/team-d-reminders; not yet verified on Midget",
-   "wire": "Register a document type in the manifest so a checklist file opens in Reminders from Files (Input::Open), and offer Save As for a list."
+   "bifrost": "springboard/apps/reminders-desktop/manifest.toml; springboard/apps/reminders-desktop/src/main.rs:497",
+   "note": "File > Import List reads a Markdown checklist (subtasks, due days and section headings) into a new list through the open panel; a checklist opened or shared from Files (net.daringfireball.markdown) is imported the same way; Export List still writes the same format; built on parity/team-d-reminders; not yet verified on Midget",
+   "wire": "Offer Save As for a list next to Export List."
   },
   {
    "feature": "Templates: save as template, view templates",
    "area": "menu",
    "apple": "File > Save as Template, View Templates; templates placeholder nib",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/templates.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add Save as Template and a Templates sheet creating a list through templates::instantiate; store with to_text."
+   "bifrost": "springboard/apps/reminders-desktop/src/organize.rs:251; springboard/apps/reminders-desktop/src/organize.rs:280",
+   "note": "List > Save List as Template keeps a list's reminders without dates or completion, and a New List from Template and Delete Template submenu use the saved templates; tested headless in organize.rs and actions_tests.rs; not yet verified on Midget. Templates are not previewed in a sheet.",
+   "wire": "Add a Templates sheet that previews each template before a list is made from it."
   },
   {
    "feature": "Shared lists and assignment",
@@ -284,7 +284,7 @@
    "area": "menu",
    "apple": "File > Print",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:314",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:316",
    "note": "File > Print List sends the list's Markdown checklist text, sections as headings, to the print path as Notes does; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Print smart lists and search results as well, and lay the printout out as a page rather than plain checklist text."
   },
@@ -302,7 +302,7 @@
    "area": "intent",
    "apple": "AppIntents.strings; Localizable.strings intent titles",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:361",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:363",
    "note": "Add Reminder, Add Quick Reminder, Create List, Open List, Open Smart List and Search Reminders; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Add the Pinned Lists entity and a Show Quick Reminder intent that opens a quick-entry panel."
   },
@@ -329,9 +329,9 @@
    "area": "menu",
    "apple": "Edit > Auto-Categorize",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/templates.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Offer Auto-Categorize in a grocery list: group with templates::auto_categorize into sections (needs the sections row)."
+   "bifrost": "springboard/apps/reminders-desktop/src/organize.rs:210",
+   "note": "List > Auto-Categorize sorts a list's loose reminders into grocery sections from the words in their titles, reusing sections already there, as one undo step; tested headless in organize.rs and actions_tests.rs; not yet verified on Midget.",
+   "wire": "Check Auto-Categorize on a grocery list on Midget."
   },
   {
    "feature": "Rich text in reminder notes (bold, lists)",
@@ -347,7 +347,7 @@
    "area": "view",
    "apple": "Show Info inspector",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:683",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:697",
    "note": "Add Image in the details opens a file panel for a PNG or JPEG (up to four, 12 MB each), copies it beside the store, shows thumbnails and a count on the row; Cancel deletes what was added; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Add a photo library picker and drag and drop onto the form, a full-size preview, and removing any picture (only the last one can go today); formats other than PNG and JPEG."
   },
@@ -356,16 +356,16 @@
    "area": "panel",
    "apple": "Time zone picker sheet nib",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/templates.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add an optional zone to the editor and compute the alert with templates::due_in_zone."
+   "bifrost": "springboard/apps/reminders-desktop/src/zones.rs; springboard/apps/reminders-desktop/src/model.rs:969",
+   "note": "The reminder's details have a Time Zone row; the due time is read on that zone's clock with its daylight saving, and the list shows the place beside the time; the row cycles through a short list of zones rather than a picker sheet; tested in zones.rs and model.rs; not yet verified on Midget.",
+   "wire": "Replace the cycling row with a zone picker sheet that lists every zone."
   },
   {
    "feature": "Settings: default list, all-day alert time, badge",
    "area": "settings",
    "apple": "Settings window",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1563",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1580",
    "note": "Reminder > Settings (Cmd+,) form with the list new reminders go to, the all-day alert time (ten times from 6:00 to 20:00) and a Dock badge switch, saved in settings.tsv and followed by the alerts and the Today widget; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Show the pane in the shell's Settings window or a real preferences window and offer any all-day time, not ten choices."
   },
