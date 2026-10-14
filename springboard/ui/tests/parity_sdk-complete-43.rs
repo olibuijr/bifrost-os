@@ -59,3 +59,96 @@ fn annotations_of_one_kind_are_listed_in_stacking_order() {
     assert_eq!(page.ids_of(Subtype::Highlight), vec![first, second]);
     assert!(page.ids_of(Subtype::Circle).is_empty());
 }
+
+mod plugin {
+    use bifrost_ui::plugin_host::{Bus, HostError, Node, ParameterSpec, ParameterTree, Preset, PresetStore, Unit};
+
+    fn cutoff() -> ParameterSpec {
+        ParameterSpec::new(1, "cutoff", "Cutoff", 20.0, 20_000.0, 1_000.0, Unit::Hertz).unwrap()
+    }
+
+    fn tree() -> ParameterTree {
+        let mute = ParameterSpec::new(2, "mute", "Mute", 0.0, 1.0, 0.0, Unit::Boolean).unwrap().read_only();
+        let filter = Node::Group { identifier: "filter".into(), name: "Filter".into(), children: vec![Node::Parameter(cutoff())] };
+        ParameterTree::new(vec![filter, Node::Parameter(mute)]).unwrap()
+    }
+
+    #[test]
+    fn a_written_value_is_clamped_to_the_parameter_range() {
+        let mut t = tree();
+        assert_eq!(t.set_value(1, 50_000.0), Ok(20_000.0));
+        assert_eq!(t.value(1), Some(20_000.0));
+        assert_eq!(t.set_value(1, -5.0), Ok(20.0));
+    }
+
+    #[test]
+    fn writes_to_unknown_read_only_or_non_finite_parameters_are_refused() {
+        let mut t = tree();
+        assert_eq!(t.set_value(9, 1.0), Err(HostError::UnknownParameter));
+        assert_eq!(t.set_value(2, 1.0), Err(HostError::ReadOnly));
+        assert_eq!(t.set_value(1, f32::NAN), Err(HostError::InvalidValue));
+        assert_eq!(t.value(1), Some(1_000.0), "a refused write changes nothing");
+    }
+
+    #[test]
+    fn the_tree_lists_addresses_in_tree_order_and_reports_changes_once() {
+        let mut t = tree();
+        assert_eq!(t.addresses(), &[1u64, 2]);
+        t.set_value(1, 500.0).unwrap();
+        assert_eq!(t.take_changes(), vec![(1, 500.0)]);
+        assert!(t.take_changes().is_empty());
+    }
+
+    #[test]
+    fn a_preset_saved_from_the_tree_selects_its_values_back() {
+        let mut t = tree();
+        t.set_value(1, 300.0).unwrap();
+        let mut presets = PresetStore::new(Vec::new()).unwrap();
+        let number = presets.save_user("Warm", t.snapshot()).unwrap();
+        assert_eq!(number, 0);
+        t.set_value(1, 9_000.0).unwrap();
+        presets.select(number, &mut t).unwrap();
+        assert_eq!(t.value(1), Some(300.0));
+        assert_eq!(presets.current(), Some(0));
+    }
+
+    #[test]
+    fn a_saved_state_restores_past_the_read_only_parameters_it_holds() {
+        let mut t = tree();
+        let saved = t.snapshot();
+        assert_eq!(saved, vec![(1, 1_000.0), (2, 0.0)]);
+        t.set_value(1, 40.0).unwrap();
+        t.restore(&saved).unwrap();
+        assert_eq!(t.value(1), Some(1_000.0));
+    }
+
+    #[test]
+    fn a_restore_with_an_unknown_address_changes_nothing() {
+        let mut t = tree();
+        t.set_value(1, 40.0).unwrap();
+        assert_eq!(t.restore(&[(1, 2_000.0), (99, 1.0)]), Err(HostError::UnknownParameter));
+        assert_eq!(t.value(1), Some(40.0));
+    }
+
+    #[test]
+    fn factory_presets_cannot_be_deleted_and_user_numbers_follow_the_highest() {
+        let factory = Preset { number: 5, name: "Room".into(), state: vec![(1, 800.0)], factory: false };
+        let mut presets = PresetStore::new(vec![factory]).unwrap();
+        assert!(presets.preset(5).unwrap().factory);
+        assert_eq!(presets.delete_user(5), Err(HostError::FactoryPreset));
+        assert_eq!(presets.save_user("Mine", vec![]).unwrap(), 6);
+        presets.delete_user(6).unwrap();
+        assert_eq!(presets.delete_user(6), Err(HostError::UnknownPreset));
+    }
+
+    #[test]
+    fn a_bus_takes_only_the_channel_counts_it_lists_while_enabled() {
+        let mut bus = Bus::new("Main", &[2, 1, 2]).unwrap();
+        assert!(bus.accepts(2) && bus.accepts(1));
+        assert!(!bus.accepts(6));
+        assert_eq!(bus.maximum_channels(), 2);
+        bus.enabled = false;
+        assert!(!bus.accepts(2));
+        assert_eq!(Bus::new("Empty", &[]), Err(HostError::InvalidChannelList));
+    }
+}

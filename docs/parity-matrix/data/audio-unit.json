@@ -10,9 +10,9 @@
     {
       "feature": "Hosting third-party AU v2 and v3 plug-ins",
       "apple": "AUAudioUnit, AudioUnit instantiation (Audio Unit framework landing page)",
-      "bifrost": "springboard/ui/src/plugin_host.rs (Instance",
+      "bifrost": "springboard/ui/src/plugin_host.rs (Instance, Instance::new, PluginVersion); springboard/ui/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no code loads an external plug-in binary; grep for audio unit, AUv2/AUv3, clap, lv2, vst, dlopen of plug-ins returned only system library loads (springboard/src/media/dl.rs, springboard/src/gpu/egl.rs)"
+      "note": "A plug-in instance ties a render unit to its parameters, presets and buses, and both AUv2 and AUv3 versions are modelled; its parameters, presets and buses are tested headless in parity_sdk-complete-43.rs, and Instance itself is covered by the host unit tests. Gap: no code loads an external plug-in binary or starts an extension process, because this system has no plug-in loader, so the row needs that loader before it can go further."
     },
     {
       "feature": "Implementing AU v3 plug-in extensions",
