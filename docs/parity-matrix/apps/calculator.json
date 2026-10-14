@@ -20,7 +20,7 @@
    "area": "view",
    "apple": "Localizable: Basic, Add/Subtract/Multiply/Divide/Equals/Percent/Change Sign/All Clear/Delete",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:396",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:500",
    "note": "Toolbar Basic segment; engine.rs arithmetic.",
    "wire": ""
   },
@@ -29,7 +29,7 @@
    "area": "view",
    "apple": "Localizable: Scientific, Square/Cube/X to the Y/Roots/Log/Sine…/Factorial/Random Number/Enter Exponent",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:128",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:149",
    "note": "Full key set incl. inverse via 2nd.",
    "wire": ""
   },
@@ -38,25 +38,25 @@
    "area": "view",
    "apple": "Localizable: 2nd / Alternate Functions, Secondary Functions (or hold Shift)",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:136",
-   "note": "2nd key works; holding Shift does not switch the keypad.",
-   "wire": "In main.rs event() treat a held Shift modifier as Act::Second while it is down and redraw the keypad labels."
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:156",
+   "note": "2nd key works; holding Shift does not switch the keypad. The shell sends no modifier state to apps (a held Shift is never an input event), so the held-Shift switch needs an SDK input addition first.",
+   "wire": "Add a modifier-state input to the SDK app protocol, then treat a held Shift as Act::Second while it is down and redraw the keypad labels."
   },
   {
    "feature": "Missing alternate keys: y^x, 10 to the base, log base y, x-th root both ways",
    "area": "view",
    "apple": "Localizable: Y to the X, Log Base y, Y root of X, 2 to the X",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:146",
-   "note": "2^x and y-th root exist; no y^x, log base y or alternate for 10^x.",
-   "wire": "Add second labels in SCI_KEYS: xʸ -> yˣ (swap operands in eval.rs), 10ˣ -> 2ˣ already, log10 -> logy (binary op in eval.rs)."
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:164",
+   "note": "Second layer now has yˣ (under eˣ), 2ˣ (under 10ˣ), log base y (under ln, infix logy in eval.rs) and the x-th root of y (under ʸ√x, infix rootx); built on parity/team-d-calculator; not yet verified on Midget.",
+   "wire": "Compare the second-layer labels and their order with the reference keypad on Midget."
   },
   {
    "feature": "Degrees / radians",
    "area": "view",
    "apple": "Localizable: Degrees, Radians, Rad",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:153",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:174",
    "note": "Persisted in settings (history.rs:120).",
    "wire": ""
   },
@@ -65,7 +65,7 @@
    "area": "view",
    "apple": "Localizable: Add to Memory, Subtract from Memory, Recall Memory, Clear Memory",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:131",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:152",
    "note": "",
    "wire": ""
   },
@@ -74,7 +74,7 @@
    "area": "view",
    "apple": "Localizable: Open/Close Parenthesis",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:129",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:150",
    "note": "",
    "wire": ""
   },
@@ -101,9 +101,9 @@
    "area": "view",
    "apple": "Localizable: Unit Conversion, Category, Input Unit, Result Unit, Swap Units, Recent Units, Search all units",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/convert.rs:14",
-   "note": "Five categories (length, mass, temperature, speed, volume) with swap; reference has many more categories, recent units and a unit search.",
-   "wire": "Add area, time, data size, energy, pressure, power, angle, fuel in convert.rs; add a search field over all units and a recent-units list stored in settings."
+   "bifrost": "springboard/apps/calculator-desktop/src/convert.rs:32",
+   "note": "Thirteen categories now: length, mass, temperature, speed, volume, area, time, data size, energy, pressure, power, angle and fuel economy (two segment rows, calc.rs:79); no unit search or recent-units list yet; built on parity/team-d-calculator; not yet verified on Midget.",
+   "wire": "Add a search field over all units and a recent-units list stored in settings."
   },
   {
    "feature": "Currency conversion with live rates",
@@ -119,16 +119,16 @@
    "area": "view",
    "apple": "Localizable: History, Show/Hide History, Today/Yesterday/Previous 7/30 Days, Delete, Clear History confirm",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:394",
-   "note": "Sidebar with list, Copy Tape and Clear History; no day groups, no per-entry delete, no confirm before clearing.",
-   "wire": "In the history pane draw section headers by date from Entry time (history.rs:14), add a per-row delete (context or swipe), and ask for confirmation in the Clear History handler (calc.rs:611)."
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:1188",
+   "note": "Day captions (Today, Yesterday, dates) on the first row of each day (history.rs:163), per-entry delete by a left swipe or the right-click menu (calc/menu.rs:230), and Clear History asks for a second tap; the rows are not separate day sections yet; built on parity/team-d-calculator; not yet verified on Midget.",
+   "wire": "Draw full section headers between day groups instead of a caption inside the first row."
   },
   {
    "feature": "Reuse a history entry",
    "area": "view",
    "apple": "History list rows (tap to reuse result)",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:840",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:1099",
    "note": "Tapping a row recalls its result into the display.",
    "wire": ""
   },
@@ -145,10 +145,10 @@
    "feature": "Copy expression / copy last result",
    "area": "menu",
    "apple": "Localizable: Copy Expression, Copy Last Result",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Only the shown number is copied.",
-   "wire": "Add Copy Expression (copies the sci expression or last history expression) and Copy Last Result to an Edit menu via main_menu; call copy_service."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc/menu.rs:158",
+   "note": "Edit > Copy Expression (cmd+shift+C) and Copy Last Result (cmd+alt+C) go through the copy service (calc/menu.rs:165); the history row menu has the same two; built on parity/team-d-calculator; not yet verified on Midget.",
+   "wire": "Verify on Midget that both reach the general pasteboard and that the Edit menu merges with the shell Edit menu."
   },
   {
    "feature": "Paper tape",
@@ -182,18 +182,18 @@
    "area": "view",
    "apple": "Localizable tooltips: \"(or press …)\" shortcuts",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/main.rs:78",
-   "note": "Digits, + - * / = %, Return, Delete, Escape work; no (, ), ^, !, e, p, Option-minus sign, Shift-E exponent.",
-   "wire": "Extend the char map in main.rs:78 with ( ) ^ ! e p and sign/exponent shortcuts, mapping to SciKey actions when in Scientific mode."
+   "bifrost": "springboard/apps/calculator-desktop/src/calc/menu.rs:174",
+   "note": "Typed ( ) ^ ! e p E and Option-minus on the scientific keypad, hex digits and & | ^ ~ < > in Programmer, Space as Enter in RPN; built on parity/team-d-calculator; not yet verified on Midget.",
+   "wire": "Verify on Midget; map the remaining reference shortcuts if any differ."
   },
   {
    "feature": "Mode menu with shortcuts",
    "area": "menu",
    "apple": "Localizable: Mode Menu, Change Mode",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No app menu; modes only via toolbar.",
-   "wire": "Implement main_menu in main.rs returning a View menu: Basic (cmd+1), Scientific (cmd+2), Programmer (cmd+3), RPN Mode (cmd+R), Unit Conversion, Show History, Thousands Separator, Decimal Places."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc/menu.rs:37",
+   "note": "View menu: Basic (cmd+1), Scientific (cmd+2), Programmer (cmd+3), RPN Mode (cmd+R), Unit Conversion (cmd+U), Show History (cmd+Y), Thousands Separator, Decimal Places, Scientific Notation and Word Size; Edit and Stack menus beside it; built on parity/team-d-calculator; not yet verified on Midget.",
+   "wire": "Verify on Midget that the View items merge into the shell View menu."
   },
   {
    "feature": "Always on top",
@@ -209,7 +209,7 @@
    "area": "intent",
    "apple": "Calculator app intents (widget Launch Calculator)",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/main.rs:127",
+   "bifrost": "springboard/apps/calculator-desktop/src/main.rs:155",
    "note": "\"evaluate\" intent with the expression param.",
    "wire": ""
   },
@@ -236,7 +236,7 @@
    "area": "view",
    "apple": "Localizable: Input…, result… VoiceOver formats",
    "status": "parity",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:453",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:566",
    "note": "Accessibility nodes with key names and display value.",
    "wire": ""
   },

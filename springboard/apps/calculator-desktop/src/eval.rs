@@ -215,15 +215,38 @@ impl Parser {
     }
 
     fn power(&mut self) -> Res<Val> {
-        let (base, pct) = self.postfix()?;
+        let (mut base, mut pct) = self.postfix()?;
         if self.sym('^') {
             self.i += 1;
             self.enter()?;
             let exponent = self.exponent()?;
             self.depth -= 1;
-            return pow(base, exponent).map(|v| (v, false));
+            base = pow(base, exponent)?;
+            pct = false;
+        }
+        // The infix keys of the second layer: `x logy b` is the logarithm of x to base b, `n rootx v` the n-th
+        // root of v. Both read a postfix operand on the right and chain from the left.
+        while let Some(op) = self.infix_word() {
+            self.i += 1;
+            let negative = self.sym('-');
+            if negative {
+                self.i += 1;
+            }
+            let right = self.postfix()?.0;
+            let right = if negative { -right } else { right };
+            base = if op == LOG_BASE { log_base(base, right)? } else { root(right, base)? };
+            pct = false;
         }
         Ok((base, pct))
+    }
+
+    /// The infix word at the cursor (`LOG_BASE` or `ROOT_OF`), if any.
+    fn infix_word(&self) -> Option<&'static str> {
+        match self.toks.get(self.i) {
+            Some(Tok::Id(name)) if name == LOG_BASE => Some(LOG_BASE),
+            Some(Tok::Id(name)) if name == ROOT_OF => Some(ROOT_OF),
+            _ => None,
+        }
     }
 
     /// Right associative and signed: `2^-3`, `2^3^2`.
@@ -359,6 +382,29 @@ fn root(x: f64, y: f64) -> Res<f64> {
         return finite(-(-x).powf(1.0 / y));
     }
     finite(x.powf(1.0 / y))
+}
+
+/// The infix word of "log base y": `8 logy 2` is 3.
+pub const LOG_BASE: &str = "logy";
+/// The infix word of "x-th root of y": `3 rootx 27` is 3.
+pub const ROOT_OF: &str = "rootx";
+
+/// The logarithm of `x` to base `b`.
+fn log_base(x: f64, b: f64) -> Res<f64> {
+    if x <= 0.0 || b <= 0.0 || b == 1.0 {
+        return Err(EvalError::Domain);
+    }
+    finite(tidy_ratio(x.ln() / b.ln()))
+}
+
+/// Rounds away the float noise of a ratio that should be a whole number (`ln 8 / ln 2`).
+fn tidy_ratio(v: f64) -> f64 {
+    let r = v.round();
+    if (v - r).abs() < 1e-12 * r.abs().max(1.0) {
+        r
+    } else {
+        v
+    }
 }
 
 fn tidy(v: f64) -> f64 {
@@ -603,6 +649,24 @@ mod tests {
         assert_eq!(ev("(-8)^0.5"), Err(EvalError::Domain));
         assert_eq!(ev("0^-1"), Err(EvalError::Domain));
         near("abs(-3)", 3.0);
+    }
+
+    #[test]
+    fn the_infix_keys_of_the_second_layer() {
+        near("8 logy 2", 3.0);
+        near("1000 logy 10", 3.0);
+        near("2 logy 8", 1.0 / 3.0);
+        near("2+8 logy 2", 5.0);
+        near("3 rootx 27", 3.0);
+        near("2 rootx 81", 9.0);
+        near("3 rootx -8", -2.0);
+        near("2*3 rootx 8", 4.0);
+        assert_eq!(ev("0 logy 2"), Err(EvalError::Domain));
+        assert_eq!(ev("8 logy 1"), Err(EvalError::Domain));
+        assert_eq!(ev("8 logy -2"), Err(EvalError::Domain));
+        assert_eq!(ev("0 rootx 8"), Err(EvalError::Domain));
+        assert_eq!(ev("2 rootx -4"), Err(EvalError::Domain));
+        assert_eq!(ev("8 logy"), Err(EvalError::Syntax));
     }
 
     #[test]

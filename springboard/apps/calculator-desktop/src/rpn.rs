@@ -1,285 +1,413 @@
-//! Reverse Polish notation: an operand stack where each operator pops its operands and pushes the result. Entry,
-//! enter, drop, swap and roll as on the stock Calculator's RPN mode. Independent of the touch UI.
-#![allow(dead_code)] // the RPN toggle and keypad wiring are the next step; tests drive it
+//! RPN mode: the basic keypad drives a stack. A number is typed, Enter pushes it, and an operator takes the top two
+//! values and leaves its result on the stack. Swap, Drop and the two rolls reorder the stack. Pure logic, no UI.
 
-use super::engine::Operator;
+use super::format::format_number;
 
-/// Deepest stack kept; the oldest value falls off the bottom beyond this.
-pub const DEPTH: usize = 64;
+/// The deepest stack; pushing past it drops the oldest value.
+pub const MAX_DEPTH: usize = 64;
 
-#[derive(Clone, Debug, Default)]
+/// Digits an entry holds.
+pub const MAX_DIGITS: usize = 12;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RKey {
+    Digit(u8),
+    Decimal,
+    Sign,
+    Backspace,
+    /// C clears the entry being typed; with none, AC clears the stack.
+    Clear,
+    Enter,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Percent,
+    Swap,
+    Drop,
+    /// Moves the top value to the bottom (roll down), or the bottom value to the top (roll up).
+    RollDown,
+    RollUp,
+}
+
+impl RKey {
+    fn symbol(self) -> &'static str {
+        match self {
+            RKey::Add => "+",
+            RKey::Sub => "-",
+            RKey::Mul => "×",
+            _ => "÷",
+        }
+    }
+}
+
+/// A finished calculation for the history: the expression, the result text and its value.
+pub type Finished = (String, String, f64);
+
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Rpn {
+    /// Committed values, the top (X) last.
     stack: Vec<f64>,
-    /// Digits being typed; `None` when the top of the stack is a finished value.
+    /// The number being typed; it is X until Enter or an operator pushes it.
     entry: Option<String>,
+    error: bool,
+}
+
+fn parse_entry(entry: &str) -> f64 {
+    entry.parse().unwrap_or(0.0)
 }
 
 impl Rpn {
-    pub fn new() -> Self {
-        Self::default()
+    /// The committed stack, X last (an entry still being typed is not in it).
+    #[cfg(test)]
+    pub fn stack(&self) -> &[f64] {
+        &self.stack
     }
 
-    /// The stack bottom to top, with a value being typed counted as the top.
-    pub fn stack(&self) -> Vec<f64> {
-        let mut out = self.stack.clone();
-        if let Some(v) = self.entry.as_deref().and_then(parse) {
-            out.push(v);
+    /// The values below X, X's neighbour last: everything committed while an entry is typed, else all but the top.
+    pub fn below(&self) -> &[f64] {
+        if self.entry.is_some() || self.stack.is_empty() {
+            &self.stack
+        } else {
+            &self.stack[..self.stack.len() - 1]
         }
-        out
     }
 
-    /// What the display shows: the entry being typed, else the top of the stack, else 0.
+    /// X as a number: the entry being typed, else the top of the stack.
+    pub fn x(&self) -> Option<f64> {
+        if self.error {
+            return None;
+        }
+        match &self.entry {
+            Some(entry) => Some(parse_entry(entry)),
+            None => self.stack.last().copied(),
+        }
+    }
+
+    /// What the display shows (ASCII, `.` decimal): the entry as typed, else X, else 0.
     pub fn display(&self) -> String {
-        match (&self.entry, self.stack.last()) {
-            (Some(text), _) => text.clone(),
-            (None, Some(v)) => crate::format::format_number(*v),
-            (None, None) => "0".to_string(),
+        if self.error {
+            return "Error".into();
+        }
+        match &self.entry {
+            Some(entry) if entry.is_empty() => "0".into(),
+            Some(entry) if entry == "-" => "-0".into(),
+            Some(entry) => entry.clone(),
+            None => self.stack.last().map_or_else(|| "0".to_string(), |v| format_number(*v)),
         }
     }
 
-    pub fn digit(&mut self, digit: u8) {
-        let text = self.entry.get_or_insert_with(String::new);
-        if text == "0" {
-            text.clear();
-        }
-        if text.len() < crate::format::MAX_DIGITS + 1 {
-            text.push((b'0' + digit.min(9)) as char);
-        }
-    }
-
-    pub fn decimal(&mut self) {
-        let text = self.entry.get_or_insert_with(String::new);
-        if !text.contains('.') {
-            if text.is_empty() {
-                text.push('0');
-            }
-            text.push('.');
+    /// X when it is a result on the stack (not an entry being typed, not an error), for display styling.
+    pub fn result(&self) -> Option<f64> {
+        if self.error || self.entry.is_some() {
+            None
+        } else {
+            self.stack.last().copied()
         }
     }
 
-    pub fn backspace(&mut self) {
-        if let Some(text) = self.entry.as_mut() {
-            text.pop();
-            if text.is_empty() {
-                self.entry = None;
-            }
-        }
-    }
-
-    /// Flips the sign of the entry or of the top value.
-    pub fn sign(&mut self) {
-        if let Some(text) = self.entry.as_mut() {
-            if let Some(rest) = text.strip_prefix('-') {
-                *text = rest.to_string();
-            } else if !text.is_empty() {
-                text.insert(0, '-');
-            }
-        } else if let Some(top) = self.stack.last_mut() {
-            *top = -*top;
-        }
-    }
-
-    fn commit(&mut self) {
-        if let Some(v) = self.entry.take().as_deref().and_then(parse) {
-            self.push(v);
+    pub fn clear_label(&self) -> &'static str {
+        if self.entry.is_some() {
+            "C"
+        } else {
+            "AC"
         }
     }
 
     fn push(&mut self, value: f64) {
-        if self.stack.len() == DEPTH {
+        self.stack.push(value);
+        if self.stack.len() > MAX_DEPTH {
             self.stack.remove(0);
         }
-        self.stack.push(value);
     }
 
-    /// Enter: commits the entry; with nothing typed it duplicates the top value.
-    pub fn enter(&mut self) {
-        if self.entry.is_some() {
-            self.commit();
-        } else if let Some(top) = self.stack.last().copied() {
-            self.push(top);
+    /// Pushes the entry being typed.
+    fn commit(&mut self) {
+        if let Some(entry) = self.entry.take() {
+            self.push(parse_entry(&entry));
         }
     }
 
-    /// Applies a binary operator to the top two values. False when fewer than two values exist or the result is
-    /// not a finite number (division by zero); the stack is left as it was in that case.
-    pub fn operate(&mut self, op: Operator) -> bool {
+    /// Replaces the entry with `value` (Paste, a recalled result).
+    pub fn set_value(&mut self, value: f64) {
+        if value.is_finite() {
+            self.error = false;
+            self.entry = Some(format_number(value));
+        }
+    }
+
+    fn operate(&mut self, key: RKey) -> Option<Finished> {
         self.commit();
         if self.stack.len() < 2 {
-            return false;
+            return None;
         }
-        let right = self.stack[self.stack.len() - 1];
-        let left = self.stack[self.stack.len() - 2];
-        let value = match op {
-            Operator::Add => left + right,
-            Operator::Subtract => left - right,
-            Operator::Multiply => left * right,
-            Operator::Divide => left / right,
+        let b = self.stack.pop()?;
+        let a = self.stack.pop()?;
+        let result = match key {
+            RKey::Add => a + b,
+            RKey::Sub => a - b,
+            RKey::Mul => a * b,
+            _ if b == 0.0 => f64::NAN,
+            _ => a / b,
         };
-        if !value.is_finite() {
-            return false;
+        if !result.is_finite() {
+            self.stack.push(a);
+            self.stack.push(b);
+            self.error = true;
+            return None;
         }
-        self.stack.truncate(self.stack.len() - 2);
-        self.stack.push(value);
-        true
+        self.push(result);
+        Some((format!("{} {} {}", format_number(a), key.symbol(), format_number(b)), format_number(result), result))
     }
 
-    /// Applies a one-operand function to the top value.
-    pub fn unary(&mut self, f: impl Fn(f64) -> f64) -> bool {
-        self.commit();
-        let Some(top) = self.stack.last_mut() else { return false };
-        let value = f(*top);
-        if !value.is_finite() {
-            return false;
+    /// Applies `key`. A finished operation is returned for the history.
+    pub fn press(&mut self, key: RKey) -> Option<Finished> {
+        self.error = false;
+        match key {
+            RKey::Digit(d) if d < 10 => {
+                let entry = self.entry.get_or_insert_with(String::new);
+                if entry.contains('e') || entry.bytes().filter(u8::is_ascii_digit).count() >= MAX_DIGITS {
+                    return None;
+                }
+                if entry.trim_start_matches('-') == "0" {
+                    entry.pop();
+                }
+                entry.push((b'0' + d) as char);
+            }
+            RKey::Digit(_) => {}
+            RKey::Decimal => {
+                let entry = self.entry.get_or_insert_with(String::new);
+                if entry.contains('.') || entry.contains('e') {
+                    return None;
+                }
+                if entry.is_empty() || entry == "-" {
+                    entry.push('0');
+                }
+                entry.push('.');
+            }
+            RKey::Sign => match &mut self.entry {
+                Some(entry) => {
+                    if entry.starts_with('-') {
+                        entry.remove(0);
+                    } else {
+                        entry.insert(0, '-');
+                    }
+                }
+                None => {
+                    if let Some(top) = self.stack.last_mut() {
+                        *top = -*top;
+                    }
+                }
+            },
+            RKey::Backspace => {
+                if let Some(entry) = &mut self.entry {
+                    entry.pop();
+                    if entry.is_empty() {
+                        self.entry = None;
+                    }
+                }
+            }
+            RKey::Clear => {
+                if self.entry.is_some() {
+                    self.entry = None;
+                } else {
+                    self.stack.clear();
+                }
+            }
+            RKey::Enter => {
+                if self.entry.is_some() {
+                    self.commit();
+                } else if let Some(top) = self.stack.last().copied() {
+                    self.push(top);
+                }
+            }
+            RKey::Add | RKey::Sub | RKey::Mul | RKey::Div => return self.operate(key),
+            RKey::Percent => {
+                self.commit();
+                if let Some(top) = self.stack.last_mut() {
+                    *top /= 100.0;
+                }
+            }
+            RKey::Swap => {
+                self.commit();
+                let n = self.stack.len();
+                if n >= 2 {
+                    self.stack.swap(n - 1, n - 2);
+                }
+            }
+            RKey::Drop => {
+                if self.entry.is_some() {
+                    self.entry = None;
+                } else {
+                    self.stack.pop();
+                }
+            }
+            RKey::RollDown => {
+                self.commit();
+                self.stack.rotate_right(1);
+            }
+            RKey::RollUp => {
+                self.commit();
+                self.stack.rotate_left(1);
+            }
         }
-        *top = value;
-        true
+        None
     }
-
-    pub fn drop_top(&mut self) {
-        if self.entry.take().is_none() {
-            self.stack.pop();
-        }
-    }
-
-    pub fn swap(&mut self) {
-        self.commit();
-        let n = self.stack.len();
-        if n >= 2 {
-            self.stack.swap(n - 1, n - 2);
-        }
-    }
-
-    /// Rolls the stack: the top goes to the bottom (`down`), or the bottom comes to the top.
-    pub fn roll(&mut self, down: bool) {
-        self.commit();
-        if self.stack.len() < 2 {
-            return;
-        }
-        if down {
-            let top = self.stack.pop().unwrap_or(0.0);
-            self.stack.insert(0, top);
-        } else {
-            let bottom = self.stack.remove(0);
-            self.stack.push(bottom);
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.stack.clear();
-        self.entry = None;
-    }
-}
-
-fn parse(text: &str) -> Option<f64> {
-    text.trim_end_matches('.').parse::<f64>().ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn type_number(r: &mut Rpn, text: &str) {
-        for ch in text.chars() {
-            match ch {
-                '.' => r.decimal(),
-                d => r.digit(d as u8 - b'0'),
-            }
+    /// Types `src`: digits, `.`, `_` (Enter), `+ - * /`.
+    fn run(r: &mut Rpn, src: &str) -> Option<Finished> {
+        let mut last = None;
+        for c in src.chars() {
+            last = r.press(match c {
+                '0'..='9' => RKey::Digit(c as u8 - b'0'),
+                '.' => RKey::Decimal,
+                '_' => RKey::Enter,
+                '+' => RKey::Add,
+                '-' => RKey::Sub,
+                '*' => RKey::Mul,
+                '/' => RKey::Div,
+                _ => panic!("unknown key {c}"),
+            });
         }
+        last
     }
 
     #[test]
-    fn two_plus_three_with_enter() {
-        let mut r = Rpn::new();
-        type_number(&mut r, "2");
-        r.enter();
-        type_number(&mut r, "3");
-        assert!(r.operate(Operator::Add));
-        assert_eq!(r.stack(), vec![5.0]);
+    fn enter_pushes_and_an_operator_takes_the_top_two() {
+        let mut r = Rpn::default();
+        let done = run(&mut r, "3_4+");
+        assert_eq!(done, Some(("3 + 4".to_string(), "7".to_string(), 7.0)));
+        assert_eq!(r.display(), "7");
+        assert_eq!(r.stack(), &[7.0]);
+        run(&mut r, "5*");
+        assert_eq!(r.display(), "35", "the result stays as X for the next operation");
+        let mut r = Rpn::default();
+        run(&mut r, "10_4-");
+        assert_eq!(r.display(), "6");
+        run(&mut r, "2/");
+        assert_eq!(r.display(), "3");
+    }
+
+    #[test]
+    fn the_stack_shows_below_x() {
+        let mut r = Rpn::default();
+        run(&mut r, "1_2_3");
+        assert_eq!(r.display(), "3");
+        assert_eq!(r.below(), &[1.0, 2.0], "3 is still the entry being typed");
+        run(&mut r, "_");
+        assert_eq!(r.below(), &[1.0, 2.0]);
+        assert_eq!(r.x(), Some(3.0));
+        assert_eq!(r.stack(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn enter_with_no_entry_duplicates_x() {
+        let mut r = Rpn::default();
+        run(&mut r, "6_");
+        r.press(RKey::Enter);
+        assert_eq!(r.stack(), &[6.0, 6.0]);
+        run(&mut r, "*");
+        assert_eq!(r.display(), "36");
+        let mut empty = Rpn::default();
+        empty.press(RKey::Enter);
+        assert!(empty.stack().is_empty());
+        assert_eq!(empty.display(), "0");
+    }
+
+    #[test]
+    fn swap_drop_and_rolls_reorder_the_stack() {
+        let mut r = Rpn::default();
+        run(&mut r, "1_2_3_");
+        r.press(RKey::Swap);
+        assert_eq!(r.stack(), &[1.0, 3.0, 2.0]);
+        r.press(RKey::RollDown);
+        assert_eq!(r.stack(), &[2.0, 1.0, 3.0], "the top goes to the bottom");
+        r.press(RKey::RollUp);
+        assert_eq!(r.stack(), &[1.0, 3.0, 2.0], "the bottom comes back to the top");
+        r.press(RKey::Drop);
+        assert_eq!(r.stack(), &[1.0, 3.0]);
+        run(&mut r, "9");
+        r.press(RKey::Swap);
+        assert_eq!(r.stack(), &[1.0, 9.0, 3.0], "an entry is pushed before the swap");
+        run(&mut r, "7");
+        r.press(RKey::Drop);
+        assert_eq!(r.stack(), &[1.0, 9.0, 3.0], "Drop discards an entry being typed first");
+    }
+
+    #[test]
+    fn editing_the_entry() {
+        let mut r = Rpn::default();
+        run(&mut r, "0012.50");
+        assert_eq!(r.display(), "12.50");
+        r.press(RKey::Backspace);
+        r.press(RKey::Backspace);
+        assert_eq!(r.display(), "12.");
+        r.press(RKey::Sign);
+        assert_eq!(r.display(), "-12.");
+        r.press(RKey::Sign);
+        assert_eq!(r.display(), "12.");
+        r.press(RKey::Decimal);
+        assert_eq!(r.display(), "12.", "one decimal point only");
+        r.press(RKey::Clear);
+        assert_eq!(r.display(), "0");
+        assert_eq!(r.clear_label(), "AC");
+        run(&mut r, "5_");
+        r.press(RKey::Sign);
+        assert_eq!(r.display(), "-5", "Change Sign works on X once it is pushed");
+        run(&mut r, ".");
+        assert_eq!(r.display(), "0.");
+        assert_eq!(r.clear_label(), "C");
+        r.press(RKey::Clear);
+        r.press(RKey::Clear);
+        assert!(r.stack().is_empty());
+    }
+
+    #[test]
+    fn division_by_zero_is_an_error_that_keeps_the_operands() {
+        let mut r = Rpn::default();
+        assert_eq!(run(&mut r, "5_0/"), None);
+        assert_eq!(r.display(), "Error");
+        assert_eq!(r.x(), None);
+        assert_eq!(r.stack(), &[5.0, 0.0]);
+        r.press(RKey::Drop);
+        assert_eq!(r.display(), "5", "any key clears the error");
+    }
+
+    #[test]
+    fn an_operator_with_one_value_does_nothing() {
+        let mut r = Rpn::default();
+        assert_eq!(run(&mut r, "5+"), None);
+        assert_eq!(r.stack(), &[5.0]);
         assert_eq!(r.display(), "5");
     }
 
     #[test]
-    fn order_matters_for_subtract_and_divide() {
-        let mut r = Rpn::new();
-        type_number(&mut r, "10");
-        r.enter();
-        type_number(&mut r, "4");
-        r.operate(Operator::Subtract);
-        assert_eq!(r.stack(), vec![6.0]);
-        type_number(&mut r, "2");
-        r.operate(Operator::Divide);
-        assert_eq!(r.stack(), vec![3.0]);
+    fn percent_and_pasted_values() {
+        let mut r = Rpn::default();
+        run(&mut r, "50");
+        r.press(RKey::Percent);
+        assert_eq!(r.display(), "0.5");
+        r.set_value(1234.5);
+        assert_eq!(r.display(), "1234.5");
+        run(&mut r, "_2*");
+        assert_eq!(r.display(), "2469");
+        r.set_value(f64::NAN);
+        assert_eq!(r.display(), "2469", "a value that is not a number is ignored");
     }
 
     #[test]
-    fn divide_by_zero_and_underflow_change_nothing() {
-        let mut r = Rpn::new();
-        assert!(!r.operate(Operator::Add));
-        type_number(&mut r, "5");
-        r.enter();
-        type_number(&mut r, "0");
-        assert!(!r.operate(Operator::Divide));
-        assert_eq!(r.stack(), vec![5.0, 0.0]);
-    }
-
-    #[test]
-    fn enter_on_empty_entry_duplicates_the_top() {
-        let mut r = Rpn::new();
-        type_number(&mut r, "7");
-        r.enter();
-        r.enter();
-        assert_eq!(r.stack(), vec![7.0, 7.0]);
-    }
-
-    #[test]
-    fn swap_drop_and_roll() {
-        let mut r = Rpn::new();
-        for n in ["1", "2", "3"] {
-            type_number(&mut r, n);
-            r.enter();
+    fn the_stack_is_bounded() {
+        let mut r = Rpn::default();
+        for n in 0..(MAX_DEPTH as u32 + 5) {
+            r.set_value(f64::from(n));
+            r.press(RKey::Enter);
         }
-        r.swap();
-        assert_eq!(r.stack(), vec![1.0, 3.0, 2.0]);
-        r.roll(true);
-        assert_eq!(r.stack(), vec![2.0, 1.0, 3.0]);
-        r.roll(false);
-        assert_eq!(r.stack(), vec![1.0, 3.0, 2.0]);
-        r.drop_top();
-        assert_eq!(r.stack(), vec![1.0, 3.0]);
-    }
-
-    #[test]
-    fn sign_decimal_and_backspace_edit_the_entry() {
-        let mut r = Rpn::new();
-        type_number(&mut r, "1.5");
-        r.sign();
-        assert_eq!(r.display(), "-1.5");
-        r.backspace();
-        assert_eq!(r.display(), "-1.");
-        r.enter();
-        assert_eq!(r.stack(), vec![-1.0]);
-        r.sign();
-        assert_eq!(r.stack(), vec![1.0]);
-    }
-
-    #[test]
-    fn unary_functions_apply_to_the_top() {
-        let mut r = Rpn::new();
-        type_number(&mut r, "9");
-        assert!(r.unary(f64::sqrt));
-        assert_eq!(r.stack(), vec![3.0]);
-        assert!(!r.unary(|v| v / 0.0));
-        assert_eq!(r.stack(), vec![3.0]);
-    }
-
-    #[test]
-    fn depth_is_capped() {
-        let mut r = Rpn::new();
-        for i in 0..(DEPTH + 5) {
-            type_number(&mut r, &(i % 9).to_string());
-            r.enter();
-        }
-        assert_eq!(r.stack().len(), DEPTH);
+        assert_eq!(r.stack().len(), MAX_DEPTH);
+        assert_eq!(r.stack()[0], 5.0, "the oldest values fall off the bottom");
     }
 }

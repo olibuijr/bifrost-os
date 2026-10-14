@@ -97,6 +97,11 @@ impl Engine {
         }
     }
 
+    /// The value on the display when it is a result or a carried operand rather than a number being typed.
+    pub fn result_value(&self) -> Option<f64> {
+        (self.replace && !self.error).then_some(self.value)
+    }
+
     pub fn clear_label(&self) -> &'static str {
         if self.error || self.entry == "0" || self.entry == "-0" {
             "AC"
