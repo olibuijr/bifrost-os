@@ -10,6 +10,8 @@ use bifrost_ui::location_auth::AuthorizationStatus;
 use bifrost_ui::map_user_location::{UserLocation, MAX_FIX_ACCURACY_M, MAX_FIX_AGE_S};
 use bifrost_ui::mapview::{MapCamera, UserTracking};
 use bifrost_ui::media_picker::{Error, Kind, MediaPicker, PickItem, Selection};
+use bifrost_ui::scene_phase::{SceneTracker, ScenePhase};
+use bifrost_ui::search_scope::{SearchBar, SearchScope, SearchToken};
 use bifrost_ui::weather_model::WeatherError;
 
 // ---- weather: typed errors an app can match on (bifrost_ui::weather_model) ----
@@ -249,4 +251,90 @@ fn headless_losing_access_drops_the_fix_and_turns_tracking_off() {
     assert_eq!(user.tracking(), UserTracking::Off);
     let mut cam = camera();
     assert!(!user.follow(&mut cam, 1000.0, None));
+}
+
+// ---- search: scopes, tokens and suggestions (bifrost_ui::search_scope) ----
+
+fn scope(id: u32, title: &str) -> SearchScope {
+    SearchScope { id, title: title.to_string() }
+}
+
+fn token(id: u32, title: &str) -> SearchToken {
+    SearchToken { id, title: title.to_string() }
+}
+
+#[test]
+fn headless_the_first_scope_is_selected_by_default() {
+    let bar = SearchBar::new(vec![scope(1, "Everything"), scope(2, "Titles")]);
+    assert_eq!(bar.selected_scope(), Some(1));
+    assert_eq!(SearchBar::new(vec![]).selected_scope(), None, "a field without scopes has no scope choice");
+}
+
+#[test]
+fn headless_selecting_a_scope_needs_a_listed_id() {
+    let mut bar = SearchBar::new(vec![scope(1, "Everything"), scope(2, "Titles")]);
+    assert!(bar.select_scope(2));
+    assert_eq!(bar.selected_scope(), Some(2));
+    assert!(!bar.select_scope(9));
+    assert_eq!(bar.selected_scope(), Some(2), "an unknown id leaves the selection alone");
+}
+
+#[test]
+fn headless_next_scope_wraps_after_the_last_one() {
+    let mut bar = SearchBar::new(vec![scope(1, "A"), scope(2, "B")]);
+    assert_eq!(bar.next_scope(), Some(2));
+    assert_eq!(bar.next_scope(), Some(1));
+    assert_eq!(SearchBar::new(vec![]).next_scope(), None);
+}
+
+#[test]
+fn headless_a_token_is_added_once_and_removed_by_id() {
+    let mut bar = SearchBar::new(vec![]);
+    assert!(bar.add_token(token(7, "Albums")));
+    assert!(!bar.add_token(token(7, "Albums again")), "the same id is not added twice");
+    assert_eq!(bar.tokens(), &[token(7, "Albums")]);
+    assert!(bar.remove_token(7));
+    assert!(!bar.remove_token(7));
+    assert!(bar.tokens().is_empty());
+}
+
+#[test]
+fn headless_suggestions_start_with_the_text_and_ignore_case() {
+    let bar = SearchBar::new(vec![]);
+    let candidates = ["Rust", "rustaceans", "Ruby", "Rust", "trust"];
+    assert_eq!(bar.suggestions("RUS", &candidates, 5), vec!["Rust", "rustaceans"]);
+}
+
+#[test]
+fn headless_suggestions_skip_the_typed_text_and_respect_the_limit() {
+    let bar = SearchBar::new(vec![]);
+    let candidates = ["rust", "rusty", "rustic", "rusted"];
+    assert_eq!(bar.suggestions("rust", &candidates, 2), vec!["rusty", "rustic"]);
+    assert!(bar.suggestions("rust", &candidates, 0).is_empty());
+}
+
+#[test]
+fn headless_blank_text_gives_no_suggestions() {
+    let bar = SearchBar::new(vec![]);
+    assert!(bar.suggestions("   ", &["a", "b"], 5).is_empty());
+}
+
+// ---- scene phase: active, inactive and background (bifrost_ui::scene_phase) ----
+
+#[test]
+fn headless_a_focused_visible_window_is_active() {
+    assert_eq!(ScenePhase::from_facts(true, true), ScenePhase::Active);
+    assert_eq!(ScenePhase::from_facts(true, false), ScenePhase::Inactive);
+    assert_eq!(ScenePhase::from_facts(false, true), ScenePhase::Background);
+    assert_eq!(ScenePhase::from_facts(false, false), ScenePhase::Background);
+}
+
+#[test]
+fn headless_the_tracker_reports_each_change_once() {
+    let mut tracker = SceneTracker::new(ScenePhase::Background);
+    assert_eq!(tracker.update(true, true), Some(ScenePhase::Active));
+    assert_eq!(tracker.update(true, true), None, "the same facts report nothing");
+    assert_eq!(tracker.update(true, false), Some(ScenePhase::Inactive));
+    assert_eq!(tracker.update(false, false), Some(ScenePhase::Background));
+    assert_eq!(tracker.phase(), ScenePhase::Background);
 }

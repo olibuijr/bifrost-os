@@ -643,6 +643,8 @@ pub mod launch;
 pub mod detect;
 pub mod prefs_layout;
 pub mod search;
+pub mod search_scope;
+pub mod scene_phase;
 pub mod text_attachment;
 pub mod text_layout_manager;
 pub mod text_table;
