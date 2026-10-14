@@ -26,14 +26,14 @@
       "apple": "QLPreviewPanelDataSource, QLPreviewPanelDelegate, QLPreviewItemLoadingBlock",
       "bifrost": "springboard/sdk/src/peek.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No data source protocol or delegate callbacks. The app pushes a whole list with set_items; there is no lazy loading block and no transition source frame."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No data source protocol or delegate callbacks. The app pushes a whole list with set_items; there is no lazy loading block and no transition source frame. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (panel_pulls_a_data_source_and_stops_at_the_item_cap, panel_display_state_is_kept_per_item_and_reset_by_a_new_list)."
     },
     {
       "feature": "Embedded preview view (QLPreviewView)",
       "apple": "QLPreviewView: init(frame:style:), previewItem, refreshPreviewItem(), displayState, autostarts, close",
       "bifrost": "springboard/sdk/src/peek.rs (PreviewView, ViewStyle)",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The preview is a Files-owned page, not an SDK view an app can place in its own view hierarchy."
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The preview is a Files-owned page, not an SDK view an app can place in its own view hierarchy. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (embedded_view_loads_an_autostarting_item_until_the_app_reports_ready, embedded_view_without_autostart_waits_at_ready, embedded_view_closes_with_its_window_only_when_asked)."
     },
     {
       "feature": "Built-in previews for common file types",
@@ -45,30 +45,30 @@
     {
       "feature": "Thumbnails (QLThumbnailGenerator)",
       "apple": "QLThumbnailGenerator: request, update handlers, multiple representations",
-      "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, line 95; ThumbnailCache, line 104, best_representation)",
+      "bifrost": "springboard/sdk/src/thumbnails.rs (request, reply, event, load_pixels); springboard/ui/src/thumb_service.rs",
       "status": "partial",
-      "note": "Caches PNG paths under the bifrost-quicklook cache directory. The caller renders each thumbnail. No update handlers, and a single result per request."
+      "note": "The SDK keeps no cache: the shell's thumbnails service draws and caches each picture (the answer names the cached raw image) and the app reads the reply or event. No update handlers, and a single result per request. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (a_thumbnail_answer_names_its_cached_picture, a_thumbnail_event_is_read_only_from_its_own_service)."
     },
     {
       "feature": "Stepping through a preview list",
       "apple": "Arrow keys and panel navigation through the data source; Space toggles the panel",
-      "bifrost": "springboard/sdk/src/peek.rs (step, toggle, line 49 and 59); springboard/src/files/mod.rs (step_preview, line 438: previous or next file in the folder)",
+      "bifrost": "springboard/sdk/src/peek.rs (step, toggle); springboard/src/files/mod.rs (step_preview, line 438: previous or next file in the folder)",
       "status": "partial",
-      "note": "Files steps through its folder without wrapping. The SDK panel's step and toggle have no shell-side key handling yet."
+      "note": "Files steps through its folder without wrapping. The SDK panel's step and toggle have no shell-side key handling yet. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (panel_steps_through_the_list_without_wrapping)."
     },
     {
       "feature": "Preview extensions (QLPreviewingController)",
       "apple": "QLPreviewingController: preparePreviewOfFile(at:completionHandler:), preparePreviewOfSearchableItem(...), providePreview(for:completionHandler:)",
-      "bifrost": "springboard/ui/src/preview.rs (Subject",
+      "bifrost": "springboard/ui/src/preview.rs (Subject, Registry::register_searchable, Registry::provider_for_subject)",
       "status": "partial",
-      "note": "Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No mechanism for an app to register a preview for its own file types, and no searchable item preview."
+      "note": "Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The model routes a file by its type and a searchable item by its longest matching domain, but no app registration reaches the shell and no searchable item preview is drawn. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_narrow_searchable_domain_beats_a_broader_one, file_subjects_must_name_an_absolute_file, searchable_subjects_drop_a_blank_query)."
     },
     {
       "feature": "Data-based preview extensions (QLPreviewProvider)",
       "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply (+ QLPreviewReplyAttachment)",
       "bifrost": "springboard/ui/src/preview.rs (PreviewProvider, Registry::preview); wired: springboard/apps/files/src/peek.rs (PictureFile, picture_registry)",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No out-of-process preview extension that returns data, PDF or HTML replies. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No out-of-process preview extension that returns data, PDF or HTML replies. Headless tests: ui/tests/parity_sdk-tests-01a.rs (preview_reply_rejects_bitmaps_outside_the_edge_limit, html_attachments_need_unique_usable_ids, nearer_registration_beats_an_ancestor_and_ties_go_to_the_first, preview_calls_the_provider_the_registry_picked). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     }
   ],
   "gaps": [

@@ -12,14 +12,14 @@
       "apple": "ScreenSaverView: init(frame:isPreview:), startAnimation(), animateOneFrame(), stopAnimation(), animationTimeInterval, isAnimating, draw(_:)",
       "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/screensaver.rs (drives bifrost_ui::screensaver::ScreenSaverView start/tick/stop/animate_one_frame); no .saver bundle host",
       "status": "partial",
-      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no .saver bundle loader and no screen saver engine; the shell has no idle-animation host Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no .saver bundle loader and no screen saver engine; the shell has no idle-animation host for app-supplied savers. Headless tests: ui/tests/parity_sdk-tests-01a.rs (saver_view_starts_stopped_with_the_default_interval, tick_reports_the_frames_that_are_due, a_long_stall_reports_at_most_the_catch_up_limit, stop_cancels_the_schedule_and_animate_one_frame_counts, interval_is_clamped_and_bad_values_keep_the_default). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Preview and configuration sheet",
       "apple": "ScreenSaverView.isPreview, hasConfigureSheet, configureSheet",
       "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/pages.rs (PageId::ScreenSaver, Preview row) and springboard/src/shell/settings.rs (Pick::ScreenSaverPreview); configuration sheet not wired",
       "status": "partial",
-      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page) Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no preview thumbnail or configure sheet for screen savers in Settings (springboard/src/shell/pages.rs has no such page). ConfigureSheet and preview_rect are host-tested (ui/tests/parity_sdk-tests-01a.rs: configure_sheet_checks_keys_kinds_and_ranges, preview_rect_fits_the_screen_aspect_into_the_thumbnail). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Preference storage for a screen saver module",
@@ -33,21 +33,21 @@
       "apple": "ScreenSaverView.backingStoreType(), performGammaFade()",
       "bifrost": "springboard/render/src/gamma_fade.rs, springboard/ui/src/screensaver.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it"
+      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it. Headless tests: render/tests/parity_sdk-tests-01a.rs (a_fade_in_rises_and_a_fade_out_falls_linearly, a_ramp_lists_evenly_spaced_levels_from_start_to_end, a_fade_without_a_length_is_already_at_its_end)"
     },
     {
       "feature": "Random value and rectangle helpers",
       "apple": "SSRandomIntBetween, SSRandomFloatBetween, SSRandomPointForSizeWithinRect, SSCenteredRectInRect",
       "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/screensaver.rs (ss_random_point_for_size_within_rect places the Clock saver)",
       "status": "partial",
-      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. these are small utilities; no SDK equivalent was found in springboard/sdk/src/ Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 3 (w3-screen-saver, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. these are small utilities; no SDK equivalent was found in springboard/sdk/src/. Headless tests: ui/tests/parity_sdk-tests-01a.rs (random_helpers_map_unit_values_into_their_ranges, a_point_keeps_the_whole_size_inside_the_rectangle, centred_rect_keeps_the_inner_size). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Idle detection that starts the saver",
       "apple": "The system starts the saver after user inactivity (screen saver engine)",
       "bifrost": "springboard/core/src/idle_monitor.rs; wired: springboard/src/shell/screensaver.rs (IdleMonitor from springboard/core/src/idle_monitor.rs, fed by the shell's last-input time)",
       "status": "partial",
-      "note": "Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the idle signal exists at the system layer; it only turns the display off and locks, and does not start an app-supplied animation. Headless tests: core/tests/parity_sdk-tests-01a.rs (idle_begins_exactly_at_the_timeout_and_is_reported_once, input_ends_an_idle_period_and_restarts_the_timer, a_zero_timeout_never_goes_idle). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Auto-lock after idle",

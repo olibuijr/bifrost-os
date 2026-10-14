@@ -122,9 +122,9 @@
     {
       "feature": "Scroll views",
       "apple": "https://developer.apple.com/documentation/swiftui/scroll-views",
-      "bifrost": "springboard/sdk/src/view/scroll.rs, springboard/ui/src/scroll.rs",
+      "bifrost": "springboard/ui/src/scroll.rs (Scroller), springboard/sdk/src/view/scroll.rs",
       "status": "partial",
-      "note": "scrolling with model; no ScrollViewReader, scroll targets or scroll position binding"
+      "note": "scrolling with model; no ScrollViewReader, scroll targets or scroll position binding. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_short_drag_does_not_scroll_and_a_tap_is_reported_as_a_tap, a_drag_follows_the_finger_past_the_slop, pulling_past_the_end_rubber_bands_beyond_the_maximum, jumps_and_range_changes_clamp_the_offset, a_released_bounce_springs_back_to_the_edge, a_fling_decelerates_and_stops_below_the_threshold)."
     },
     {
       "feature": "Shader effects (Shader, ShaderLibrary, colorEffect, distortionEffect, layerEffect, visualEffect)",
@@ -138,14 +138,14 @@
       "apple": "View.glassEffect(_:in:), Glass, GlassEffectContainer, View.glassEffectID(_:in:)",
       "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs (live dual-Kawase blur in the window server); springboard/render/src/glass.rs",
       "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md). Headless tests: layers/tests/parity_sdk-tests-01a.rs (a_new_layer_has_no_material, a_glass_material_keeps_its_blur_tint_and_saturation, glass_materials_compare_by_all_their_parameters); wm/tests/parity_sdk-tests-01a.rs covers the blur pass arithmetic."
     },
     {
       "feature": "Materials (ultra thin to ultra thick, bar)",
       "apple": "Material.ultraThin, .thin, .regular, .thick, .ultraThick, .bar; View.background(_:in:)",
-      "bifrost": "springboard/sdk/src/widgets.rs (visual_effect with Material); springboard/render/src/glass.rs",
+      "bifrost": "springboard/render/src/glass.rs (Kind, Look), springboard/sdk/src/widgets.rs (visual_effect with Material)",
       "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md). Headless tests: render/tests/parity_sdk-tests-01a.rs (chrome_and_title_bars_share_the_title_bar_recipe_and_chrome_is_the_default, sidebars_are_thinner_glass_than_window_backgrounds, an_identity_look_leaves_the_backdrop_unchanged, mixing_looks_follows_the_scheme_position)."
     }
   ],
   "gaps": [

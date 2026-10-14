@@ -68,7 +68,7 @@
       "apple": "CSSearchableIndex",
       "bifrost": "springboard/sdk/src/quicksearch.rs",
       "status": "partial",
-      "note": "Per-app JSON index, capped at 1000 items."
+      "note": "Per-app JSON index in the shell. The SDK checks identifiers before sending (IndexError) and sends items in chunks of at most MAX_ITEMS (8). Headless tests: sdk/tests/parity_sdk-tests-01a.rs (an_indexed_item_needs_an_identifier_within_its_limits, a_search_over_the_app_items_finds_the_matching_title)."
     },
     {
       "feature": "Spotlight: metadata queries",

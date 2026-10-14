@@ -40,7 +40,7 @@
       "apple": "Closest related Apple surface is Keychain Services; SFAuthorization is not a keychain API",
       "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/src/keychain.rs (Error::NotPermitted)",
       "status": "partial",
-      "note": "gated by the manifest keychain permission only; no user authentication step and no per-right authorization"
+      "note": "gated by the manifest keychain permission only; no user authentication step and no per-right authorization. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (decode_item_maps_a_failed_get_to_its_status) cover the NotPermitted to errSecNotAvailable mapping; the manifest check itself runs in the shell."
     }
   ],
   "gaps": [
