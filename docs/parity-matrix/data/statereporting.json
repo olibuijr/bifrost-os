@@ -24,16 +24,16 @@
     {
       "feature": "Crash capture and crash log entries",
       "apple": "crash diagnostics surfaced through MetricKit (framework landing page cross-reference)",
-      "bifrost": "springboard/src/shell/diag.rs (CrashEntry, crash.log and crash.log.old parsing)",
+      "bifrost": "springboard/src/shell/diag.rs (CrashEntry, crash.log and crash.log.old parsing); springboard/sdk/src/crash_report.rs (the reporter model an app can implement)",
       "status": "os",
-      "note": "system layer lists and deletes crash logs; apps get no API to attach state to a crash"
+      "note": "The shell writes crash.log into its own state directory, outside every app sandbox, so an app cannot read these entries. The blocker is that the shell does not yet call an app's crash reporter when another app crashes (crash_report.rs), so no SDK surface can carry a crash to an app."
     },
     {
       "feature": "Analytics and Diagnostics page (user-facing)",
       "apple": "Settings > Privacy > Analytics & Diagnostics (system UI)",
       "bifrost": "springboard/src/shell/diagnostics_page.rs",
       "status": "os",
-      "note": "lists crash logs, Share with Developer, Delete All Crash Logs; the share uploads build, crash logs and heartbeat to the update server"
+      "note": "The page is a shell Settings pane built from the shell's own list and command types, and its share uploads through the shell's update client (diag::post), so there is no SDK surface. The blocker is that the SDK has no settings-pane extension point for an app to contribute a page."
     },
     {
       "feature": "Unified logging as diagnostic context",

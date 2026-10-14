@@ -138,6 +138,7 @@ pub mod sleep_assertions;
 pub mod app_transfer;
 pub mod app_disk_writes;
 pub mod device_registry;
+pub mod udev_db;
 pub mod console_user;
 pub mod natpmp;
 pub mod aes_gcm;

@@ -232,6 +232,7 @@ pub mod midi_ci_property;
 pub mod midi_network;
 pub mod motion_raw;
 pub mod device_registry;
+pub mod udev;
 pub mod script_value;
 pub mod script_syntax;
 pub mod script_export;
