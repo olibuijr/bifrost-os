@@ -24,9 +24,9 @@
     {
       "feature": "Process execution, fork and exit events",
       "apple": "es_event_exec_t, es_event_fork_t, es_event_exit_t, es_exec_arg, es_exec_env, es_exec_fd (Process Event Types)",
-      "bifrost": "springboard/sdk/src/workspace.rs (DID_LAUNCH_APPLICATION, DID_TERMINATE_APPLICATION)",
+      "bifrost": "springboard/sdk/src/workspace.rs (DID_LAUNCH_APPLICATION, DID_TERMINATE_APPLICATION); springboard/core/src/process_info.rs (parse_stat, parent_chain, snapshot_events)",
       "status": "partial",
-      "note": "Only app launch and terminate, emitted by the shell for its own apps. No arguments, environment, file descriptors, parent chain or processes outside the shell."
+      "note": "Process records parse from procfs text with a parent chain, and two snapshots of the process table give exit and start events (a reused pid counts as both), tested headless in springboard/core/tests/parity_sdk-complete-45.rs. Gap: nothing reads /proc yet, so the shell still reports only its own app launches and terminations, and exec and fork calls, arguments, environment and file descriptors are not reported; live /proc reads need the lab machine."
     },
     {
       "feature": "Process signal, working directory and root directory events",

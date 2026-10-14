@@ -59,9 +59,9 @@
     {
       "feature": "Scanners and printers over USB",
       "apple": "IOUSBHost (scanner and printer devices)",
-      "bifrost": "springboard/core/src/usb_printer.rs, springboard/sdk/src/usb_printer.rs",
+      "bifrost": "springboard/core/src/usb_printer.rs (can_print, DeviceId::display_name), springboard/sdk/src/usb_printer.rs; springboard/core/tests/parity_sdk-complete-45.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-iousbhost, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The print API does not expose a USB transport. No scanner API exists."
+      "note": "Wave 5 (w5-iousbhost, parity/integration 93f283b0): pure model with host unit tests, now including can_print (a printer interface needs a bulk-out endpoint) and the printer name for a list, tested headless in parity_sdk-complete-45.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. The print API does not expose a USB transport. No scanner API exists: most USB scanners use vendor-specific protocols, so scanner support needs per-model drivers and a device."
     },
     {
       "feature": "Host controller interface and state machines (hubs, controller, port, endpoint)",
