@@ -138,3 +138,5 @@ pub mod text_replacements;
 pub mod volume;
 pub mod identity;
 pub mod reachability;
+pub mod csv;
+pub mod weather;
