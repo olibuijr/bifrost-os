@@ -2243,9 +2243,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Nothing warns when a volume is nearly full. Build a low-space check in the shell on the capacity figures from springboard/core/src/volume.rs, with a notification through springboard/core/src/notify_center.rs.",
+   "bifrost": "springboard/core/src/low_space.rs (level, notification_name, message); springboard/core/src/volume.rs (capacity)",
+   "status": "partial",
+   "note": "The low-space level, the notification name and the warning sentence are tested headless in springboard/core/tests/parity_os-gaps-07.rs. Gap: the shell does not yet read capacity on a timer or post the notification.",
    "rea": [],
    "method": "assessed"
   },
