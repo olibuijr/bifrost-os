@@ -3,30 +3,30 @@
   "doc": "https://developer.apple.com/documentation/glkit",
   "macos_since": "10.8",
   "status": "partial",
-  "bifrost": "springboard/sdk/src/view/app.rs (frame drawing), springboard/sdk/src/view/animation.rs (frame timing), springboard/sdk/src/widgets.rs (Material blur), springboard/render/src/imgdec.rs (image decode), springboard/src/gpu/ (internal GLES presenter, not app-facing)",
-  "summary": "GLKit is an OpenGL and OpenGL ES helper layer (GL view, view controller render loop, shader effects, mesh and texture loading, math). Apple marks most of it deprecated on macOS from 10.14, and macOS requires an OpenGL 3.2 Core Profile context. BifrOSt has no app-facing GL view, shader effect or mesh API; its GPU presenter is internal, and apps get blur materials, a draw and animation loop and image decoding instead.",
+  "bifrost": "springboard/sdk/src/view/app.rs (frame drawing), springboard/sdk/src/view/animation.rs (frame timing), springboard/sdk/src/widgets.rs (Material blur), springboard/render/src/imgdec.rs (image decode), springboard/ui/src/shader_effect.rs, springboard/ui/src/texture_loader.rs, springboard/ui/src/drawable_view.rs, springboard/ui/src/render_loop.rs, springboard/src/gpu/ (internal GLES presenter, not app-facing)",
+  "summary": "GLKit is an OpenGL and OpenGL ES helper layer (GL view, view controller render loop, shader effects, mesh and texture loading, math). Apple marks most of it deprecated on macOS from 10.14, and macOS requires an OpenGL 3.2 Core Profile context. BifrOSt has no app-facing GL view or shader API; its GPU presenter is internal. Pure models in springboard/ui cover the effect, drawable, loop, texture-request and math parts, and apps get blur materials, a draw and animation loop and image decoding.",
   "rea_evidence": "ev_2dea8330752a36acabb14ce26422118cccfeccc1eef2a1724b27913e3d95c67d",
   "features": [
     {
       "feature": "GL view and drawable",
       "apple": "GLKView, GLKViewDelegate (init(frame:context:), drawableColorFormat, bindDrawable, display, snapshot); macOS deprecated 10.14",
-      "bifrost": "springboard/ui/src/drawable.rs",
+      "bifrost": "springboard/ui/src/drawable.rs, springboard/ui/src/drawable_view.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps cannot obtain a GL context or drawable; the presenter draws the desktop only"
+      "note": "pure models: drawable formats and memory (drawable.rs); a view that runs a delegate display pass, tracks needs-display and snapshots the last pass's layout (drawable_view.rs). built on parity/team-n-glkit; not yet verified on Midget. apps cannot obtain a GL context; the presenter draws the desktop only"
     },
     {
       "feature": "Render loop controller",
       "apple": "GLKViewController (preferredFramesPerSecond, isPaused, pauseOnWillResignActive, resumeOnDidBecomeActive); iOS and tvOS only per docc, not on macOS",
-      "bifrost": "springboard/sdk/src/view/app.rs:216 draw(), :222 draw_at(ctx, s, t) time-based drawing; springboard/sdk/src/view/animation.rs (Timing, Transaction)",
+      "bifrost": "springboard/ui/src/render_loop.rs (pure model), springboard/sdk/src/view/app.rs:216 draw(), :222 draw_at(ctx, s, t), springboard/sdk/src/view/animation.rs (Timing, Transaction)",
       "status": "partial",
-      "note": "apps are redrawn by the SDK's timed draw path, with no frame-rate, pause or app-activation controls"
+      "note": "frame rate (1 to 120 per second), on-demand drawing, pause, and pause and resume with app activity are modelled in render_loop.rs. built on parity/team-n-glkit; not yet verified on Midget. the SDK's timed draw path does not yet use the model"
     },
     {
       "feature": "Shader-based effects",
       "apple": "GLKNamedEffect, GLKBaseEffect (lighting, transform), GLKReflectionMapEffect, GLKSkyboxEffect",
-      "bifrost": "none app-facing; shader sources in springboard/src/gpu/shaders.rs (layer_fragment_source, fade_fragment_source) are internal",
-      "status": "gap",
-      "note": "no app-supplied shaders or lighting model"
+      "bifrost": "springboard/ui/src/shader_effect.rs (base effect transform, three lights, fog; reflection vector; cube-map lookup; skybox ray), springboard/ui/src/shading.rs, springboard/ui/src/linalg.rs",
+      "status": "partial",
+      "note": "pure models with host unit tests: no app-supplied shader source and no GPU program; shader sources in springboard/src/gpu/shaders.rs stay internal. built on parity/team-n-glkit; not yet verified on Midget"
     },
     {
       "feature": "Effect properties",
@@ -45,9 +45,9 @@
     {
       "feature": "Texture loading",
       "apple": "GLKTextureLoader, GLKTextureInfo (background loading from image files; GLKTextureInfo deprecated 10.14)",
-      "bifrost": "springboard/render/src/imgdec.rs (PNG and JPEG decode); springboard/src/gpu/texture.rs (GPU texture bookkeeping, internal)",
+      "bifrost": "springboard/ui/src/texture_loader.rs (load options, texture info, request table), springboard/render/src/imgdec.rs (PNG and JPEG decode); springboard/src/gpu/texture.rs (GPU texture bookkeeping, internal)",
       "status": "partial",
-      "note": "images decode into CPU surfaces; there is no background GPU texture upload API for apps"
+      "note": "the request model (pending, loaded, failed; mip count; alpha state) is pure; decoding is CPU-only and no GPU upload API is exposed to apps. built on parity/team-n-glkit; not yet verified on Midget"
     },
     {
       "feature": "Mesh data",
@@ -72,11 +72,11 @@
     }
   ],
   "gaps": [
-    "No app-facing GL view or drawable: apps cannot create an OpenGL or GLES context on BifrOSt (springboard/src/gpu/mod.rs is internal).",
-    "No shader effect classes (GLKBaseEffect and related) and no way for apps to supply shaders.",
-    "No 3D math types (matrix, vector, quaternion) in the SDK; only the browser engine's 2D transform.",
-    "No mesh or 3D buffer API.",
-    "No background GPU texture loader for apps; image decode is CPU-only (springboard/render/src/imgdec.rs).",
+    "No app-facing GL view or drawable: apps cannot create an OpenGL or GLES context on BifrOSt (springboard/src/gpu/mod.rs is internal). The drawable_view model is not wired to a context.",
+    "No app-supplied shaders: the effect model in shader_effect.rs computes shading on the CPU and cannot run a custom GPU program.",
+    "No 3D math types beyond the pure models: matrix, vector and quaternion types are in springboard/ui/src/linalg.rs and are not re-exported through the SDK.",
+    "No mesh or 3D buffer API in the SDK; the buffer model in mesh.rs does not touch GPU memory.",
+    "No GPU texture upload for apps; texture_loader.rs models the requests and image decode is CPU-only (springboard/render/src/imgdec.rs).",
     "Apple deprecated most of GLKit on macOS from 10.14. Parity work here would target the Metal-equivalent path rather than GLKit, so this framework may stay a documented n/a for new apps."
   ]
 }
