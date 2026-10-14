@@ -1,4 +1,4 @@
-//! Photo Booth's Trash. A deleted capture moves into the desktop Trash folder, laid out as the freedesktop trash
+//! Photo Booth's Trash. A deleted capture moves into the desktop Trash folder, laid out as the common desktop trash
 //! specification describes it: `files/` holds the picture and `info/` holds a record of where it came from and when it
 //! was deleted. The file manager shows that folder, and Undo Delete moves the picture back out of it.
 

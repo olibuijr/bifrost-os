@@ -3,7 +3,7 @@
 ## 0.4.0
 
 - Delete moves the capture into the desktop Trash folder (`$XDG_DATA_HOME/Trash`, or `~/.local/share/Trash`) with the
-  freedesktop record of where it came from and when it was deleted, so the file manager can show it and put it back.
+  trash record of where it came from and when it was deleted, so the file manager can show it and put it back.
   Undo Delete (cmd+z) moves it out of the Trash to its place in the strip; if a picture has taken its name since, the
   restored one gets a free name.
 - The screen flash timing moved into the model, where it is tested headless.
