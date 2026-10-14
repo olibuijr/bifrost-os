@@ -1,14 +1,18 @@
 //! Sticky Notes: small floating notes on one board. Each note has a colour, a collapse control, a caret and
-//! selection, text styles, and a translucent look when it is not the focused note. The board saves on every
-//! change, and edits can be undone. Find searches all notes; a note prints, exports and imports as text.
+//! selection, styles that apply to a selection, and a translucent look when it is not the focused note. The board saves
+//! on every change, and edits can be undone. Find searches all notes; spelling, substitutions and data detectors mark
+//! and change text as it is typed; a note prints, exports and imports as text, and imports rich text too.
 
 mod board;
 mod dates;
 mod history;
 mod layout;
 mod model;
+mod prefs;
 mod speech;
+mod spell;
 mod store;
+mod substitute;
 mod swatch;
 
 use bifrost_app::control::RpcError;
@@ -19,13 +23,18 @@ use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::print::{PrintError, PrintOperation};
-use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_META, CHORD_SHIFT};
 use bifrost_app::widgets;
 use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use board::Marks;
 use history::History;
-use model::{Arrange, Board, Case, Colour, Ink, Move, Part, Style, TextSize};
+use model::{Arrange, Baseline, Board, Case, Colour, Ink, Move, Note, Part, Setting, Style, TextSize};
+use prefs::Prefs;
+use spell::Spelling;
+use std::collections::HashMap;
 use std::io::{Read, Write};
+use substitute::Typed;
 
 const MENU_NEW: u32 = 1;
 const MENU_DELETE: u32 = 2;
@@ -74,6 +83,22 @@ const MENU_SPEAK_START: u32 = 72;
 const MENU_SPEAK_STOP: u32 = 73;
 const MENU_REPLACE: u32 = 74;
 const MENU_REPLACE_ALL: u32 = 75;
+const MENU_OUTLINE: u32 = 79;
+const MENU_BASELINE_BASE: u32 = 80; // 80..=82, one per Baseline
+const MENU_KERN_BASE: u32 = 83; // 83..=85, one per Setting
+const MENU_LIGATURE_BASE: u32 = 86; // 86..=88, one per Setting
+const MENU_ADD_LINK: u32 = 89;
+const MENU_SPELL_WHILE_TYPING: u32 = 90;
+const MENU_SPELL_CHECK_NOW: u32 = 91;
+const MENU_SPELL_AUTO: u32 = 92;
+const MENU_SPELL_CORRECT: u32 = 93;
+const MENU_SPELL_LEARN: u32 = 94;
+const MENU_SPELL_IGNORE: u32 = 95;
+const MENU_SMART_QUOTES: u32 = 96;
+const MENU_SMART_DASHES: u32 = 97;
+const MENU_DETECT_DATES: u32 = 98;
+const MENU_DETECT_ADDRESSES: u32 = 99;
+const MENU_DETECT_PHONES: u32 = 100;
 
 /// The buttons of the delete confirmation.
 const SHEET_CANCEL: u32 = 1;
@@ -126,7 +151,8 @@ fn undo_name(id: u32) -> Option<&'static str> {
         MENU_DELETE => "Delete",
         MENU_DUPLICATE => "Duplicate",
         MENU_COLLAPSE | MENU_COLLAPSE_ALL | MENU_EXPAND_ALL => "Collapse",
-        MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE | MENU_BIGGER | MENU_SMALLER | MENU_PASTE_STYLE | MENU_USE_DEFAULT => "Style",
+        MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE | MENU_OUTLINE | MENU_BIGGER | MENU_SMALLER | MENU_PASTE_STYLE | MENU_USE_DEFAULT => "Style",
+        MENU_BASELINE_BASE..=82 | MENU_KERN_BASE..=85 | MENU_LIGATURE_BASE..=88 => "Style",
         MENU_SIZE_BASE..=8 => "Text Size",
         MENU_INK_BASE..=64 => "Text Colour",
         MENU_COLOUR_BASE..=15 => "Colour",
@@ -136,8 +162,50 @@ fn undo_name(id: u32) -> Option<&'static str> {
         MENU_TRANSLUCENT => "Translucent",
         MENU_ZOOM => "Zoom",
         MENU_ARRANGE_BASE..=56 => "Arrange",
+        MENU_SPELL_CORRECT => "Correct Spelling",
         _ => return None,
     })
+}
+
+/// Whether typed text is a word boundary (one space or punctuation mark), after which Correct Spelling Automatically
+/// checks the word before it. An apostrophe is part of a word.
+fn is_boundary(text: &str) -> bool {
+    let mut chars = text.chars();
+    matches!((chars.next(), chars.next()), (Some(c), None) if !c.is_alphanumeric() && c != '\'' && c != '\u{2019}' && !c.is_control())
+}
+
+/// Types `text` into the note. A single typed character goes through the Substitutions rules first: Smart Quotes and
+/// Smart Dashes.
+fn type_with_substitutions(note: &mut Note, text: &str, prefs: Prefs, now: u64) {
+    let mut chars = text.chars();
+    let single = match (chars.next(), chars.next()) {
+        (Some(c), None) if prefs.smart_quotes || prefs.smart_dashes => Some(c),
+        _ => None,
+    };
+    let Some(c) = single else {
+        note.type_text(text, now);
+        return;
+    };
+    let before = note.text[..note.selection().start].chars().next_back();
+    match substitute::typed(before, c, prefs.smart_quotes, prefs.smart_dashes) {
+        Some(Typed::Replace(dash)) if !note.has_selection() => {
+            note.backspace(now);
+            note.type_text(&dash.to_string(), now);
+        }
+        Some(Typed::Insert(s)) => note.type_text(&s, now),
+        _ => note.type_text(text, now),
+    }
+}
+
+/// Correct Spelling Automatically: replaces the misspelled word that ends right before the boundary the caret just
+/// passed. The caret stays after the boundary.
+fn autocorrect_before_boundary(note: &mut Note, spelling: &Spelling, typed_len: usize, now: u64) {
+    let Some(boundary) = note.caret.checked_sub(typed_len) else { return };
+    let Some((range, guess)) = spelling.autocorrect(&note.text, boundary) else { return };
+    let caret = note.caret;
+    let shifted = caret + guess.len() - range.len();
+    note.replace_range(range, &guess, now);
+    note.set_caret(shifted, false);
 }
 
 struct StickiesApp {
@@ -158,6 +226,8 @@ struct StickiesApp {
     replacing: bool,
     /// The custom colour entry while its bar is open.
     colour_entry: Option<String>,
+    /// The web address entry of Add Link while its bar is open.
+    link_entry: Option<String>,
     speaker: speech::Speaker,
     confirm: Option<Confirm>,
     /// The style Copy Style took, for Paste Style.
@@ -166,6 +236,13 @@ struct StickiesApp {
     last_press: Option<(u64, f64)>,
     /// The board as it was when a press began, for the undo step of a move or resize.
     before_drag: Option<Board>,
+    /// The spelling checker, made the first time it is needed.
+    spelling: Option<Spelling>,
+    /// The switches of the Spelling, Substitutions and Data Detectors menus.
+    prefs: Prefs,
+    /// The rules under the text of each note, and the text they were made for.
+    marks: Marks,
+    marked: HashMap<u64, String>,
 }
 
 impl StickiesApp {
@@ -182,11 +259,16 @@ impl StickiesApp {
             replace: String::new(),
             replacing: false,
             colour_entry: None,
+            link_entry: None,
             speaker: speech::Speaker::default(),
             confirm: None,
             style_clip: None,
             last_press: None,
             before_drag: None,
+            spelling: None,
+            prefs: Prefs::default(),
+            marks: Marks::new(),
+            marked: HashMap::new(),
         }
     }
 
@@ -205,6 +287,42 @@ impl StickiesApp {
     fn changed(&mut self) -> bool {
         self.dirty = true;
         true
+    }
+
+    /// Makes the spelling checker, loading the words the user taught it, the first time it is needed.
+    fn ensure_spelling(&mut self, ctx: &Ctx) {
+        if self.spelling.is_none() {
+            let mut spelling = Spelling::new();
+            spelling.load(&ctx.defaults());
+            self.spelling = Some(spelling);
+        }
+    }
+
+    /// Recomputes the marks of the notes whose text changed, with the checker when spelling is checked as typing.
+    fn refresh_marks(&mut self, ctx: &Ctx) {
+        if self.board.is_none() {
+            return;
+        }
+        if self.prefs.check_while_typing {
+            self.ensure_spelling(ctx);
+        }
+        let spelling = if self.prefs.check_while_typing { self.spelling.as_ref() } else { None };
+        let kinds = self.prefs.detector_kinds();
+        let Some(board) = &self.board else { return };
+        self.marks.retain(|id, _| board.find(*id).is_some());
+        self.marked.retain(|id, _| board.find(*id).is_some());
+        for note in &board.notes {
+            if self.marked.get(&note.id) != Some(&note.text) {
+                self.marks.insert(note.id, spell::marks(&note.text, spelling, &kinds));
+                self.marked.insert(note.id, note.text.clone());
+            }
+        }
+    }
+
+    /// Drops the marks, so the next draw computes them again (after a switch or the learned words change).
+    fn forget_marks(&mut self) {
+        self.marks.clear();
+        self.marked.clear();
     }
 
     /// Pointer position in points: input is in pixels, and the board is laid out in points.
@@ -392,8 +510,15 @@ impl StickiesApp {
         if self.colour_entry.is_some() {
             return self.colour_key(key);
         }
+        if self.link_entry.is_some() {
+            return self.link_key(key);
+        }
         if self.find.is_some() {
             return self.find_key(key);
+        }
+        // a command arrow (Cmd with an arrow key) moves the caret to the edge of the line or the text
+        if let Some((code, mods)) = key.as_chord() {
+            return self.chord(code, mods);
         }
         // Escape leaves the note: no note takes typing until one is pressed again
         if let KeyInput::Code(27) = key {
@@ -403,18 +528,18 @@ impl StickiesApp {
             }
             return self.changed();
         }
-        let Some(board) = &mut self.board else { return false };
+        if let KeyInput::Text(text) = key {
+            if self.prefs.correct_automatically && is_boundary(text) {
+                self.ensure_spelling(ctx);
+            }
+            return self.typed(text);
+        }
         let now = Self::now();
+        let Some(board) = &mut self.board else { return false };
         let before = board.clone();
         let Some(note) = board.focused_mut() else { return false };
         let id = note.id;
         match key {
-            KeyInput::Text(text) => {
-                if text.chars().all(char::is_control) {
-                    return false;
-                }
-                note.type_text(text, now)
-            }
             KeyInput::Code(8) => {
                 if !note.backspace(now) {
                     return false;
@@ -449,6 +574,50 @@ impl StickiesApp {
             self.history.push_typing(id, before);
         }
         self.changed()
+    }
+
+    /// Types `text` into the focused note: the Substitutions rules first, then Correct Spelling Automatically when a
+    /// boundary was typed. The typing is one undo step, shared with the typing before it in the same note.
+    fn typed(&mut self, text: &str) -> bool {
+        if text.chars().all(char::is_control) {
+            return false;
+        }
+        let prefs = self.prefs;
+        let spelling = if prefs.correct_automatically && is_boundary(text) { self.spelling.as_ref() } else { None };
+        let now = Self::now();
+        let Some(board) = &mut self.board else { return false };
+        let before = board.clone();
+        let Some(note) = board.focused_mut() else { return false };
+        let id = note.id;
+        type_with_substitutions(note, text, prefs, now);
+        if let Some(sp) = spelling {
+            autocorrect_before_boundary(note, sp, text.len(), now);
+        }
+        if *board != before {
+            self.history.push_typing(id, before);
+        }
+        self.changed()
+    }
+
+    /// Command arrows: Cmd-Left and Cmd-Right go to the ends of the line, Cmd-Up and Cmd-Down to the ends of the text,
+    /// and Shift with them extends the selection.
+    fn chord(&mut self, code: u32, mods: u32) -> bool {
+        if mods & CHORD_META == 0 {
+            return false;
+        }
+        let extend = mods & CHORD_SHIFT != 0;
+        let Some(board) = &mut self.board else { return false };
+        let Some(note) = board.focused_mut() else { return false };
+        let end = note.text.len();
+        match code {
+            37 => note.move_caret(Move::LineStart, extend),
+            39 => note.move_caret(Move::LineEnd, extend),
+            38 => note.set_caret(0, extend),
+            40 => note.set_caret(end, extend),
+            _ => return false,
+        }
+        self.history.end_typing();
+        true
     }
 
     /// Keys while the find bar is open: they edit the find text instead of a note.
@@ -571,6 +740,45 @@ impl StickiesApp {
         }
     }
 
+    /// Keys in the web address bar of Add Link: typing builds the address, Return adds it as a link, Escape closes it.
+    fn link_key(&mut self, key: &KeyInput) -> bool {
+        let Some(entry) = &mut self.link_entry else { return false };
+        match key {
+            KeyInput::Text(text) => {
+                let before = entry.len();
+                entry.extend(text.chars().filter(|c| !c.is_control()));
+                entry.len() != before
+            }
+            KeyInput::Code(8) => entry.pop().is_some(),
+            KeyInput::Code(13) => {
+                if !model::is_link(entry) {
+                    return false;
+                }
+                let url = entry.trim().to_string();
+                self.link_entry = None;
+                self.add_link(&url)
+            }
+            KeyInput::Code(27) => {
+                self.link_entry = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Adds a web address to the focused note as text in place of the selection, as one undo step. The note underlines
+    /// it and a double press opens it.
+    fn add_link(&mut self, url: &str) -> bool {
+        let before = self.board.clone();
+        let now = Self::now();
+        let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
+        note.type_text(url, now);
+        if let Some(before) = before {
+            self.history.push("Add Link", before);
+        }
+        self.changed()
+    }
+
     /// Gives the focused note a custom colour, as one undo step. False without a focused note or a change.
     fn apply_custom(&mut self, rgb: swatch::Rgb) -> bool {
         let Some(board) = &mut self.board else { return false };
@@ -598,7 +806,7 @@ impl StickiesApp {
     }
 
     fn import_panel(&mut self, ctx: &Ctx) -> bool {
-        self.import = Some(ctx.open_document(DocMode::Read, "Import Sticky Note", &["public.text"]));
+        self.import = Some(ctx.open_document(DocMode::Read, "Import Sticky Note", &["public.text", "public.rtf"]));
         false
     }
 
@@ -642,19 +850,101 @@ impl StickiesApp {
         true
     }
 
-    /// Copy Style: remembers the focused note's text style.
+    /// Copy Style: remembers the text style at the focused note's caret.
     fn copy_style(&mut self) {
-        self.style_clip = self.board.as_ref().and_then(|b| b.focused()).map(|n| n.style);
+        self.style_clip = self.board.as_ref().and_then(|b| b.focused()).map(|n| n.current_style());
     }
 
-    /// Paste Style: gives the focused note the remembered style. False when none was copied or no note has focus.
+    /// Paste Style: gives the selection (or the whole note) the remembered style, and keeps the note's text size. False
+    /// when none was copied or nothing changed.
     fn paste_style(&mut self) -> bool {
-        let Some(style) = self.style_clip else { return false };
+        let Some(clip) = self.style_clip else { return false };
         let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
-        if note.style == style {
+        note.restyle(move |s| *s = (*s).take_attributes(clip))
+    }
+
+    /// Applies a style change to the focused note: its selection, or the whole note without one. True when a style changed.
+    fn restyle_focused(&mut self, f: impl Fn(&mut Style)) -> bool {
+        let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
+        note.restyle(f) && self.changed()
+    }
+
+    /// Toggles one attribute of the style at the caret: on when it is off at the caret, off otherwise.
+    fn toggle_style(&mut self, on: fn(&Style) -> bool, set: fn(&mut Style, bool)) -> bool {
+        let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
+        let value = !on(&note.current_style());
+        note.restyle(move |s| set(s, value)) && self.changed()
+    }
+
+    /// Flips one of the Spelling, Substitutions or Data Detectors switches, saves it and drops the marks.
+    fn toggle_pref(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let p = &mut self.prefs;
+        match id {
+            MENU_SPELL_WHILE_TYPING => p.check_while_typing = !p.check_while_typing,
+            MENU_SPELL_AUTO => p.correct_automatically = !p.correct_automatically,
+            MENU_SMART_QUOTES => p.smart_quotes = !p.smart_quotes,
+            MENU_SMART_DASHES => p.smart_dashes = !p.smart_dashes,
+            MENU_DETECT_DATES => p.detect_dates = !p.detect_dates,
+            MENU_DETECT_ADDRESSES => p.detect_addresses = !p.detect_addresses,
+            MENU_DETECT_PHONES => p.detect_phone_numbers = !p.detect_phone_numbers,
+            _ => return false,
+        }
+        let prefs = self.prefs;
+        prefs.save(&mut ctx.defaults_mut());
+        self.forget_marks();
+        true
+    }
+
+    /// Check Document Now: selects the next misspelled word after the selection, wrapping round the note.
+    fn check_document_now(&mut self, ctx: &Ctx) -> bool {
+        self.ensure_spelling(ctx);
+        let (Some(board), Some(spelling)) = (self.board.as_mut(), self.spelling.as_ref()) else { return false };
+        let Some(note) = board.focused_mut() else { return false };
+        let ranges = spelling.misspelled(&note.text);
+        match spell::next_misspelled(&ranges, note.selection().end) {
+            Some(r) => {
+                note.set_caret(r.start, false);
+                note.set_caret(r.end, true);
+                true
+            }
+            None => {
+                ctx.notify("Sticky Notes", "No misspelled words");
+                false
+            }
+        }
+    }
+
+    /// Correct Spelling: replaces the word at the caret with the checker's best guess.
+    fn correct_spelling(&mut self, ctx: &Ctx) -> bool {
+        self.ensure_spelling(ctx);
+        let now = Self::now();
+        let (Some(board), Some(spelling)) = (self.board.as_mut(), self.spelling.as_ref()) else { return false };
+        let Some(note) = board.focused_mut() else { return false };
+        let Some(range) = spell::word_at(&note.text, note.caret) else { return false };
+        let Some(guess) = spelling.correction(&note.text, range.clone()) else { return false };
+        if guess == note.text[range.clone()] {
             return false;
         }
-        note.style = style;
+        let caret = note.caret;
+        let shifted = caret + guess.len() - range.len();
+        note.replace_range(range, &guess, now);
+        note.set_caret(shifted, false);
+        self.changed()
+    }
+
+    /// Learn Spelling and Ignore Spelling for the word at the caret.
+    fn learn_or_ignore(&mut self, ctx: &Ctx, id: u32) -> bool {
+        self.ensure_spelling(ctx);
+        let (Some(board), Some(spelling)) = (self.board.as_ref(), self.spelling.as_mut()) else { return false };
+        let Some(note) = board.focused() else { return false };
+        let Some(range) = spell::word_at(&note.text, note.caret) else { return false };
+        let word = note.text[range].to_string();
+        if id == MENU_SPELL_LEARN {
+            spelling.learn(&mut ctx.defaults_mut(), &word);
+        } else {
+            spelling.ignore(&word);
+        }
+        self.forget_marks();
         true
     }
 
@@ -729,36 +1019,39 @@ impl StickiesApp {
                 let collapse = id == MENU_COLLAPSE_ALL;
                 self.board.as_mut().is_some_and(|b| b.set_all_collapsed(collapse)) && self.changed()
             }
-            MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE => {
-                let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
-                match id {
-                    MENU_BOLD => note.style.bold = !note.style.bold,
-                    MENU_ITALIC => note.style.italic = !note.style.italic,
-                    MENU_UNDERLINE => note.style.underline = !note.style.underline,
-                    _ => note.style.strike = !note.style.strike,
-                }
-                self.changed()
-            }
+            MENU_BOLD => self.toggle_style(|s| s.bold, |s, v| s.bold = v),
+            MENU_ITALIC => self.toggle_style(|s| s.italic, |s, v| s.italic = v),
+            MENU_UNDERLINE => self.toggle_style(|s| s.underline, |s, v| s.underline = v),
+            MENU_STRIKE => self.toggle_style(|s| s.strike, |s, v| s.strike = v),
+            MENU_OUTLINE => self.toggle_style(|s| s.outline, |s, v| s.outline = v),
             MENU_BIGGER | MENU_SMALLER => {
                 let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
                 let size = if id == MENU_BIGGER { note.style.size.bigger() } else { note.style.size.smaller() };
                 if size == note.style.size {
                     return false;
                 }
-                note.style.size = size;
-                self.changed()
+                note.restyle_whole(|s| s.size = size) && self.changed()
             }
             MENU_SIZE_BASE..=8 => {
                 let size = [TextSize::Small, TextSize::Medium, TextSize::Large][(id - MENU_SIZE_BASE) as usize];
                 let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
-                note.style.size = size;
-                self.changed()
+                note.restyle_whole(|s| s.size = size) && self.changed()
             }
             MENU_INK_BASE..=64 => {
                 let ink = Ink::ALL[(id - MENU_INK_BASE) as usize];
-                let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
-                note.style.ink = ink;
-                self.changed()
+                self.restyle_focused(|s| s.ink = ink)
+            }
+            MENU_BASELINE_BASE..=82 => {
+                let baseline = Baseline::ALL[(id - MENU_BASELINE_BASE) as usize];
+                self.restyle_focused(|s| s.baseline = baseline)
+            }
+            MENU_KERN_BASE..=85 => {
+                let kern = Setting::ALL[(id - MENU_KERN_BASE) as usize];
+                self.restyle_focused(|s| s.kern = kern)
+            }
+            MENU_LIGATURE_BASE..=88 => {
+                let ligature = Setting::ALL[(id - MENU_LIGATURE_BASE) as usize];
+                self.restyle_focused(|s| s.ligature = ligature)
             }
             MENU_COPY_STYLE => {
                 self.copy_style();
@@ -777,6 +1070,7 @@ impl StickiesApp {
                 let start = note.rgb.map_or_else(|| "#".to_string(), swatch::hex);
                 self.find = None;
                 self.replacing = false;
+                self.link_entry = None;
                 self.colour_entry = Some(start);
                 true
             }
@@ -833,6 +1127,7 @@ impl StickiesApp {
             }
             MENU_FIND => {
                 self.colour_entry = None;
+                self.link_entry = None;
                 if self.find.is_none() {
                     self.find = Some(self.last_find.clone());
                 }
@@ -857,7 +1152,18 @@ impl StickiesApp {
             }
             MENU_REPLACE | MENU_REPLACE_ALL => {
                 self.colour_entry = None;
+                self.link_entry = None;
                 self.replace(id == MENU_REPLACE_ALL)
+            }
+            MENU_ADD_LINK => {
+                let open = self.board.as_ref().and_then(|b| b.focused()).is_some();
+                if open {
+                    self.find = None;
+                    self.replacing = false;
+                    self.colour_entry = None;
+                    self.link_entry = Some(String::new());
+                }
+                open
             }
             MENU_SPEAK_START => {
                 let Some(text) = self.board.as_ref().and_then(|b| b.focused()).and_then(speech::text_to_speak) else { return false };
@@ -877,6 +1183,12 @@ impl StickiesApp {
                 }
                 false
             }
+            MENU_SPELL_WHILE_TYPING | MENU_SPELL_AUTO | MENU_SMART_QUOTES | MENU_SMART_DASHES | MENU_DETECT_DATES | MENU_DETECT_ADDRESSES | MENU_DETECT_PHONES => {
+                self.toggle_pref(ctx, id)
+            }
+            MENU_SPELL_CHECK_NOW => self.check_document_now(ctx),
+            MENU_SPELL_CORRECT => self.correct_spelling(ctx),
+            MENU_SPELL_LEARN | MENU_SPELL_IGNORE => self.learn_or_ignore(ctx, id),
             MENU_PRINT => {
                 self.print(ctx);
                 false
@@ -919,6 +1231,8 @@ impl StickiesApp {
         let any = self.board.as_ref().is_some_and(|b| !b.notes.is_empty());
         let can_speak = note.and_then(speech::text_to_speak).is_some();
         let can_replace = any && has_find;
+        let has_word = note.is_some_and(|n| spell::word_at(&n.text, n.caret).is_some());
+        let p = self.prefs;
         AppMenu {
             title: "Edit".into(),
             items: vec![
@@ -938,7 +1252,25 @@ impl StickiesApp {
                 AppMenuItem::new(MENU_REPLACE, "Replace").enabled(can_replace),
                 AppMenuItem::new(MENU_REPLACE_ALL, "Replace All").enabled(can_replace),
                 AppMenuItem::separator(),
+                AppMenuItem::new(MENU_ADD_LINK, "Add Link...").key("cmd+k").enabled(has_focus),
                 AppMenuItem::new(MENU_OPEN_LINK, "Open Link").enabled(has_link),
+                AppMenuItem::separator(),
+                AppMenuItem::submenu("Spelling and Grammar"),
+                AppMenuItem::new(MENU_SPELL_WHILE_TYPING, "Check Spelling While Typing").checked(p.check_while_typing).depth(1),
+                AppMenuItem::new(MENU_SPELL_CHECK_NOW, "Check Document Now").key("cmd+;").enabled(any).depth(1),
+                AppMenuItem::new(MENU_SPELL_AUTO, "Correct Spelling Automatically").checked(p.correct_automatically).depth(1),
+                AppMenuItem::separator().depth(1),
+                AppMenuItem::new(MENU_SPELL_CORRECT, "Correct Spelling").enabled(has_word).depth(1),
+                AppMenuItem::new(MENU_SPELL_LEARN, "Learn Spelling").enabled(has_word).depth(1),
+                AppMenuItem::new(MENU_SPELL_IGNORE, "Ignore Spelling").enabled(has_word).depth(1),
+                AppMenuItem::submenu("Substitutions"),
+                AppMenuItem::new(MENU_SMART_QUOTES, "Smart Quotes").checked(p.smart_quotes).depth(1),
+                AppMenuItem::new(MENU_SMART_DASHES, "Smart Dashes").checked(p.smart_dashes).depth(1),
+                AppMenuItem::submenu("Data Detectors"),
+                AppMenuItem::new(MENU_DETECT_DATES, "Dates").checked(p.detect_dates).depth(1),
+                AppMenuItem::new(MENU_DETECT_ADDRESSES, "Addresses").checked(p.detect_addresses).depth(1),
+                AppMenuItem::new(MENU_DETECT_PHONES, "Phone Numbers").checked(p.detect_phone_numbers).depth(1),
+                AppMenuItem::separator(),
                 AppMenuItem::submenu("Transformations"),
                 AppMenuItem::new(MENU_UPPER, "Make Upper Case").enabled(has_selection).depth(1),
                 AppMenuItem::new(MENU_LOWER, "Make Lower Case").enabled(has_selection).depth(1),
@@ -951,17 +1283,32 @@ impl StickiesApp {
     }
 
     fn font_menu(&self, has_focus: bool) -> AppMenu {
-        let style = self.board.as_ref().and_then(|b| b.focused()).map(|n| n.style);
+        // the checks show the style at the caret, which is what the next typing takes
+        let style = self.board.as_ref().and_then(|b| b.focused()).map(|n| n.current_style());
         let on = |f: fn(&Style) -> bool| style.as_ref().is_some_and(f);
         let mut items = vec![
             AppMenuItem::new(MENU_BOLD, "Bold").key("cmd+b").enabled(has_focus).checked(on(|s| s.bold)),
             AppMenuItem::new(MENU_ITALIC, "Italic").key("cmd+i").enabled(has_focus).checked(on(|s| s.italic)),
             AppMenuItem::new(MENU_UNDERLINE, "Underline").key("cmd+u").enabled(has_focus).checked(on(|s| s.underline)),
             AppMenuItem::new(MENU_STRIKE, "Strikethrough").enabled(has_focus).checked(on(|s| s.strike)),
+            AppMenuItem::new(MENU_OUTLINE, "Outline").enabled(has_focus).checked(on(|s| s.outline)),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_BIGGER, "Bigger").key("cmd+=").enabled(style.is_some_and(|s| s.size != TextSize::Large)),
-            AppMenuItem::new(MENU_SMALLER, "Smaller").key("cmd+-").enabled(style.is_some_and(|s| s.size != TextSize::Small)),
+            AppMenuItem::submenu("Kern"),
         ];
+        for (i, kern) in Setting::ALL.iter().enumerate() {
+            items.push(AppMenuItem::new(MENU_KERN_BASE + i as u32, kern.title()).enabled(has_focus).checked(style.is_some_and(|s| s.kern == *kern)).depth(1));
+        }
+        items.push(AppMenuItem::submenu("Ligature"));
+        for (i, ligature) in Setting::ALL.iter().enumerate() {
+            items.push(AppMenuItem::new(MENU_LIGATURE_BASE + i as u32, ligature.title()).enabled(has_focus).checked(style.is_some_and(|s| s.ligature == *ligature)).depth(1));
+        }
+        items.push(AppMenuItem::submenu("Baseline"));
+        for (i, baseline) in Baseline::ALL.iter().enumerate() {
+            items.push(AppMenuItem::new(MENU_BASELINE_BASE + i as u32, baseline.title()).enabled(has_focus).checked(style.is_some_and(|s| s.baseline == *baseline)).depth(1));
+        }
+        items.push(AppMenuItem::separator());
+        items.push(AppMenuItem::new(MENU_BIGGER, "Bigger").key("cmd+=").enabled(style.is_some_and(|s| s.size != TextSize::Large)));
+        items.push(AppMenuItem::new(MENU_SMALLER, "Smaller").key("cmd+-").enabled(style.is_some_and(|s| s.size != TextSize::Small)));
         for (i, (size, title)) in [(TextSize::Small, "Small Text"), (TextSize::Medium, "Medium Text"), (TextSize::Large, "Large Text")].into_iter().enumerate() {
             items.push(AppMenuItem::new(MENU_SIZE_BASE + i as u32, title).enabled(has_focus).checked(style.is_some_and(|s| s.size == size)));
         }
@@ -1027,6 +1374,7 @@ impl App for StickiesApp {
         if self.board.is_none() {
             self.board = Some(store::load(&ctx.data_dir));
         }
+        self.prefs = Prefs::load(&ctx.defaults());
     }
 
     /// The Make New Sticky Note service of the Services menu sends its selection here.
@@ -1105,7 +1453,17 @@ impl App for StickiesApp {
                 }
                 let text = String::from_utf8_lossy(&bytes).into_owned();
                 let before = self.board.clone();
+                let rich = bytes.starts_with(b"{\\rtf");
                 let ids = match &mut self.board {
+                    // a rich text file becomes one note that keeps its bold, italic, underline and strikethrough
+                    Some(board) if rich => {
+                        let runs = model::runs_from_rtf(&text);
+                        if runs.iter().all(|(t, _)| t.trim().is_empty()) {
+                            Vec::new()
+                        } else {
+                            vec![board.add_runs(&runs, 40.0, 60.0, Self::now())]
+                        }
+                    }
                     Some(board) => board.import_text(&text, Self::now()),
                     None => Vec::new(),
                 };
@@ -1157,13 +1515,17 @@ impl App for StickiesApp {
 
     fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, _t: f64) -> Damage {
         let (w, h) = canvas.size();
+        self.refresh_marks(ctx);
         if let Some(board) = &self.board {
-            board::draw(canvas, &ctx.ui, board);
+            board::draw(canvas, &ctx.ui, board, &self.marks);
             if let Some(query) = &self.find {
                 board::draw_find(canvas, &ctx.ui, query, &self.replace, self.replacing, board.matches(query).len());
             }
             if let Some(entry) = &self.colour_entry {
                 board::draw_colour_entry(canvas, &ctx.ui, entry);
+            }
+            if let Some(entry) = &self.link_entry {
+                board::draw_link_entry(canvas, &ctx.ui, entry);
             }
         }
         if let Some(confirm) = &self.confirm {
@@ -1200,15 +1562,39 @@ mod tests {
         app
     }
 
+    fn focused(app: &StickiesApp) -> &Note {
+        app.board.as_ref().unwrap().focused().unwrap()
+    }
+
+    fn type_chars(app: &mut StickiesApp, text: &str, quotes: bool, dashes: bool) {
+        app.prefs = Prefs { smart_quotes: quotes, smart_dashes: dashes, ..Prefs::default() };
+        for c in text.chars() {
+            app.typed(&c.to_string());
+        }
+    }
+
     #[test]
     fn every_mutating_menu_id_has_an_undo_name_and_the_others_do_not() {
-        for id in [MENU_NEW, MENU_DELETE, MENU_DUPLICATE, MENU_BOLD, MENU_CUT, MENU_PASTE, MENU_ZOOM, MENU_UPPER, 7, 12, 62, 54] {
+        for id in [MENU_NEW, MENU_DELETE, MENU_DUPLICATE, MENU_BOLD, MENU_CUT, MENU_PASTE, MENU_ZOOM, MENU_UPPER, 7, 12, 62, 54, MENU_OUTLINE, 80, 85, 88, MENU_SPELL_CORRECT] {
             assert!(undo_name(id).is_some(), "id {id}");
         }
-        for id in [MENU_COPY, MENU_SELECT_ALL, MENU_FIND, MENU_PRINT, MENU_IMPORT, MENU_OPEN_LINK, MENU_UNDO, MENU_COPY_STYLE] {
+        for id in [MENU_COPY, MENU_SELECT_ALL, MENU_FIND, MENU_PRINT, MENU_IMPORT, MENU_OPEN_LINK, MENU_UNDO, MENU_COPY_STYLE, MENU_SPELL_CHECK_NOW, MENU_SMART_QUOTES, MENU_ADD_LINK] {
             assert!(undo_name(id).is_none(), "id {id}");
         }
         assert_eq!(undo_name(MENU_ARRANGE_BASE), Some("Arrange"));
+    }
+
+    #[test]
+    fn the_new_menu_ids_do_not_clash_with_the_old_ones() {
+        let new = [MENU_OUTLINE, MENU_BASELINE_BASE, MENU_KERN_BASE, MENU_LIGATURE_BASE, MENU_ADD_LINK, MENU_SPELL_WHILE_TYPING, MENU_SPELL_CHECK_NOW, MENU_SPELL_AUTO, MENU_SPELL_CORRECT, MENU_SPELL_LEARN, MENU_SPELL_IGNORE, MENU_SMART_QUOTES, MENU_SMART_DASHES, MENU_DETECT_DATES, MENU_DETECT_ADDRESSES, MENU_DETECT_PHONES];
+        for (i, a) in new.iter().enumerate() {
+            assert!(!new[i + 1..].contains(a));
+            assert!(!(MENU_COLOUR_BASE..=15).contains(a) && !(MENU_ARRANGE_BASE..=56).contains(a) && !(MENU_INK_BASE..=64).contains(a));
+            assert!(!(MENU_SIZE_BASE..=8).contains(a) && *a != MENU_REPLACE_ALL && *a != MENU_UNDO && *a != MENU_TRANSLUCENT);
+        }
+        assert_eq!(MENU_BASELINE_BASE + 2, MENU_KERN_BASE - 1, "three baselines fit before the kern items");
+        assert_eq!(MENU_KERN_BASE + 2, MENU_LIGATURE_BASE - 1, "three kern settings fit before the ligature items");
+        assert_eq!(MENU_LIGATURE_BASE + 2, MENU_ADD_LINK - 1, "three ligature settings fit before Add Link");
     }
 
     #[test]
@@ -1276,7 +1662,7 @@ mod tests {
     }
 
     #[test]
-    fn copy_style_and_paste_style_move_a_style_between_notes() {
+    fn copy_style_and_paste_style_move_a_style_between_notes_and_keep_the_size() {
         let mut app = app_with(&["one", "two"]);
         let (first, second) = {
             let b = app.board.as_ref().unwrap();
@@ -1285,14 +1671,20 @@ mod tests {
         assert!(!app.paste_style(), "nothing copied yet");
         {
             let b = app.board.as_mut().unwrap();
-            b.find_mut(first).unwrap().style = Style { bold: true, underline: true, ..Style::default() };
+            b.find_mut(first).unwrap().restyle_whole(|s| {
+                s.bold = true;
+                s.underline = true;
+                s.size = TextSize::Large;
+            });
             b.raise(first);
         }
         app.copy_style();
         assert_eq!(app.style_clip.map(|s| s.bold), Some(true));
         app.board.as_mut().unwrap().raise(second);
         assert!(app.paste_style());
-        assert!(app.board.as_ref().unwrap().find(second).unwrap().style.underline);
+        let pasted = app.board.as_ref().unwrap().find(second).unwrap();
+        assert!(pasted.current_style().underline);
+        assert_eq!(pasted.style.size, TextSize::Medium, "the size is the note's own");
         assert!(!app.paste_style(), "the style is already there");
         assert_eq!(undo_name(MENU_PASTE_STYLE), Some("Style"));
     }
@@ -1450,5 +1842,129 @@ mod tests {
         assert_ne!(before, frames(&b));
         b.find_mut(id).unwrap().x = 10.0;
         assert_eq!(before, frames(&b));
+    }
+
+    #[test]
+    fn a_format_change_applies_to_the_selection_only() {
+        let mut app = app_with(&["one two"]);
+        {
+            let note = app.board.as_mut().unwrap().focused_mut().unwrap();
+            note.set_caret(4, false);
+            note.set_caret(7, true);
+        }
+        assert!(app.restyle_focused(|s| s.outline = true));
+        let note = focused(&app);
+        assert!(note.styles[4..7].iter().all(|s| s.outline));
+        assert!(!note.styles[0].outline && !note.style.outline, "the rest, and the typing style, keep theirs");
+        assert!(app.toggle_style(|s| s.outline, |s, v| s.outline = v), "the selection is outlined, so this turns it off");
+        assert!(!focused(&app).styles[5].outline);
+    }
+
+    #[test]
+    fn kern_baseline_and_ligature_items_set_their_own_attribute() {
+        let mut app = app_with(&["x y"]);
+        app.board.as_mut().unwrap().focused_mut().unwrap().set_caret(0, false);
+        assert!(app.restyle_focused(|s| s.baseline = Baseline::Superscript));
+        assert!(app.restyle_focused(|s| s.kern = Setting::Off));
+        assert!(app.restyle_focused(|s| s.ligature = Setting::All));
+        let style = focused(&app).style_at_index(0);
+        assert_eq!((style.baseline, style.kern, style.ligature), (Baseline::Superscript, Setting::Off, Setting::All));
+        assert!(!app.restyle_focused(|s| s.kern = Setting::Off), "already set");
+    }
+
+    #[test]
+    fn smart_quotes_and_dashes_change_what_is_typed() {
+        let mut app = app_with(&[""]);
+        type_chars(&mut app, "\"hi\" a--b", true, true);
+        assert_eq!(focused(&app).text, "\u{201c}hi\u{201d} a\u{2014}b");
+    }
+
+    #[test]
+    fn with_substitutions_off_the_text_is_typed_as_it_is() {
+        let mut app = app_with(&[""]);
+        type_chars(&mut app, "\"x\"--", false, false);
+        assert_eq!(focused(&app).text, "\"x\"--");
+    }
+
+    #[test]
+    fn command_arrows_go_to_the_edges_and_shift_extends_the_selection() {
+        let mut app = app_with(&["hello world"]);
+        // the caret starts at the end of the text
+        assert!(app.chord(37, CHORD_META), "Cmd-Left goes to the start of the line");
+        assert_eq!(focused(&app).caret, 0);
+        assert!(app.chord(39, CHORD_META));
+        assert_eq!(focused(&app).caret, 11);
+        assert!(app.chord(38, CHORD_META));
+        assert_eq!(focused(&app).caret, 0);
+        assert!(app.chord(40, CHORD_META | CHORD_SHIFT));
+        assert_eq!(focused(&app).selection(), 0..11);
+        assert!(!app.chord(40, 0), "no Cmd, no move");
+        assert!(!app.chord(33, CHORD_META), "other keys are not handled here");
+        // the key input form of the same chord reaches the note through key()
+        let shifted = KeyInput::chord(37, CHORD_META | CHORD_SHIFT);
+        assert_eq!(shifted.as_chord(), Some((37, CHORD_META | CHORD_SHIFT)));
+    }
+
+    #[test]
+    fn add_link_inserts_a_web_address_and_refuses_anything_else() {
+        let mut app = app_with(&["see "]);
+        app.link_entry = Some(String::new());
+        for c in "example.com".chars() {
+            app.link_key(&KeyInput::Text(c.to_string()));
+        }
+        assert!(!app.link_key(&KeyInput::Code(13)), "not an address yet");
+        assert!(app.link_entry.is_some());
+        app.link_entry = Some(String::new());
+        for c in "https://example.com".chars() {
+            app.link_key(&KeyInput::Text(c.to_string()));
+        }
+        assert!(app.link_key(&KeyInput::Code(13)));
+        assert!(app.link_entry.is_none());
+        assert_eq!(focused(&app).text, "see https://example.com");
+        assert_eq!(app.history.undo_title(), "Undo Add Link");
+        assert!(app.undo());
+        assert_eq!(focused(&app).text, "see ");
+    }
+
+    #[test]
+    fn escape_closes_the_link_bar_without_a_change() {
+        let mut app = app_with(&["note"]);
+        app.link_entry = Some("https://".into());
+        assert!(app.link_key(&KeyInput::Code(27)));
+        assert!(app.link_entry.is_none());
+        assert!(!app.history.can_undo());
+    }
+
+    #[test]
+    fn a_boundary_is_a_space_or_punctuation_and_not_a_letter() {
+        assert!(is_boundary(" "));
+        assert!(is_boundary("."));
+        assert!(!is_boundary("a"));
+        assert!(!is_boundary("'"), "an apostrophe is part of a word");
+        assert!(!is_boundary("ab"));
+        assert!(!is_boundary(""));
+    }
+
+    #[test]
+    fn a_single_hyphen_after_text_is_typed_as_it_is_with_smart_dashes_on() {
+        let mut app = app_with(&["ab"]);
+        app.prefs = Prefs { smart_dashes: true, ..Prefs::default() };
+        app.board.as_mut().unwrap().focused_mut().unwrap().set_caret(2, false);
+        assert!(app.typed("-"));
+        assert_eq!(focused(&app).text, "ab-");
+        assert!(app.typed("-"));
+        assert_eq!(focused(&app).text, "ab\u{2014}", "the second hyphen makes the dash");
+    }
+
+    #[test]
+    fn toggling_a_switch_saves_it_and_drops_the_marks() {
+        let mut app = app_with(&["note"]);
+        app.marks.insert(1, Vec::new());
+        app.marked.insert(1, "note".into());
+        assert!(app.prefs.check_while_typing);
+        app.prefs.check_while_typing = false;
+        app.forget_marks();
+        assert!(app.marks.is_empty() && app.marked.is_empty());
+        assert!(!app.prefs.correct_automatically);
     }
 }
