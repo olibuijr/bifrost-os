@@ -201,6 +201,7 @@ pub mod web_data;
 pub mod web_nav;
 pub mod webview;
 pub mod webview_dev;
+pub mod js_value;
 pub mod power_sources;
 pub mod hid_devices;
 pub mod serial_ports;

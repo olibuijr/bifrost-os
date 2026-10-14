@@ -67,3 +67,75 @@ fn the_name_lookup_is_asked_for_each_device_address() {
     assert_eq!(notices[0].body, "Mouse");
     assert_eq!(notices[1].body, BdAddr([0x00, 0x1A, 0x7D, 0xDA, 0x71, 9]).to_string());
 }
+
+mod js {
+    use bifrost_app::js_value::JsValue;
+    use bifrost_app::webview_dev::EvalValue;
+
+    fn eval(ty: &str, json: &str) -> EvalValue {
+        EvalValue { ty: ty.into(), json: json.into() }
+    }
+
+    #[test]
+    fn a_number_result_reads_as_a_number() {
+        assert_eq!(JsValue::from_eval(&eval("number", "42")), Ok(JsValue::Number(42.0)));
+    }
+
+    #[test]
+    fn a_string_result_decodes_its_escapes() {
+        assert_eq!(JsValue::from_eval(&eval("string", r#""a\nb \"q\"""#)), Ok(JsValue::String("a\nb \"q\"".into())));
+    }
+
+    #[test]
+    fn an_undefined_result_reads_as_undefined_whatever_its_text() {
+        assert_eq!(JsValue::from_eval(&eval("undefined", "null")), Ok(JsValue::Undefined));
+    }
+
+    #[test]
+    fn a_nested_array_and_object_keep_their_order_and_types() {
+        let value = eval("array", r#"[1,"x",{"k":true,"n":null}]"#);
+        let expected = JsValue::Array(vec![
+            JsValue::Number(1.0),
+            JsValue::String("x".into()),
+            JsValue::Object(vec![("k".into(), JsValue::Bool(true)), ("n".into(), JsValue::Null)]),
+        ]);
+        assert_eq!(JsValue::from_eval(&value), Ok(expected));
+    }
+
+    #[test]
+    fn a_result_whose_text_does_not_match_its_type_is_refused() {
+        assert!(JsValue::from_eval(&eval("number", r#""7""#)).is_err());
+        assert!(JsValue::from_eval(&eval("object", "[1]")).is_err());
+    }
+
+    #[test]
+    fn a_dom_element_and_an_unknown_type_have_no_value_form() {
+        assert!(JsValue::from_eval(&eval("element", "{}")).unwrap_err().contains("element"));
+        assert!(JsValue::from_eval(&eval("symbol", "1")).unwrap_err().contains("symbol"));
+    }
+
+    #[test]
+    fn a_field_of_an_object_is_found_by_name() {
+        let obj = JsValue::Object(vec![("title".into(), JsValue::String("Hi".into()))]);
+        assert_eq!(obj.get("title"), Some(&JsValue::String("Hi".into())));
+        assert_eq!(obj.get("missing"), None);
+        assert_eq!(JsValue::Number(1.0).get("title"), None);
+    }
+
+    #[test]
+    fn values_become_script_literals_that_quote_their_strings() {
+        let value = JsValue::Object(vec![
+            ("a".into(), JsValue::Number(1.5)),
+            ("b".into(), JsValue::String("q\"x".into())),
+        ]);
+        assert_eq!(value.to_literal().unwrap(), r#"{"a":1.5,"b":"q\"x"}"#);
+        let list = JsValue::Array(vec![JsValue::Null, JsValue::Bool(true), JsValue::Undefined]);
+        assert_eq!(list.to_literal().unwrap(), "[null,true,undefined]");
+    }
+
+    #[test]
+    fn a_non_finite_number_has_no_script_literal() {
+        assert!(JsValue::Number(f64::NAN).to_literal().is_err());
+        assert!(JsValue::Array(vec![JsValue::Number(f64::INFINITY)]).to_literal().is_err());
+    }
+}
