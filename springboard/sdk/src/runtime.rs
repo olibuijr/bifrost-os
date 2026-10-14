@@ -1121,10 +1121,9 @@ thread_local! {
 /// Where the app's control socket lives: `BIFROST_CONTROL`, else `$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`,
 /// else `control.sock` in the app's data directory (no XDG runtime directory is assumed).
 fn control_endpoint(app_id: &str, data_dir: &std::path::Path) -> Option<crate::control::Control> {
-    let path = std::env::var_os("BIFROST_CONTROL")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("XDG_RUNTIME_DIR").map(|d| PathBuf::from(d).join("bifrost/apps").join(format!("{app_id}.sock"))))
-        .unwrap_or_else(|| data_dir.join("control.sock"));
+    let explicit = std::env::var_os("BIFROST_CONTROL").map(PathBuf::from);
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
+    let path = crate::script_target::socket_path(app_id, explicit.as_deref(), runtime.as_deref(), data_dir);
     match crate::control::Control::bind(&path) {
         Ok(c) => Some(c),
         Err(e) => {

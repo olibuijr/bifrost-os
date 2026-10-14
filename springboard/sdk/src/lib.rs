@@ -311,6 +311,7 @@ pub mod notification_queue;
 pub mod post_delivery;
 pub mod system_sound;
 pub mod workspace;
+pub mod script_target;
 pub mod service;
 pub mod search_ranking;
 pub mod audio_devices;
