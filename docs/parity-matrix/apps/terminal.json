@@ -337,8 +337,8 @@
    "area": "menu",
    "apple": "Help > Terminal Help",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/extras.rs:21",
-   "note": "More menu row shows a one-line shortcut help; no help page.",
+   "bifrost": "springboard/src/shell/terminal/extras.rs (SHORTCUTS, help_line)",
+   "note": "More menu row Terminal help shows every Terminal shortcut from one table, checked by unit tests in extras.rs (keys unique, line in table order). Shown as a one-line message; no help page yet.",
    "wire": ""
   },
   {

@@ -254,7 +254,7 @@ impl Shell {
                 let text = self.term.as_ref().and_then(|term| term.selected_text());
                 self.terminal_paste_or_say(text, "Select terminal text first", t);
             }
-            27 => self.terminal_ui.message = extras::HELP.into(),
+            27 => self.terminal_ui.message = extras::help_line(),
             28 => self.terminal_open_title_edit(t),
             29 => self.terminal_toggle_mouse_reporting(),
             30 => {

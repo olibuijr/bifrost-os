@@ -452,7 +452,7 @@ fn paste_selection_and_help_report_through_the_menu() {
     assert_eq!(sh.terminal_ui.message, "Select terminal text first");
     assert_eq!(MENU[27], "Terminal help");
     sh.terminal_menu_action(27, 2100.0);
-    assert_eq!(sh.terminal_ui.message, extras::HELP);
+    assert_eq!(sh.terminal_ui.message, extras::help_line());
 }
 
 #[test]
