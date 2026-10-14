@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-10-14
+
+- Find and Emoji & Symbols are in the Message menu so the app does not duplicate the shell Edit menu.
+
 ## 0.5.0 — 2026-10-14
 
 - Files dropped on the window go to the open conversation, as Attach File sends them: a picture as a picture, any other file as a file message. A drop is taken only when the account is signed in and a conversation is open.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-10-14
+
+- Capture editing commands are in the Photo menu so the app does not duplicate the shell Edit menu.
+
 ## 0.5.0
 
 - Choosing a camera in the Camera menu reads the camera list again first. A camera unplugged since the menu opened is
