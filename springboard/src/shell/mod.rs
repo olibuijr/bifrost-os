@@ -161,6 +161,8 @@ pub mod timeset_page;
 pub mod night_shift;
 pub mod notify_page;
 pub mod wallpaper_page;
+pub mod settings_intents;
+pub mod wallpaper_schedule;
 pub mod widgets;
 pub mod widgetgallery;
 pub mod wifi_page;
