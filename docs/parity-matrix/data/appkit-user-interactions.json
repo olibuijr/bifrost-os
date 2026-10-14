@@ -47,7 +47,7 @@
    "apple": "NSAccessibility protocols, roles, labels, announcements",
    "bifrost": "springboard/ui/src/ax.rs, springboard/src/shell/atspi/mod.rs, springboard/src/shell/axmap.rs",
    "status": "partial",
-   "note": "AT-SPI2 bridge with label/title/help, caret and selection, announcements; the Node is flat so nesting is reported only by ax_tree()"
+   "note": "AT-SPI2 bridge with label/title/help, caret and selection, announcements; the Node is flat so nesting is reported only by ax_tree(). Tests (springboard/ui/tests/parity_sdk-tests-01c.rs): recorded_groups_make_a_parent_child_tree"
   },
   {
    "feature": "NSPasteboard",

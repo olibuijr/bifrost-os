@@ -2,6 +2,7 @@
 //! and view are pure state, and the thumbnail answers are decoded from JSON bodies; nothing is sent to a shell.
 
 use bifrost_app::peek::{ItemState, PreviewDataSource, PreviewItem, PreviewPanel, PreviewView, ViewStyle, MAX_ITEMS};
+use bifrost_app::share;
 use bifrost_app::thumbnails::{self, State, FAILED_EVENT, READY_EVENT, SERVICE};
 use bifrost_core::json::Json;
 
@@ -206,4 +207,18 @@ fn only_the_thumbnail_events_of_the_thumbnail_service_are_read() {
     assert!(thumbnails::event(SERVICE, READY_EVENT, &body).is_some());
     assert!(thumbnails::event(SERVICE, "closed", &body).is_none());
     assert!(thumbnails::event("quick-look", READY_EVENT, &body).is_none());
+}
+
+#[test]
+fn a_shared_text_arrives_as_a_data_url_that_decodes_to_the_text() {
+    assert_eq!(share::text_from_url("data:text/plain;charset=utf-8,hello%20world%21"), Some("hello world!".into()));
+    assert_eq!(share::text_from_url("https://example.com/"), None, "a web address is a URL, not shared text");
+    assert_eq!(share::text_from_url("data:text/plain;charset=utf-8,bad%zz"), None, "an escape that is not hex is refused");
+}
+
+#[test]
+fn a_document_request_with_the_inbound_bit_is_one_someone_shared_with_the_app() {
+    assert!(share::is_inbound(share::INBOUND | 7));
+    assert!(!share::is_inbound(7), "a request the app made itself is not inbound");
+    assert_eq!(share::COPY, "copy");
 }
