@@ -1,5 +1,5 @@
 repo = "storytold/photocraft"
-url = "https://github.com/storytold/photocraft/releases/download/v0.6.0/photocraft-0.8.2-linux-x86_64.tar.gz"
+url = "https://github.com/storytold/photocraft/releases/download/v0.8.2/photocraft-0.8.2-linux-x86_64.tar.gz"
 sha256 = "16c3089976eee2d290dbe73986db4835c1ec5a043c5c16b017b24848ff5ea827"
 binary = "photocraft-0.8.2-linux-x86_64/bin/photocraft"
 licenses = "photocraft-0.8.2-linux-x86_64/share/doc/photocraft"
