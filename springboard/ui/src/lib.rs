@@ -990,6 +990,7 @@ pub mod map_geojson;
 pub mod location_reminder;
 pub mod switch_scan;
 pub mod ax_audit;
+pub mod ax_rotor;
 pub mod state_report;
 pub mod precipitation;
 pub mod weather_alert;
