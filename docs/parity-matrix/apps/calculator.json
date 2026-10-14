@@ -164,8 +164,8 @@
    "area": "settings",
    "apple": "Localizable: Show/Hide Thousands Separator",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/calc/menu.rs:54; springboard/apps/calculator-desktop/src/format.rs:110",
-   "note": "View > Thousands Separator (calc/menu.rs:54, 117) is stored in Settings and read by format::Style (format.rs:110); the display and the expression both group digits in threes when it is on. Not tested on Midget.",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc/menu.rs:54; springboard/apps/calculator-desktop/src/format.rs:192",
+   "note": "View > Thousands Separator (calc/menu.rs:54, 117) is stored in Settings and grouped by format::localize_with (format.rs:192); the display and the expression both group digits in threes when it is on. Not tested on Midget.",
    "wire": "Verify on Midget that the checkmark and the grouping in the display and the history agree."
   },
   {
