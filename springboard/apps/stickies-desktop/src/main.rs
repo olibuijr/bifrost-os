@@ -8,12 +8,14 @@ mod dates;
 mod history;
 mod layout;
 mod model;
+mod page;
 mod prefs;
 mod speech;
 mod spell;
 mod store;
 mod substitute;
 mod swatch;
+mod words;
 
 use bifrost_app::control::RpcError;
 use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
@@ -22,7 +24,7 @@ use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::layout::UNIFIED_BAR_PT;
-use bifrost_app::print::{Orientation, PaperSize, PrintError, PrintInfo, PrintOperation};
+use bifrost_app::print::{Orientation, PrintError, PrintInfo, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_META, CHORD_SHIFT};
 use bifrost_app::widgets;
 use bifrost_core::json::Json;
@@ -30,6 +32,7 @@ use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEve
 use board::Marks;
 use history::History;
 use model::{Arrange, Baseline, Board, Case, Colour, Ink, Move, Note, Part, Setting, Style, TextSize};
+use page::PAPERS;
 use prefs::Prefs;
 use spell::Spelling;
 use std::collections::HashMap;
@@ -104,9 +107,7 @@ const MENU_REPLACE_IN_NOTE: u32 = 102;
 const MENU_PORTRAIT: u32 = 103;
 const MENU_LANDSCAPE: u32 = 104;
 const MENU_PAPER_BASE: u32 = 105; // 105..=109, one per entry of PAPERS
-
-/// The paper sizes Page Setup offers, in menu order.
-const PAPERS: [PaperSize; 5] = [PaperSize::A4, PaperSize::Letter, PaperSize::Legal, PaperSize::A5, PaperSize::A3];
+const MENU_WHOLE_WORD: u32 = 110;
 
 /// What a replace changes: the selected match, every match in the focused note, or every match in every note.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -721,14 +722,15 @@ impl StickiesApp {
         }
         let with = self.replace.clone();
         let ignore_case = self.prefs.find_ignore_case;
+        let whole_word = self.prefs.find_whole_word;
         let Some(board) = &mut self.board else { return 0 };
         let done = match scope {
-            Scope::Selection => usize::from(board.replace_selected(&query, &with, ignore_case, now)),
+            Scope::Selection => usize::from(board.replace_selected(&query, &with, ignore_case, whole_word, now)),
             Scope::FocusedNote => match board.focus {
-                Some(id) => board.replace_all(&query, &with, ignore_case, Some(id), now),
+                Some(id) => board.replace_all(&query, &with, ignore_case, whole_word, Some(id), now),
                 None => 0,
             },
-            Scope::AllNotes => board.replace_all(&query, &with, ignore_case, None, now),
+            Scope::AllNotes => board.replace_all(&query, &with, ignore_case, whole_word, None, now),
         };
         if done > 0 {
             self.dirty = true;
@@ -827,8 +829,9 @@ impl StickiesApp {
             return;
         }
         let ignore_case = self.prefs.find_ignore_case;
+        let whole_word = self.prefs.find_whole_word;
         let Some(board) = &mut self.board else { return };
-        if let Some(found) = board.find_step(&query, forward, ignore_case) {
+        if let Some(found) = board.find_step(&query, forward, ignore_case, whole_word) {
             board.select_match(&found);
         }
     }
@@ -1194,6 +1197,12 @@ impl StickiesApp {
                 prefs.save(&mut ctx.defaults_mut());
                 true
             }
+            MENU_WHOLE_WORD => {
+                self.prefs.find_whole_word = !self.prefs.find_whole_word;
+                let prefs = self.prefs;
+                prefs.save(&mut ctx.defaults_mut());
+                true
+            }
             MENU_ADD_LINK => {
                 let open = self.board.as_ref().and_then(|b| b.focused()).is_some();
                 if open {
@@ -1234,12 +1243,16 @@ impl StickiesApp {
             }
             MENU_PORTRAIT | MENU_LANDSCAPE => {
                 self.page.orientation = if id == MENU_LANDSCAPE { Orientation::Landscape } else { Orientation::Portrait };
+                let page = self.page.clone();
+                page::save(&mut ctx.defaults_mut(), &page);
                 false
             }
             MENU_PAPER_BASE..=109 => {
                 if let Some(paper) = PAPERS.get((id - MENU_PAPER_BASE) as usize) {
                     self.page.paper = *paper;
                 }
+                let page = self.page.clone();
+                page::save(&mut ctx.defaults_mut(), &page);
                 false
             }
             MENU_IMPORT => self.import_panel(ctx),
@@ -1310,6 +1323,7 @@ impl StickiesApp {
                 AppMenuItem::new(MENU_REPLACE_ALL, "Replace All").enabled(can_replace),
                 AppMenuItem::new(MENU_REPLACE_IN_NOTE, "Replace All in Current Note").enabled(can_replace && has_focus),
                 AppMenuItem::new(MENU_IGNORE_CASE, "Ignore Case").checked(p.find_ignore_case),
+                AppMenuItem::new(MENU_WHOLE_WORD, "Whole Word").checked(p.find_whole_word),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_ADD_LINK, "Add Link...").key("cmd+k").enabled(has_focus),
                 AppMenuItem::new(MENU_OPEN_LINK, "Open Link").enabled(has_link),
@@ -1434,6 +1448,7 @@ impl App for StickiesApp {
             self.board = Some(store::load(&ctx.data_dir));
         }
         self.prefs = Prefs::load(&ctx.defaults());
+        self.page = page::load(&ctx.defaults());
     }
 
     /// The Make New Sticky Note service of the Services menu sends its selection here.
@@ -1578,7 +1593,7 @@ impl App for StickiesApp {
         if let Some(board) = &self.board {
             board::draw(canvas, &ctx.ui, board, &self.marks);
             if let Some(query) = &self.find {
-                let found = board.matches(query, self.prefs.find_ignore_case).len();
+                let found = board.matches(query, self.prefs.find_ignore_case, self.prefs.find_whole_word).len();
                 board::draw_find(canvas, &ctx.ui, query, &self.replace, self.replacing, found);
             }
             if let Some(entry) = &self.colour_entry {
@@ -1919,7 +1934,7 @@ mod tests {
 
     #[test]
     fn replace_and_custom_colour_ids_do_not_clash_with_the_other_menu_ids() {
-        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
+        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_WHOLE_WORD, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
         for (i, a) in ids.iter().enumerate() {
             assert!(!(MENU_COLOUR_BASE..=15).contains(a) && !(MENU_ARRANGE_BASE..=56).contains(a) && !(MENU_INK_BASE..=64).contains(a));
             assert!(![MENU_INFO_CREATED, MENU_INFO_MODIFIED, MENU_ZOOM, MENU_TRANSLUCENT].contains(a));
