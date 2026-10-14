@@ -5,7 +5,9 @@
 //! the common forms other writers produce (hex escapes, `\uN` with its fallback character, `\plain`, `\pard`), and
 //! skips the destinations it does not use (colour and style tables, info, pictures, `\*` extensions).
 
-use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, MAX_TAB, MIN_TAB, SPACINGS};
+use crate::links;
+use crate::properties::Properties;
+use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, LINE_BREAK, MAX_PARAGRAPH_SPACE, MAX_TAB, MIN_TAB, PAGE_BREAK, SPACINGS};
 
 /// Whether `bytes` are an RTF file (the header every RTF file starts with).
 pub fn is_rtf(bytes: &[u8]) -> bool {
@@ -16,7 +18,7 @@ pub fn is_rtf(bytes: &[u8]) -> bool {
 const SKIPPED_DESTINATIONS: &[&str] = &[
     "stylesheet", "info", "pict", "header", "headerl", "headerr", "footer", "footerl", "footerr", "footnote",
     "generator", "listtable", "listoverridetable", "rsidtbl", "xmlnstbl", "latentstyles", "themedata",
-    "colorschememapping", "datastore", "fldinst", "object", "mmathPr", "filetbl", "revtbl",
+    "colorschememapping", "datastore", "object", "mmathPr", "filetbl", "revtbl",
 ];
 
 /// Writes the cells as RTF with the default tab stops.
@@ -26,7 +28,13 @@ pub fn write(cells: &[Cell]) -> Vec<u8> {
 }
 
 /// Writes the cells as RTF: the font and colour tables, the tab stop distance (`\deftab`, in twips), then paragraphs.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
+    write_with_info(cells, tab, &Properties::default())
+}
+
+/// Writes the cells as RTF with an info group for the document properties (left out when they are all empty).
+pub fn write_with_info(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> {
     let mut out = format!("{{\\rtf1\\ansi\\deff0\\deftab{}{{\\fonttbl", (tab * 20.0).round() as i32);
     for (i, family) in FAMILIES.iter().enumerate() {
         out += &format!("{{\\f{i} {family};}}");
@@ -35,9 +43,13 @@ pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
     for (_, [r, g, b]) in COLORS.iter().skip(1) {
         out += &format!("\\red{r}\\green{g}\\blue{b};");
     }
-    out += "}\n";
+    out += "}";
+    out += &info_group(props);
+    out += "\n";
     let mut para_start = true;
     let mut last: Option<Style> = None;
+    // the link whose field is open: a run of linked characters is one hyperlink field
+    let mut open_link = 0u16;
     for c in cells {
         if para_start {
             out += &format!("\\pard\\q{} ", align_code(c.style.align));
@@ -45,9 +57,27 @@ pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
             para_start = false;
         }
         if c.ch == '\n' {
+            if open_link != 0 {
+                out += "}}";
+                open_link = 0;
+                last = None;
+            }
             out += "\\par\n";
             para_start = true;
             continue;
+        }
+        if c.style.link != open_link {
+            if open_link != 0 {
+                out += "}}";
+                open_link = 0;
+                last = None;
+            }
+            if let Some(url) = links::url(c.style.link) {
+                let address: String = url.chars().map(escape).collect();
+                out += &format!("{{\\field{{\\*\\fldinst HYPERLINK \"{address}\"}}{{\\fldrslt ");
+                open_link = c.style.link;
+                last = None;
+            }
         }
         if !last.is_some_and(|l| l.same_run(&c.style)) {
             out += &character_words(&c.style);
@@ -55,8 +85,167 @@ pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
         }
         out += &escape(c.ch);
     }
+    if open_link != 0 {
+        out += "}}";
+    }
     out += "}";
     out.into_bytes()
+}
+
+/// The info group for the properties, with the non-empty fields only (the copyright is an extension destination), or
+/// nothing when there are none.
+fn info_group(props: &Properties) -> String {
+    if props.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("{\\info");
+    for (word, index) in [("title", 0), ("author", 1), ("subject", 2), ("keywords", 3), ("copyright", 4)] {
+        let value = props.get(index);
+        if value.is_empty() {
+            continue;
+        }
+        let text: String = value.chars().map(escape).collect();
+        let star = if word == "copyright" { "\\*" } else { "" };
+        out += &format!("{{{star}\\{word} {text}}}");
+    }
+    out += "}";
+    out
+}
+
+/// Reads the document properties from the info group of an RTF file; a file without one has none.
+pub fn read_info(bytes: &[u8]) -> Properties {
+    let mut props = Properties::default();
+    let Some(at) = bytes.windows(6).position(|w| w == b"{\\info") else { return props };
+    let mut i = at + 6;
+    if bytes.get(i).is_some_and(|b| b.is_ascii_alphabetic()) {
+        return props;
+    }
+    let mut depth = 1;
+    while i < bytes.len() && depth > 0 {
+        match bytes[i] {
+            b'}' => {
+                depth -= 1;
+                i += 1;
+            }
+            b'{' => {
+                i += 1;
+                // a destination that older readers must skip is marked with a star
+                if bytes[i..].starts_with(b"\\*") {
+                    i += 2;
+                }
+                let name_at = i + 1;
+                if bytes.get(i) == Some(&b'\\') && bytes.get(name_at).is_some_and(|b| b.is_ascii_alphabetic()) {
+                    let mut end = name_at;
+                    while end < bytes.len() && bytes[end].is_ascii_alphabetic() {
+                        end += 1;
+                    }
+                    let name = String::from_utf8_lossy(&bytes[name_at..end]).into_owned();
+                    i = end;
+                    if bytes.get(i) == Some(&b' ') {
+                        i += 1;
+                    }
+                    let value = group_text(bytes, &mut i);
+                    props.set_named(&name, &value);
+                } else {
+                    // some other group: step over it
+                    let mut inner = 1;
+                    while i < bytes.len() && inner > 0 {
+                        match bytes[i] {
+                            b'{' => inner += 1,
+                            b'}' => inner -= 1,
+                            b'\\' => i += 1,
+                            _ => {}
+                        }
+                        i += 1;
+                    }
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    props
+}
+
+/// The text of a group from `*i` to its closing brace (which is consumed): escapes decoded, other control words and
+/// nested groups dropped.
+fn group_text(bytes: &[u8], i: &mut usize) -> String {
+    let mut units: Vec<u16> = Vec::new();
+    let mut nested = 0;
+    let mut fallback = 0;
+    while *i < bytes.len() {
+        let b = bytes[*i];
+        *i += 1;
+        match b {
+            b'{' => nested += 1,
+            b'}' => {
+                if nested == 0 {
+                    break;
+                }
+                nested -= 1;
+            }
+            b'\\' => {
+                let Some(&c) = bytes.get(*i) else { break };
+                if c.is_ascii_alphabetic() {
+                    let start = *i;
+                    while *i < bytes.len() && bytes[*i].is_ascii_alphabetic() {
+                        *i += 1;
+                    }
+                    let name = &bytes[start..*i];
+                    let negative = bytes.get(*i) == Some(&b'-');
+                    let digits = if negative { *i + 1 } else { *i };
+                    let mut end = digits;
+                    while end < bytes.len() && bytes[end].is_ascii_digit() {
+                        end += 1;
+                    }
+                    let number: Option<i64> = std::str::from_utf8(&bytes[digits..end]).ok().and_then(|d| d.parse().ok());
+                    if end > digits {
+                        *i = end;
+                    }
+                    if bytes.get(*i) == Some(&b' ') {
+                        *i += 1;
+                    }
+                    if nested == 0 {
+                        match (name, number) {
+                            (b"u", Some(n)) => {
+                                units.push((if negative { -n } else { n }) as u16);
+                                fallback = 1;
+                            }
+                            (b"tab", _) => units.push(u16::from(b' ')),
+                            _ => {}
+                        }
+                    }
+                } else {
+                    *i += 1;
+                    match c {
+                        b'\'' => {
+                            let hex = bytes.get(*i..*i + 2).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok());
+                            *i += 2;
+                            if fallback > 0 {
+                                fallback -= 1;
+                            } else if let (Some(byte), 0) = (hex, nested) {
+                                let mut buf = [0u16; 2];
+                                units.extend_from_slice(cp1252(byte).encode_utf16(&mut buf));
+                            }
+                        }
+                        b'\\' | b'{' | b'}' if nested == 0 => units.push(u16::from(c)),
+                        _ => {}
+                    }
+                }
+            }
+            b'\r' | b'\n' => {}
+            _ => {
+                let (ch, end) = utf8_char(bytes, *i - 1);
+                *i = end;
+                if fallback > 0 {
+                    fallback -= 1;
+                } else if nested == 0 {
+                    let mut buf = [0u16; 2];
+                    units.extend_from_slice(ch.encode_utf16(&mut buf));
+                }
+            }
+        }
+    }
+    String::from_utf16_lossy(&units)
 }
 
 /// Reads an RTF file. Text the reader does not understand is dropped, never shown as garbage.
@@ -73,14 +262,25 @@ pub fn read_doc(bytes: &[u8]) -> (Vec<Cell>, f32) {
 }
 
 /// Reads plain text: UTF-8 (invalid bytes become the replacement character), with CR LF as one line break.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn read_plain(bytes: &[u8]) -> Vec<Cell> {
-    let text = String::from_utf8_lossy(bytes).replace("\r\n", "\n");
-    text.chars().filter(|&c| c != '\r').map(|ch| Cell { ch, style: Style::default() }).collect()
+    plain_cells(&crate::encoding::detect(bytes).0)
 }
 
-/// Writes the text without any formatting, as UTF-8.
+/// The cells of plain text: CR LF and a lone CR are one line break each.
+pub fn plain_cells(text: &str) -> Vec<Cell> {
+    text.replace("\r\n", "\n").chars().map(|ch| if ch == '\r' { '\n' } else { ch }).map(|ch| Cell { ch, style: Style::default() }).collect()
+}
+
+/// Writes the text without any formatting, as UTF-8. A line break is a line ending in plain text; a page break stays
+/// the form feed character.
 pub fn write_plain(cells: &[Cell]) -> Vec<u8> {
-    cells.iter().map(|c| c.ch).collect::<String>().into_bytes()
+    plain_text(cells).into_bytes()
+}
+
+/// The characters of the cells as plain text.
+pub fn plain_text(cells: &[Cell]) -> String {
+    cells.iter().map(|c| if c.ch == LINE_BREAK { '\n' } else { c.ch }).collect()
 }
 
 fn align_code(align: Align) -> char {
@@ -98,6 +298,13 @@ fn paragraph_words(style: &Style) -> String {
     if style.spacing > 0 {
         let multiple = SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0);
         words += &format!("\\sl{}\\slmult1 ", (multiple * 240.0).round() as i32);
+    }
+    // paragraph space before and after, in twips (points times 20)
+    if style.space_before > 0 {
+        words += &format!("\\sb{} ", style.space_before as u32 * 20);
+    }
+    if style.space_after > 0 {
+        words += &format!("\\sa{} ", style.space_after as u32 * 20);
     }
     match style.list {
         ListKind::None => {}
@@ -140,6 +347,8 @@ fn escape(ch: char) -> String {
         '{' => "\\{".into(),
         '}' => "\\}".into(),
         '\t' => "\\tab ".into(),
+        LINE_BREAK => "\\line ".into(),
+        PAGE_BREAK => "\\page ".into(),
         ' '..='~' => ch.to_string(),
         c if (c as u32) < 0x20 => String::new(),
         c => {
@@ -184,6 +393,11 @@ struct Reader {
     rgb: [i64; 3],
     /// the distance between tab stops, from `\deftab`
     tab: f32,
+    /// the depth of a field instruction group, while it is read, and its text so far
+    inst: Option<usize>,
+    inst_text: String,
+    /// the link a field instruction named, which the field's result takes
+    pending_link: u16,
 }
 
 impl Reader {
@@ -213,6 +427,10 @@ impl Reader {
                     }
                     if self.ctable == Some(closing) {
                         self.ctable = None;
+                    }
+                    if self.inst == Some(closing) {
+                        self.inst = None;
+                        self.finish_instruction();
                     }
                     self.group_start = false;
                 }
@@ -295,7 +513,8 @@ impl Reader {
             i += 1;
             match c {
                 b'*' => {
-                    if self.take_group_start() {
+                    // an extension destination is skipped, except the field instruction a hyperlink is read from
+                    if self.take_group_start() && !bytes[i..].starts_with(b"\\fldinst") {
                         self.skip = Some(self.depth);
                     }
                 }
@@ -380,6 +599,18 @@ impl Reader {
                 self.cur.align = Align::Left;
                 self.cur.spacing = 0;
                 self.cur.list = ListKind::None;
+                self.cur.space_before = 0;
+                self.cur.space_after = 0;
+            }
+            "sb" => {
+                if let Some(twips) = param.filter(|&v| v >= 0) {
+                    self.cur.space_before = (twips as f32 / 20.0).round().min(MAX_PARAGRAPH_SPACE as f32) as u8;
+                }
+            }
+            "sa" => {
+                if let Some(twips) = param.filter(|&v| v >= 0) {
+                    self.cur.space_after = (twips as f32 / 20.0).round().min(MAX_PARAGRAPH_SPACE as f32) as u8;
+                }
             }
             "red" if self.ctable.is_some() => self.rgb[0] = param.unwrap_or(0),
             "green" if self.ctable.is_some() => self.rgb[1] = param.unwrap_or(0),
@@ -396,6 +627,12 @@ impl Reader {
                     self.cur.spacing = nearest_spacing(twips as f32 / 240.0);
                 }
             }
+            "field" => self.pending_link = 0,
+            "fldinst" => {
+                self.inst = Some(self.depth);
+                self.inst_text.clear();
+            }
+            "fldrslt" => self.cur.link = self.pending_link,
             "pnlvlblt" => self.cur.list = ListKind::Bullet,
             "pnlvlbody" => self.cur.list = ListKind::Numbered,
             "deftab" => {
@@ -403,7 +640,9 @@ impl Reader {
                     self.tab = twips as f32 / 20.0;
                 }
             }
-            "par" | "line" => self.push('\n'),
+            "par" => self.push('\n'),
+            "line" => self.push(LINE_BREAK),
+            "page" => self.push(PAGE_BREAK),
             "tab" => self.push('\t'),
             "uc" => self.uc = param.unwrap_or(1).max(0) as usize,
             "u" => {
@@ -450,7 +689,19 @@ impl Reader {
     }
 
     fn push(&mut self, ch: char) {
+        if self.inst.is_some() {
+            self.inst_text.push(ch);
+            return;
+        }
         self.cells.push(Cell { ch, style: self.cur });
+    }
+
+    /// The end of a field instruction: a hyperlink names the link its result is read with.
+    fn finish_instruction(&mut self) {
+        let text = std::mem::take(&mut self.inst_text);
+        if let Some(url) = links::from_field_instruction(&text) {
+            self.pending_link = links::intern(&url);
+        }
     }
 
     /// Text inside the font table: `\fN Name;` entries.
@@ -488,7 +739,7 @@ fn utf8_char(bytes: &[u8], at: usize) -> (char, usize) {
 
 /// The character a Windows-1252 byte stands for (the code page `\'hh` escapes are written in): the printable
 /// characters of 0x80 to 0x9F differ from Latin-1, which is what every other byte is.
-fn cp1252(byte: u8) -> char {
+pub(crate) fn cp1252(byte: u8) -> char {
     let code = match byte {
         0x80 => 0x20AC,
         0x82 => 0x201A,
@@ -606,6 +857,18 @@ mod tests {
     }
 
     #[test]
+    fn paragraph_space_before_and_after_round_trip() {
+        let spaced = Style { space_before: 12, space_after: 6, ..Style::default() };
+        let cells = vec![cell('a', spaced), cell('\n', spaced), cell('b', Style::default())];
+        let rtf = String::from_utf8(write(&cells)).unwrap();
+        assert!(rtf.contains("\\sb240") && rtf.contains("\\sa120"), "{rtf}");
+        let back = read(rtf.as_bytes());
+        assert_eq!(back[0].style.space_before, 12);
+        assert_eq!(back[0].style.space_after, 6);
+        assert_eq!(back[2].style.space_before, 0, "a paragraph without space starts with none");
+    }
+
+    #[test]
     fn black_is_the_default_colour_and_other_colours_the_nearest_palette_entry() {
         assert_eq!(text_color([0, 0, 0]), 0);
         assert_eq!(text_color([20, 30, 10]), 0);
@@ -670,5 +933,102 @@ mod tests {
         assert_eq!(write_plain(&cells), b"one\ntwo".to_vec());
         assert!(!is_rtf(b"one"));
         assert!(is_rtf(b"{\\rtf1 x}"));
+    }
+
+    #[test]
+    fn a_link_is_written_as_a_hyperlink_field_and_read_back() {
+        let id = links::intern("https://example.com/a?b=1");
+        let plain = Style::default();
+        let linked = Style { link: id, bold: true, ..Style::default() };
+        let mut cells: Vec<Cell> = "see ".chars().map(|ch| Cell { ch, style: plain }).collect();
+        cells.extend("the docs".chars().map(|ch| Cell { ch, style: linked }));
+        cells.extend(" now\nnext ".chars().map(|ch| Cell { ch, style: plain }));
+        cells.extend("one".chars().map(|ch| Cell { ch, style: linked }));
+        let bytes = write(&cells);
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        assert!(text.contains("{\\field{\\*\\fldinst HYPERLINK \"https://example.com/a?b=1\"}{\\fldrslt "), "{text}");
+        assert_eq!(read(&bytes), cells);
+        assert_eq!(text.matches("\\fldinst").count(), 2, "one field for each run of linked text");
+    }
+
+    #[test]
+    fn a_link_ending_a_paragraph_closes_its_field_before_the_break() {
+        let id = links::intern("https://example.com/end");
+        let linked = Style { link: id, ..Style::default() };
+        let cells: Vec<Cell> = "ab\ncd".chars().map(|ch| Cell { ch, style: if ch == '\n' { Style::default() } else { linked } }).collect();
+        assert_eq!(read(&write(&cells)), cells);
+    }
+
+    #[test]
+    fn foreign_hyperlink_fields_are_read_and_other_fields_are_plain_text() {
+        let src = b"{\\rtf1{\\field{\\*\\fldinst{HYPERLINK \"https://example.org/x\"}}{\\fldrslt{\\ul docs}}} and {\\field{\\*\\fldinst PAGE}{\\fldrslt 3}}}";
+        let cells = read(src);
+        assert_eq!(text_of(&cells), "docs and 3");
+        let url = links::url(cells[0].style.link);
+        assert_eq!(url.as_deref(), Some("https://example.org/x"));
+        assert!(cells[0].style.underline);
+        assert!(cells[4..].iter().all(|c| c.style.link == 0), "text after the field is not linked");
+        // a code-running address is not a link
+        let bad = read(b"{\\rtf1{\\field{\\*\\fldinst HYPERLINK \"javascript:alert(1)\"}{\\fldrslt x}}}");
+        assert_eq!(text_of(&bad), "x");
+        assert_eq!(bad[0].style.link, 0);
+    }
+
+    #[test]
+    fn line_and_page_breaks_round_trip_and_are_not_paragraphs() {
+        let cells: Vec<Cell> = "a\u{2028}b\u{c}c\nd".chars().map(|ch| Cell { ch, style: Style::default() }).collect();
+        let bytes = write(&cells);
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        assert!(text.contains("a\\line b\\page c\\par"), "{text}");
+        assert_eq!(read(&bytes), cells);
+        // plain text writes a line break as a line ending
+        assert_eq!(write_plain(&cells), "a\nb\u{c}c\nd".as_bytes().to_vec());
+    }
+
+    #[test]
+    fn plain_text_takes_old_line_endings_and_other_encodings() {
+        assert_eq!(text_of(&read_plain(b"a\rb\r\nc")), "a\nb\nc");
+        assert_eq!(text_of(&read_plain(&[b'c', b'a', b'f', 0xe9])), "café");
+        assert_eq!(text_of(&read_plain(&[0xff, 0xfe, b'h', 0, b'i', 0])), "hi");
+    }
+
+    fn props(title: &str, author: &str, copyright: &str) -> Properties {
+        let mut p = Properties::default();
+        p.title = title.into();
+        p.author = author.into();
+        p.copyright = copyright.into();
+        p
+    }
+
+    #[test]
+    fn the_document_properties_round_trip_through_the_info_group() {
+        let mut p = props("Trip {report}", "Ólafur", "(c) 2026");
+        p.subject = "Iceland".into();
+        p.keywords = "north, summer".into();
+        let bytes = write_with_info(&[], 36.0, &p);
+        assert!(String::from_utf8_lossy(&bytes).contains("{\\info{\\title Trip \\{report\\}}"));
+        assert_eq!(read_info(&bytes), p);
+        // the text reader still skips the group
+        let cells: Vec<Cell> = "visible".chars().map(|ch| Cell { ch, style: Style::default() }).collect();
+        let with_text = write_with_info(&cells, 36.0, &p);
+        assert_eq!(text_of(&read(&with_text)), "visible");
+    }
+
+    #[test]
+    fn a_document_without_properties_has_no_info_group() {
+        let bytes = write_doc(&[], 36.0);
+        assert!(!String::from_utf8_lossy(&bytes).contains("\\info"));
+        assert!(read_info(&bytes).is_empty());
+        assert_eq!(write_doc(&[], 36.0), write_with_info(&[], 36.0, &Properties::default()));
+    }
+
+    #[test]
+    fn a_foreign_info_group_is_read_with_its_escapes() {
+        let src = b"{\\rtf1\\ansi{\\info{\\title Caf\\'e9 \\u8364?uro}{\\author Ada}{\\operator Bob}{\\creatim\\yr2026\\mo1}{\\*\\copyright Me}}body}";
+        let p = read_info(src);
+        assert_eq!(p.title, "Caf\u{e9} \u{20ac}uro");
+        assert_eq!(p.author, "Ada", "other info entries are ignored");
+        assert_eq!(p.copyright, "Me");
+        assert!(read_info(b"{\\rtf1 {\\information x}}").is_empty(), "only the info group counts");
     }
 }

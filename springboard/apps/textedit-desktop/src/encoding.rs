@@ -1,191 +1,179 @@
-//! Plain text encodings for open and save: UTF-8, UTF-16 (either byte order), ISO Latin 1, Windows Latin 1 and Mac
-//! Roman. `detect` reads a byte order mark and otherwise picks UTF-8 when the bytes are valid and Mac Roman or
-//! Windows Latin 1 when not; `decode` and `encode` convert with an explicit choice, as the open panel's encoding
-//! popup and Format > Text Encoding do. Pure std.
-#![allow(dead_code)] // the open/save accessory and Text Encoding submenu call these next
+//! Plain text encodings. A plain text file is read by looking at its bytes (a byte order mark, valid UTF-8, or else
+//! a single-byte Western text), and saved in the encoding the document carries, which Format > Text Encoding changes.
+//! Pure: bytes in, text out, with no shell types.
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+use crate::rtf::cp1252;
+
+/// The encodings Text Editor reads and writes for plain text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Encoding {
+    #[default]
     Utf8,
+    /// UTF-16 with a byte order mark, in either byte order
     Utf16Le,
     Utf16Be,
+    /// ISO 8859-1
     Latin1,
+    /// Windows code page 1252
     Windows1252,
-    MacRoman,
+    /// The classic Western single-byte set
+    Roman,
+    Ascii,
 }
 
-impl Encoding {
-    pub const ALL: [Encoding; 6] =
-        [Self::Utf8, Self::Utf16Le, Self::Utf16Be, Self::Latin1, Self::Windows1252, Self::MacRoman];
+/// Every encoding, in the order the menus list them.
+pub const ALL: [Encoding; 7] =
+    [Encoding::Utf8, Encoding::Utf16Le, Encoding::Utf16Be, Encoding::Latin1, Encoding::Windows1252, Encoding::Roman, Encoding::Ascii];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Utf8 => "Unicode (UTF-8)",
-            Self::Utf16Le => "Unicode (UTF-16 little-endian)",
-            Self::Utf16Be => "Unicode (UTF-16 big-endian)",
-            Self::Latin1 => "Western (ISO Latin 1)",
-            Self::Windows1252 => "Western (Windows Latin 1)",
-            Self::MacRoman => "Western (Mac OS Roman)",
-        }
-    }
-
-    /// The charset name used in HTML and mail headers.
-    pub fn charset(self) -> &'static str {
-        match self {
-            Self::Utf8 => "utf-8",
-            Self::Utf16Le => "utf-16le",
-            Self::Utf16Be => "utf-16be",
-            Self::Latin1 => "iso-8859-1",
-            Self::Windows1252 => "windows-1252",
-            Self::MacRoman => "macintosh",
-        }
-    }
-
-    pub fn from_charset(name: &str) -> Option<Encoding> {
-        match name.trim().to_ascii_lowercase().as_str() {
-            "utf-8" | "utf8" => Some(Self::Utf8),
-            "utf-16le" | "utf-16" => Some(Self::Utf16Le),
-            "utf-16be" => Some(Self::Utf16Be),
-            "iso-8859-1" | "latin1" | "l1" => Some(Self::Latin1),
-            "windows-1252" | "cp1252" => Some(Self::Windows1252),
-            "macintosh" | "macroman" | "mac" | "x-mac-roman" => Some(Self::MacRoman),
-            _ => None,
-        }
-    }
-}
-
-const MAC_HIGH: &str = "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄€‹›ﬁﬂ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ\u{f8ff}ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ";
-
-/// Windows Latin 1 for 0x80..=0x9F; `\0` marks the bytes it leaves undefined.
-const WIN_HIGH: [char; 32] = [
-    '€', '\0', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\0', 'Ž', '\0', '\0', '‘', '’', '“', '”', '•',
-    '–', '—', '˜', '™', 'š', '›', 'œ', '\0', 'ž', 'Ÿ',
+/// The upper half of the classic Western set (bytes 0x80 to 0xFF). The last byte has no Unicode character here.
+const ROMAN_HIGH: [char; 128] = [
+    'Ä', 'Å', 'Ç', 'É', 'Ñ', 'Ö', 'Ü', 'á', 'à', 'â', 'ä', 'ã', 'å', 'ç', 'é', 'è', //
+    'ê', 'ë', 'í', 'ì', 'î', 'ï', 'ñ', 'ó', 'ò', 'ô', 'ö', 'õ', 'ú', 'ù', 'û', 'ü', //
+    '†', '°', '¢', '£', '§', '•', '¶', 'ß', '®', '©', '™', '´', '¨', '≠', 'Æ', 'Ø', //
+    '∞', '±', '≤', '≥', '¥', 'µ', '∂', '∑', '∏', 'π', '∫', 'ª', 'º', 'Ω', 'æ', 'ø', //
+    '¿', '¡', '¬', '√', 'ƒ', '≈', '∆', '«', '»', '…', '\u{a0}', 'À', 'Ã', 'Õ', 'Œ', 'œ', //
+    '–', '—', '“', '”', '‘', '’', '÷', '◊', 'ÿ', 'Ÿ', '⁄', '€', '‹', '›', 'ﬁ', 'ﬂ', //
+    '‡', '·', '‚', '„', '‰', 'Â', 'Ê', 'Á', 'Ë', 'È', 'Í', 'Î', 'Ï', 'Ì', 'Ó', 'Ô', //
+    '\u{fffd}', 'Ò', 'Ú', 'Û', 'Ù', 'ı', 'ˆ', '˜', '¯', '˘', '˙', '˚', '¸', '˝', '˛', 'ˇ',
 ];
 
-fn mac_char(b: u8) -> char {
-    MAC_HIGH.chars().nth(usize::from(b - 0x80)).unwrap_or('\u{fffd}')
-}
+impl Encoding {
+    /// The name in menus.
+    pub fn name(self) -> &'static str {
+        match self {
+            Encoding::Utf8 => "Unicode (UTF-8)",
+            Encoding::Utf16Le => "Unicode (UTF-16 little-endian)",
+            Encoding::Utf16Be => "Unicode (UTF-16 big-endian)",
+            Encoding::Latin1 => "Western (ISO Latin 1)",
+            Encoding::Windows1252 => "Western (Windows Latin 1)",
+            Encoding::Roman => "Western (Classic Roman)",
+            Encoding::Ascii => "ASCII",
+        }
+    }
 
-fn win_char(b: u8) -> char {
-    match WIN_HIGH[usize::from(b - 0x80)] {
-        '\0' => char::from(b),
-        c => c,
+    /// The stable identifier kept in the preferences.
+    pub fn id(self) -> &'static str {
+        match self {
+            Encoding::Utf8 => "utf-8",
+            Encoding::Utf16Le => "utf-16le",
+            Encoding::Utf16Be => "utf-16be",
+            Encoding::Latin1 => "latin1",
+            Encoding::Windows1252 => "cp1252",
+            Encoding::Roman => "roman",
+            Encoding::Ascii => "ascii",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Encoding> {
+        ALL.iter().copied().find(|e| e.id() == id)
+    }
+
+    /// The position in `ALL`, which menu ids use.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn index(self) -> u8 {
+        ALL.iter().position(|e| *e == self).unwrap_or(0) as u8
+    }
+
+    pub fn from_index(index: u8) -> Option<Encoding> {
+        ALL.get(index as usize).copied()
+    }
+
+    /// The character a byte stands for in a single-byte encoding.
+    fn byte_char(self, byte: u8) -> char {
+        if byte < 0x80 {
+            return byte as char;
+        }
+        match self {
+            Encoding::Latin1 => byte as char,
+            Encoding::Windows1252 => cp1252(byte),
+            Encoding::Roman => ROMAN_HIGH[(byte - 0x80) as usize],
+            // no high half
+            _ => '\u{fffd}',
+        }
+    }
+
+    /// The byte a character is in a single-byte encoding, if it has one.
+    fn char_byte(self, ch: char) -> Option<u8> {
+        if (ch as u32) < 0x80 {
+            return Some(ch as u8);
+        }
+        if self == Encoding::Ascii || ch == '\u{fffd}' {
+            return None;
+        }
+        (0x80..=0xffu8).find(|&b| self.byte_char(b) == ch)
     }
 }
 
-/// The encoding named by a byte order mark, and the length of the mark.
-pub fn bom(bytes: &[u8]) -> Option<(Encoding, usize)> {
-    if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
-        Some((Encoding::Utf8, 3))
-    } else if bytes.starts_with(&[0xff, 0xfe]) {
-        Some((Encoding::Utf16Le, 2))
+/// Decodes `bytes` in a known encoding. Bytes that mean nothing become the replacement character.
+pub fn decode_as(bytes: &[u8], encoding: Encoding) -> String {
+    match encoding {
+        Encoding::Utf8 => String::from_utf8_lossy(bytes.strip_prefix(&[0xef, 0xbb, 0xbf][..]).unwrap_or(bytes)).into_owned(),
+        Encoding::Utf16Le | Encoding::Utf16Be => {
+            let little = encoding == Encoding::Utf16Le;
+            let bom: &[u8] = if little { &[0xff, 0xfe] } else { &[0xfe, 0xff] };
+            let body = bytes.strip_prefix(bom).unwrap_or(bytes);
+            let units = body.chunks_exact(2).map(|p| if little { u16::from_le_bytes([p[0], p[1]]) } else { u16::from_be_bytes([p[0], p[1]]) });
+            char::decode_utf16(units).map(|r| r.unwrap_or('\u{fffd}')).collect()
+        }
+        single => bytes.iter().map(|&b| single.byte_char(b)).collect(),
+    }
+}
+
+/// Finds the encoding of a plain text file and decodes it: a byte order mark decides, then valid UTF-8, then text with
+/// a zero byte in every other position (UTF-16 without a mark); anything else is Western single-byte text.
+pub fn detect(bytes: &[u8]) -> (String, Encoding) {
+    let encoding = if bytes.starts_with(&[0xff, 0xfe]) {
+        Encoding::Utf16Le
     } else if bytes.starts_with(&[0xfe, 0xff]) {
-        Some((Encoding::Utf16Be, 2))
+        Encoding::Utf16Be
+    } else if std::str::from_utf8(bytes).is_ok() {
+        Encoding::Utf8
+    } else if let Some(utf16) = guess_utf16(bytes) {
+        utf16
+    } else {
+        Encoding::Windows1252
+    };
+    (decode_as(bytes, encoding), encoding)
+}
+
+/// UTF-16 text without a byte order mark: mostly Latin text has a zero in every high byte.
+fn guess_utf16(bytes: &[u8]) -> Option<Encoding> {
+    if bytes.len() < 4 || bytes.len() % 2 != 0 {
+        return None;
+    }
+    let pairs = bytes.len() / 2;
+    let zero_high = bytes.chunks_exact(2).filter(|p| p[1] == 0 && p[0] != 0).count();
+    let zero_low = bytes.chunks_exact(2).filter(|p| p[0] == 0 && p[1] != 0).count();
+    if zero_high * 10 >= pairs * 9 {
+        Some(Encoding::Utf16Le)
+    } else if zero_low * 10 >= pairs * 9 {
+        Some(Encoding::Utf16Be)
     } else {
         None
     }
 }
 
-/// Guesses the encoding of `bytes`: a byte order mark wins, then UTF-16 when most alternate bytes are zero, then
-/// valid UTF-8, else Mac Roman when it holds bytes in 0x80..=0x9F that Windows Latin 1 would leave controls or odd, else
-/// Windows Latin 1.
-pub fn detect(bytes: &[u8]) -> Encoding {
-    if let Some((e, _)) = bom(bytes) {
-        return e;
-    }
-    if bytes.len() >= 4 && bytes.len() % 2 == 0 {
-        let even_zero = bytes.iter().step_by(2).filter(|b| **b == 0).count();
-        let odd_zero = bytes.iter().skip(1).step_by(2).filter(|b| **b == 0).count();
-        let half = bytes.len() / 2;
-        if odd_zero * 10 >= half * 8 {
-            return Encoding::Utf16Le;
-        }
-        if even_zero * 10 >= half * 8 {
-            return Encoding::Utf16Be;
-        }
-    }
-    if std::str::from_utf8(bytes).is_ok() {
-        return Encoding::Utf8;
-    }
-    if bytes.iter().any(|b| (0x80..=0x9f).contains(b) && WIN_HIGH[usize::from(b - 0x80)] == '\0') {
-        return Encoding::MacRoman;
-    }
-    Encoding::Windows1252
-}
-
-/// Decodes `bytes` as `encoding`. A byte order mark that matches is skipped; invalid sequences become U+FFFD.
-pub fn decode(bytes: &[u8], encoding: Encoding) -> String {
-    let body = match bom(bytes) {
-        Some((e, n)) if e == encoding => &bytes[n..],
-        _ => bytes,
-    };
+/// Encodes text. Fails with the first character the encoding cannot hold, so saving never silently loses text.
+pub fn encode(text: &str, encoding: Encoding) -> Result<Vec<u8>, char> {
     match encoding {
-        Encoding::Utf8 => String::from_utf8_lossy(body).into_owned(),
+        Encoding::Utf8 => Ok(text.as_bytes().to_vec()),
         Encoding::Utf16Le | Encoding::Utf16Be => {
-            let units = body.chunks_exact(2).map(|p| {
-                if encoding == Encoding::Utf16Le { u16::from_le_bytes([p[0], p[1]]) } else { u16::from_be_bytes([p[0], p[1]]) }
-            });
-            char::decode_utf16(units).map(|r| r.unwrap_or('\u{fffd}')).collect()
+            let little = encoding == Encoding::Utf16Le;
+            let mut out: Vec<u8> = if little { vec![0xff, 0xfe] } else { vec![0xfe, 0xff] };
+            for unit in text.encode_utf16() {
+                out.extend_from_slice(&if little { unit.to_le_bytes() } else { unit.to_be_bytes() });
+            }
+            Ok(out)
         }
-        Encoding::Latin1 => body.iter().map(|b| char::from(*b)).collect(),
-        Encoding::Windows1252 => body.iter().map(|b| if *b < 0x80 || *b >= 0xa0 { char::from(*b) } else { win_char(*b) }).collect(),
-        Encoding::MacRoman => body.iter().map(|b| if *b < 0x80 { char::from(*b) } else { mac_char(*b) }).collect(),
+        single => text.chars().map(|ch| single.char_byte(ch).ok_or(ch)).collect(),
     }
 }
 
-/// Encodes `text`. `Err` holds the characters the encoding cannot represent (each once, in order); the caller
-/// offers to save lossy (`encode_lossy`) or to choose another encoding.
-pub fn encode(text: &str, encoding: Encoding) -> Result<Vec<u8>, Vec<char>> {
-    let mut lost: Vec<char> = vec![];
-    let out = encode_with(text, encoding, &mut |c| {
-        if !lost.contains(&c) {
-            lost.push(c);
-        }
-        b'?'
-    });
-    if lost.is_empty() { Ok(out) } else { Err(lost) }
-}
-
-/// Encodes `text`, writing `?` for characters the encoding cannot represent.
-pub fn encode_lossy(text: &str, encoding: Encoding) -> Vec<u8> {
-    encode_with(text, encoding, &mut |_| b'?')
-}
-
-fn encode_with(text: &str, encoding: Encoding, missing: &mut dyn FnMut(char) -> u8) -> Vec<u8> {
-    match encoding {
-        Encoding::Utf8 => text.as_bytes().to_vec(),
-        Encoding::Utf16Le => text.encode_utf16().flat_map(u16::to_le_bytes).collect(),
-        Encoding::Utf16Be => text.encode_utf16().flat_map(u16::to_be_bytes).collect(),
-        Encoding::Latin1 => text.chars().map(|c| u8::try_from(u32::from(c)).unwrap_or_else(|_| missing(c))).collect(),
-        Encoding::Windows1252 => text
-            .chars()
-            .map(|c| match u8::try_from(u32::from(c)) {
-                Ok(b) if !(0x80..0xa0).contains(&b) => b,
-                _ => (0x80u8..0xa0).find(|b| WIN_HIGH[usize::from(b - 0x80)] == c).unwrap_or_else(|| missing(c)),
-            })
-            .collect(),
-        Encoding::MacRoman => text
-            .chars()
-            .map(|c| {
-                if u32::from(c) < 0x80 {
-                    c as u8
-                } else {
-                    MAC_HIGH.chars().position(|m| m == c).map(|i| 0x80 + i as u8).unwrap_or_else(|| missing(c))
-                }
-            })
-            .collect(),
-    }
-}
-
-/// `encode`, with a byte order mark in front for the UTF-16 encodings (UTF-8 gets none).
-pub fn encode_with_bom(text: &str, encoding: Encoding) -> Result<Vec<u8>, Vec<char>> {
-    let mut out = match encoding {
-        Encoding::Utf16Le => vec![0xff, 0xfe],
-        Encoding::Utf16Be => vec![0xfe, 0xff],
-        _ => vec![],
-    };
-    out.extend(encode(text, encoding)?);
-    Ok(out)
+/// Reads text that was decoded in the wrong encoding again as another one: the characters are turned back into the
+/// bytes of `from` and decoded as `to`. `None` when the text cannot be turned back into bytes.
+pub fn reinterpret(text: &str, from: Encoding, to: Encoding) -> Option<String> {
+    let bytes = encode(text, from).ok()?;
+    Some(decode_as(&bytes, to))
 }
 
 #[cfg(test)]
@@ -193,63 +181,72 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mac_table_has_128_entries_and_known_points() {
-        assert_eq!(MAC_HIGH.chars().count(), 128);
-        assert_eq!(mac_char(0x80), 'Ä');
-        assert_eq!(mac_char(0x8e), 'é');
-        assert_eq!(mac_char(0xa5), '•');
-        assert_eq!(mac_char(0xd2), '“');
-        assert_eq!(mac_char(0xdb), '€');
-        assert_eq!(mac_char(0xff), 'ˇ');
+    fn valid_utf8_stays_utf8_and_a_byte_order_mark_is_dropped() {
+        assert_eq!(detect("héllo".as_bytes()), ("héllo".to_string(), Encoding::Utf8));
+        assert_eq!(detect(&[0xef, 0xbb, 0xbf, b'a']), ("a".to_string(), Encoding::Utf8));
+        assert_eq!(detect(b"").1, Encoding::Utf8);
     }
 
     #[test]
-    fn detection_order() {
-        assert_eq!(detect(b"\xef\xbb\xbfhi"), Encoding::Utf8);
-        assert_eq!(detect(b"\xff\xfeh\0i\0"), Encoding::Utf16Le);
-        assert_eq!(detect("þetta er í lagi".as_bytes()), Encoding::Utf8);
-        assert_eq!(detect(b"h\0i\0 \0y\0o\0u\0"), Encoding::Utf16Le);
-        assert_eq!(detect(b"\0h\0i\0 \0y\0o\0u"), Encoding::Utf16Be);
-        assert_eq!(detect(b"caf\xe9"), Encoding::Windows1252);
-        assert_eq!(detect(b"a\x81b"), Encoding::MacRoman);
+    fn utf16_is_found_by_its_mark_or_by_its_zero_bytes() {
+        let le = encode("Halló", Encoding::Utf16Le).unwrap();
+        assert_eq!(detect(&le), ("Halló".to_string(), Encoding::Utf16Le));
+        let be = encode("Halló", Encoding::Utf16Be).unwrap();
+        assert_eq!(detect(&be), ("Halló".to_string(), Encoding::Utf16Be));
+        // no mark: ASCII text with a zero in every other byte
+        assert_eq!(detect(b"h\0i\0 \0y\0o\0"), ("hi yo".to_string(), Encoding::Utf16Le));
+        assert_eq!(detect(b"\0h\0i\0 \0y\0o"), ("hi yo".to_string(), Encoding::Utf16Be));
     }
 
     #[test]
-    fn round_trips_in_each_encoding() {
-        let text = "Þórður á tónleikum – “café” ö";
-        for e in [Encoding::Utf8, Encoding::Utf16Le, Encoding::Utf16Be] {
-            assert_eq!(decode(&encode(text, e).unwrap(), e), text, "{e:?}");
+    fn invalid_utf8_is_read_as_western_single_byte_text() {
+        // 0xe9 alone is not UTF-8; in the Western sets it is e acute
+        assert_eq!(detect(&[b'c', b'a', b'f', 0xe9]), ("café".to_string(), Encoding::Windows1252));
+        // the Windows set has a euro sign at 0x80 where ISO Latin 1 has a control
+        assert_eq!(decode_as(&[0x80], Encoding::Windows1252), "\u{20ac}");
+        assert_eq!(decode_as(&[0x80], Encoding::Latin1), "\u{80}");
+    }
+
+    #[test]
+    fn the_roman_set_maps_its_high_half() {
+        assert_eq!(decode_as(&[0x8a, 0x8e, 0xa5, 0xc9], Encoding::Roman), "äé•…");
+        assert_eq!(encode("äé•…", Encoding::Roman).unwrap(), vec![0x8a, 0x8e, 0xa5, 0xc9]);
+    }
+
+    #[test]
+    fn every_encoding_round_trips_the_text_it_can_hold() {
+        for e in ALL {
+            assert_eq!(decode_as(&encode("plain text", e).unwrap(), e), "plain text", "{}", e.name());
         }
-        let latin = "Þórður á tónleikum café ö";
-        assert_eq!(decode(&encode(latin, Encoding::Latin1).unwrap(), Encoding::Latin1), latin);
-        let win = "Þórður – “café” €";
-        assert_eq!(decode(&encode(win, Encoding::Windows1252).unwrap(), Encoding::Windows1252), win);
-        let mac = "Þ is not here but é — “q” ✓";
-        assert_eq!(encode(mac, Encoding::MacRoman), Err(vec!['Þ', '✓']));
-        let mac = "café — “q” ö";
-        assert_eq!(decode(&encode(mac, Encoding::MacRoman).unwrap(), Encoding::MacRoman), mac);
-    }
-
-    #[test]
-    fn unrepresentable_characters_are_reported_or_replaced() {
-        assert_eq!(encode("a€b", Encoding::Latin1), Err(vec!['€']));
-        assert_eq!(encode_lossy("a€b€", Encoding::Latin1), b"a?b?");
-        assert_eq!(encode_lossy("a€", Encoding::Windows1252), vec![b'a', 0x80]);
-    }
-
-    #[test]
-    fn bom_is_skipped_on_decode_and_written_on_request() {
-        assert_eq!(decode(b"\xef\xbb\xbfhi", Encoding::Utf8), "hi");
-        assert_eq!(decode(b"\xff\xfeh\0i\0", Encoding::Utf16Le), "hi");
-        assert_eq!(encode_with_bom("hi", Encoding::Utf16Be).unwrap(), vec![0xfe, 0xff, 0, b'h', 0, b'i']);
-        assert_eq!(encode_with_bom("hi", Encoding::Utf8).unwrap(), b"hi");
-    }
-
-    #[test]
-    fn charset_names() {
-        for e in Encoding::ALL {
-            assert_eq!(Encoding::from_charset(e.charset()), Some(e));
+        for e in [Encoding::Latin1, Encoding::Windows1252, Encoding::Roman] {
+            assert_eq!(decode_as(&encode("æ ö é", e).unwrap(), e), "æ ö é", "{}", e.name());
         }
-        assert_eq!(Encoding::from_charset("KOI8"), None);
+        assert_eq!(decode_as(&encode("😀 ok", Encoding::Utf16Be).unwrap(), Encoding::Utf16Be), "😀 ok");
+    }
+
+    #[test]
+    fn saving_refuses_a_character_the_encoding_cannot_hold() {
+        assert_eq!(encode("naïve", Encoding::Ascii), Err('ï'));
+        assert_eq!(encode("€", Encoding::Latin1), Err('€'));
+        assert!(encode("€", Encoding::Windows1252).is_ok());
+        assert_eq!(encode("\u{fffd}", Encoding::Roman), Err('\u{fffd}'), "the unmapped byte is not a character to save");
+    }
+
+    #[test]
+    fn reinterpreting_repairs_text_read_in_the_wrong_set() {
+        // a classic-set file opened as Windows text shows the wrong letters; read again as the right set it is fixed
+        let wrong = decode_as(&[0x8e], Encoding::Windows1252);
+        assert_eq!(reinterpret(&wrong, Encoding::Windows1252, Encoding::Roman).as_deref(), Some("é"));
+        assert_eq!(reinterpret("→", Encoding::Windows1252, Encoding::Roman), None, "text that is not bytes of the set");
+    }
+
+    #[test]
+    fn ids_and_indexes_name_each_encoding_once() {
+        for (i, e) in ALL.iter().enumerate() {
+            assert_eq!(Encoding::from_id(e.id()), Some(*e));
+            assert_eq!(Encoding::from_index(e.index()), Some(*e));
+            assert_eq!(e.index() as usize, i);
+        }
+        assert_eq!(Encoding::from_id("klingon"), None);
     }
 }
