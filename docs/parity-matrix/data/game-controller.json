@@ -17,9 +17,9 @@
     {
       "feature": "Input events (polling and callbacks)",
       "apple": "GCController input profiles, valueChangedHandler, GCDevicePhysicalInput",
-      "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput); wired: springboard/src/shell/services/gamepad_service.rs (tick, remap_change)",
+      "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput); springboard/sdk/src/gamepad_input.rs (describe, button_name, axis_name); wired: springboard/src/shell/services/gamepad_service.rs (tick, remap_change)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decoding handles pointer, touch and keyboard only. No gamepad axes, buttons, triggers or hats are mapped, and no SDK type exposes input state. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The model maps 13 buttons, two sticks with clicks, two triggers and the direction pad, with dead zones, change callbacks, a polling queue and a plain-text description per change; the SDK exposes it as bifrost_app::gamepad_input (headless tests in sdk/tests/parity_sdk-complete-34.rs). Needs hardware: no real controller has been read on Midget, and the shell's event decoder still treats the stick axes as a pointer until the event loop feeds this model (see ui/src/gamepad.rs)."
     },
     {
       "feature": "Button, axis, switch and direction-pad elements",

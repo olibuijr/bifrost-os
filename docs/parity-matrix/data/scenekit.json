@@ -38,9 +38,9 @@
   {
    "feature": "Animation and actions",
    "apple": "SCNAction, SCNTransaction, SCNAnimation, SCNAnimationPlayer",
-   "bifrost": "springboard/sdk/src/view/animation.rs",
+   "bifrost": "springboard/sdk/src/view/animation.rs; springboard/sdk/src/view/action.rs (Action, Pose)",
    "status": "partial",
-   "note": "implicit 2D animation of frame, opacity and background (headless_swatch_is_drawn_where_the_animation_has_moved_it, headless_frame_opacity_and_size_interpolate_together in springboard/sdk/src/view/animation.rs); no keyframe or 3D property animation"
+   "note": "Implicit 2D animation of frame, opacity and background (headless_swatch_is_drawn_where_the_animation_has_moved_it, headless_frame_opacity_and_size_interpolate_together in view/animation.rs). Actions compose moves, turns, scales, fades, waits, sequences, groups and counted repeats into a pose at any time (headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the window does not run action poses yet, repeats do not run forever, and 3D property animation is not modelled."
   },
   {
    "feature": "Constraints",

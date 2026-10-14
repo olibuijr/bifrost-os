@@ -17,9 +17,9 @@
     {
       "feature": "Symbol drawing: shape painters and named icons",
       "apple": "No direct counterpart; the fill behind a symbol image (CGContext fill of a path into a rect)",
-      "bifrost": "springboard/sdk/src/glyph_draw.rs (paint, disc, ring, segment, arc, ellipse, either, globe, mic, dismiss_keyboard, alarm_clock, stopwatch, timer re-exported from springboard/render/src/sdf_glyphs.rs; springboard/src/shell/glyphs.rs re-exports the same)",
+      "bifrost": "springboard/sdk/src/glyph_draw.rs (paint, disc, ring, segment, arc, ellipse, either, globe, mic, dismiss_keyboard, alarm_clock, stopwatch, timer re-exported from springboard/render/src/sdf_glyphs.rs; springboard/src/shell/glyphs.rs re-exports the same); springboard/sdk/src/symbol_draw.rs (SymbolStyle, paint_layer)",
       "status": "partial",
-      "note": "The shell's painters are now the SDK's: apps can draw through bifrost_app::glyph_draw, and shell and SDK draw identical pixels (tests in sdk glyph_draw and render sdf_glyphs). Still one colour per call, no rendering modes (monochrome, hierarchical, palette) and no symbol weights or scales; apps still import springboard::shell::glyphs until they move (no app changes this sprint). Parity needs a Midget check"
+      "note": "The shell's painters are the SDK's, and bifrost_app::symbol_draw applies a symbol's weight stroke factor, scale, rendering mode (hierarchical opacity by layer, palette slots, monochrome) and palette to each layer (headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the named icons (globe, mic and the others) still take one colour per call with no layered form, and a Midget check is still needed for parity."
     },
     {
       "feature": "Appear, disappear and scale effects",

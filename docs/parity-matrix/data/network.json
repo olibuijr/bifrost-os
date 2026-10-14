@@ -10,9 +10,9 @@
     {
       "feature": "HTTP and URL-based loading",
       "apple": "URLSession (the framework page says to use URLSession for HTTP and URL loading)",
-      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); wired: springboard/apps/news-desktop/src/feed_cache.rs (Conditional::get over bifrost_app::url::URLSession::shared().bytes)",
+      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/src/url_configuration.rs (URLSessionConfiguration, CachePolicy); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); wired: springboard/apps/news-desktop/src/feed_cache.rs (Conditional::get over bifrost_app::url::URLSession::shared().bytes)",
       "status": "partial",
-      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache. No URLSessionConfiguration, delegates, background sessions, upload tasks or HTTP/2 Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache, and a URLSessionConfiguration model (request timeout cap, session headers, cache policy actions, resource expiry, connections per host; headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the transport does not read the configuration yet, and HTTP/2 is missing; the row needs a Midget check."
     },
     {
       "feature": "Connections (NWConnection) to a remote endpoint",
@@ -87,9 +87,9 @@
     {
       "feature": "Network debugging and diagnostics",
       "apple": "CFNetwork diagnostic logging, packet trace, Debugging HTTP Server-Side Errors",
-      "bifrost": "springboard/core/src/log.rs (Level, redact, encode_datagram, Logger); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/log.rs; wired: springboard/src/shell/pages.rs (WifiDetail DIAGNOSTICS group shows a saved network's failure note; DETAILS group shows interface, IPv4 method and DNS)",
+      "bifrost": "springboard/core/src/log.rs (Level, redact, encode_datagram, Logger); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/log.rs; springboard/sdk/src/http_log.rs (Exchange, redact_url); wired: springboard/src/shell/pages.rs (WifiDetail DIAGNOSTICS group shows a saved network's failure note; DETAILS group shows interface, IPv4 method and DNS)",
       "status": "partial",
-      "note": "Apps log through os.Logger with levels, privacy redaction and journal encoding (log_levels_map_to_syslog_priorities_and_back, private_values_are_redacted_unless_the_subsystem_shows_them, a_multi_line_journal_value_is_length_prefixed). No packet traces, no CFNetwork-style HTTP logging and no network inspector. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Apps log through os.Logger with levels, privacy redaction and journal encoding (log_levels_map_to_syslog_priorities_and_back, private_values_are_redacted_unless_the_subsystem_shows_them, a_multi_line_journal_value_is_length_prefixed). HTTP exchanges have a one-line summary with a redacted URL (credential query values and passwords removed), status, body size, duration and an outcome-based level (headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the transport does not write these summaries yet, and there are no packet traces or network inspector."
     },
     {
       "feature": "Privacy attribution and local network identity",
