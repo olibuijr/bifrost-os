@@ -119,6 +119,43 @@ pub fn equalize(src: &Plane) -> Plane {
     Plane { width: src.width, height: src.height, pixels }
 }
 
+/// Builds the specification lookup table that maps the levels of a source histogram onto a reference histogram.
+/// Each source level takes the smallest reference level whose cumulative share reaches the source level's
+/// cumulative share. Both histograms hold one bin per level, at most 256 of them. An empty reference maps every
+/// level to 0.
+pub fn specification_table(source: &[u32], reference: &[u32]) -> Vec<u8> {
+    let src_total: u64 = source.iter().map(|&c| c as u64).sum();
+    let ref_total: u64 = reference.iter().map(|&c| c as u64).sum();
+    let mut ref_cdf = Vec::with_capacity(reference.len());
+    let mut running = 0u64;
+    for &c in reference {
+        running += c as u64;
+        ref_cdf.push(running);
+    }
+    let last = reference.len().saturating_sub(1);
+    let mut table = Vec::with_capacity(source.len());
+    let mut cumulative = 0u64;
+    let mut level = 0usize;
+    for &c in source {
+        cumulative += c as u64;
+        // Both sides are scaled by the two totals so that the comparison stays in integers.
+        while level < last && ref_cdf[level] * src_total < cumulative * ref_total {
+            level += 1;
+        }
+        table.push(level.min(255) as u8);
+    }
+    table
+}
+
+/// Histogram specification: remaps the pixels of `src` so that their 256-bin histogram follows the histogram of
+/// `reference`. A source whose levels are already distributed like the reference comes out unchanged.
+pub fn specify(src: &Plane, reference: &Plane) -> Plane {
+    let info = HistogramInfo { entries: 256, min: 0, max: 255 };
+    let lut = specification_table(&histogram(src, info), &histogram(reference, info));
+    let pixels = src.pixels.iter().map(|&v| lut[v as usize]).collect();
+    Plane { width: src.width, height: src.height, pixels }
+}
+
 /// Whether a rectangular extreme keeps the smallest or the largest value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Extreme {
@@ -220,6 +257,86 @@ pub fn convolve(src: &Plane, kw: usize, kh: usize, weights: &[f32], bias: f32) -
         }
     }
     Some(Plane { width: w, height: h, pixels })
+}
+
+/// The side lengths a convolution kernel may have: odd, from 3 to 9.
+pub const CONVOLUTION_SIDES: std::ops::RangeInclusive<usize> = 3..=9;
+
+/// Whether `n` is a valid convolution kernel side. See `CONVOLUTION_SIDES`.
+pub fn is_convolution_side(n: usize) -> bool {
+    CONVOLUTION_SIDES.contains(&n) && odd_side(n)
+}
+
+/// The direction a one-dimensional kernel runs in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Axis {
+    Horizontal,
+    Vertical,
+}
+
+/// Convolves `src` with a one-dimensional kernel along `axis`. `taps` has an odd length from 3 to 9 and is
+/// applied in layout order with no flip. `bias` and the edge handling are the same as for `convolve`.
+/// Returns `None` for any other tap count.
+pub fn convolve_axis(src: &Plane, axis: Axis, taps: &[f32], bias: f32) -> Option<Plane> {
+    if !is_convolution_side(taps.len()) {
+        return None;
+    }
+    let r = (taps.len() / 2) as isize;
+    let (w, h) = (src.width, src.height);
+    let mut pixels = vec![0u8; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let mut acc = bias;
+            for (k, &tap) in taps.iter().enumerate() {
+                let offset = k as isize - r;
+                let (sx, sy) = match axis {
+                    Axis::Horizontal => (x as isize + offset, y as isize),
+                    Axis::Vertical => (x as isize, y as isize + offset),
+                };
+                acc += tap * (edge_pixel(src, sx, sy) as f32);
+            }
+            pixels[y * w + x] = to_byte(acc);
+        }
+    }
+    Some(Plane { width: w, height: h, pixels })
+}
+
+/// An 8-bit RGB image, row-major, three interleaved bytes per pixel (red, green, blue).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RgbImage {
+    pub width: usize,
+    pub height: usize,
+    pub pixels: Vec<u8>,
+}
+
+impl RgbImage {
+    /// Wraps `pixels` as an RGB image. Returns `None` when the byte count is not three times the pixel count.
+    pub fn new(width: usize, height: usize, pixels: Vec<u8>) -> Option<Self> {
+        let bytes = width.checked_mul(height)?.checked_mul(3)?;
+        (pixels.len() == bytes).then_some(RgbImage { width, height, pixels })
+    }
+}
+
+/// Convolves each colour channel of `src` with the same `kw` by `kh` kernel. Each channel is filtered on its own,
+/// so the three outputs never mix. Returns `None` when a side is not a valid kernel side or `weights` has the
+/// wrong count.
+pub fn convolve_rgb(src: &RgbImage, kw: usize, kh: usize, weights: &[f32], bias: f32) -> Option<RgbImage> {
+    if !is_convolution_side(kw) || !is_convolution_side(kh) {
+        return None;
+    }
+    let mut pixels = vec![0u8; src.pixels.len()];
+    for channel in 0..3 {
+        let plane = Plane {
+            width: src.width,
+            height: src.height,
+            pixels: src.pixels.iter().skip(channel).step_by(3).copied().collect(),
+        };
+        let filtered = convolve(&plane, kw, kh, weights, bias)?;
+        for (i, &v) in filtered.pixels.iter().enumerate() {
+            pixels[i * 3 + channel] = v;
+        }
+    }
+    Some(RgbImage { width: src.width, height: src.height, pixels })
 }
 
 /// The four-neighbour Laplacian: the 3 by 3 kernel `0 1 0 / 1 -4 1 / 0 1 0` with `bias` added before

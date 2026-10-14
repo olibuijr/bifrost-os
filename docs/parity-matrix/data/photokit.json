@@ -10,9 +10,9 @@
   {
    "feature": "Shared photo library access (PHPhotoLibrary)",
    "apple": "PHPhotoLibrary, PHPhotosError, PHPhotosErrorDomain",
-   "bifrost": "springboard/ui/src/photo_access.rs; springboard/sdk/src/photo_library.rs, springboard/src/shell/services/photos.rs",
+   "bifrost": "springboard/ui/src/photo_access.rs; springboard/ui/src/photo_changes.rs (change details of a library listing); springboard/sdk/src/photo_library.rs, springboard/src/shell/services/photos.rs",
    "status": "partial",
-   "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object manages access or changes to the library; Notes calls the springboard library module directly. No permission or authorization flow for apps. Sprint 5: app-facing PHPhotoLibrary.authorization_status/request_authorization in springboard/sdk/src/photo_library.rs, answered by the photos service (springboard/src/shell/services/photos.rs); denied without the photos manifest permission. Host unit tests only; Midget check pending. No access sheet or change observation. Headless tests in springboard/ui/tests/parity_sdk-tests-07.rs: headless_first_allow_grants_the_whole_library, headless_a_later_request_returns_the_first_answer_unchanged, headless_limited_access_keeps_sorted_unique_identifiers, headless_selection_changes_only_in_limited_access, headless_restricted_library_refuses_every_request, headless_undecided_and_denied_apps_see_nothing."
+   "note": "Authorization is modelled headless in springboard/ui/tests/parity_sdk-tests-07.rs (first answer kept, limited access, restricted library), and the change details a library observer would receive (inserted, removed, moved, changed, duplicate refusal) are tested in springboard/ui/tests/parity_sdk-complete-23.rs. Apps reach authorization_status and request_authorization through springboard/sdk/src/photo_library.rs, answered by the photos service, but there is no observer registration for apps and no access sheet, and the access sheet needs a display and the Midget check."
   },
   {
    "feature": "Asset retrieval and fetch options",
@@ -45,9 +45,9 @@
   {
    "feature": "Asset metadata (EXIF and extended attributes)",
    "apple": "PHAssetExtendedMetadata, creation date, location",
-   "bifrost": "springboard/src/shell/photos/exif.rs (JPEG APP1 reader: camera, date, exposure, size, GPS); springboard/src/shell/photos/library.rs (EXIF capture time for .jpg and .jpeg); wired: springboard/src/shell/photos/exif.rs (Lens row); springboard/src/shell/photos/mod.rs (Info sheet, draw_info)",
+   "bifrost": "springboard/src/shell/photos/exif.rs (JPEG APP1 reader and PNG eXIf reader: parse, parse_png, parse_image; camera, date, exposure, size, GPS); springboard/src/shell/photos/library.rs (EXIF capture time for .jpg and .jpeg); wired: springboard/src/shell/photos/exif.rs (Lens row); springboard/src/shell/photos/mod.rs (Info sheet, draw_info)",
    "status": "partial",
-   "note": "JPEG only. No PHAsset-style metadata object for apps. Values are shown in the Photos app. Headless tests in springboard/tests/parity_sdk-tests-07.rs: headless_gps_tags_are_read_from_the_jpeg_and_signed_by_their_references, headless_capture_date_and_exposure_are_formatted_for_the_info_sheet, headless_reader_rejects_non_jpeg_bytes_and_keeps_the_file_size_fallback. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "JPEG and PNG (eXIf chunk and IHDR size) are read headless in springboard/tests/parity_sdk-tests-07.rs and springboard/tests/parity_sdk-complete-23.rs. Gap: other formats such as HEIC or RAW are not read, and there is no PHAsset-style metadata object for apps; the values are shown in the Photos app, which needs the Midget check."
   },
   {
    "feature": "Asset resources and creating assets",

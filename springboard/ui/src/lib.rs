@@ -1062,6 +1062,7 @@ pub mod photo_library;
 pub mod fs_volume;
 pub mod fs_probe;
 pub mod fs_maintenance;
+pub mod fs_resource;
 pub mod keychain_save;
 pub mod keychain_settings;
 pub mod certificate_trust;
