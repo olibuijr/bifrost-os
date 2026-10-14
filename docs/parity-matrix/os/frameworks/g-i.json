@@ -229,8 +229,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Home accessory control is an Apple home-platform service. BifrOSt home control runs in the separate Home Assistant integration outside this repository.",
    "rea": [],
    "method": "heuristic"
   },
@@ -585,8 +585,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "The Apple Messages transport framework has no BifrOSt counterpart because BifrOSt runs no Messages service.",
    "rea": [],
    "method": "heuristic"
   },

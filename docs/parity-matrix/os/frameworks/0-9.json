@@ -396,9 +396,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/sdk/src/core_location.rs (LocationManager, Coordinate)",
+   "status": "partial",
+   "note": "The SDK location manager and coordinate model cover the public location surface. Gap: the private location-essentials service has no BifrOSt counterpart.",
    "rea": [],
    "method": "heuristic"
   },

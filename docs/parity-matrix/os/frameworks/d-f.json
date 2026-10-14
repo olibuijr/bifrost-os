@@ -103,8 +103,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Screen Time activity reporting is an Apple parental-control service; BifrOSt has no counterpart and does not plan one.",
    "rea": [],
    "method": "heuristic"
   },
@@ -207,8 +207,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "The optical disc burning panel has no BifrOSt counterpart because BifrOSt ships no optical burner support.",
    "rea": [],
    "method": "heuristic"
   },
@@ -459,8 +459,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Family controls depend on Apple accounts and Screen Time, which BifrOSt does not provide.",
    "rea": [],
    "method": "heuristic"
   },
@@ -543,8 +543,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "The Wallet finance interface depends on Apple Pay and bank connections, which BifrOSt does not provide.",
    "rea": [],
    "method": "heuristic"
   },
