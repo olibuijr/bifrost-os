@@ -4,7 +4,7 @@
   "macos_since": "10.3",
   "status": "partial",
   "bifrost": "No SDK module. Ad hoc equivalents: springboard/render/src/gfx/rotate.rs, springboard/src/media/convert.rs, springboard/apps/daw/src/conv.rs, springboard/render/src/cg/pdf/inflate.rs, springboard/src/shell/photos/edit.rs",
-  "summary": "Accelerate's vector, signal, linear algebra, sparse solver, compression and ML APIs have no BifrOSt SDK counterpart. The system and apps contain private equivalents (quarter-turn rotation, YUV to RGBA conversion, DEFLATE decoding, a radix-2 FFT convolver, brightness and contrast lookup tables), but no app can call them through the SDK.",
+  "summary": "Accelerate's vector, signal, linear algebra, sparse solver and ML APIs have no BifrOSt SDK counterpart. DEFLATE and zlib are available to apps through the SDK compression module. The system and apps contain private equivalents (quarter-turn rotation, YUV to RGBA conversion, a radix-2 FFT convolver, brightness and contrast lookup tables), but no app can call them through the SDK.",
   "rea_evidence": "ev_371efbd6465434fa7c238d2db92f2f8a9c41b8360f6013ec6863082d97dc6c3e",
   "features": [
     {
@@ -59,9 +59,9 @@
     {
       "feature": "Compression and decompression",
       "apple": "Compression (buffer, stream and filter APIs), Directories and Data Archives",
-      "bifrost": "springboard/render/src/cg/pdf/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
+      "bifrost": "springboard/sdk/src/compression.rs (encode_buffer, encode_buffer_threaded, decode_buffer), springboard/render/src/cg/pdf/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
       "status": "partial",
-      "note": "DEFLATE and zlib decoding exist inside the Books engine. There is no compressor and no SDK compression API. The PNG writer emits uncompressed blocks."
+      "note": "DEFLATE and zlib encode and decode through the SDK compression module (bifrost_app::compression); the PNG writer still emits uncompressed blocks, and no LZFSE, LZ4, LZMA or Brotli codec exists. Tests in springboard/sdk/tests/parity_sdk-tests-04.rs: zlib_reference_bytes_decode_to_hello, every_level_and_algorithm_round_trips, stored_zlib_from_the_png_writer_decodes_through_the_codec. Not yet verified on Midget."
     },
     {
       "feature": "Linear algebra (BLAS, LAPACK, sparse solvers)",
@@ -107,9 +107,9 @@
     }
   ],
   "gaps": [
-    "No SDK module for vDSP, vImage, BNNS, compression, BLAS/LAPACK, sparse solvers or simd.",
+    "No SDK module for vDSP, vImage, BNNS, BLAS/LAPACK, sparse solvers or simd.",
     "No app-facing FFT or DCT API. The only FFT is private to the DAW convolver (springboard/apps/daw/src/conv.rs).",
-    "No compressor. DEFLATE is decode-only and lives in the Books engine, and the PNG writer stores uncompressed blocks.",
+    "No LZFSE, LZ4, LZMA or Brotli codec. The SDK compression module covers DEFLATE and zlib only, and the PNG writer stores uncompressed blocks.",
     "No general image convolution, morphology, histogram, or arbitrary-angle geometric transform API.",
     "No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.",
     "No neural network inference or training API for apps.",
