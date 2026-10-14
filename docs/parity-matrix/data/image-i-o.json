@@ -10,16 +10,16 @@
     {
       "feature": "Image source: decode from data or file",
       "apple": "CGImageSource",
-      "bifrost": "springboard/sdk/src/image_source.rs; wired: springboard/apps/files/src/views/options.rs (picture_thumb)",
+      "bifrost": "springboard/sdk/src/image_source.rs (ImageSource::new, with_max_pixels, read_file); wired: springboard/apps/files/src/views/options.rs (picture_thumb); springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Reads the header first (format and size, refusing oversized pictures), then decodes any format of the cg::imageio codecs (PNG, JPEG, GIF, BMP, ICO, TIFF; WebP read only) into premultiplied RGBA. Apps reach it through bifrost_app::image_source."
+      "note": "Reads the header first (format, size and EXIF orientation), refuses oversized pictures, and reads a file with a byte limit (read_file) before decoding any format of the cg::imageio codecs (PNG, JPEG, GIF, BMP, ICO, TIFF; WebP read only) into premultiplied RGBA. Tested headless in parity_sdk-complete-07. Gap: not yet verified on Midget, and the decode is whole-picture and synchronous."
     },
     {
       "feature": "Image destination: encode and write",
       "apple": "CGImageDestination",
-      "bifrost": "springboard/sdk/src/picture_writer.rs (PictureWriter over cg::imageio::ImageDestination), springboard/sdk/src/graphics_imageio.rs (encode, encode_jpeg); system layer: springboard/src/pngenc.rs:9, springboard/src/shell/camera/jpeg.rs:284, springboard/src/shell/photos/edit.rs:343",
+      "bifrost": "springboard/sdk/src/picture_writer.rs (PictureWriter over cg::imageio::ImageDestination), springboard/sdk/src/graphics_imageio.rs (encode, encode_jpeg); system layer: springboard/src/pngenc.rs:9, springboard/src/shell/camera/jpeg.rs:284, springboard/src/shell/photos/edit.rs:343; springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Apps write PNG, JPEG, GIF, BMP, TIFF and ICO with orientation, date, location, quality, frame delay and loop count. WebP is read only. The Photos and camera code still use their own encoders."
+      "note": "Apps write PNG, JPEG, GIF, BMP, TIFF and ICO with orientation, date, camera, software, location, altitude, quality, frame delay and loop count, tested headless in parity_sdk-complete-07. Gap: WebP is read only (no pure-Rust encoder here), and the shell's own picture encoders stay in the system layer; not yet verified on Midget."
     },
     {
       "feature": "Format coverage (GIF, HEIC, WebP, TIFF, TGA, DNG, RAW)",
@@ -31,44 +31,44 @@
     {
       "feature": "Downsampled and thumbnail decode",
       "apple": "CGImageSource thumbnail options (kCGImageSourceCreateThumbnail*)",
-      "bifrost": "springboard/sdk/src/image_source.rs, springboard/render/src/imgdec.rs (fit_dims); wired: springboard/apps/files/src/views/options.rs (picture_thumb, blit_thumb)",
+      "bifrost": "springboard/sdk/src/image_source.rs (thumbnail_size, thumbnail, upright_size); springboard/render/src/imgdec.rs (fit_dims); wired: springboard/apps/files/src/views/options.rs (picture_thumb, blit_thumb); springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Thumbnails fit a box without enlarging. The codec thumbnail path (ImageSource::thumbnail_at) also applies the EXIF orientation. No per-file thumbnail request for apps beyond the box size."
+      "note": "Thumbnails fit a box without enlarging and are turned upright by the EXIF orientation, so a rotated photo gets the right box shape (tested headless in parity_sdk-complete-07). Gap: the whole picture is still decoded before it is scaled down, and apps cannot ask the codec for a subsampled decode."
     },
     {
       "feature": "Decode size limits",
       "apple": "No direct equivalent (Image I/O reads the header first)",
-      "bifrost": "springboard/sdk/src/image_source.rs (TooLarge before decode)",
+      "bifrost": "springboard/sdk/src/image_source.rs (ImageSource::with_max_pixels: TooLarge before decode); springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Oversized pictures are refused before decoding."
+      "note": "Pictures over the side limit (MAX_SIDE) or over an app's pixel budget are refused from the header before decoding, tested headless in parity_sdk-complete-07. Gap: the shell does not apply a budget of its own, and the limit is not yet checked on Midget."
     },
     {
       "feature": "EXIF metadata read (camera, date, exposure, size)",
       "apple": "EXIF Dictionary Keys (kCGImagePropertyExif*)",
-      "bifrost": "springboard/sdk/src/image_metadata.rs (read: PictureInfo with camera, date, exposure, f-number, ISO, focal length, dpi); system layer: springboard/src/shell/photos/exif.rs:113, wired in springboard/apps/files/src/info.rs",
+      "bifrost": "springboard/sdk/src/image_metadata.rs (read: PictureInfo with camera, date, exposure, f-number, ISO, focal length, dpi, altitude, software, lens model); system layer: springboard/src/shell/photos/exif.rs:113, wired in springboard/apps/files/src/info.rs; springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Exposed to SDK apps through image_metadata::read. Reads what the cg::imageio EXIF reader fills; maker notes and XMP packets are skipped as opaque."
+      "note": "PictureInfo reads camera, date, exposure, f-number, ISO, focal length, dpi, altitude, software and lens model from the file that the cg::imageio EXIF reader fills; the software and altitude reads are tested headless in parity_sdk-complete-07. Gap: maker notes and XMP packets are skipped as opaque, and the shell's own reader is not yet checked on Midget."
     },
     {
       "feature": "EXIF orientation applied on decode",
       "apple": "kCGImagePropertyOrientation",
-      "bifrost": "springboard/sdk/src/image_metadata.rs (decode_upright, orientation via cg::imageio::orient_image); springboard/render/src/cg/imageio/mod.rs (orient_image); system layer: springboard/src/shell/photos/mod.rs (decode_upright)",
+      "bifrost": "springboard/sdk/src/image_metadata.rs (decode_upright, orientation via cg::imageio::orient_image); springboard/sdk/src/image_source.rs (ImageSource::decode_upright, upright_size); springboard/render/src/cg/imageio/mod.rs (orient_image); system layer: springboard/src/shell/photos/mod.rs (decode_upright); springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. SDK apps get upright pixels from image_metadata::decode_upright and thumbnails from image_source apply the same rotation through the codec."
+      "note": "SDK apps get upright pixels from image_metadata::decode_upright and image_source::ImageSource::decode_upright, and thumbnails from image_source use the same rotation (tested headless in parity_sdk-complete-07). Gap: the shell's upright decode is not yet checked against the SDK on Midget."
     },
     {
       "feature": "EXIF write",
       "apple": "CGImageDestination with EXIF properties",
-      "bifrost": "springboard/sdk/src/picture_writer.rs (date_taken, orientation); springboard/render/src/cg/imageio/exif.rs (build_block); system layer: springboard/src/shell/camera/jpeg.rs:249",
+      "bifrost": "springboard/sdk/src/picture_writer.rs (date_taken, orientation, camera, software, altitude); springboard/render/src/cg/imageio/exif.rs (build_block); system layer: springboard/src/shell/camera/jpeg.rs:249; springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Writes DateTimeOriginal and Orientation for JPEG, PNG and TIFF. Other EXIF tags are not exposed through the SDK writer."
+      "note": "Writes DateTimeOriginal, Orientation, camera make and model, Software and altitude for JPEG, PNG and TIFF; the JPEG values read back in parity_sdk-complete-07. Gap: exposure and lens tags are not written by the SDK writer, and the camera's own writer is not yet checked on Midget."
     },
     {
       "feature": "GPS dictionary",
       "apple": "GPS Dictionary Keys",
-      "bifrost": "springboard/sdk/src/image_metadata.rs (Location read, decimal_to_dms, dms_to_decimal); springboard/sdk/src/picture_writer.rs (location write); springboard/render/src/cg/imageio/exif.rs (GPS_TAGS)",
+      "bifrost": "springboard/sdk/src/image_metadata.rs (Location read, altitude_m, decimal_to_dms, dms_to_decimal); springboard/sdk/src/picture_writer.rs (location and altitude write); springboard/render/src/cg/imageio/exif.rs (GPS_TAGS); springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Latitude and longitude are read and written as decimal degrees. Altitude is not exposed to SDK apps."
+      "note": "Latitude, longitude and altitude are read and written (decimal degrees and metres, negative below sea level); the altitude round trip is tested headless in parity_sdk-complete-07. Gap: the GPS time stamp, speed and direction are not exposed, and the values are not yet checked on Midget."
     },
     {
       "feature": "XMP, IPTC and 8BIM metadata",
@@ -80,9 +80,9 @@
     {
       "feature": "Animated GIF and APNG frames",
       "apple": "CGAnimateImageAtURLWithBlock, CGAnimateImageDataWithBlock, kCGImageAnimationDelayTime",
-      "bifrost": "springboard/sdk/src/image_animation.rs (read: frames, delay_ms, loop_count); springboard/sdk/src/picture_writer.rs (frame writing); springboard/core/src/gifframes.rs",
+      "bifrost": "springboard/sdk/src/image_animation.rs (read: frames, delay_ms, loop_count; frame_at, shown_ms, duration_ms); springboard/sdk/src/picture_writer.rs (frame writing); springboard/core/src/gifframes.rs; springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Built on parity/team-n-image-i-o; not yet verified on Midget. Apps read every frame with its delay and loop count, and write animated GIFs with picture_writer. APNG frame access is not verified."
+      "note": "Apps read every GIF frame with its delay and loop count, get the frame on screen at an elapsed time (zero delays shown for 100 ms, the loop count applied), and write animated GIFs; tested headless in parity_sdk-complete-07. Gap: APNG frames are not composited, because the PNG reader parses the frame count but does not decode the frames."
     },
     {
       "feature": "Colour profiles and HDR gain maps",
@@ -115,9 +115,9 @@
     {
       "feature": "Image data in drag and drop",
       "apple": "public.image in registerForDraggedTypes",
-      "bifrost": "springboard/sdk/src/dnd.rs (register_types), docs/bifrost-ui.md:513 (public.image accepts PNG and JPEG)",
+      "bifrost": "springboard/sdk/src/dnd.rs (register_types, image_format_of, accepts_image), docs/bifrost-ui.md:513 (public.image accepts PNG and JPEG); springboard/sdk/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Image drops are typed by UTType. Image payloads (data) are not carried; the docs list it as a gap."
+      "note": "An image drop is typed by its picture type or file name, and a window that takes public.image takes every picture format (tested headless in parity_sdk-complete-07). Gap: image data does not travel with the drag; the drag payload needs a change to the shell protocol first."
     },
     {
       "feature": "Tiled image providers",

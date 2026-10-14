@@ -87,9 +87,9 @@
     {
       "feature": "Audio devices",
       "apple": "Audio (virtio sound, host audio)",
-      "bifrost": "springboard/core/src/guest_audio.rs",
+      "bifrost": "springboard/core/src/guest_audio.rs (StreamConfig, GuestStream, Request); springboard/core/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No guest audio; springboard/audiod has no VM route"
+      "note": "A guest PCM stream takes its parameters, then prepare, start, stop and release requests in order, and refuses out-of-order ones; tested headless in parity_sdk-complete-07. Gap: no guest audio route exists, springboard/audiod has no VM route, and the host side needs the lab machine."
     },
     {
       "feature": "Memory balloon",
