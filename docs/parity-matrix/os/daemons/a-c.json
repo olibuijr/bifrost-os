@@ -1131,9 +1131,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/low_battery.rs",
+   "status": "partial",
+   "note": "Covers only the battery menu extra alerts (Low Power Mode offer, Low Battery warnings, clean shutdown). No generic menu extra notification agent. built on os/team-m-09-daemons; not yet verified on Midget",
    "rea": [],
    "method": "heuristic"
   },

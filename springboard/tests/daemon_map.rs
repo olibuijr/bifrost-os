@@ -99,7 +99,8 @@ fn shell_roles_are_mapped_and_unrelated_services_stay_gaps() {
     ] {
         assert_eq!(status_of(n), "partial", "{n} should be mapped to the shell service that fills its role");
     }
-    for n in ["com.apple.Siri.agent", "com.apple.FamilyControlsAgent", "com.apple.iCloudNotificationAgent", "com.apple.icloud.searchpartyd", "com.apple.ScreenTimeAgent", "com.apple.MemorySlotNotification"] {
+    for n in ["com.apple.Siri.agent", "com.apple.FamilyControlsAgent", "com.apple.iCloudNotificationAgent", "com.apple.icloud.searchpartyd", "com.apple.ScreenTimeAgent"] {
         assert_eq!(status_of(n), "gap", "{n} has no real counterpart and must stay a gap");
     }
+    assert_eq!(status_of("com.apple.MemorySlotNotification"), "n/a", "Apple-only memory slot hardware");
 }
