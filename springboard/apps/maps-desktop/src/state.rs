@@ -7,10 +7,12 @@ use crate::geocode::{parse_coordinates, Geocoder, Place, Suggestor, DEFAULT_BASE
 use crate::gpx;
 use crate::links::{self, Endpoint, LinkAction};
 use crate::measure::{path_length_m, Measure};
+use crate::nav::{self, Guidance, Navigator};
 use crate::route::{self, Profile, Route, Router};
-use crate::source::{user_agent, MapType};
+use crate::source::{user_agent, MapType, TileSource};
 use crate::store::{self, Library, Saved};
 use crate::tiles::TileId;
+use crate::transit::Planner;
 use crate::units::{format_distance, format_duration, DistanceUnits, UnitsSetting};
 use crate::view::{MapView, Pins};
 use bifrost_app::controls::TextField;
@@ -25,6 +27,10 @@ pub const PLACE_ZOOM: f64 = 15.0;
 pub const DOWNLOAD_LEVELS: u8 = 2;
 /// Zoom step of the buttons and the menu.
 pub const ZOOM_STEP: f64 = 1.0;
+/// Fewest milliseconds between two requests for a new route while the person is off the route.
+pub const REROUTE_MIN_MS: u64 = 15_000;
+/// A position this accurate (metres) or better is shown at street level; a coarser one at a wider zoom.
+const STREET_FIX_M: f64 = 200.0;
 
 /// The card beside the map.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,8 +38,35 @@ pub enum Panel {
     None,
     Place,
     Directions,
+    Navigation,
     Measure,
     Download,
+}
+
+/// Where the person is, as the shell's location service reports it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Here {
+    pub lat: f64,
+    pub lon: f64,
+    /// radius of uncertainty, metres
+    pub accuracy_m: f64,
+}
+
+impl Here {
+    pub fn lat_lon(&self) -> (f64, f64) {
+        (self.lat, self.lon)
+    }
+}
+
+/// The zoom that shows a position of the given accuracy: street level for a good fix, wider for a coarse one (an IP
+/// lookup is good to a city, not a street).
+pub fn zoom_for_accuracy(accuracy_m: f64) -> f64 {
+    match accuracy_m {
+        a if a <= STREET_FIX_M => PLACE_ZOOM,
+        a if a <= 2_000.0 => 13.0,
+        a if a <= 30_000.0 => 11.0,
+        _ => 9.0,
+    }
 }
 
 /// Every command. Menu items, toolbar buttons and the card's buttons all run one of these.
@@ -71,6 +104,13 @@ pub enum Act {
     OpenGpx,
     ClearRecents,
     Escape,
+    /// centre the map on the person's position
+    Locate,
+    /// draw the traffic layer over the map
+    ToggleTraffic,
+    /// follow the route on the card, turn by turn
+    StartNavigation,
+    EndNavigation,
 }
 
 /// The commands that have a menu item, in menu order; an item's id is its position plus one.
@@ -100,6 +140,10 @@ pub const MENU_ACTS: &[Act] = &[
     Act::SetWork,
     Act::NewCollection,
     Act::ClearRecents,
+    Act::ToggleTraffic,
+    Act::Locate,
+    Act::StartNavigation,
+    Act::EndNavigation,
 ];
 
 impl Act {
@@ -129,6 +173,12 @@ pub enum Effect {
     StartDownload(Vec<TileId>),
     CancelDownload,
     FocusSearch,
+    /// ask the transit planner; the reply is a list of journeys
+    Plan { url: String },
+    /// ask the location service for the person's position (asking permission first when needed)
+    Locate,
+    /// keep receiving positions while a route is followed, or stop
+    TrackLocation(bool),
 }
 
 /// One row under the search field.
@@ -171,7 +221,22 @@ pub struct Maps {
     pub shown_collection: Option<usize>,
     /// one line of news under the card title ("Routing unavailable", "No places found")
     pub note: Option<String>,
+    /// the person's position, once the location service has reported it
+    pub here: Option<Here>,
+    /// a Locate is waiting for the first position
+    pub locating: bool,
+    /// the traffic layer is drawn over the map
+    pub show_traffic: bool,
+    /// the route being followed turn by turn
+    pub nav: Option<Navigator>,
+    pub guidance: Option<Guidance>,
+    /// the latest call of the guidance ("In 150 m, turn left onto Main Street")
+    pub announcement: Option<String>,
+    rerouting: bool,
+    last_reroute_ms: Option<u64>,
     router: Router,
+    planner: Planner,
+    traffic: Option<TileSource>,
     geocoder: Geocoder,
     version: String,
     dirty_settings: bool,
@@ -202,6 +267,10 @@ impl Maps {
         let geocoder = Geocoder::new(&geocoder_base, &user_agent(version)).or_else(|_| Geocoder::new(DEFAULT_BASE, &user_agent(version))).expect("the default geocoder is valid");
         let routing = Some(text("routing_url")).filter(|u| !u.is_empty());
         let router = Router::new(routing.as_deref()).unwrap_or_else(|_| Router::new(None).expect("no routing server is valid"));
+        let transit_base = Some(text("transit_url")).filter(|u| !u.is_empty());
+        let planner = Planner::new(transit_base.as_deref()).unwrap_or_else(|_| Planner::new(None).expect("no transit planner is valid"));
+        let traffic = Some(text("traffic_url")).filter(|u| !u.is_empty()).and_then(|u| TileSource::new(&u, &user_agent(version)).ok());
+        let show_traffic = traffic.is_some() && matches!(s.and_then(|j| j.get("traffic")), Some(Json::Bool(true)));
         Maps {
             root: root.to_path_buf(),
             view: MapView::new(lat, lon, zoom, width, height),
@@ -229,7 +298,17 @@ impl Maps {
             progress: None,
             shown_collection: None,
             note: None,
+            here: None,
+            locating: false,
+            show_traffic,
+            nav: None,
+            guidance: None,
+            announcement: None,
+            rerouting: false,
+            last_reroute_ms: None,
             router,
+            planner,
+            traffic,
             geocoder,
             version: version.to_string(),
             dirty_settings: false,
@@ -250,6 +329,11 @@ impl Maps {
 
     pub fn router(&self) -> &Router {
         &self.router
+    }
+
+    /// The tile source of the traffic layer, when `traffic_url` is set in settings.json and valid.
+    pub fn traffic_source(&self) -> Option<&TileSource> {
+        self.traffic.as_ref()
     }
 
     pub fn resize(&mut self, width: f64, height: f64) {
@@ -283,10 +367,11 @@ impl Maps {
             ("lon".to_string(), Json::Num(lon)),
             ("zoom".to_string(), Json::Num(self.view.zoom())),
             ("pins".to_string(), pins),
+            ("traffic".to_string(), Json::Bool(self.show_traffic)),
         ];
         // the servers are kept as the person set them in settings.json
         if let Some(old) = std::fs::read_to_string(self.root.join("settings.json")).ok().and_then(|t| json::parse(&t).ok()) {
-            for k in ["geocoder_url", "routing_url"] {
+            for k in ["geocoder_url", "routing_url", "transit_url", "traffic_url"] {
                 if let Some(v) = old.str_field(k) {
                     fields.push((k.to_string(), Json::Str(v)));
                 }
@@ -494,12 +579,15 @@ impl Maps {
             Act::AddToCollection(i) => has_place && i < self.library.collections.len(),
             Act::StartDownload => self.offline_area.is_some_and(|a| a.count().1) && self.progress.is_none(),
             Act::ClearRecents => !self.library.recents.is_empty(),
+            Act::StartNavigation => self.panel == Panel::Directions && self.current_route().is_some_and(|r| nav::can_follow(r, self.profile)),
+            Act::EndNavigation => self.nav.is_some(),
             _ => true,
         }
     }
 
     pub fn checked(&self, act: Act) -> bool {
         match act {
+            Act::ToggleTraffic => self.show_traffic,
             Act::MapType(m) => self.map_type == m,
             Act::Units(u) => self.units_setting == u,
             Act::Measure => self.panel == Panel::Measure,
@@ -649,6 +737,21 @@ impl Maps {
             }
             Act::OpenGpx => return vec![Effect::OpenGpx],
             Act::ClearRecents => self.library.clear_recents(),
+            Act::Locate => {
+                self.locating = true;
+                self.note = Some("Finding your location\u{2026}".to_string());
+                return vec![Effect::Locate];
+            }
+            Act::ToggleTraffic => {
+                if self.traffic.is_none() {
+                    self.note = Some("No traffic layer is set up: add traffic_url to settings.json".to_string());
+                } else {
+                    self.show_traffic = !self.show_traffic;
+                    self.touch_settings();
+                }
+            }
+            Act::StartNavigation => return self.start_navigation(now_ms),
+            Act::EndNavigation => return self.end_navigation(),
         }
         let _ = now_ms;
         vec![]
@@ -660,6 +763,10 @@ impl Maps {
     }
 
     fn close_panel(&mut self) -> Vec<Effect> {
+        if self.panel == Panel::Navigation {
+            // the card closes back to the directions it was started from
+            return self.end_navigation();
+        }
         let was = self.panel;
         self.panel = if was == Panel::Place || self.selected.is_none() { Panel::None } else { Panel::Place };
         if was == Panel::Download && self.progress.is_some() {
@@ -691,9 +798,11 @@ impl Maps {
 
     fn open_directions(&mut self) -> Vec<Effect> {
         let (name, to) = self.target();
-        let from = match (&self.library.home, self.route_from.as_ref()) {
-            (_, Some(f)) if f.1 != to => f.clone(),
-            (Some(h), _) if (h.lat, h.lon) != to => (h.title().to_string(), (h.lat, h.lon)),
+        // the start: one the person chose, else where they are, else Home, else the middle of the map
+        let from = match (&self.library.home, self.route_from.as_ref(), self.here) {
+            (_, Some(f), _) if f.1 != to => f.clone(),
+            (_, _, Some(h)) if (h.lat, h.lon) != to => ("Current location".to_string(), (h.lat, h.lon)),
+            (Some(h), _, _) if (h.lat, h.lon) != to => (h.title().to_string(), (h.lat, h.lon)),
             _ => {
                 let (lat, lon) = self.view.centre();
                 ("Map centre".to_string(), (lat, lon))
@@ -708,30 +817,53 @@ impl Maps {
     /// Asks the routing server, or shows the labelled straight-line estimate when none is configured.
     pub fn request_route(&mut self) -> Vec<Effect> {
         let (Some((_, from)), Some((_, to))) = (self.route_from.clone(), self.route_to.clone()) else { return vec![] };
+        // a new request replaces the route that was being followed
+        let mut effects: Vec<Effect> = self.stop_navigation().into_iter().collect();
         self.routes.clear();
         self.route_index = 0;
         self.note = None;
+        self.rerouting = false;
+        if self.profile == Profile::Transit {
+            match self.planner.plan_url(from, to) {
+                Ok(url) => {
+                    self.routing = true;
+                    effects.push(Effect::Plan { url });
+                }
+                Err(_) => self.note = Some("No transit planner is set up: add transit_url to settings.json".to_string()),
+            }
+            return effects;
+        }
         match self.router.route_url(from, to, self.profile) {
             Ok(url) => {
                 self.routing = true;
-                vec![Effect::Route { url }]
+                effects.push(Effect::Route { url });
             }
             Err(_) => {
                 self.routes = vec![route::estimate(from, to, self.profile)];
                 self.note = Some("No routing server is set up: this is a straight-line estimate".to_string());
                 self.fit_route();
-                vec![]
             }
         }
+        effects
     }
 
     pub fn route_done(&mut self, result: Result<Vec<Route>, String>) {
         self.routing = false;
+        if self.rerouting {
+            self.reroute_done(result);
+            return;
+        }
         match result {
             Ok(routes) if !routes.is_empty() => {
                 self.routes = routes;
                 self.route_index = 0;
                 self.note = None;
+            }
+            Err(why) if self.profile == Profile::Transit => {
+                // there is no straight-line stand-in for a timetable
+                self.routes.clear();
+                self.note = Some(format!("No journey found ({why})"));
+                return;
             }
             other => {
                 let (Some((_, from)), Some((_, to))) = (&self.route_from, &self.route_to) else { return };
@@ -753,6 +885,153 @@ impl Maps {
 
     pub fn current_route(&self) -> Option<&Route> {
         self.routes.get(self.route_index)
+    }
+
+    // ---- current location and turn-by-turn guidance ----
+
+    /// The location service could not give a position (refused, none set up): Locate stops waiting and the reason shows.
+    pub fn locate_failed(&mut self, why: &str) {
+        self.locating = false;
+        self.note = Some(why.to_string());
+    }
+
+    /// A position from the location service. A Locate that was waiting centres the map on it; while a route is
+    /// followed the guidance moves on. Returns what the window must do (a request for a new route).
+    pub fn position_update(&mut self, here: Here, now_ms: u64) -> Vec<Effect> {
+        self.here = Some(here);
+        if self.locating {
+            self.locating = false;
+            self.view.centre_to(here.lat, here.lon);
+            let zoom = zoom_for_accuracy(here.accuracy_m);
+            let zoom = if here.accuracy_m <= STREET_FIX_M { self.view.zoom().max(zoom) } else { zoom };
+            self.view.set_zoom(zoom);
+            let note = (here.accuracy_m > 1_000.0).then(|| format!("Approximate location, within about {}", self.distance_text(here.accuracy_m)));
+            self.note = note;
+            self.touch_settings();
+        }
+        self.follow(here, now_ms)
+    }
+
+    /// Moves the guidance to a position: the call that is due is kept for the card, the map follows the person, and
+    /// a position off the route asks for a new route.
+    fn follow(&mut self, here: Here, now_ms: u64) -> Vec<Effect> {
+        let units = self.units();
+        let Some(nav) = self.nav.as_mut() else { return vec![] };
+        let guidance = nav.update((here.lat, here.lon), here.accuracy_m);
+        let spoken = guidance.announce.and_then(|a| {
+            let step = nav.route().steps.get(a.step)?;
+            Some(nav::announcement_text(&step.instruction(), &format_distance(a.distance_m, units), a.now))
+        });
+        if let Some(text) = spoken {
+            self.announcement = Some(text);
+        }
+        if !guidance.arrived {
+            self.view.centre_to(here.lat, here.lon);
+        }
+        let off_route = guidance.off_route;
+        self.guidance = Some(guidance);
+        if off_route {
+            self.reroute(here, now_ms)
+        } else {
+            vec![]
+        }
+    }
+
+    /// Asks the routing server for a way from where the person is to the same destination. At most one request every
+    /// `REROUTE_MIN_MS`, and none while another is running.
+    fn reroute(&mut self, here: Here, now_ms: u64) -> Vec<Effect> {
+        if self.routing || self.last_reroute_ms.is_some_and(|t| now_ms < t + REROUTE_MIN_MS) {
+            return vec![];
+        }
+        let Some((_, to)) = self.route_to.clone() else { return vec![] };
+        let from = (here.lat, here.lon);
+        let Ok(url) = self.router.route_url(from, to, self.profile) else { return vec![] };
+        self.last_reroute_ms = Some(now_ms);
+        self.routing = true;
+        self.rerouting = true;
+        self.route_from = Some(("Current location".to_string(), from));
+        self.note = Some("Finding a new route\u{2026}".to_string());
+        vec![Effect::Route { url }]
+    }
+
+    /// The reply to a request for a new route: followed from the next position on, or the old route is kept.
+    fn reroute_done(&mut self, result: Result<Vec<Route>, String>) {
+        self.rerouting = false;
+        let profile = self.profile;
+        let followed = result.ok().and_then(|routes| {
+            let nav = Navigator::new(routes.first()?.clone(), profile)?;
+            Some((routes, nav))
+        });
+        match followed {
+            Some((routes, nav)) => {
+                self.routes = routes;
+                self.route_index = 0;
+                self.nav = Some(nav);
+                self.guidance = None;
+                self.announcement = Some("Following a new route".to_string());
+                self.note = None;
+            }
+            None => self.note = Some("No new route was found".to_string()),
+        }
+    }
+
+    fn start_navigation(&mut self, _now_ms: u64) -> Vec<Effect> {
+        let Some(route) = self.current_route().cloned() else { return vec![] };
+        let Some(nav) = Navigator::new(route, self.profile) else { return vec![] };
+        self.nav = Some(nav);
+        self.guidance = None;
+        self.announcement = None;
+        self.last_reroute_ms = None;
+        self.rerouting = false;
+        self.panel = Panel::Navigation;
+        self.note = None;
+        // the first position comes from the location service, never from an earlier Locate, which may be old
+        vec![Effect::TrackLocation(true)]
+    }
+
+    fn end_navigation(&mut self) -> Vec<Effect> {
+        self.stop_navigation().into_iter().collect()
+    }
+
+    /// Leaves guidance; the card goes back to the directions. `Some` when positions were being followed.
+    fn stop_navigation(&mut self) -> Option<Effect> {
+        let was = self.nav.take().is_some() || self.panel == Panel::Navigation;
+        self.guidance = None;
+        self.announcement = None;
+        self.rerouting = false;
+        if self.panel == Panel::Navigation {
+            self.panel = Panel::Directions;
+        }
+        was.then_some(Effect::TrackLocation(false))
+    }
+
+    /// The large line of the guidance card: the next manoeuvre.
+    pub fn nav_title(&self) -> String {
+        match (&self.nav, &self.guidance) {
+            (_, Some(g)) if g.arrived => "You have arrived".to_string(),
+            (_, Some(g)) if g.off_route => "Off route".to_string(),
+            (Some(nav), Some(g)) => match g.ahead.and_then(|i| nav.route().steps.get(i)) {
+                Some(step) => step.instruction(),
+                None => "Continue to your destination".to_string(),
+            },
+            _ => "Starting navigation".to_string(),
+        }
+    }
+
+    /// The line under it: how far away the manoeuvre is.
+    pub fn nav_subtitle(&self) -> String {
+        match &self.guidance {
+            None => "Waiting for your location".to_string(),
+            Some(g) if g.arrived => self.route_to.as_ref().map(|(n, _)| n.clone()).unwrap_or_default(),
+            Some(g) if g.off_route => "Finding a new route".to_string(),
+            Some(g) => format!("in {}", self.distance_text(g.distance_m)),
+        }
+    }
+
+    /// The time and distance left, once there is a position and the route is not finished.
+    pub fn nav_remaining(&self) -> Option<String> {
+        let g = self.guidance.as_ref().filter(|g| !g.arrived)?;
+        Some(format!("{} \u{b7} {} remaining", format_duration(g.remaining_s), self.distance_text(g.remaining_m)))
     }
 
     // ---- links, files ----
@@ -1316,5 +1595,290 @@ mod tests {
         assert_eq!(m.units(), DistanceUnits::Imperial);
         m.act(Act::Units(UnitsSetting::Kilometres), 0);
         assert_eq!(m.units(), DistanceUnits::Metric);
+    }
+
+    fn with_settings(name: &str, settings: &str) -> Maps {
+        let root = dir(name);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("settings.json"), settings).unwrap();
+        let mut m = Maps::new(&root, "1.0.0", 800.0, 600.0);
+        m.region_metric = true;
+        m
+    }
+
+    fn fix(p: (f64, f64)) -> Here {
+        Here { lat: p.0, lon: p.1, accuracy_m: 10.0 }
+    }
+
+    #[test]
+    fn locate_waits_for_a_position_then_centres_on_it() {
+        let mut m = maps("locate");
+        assert!(m.can(Act::Locate));
+        assert_eq!(m.act(Act::Locate, 0), vec![Effect::Locate]);
+        assert!(m.locating);
+        assert!(m.position_update(Here { lat: 65.68, lon: -18.1, accuracy_m: 100.0 }, 10).is_empty());
+        assert!(!m.locating);
+        let (lat, lon) = m.view.centre();
+        assert!((lat - 65.68).abs() < 1e-6 && (lon + 18.1).abs() < 1e-6);
+        assert!((m.view.zoom() - PLACE_ZOOM).abs() < 1e-9);
+        assert_eq!(m.here, Some(Here { lat: 65.68, lon: -18.1, accuracy_m: 100.0 }));
+        assert!(m.note.is_none());
+    }
+
+    #[test]
+    fn a_city_level_fix_is_shown_wider_and_called_approximate() {
+        let mut m = maps("approx");
+        m.act(Act::Locate, 0);
+        m.position_update(Here { lat: 64.15, lon: -21.94, accuracy_m: 25_000.0 }, 0);
+        assert!((m.view.zoom() - 11.0).abs() < 1e-9);
+        assert!(m.note.as_deref().unwrap().starts_with("Approximate location"));
+        assert!(zoom_for_accuracy(50.0) > zoom_for_accuracy(500.0) && zoom_for_accuracy(500.0) > zoom_for_accuracy(5_000.0));
+    }
+
+    #[test]
+    fn a_position_nobody_asked_for_does_not_move_the_map() {
+        let mut m = maps("quiet");
+        let before = m.view.centre();
+        m.position_update(fix((65.0, -18.0)), 0);
+        assert_eq!(m.view.centre(), before);
+        assert!(m.here.is_some());
+    }
+
+    #[test]
+    fn a_refused_locate_stops_waiting_and_says_why() {
+        let mut m = maps("refused");
+        m.act(Act::Locate, 0);
+        m.locate_failed("Location is off for Maps");
+        assert!(!m.locating);
+        assert_eq!(m.note.as_deref(), Some("Location is off for Maps"));
+    }
+
+    #[test]
+    fn directions_start_from_the_current_location_when_it_is_known() {
+        let mut m = maps("here-origin");
+        m.library.set_home(Some(Saved::new("Home", 64.2, -21.8)));
+        m.position_update(fix((64.14, -21.9)), 0);
+        m.choose(Place::new("Perlan", 64.1295, -21.9186));
+        m.act(Act::Directions, 0);
+        let (name, at) = m.route_from.clone().unwrap();
+        assert_eq!(name, "Current location");
+        assert_eq!(at, (64.14, -21.9));
+    }
+
+    #[test]
+    fn traffic_needs_a_layer_url_and_the_choice_is_kept() {
+        let mut m = maps("traffic-none");
+        assert!(m.traffic_source().is_none());
+        m.act(Act::ToggleTraffic, 0);
+        assert!(!m.show_traffic);
+        assert!(m.note.as_deref().unwrap().contains("traffic_url"));
+
+        let mut m = with_settings("traffic", r#"{"traffic_url":"https://traffic.example.org/{z}/{x}/{y}.png"}"#);
+        assert!(m.traffic_source().is_some());
+        assert!(!m.checked(Act::ToggleTraffic));
+        m.act(Act::ToggleTraffic, 0);
+        assert!(m.checked(Act::ToggleTraffic));
+        m.persist();
+        assert!(std::fs::read_to_string(m.root().join("settings.json")).unwrap().contains("traffic_url"));
+        let again = Maps::new(m.root(), "1.0.0", 800.0, 600.0);
+        assert!(again.show_traffic, "the choice is remembered");
+        m.act(Act::ToggleTraffic, 0);
+        assert!(!m.show_traffic);
+
+        let bad = with_settings("traffic-bad", r#"{"traffic_url":"https://x/{z}/{x}.png","traffic":true}"#);
+        assert!(bad.traffic_source().is_none() && !bad.show_traffic, "a template without a y is ignored");
+    }
+
+    #[test]
+    fn transit_directions_ask_the_planner_and_never_fall_back_to_an_estimate() {
+        let mut m = with_settings("transit", r#"{"transit_url":"https://otp.example.org/otp/routers/default"}"#);
+        m.choose(Place::new("Perlan", 64.1295, -21.9186));
+        m.act(Act::Directions, 0);
+        let fx = m.act(Act::Profile(Profile::Transit), 0);
+        match &fx[..] {
+            [Effect::Plan { url }] => assert!(url.starts_with("https://otp.example.org/otp/routers/default/plan?fromPlace="), "{url}"),
+            other => panic!("{other:?}"),
+        }
+        assert!(m.routing);
+        let body = r#"{"plan":{"itineraries":[{"duration":900,"legs":[{"mode":"BUS","routeShortName":"1","distance":3000,
+            "from":{"name":"A","lat":64.1,"lon":-21.9},"to":{"name":"B","lat":64.13,"lon":-21.92}}]}]}}"#;
+        m.route_done(crate::transit::parse_itineraries(body));
+        assert_eq!(m.routes.len(), 1);
+        assert!(!m.routes[0].approximate);
+        assert!(!m.can(Act::StartNavigation), "a timetable journey is not followed turn by turn");
+        m.route_done(Err("timeout".into()));
+        assert!(m.routes.is_empty(), "no straight-line stand-in for a bus");
+        assert!(m.note.as_deref().unwrap().contains("No journey"));
+    }
+
+    #[test]
+    fn transit_without_a_planner_says_so() {
+        let mut m = maps("transit-none");
+        m.choose(Place::new("Perlan", 64.1295, -21.9186));
+        m.act(Act::Directions, 0);
+        assert!(m.act(Act::Profile(Profile::Transit), 0).is_empty());
+        assert!(m.routes.is_empty());
+        assert!(m.note.as_deref().unwrap().contains("transit_url"));
+        assert!(!m.routing);
+    }
+
+    const MPD: f64 = 111_194.9;
+    const A: (f64, f64) = (64.0, -21.0);
+
+    fn north_of(p: (f64, f64), metres: f64) -> (f64, f64) {
+        (p.0 + metres / MPD, p.1)
+    }
+
+    fn east_of(p: (f64, f64), metres: f64) -> (f64, f64) {
+        (p.0, p.1 + metres / (MPD * p.0.to_radians().cos()))
+    }
+
+    fn step(name: &str, maneuver: &str, distance_m: f64) -> route::Step {
+        route::Step { name: name.into(), maneuver: maneuver.into(), distance_m }
+    }
+
+    /// 1000 m north, a right turn, 1000 m east.
+    fn guide_route() -> Route {
+        let b = north_of(A, 1000.0);
+        let c = east_of(b, 1000.0);
+        Route {
+            distance_m: 2000.0,
+            duration_s: 200.0,
+            steps: vec![step("Main Street", "depart", 1000.0), step("Side Road", "turn right", 1000.0), step("", "arrive", 0.0)],
+            approximate: false,
+            geometry: vec![A, b, c],
+        }
+    }
+
+    /// A map with a routing server whose directions card shows `guide_route`.
+    fn with_route(name: &str) -> Maps {
+        let mut m = with_settings(name, r#"{"routing_url":"https://router.example.org"}"#);
+        let route = guide_route();
+        let end = *route.geometry.last().unwrap();
+        m.route_from = Some(("A".into(), A));
+        m.route_to = Some(("B".into(), end));
+        m.panel = Panel::Directions;
+        m.route_done(Ok(vec![route]));
+        m
+    }
+
+    #[test]
+    fn only_a_computed_route_can_be_started() {
+        let mut estimate = maps("nav-estimate");
+        estimate.choose(Place::new("Perlan", 64.1295, -21.9186));
+        estimate.act(Act::Directions, 0);
+        assert!(estimate.current_route().unwrap().approximate);
+        assert!(!estimate.can(Act::StartNavigation));
+        assert!(!estimate.can(Act::EndNavigation));
+        assert!(with_route("nav-can").can(Act::StartNavigation));
+    }
+
+    #[test]
+    fn starting_waits_for_a_position_and_then_shows_the_first_manoeuvre() {
+        let mut m = with_route("nav-start");
+        assert_eq!(m.act(Act::StartNavigation, 0), vec![Effect::TrackLocation(true)]);
+        assert_eq!(m.panel, Panel::Navigation);
+        assert_eq!(m.nav_title(), "Starting navigation");
+        assert_eq!(m.nav_subtitle(), "Waiting for your location");
+        assert!(m.nav_remaining().is_none());
+        assert!(m.position_update(fix(north_of(A, 100.0)), 1_000).is_empty());
+        assert_eq!(m.nav_title(), "Turn right onto Side Road");
+        assert!(m.nav_subtitle().starts_with("in "), "{}", m.nav_subtitle());
+        assert!(m.nav_remaining().unwrap().ends_with("remaining"));
+        let (lat, _) = m.view.centre();
+        assert!((lat - north_of(A, 100.0).0).abs() < 1e-6, "the map follows the person");
+    }
+
+    #[test]
+    fn the_next_manoeuvre_is_announced_as_it_comes_near() {
+        let mut m = with_route("nav-announce");
+        m.act(Act::StartNavigation, 0);
+        m.position_update(fix(north_of(A, 300.0)), 1_000);
+        assert!(m.announcement.is_none(), "700 m is too far");
+        m.position_update(fix(north_of(A, 520.0)), 2_000);
+        let far = m.announcement.clone().unwrap();
+        assert!(far.starts_with("In ") && far.ends_with("turn right onto Side Road"), "{far}");
+        m.position_update(fix(north_of(A, 990.0)), 3_000);
+        assert_eq!(m.announcement.as_deref(), Some("Turn right onto Side Road"));
+    }
+
+    #[test]
+    fn leaving_the_route_asks_for_a_new_one_once_in_a_while() {
+        let mut m = with_route("nav-reroute");
+        m.act(Act::StartNavigation, 0);
+        m.position_update(fix(north_of(A, 300.0)), 1_000);
+        let stray = fix(east_of(north_of(A, 500.0), -300.0));
+        let fx = m.position_update(stray, 20_000);
+        match &fx[..] {
+            [Effect::Route { url }] => assert!(url.starts_with("https://router.example.org/route/v1/driving/"), "{url}"),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(m.nav_title(), "Off route");
+        assert_eq!(m.route_from.as_ref().unwrap().0, "Current location");
+        assert!(m.routing);
+        assert!(m.position_update(stray, 25_000).is_empty(), "one request at a time");
+        // the reply: a route from where the person is, followed from the next position on
+        let end = north_of(stray.lat_lon(), 400.0);
+        let fresh = Route {
+            geometry: vec![stray.lat_lon(), end],
+            steps: vec![step("Main Street", "depart", 400.0), step("", "arrive", 0.0)],
+            distance_m: 400.0,
+            duration_s: 40.0,
+            approximate: false,
+        };
+        m.route_done(Ok(vec![fresh]));
+        assert!(!m.routing);
+        assert_eq!(m.announcement.as_deref(), Some("Following a new route"));
+        assert!(m.guidance.is_none());
+        m.position_update(stray, 30_000);
+        assert!(!m.guidance.as_ref().unwrap().off_route);
+    }
+
+    #[test]
+    fn a_new_route_that_cannot_be_found_keeps_the_old_one() {
+        let mut m = with_route("nav-noroute");
+        m.act(Act::StartNavigation, 0);
+        let stray = fix(east_of(north_of(A, 500.0), -300.0));
+        m.position_update(stray, 20_000);
+        m.route_done(Err("timeout".into()));
+        assert!(m.nav.is_some());
+        assert_eq!(m.note.as_deref(), Some("No new route was found"));
+        assert!(!m.position_update(stray, 40_000).is_empty(), "it tries again after the pause");
+    }
+
+    #[test]
+    fn arriving_says_so() {
+        let mut m = with_route("nav-arrive");
+        m.act(Act::StartNavigation, 0);
+        let end = *guide_route().geometry.last().unwrap();
+        m.position_update(fix(east_of(end, -10.0)), 1_000);
+        assert_eq!(m.nav_title(), "You have arrived");
+        assert_eq!(m.nav_subtitle(), "B");
+        assert_eq!(m.announcement.as_deref(), Some("Arrive at your destination"));
+        assert!(m.nav_remaining().is_none());
+    }
+
+    #[test]
+    fn ending_or_closing_the_guidance_goes_back_to_the_directions() {
+        let mut m = with_route("nav-end");
+        m.act(Act::StartNavigation, 0);
+        assert!(m.can(Act::EndNavigation));
+        assert_eq!(m.act(Act::EndNavigation, 0), vec![Effect::TrackLocation(false)]);
+        assert_eq!(m.panel, Panel::Directions);
+        assert!(m.nav.is_none() && m.guidance.is_none());
+        assert!(!m.can(Act::EndNavigation));
+        m.act(Act::StartNavigation, 0);
+        assert_eq!(m.act(Act::ClosePanel, 0), vec![Effect::TrackLocation(false)]);
+        assert_eq!(m.panel, Panel::Directions, "the card closes back to the directions");
+    }
+
+    #[test]
+    fn asking_for_other_directions_while_following_stops_the_guidance() {
+        let mut m = with_route("nav-profile");
+        m.act(Act::StartNavigation, 0);
+        let fx = m.act(Act::Profile(Profile::Walking), 0);
+        assert_eq!(fx.first(), Some(&Effect::TrackLocation(false)));
+        assert!(matches!(fx.get(1), Some(Effect::Route { .. })));
+        assert!(m.nav.is_none());
     }
 }

@@ -14,6 +14,8 @@ pub enum Profile {
     Driving,
     Walking,
     Cycling,
+    /// public transport; the journey comes from the transit planner (`transit`), not the OSRM server
+    Transit,
 }
 
 impl Profile {
@@ -23,6 +25,7 @@ impl Profile {
             Profile::Driving => "driving",
             Profile::Walking => "foot",
             Profile::Cycling => "bike",
+            Profile::Transit => "transit",
         }
     }
 
@@ -32,6 +35,7 @@ impl Profile {
             Profile::Driving => 13.9,
             Profile::Walking => 1.4,
             Profile::Cycling => 4.2,
+            Profile::Transit => 8.3,
         }
     }
 }
@@ -56,6 +60,7 @@ impl Step {
             "turn" | "end of road" | "fork" | "on ramp" | "off ramp" if !modifier.is_empty() => format!("Turn {modifier}{onto}"),
             "roundabout" | "rotary" => format!("Take the roundabout{onto}"),
             "merge" => format!("Merge{onto}"),
+            "transit" => self.name.clone(),
             "continue" | "new name" => format!("Continue{way}"),
             "" => format!("Continue{way}"),
             other if modifier.is_empty() => format!("{}{onto}", capitalise(other)),
@@ -103,6 +108,9 @@ impl Router {
     /// The route request URL from `from` to `to` as (lat, lon). Coordinates go in lon,lat order, as OSRM expects.
     /// Errors when routing is not configured, so no request is made.
     pub fn route_url(&self, from: (f64, f64), to: (f64, f64), profile: Profile) -> Result<String, String> {
+        if profile == Profile::Transit {
+            return Err("transit journeys come from the transit planner".into());
+        }
         let base = self.base.as_deref().ok_or("routing is not configured")?;
         check_coord(from)?;
         check_coord(to)?;
@@ -117,7 +125,7 @@ impl Router {
     }
 }
 
-fn check_coord((lat, lon): (f64, f64)) -> Result<(), String> {
+pub(crate) fn check_coord((lat, lon): (f64, f64)) -> Result<(), String> {
     if lat.is_finite() && lon.is_finite() && lat.abs() <= 90.0 && lon.abs() <= 180.0 {
         Ok(())
     } else {
