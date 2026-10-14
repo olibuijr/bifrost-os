@@ -269,11 +269,74 @@ pub fn flatten_on_white(img: &Image) -> Image {
     Image { w: img.w, h: img.h, px }
 }
 
+/// The picture sharpened with an unsharp mask: each colour channel moves `amount` times its difference from the average
+/// of its 3 by 3 neighbourhood (edges clamped). Alpha is kept, so transparent parts stay transparent. An amount of zero
+/// or less returns the picture as it is.
+pub fn sharpen(img: &Image, amount: f32) -> Image {
+    if amount <= 0.0 || img.w == 0 || img.h == 0 {
+        return img.clone();
+    }
+    let (w, h) = (img.w as i32, img.h as i32);
+    let mut px = Vec::with_capacity(img.px.len());
+    for y in 0..h {
+        for x in 0..w {
+            let mut sum = [0u32; 3];
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let sx = (x + dx).clamp(0, w - 1) as usize;
+                    let sy = (y + dy).clamp(0, h - 1) as usize;
+                    let p = img.px[sy * img.w + sx];
+                    for (k, total) in sum.iter_mut().enumerate() {
+                        *total += (p >> (8 * k)) & 0xff;
+                    }
+                }
+            }
+            let p = img.px[y as usize * img.w + x as usize];
+            let mut out = p & 0xff00_0000;
+            for (k, total) in sum.iter().enumerate() {
+                let c = ((p >> (8 * k)) & 0xff) as f32;
+                let blur = *total as f32 / 9.0;
+                let v = (c + amount * (c - blur)).round().clamp(0.0, 255.0) as u32;
+                out |= v << (8 * k);
+            }
+            px.push(out);
+        }
+    }
+    Image { w: img.w, h: img.h, px }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::MarkKind;
     use bifrost_app::kit::pack;
+
+    #[test]
+    fn sharpening_by_nothing_keeps_the_picture_and_a_flat_area_does_not_change() {
+        let grey = Image { w: 4, h: 4, px: vec![pack(90, 90, 90, 255); 16] };
+        assert_eq!(sharpen(&grey, 0.0).px, grey.px);
+        assert_eq!(sharpen(&grey, 1.5).px, grey.px, "a flat area has nothing to sharpen");
+    }
+
+    #[test]
+    fn sharpening_pushes_a_bright_dot_brighter_and_keeps_alpha() {
+        let mut px = vec![pack(100, 100, 100, 255); 9];
+        px[4] = pack(120, 100, 100, 128);
+        let out = sharpen(&Image { w: 3, h: 3, px }, 1.0);
+        let centre = out.px[4];
+        assert_eq!(centre >> 24, 128, "alpha is kept");
+        assert!((centre & 0xff) > 120, "the red channel is pushed past the neighbourhood average");
+        assert_eq!((centre >> 8) & 0xff, 100, "the green channel is flat, so it stays");
+    }
+
+    #[test]
+    fn sharpening_clamps_to_the_channel_range() {
+        let mut px = vec![pack(0, 0, 0, 255); 9];
+        px[4] = pack(255, 255, 255, 255);
+        let out = sharpen(&Image { w: 3, h: 3, px }, 2.0);
+        assert_eq!(out.px[4] & 0xff, 255);
+        assert_eq!(out.px[0] & 0xff, 0, "dark neighbours go no lower than zero");
+    }
 
     const WHITE: u32 = pack(255, 255, 255, 255);
     const RED: u32 = pack(255, 0, 0, 255);

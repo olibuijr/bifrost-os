@@ -122,6 +122,21 @@ pub struct Shown<'a> {
     pub size: Option<(usize, usize)>,
     pub marks: &'a [Mark],
     pub bookmarks: usize,
+    /// The PDF's information rows and whether it is encrypted.
+    pub info: &'a [(&'static str, String)],
+    pub encrypted: bool,
+}
+
+/// A text string of a PDF: UTF-16 big endian when it starts with the byte order mark, otherwise one character per byte
+/// (the PDFDocEncoding that Latin text uses).
+pub fn pdf_text(bytes: &[u8]) -> String {
+    match bytes.strip_prefix(&[0xFE, 0xFF]) {
+        Some(rest) => {
+            let units: Vec<u16> = rest.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+            String::from_utf16_lossy(&units)
+        }
+        None => bytes.iter().map(|&b| b as char).collect(),
+    }
 }
 
 /// The rows the Inspector lists, as label and value.
@@ -139,6 +154,10 @@ pub fn rows(facts: &Facts, shown: &Shown) -> Vec<(String, String)> {
     out.push(("Annotations".into(), annotation_summary(shown.marks)));
     if shown.bookmarks > 0 {
         out.push(("Bookmarks".into(), shown.bookmarks.to_string()));
+    }
+    if shown.is_pdf {
+        out.push(("Security".into(), if shown.encrypted { "Password protected".into() } else { "None".into() }));
+        out.extend(shown.info.iter().map(|(label, value)| (label.to_string(), value.clone())));
     }
     out.extend(facts.exif.iter().map(|(label, value)| (label.to_string(), value.clone())));
     out
@@ -178,7 +197,7 @@ mod tests {
     #[test]
     fn rows_name_the_file_and_what_is_in_it() {
         let facts = Facts { name: "a.jpg".into(), kind: "JPEG image", bytes: 2048, exif: vec![("Camera", "Cam".into()), ("Location", "64.1466 N, 21.9426 W".into())] };
-        let picture = Shown { pages: 1, is_pdf: false, size: Some((40, 30)), marks: &[], bookmarks: 0 };
+        let picture = Shown { pages: 1, is_pdf: false, size: Some((40, 30)), marks: &[], bookmarks: 0, info: &[], encrypted: false };
         let rows = rows(&facts, &picture);
         let get = |label: &str| rows.iter().find(|(l, _)| l == label).map(|(_, v)| v.as_str());
         assert_eq!(get("Name"), Some("a.jpg"));
@@ -188,11 +207,20 @@ mod tests {
         assert_eq!(get("Annotations"), Some("None"));
         assert_eq!(get("Camera"), Some("Cam"));
         assert_eq!(location(&facts), Some("64.1466 N, 21.9426 W"));
-        let pdf = Shown { pages: 9, is_pdf: true, size: None, marks: &[], bookmarks: 2 };
+        let info = [("Title", "Notes".to_string())];
+        let pdf = Shown { pages: 9, is_pdf: true, size: None, marks: &[], bookmarks: 2, info: &info, encrypted: true };
         let rows = super::rows(&Facts { name: "b.pdf".into(), kind: "PDF document", ..Facts::default() }, &pdf);
         assert!(rows.contains(&("Pages".to_string(), "9".to_string())));
         assert!(rows.contains(&("Bookmarks".to_string(), "2".to_string())));
         assert!(rows.iter().all(|(l, _)| l != "File Size" && l != "Dimensions"));
+        assert!(rows.contains(&("Security".to_string(), "Password protected".to_string())));
+        assert!(rows.contains(&("Title".to_string(), "Notes".to_string())));
+    }
+
+    #[test]
+    fn pdf_text_strings_decode_utf16_and_latin() {
+        assert_eq!(pdf_text(b"Caf\xe9"), "Caf\u{e9}");
+        assert_eq!(pdf_text(&[0xFE, 0xFF, 0x00, 0x41, 0x00, 0xF0]), "A\u{f0}");
     }
 
     #[test]

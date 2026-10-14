@@ -11,12 +11,15 @@ mod picture_tools;
 mod canvas;
 mod document;
 mod export;
+mod export_panel;
 mod find;
 mod inspector;
 mod model;
+mod password;
 mod pdfjob;
 mod pdfmarks;
 mod pixels;
+mod signature_panel;
 mod prefs;
 mod printjob;
 mod recents;
@@ -30,6 +33,7 @@ use canvas::{Action, Layout, Mode, PictureCache, Scene, Side, Tool};
 use document::Document;
 use export::Raster;
 use model::{Adjust, History, Mark, MarkKind, Norm, Pixels, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE, MARK_RED};
+use password::Ask;
 use pdfjob::{Inbox, Job, Reply};
 use prefs::Prefs;
 use recents::Recents;
@@ -77,6 +81,8 @@ enum Gesture {
 /// A PDF on its way from its worker: the worker's job sender and the inbox its replies come back in.
 struct Loading {
     path: PathBuf,
+    /// The password the file is opened with; empty when none was asked for.
+    password: Vec<u8>,
     jobs: Sender<Job>,
     inbox: Inbox,
 }
@@ -143,6 +149,15 @@ struct Viewer {
     after_open: Option<String>,
     /// Whether the Adjust Color sliders are shown on the right side.
     color_panel: bool,
+    /// Whether the Export As panel is shown on the right, and the format it exports to.
+    export_shown: bool,
+    /// Whether the signature picker is shown on the right.
+    signatures_shown: bool,
+    export_format: export_panel::Format,
+    /// A PDF that needs a password, and the password being typed for it.
+    asking: Option<Ask>,
+    /// The password a PDF was opened with this session, so it is not asked for again (Revert to Saved, Open Recent).
+    password: Option<(PathBuf, Vec<u8>)>,
 }
 
 impl Viewer {
@@ -186,6 +201,11 @@ impl Viewer {
             authoring: None,
             after_open: None,
             color_panel: false,
+            export_shown: false,
+            signatures_shown: false,
+            export_format: export_panel::Format::Png,
+            asking: None,
+            password: None,
         }
     }
 
@@ -202,7 +222,7 @@ impl Viewer {
         if !self.toolbar {
             lay.bar = 0;
         }
-        if self.inspector || self.color_panel {
+        if self.inspector || self.color_panel || self.export_shown || self.signatures_shown {
             lay.inspector = Layout::inspector_width(ui, w);
         }
         lay
@@ -253,8 +273,18 @@ impl Viewer {
     }
 
     fn open_path(&mut self, path: &Path) {
+        let password = match &self.password {
+            Some((known, password)) if known == path => password.clone(),
+            _ => Vec::new(),
+        };
+        self.open_document(path, password);
+    }
+
+    /// Opens `path` with `password` (empty for a file without one). A PDF that the password does not open asks for it.
+    fn open_document(&mut self, path: &Path, password: Vec<u8>) {
         self.stop_editing();
         self.save_position();
+        self.asking = None;
         self.authoring = None;
         self.pending_save = None;
         self.after_open = None;
@@ -279,8 +309,8 @@ impl Viewer {
         self.remember(path);
         self.restore_page = if self.prefs.remember_page { document::load_position(&self.data_dir, path) } else { None };
         if matches!(engine::format_of(path), Some(engine::Format::Pdf)) {
-            let (jobs, inbox) = pdfjob::spawn(path.to_path_buf());
-            self.loading = Some(Loading { path: path.to_path_buf(), jobs, inbox });
+            let (jobs, inbox) = pdfjob::spawn(path.to_path_buf(), password.clone());
+            self.loading = Some(Loading { path: path.to_path_buf(), password, jobs, inbox });
             self.status = format!("Opening {}", name_of(path));
             return;
         }
@@ -586,10 +616,17 @@ impl Viewer {
                 None => self.loading = Some(loading),
                 Some(Ok(info)) => {
                     changed = true;
-                    let Loading { path, jobs, inbox } = loading;
+                    let Loading { path, jobs, inbox, .. } = loading;
                     self.doc = Some(document::from_pdf(&path, &self.data_dir, info, jobs, inbox));
                     self.status = self.after_open.take().unwrap_or_default();
                     self.restore_view();
+                }
+                Some(Err(e)) if pdfjob::needs_password(&e) => {
+                    changed = true;
+                    let retry = !loading.password.is_empty();
+                    self.password = None;
+                    self.asking = Some(Ask::new(&loading.path, retry));
+                    self.show_asking();
                 }
                 Some(Err(e)) => {
                     changed = true;
@@ -718,6 +755,11 @@ impl Viewer {
         self.selection_on_page()
     }
 
+    /// What the Export As panel shows: the chosen format, quality and size, and whether a document is open.
+    fn export_choices(&self) -> export_panel::Choices {
+        export_panel::Choices { format: self.export_format, quality: self.jpeg_quality, scale: self.export_scale, open: self.doc.is_some() }
+    }
+
     /// The rows the Inspector lists for the open file.
     fn inspector_rows(&self) -> Vec<(String, String)> {
         let Some(doc) = &self.doc else { return Vec::new() };
@@ -727,6 +769,8 @@ impl Viewer {
             size: doc.sizes.first().copied(),
             marks: &doc.marks,
             bookmarks: doc.bookmarks.len(),
+            info: &doc.info,
+            encrypted: doc.encrypted,
         };
         inspector::rows(&self.facts, &shown)
     }
@@ -989,6 +1033,30 @@ impl Viewer {
             }
             Action::ShowColorPanel => {
                 self.color_panel = !self.color_panel;
+                if self.color_panel {
+                    self.export_shown = false;
+                    self.signatures_shown = false;
+                }
+                true
+            }
+            Action::ExportAs => {
+                self.export_shown = !self.export_shown;
+                if self.export_shown {
+                    self.color_panel = false;
+                    self.signatures_shown = false;
+                }
+                true
+            }
+            Action::ShowSignatures => {
+                self.signatures_shown = !self.signatures_shown;
+                if self.signatures_shown {
+                    self.color_panel = false;
+                    self.export_shown = false;
+                }
+                true
+            }
+            Action::ChooseFormat(format) => {
+                self.export_format = format;
                 true
             }
             _ => self.track(|v| v.act_edit(ui, lay, action)),
@@ -1371,6 +1439,8 @@ impl Viewer {
             Action::Darker => self.adjust.exposure = (self.adjust.exposure - 0.5).clamp(-2.0, 2.0),
             Action::Saturate => self.adjust.saturation = (self.adjust.saturation + 0.25).clamp(0.0, 2.0),
             Action::Desaturate => self.adjust.saturation = (self.adjust.saturation - 0.25).clamp(0.0, 2.0),
+            Action::Sharpen => self.adjust.sharpness = (self.adjust.sharpness + 0.25).clamp(0.0, 2.0),
+            Action::Soften => self.adjust.sharpness = (self.adjust.sharpness - 0.25).clamp(0.0, 2.0),
             Action::ResetColour => self.adjust = Adjust::default(),
             Action::Print => self.print(),
             Action::RevertToOriginal => self.revert(),
@@ -1406,7 +1476,15 @@ impl Viewer {
             | Action::ToggleRememberPage
             | Action::ToggleContactDefault
             | Action::SetAuthor
-            | Action::ShowColorPanel => {}
+            | Action::ShowColorPanel
+            | Action::ExportAs
+            | Action::ChooseFormat(_)
+            | Action::ShowSignatures => {}
+            Action::ExportNow => match self.export_format {
+                export_panel::Format::Png => self.export_raster(Raster::Png),
+                export_panel::Format::Jpeg => self.export_raster(Raster::Jpeg(self.jpeg_quality)),
+                export_panel::Format::Pdf => self.export_pdf(),
+            },
             Action::QualityHigh | Action::QualityMedium | Action::QualityLow => {
                 if let Some(quality) = action.jpeg_quality() {
                     self.jpeg_quality = quality;
@@ -1528,9 +1606,26 @@ impl Viewer {
         if let Some(action) = canvas::button_hit(ui, lay, x, y) {
             return self.act(ui, lay, action);
         }
+        // the signature picker takes the clicks on its side; a click on a signature places it on the shown page
+        if self.signatures_shown && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
+            let metrics = canvas::export_metrics(ui, lay);
+            // the press is already inside the undo record that touch() opens around this call
+            if let Some(index) = signature_panel::hit(&metrics, self.signatures.len(), x, y) {
+                self.insert_signature(index);
+            }
+            return true;
+        }
+        // the Export As panel takes the clicks on its side; a click on one of its buttons runs that button's action
+        if self.export_shown && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
+            let panel = export_panel::panel(&canvas::export_metrics(ui, lay), &self.export_choices());
+            return match export_panel::hit(&panel, x, y) {
+                Some(action) => self.act(ui, lay, action),
+                None => true,
+            };
+        }
         // the Adjust Color panel takes the clicks on its side; its value changes while the finger moves
         if self.color_panel && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
-            if let Some(which) = canvas::slider_hit(ui, lay, 4, x, y) {
+            if let Some(which) = canvas::slider_hit(ui, lay, self.adjust.sliders().len(), x, y) {
                 self.gesture = Some(Gesture::Slider { which, before: self.snapshot() });
             }
             return true;
@@ -1758,7 +1853,49 @@ impl Viewer {
         true
     }
 
+    /// Shows the password request, with the typing as stars.
+    fn show_asking(&mut self) {
+        if let Some(ask) = &self.asking {
+            self.status = ask.message(&name_of(&ask.path));
+        }
+    }
+
+    /// A key while the password of a PDF is being typed. Return opens the file with what was typed, and Escape leaves
+    /// the file unopened.
+    fn key_password(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Text(t) => {
+                if let Some(ask) = &mut self.asking {
+                    ask.type_text(t);
+                }
+            }
+            KeyInput::Code(8) => {
+                if let Some(ask) = &mut self.asking {
+                    ask.delete();
+                }
+            }
+            KeyInput::Code(13) => {
+                let Some(ask) = self.asking.take() else { return false };
+                let password = ask.password();
+                self.password = Some((ask.path.clone(), password.clone()));
+                self.open_document(&ask.path, password);
+                return true;
+            }
+            KeyInput::Code(27) => {
+                self.asking = None;
+                self.status = "The document was not opened.".into();
+                return true;
+            }
+            _ => return false,
+        }
+        self.show_asking();
+        true
+    }
+
     fn key(&mut self, ctx: &Ctx, key: KeyInput) -> bool {
+        if self.asking.is_some() {
+            return self.key_password(&key);
+        }
         if self.authoring.is_some() {
             return self.key_author(&key);
         }
@@ -1886,6 +2023,7 @@ fn item_labelled(action: Action, label: &str, enabled: bool, checked: bool) -> A
         Action::GoToPage => m.key("cmd+alt+g"),
         Action::AddBookmark => m.key("cmd+d"),
         Action::Save => m.key("cmd+s"),
+        Action::ExportAs => m.key("cmd+shift+s"),
         Action::CopyText => m.key("cmd+c"),
         Action::SelectAll => m.key("cmd+a"),
         Action::ToggleToolbar => m.key("cmd+alt+t"),
@@ -1959,6 +2097,12 @@ impl App for Viewer {
             tool_items.push(AppMenuItem::new(MENU_SIGNATURE + i as u32, &format!("Signature {}", i + 1)).enabled(open).depth(1));
         }
         tool_items.push(item(Action::ClearSignatures, !self.signatures.is_empty(), false));
+        tool_items.push(item_labelled(
+            Action::ShowSignatures,
+            if self.signatures_shown { "Hide Signatures" } else { "Show Signatures" },
+            open,
+            self.signatures_shown,
+        ));
         tool_items.extend([
             AppMenuItem::separator(),
             item_labelled(Action::ToggleMagnifier, if self.loupe_on { "Hide Magnifier" } else { "Show Magnifier" }, open, self.loupe_on),
@@ -1991,6 +2135,7 @@ impl App for Viewer {
         );
         file_items.push(AppMenuItem::separator());
         file_items.push(item(Action::ExportPdf, pdf, false));
+        file_items.push(item(Action::ExportAs, open, self.export_shown));
         file_items.push(AppMenuItem::separator());
         file_items.push(item(Action::Save, open, false));
         file_items.push(item(Action::RevertToSaved, open, false));
@@ -2070,6 +2215,8 @@ impl App for Viewer {
                     item(Action::Darker, open, false),
                     item(Action::Saturate, open, false),
                     item(Action::Desaturate, open, false),
+                    item(Action::Sharpen, open, false),
+                    item(Action::Soften, open && self.adjust.sharpness > 0.0, false),
                     item(Action::ResetColour, open && !self.adjust.is_identity(), false),
                     AppMenuItem::separator(),
                     item_labelled(
@@ -2166,6 +2313,9 @@ impl App for Viewer {
         let draft = self.draft(&lay);
         let rows = if self.inspector && self.mode != Mode::Slideshow { self.inspector_rows() } else { Vec::new() };
         let sliders = (self.color_panel && lay.inspector > 0 && self.mode != Mode::Slideshow).then(|| self.adjust.sliders());
+        let export = (self.export_shown && lay.inspector > 0 && self.mode != Mode::Slideshow)
+            .then(|| export_panel::panel(&canvas::export_metrics(&ctx.ui, &lay), &self.export_choices()));
+        let signatures = (self.signatures_shown && lay.inspector > 0 && self.mode != Mode::Slideshow).then(|| self.signatures.as_slice());
         let scene = Scene {
             doc: self.doc.as_ref(),
             view: self.view,
@@ -2182,6 +2332,8 @@ impl App for Viewer {
             contact_scroll: self.contact_scroll,
             found: &self.found,
             color: sliders.as_ref().map(|s| s.as_slice()),
+            export,
+            signatures,
         };
         canvas::draw(s, &ctx.ui, &lay, &scene, &mut self.cache);
         let mut d = Damage::new(s.w, s.h);

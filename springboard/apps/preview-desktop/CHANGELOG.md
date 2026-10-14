@@ -46,6 +46,66 @@
 - Tools > Adjust Size (Cmd+Option+I) resamples a picture: type a width, a width x height or a percentage in the status
   line and press Return. File > JPEG Quality chooses High, Medium or Low for exported JPEGs.
 
+## 0.10.0
+
+- File > Export As (Cmd+Shift+S) shows an export panel on the right: PNG, JPEG or PDF, the JPEG quality, the export size
+  (25% to 200%) and an Export button. The quality applies to JPEG and the size to the formats that scale. A PDF's password
+  is not set from the panel yet.
+- Opening a password-protected PDF asks for its password in the status line. The typing shows as stars, Return opens the
+  file and Escape leaves it closed. A password is kept for the session, so Revert to Saved does not ask again. Owner
+  passwords are not tried, and a PDF with a password cannot be saved with its markup yet.
+- Adjust > Sharpen and Soften (and a Sharpness slider in Adjust Color) apply an unsharp mask after the colour adjustments.
+  Reset Colour clears it.
+- The Inspector lists a PDF's title, author, subject and keywords, and whether it is password protected.
+- Tools > Show Signatures puts the saved signatures on the right. A click places one on the shown page as one undo step.
+  The panels on the right now take turns: Export As, signatures, Adjust Color and the Inspector.
+
+## 0.9.0
+
+- File > Save (Cmd+S) writes the markup, page order and turns into the document and opens it again. A PDF is written
+  with its markup as annotations; a picture is written in its own format. File > Revert to Saved opens the file again
+  and drops every change since it was saved. The copy the window keeps for a file chosen in the open panel is the one
+  Save replaces.
+- Edit > Copy (Cmd+C) puts the text of a PDF page on the clipboard, or only the lines inside the selection when there
+  is one; a picture goes to the clipboard as PNG. Edit > Select All (Cmd+A) selects the shown page. Copy works by
+  line, not by word: the extraction does not give the position of each word.
+- Tools > Text Box places a text box at a click and takes the typed text; it is saved into the PDF as a FreeText
+  annotation in Helvetica. Text boxes are not burned into exported pictures yet.
+- Tools > Star, Polygon and Speech Bubble draw closed shapes. They are saved into the PDF as polygon annotations and
+  burn into exports.
+- Tools > Redact draws a black box over a picture; the box is burned into saved and exported pictures. It is not offered
+  for a PDF, whose text under a box would stay.
+- Tools > Save Signature keeps the strokes drawn on the shown page (Sign tool) in a library of up to nine.
+  Tools > Insert Signature places one in the middle of the page as drawn strokes, at one undo step.
+- View > Hide Toolbar (Cmd+Option+T) hides the toolbar and gives its height to the page.
+- Adjust > Show Adjust Color shows sliders for exposure, contrast, saturation and temperature on the right side. A drag
+  is one undo step. Sharpness has no filter yet.
+- Settings menu: Remember Last Page reopens a document on the page it was last shown on; Open PDFs as Contact Sheet
+  opens them as the grid; Annotation Author sets the author written into new markup (typed in the status line).
+
+## 0.8.0
+
+- Tools > Select drags out a rectangle on the page. Tools > Crop (Cmd+K) keeps the selection of a picture and moves its
+  markup with it; View > Zoom to Selection fills the window with it.
+- Tools > Flip Horizontal and Flip Vertical mirror a picture and its markup. Tools > Instant Alpha clears the region of
+  one colour around a click to transparent, and Tools > Remove Background clears the background that reaches the
+  picture's edge. All of these can be undone, and Revert to Original brings the pixels back. PNG export now keeps
+  transparency; JPEG export lays a transparent picture over white.
+- New markup: Oval, Line, Arrow, Underline and Strike Through. They draw in the window, burn into exports and are saved
+  into the PDF as Circle, Line, Underline and StrikeOut annotations.
+- Edit > Find (Cmd+F) searches the text of a PDF: type the text in the status line and press Return. The matching lines
+  are listed in the sidebar (View > Search Results) and Find Next and Find Previous (Cmd+G, Shift+Cmd+G) step through
+  the pages that hold them.
+- View > Markup and View > Bookmarks list every mark and bookmark in the sidebar; a click goes to its page.
+- View > Contact Sheet (Cmd+2) shows every page in a grid. View > Slideshow (Shift+Cmd+F) shows the pages one after
+  another without the toolbar and sidebar; arrows, space and Return step, Escape ends it.
+- Tools > Show Inspector (Cmd+I) lists the file's name, kind, size, pages or pixels, markup counts and, for a JPEG, its
+  camera, exposure and location. Tools > Show Location Info shows the place a picture was taken. Tools > Show Magnifier
+  enlarges the picture under the pointer.
+- File > New from Clipboard (Cmd+N) opens a picture from the clipboard.
+- Tools > Adjust Size (Cmd+Option+I) resamples a picture: type a width, a width x height or a percentage in the status
+  line and press Return. File > JPEG Quality chooses High, Medium or Low for exported JPEGs.
+
 ## 0.7.0
 
 - File > Open (Cmd+O) shows the open panel for PDFs and pictures. The chosen file is copied into the app's data folder and opened from there.
