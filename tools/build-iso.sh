@@ -71,6 +71,26 @@ for app_id in is.olibuijr.browser.desktop is.olibuijr.files.desktop; do
 done
 offline_apps=("$AIROOT"/usr/share/bifrost/offline/apps/*.aap)
 [ "${#offline_apps[@]}" -eq 2 ] || { echo "expected exactly two offline default apps, found ${#offline_apps[@]}" >&2; exit 1; }
+# The live installer and installed shell need these generated assets; never inherit a stale profile copy. Preparing the
+# assets (including any font fetches) is a separate build-time step, not an ISO-build/network fallback.
+ASSET_SRC=${BIFROST_ISO_ASSETS_DIR:-springboard/assets}
+for file in SFUI.ttf SFUIMono.ttf Symbols.ttf wallpaper.raw wallpapers/index.ini \
+            icons/bifrost.settings.raw icons/bifrost.appstore.raw icons/bifrost.files.raw icons/bifrost.browser.raw; do
+  [ -s "$ASSET_SRC/$file" ] || { echo "required ISO asset missing: $ASSET_SRC/$file (prepare assets before building)" >&2; exit 1; }
+done
+ASSET_DEST="$AIROOT/usr/share/springboard/assets"
+mkdir -p "$ASSET_DEST"
+rsync -a --delete "$ASSET_SRC/" "$ASSET_DEST/"
+# Installer footage is a required live-media input. The canonical source is the archiso overlay; lab builds can point
+# at the already-published payload explicitly without depending on an old AIROOT tree.
+VIDEO_SRC=${BIFROST_ISO_VIDEO_DIR:-packaging/archiso/airootfs/usr/share/bifrost/video}
+for file in Godafoss_1080.mp4 Svartifoss_1080.mp4; do
+  [ -s "$VIDEO_SRC/$file" ] || { echo "required installer video missing: $VIDEO_SRC/$file (set BIFROST_ISO_VIDEO_DIR to a prepared source directory)" >&2; exit 1; }
+done
+VIDEO_DEST="$AIROOT/usr/share/bifrost/video"
+mkdir -p "$VIDEO_DEST"
+install -m644 "$VIDEO_SRC/Godafoss_1080.mp4" "$VIDEO_DEST/Godafoss_1080.mp4"
+install -m644 "$VIDEO_SRC/Svartifoss_1080.mp4" "$VIDEO_DEST/Svartifoss_1080.mp4"
 rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols packaging/arch/recovery/guard.rs -o out/bifrost-update-guard-iso
 install -Dm755 out/bifrost-update-guard-iso "$AIROOT/usr/bin/bifrost-update-guard"
 install -Dm644 packaging/arch/recovery/bifrost-update-guard.service "$AIROOT/usr/lib/systemd/system/bifrost-update-guard.service"
