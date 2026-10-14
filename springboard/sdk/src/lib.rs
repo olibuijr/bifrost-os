@@ -265,6 +265,7 @@ pub mod peer_mesh;
 pub mod peer_identity;
 pub mod nearby_service;
 pub mod restoration;
+pub mod scene_session;
 pub mod image_source;
 pub mod image_metadata;
 pub mod image_animation;
