@@ -10,23 +10,23 @@
     {
       "feature": "Posting a named notification (notify_post)",
       "apple": "notify_post(_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::post_with); wired: springboard/src/shell/services/notify_bus.rs (post); springboard/sdk/src/notify_bus.rs (post)",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::post_with); springboard/sdk/src/notify_bus.rs (post); springboard/sdk/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/services/notify_bus.rs (post)",
       "status": "partial",
-      "note": "Cross-app broadcast relayed by the shell (ToShell::DistPost). Only between BifrOSt apps, string names, string user_info capped at 32 entries; no system-wide Darwin names. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Cross-app broadcast relayed by the shell (ToShell::DistPost). Headless tests: a_distributed_post_reaches_local_observers_and_is_queued_for_the_shell_sorted, a_process_local_distributed_post_sends_nothing_to_the_shell, notify_bus_calls_go_to_the_notify_bus_service_with_their_method. Only between BifrOSt apps, string names, string user_info capped at 32 entries; no system-wide Darwin names. Verify on Midget for parity."
     },
     {
       "feature": "Registering a handler for a name (notify_register_dispatch)",
       "apple": "notify_register_dispatch(_:_:_:_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::add_observer); wired: springboard/src/shell/services/notify_bus.rs (notified event); springboard/sdk/src/notify_bus.rs (notified)",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::add_observer, NotificationCenter::add_observer); springboard/sdk/src/notify_bus.rs (register, Mode); springboard/sdk/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/services/notify_bus.rs (notified event)",
       "status": "partial",
-      "note": "Observers run on the main thread, not on a caller-chosen dispatch queue. Observer closures are tied to the main thread; no queue argument. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Observers run on the main thread and take an optional object filter. Headless tests: an_observer_hears_its_name_and_its_object_only, an_observer_without_an_object_hears_every_object_and_gets_the_user_info. Observer closures are tied to the main thread; there is no queue argument. Verify on Midget for parity."
     },
     {
       "feature": "Polling a registration token (notify_check)",
       "apple": "notify_check(_:_:)",
-      "bifrost": "springboard/core/src/notify_center.rs; wired: springboard/src/shell/services/notify_bus.rs (register mode poll, check); springboard/sdk/src/notify_bus.rs (check)",
+      "bifrost": "springboard/core/src/notify_center.rs (NotifyCenter::register, check, post); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/notify_bus.rs (check); wired: springboard/src/shell/services/notify_bus.rs (register mode poll, check)",
       "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token API; delivery is push only. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "A poll token is marked on each post and the mark is cleared by check. Headless tests: post_marks_every_live_token_on_the_name_and_counts_them, check_clears_the_pending_mark, a_poll_token_does_not_queue_signals. The shell offers poll mode through the notify bus check call. Verify on Midget for parity."
     },
     {
       "feature": "Signal-based delivery (notify_register_signal)",
@@ -52,16 +52,16 @@
     {
       "feature": "Token lifecycle (notify_cancel, notify_suspend, notify_resume, notify_is_valid_token)",
       "apple": "notify_cancel(_:), notify_suspend(_:), notify_resume(_:), notify_is_valid_token(_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (ObserverToken drop removes observer); wired: springboard/src/shell/services/notify_bus.rs (cancel, suspend, resume, valid); springboard/sdk/src/notify_bus.rs",
+      "bifrost": "springboard/core/src/notify_center.rs (cancel, suspend, resume, is_valid); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/notification.rs (ObserverToken drop removes observer); springboard/sdk/src/notify_bus.rs (suspend, resume, cancel, valid); wired: springboard/src/shell/services/notify_bus.rs (cancel, suspend, resume, valid)",
       "status": "partial",
-      "note": "Dropping the token removes the observer. No suspend or resume, and no integer token validity check. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Cancelling removes a token, suspending skips posts while resume restarts delivery, and is_valid answers for a live token. Headless tests: cancelled_tokens_stop_receiving_posts, suspended_tokens_miss_posts_and_resume_restarts_delivery, an_observer_hears_its_name_and_its_object_only (dropping the token removes the observer). The in-process observer token has drop only, not suspend or resume. Verify on Midget for parity."
     },
     {
       "feature": "Per-name state values (notify_set_state, notify_get_state)",
       "apple": "notify_set_state(_:_:), notify_get_state(_:_:)",
-      "bifrost": "springboard/core/src/notify_center.rs; wired: springboard/src/shell/services/notify_bus.rs (set_state, state); springboard/sdk/src/notify_bus.rs",
+      "bifrost": "springboard/core/src/notify_center.rs (NotifyCenter::set_state, state); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/notify_bus.rs (set_state, state); wired: springboard/src/shell/services/notify_bus.rs (set_state, state)",
       "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing stores a 64-bit state alongside a name. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "A 64-bit state value per name, shared by every token on it, defaults to zero. Headless test: name_state_defaults_to_zero_and_keeps_the_last_value_set. The SDK refuses set_state for system names. Verify on Midget for parity."
     },
     {
       "feature": "Posting to a non-running app (suspensionBehavior)",
@@ -73,9 +73,9 @@
     {
       "feature": "System event names (kNotifyTimeZoneChange, kNotifyClockSet, kNotifyVFSMount, kNotifyVFSUnmount, kNotifyVFSLowDiskSpace, kNotifySCNetworkChange, kNotifySCHostNameChange, kNotifyDSCacheInvalidation*, kNotifyASLDBUpdate)",
       "apple": "Notify Macros constants",
-      "bifrost": "springboard/core/src/notify_center.rs; wired: springboard/src/shell/services/notify_bus.rs (system.appearance.change, system.screen.locked, system.screen.unlocked, system.network.change); only four of the names are posted",
+      "bifrost": "springboard/core/src/notify_center.rs (SYSTEM_EVENTS); springboard/core/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/services/notify_bus.rs (system.appearance.change, system.screen.locked, system.screen.unlocked, system.network.change)",
       "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No shell broadcast for time zone, clock, mount, disk-space, network or host-name changes under these names. Workspace app-launch events exist but use their own message, not Darwin names. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "The eleven system names are defined in the core model under the system namespace (system_event_names_are_the_system_namespace_and_include_the_clock_and_volume_events). Only the appearance, screen lock and network changes are posted by the shell; there is no broadcast for time zone, clock, mount, disk-space, host-name or cache changes under these names. Verify on Midget for parity."
     },
     {
       "feature": "Status codes and macros (NOTIFY_STATUS_*, NOTIFY_TOKEN_INVALID)",
