@@ -1291,6 +1291,7 @@ impl MailWindow {
                     if self.undo == Some(id) {
                         self.undo = None;
                     }
+                    self.save_queue_file();
                 }
                 self.mail.status = "Sent".into();
             }
@@ -1299,6 +1300,7 @@ impl MailWindow {
                 if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free()) {
                     self.mail.sheet = Some(Sheet::Compose(compose));
                     self.mail.status = format!("The message was not sent: {e}");
+                    self.save_queue_file();
                 } else if let Some(mut queued) = flight {
                     queued.attempts += 1;
                     if queued.attempts >= schedule::MAX_ATTEMPTS {
@@ -2233,8 +2235,12 @@ impl MailWindow {
         self.dirty = true;
     }
 
+    /// Writes the outbox and the reminders. A message that is out for sending stays in the file until the server has taken
+    /// it, so a restart in the middle sends it again instead of losing it.
     fn save_queue_file(&mut self) {
-        if let Err(e) = schedule::save(&self.queue_path, &self.mail.queue) {
+        let mut saved = self.mail.queue.clone();
+        saved.outbox.extend(self.in_flight.values().cloned());
+        if let Err(e) = schedule::save(&self.queue_path, &saved) {
             self.mail.status = format!("The outbox could not be saved: {e}");
         }
     }
