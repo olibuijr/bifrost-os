@@ -33,14 +33,14 @@
       "apple": "IOServiceOpen, IOConnectCallMethod, IOConnectCallScalarMethod, IOConnectCallStructMethod, IOConnectMapMemory",
       "bifrost": "springboard/src/media/v4l2.rs:233 (Device::open, ioctl-based capture); springboard/src/bare/kms.rs (DRM ioctls)",
       "status": "os",
-      "note": "The Linux kernel ABI is used directly by the shell. No general driver-call API is offered to apps."
+      "note": "Blocked: a generic driver-call API needs a shell broker that checks an app's grant before it issues an ioctl on a device node, and no such broker or grant record exists. The shell keeps its ioctl calls private (v4l2.rs, kms.rs), so apps get no method call and no mapped memory."
     },
     {
       "feature": "Shared-memory data queues from drivers",
       "apple": "IODataQueueAllocateNotificationPort, IODataQueueDequeue, IODataQueuePeek (IODataQueueClient.h)",
       "bifrost": "springboard/src/media/v4l2.rs (mmap'd capture buffers); springboard/src/bare/scanout.rs (buffer allocation for display)",
       "status": "os",
-      "note": "Equivalent buffer-sharing paths exist for video and display. No generic data-queue type exists in the SDK."
+      "note": "Blocked: the shell's mmap'd capture and scanout buffers are private to the shell, and no shared-memory channel from a driver to an app is defined in springboard/proto, so a data-queue type would have no producer to read from."
     },
     {
       "feature": "Power sources and battery state",
@@ -94,9 +94,9 @@
     {
       "feature": "Network interfaces",
       "apple": "IOKit network interface services (IONetworkInterface)",
-      "bifrost": "springboard/src/net/wifi.rs:630 (adapter link and address from sysfs)",
-      "status": "os",
-      "note": "Network state is read by the netd daemon and the shell."
+      "bifrost": "springboard/sdk/src/net_interfaces.rs (parse_operstate, parse_hardware_address, classify, from_entries, list); springboard/src/net/wifi.rs:630 (adapter link and address from sysfs)",
+      "status": "partial",
+      "note": "The SDK lists each adapter's name, kind, link state and hardware address, and its parsers and classification are tested headless in tests/parity_sdk-rest-03.rs. Gap: list() reads /sys/class/net on the lab machine only, no app receives change events, and the shell's wifi.rs link reader does not yet use the SDK model."
     },
     {
       "feature": "Serial ports and modem",
