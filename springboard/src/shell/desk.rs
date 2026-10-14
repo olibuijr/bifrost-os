@@ -62,6 +62,16 @@ pub fn compositor_places_windows() -> bool {
 }
 
 /// The rectangle of `tile` inside the work area `a`; Centre keeps two thirds of each side.
+/// How far a window moves up to clear the on-screen keyboard whose top edge is `kb_top`: its bottom edge stops
+/// at the keyboard, and its top never goes above the menu bar. Zero when it already clears the keyboard.
+pub fn kb_lift(r: Rect, kb_top: i32, menubar: i32) -> i32 {
+    let over = r.y + r.h - kb_top;
+    if over <= 0 {
+        return 0;
+    }
+    over.min((r.y - menubar).max(0))
+}
+
 pub fn tile_rect(a: Rect, tile: Tile) -> Rect {
     let (hw, hh) = (a.w / 2, a.h / 2);
     let (rw, rh) = (a.w - hw, a.h - hh);
@@ -814,6 +824,64 @@ impl Shell {
         self.desk.is_some()
     }
 
+    /// The on-screen keyboard is drawn over the desktop: a touch tablet, not locked, and the keyboard is up or
+    /// sliding. A desktop has a hardware keyboard and never gets one (`set_keyboard`).
+    pub(super) fn desk_keyboard_visible(&self) -> bool {
+        self.form.is_tablet() && !self.is_locked() && (self.keyboard.shown() || self.keyboard.animating())
+    }
+
+    /// Lifts the front window clear of the keyboard while it is up, and puts a lifted window back once it is down.
+    /// A window the user moved since the lift is left where it is.
+    pub(super) fn desk_keyboard_lift(&mut self) {
+        if let Some((app, y, lifted_y)) = self.desk_kb_lift.take() {
+            if let Some(w) = self.desk.as_mut().and_then(|d| d.wins.iter_mut().find(|w| w.app == app)) {
+                if w.r.y == lifted_y {
+                    w.r.y = y;
+                    self.dirty = true;
+                }
+            }
+        }
+        if !(self.form.is_tablet() && self.keyboard.shown() && !self.is_locked()) {
+            return;
+        }
+        let kb_top = self.kb_top() as i32;
+        let menubar = self.desktop_bar_height() as i32;
+        let Some(d) = self.desk.as_mut() else { return };
+        let Some(i) = d.wins.iter().rposition(|w| !w.minimized) else { return };
+        let w = &mut d.wins[i];
+        let lift = kb_lift(w.r, kb_top, menubar);
+        if lift > 0 {
+            let (app, y) = (w.app, w.r.y);
+            w.r.y -= lift;
+            self.desk_kb_lift = Some((app, y, w.r.y));
+            self.dirty = true;
+        }
+    }
+
+    /// Touches on the keyboard while the desktop is up: the same routing as `ext_touch` for a foreground app.
+    /// `None` leaves the touch to the desktop.
+    pub(super) fn desk_keyboard_touch(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
+        if !self.desk_keyboard_visible() {
+            return None;
+        }
+        let top = self.kb_top();
+        match ev {
+            Event::Down(x, y) if self.keyboard.shown() && y >= top => {
+                self.kb_touch = true;
+                self.keyboard.down(x, y - top, t);
+            }
+            Event::Move(x, y) if self.kb_touch => self.keyboard.moved(x, y - top),
+            Event::Up(x, y) if self.kb_touch => {
+                self.kb_touch = false;
+                if let Some(out) = self.keyboard.up(x, y - top, t) {
+                    self.type_out(out, t);
+                }
+            }
+            _ => return None,
+        }
+        Some(vec![])
+    }
+
     /// Settings > Appearance without a restart: the pref is saved and `appearance_tick` fades to it.
     pub fn set_appearance(&mut self,mode:&str)->Result<(),String> {
         self.prefs.set(super::settings::APPEARANCE_PREF,mode).map_err(|e|e.to_string())?;
@@ -1255,6 +1323,8 @@ impl Shell {
                 let app = self.desk.as_ref()?.wins[i].app;
                 self.screen = Screen::App(app);
                 self.fullscreen = false;
+                // the window now in front takes over the keyboard's lift
+                self.desk_keyboard_lift();
                 let w = self.desk.as_ref()?.wins[i];
                 let mut hit = hit;
                 if hit == Hit::Title {
@@ -1714,6 +1784,13 @@ impl Shell {
         }
         self.draw_app_status(s);
         self.draw_desk_dock(s, &m, t);
+        // a tablet's on-screen keyboard sits over the desktop, above the windows and the dock
+        if self.desk_keyboard_visible() {
+            let kb_top = self.kb_top();
+            self.keyboard.draw(s, &self.ui, kb_top, t);
+            let below = (kb_top + self.keyboard.h() + self.keyboard.offset(t)) as usize;
+            s.fill_rect(0, below, self.w as usize, self.h as usize, super::keyboard::BG);
+        }
         #[cfg(feature="desktop-wayland")]
         self.draw_desktop_popup(s);
         self.draw_quick_look(s);
@@ -2595,5 +2672,34 @@ mod calendar_tile_tests {
         // weekday 0 is Sunday; a negative index wraps to Saturday rather than panicking
         assert_eq!(calendar_face_text(0, 4), ("Sun", "4".to_string()));
         assert_eq!(calendar_face_text(-1, 31), ("Sat", "31".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod keyboard_lift_tests {
+    use super::{kb_lift, Rect};
+
+    fn rect(y: i32, h: i32) -> Rect {
+        Rect { x: 0, y, w: 600, h }
+    }
+
+    #[test]
+    fn a_window_that_clears_the_keyboard_does_not_move() {
+        assert_eq!(kb_lift(rect(200, 600), 1200, 40), 0);
+        // the bottom edge exactly on the keyboard's top is clear too
+        assert_eq!(kb_lift(rect(200, 1000), 1200, 40), 0);
+    }
+
+    #[test]
+    fn a_window_under_the_keyboard_moves_up_by_the_overlap() {
+        assert_eq!(kb_lift(rect(900, 600), 1200, 40), 300);
+    }
+
+    #[test]
+    fn the_lift_stops_at_the_menu_bar() {
+        // the overlap is 900 but the top is only 60 px below the menu bar
+        assert_eq!(kb_lift(rect(100, 1800), 1000, 40), 60);
+        // a window already at the menu bar cannot move
+        assert_eq!(kb_lift(rect(40, 1800), 1000, 40), 0);
     }
 }

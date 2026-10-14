@@ -644,6 +644,8 @@ pub struct Shell {
     haptics: bool,
     /// a touch that started on the keyboard
     kb_touch: bool,
+    /// the desktop window the on-screen keyboard lifted: (app, y before the lift, y after it)
+    desk_kb_lift: Option<(AppId, i32, i32)>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
     term_touch: termtouch::TermTouch,
     last_input: f64,
@@ -938,6 +940,7 @@ impl Shell {
             hw_keyboard: false,
             haptics: false,
             kb_touch: false,
+            desk_kb_lift: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
             settings_changed: 0.0,
@@ -2461,6 +2464,9 @@ impl Shell {
             return fx;
         }
         if self.desk_active() && matches!(self.screen, Screen::Home | Screen::App(_)) {
+            if let Some(fx) = self.desk_keyboard_touch(ev, t) {
+                return fx;
+            }
             if let Some(fx) = self.desk_event(ev, t) {
                 return fx;
             }
@@ -4127,10 +4133,46 @@ impl Shell {
         // showed as grey boxes along the bottom of the window.
         let shown = shown && self.keyboard_allowed();
         if self.keyboard.shown() == shown {
+    /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
+    /// hardware keyboard decide.
+    pub(super) fn keyboard_allowed(&self) -> bool {
+        self.form.allows_onscreen_keyboard(self.desk_active(), self.hw_keyboard)
+    }
+
+    /// The form factor this shell runs as.
+    pub fn form(&self) -> bifrost_ui::form_factor::FormFactor {
+        self.form
+    }
+
+    /// A physical keyboard attached or removed. Attaching hides a raised on-screen keyboard and keeps it down while
+    /// the keyboard stays; removing it lets text fields raise it again (they do so on the next focus).
+    pub fn set_hardware_keyboard(&mut self, attached: bool, t: f64) {
+        if self.hw_keyboard == attached {
             return;
         }
-        self.keyboard.set_shown(shown, t);
-        self.resize_terminals();
+        self.hw_keyboard = attached;
+        if attached {
+            self.set_keyboard(false, t);
+            if matches!(self.screen, Screen::App(AppId::External(_))) {
+                self.ext_set_keyboard(false, t);
+            }
+        }
+        self.dirty = true;
+    }
+
+    /// Slides the keyboard in or out; the terminal takes its final size at once.
+    fn set_keyboard(&mut self, shown: bool, t: f64) {
+        // A desktop has a hardware keyboard and Golden Gate has no on-screen one: never raise it there. A tablet
+        // raises it with the desktop UI up too, unless a hardware keyboard is attached. Guarding here, not in each
+        // caller, matters: bringing an app with a focused text field to the front used to raise it, and its top row
+        // showed as grey boxes along the bottom of the window.
+        let shown = shown && self.keyboard_allowed();
+        if self.keyboard.shown() != shown {
+            self.keyboard.set_shown(shown, t);
+            self.resize_terminals();
+        }
+        // the desktop's front window follows the keyboard up and back down
+        self.desk_keyboard_lift();
     }
 
     fn terminal_touch(&mut self, ev: Event, t: f64) {
