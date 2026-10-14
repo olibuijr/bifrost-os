@@ -150,6 +150,6 @@
     "No large widget family; shell widgets stop at small (155 pt) and medium (329 pt).",
     "No accented rendering mode or widget container background for the Liquid Glass look.",
     "No widget accessibility descriptions; shell tiles are pixel images.",
-    "No relevance input for Smart Stacks; the shell stack is a manual swipe list."
+    "Smart Stack relevance comes only from the app's own scores and time clues; the shell stack is a manual swipe list."
   ]
 }
