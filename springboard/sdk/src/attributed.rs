@@ -973,7 +973,7 @@ impl RichTextView {
         let end = content.len();
         RichTextView { text: RichText { content, selection: end..end, typing: Attrs::default() }, undo: UndoManager::new(100) }
     }
-    fn edit(&mut self, name: &str, f: impl FnOnce(&mut RichText)) {
+    pub(crate) fn edit(&mut self, name: &str, f: impl FnOnce(&mut RichText)) {
         let before = self.text.clone();
         f(&mut self.text);
         let after = self.text.clone();
