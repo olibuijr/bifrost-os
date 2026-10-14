@@ -40,7 +40,7 @@
       "apple": "MediaIntelligenceError",
       "bifrost": "springboard/ui/src/media_intelligence_error.rs (MediaIntelligenceError, check_embedding, check_threshold); springboard/ui/src/face_group.rs (FaceGroups::try_insert_face, try_entities)",
       "status": "partial",
-      "note": "One typed error covers face grouping: an empty, non-finite or wrong-length embedding and a threshold outside -1 to 1 are refused with their reason, and runtime failures are carried through; tested headless in ui/tests/parity_sdk-rest-10.rs. Gap: no app-facing analysis request returns it yet, so the Apple error cases for asset loading and video analysis have no counterpart."
+      "note": "One typed error covers face grouping: an empty, non-finite or wrong-length embedding and a threshold outside -1 to 1 are refused with their reason, and runtime failures are carried through; tested headless in ui/tests/parity_sdk-rest-10.rs. Gap: no app-facing analysis request returns it yet, so the reference error cases for asset loading and video analysis have no counterpart."
     }
   ],
   "gaps": [

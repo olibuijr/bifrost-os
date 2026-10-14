@@ -1,8 +1,8 @@
-# IOSurface parity (sdk-rest-10)
+# Shared buffer handoff (sdk-rest-10)
 
 ## What it mirrors
 
-The reference framework shares a buffer between processes by a port or an XPC object, and an app holds the buffer
+The reference framework shares a buffer between processes through a port handle, and an app holds the buffer
 as a typed surface. BifrOSt shares a buffer as one memfd descriptor passed with SCM_RIGHTS over a SOCK_SEQPACKET
 channel.
 
