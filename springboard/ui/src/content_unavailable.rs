@@ -1,4 +1,4 @@
-//! Content-unavailable configuration (`UIContentUnavailableConfiguration`): the image, title, secondary text, buttons and
+//! Content-unavailable configuration (the reference platform's content-unavailable configuration): the image, title, secondary text, buttons and
 //! layout axis of an empty-state page, with the empty and search presets. It is a plain value; the SDK view draws it and
 //! the app draws the image named by `image`.
 
@@ -9,7 +9,7 @@ pub struct ContentButton {
     pub action: String,
 }
 
-/// How the parts are arranged (`UIContentUnavailableConfiguration.axis`).
+/// How the parts are arranged (the reference platform's `axis`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Axis {
     #[default]

@@ -1,4 +1,4 @@
-//! Content-unavailable view (`UIContentUnavailableView`): an empty-state page drawn from a
+//! Content-unavailable view (the reference platform's content-unavailable view): an empty-state page drawn from a
 //! `bifrost_ui::content_unavailable::ContentUnavailable` configuration. The parts stack in the middle of the frame: the
 //! picture the app supplies (drawn at its pixel size, centred), the title, the secondary text, then one button per
 //! configured button, each sending its own action. The labels and buttons are the accessibility elements.
@@ -35,7 +35,7 @@ impl View for ImageSlot {
     }
 }
 
-/// An empty-state page (`UIContentUnavailableView`). Build it from a configuration; read the configuration back with
+/// An empty-state page (the reference platform's content-unavailable view). Build it from a configuration; read the configuration back with
 /// [`ContentUnavailableView::config`].
 pub struct ContentUnavailableView {
     base: ViewBase,

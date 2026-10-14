@@ -1,4 +1,4 @@
-//! Large content viewer (`UILargeContentViewerInteraction`) for a bar item or a control. `LargeContentView` wraps the
+//! Large content viewer (the reference platform's large content viewer interaction) for a bar item or a control. `LargeContentView` wraps the
 //! item's view: a press held still for `HOLD_S` shows the item's large title, and its picture when it has one, in a
 //! bubble above the item; lifting the finger hides the bubble. The wrapped view keeps every pointer event, so a button
 //! still sends its action; a long press on a button therefore also fires that action on release. The wrapper sees the

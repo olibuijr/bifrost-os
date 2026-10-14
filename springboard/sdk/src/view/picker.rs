@@ -1,4 +1,4 @@
-//! Spinning-wheel picker (`UIPickerView`) over `bifrost_ui::picker_wheel`: one wheel per component, drawn as rows around
+//! Spinning-wheel picker (the reference platform's picker view) over `bifrost_ui::picker_wheel`: one wheel per component, drawn as rows around
 //! a centre band. A drag scrolls a wheel, a flick carries it further and the release settles it on a row; a tap settles
 //! it on the tapped row. The selection changes when a wheel settles: the view sends `action` and calls the selection
 //! handler (`pickerView(_:didSelectRow:inComponent:)`). Programmatic changes do not (`select_row`), as in the reference
@@ -36,7 +36,7 @@ struct Drag {
     travelled: f32,
 }
 
-/// A picker view (`UIPickerView`). Build it with a data source, then read the selection with [`PickerView::selected_row`].
+/// A picker view (the reference platform's picker view). Build it with a data source, then read the selection with [`PickerView::selected_row`].
 pub struct PickerView {
     base: ViewBase,
     wheel: PickerWheel,

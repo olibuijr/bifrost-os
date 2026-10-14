@@ -1,4 +1,4 @@
-//! Large content viewer (`UILargeContentViewerInteraction`): a press that is held still for a moment presents the item
+//! Large content viewer (the reference platform's large content viewer interaction): a press that is held still for a moment presents the item
 //! in enlarged form, for people who use large text sizes. This is pure state. The SDK wrapper feeds it pointer events
 //! and frame times and draws what it reports; the item's title and image are the app's.
 
@@ -7,7 +7,7 @@ pub const HOLD_S: f64 = 0.5;
 /// Points the finger may travel before the hold counts as a drag and is cancelled.
 pub const SLOP_PT: f32 = 10.0;
 
-/// What the large content viewer shows for an item (`UILargeContentViewerItem`).
+/// What the large content viewer shows for an item (the reference platform's large content viewer item).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LargeContentItem {
     pub title: String,

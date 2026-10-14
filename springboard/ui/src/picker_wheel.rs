@@ -1,6 +1,6 @@
-//! Spinning-wheel picker model (`UIPickerView`): the components of a picker, the rows of each, the selected row of each
+//! Spinning-wheel picker model (the reference platform's picker view): the components of a picker, the rows of each, the selected row of each
 //! and the position of each wheel while it is dragged or settles on a row. The data source supplies counts and titles
-//! (`UIPickerViewDataSource`) and optional component widths (`pickerView(_:widthForComponent:)`). Positions are counted
+//! (the reference platform's data source protocol) and optional component widths (the delegate's width query). Positions are counted
 //! in rows, so the model does not depend on the row height in points. Nothing here draws; the SDK picker view maps
 //! touches and keys onto it.
 
@@ -11,7 +11,7 @@ pub const FLING_PROJECTION_S: f32 = 0.25;
 /// Share of the finger's travel past the first or last row that the wheel follows (the rubber band).
 const RUBBER_BAND: f32 = 0.4;
 
-/// What a picker asks its data source for (`UIPickerViewDataSource` and the width and title parts of its delegate).
+/// What a picker asks its data source for (the data source, and the width and title parts of the delegate).
 pub trait PickerDataSource {
     /// `numberOfComponents(in:)`
     fn components(&self) -> usize;
