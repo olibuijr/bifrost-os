@@ -1,3 +1,5 @@
+#![cfg(feature = "desktop-wayland")]
+
 //! Parity sdk-complete-09: headless tests for the entitlement queries of an app policy. The policy is built from the
 //! manifest strings the shell reads; nothing launches an app.
 
