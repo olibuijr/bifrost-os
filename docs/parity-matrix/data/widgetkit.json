@@ -17,44 +17,44 @@
     {
       "feature": "Configurable widgets (AppIntentConfiguration, WidgetInfo)",
       "apple": "AppIntentConfiguration, WidgetInfo, Migrating widgets from SiriKit Intents",
-      "bifrost": "springboard/ui/src/widget_config.rs; wired: springboard/src/shell/services/widgets_timeline.rs (configure, set_option, options, step_option); springboard/src/shell/notify/center.rs (draw_option_rows, center_options_hit, Options chip)",
+      "bifrost": "springboard/ui/src/widget_config.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (configure, set_option, options, step_option); springboard/src/shell/notify/center.rs (draw_option_rows, center_options_hit, Options chip)",
       "status": "partial",
-      "note": "Wave 4 (w4-widgetkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents exist for the control socket, but they do not feed a widget configuration UI. Shell widgets have fixed options set in the shell. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Option definitions, value checks, defaults and resets are tested headless (headless_widget_config_* in ui/tests/parity_sdk-tests-01b.rs). Apps define options through the widgets_timeline service (configure), and the shell keeps the values per widget and edits them from the Options chip. There is no App Intents configuration source. Not yet verified on Midget."
     },
     {
       "feature": "Timeline updates (TimelineProvider, TimelineEntry, Timeline, WidgetCenter reload)",
       "apple": "TimelineProvider, AppIntentTimelineProvider, TimelineEntry, Timeline, WidgetCenter",
-      "bifrost": "springboard/ui/src/relevance.rs, springboard/ui/src/timeline.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload keeps options and carries the link)",
+      "bifrost": "springboard/ui/src/timeline.rs, springboard/ui/src/relevance.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload keeps options and carries the link; current, due)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell refreshes its own tiles on a schedule. Apps have no timeline or reload call. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Entries, reload policies and time clues are tested headless (headless_timeline_* in ui/tests/parity_sdk-tests-01b.rs). Apps send timelines through the widgets_timeline service (reload), and the shell asks an app for a new one when its reload date passes (due). There is no WidgetCenter reload call into the shell from the app side beyond that. Not yet verified on Midget."
     },
     {
       "feature": "Widget families and sizes (systemSmall, systemMedium, systemLarge)",
       "apple": "WidgetFamily, widgetFamily, Supporting additional widget sizes",
-      "bifrost": "springboard/src/shell/widgets/mod.rs (SMALL_PT 155, MEDIUM_PT 329); springboard/src/shell/homeconf.rs (Size)",
+      "bifrost": "springboard/src/shell/homeconf.rs (Size, cells); springboard/src/shell/widgets/mod.rs (SMALL_PT 155, MEDIUM_PT 329, Kind::size); tests: springboard/tests/parity_sdk-tests-01b.rs",
       "status": "partial",
-      "note": "Shell has small and medium only. No large size. Apps cannot choose a family."
+      "note": "Small and medium families only, in points and grid cells (headless_widget_families_* in springboard/tests/parity_sdk-tests-01b.rs). The Large flag in the timeline store makes a row taller in Notification Centre; it is not a systemLarge family. Apps cannot choose a family."
     },
     {
       "feature": "Home-screen placement and gallery (Add Widget, edit, resize, remove)",
       "apple": "Widget gallery on the Home screen, widget editing",
-      "bifrost": "springboard/src/shell/widgetgallery.rs, springboard/src/shell/homeedit.rs, springboard/src/shell/homeconf.rs; wired: springboard/src/shell/notify/center.rs; springboard/src/shell/services/widgets_timeline.rs (set_placed, set_large)",
+      "bifrost": "springboard/src/shell/homeconf.rs (find_spot, resize, fits); tests: springboard/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (set_placed, set_large, listing); springboard/src/shell/widgetgallery.rs; springboard/src/shell/homeedit.rs; springboard/src/shell/notify/center.rs",
       "status": "partial",
-      "note": "Users can place, resize and remove shell widgets from a long-press gallery. Third-party widgets do not appear in it. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Spots on the grid, resizing and the gallery's placed and large flags are tested headless (headless_widget_placement_* in springboard/tests/parity_sdk-tests-01b.rs). Users place, resize and remove shell widgets from the gallery. Third-party widgets do not appear in it. Not yet verified on Midget."
     },
     {
       "feature": "Today View and widget list ordering",
       "apple": "Today View / Notification Center widgets (WidgetCenter)",
-      "bifrost": "springboard/src/shell/today.rs (search bar, widget tiles, Edit to reorder and switch widgets off)",
+      "bifrost": "springboard/src/shell/today.rs (layout, search bar, widget tiles, Edit to reorder and switch widgets off); tests: springboard/tests/parity_sdk-tests-01b.rs",
       "status": "partial",
-      "note": "Shell-only. Order and visibility persist in today.ini. No app tiles."
+      "note": "Tile flow and the switched-off section below the gap are tested headless (headless_today_view_* in springboard/tests/parity_sdk-tests-01b.rs). Shell-only. Order and visibility persist in today.ini. No app tiles."
     },
     {
       "feature": "Smart Stacks and relevance (RelevanceConfiguration, TimelineEntryRelevance, WidgetRelevance)",
       "apple": "RelevanceConfiguration, RelevanceEntriesProvider, TimelineEntryRelevance, WidgetRelevanceAttribute, Smart Stacks",
-      "bifrost": "springboard/ui/src/relevance.rs, springboard/ui/src/timeline.rs; wired: springboard/src/shell/services/widgets_timeline.rs (Store::rows orders widgets with relevance::rank)",
+      "bifrost": "springboard/ui/src/relevance.rs, springboard/ui/src/timeline.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs, springboard/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (Store::rows orders widgets with relevance::rank)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stack is a manual swipe list of small tiles. It has no relevance scores and no app relevance input. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Ranking, windows and time clues are tested headless (headless_smart_stack_* in ui/tests; the shell store's rows order in springboard/tests). Apps send a relevance score and duration or a time clue with reload. The stack is a swipe list of small tiles, with no Apple-style learned relevance; the scores are the app's own."
     },
     {
       "feature": "Dynamic dates and clock content in widgets",
@@ -73,9 +73,9 @@
     {
       "feature": "Rendering modes and accented or Liquid Glass look (widgetRenderingMode, widgetAccentable, AccessoryWidgetBackground)",
       "apple": "WidgetRenderingMode, WidgetAccentedRenderingMode, widgetAccentable(_:), AccessoryWidgetBackground",
-      "bifrost": "springboard/sdk/src/widgets.rs (Material, Vibrant, blit_vibrant)",
+      "bifrost": "springboard/sdk/src/widgets.rs (Material, Vibrant, blit_vibrant); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs",
       "status": "partial",
-      "note": "Vibrancy and materials exist for app windows. No accented rendering mode or widget background container."
+      "note": "The material kinds map to the bifrost_ui visual effect kinds and back (headless_widget_rendering_* in sdk/tests). No widget rendering mode: full colour, accented and vibrant widget looks are not modelled. No widget background container. Vibrancy and materials exist for app windows only."
     },
     {
       "feature": "Interactivity in widgets (Button, Toggle, AppIntent in widget)",
@@ -87,9 +87,9 @@
     {
       "feature": "Deep links from widgets (widgetURL, Link)",
       "apple": "widgetURL(_:), Link, Linking to specific app scenes from your widget",
-      "bifrost": "springboard/ui/src/widget_link.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload link, set_link, link); springboard/src/shell/notify/center.rs (open_widget)",
+      "bifrost": "springboard/ui/src/widget_link.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload link, set_link, link); springboard/src/shell/notify/center.rs (open_widget)",
       "status": "partial",
-      "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tile taps open fixed destinations. Apps cannot give a widget a URL or scene target. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Link parsing, scheme and path checks are tested headless (headless_widget_link_* in ui/tests/parity_sdk-tests-01b.rs). An app sets a bifrost-app:// link with its reload, and the shell keeps it per widget. A link names an app and a path, not a scene, and a widget has no SwiftUI-style view-level Link. Not yet verified on Midget."
     },
     {
       "feature": "Live Activities (ActivityConfiguration, DynamicIsland, ActivityKit)",
