@@ -40,8 +40,8 @@
    "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "BifrOSt ships no GPU developer capture tools or paravirtual GPU driver, which are the only users of this shader.",
    "rea": [],
    "method": "assessed"
   },

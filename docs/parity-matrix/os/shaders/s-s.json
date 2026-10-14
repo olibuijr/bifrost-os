@@ -18,9 +18,9 @@
    "description": "",
    "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt stores strokes (springboard/ui/src/markup_drawing.rs, apps/freeform-desktop/src/ink.rs) and draws plain strokes; no textured ink shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/blend.rs",
+   "status": "partial",
+   "note": "Blend modes and source-over compositing run on packed premultiplied pixels; the six-channel stroke composite of the reference is not implemented.",
    "rea": [],
    "method": "assessed"
   },
