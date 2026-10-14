@@ -73,9 +73,9 @@
     {
       "feature": "Adornments over markup",
       "apple": "MarkupAdornment",
-      "bifrost": "springboard/src/shell/markup.rs:99 (bar), :104 (tray), :124 (button): shell chrome only",
-      "status": "gap",
-      "note": "Shell chrome is drawn by the shell and is not an app-facing adornment type."
+      "bifrost": "springboard/ui/src/markup_adornment.rs (Adornment::frame_in, place_all, hit_test); springboard/src/shell/markup.rs:99 (bar), :104 (tray), :124 (button): shell chrome only",
+      "status": "partial",
+      "note": "Adornments are placed by anchor and inset inside a canvas, clipped to it, and hit-tested topmost first; tested headless in springboard/ui/tests/parity_sdk-gaps-03.rs. Gap: no SDK view draws an adornment over a markup canvas, and the shell's own chrome does not use this model."
     },
     {
       "feature": "Auto-resizing of markup",
