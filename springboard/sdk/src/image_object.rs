@@ -253,6 +253,65 @@ impl ImageObject {
     }
 }
 
+/// The named images an app registers. `NSImage(named:)` looks images up here by name. A name is registered once.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ImageCatalog {
+    images: Vec<ImageObject>,
+}
+
+impl ImageCatalog {
+    /// An empty catalogue.
+    pub fn new() -> Self {
+        ImageCatalog::default()
+    }
+
+    /// Registers `image` under its name. Returns `false` and changes nothing when the image has no name or the name
+    /// is already registered.
+    pub fn register(&mut self, image: ImageObject) -> bool {
+        let name = match image.name() {
+            Some(name) => name.to_string(),
+            None => return false,
+        };
+        if self.named(&name).is_some() {
+            return false;
+        }
+        self.images.push(image);
+        true
+    }
+
+    /// The image registered under `name`.
+    pub fn named(&self, name: &str) -> Option<&ImageObject> {
+        self.images.iter().find(|image| image.name() == Some(name))
+    }
+
+    /// Removes the image registered under `name`. Returns whether one was registered.
+    pub fn remove(&mut self, name: &str) -> bool {
+        let before = self.images.len();
+        self.images.retain(|image| image.name() != Some(name));
+        self.images.len() != before
+    }
+
+    /// The registered names, in registration order.
+    pub fn names(&self) -> Vec<&str> {
+        self.images.iter().filter_map(ImageObject::name).collect()
+    }
+}
+
+/// The pixels of a template image drawn in `tint` (`isTemplate` images are masks that take the tint of their
+/// context). Each output pixel keeps the tint's colour bits and takes the source alpha scaled by the tint's alpha.
+/// Pixels are `0xAARRGGBB`, with alpha in the top byte.
+pub fn tint_template(pixels: &[u32], tint: u32) -> Vec<u32> {
+    let tint_alpha = tint >> 24;
+    let colour = tint & 0x00ff_ffff;
+    pixels
+        .iter()
+        .map(|&pixel| {
+            let alpha = (pixel >> 24) * tint_alpha / 255;
+            (alpha << 24) | colour
+        })
+        .collect()
+}
+
 fn valid_size(size: (f32, f32)) -> bool {
     size.0.is_finite() && size.1.is_finite() && size.0 > 0.0 && size.1 > 0.0
 }
