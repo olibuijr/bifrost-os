@@ -4,7 +4,9 @@
 //! The writer emits the same subset, so a document survives a round trip. Pictures, tables' borders, headers and
 //! footers, comments and tracked changes are not carried: their text, where it is in the body, is.
 
-use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, FAMILY_NAMES, SPACINGS};
+use crate::links;
+use crate::properties::{self, Properties};
+use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, FAMILY_NAMES, LINE_BREAK, PAGE_BREAK, SPACINGS};
 use crate::xml::{self, Token};
 use crate::{rtf, zipdoc};
 use std::collections::HashMap;
@@ -16,6 +18,7 @@ pub const TYPE: &str = "org.openxmlformats.wordprocessingml.document";
 const HIGHLIGHTS: [&str; 8] = ["none", "red", "darkYellow", "yellow", "green", "blue", "magenta", "lightGray"];
 
 const NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 /// Whether the bytes are a `.docx` package: a ZIP with a main document part.
 pub fn is_docx(bytes: &[u8]) -> bool {
@@ -103,21 +106,39 @@ fn list_kinds(numbering: &str) -> HashMap<String, ListKind> {
 pub fn read(bytes: &[u8]) -> Option<Vec<Cell>> {
     let document = zipdoc::read_entry(bytes, "word/document.xml")?;
     let lists = zipdoc::read_entry(bytes, "word/numbering.xml").map(|n| list_kinds(&String::from_utf8_lossy(&n))).unwrap_or_default();
-    Some(parse(&String::from_utf8_lossy(&document), &lists))
+    let targets = zipdoc::read_entry(bytes, "word/_rels/document.xml.rels").map(|r| hyperlink_targets(&String::from_utf8_lossy(&r))).unwrap_or_default();
+    Some(parse(&String::from_utf8_lossy(&document), &lists, &targets))
+}
+
+/// The external addresses of the document part's relationships, by relationship id: what a hyperlink names.
+fn hyperlink_targets(rels: &str) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for token in xml::tokens(rels) {
+        if let Token::Open { name, attrs, .. } = token {
+            if name == "Relationship" && xml::attr(&attrs, "Type").is_some_and(|t| t.ends_with("/hyperlink")) {
+                if let (Some(id), Some(target)) = (xml::attr(&attrs, "Id"), xml::attr(&attrs, "Target")) {
+                    out.insert(id.to_string(), target.to_string());
+                }
+            }
+        }
+    }
+    out
 }
 
 /// The cells of the main document part. A paragraph's newline is added when the next paragraph starts, so the last
 /// paragraph has none, as in a file written by `write`.
-fn parse(document: &str, lists: &HashMap<String, ListKind>) -> Vec<Cell> {
+fn parse(document: &str, lists: &HashMap<String, ListKind>, targets: &HashMap<String, String>) -> Vec<Cell> {
     let mut cells: Vec<Cell> = Vec::new();
+    // the link of the hyperlink element being read, 0 outside one
+    let mut link = 0u16;
     let mut para = Style::default();
     let mut run = Style::default();
     let mut heading: Option<f32> = None;
     let mut size_set = false;
     let mut seen_paragraph = false;
     let (mut in_ppr, mut in_rpr, mut in_text) = (false, false, false);
-    let cell_style = |para: &Style, run: &Style, heading: Option<f32>, size_set: bool| {
-        let mut s = Style { align: para.align, spacing: para.spacing, list: para.list, ..*run };
+    let cell_style = |para: &Style, run: &Style, heading: Option<f32>, size_set: bool, link: u16| {
+        let mut s = Style { align: para.align, spacing: para.spacing, list: para.list, link, ..*run };
         if let Some(h) = heading {
             s.bold = true;
             if !size_set {
@@ -135,10 +156,15 @@ fn parse(document: &str, lists: &HashMap<String, ListKind>) -> Vec<Cell> {
                         cells.push(Cell { ch: '\n', style: Style { align: para.align, spacing: para.spacing, list: para.list, ..Style::default() } });
                     }
                     seen_paragraph = true;
+                    link = 0;
                     para = Style::default();
                     run = Style::default();
                     heading = None;
                     size_set = false;
+                }
+                "w:hyperlink" => {
+                    let address = xml::attr(&attrs, "r:id").and_then(|id| targets.get(id)).and_then(|t| links::normalize(t));
+                    link = if empty { 0 } else { address.map_or(0, |url| links::intern(&url)) };
                 }
                 "w:pPr" => in_ppr = !empty,
                 "w:rPr" => in_rpr = !empty,
@@ -199,19 +225,23 @@ fn parse(document: &str, lists: &HashMap<String, ListKind>) -> Vec<Cell> {
                         run.font = family_for_name(font);
                     }
                 }
-                "w:tab" if !in_ppr => cells.push(Cell { ch: '\t', style: cell_style(&para, &run, heading, size_set) }),
-                "w:br" | "w:cr" => cells.push(Cell { ch: '\n', style: cell_style(&para, &run, heading, size_set) }),
+                "w:tab" if !in_ppr => cells.push(Cell { ch: '\t', style: cell_style(&para, &run, heading, size_set, link) }),
+                "w:br" | "w:cr" => {
+                    let ch = if xml::attr(&attrs, "w:type") == Some("page") { PAGE_BREAK } else { LINE_BREAK };
+                    cells.push(Cell { ch, style: cell_style(&para, &run, heading, size_set, link) });
+                }
                 _ => {}
             },
             Token::Close(name) => match name.as_str() {
                 "w:pPr" => in_ppr = false,
                 "w:rPr" => in_rpr = false,
+                "w:hyperlink" => link = 0,
                 "w:t" => in_text = false,
                 _ => {}
             },
             Token::Text(text) => {
                 if in_text {
-                    let style = cell_style(&para, &run, heading, size_set);
+                    let style = cell_style(&para, &run, heading, size_set, link);
                     cells.extend(text.chars().filter(|c| !c.is_control()).map(|ch| Cell { ch, style }));
                 }
             }
@@ -284,6 +314,14 @@ fn run_xml(cells: &[Cell], out: &mut String) {
                 flush(&mut buffer, out);
                 out.push_str("<w:tab/>");
             }
+            LINE_BREAK => {
+                flush(&mut buffer, out);
+                out.push_str("<w:br/>");
+            }
+            PAGE_BREAK => {
+                flush(&mut buffer, out);
+                out.push_str("<w:br w:type=\"page\"/>");
+            }
             c if c.is_control() => {}
             c => buffer.push(c),
         }
@@ -292,7 +330,16 @@ fn run_xml(cells: &[Cell], out: &mut String) {
     out.push_str("</w:r>");
 }
 
-fn paragraph_xml(cells: &[Cell], style: &Style, out: &mut String) {
+/// The relationship id of an address among the document's hyperlinks, adding it the first time.
+fn link_id(addresses: &mut Vec<String>, url: &str) -> String {
+    let at = addresses.iter().position(|a| a == url).unwrap_or_else(|| {
+        addresses.push(url.to_string());
+        addresses.len() - 1
+    });
+    format!("rIdL{}", at + 1)
+}
+
+fn paragraph_xml(cells: &[Cell], style: &Style, addresses: &mut Vec<String>, out: &mut String) {
     out.push_str("<w:p><w:pPr>");
     match style.list {
         ListKind::None => {}
@@ -316,44 +363,103 @@ fn paragraph_xml(cells: &[Cell], style: &Style, out: &mut String) {
         while j < cells.len() && cells[i].style.same_run(&cells[j].style) {
             j += 1;
         }
+        // a run of linked text is inside a hyperlink element
+        let anchor = links::url(cells[i].style.link);
+        if let Some(url) = &anchor {
+            out.push_str(&format!("<w:hyperlink r:id=\"{}\">", link_id(addresses, url)));
+        }
         run_xml(&cells[i..j], out);
+        if anchor.is_some() {
+            out.push_str("</w:hyperlink>");
+        }
         i = j;
     }
     out.push_str("</w:p>");
 }
 
-/// The cells as a `.docx` package.
-pub fn write(cells: &[Cell]) -> Vec<u8> {
+/// The document properties in a `.docx` package (title, subject, author, keywords); a package without them has none.
+pub fn read_properties(bytes: &[u8]) -> Properties {
+    zipdoc::read_entry(bytes, "docProps/core.xml").map(|core| properties::read_xml(&String::from_utf8_lossy(&core))).unwrap_or_default()
+}
+
+/// The core properties part for the properties that a `.docx` package carries (the copyright has no place in it).
+fn core_part(props: &Properties) -> String {
     let mut body = String::new();
+    for (tag, index) in [("dc:title", 0), ("dc:subject", 2), ("dc:creator", 1), ("cp:keywords", 3)] {
+        let value = props.get(index);
+        if !value.is_empty() {
+            body += &format!("<{tag}>{}</{tag}>", xml::escape(value));
+        }
+    }
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<cp:coreProperties \
+xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">{body}</cp:coreProperties>"
+    )
+}
+
+/// The cells as a `.docx` package without properties.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn write(cells: &[Cell]) -> Vec<u8> {
+    write_with(cells, &Properties::default())
+}
+
+/// The cells as a `.docx` package carrying the document properties.
+pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
+    let mut body = String::new();
+    let mut addresses: Vec<String> = Vec::new();
     let mut start = 0;
     loop {
         let end = cells[start..].iter().position(|c| c.ch == '\n').map_or(cells.len(), |i| start + i);
         // the paragraph's properties are on its cells and its newline
         let style = cells.get(end).or_else(|| cells.get(start)).map(|c| c.style).unwrap_or_default();
-        paragraph_xml(&cells[start..end], &style, &mut body);
+        paragraph_xml(&cells[start..end], &style, &mut addresses, &mut body);
         if end >= cells.len() {
             break;
         }
         start = end + 1;
     }
-    let document = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<w:document xmlns:w=\"{NS}\"><w:body>{body}</w:body></w:document>");
-    let content_types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+    let document = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<w:document xmlns:w=\"{NS}\" xmlns:r=\"{REL_NS}\"><w:body>{body}</w:body></w:document>");
+    let has_core = (0..4).any(|i| !props.get(i).is_empty());
+    let core_type = if has_core {
+        "<Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>"
+    } else {
+        ""
+    };
+    let core_rel = if has_core {
+        "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/>"
+    } else {
+        ""
+    };
+    let content_types = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
 <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
 <Default Extension=\"xml\" ContentType=\"application/xml\"/>\
 <Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>\
-<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/></Types>";
-    let root_rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
-<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>";
-    let document_rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
-<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/></Relationships>";
+<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/>{core_type}</Types>");
+    let root_rels = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>{core_rel}</Relationships>");
+    let mut hyperlinks = String::new();
+    for (i, address) in addresses.iter().enumerate() {
+        hyperlinks += &format!(
+            "<Relationship Id=\"rIdL{}\" Type=\"{REL_NS}/hyperlink\" Target=\"{}\" TargetMode=\"External\"/>",
+            i + 1,
+            xml::escape(address)
+        );
+    }
+    let document_rels = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/>{hyperlinks}</Relationships>");
     let numbering = numbering_part();
-    zipdoc::write(&[
+    let core = core_part(props);
+    let mut parts: Vec<(&str, &[u8])> = vec![
         ("[Content_Types].xml", content_types.as_bytes()),
         ("_rels/.rels", root_rels.as_bytes()),
         ("word/document.xml", document.as_bytes()),
         ("word/_rels/document.xml.rels", document_rels.as_bytes()),
         ("word/numbering.xml", numbering.as_bytes()),
-    ])
+    ];
+    if has_core {
+        parts.push(("docProps/core.xml", core.as_bytes()));
+    }
+    zipdoc::write(&parts)
 }
 
 #[cfg(test)]
@@ -391,6 +497,59 @@ mod tests {
         let package = write(&cells);
         assert!(is_docx(&package));
         assert_eq!(read(&package), Some(cells));
+    }
+
+    #[test]
+    fn links_are_hyperlink_elements_with_relationships_and_round_trip() {
+        let a = links::intern("https://example.com/a?x=1&y=2");
+        let b = links::intern("mailto:ada@example.com");
+        let mut cells: Vec<Cell> = "go ".chars().map(|ch| cell(ch, Style::default())).collect();
+        cells.extend("there".chars().map(|ch| cell(ch, Style { link: a, bold: true, ..Style::default() })));
+        cells.push(cell('\n', Style::default()));
+        cells.extend("mail".chars().map(|ch| cell(ch, Style { link: b, ..Style::default() })));
+        cells.extend(" again ".chars().map(|ch| cell(ch, Style::default())));
+        cells.extend("there".chars().map(|ch| cell(ch, Style { link: a, ..Style::default() })));
+        let package = write(&cells);
+        let rels = String::from_utf8(zipdoc::read_entry(&package, "word/_rels/document.xml.rels").unwrap()).unwrap();
+        assert!(rels.contains("Target=\"https://example.com/a?x=1&amp;y=2\" TargetMode=\"External\""), "{rels}");
+        assert_eq!(rels.matches("/hyperlink").count(), 2, "an address used twice has one relationship");
+        assert_eq!(read(&package), Some(cells));
+    }
+
+    #[test]
+    fn a_foreign_hyperlink_without_a_usable_address_is_plain_text() {
+        let document = "<w:document><w:body><w:p><w:hyperlink r:id=\"rId9\"><w:r><w:t>a</w:t></w:r></w:hyperlink><w:hyperlink w:anchor=\"top\"><w:r><w:t>b</w:t></w:r></w:hyperlink><w:r><w:t>c</w:t></w:r></w:p></w:body></w:document>";
+        let rels = "<Relationships><Relationship Id=\"rId9\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink\" Target=\"javascript:x\" TargetMode=\"External\"/></Relationships>";
+        let cells = parse(document, &HashMap::new(), &hyperlink_targets(rels));
+        assert_eq!(text_of(&cells), "abc");
+        assert!(cells.iter().all(|c| c.style.link == 0));
+        let good = hyperlink_targets("<Relationships><Relationship Id=\"rId2\" Type=\"x/hyperlink\" Target=\"https://example.org\"/><Relationship Id=\"rId3\" Type=\"x/image\" Target=\"a.png\"/></Relationships>");
+        assert_eq!(good.get("rId2").map(String::as_str), Some("https://example.org"));
+        assert!(!good.contains_key("rId3"));
+    }
+
+    #[test]
+    fn line_and_page_breaks_round_trip() {
+        let cells: Vec<Cell> = "a\u{2028}b\u{c}c".chars().map(|ch| Cell { ch, style: Style::default() }).collect();
+        let package = write(&cells);
+        assert_eq!(read(&package), Some(cells));
+    }
+
+    #[test]
+    fn the_document_properties_round_trip_and_an_unlabelled_package_has_none() {
+        let mut props = Properties::default();
+        props.title = "Plan & notes".into();
+        props.author = "Ada".into();
+        props.subject = "Q3".into();
+        props.keywords = "a, b".into();
+        props.copyright = "not carried".into();
+        let package = write_with(&[], &props);
+        let back = read_properties(&package);
+        assert_eq!((back.title.as_str(), back.author.as_str(), back.subject.as_str(), back.keywords.as_str()), ("Plan & notes", "Ada", "Q3", "a, b"));
+        assert_eq!(back.copyright, "", "a package has no copyright field");
+        assert_eq!(read(&package), Some(Vec::new()));
+        assert!(read_properties(&write(&[])).is_empty());
+        assert!(!zipdoc::names(&write(&[])).iter().any(|n| n.starts_with("docProps")));
     }
 
     #[test]

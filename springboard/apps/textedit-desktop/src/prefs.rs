@@ -2,6 +2,8 @@
 //! preferences so they hold the next time the app starts. Pure: reading takes a lookup and writing gives the pairs, so
 //! the rules are tested without a runtime.
 
+use crate::encoding::Encoding;
+
 /// The options, with the defaults a fresh install has.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Options {
@@ -12,6 +14,8 @@ pub struct Options {
     /// Edit > Substitutions > Smart Quotes and Smart Dashes
     pub smart_quotes: bool,
     pub smart_dashes: bool,
+    /// Edit > Substitutions > Smart Links: a web or mail address becomes a link when the word ends
+    pub smart_links: bool,
     /// View > Show Ruler, and View > Wrap to Window
     pub show_ruler: bool,
     pub wrap_window: bool,
@@ -19,27 +23,34 @@ pub struct Options {
     pub header_footer: bool,
     /// Whether File > New makes a plain text document
     pub new_plain: bool,
+    /// Preferences > Open and Save: the encoding new plain text documents are saved in, and whether RTF and HTML files
+    /// open as plain text showing their markup
+    pub default_encoding: Encoding,
+    pub markup_as_code: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { spell_enabled: true, spell_auto: false, smart_quotes: false, smart_dashes: false, show_ruler: true, wrap_window: false, header_footer: false, new_plain: false }
+        Options { spell_enabled: true, spell_auto: false, smart_quotes: false, smart_dashes: false, smart_links: false, show_ruler: true, wrap_window: false, header_footer: false, new_plain: false, default_encoding: Encoding::Utf8, markup_as_code: false }
     }
 }
 
 impl Options {
     /// The options as stored: each key with "1" or "0".
-    pub fn entries(&self) -> [(&'static str, &'static str); 8] {
+    pub fn entries(&self) -> [(&'static str, &'static str); 11] {
         let v = |on: bool| if on { "1" } else { "0" };
         [
             ("options.spell_enabled", v(self.spell_enabled)),
             ("options.spell_auto", v(self.spell_auto)),
             ("options.smart_quotes", v(self.smart_quotes)),
             ("options.smart_dashes", v(self.smart_dashes)),
+            ("options.smart_links", v(self.smart_links)),
             ("options.show_ruler", v(self.show_ruler)),
             ("options.wrap_window", v(self.wrap_window)),
             ("options.header_footer", v(self.header_footer)),
             ("options.new_plain", v(self.new_plain)),
+            ("options.default_encoding", self.default_encoding.id()),
+            ("options.markup_as_code", v(self.markup_as_code)),
         ]
     }
 
@@ -56,10 +67,13 @@ impl Options {
             spell_auto: flag("options.spell_auto", d.spell_auto),
             smart_quotes: flag("options.smart_quotes", d.smart_quotes),
             smart_dashes: flag("options.smart_dashes", d.smart_dashes),
+            smart_links: flag("options.smart_links", d.smart_links),
             show_ruler: flag("options.show_ruler", d.show_ruler),
             wrap_window: flag("options.wrap_window", d.wrap_window),
             header_footer: flag("options.header_footer", d.header_footer),
             new_plain: flag("options.new_plain", d.new_plain),
+            default_encoding: get("options.default_encoding").and_then(|id| Encoding::from_id(&id)).unwrap_or(d.default_encoding),
+            markup_as_code: flag("options.markup_as_code", d.markup_as_code),
         }
     }
 }
@@ -84,7 +98,7 @@ mod tests {
 
     #[test]
     fn options_survive_a_write_and_a_read() {
-        let on = Options { spell_enabled: false, spell_auto: true, smart_quotes: true, smart_dashes: true, show_ruler: false, wrap_window: true, header_footer: true, new_plain: true };
+        let on = Options { spell_enabled: false, spell_auto: true, smart_quotes: true, smart_dashes: true, smart_links: true, show_ruler: false, wrap_window: true, header_footer: true, new_plain: true, default_encoding: Encoding::Roman, markup_as_code: true };
         let stored: HashMap<String, String> = on.entries().iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         assert_eq!(Options::read(&|k| stored.get(k).cloned()), on);
     }
@@ -95,6 +109,8 @@ mod tests {
         assert_eq!(Options::read(&|_| Some("maybe".into())), Options::default());
         let only_ruler_off = Options::read(&|k| (k == "options.show_ruler").then(|| "0".to_string()));
         assert!(!only_ruler_off.show_ruler && only_ruler_off.spell_enabled);
+        let unknown_encoding = Options::read(&|k| (k == "options.default_encoding").then(|| "klingon".to_string()));
+        assert_eq!(unknown_encoding.default_encoding, Encoding::Utf8);
     }
 
     #[test]

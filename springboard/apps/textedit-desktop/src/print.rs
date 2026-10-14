@@ -3,7 +3,7 @@
 //! the printable width, so a printed page breaks lines where the window does.
 
 use crate::layout::{self, Layout, Marker, Measure};
-use crate::text::{Cell, COLORS, FAMILIES};
+use crate::text::{is_break, Cell, COLORS, FAMILIES, PAGE_BREAK};
 use bifrost_app::kit::cg::pdf::writer::text_literal;
 use bifrost_app::print::{PaperSize, PdfPage, PrintInfo};
 use std::ops::Range;
@@ -33,13 +33,15 @@ pub fn paper_name(paper: PaperSize) -> &'static str {
     }
 }
 
-/// Splits the lines into pages of at most `height` points. A line taller than a page still gets a page of its own.
-pub fn split(layout: &Layout, height: f32) -> Vec<Range<usize>> {
+/// Splits the lines into pages of at most `height` points. A line taller than a page still gets a page of its own, and
+/// a page break ends the page its line is on.
+pub fn split(cells: &[Cell], layout: &Layout, height: f32) -> Vec<Range<usize>> {
     let mut out = Vec::new();
     let mut first = 0;
     let mut page_top = 0.0;
     for (i, line) in layout.lines.iter().enumerate() {
-        if i > first && line.top + line.height - page_top > height {
+        let after_break = i > 0 && layout.lines[i - 1].end > layout.lines[i - 1].start && cells[layout.lines[i - 1].end - 1].ch == PAGE_BREAK;
+        if i > first && (after_break || line.top + line.height - page_top > height) {
             out.push(first..i);
             first = i;
             page_top = line.top;
@@ -96,7 +98,7 @@ fn content(cells: &[Cell], layout: &Layout, lines: Range<usize>, info: &PrintInf
                     let sy = y + s.size * 0.3;
                     out.extend(format!("{w} w {:.2} {:.2} m {:.2} {:.2} l S\n", left + origin + start, sy, left + origin + end, sy).bytes());
                 }
-                if s.underline {
+                if s.underline || s.link != 0 {
                     let w = (s.size / 24.0).max(0.4);
                     let uy = y - s.size * 0.12;
                     out.extend(format!("{w} w {:.2} {:.2} m {:.2} {:.2} l S\n", left + origin + start, uy, left + origin + end, uy).bytes());
@@ -107,6 +109,8 @@ fn content(cells: &[Cell], layout: &Layout, lines: Range<usize>, info: &PrintInf
             let step = layout::advance(rel, cell, layout.tab, measure);
             if cell.ch == '\t' {
                 flush(&mut out, &mut run, rel);
+            } else if is_break(cell.ch) {
+                // breaks take no width and print nothing
             } else {
                 if run.as_ref().is_some_and(|(_, _, s)| !s.same_run(&cell.style)) {
                     flush(&mut out, &mut run, rel);
@@ -135,8 +139,14 @@ fn show(out: &mut Vec<u8>, s: &crate::text::Style, text: &str, x: f32, y: f32) {
         -1 => (s.size * crate::view::SCRIPT_SCALE, -s.size * 0.12),
         _ => (s.size, 0.0),
     };
-    // text on a highlight is black, as on screen
-    let color = if s.highlight > 0 && s.color == 0 { "0 0 0 rg 0 0 0 RG".to_string() } else { color_words(s.color) };
+    // text on a highlight is black, as on screen; a link is blue
+    let color = if s.link != 0 {
+        "0 0.478 1 rg 0 0.478 1 RG".to_string()
+    } else if s.highlight > 0 && s.color == 0 {
+        "0 0 0 rg 0 0 0 RG".to_string()
+    } else {
+        color_words(s.color)
+    };
     out.extend(format!("BT /F{face} {size} Tf {rise:.2} Ts {} {:.2} {:.2} Td ", color, x, y).bytes());
     text_literal(text, out);
     out.extend(b" Tj ET\n");
@@ -174,7 +184,7 @@ fn header_footer(title: &str, page: usize, pages: usize, info: &PrintInfo) -> Ve
 pub fn document_with(cells: &[Cell], layout: &Layout, info: &PrintInfo, measure: &Measure, title: Option<&str>) -> Vec<PdfPage> {
     let (_, _, _, printable_h) = info.imageable();
     let (w, h) = info.paper_size();
-    let ranges = split(layout, printable_h);
+    let ranges = split(cells, layout, printable_h);
     let pages = ranges.len();
     ranges
         .into_iter()
@@ -208,8 +218,23 @@ mod tests {
         let c = cells("a\nb\nc\nd\ne");
         let l = layout(&c, 100.0, &six);
         let line = l.lines[0].height;
-        assert_eq!(split(&l, line * 2.0 + 0.1), vec![0..2, 2..4, 4..5]);
-        assert_eq!(split(&l, 1.0), vec![0..1, 1..2, 2..3, 3..4, 4..5], "a line taller than the page gets its own page");
+        assert_eq!(split(&c, &l, line * 2.0 + 0.1), vec![0..2, 2..4, 4..5]);
+        assert_eq!(split(&c, &l, 1.0), vec![0..1, 1..2, 2..3, 3..4, 4..5], "a line taller than the page gets its own page");
+    }
+
+    #[test]
+    fn a_page_break_starts_a_new_page_and_a_line_break_does_not() {
+        let c = cells("a\u{c}b\u{2028}c\nd");
+        let l = layout(&c, 100.0, &six);
+        assert_eq!(l.lines.len(), 4);
+        assert_eq!(split(&c, &l, 10_000.0), vec![0..1, 1..4], "only the page break splits the pages");
+        let info = PrintInfo { margins: [72.0; 4], ..PrintInfo::default() };
+        let (_, _, w, _) = info.imageable();
+        let l = layout(&c, w, &six);
+        let pages = document(&c, &l, &info, &six);
+        assert_eq!(pages.len(), 2);
+        let text = String::from_utf8_lossy(&pages[0].content).into_owned();
+        assert!(text.contains("(a)") && !text.contains('\u{c}'), "the break itself prints nothing");
     }
 
     #[test]

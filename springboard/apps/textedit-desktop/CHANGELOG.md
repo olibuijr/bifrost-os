@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.3.0 — 2026-10-13
+
+- Plain text encodings: a plain text file opens in the encoding it is in (a byte order mark, UTF-8, UTF-16 without a
+  mark, or else Western single-byte text) and saves in the same one. Format > Text Encoding changes the encoding a plain
+  text document is saved in (UTF-8, UTF-16 in either byte order, ISO Latin 1, Windows Latin 1, Classic Roman, ASCII) and
+  refuses to save text the encoding cannot hold; Format > Reinterpret As reads the text again in another encoding when
+  the guess was wrong. Preferences > Plain Text Encoding sets the encoding of new documents.
+- File > Show Properties: title, author, subject, keywords and copyright, kept in the RTF info group and in the
+  `.docx` and `.odt` package metadata (those two have no copyright field).
+- Edit > Add Link (Cmd+K), Open Link and Remove Link: text can link to a web, mail, phone or file transfer address. Links
+  are drawn in the link colour with an underline, are kept by RTF (hyperlink fields), HTML, `.docx` and `.odt`, print,
+  and open with a click in a document that cannot be edited. Addresses that run code or read local files are refused.
+- Edit > Substitutions > Smart Links: a web address (`http://`, `https://`, `www.`), a `mailto:` address or a mail address
+  becomes a link when the word ends with a blank. Kept in the preferences.
+- Edit > Insert: Page Break, Line Break and Paragraph Break. A line break starts a new line inside the paragraph, and a
+  page break starts a new page when printing (RTF `\line` and `\page`, a docx break). A plain text document writes a line
+  break as a line ending. HTML and `.odt` files write both as a line break, which those readers take as a paragraph
+  break.
+- Preferences > Show RTF and HTML Files as Code opens those files as plain text showing their markup.
+
 ## 1.2.0 — 2026-10-13
 
 - File: Save All, Export as PDF (a save panel, then the same PDF the printer gets), and Print Header and Footer (the

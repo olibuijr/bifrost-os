@@ -3,6 +3,7 @@
 //! reached in device pixels through `Ui::pt`. Colours and type come from the shared tokens only.
 
 use crate::layout::{self, Layout, Line, Marker};
+use crate::properties::{self, PanelLayout};
 use crate::text::{Align, Cell, ListKind, Style, Transform, COLORS, FAMILIES, SPACINGS};
 use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
@@ -100,11 +101,34 @@ pub enum Action {
     /// Substitutions and automatic spelling
     SmartQuotes,
     SmartDashes,
+    SmartLinks,
     SpellAuto,
     /// Print: page header and footer
     HeaderFooter,
     /// Preferences: whether new documents are plain text (true) or rich text (false)
     NewPlain(bool),
+    /// Edit > Insert: a page break, a line break (a new line in the paragraph) and a paragraph break
+    InsertPage,
+    InsertLine,
+    InsertParagraph,
+    /// Edit > Add Link, Open Link, Remove Link, and the link panel's buttons
+    AddLink,
+    OpenLink,
+    RemoveLink,
+    LinkDone,
+    LinkCancel,
+    LinkRemove,
+    /// File > Show Properties, and the panel's two buttons
+    ShowProperties,
+    PropsDone,
+    PropsCancel,
+    /// Preferences > Open and Save: show RTF and HTML files as code
+    MarkupAsCode,
+    /// Format > Text Encoding: save as (index into `encoding::ALL`), and read the text again as another encoding
+    Encoding(u8),
+    Reinterpret(u8),
+    /// Preferences > Open and Save: the encoding of new plain text documents
+    DefaultEncoding(u8),
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -175,11 +199,28 @@ impl Action {
             Action::ActualSize => MENU_BASE + 0x85,
             Action::SmartQuotes => MENU_BASE + 0x86,
             Action::SmartDashes => MENU_BASE + 0x87,
+            Action::SmartLinks => MENU_BASE + 0xb8,
             Action::SpellAuto => MENU_BASE + 0x88,
             Action::HeaderFooter => MENU_BASE + 0x89,
             Action::NewPlain(false) => MENU_BASE + 0x8a,
             Action::NewPlain(true) => MENU_BASE + 0x8b,
+            Action::InsertPage => MENU_BASE + 0x98,
+            Action::InsertLine => MENU_BASE + 0x99,
+            Action::InsertParagraph => MENU_BASE + 0x9a,
+            Action::AddLink => MENU_BASE + 0x9b,
+            Action::OpenLink => MENU_BASE + 0x9c,
+            Action::RemoveLink => MENU_BASE + 0x9d,
+            Action::LinkDone => MENU_BASE + 0x9e,
+            Action::LinkCancel => MENU_BASE + 0x9f,
+            Action::LinkRemove => MENU_BASE + 0xb7,
+            Action::ShowProperties => MENU_BASE + 0x8c,
+            Action::PropsDone => MENU_BASE + 0x8d,
+            Action::PropsCancel => MENU_BASE + 0x8e,
+            Action::MarkupAsCode => MENU_BASE + 0x8f,
             Action::Highlight(i) => MENU_BASE + 0x90 + i as u32,
+            Action::Encoding(i) => MENU_BASE + 0xa0 + i as u32,
+            Action::Reinterpret(i) => MENU_BASE + 0xa8 + i as u32,
+            Action::DefaultEncoding(i) => MENU_BASE + 0xb0 + i as u32,
         })
     }
 
@@ -247,11 +288,28 @@ impl Action {
             0x85 => Action::ActualSize,
             0x86 => Action::SmartQuotes,
             0x87 => Action::SmartDashes,
+            0xb8 => Action::SmartLinks,
             0x88 => Action::SpellAuto,
             0x89 => Action::HeaderFooter,
             0x8a => Action::NewPlain(false),
             0x8b => Action::NewPlain(true),
+            0x98 => Action::InsertPage,
+            0x99 => Action::InsertLine,
+            0x9a => Action::InsertParagraph,
+            0x9b => Action::AddLink,
+            0x9c => Action::OpenLink,
+            0x9d => Action::RemoveLink,
+            0x9e => Action::LinkDone,
+            0x9f => Action::LinkCancel,
+            0xb7 => Action::LinkRemove,
+            0x8c => Action::ShowProperties,
+            0x8d => Action::PropsDone,
+            0x8e => Action::PropsCancel,
+            0x8f => Action::MarkupAsCode,
             0x90..=0x97 => Action::Highlight((offset - 0x90) as u8),
+            0xa0..=0xa6 => Action::Encoding((offset - 0xa0) as u8),
+            0xa8..=0xae => Action::Reinterpret((offset - 0xa8) as u8),
+            0xb0..=0xb6 => Action::DefaultEncoding((offset - 0xb0) as u8),
             _ => return None,
         })
     }
@@ -646,6 +704,76 @@ pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, buttons: &[Button
     }
 }
 
+/// The buttons of a panel, right-aligned on its bottom row: a label, what it does, and whether it is the default.
+pub fn sheet_buttons(ui: &Ui, l: &PanelLayout, specs: &[(&str, Action, bool)]) -> Vec<Button> {
+    let mut buttons: Vec<Button> = specs
+        .iter()
+        .map(|(label, action, default)| {
+            let mut b = label_button(ui, label, Some(*action), if *default { Weight::Bold } else { Weight::Regular });
+            b.active = *default;
+            b
+        })
+        .collect();
+    let total = buttons.iter().map(|b| b.rect.w).sum::<f32>() + ITEM_GAP * buttons.len().saturating_sub(1) as f32;
+    place_row(&mut buttons, &[specs.len()], l.right - total, l.buttons_y);
+    buttons
+}
+
+/// The document properties panel's buttons.
+pub fn properties_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    sheet_buttons(ui, l, &[("Cancel", Action::PropsCancel, false), ("Done", Action::PropsDone, true)])
+}
+
+/// The link panel's buttons; Remove Link is offered when the text already links somewhere.
+pub fn link_buttons(ui: &Ui, l: &PanelLayout, can_remove: bool) -> Vec<Button> {
+    let mut specs = vec![("Cancel", Action::LinkCancel, false)];
+    if can_remove {
+        specs.push(("Remove Link", Action::LinkRemove, false));
+    }
+    specs.push(("Done", Action::LinkDone, true));
+    sheet_buttons(ui, l, &specs)
+}
+
+/// Draws a panel over the page: its title, its labelled fields (the focused one outlined) and its buttons.
+pub fn draw_sheet(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, fields: &[(&str, &str)], focus: usize, buttons: &[Button]) {
+    let frame = to_px(ui, l.frame);
+    c.fill_rrect(frame, ui.pt(CONTROL_RADIUS), DETAIL_BG.now());
+    c.stroke_rrect(frame, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), SEPARATOR_C.now());
+    text_at(c, ui, title, MAC_BODY_PT, Weight::Bold, LABEL.now(), l.labels_x, l.title_y);
+    for (i, ((label, value), rect)) in fields.iter().zip(l.fields.iter()).enumerate() {
+        let r = to_px(ui, *rect);
+        c.fill_rrect(r, ui.pt(CONTROL_RADIUS), FIELD_BG.now());
+        if focus == i {
+            c.stroke_rrect(r, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), LINK);
+        }
+        let name = ui.text(label, MAC_BODY_PT, Weight::Regular, LABEL_3.now());
+        blit(c, &name, ui.pt(l.labels_x), r.y + (r.h - name.h as f32) / 2.0);
+        // the end of a long value is the part being typed, so it is the part shown
+        let inner = (ui.pt(rect.w) - 2.0 * ui.pt(BUTTON_PAD)).max(0.0);
+        let shown = tail_that_fits(ui, value, inner);
+        let img = ui.text(&shown, MAC_BODY_PT, Weight::Regular, LABEL.now());
+        blit(c, &img, r.x + ui.pt(BUTTON_PAD), r.y + (r.h - img.h as f32) / 2.0);
+    }
+    for b in buttons {
+        draw_button(c, ui, b);
+    }
+}
+
+/// The longest end of `text` that fits in `max_px`.
+fn tail_that_fits(ui: &Ui, text: &str, max_px: f32) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut start = 0;
+    while start < chars.len() {
+        let tail: String = chars[start..].iter().collect();
+        if ui.measure(&tail, MAC_BODY_PT, Weight::Regular) <= max_px {
+            return tail;
+        }
+        // drop a chunk at a time so a very long address stays cheap
+        start += ((chars.len() - start) / 8).max(1);
+    }
+    String::new()
+}
+
 /// The page: its background and a clip to the body so text never draws over the bars.
 pub fn page_clip(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry) -> RectF {
     let r = RectF::new(0.0, ui.pt(geom.body_top).floor(), ui.pt(geom.width).ceil(), ui.pt(geom.body_bottom - geom.body_top).ceil());
@@ -735,7 +863,7 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
             }
             run.clear();
         }
-        if cell.ch != '\t' {
+        if cell.ch != '\t' && !crate::text::is_break(cell.ch) {
             if run_style.is_none() {
                 run_style = Some(cell.style);
                 run_x = rel;
@@ -746,6 +874,15 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
     }
     if let Some(s) = run_style {
         flush_run(c, ui, &run, &s, base + run_x, y, line.height);
+    }
+    // a page break shows as a rule across the rest of its line
+    if line.end > line.start && cells[line.end - 1].ch == crate::text::PAGE_BREAK {
+        let from = base + line.width + 4.0;
+        let to = origin_x + lines.width;
+        if to > from {
+            let rule = Rect { x: from, y: y + line.height / 2.0, w: to - from, h: 1.0 };
+            c.fill_rect(to_px(ui, rule), LABEL_3.now());
+        }
     }
 }
 
@@ -759,8 +896,14 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
     if shown.is_empty() {
         return x;
     }
-    // text on a highlight is dark whatever the appearance, as the plate is light
-    let color = if style.highlight > 0 && style.color == 0 { pack(0, 0, 0, 255) } else { text_color(style.color) };
+    // text on a highlight is dark whatever the appearance, as the plate is light; a link is the link colour
+    let color = if style.link != 0 {
+        LINK
+    } else if style.highlight > 0 && style.color == 0 {
+        pack(0, 0, 0, 255)
+    } else {
+        text_color(style.color)
+    };
     let size = drawn_size(style);
     let shift = match style.script {
         1 => 0.0,
@@ -773,7 +916,7 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
         c.fill_rect(to_px(ui, plate), highlight_color(style.highlight));
     }
     text_at(c, ui, &shown, size, weight_of(style), color, x, y + shift);
-    if style.underline {
+    if style.underline || style.link != 0 {
         let rule = Rect { x, y: y + line_height.min(style.size * 1.25) - 2.0, w: width, h: 1.0 };
         c.fill_rect(to_px(ui, rule), color);
     }
@@ -906,10 +1049,30 @@ mod tests {
             Action::ActualSize,
             Action::SmartQuotes,
             Action::SmartDashes,
+            Action::SmartLinks,
             Action::SpellAuto,
             Action::HeaderFooter,
             Action::NewPlain(false),
             Action::NewPlain(true),
+            Action::InsertPage,
+            Action::InsertLine,
+            Action::InsertParagraph,
+            Action::AddLink,
+            Action::OpenLink,
+            Action::RemoveLink,
+            Action::LinkDone,
+            Action::LinkCancel,
+            Action::LinkRemove,
+            Action::ShowProperties,
+            Action::PropsDone,
+            Action::PropsCancel,
+            Action::MarkupAsCode,
+            Action::Encoding(0),
+            Action::Encoding(6),
+            Action::Reinterpret(0),
+            Action::Reinterpret(6),
+            Action::DefaultEncoding(0),
+            Action::DefaultEncoding(6),
         ];
         let mut ids: Vec<u32> = all.iter().filter_map(|a| a.id()).collect();
         ids.sort_unstable();

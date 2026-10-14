@@ -2,7 +2,7 @@
 //! tab stops, and the mapping between a text position and a point (the caret, a click). Pure: the widths come from a
 //! `Measure` the caller supplies, so the rules are tested with fixed widths and the window draws with the real font.
 
-use crate::text::{Align, Cell, ListKind, Style, DEFAULT_SIZE, DEFAULT_TAB, SPACINGS};
+use crate::text::{is_break, Align, Cell, ListKind, Style, DEFAULT_SIZE, DEFAULT_TAB, SPACINGS};
 
 /// Line height as a multiple of the largest size on the line.
 pub const LINE_FACTOR: f32 = 1.25;
@@ -60,7 +60,9 @@ struct Para {
 
 /// How far a tab or character at `x` (from the start of the line's text) advances.
 pub fn advance(x: f32, cell: &Cell, tab: f32, measure: &Measure) -> f32 {
-    if cell.ch == '\t' && tab > 0.0 {
+    if is_break(cell.ch) {
+        0.0
+    } else if cell.ch == '\t' && tab > 0.0 {
         ((x / tab).floor() + 1.0) * tab - x
     } else {
         measure(cell.ch, &cell.style)
@@ -141,6 +143,16 @@ fn wrap(cells: &[Cell], start: usize, end: usize, width: f32, measure: &Measure,
             continue;
         }
         used += w;
+        if is_break(cells[i].ch) {
+            // a line or page break ends the line after it
+            push_line(out, cells, line_start, i + 1, used, para, marker, top);
+            marker = Marker::None;
+            line_start = i + 1;
+            used = 0.0;
+            space = None;
+            i += 1;
+            continue;
+        }
         if cells[i].ch == ' ' {
             space = Some((i + 1, used));
         }
@@ -216,6 +228,10 @@ impl Layout {
             }
             rel += w;
         }
+        // past the end of a line that a break ends, the caret goes before the break, not onto the next line
+        if line.end > line.start && is_break(cells[line.end - 1].ch) {
+            return line.end - 1;
+        }
         line.end
     }
 
@@ -251,6 +267,38 @@ mod tests {
         let spans: Vec<(usize, usize)> = l.lines.iter().map(|l| (l.start, l.end)).collect();
         assert_eq!(spans, vec![(0, 4), (4, 8), (8, 11)]);
         assert_eq!(l.lines[0].width, 4.0);
+    }
+
+    #[test]
+    fn a_line_break_ends_the_line_without_taking_width() {
+        let c = cells("ab\u{2028}cd");
+        let l = layout(&c, 100.0, &one);
+        let spans: Vec<(usize, usize)> = l.lines.iter().map(|l| (l.start, l.end)).collect();
+        assert_eq!(spans, vec![(0, 3), (3, 5)]);
+        assert_eq!(l.lines[0].width, 2.0, "the break itself is as wide as nothing");
+        assert_eq!(l.lines[1].top, l.lines[0].height);
+        assert!(l.lines[1].marker == Marker::None);
+    }
+
+    #[test]
+    fn a_break_at_the_end_of_a_paragraph_leaves_an_empty_line_for_the_caret() {
+        let c = cells("ab\u{c}");
+        let l = layout(&c, 100.0, &one);
+        let spans: Vec<(usize, usize)> = l.lines.iter().map(|l| (l.start, l.end)).collect();
+        assert_eq!(spans, vec![(0, 3), (3, 3)]);
+        // the caret after the break is on the new line, the one before it at the end of the first
+        assert_eq!(l.line_of(3), 1);
+        assert_eq!(l.line_of(2), 0);
+        assert_eq!(l.caret(&c, 2, &one).0, 2.0);
+    }
+
+    #[test]
+    fn a_click_past_a_broken_line_lands_before_its_break() {
+        let c = cells("ab\u{2028}cd");
+        let l = layout(&c, 100.0, &one);
+        assert_eq!(l.index_at(&c, 50.0, 1.0, &one), 2);
+        assert_eq!(l.index_at(&c, 50.0, l.lines[1].top + 1.0, &one), 5);
+        assert_eq!(l.move_vertical(&c, 1, true, &one), 4);
     }
 
     #[test]
