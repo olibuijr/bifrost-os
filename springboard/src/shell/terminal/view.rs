@@ -238,6 +238,15 @@ impl Shell {
             Panel::Shell => "Login Shell",
             Panel::Colors => "Colors",
             Panel::Help => "Terminal Help",
+            Panel::Profiles => "Profiles",
+            Panel::Groups => "Window Groups",
+            Panel::Tabs => "All Tabs",
+            Panel::Startup => "Startup Command",
+            Panel::GroupName => "Save Window Group",
+            Panel::Export => match self.terminal_ui.export.as_ref() {
+                Some((stem, _)) if stem == "terminal-selection" => "Save Selection As",
+                _ => "Export Scrollback As",
+            },
             _ => "Terminal",
         };
         if panel == Panel::Form {
@@ -279,7 +288,7 @@ impl Shell {
                 255,
                 255,
             );
-            let done = matches!(panel, Panel::More | Panel::Help);
+            let done = matches!(panel, Panel::More | Panel::Help | Panel::Profiles | Panel::Groups | Panel::Tabs);
             button(
                 s,
                 ui,
@@ -299,9 +308,52 @@ impl Shell {
                     field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
                 }
             }
-            Panel::Title | Panel::Shell | Panel::Colors => {
+            Panel::Title | Panel::Shell | Panel::Colors | Panel::Startup | Panel::GroupName | Panel::Export => {
                 if let Some(field) = &self.terminal_ui.entry {
                     field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
+                }
+            }
+            Panel::Groups => {
+                let mut list = s.rows(content_top as usize, content_bottom as usize);
+                for (i, group) in self.terminal_groups().iter().enumerate() {
+                    let y = content_top + ui.pt(i as f32 * 44.0) - self.terminal_ui.scroll;
+                    if y + ui.pt(44.0) < content_top || y >= content_bottom {
+                        continue;
+                    }
+                    let armed = self.terminal_ui.group_delete == Some(i);
+                    text(&mut list, ui, &group.name, px + ui.pt(16.0), y, pw - ui.pt(150.0), WHITE);
+                    let detail = format!("{} tab{}", group.tabs.len(), if group.tabs.len() == 1 { "" } else { "s" });
+                    text(&mut list, ui, &detail, px + pw - ui.pt(150.0), y, ui.pt(90.0), SECONDARY);
+                    text(&mut list, ui, if armed { "Delete" } else { "×" }, px + pw - ui.pt(52.0), y, ui.pt(40.0), if armed { RED } else { SECONDARY });
+                    list.fill_rrect(px + ui.pt(16.0), y + ui.pt(44.0) - 1.0, pw - ui.pt(32.0), 1.0, 0.0, BADGE);
+                }
+            }
+            Panel::Tabs => {
+                let mut list = s.rows(content_top as usize, content_bottom as usize);
+                for i in 0..self.term.len() {
+                    let y = content_top + ui.pt(i as f32 * 44.0) - self.terminal_ui.scroll;
+                    if y + ui.pt(44.0) < content_top || y >= content_bottom {
+                        continue;
+                    }
+                    let current = i == self.term.active_index();
+                    let title = self.term.iter().nth(i).map(|tab| tab.title(i)).unwrap_or_default();
+                    text(&mut list, ui, &title, px + ui.pt(16.0), y, pw - ui.pt(150.0), if current { WHITE } else { SECONDARY });
+                    text(&mut list, ui, if current { "Current" } else { "" }, px + pw - ui.pt(126.0), y, ui.pt(110.0), SECONDARY);
+                    list.fill_rrect(px + ui.pt(16.0), y + ui.pt(44.0) - 1.0, pw - ui.pt(32.0), 1.0, 0.0, BADGE);
+                }
+            }
+            Panel::Profiles => {
+                let mut list = s.rows(content_top as usize, content_bottom as usize);
+                let (theme, profile) = (self.terminal_ui.settings.theme, self.terminal_ui.profile);
+                for (i, choice) in self.terminal_profile_choices().into_iter().enumerate() {
+                    let y = content_top + ui.pt(i as f32 * 44.0) - self.terminal_ui.scroll;
+                    if y + ui.pt(44.0) < content_top || y >= content_bottom {
+                        continue;
+                    }
+                    let current = profiles::is_current(choice, theme, profile);
+                    text(&mut list, ui, profiles::choice_name(choice), px + ui.pt(16.0), y, pw - ui.pt(150.0), if current { WHITE } else { SECONDARY });
+                    text(&mut list, ui, if current { "In use" } else { "" }, px + pw - ui.pt(126.0), y, ui.pt(110.0), SECONDARY);
+                    list.fill_rrect(px + ui.pt(16.0), y + ui.pt(44.0) - 1.0, pw - ui.pt(32.0), 1.0, 0.0, BADGE);
                 }
             }
             Panel::Help => {
@@ -615,6 +667,11 @@ impl Shell {
                         18 => String::from(if self.terminal_ui.secure { "On" } else { "Off" }),
                         item::MOUSE => String::from(if self.terminal_ui.mouse_reporting { "On" } else { "Off" }),
                         item::GROUP_LAUNCH => String::from(if self.terminal_ui.group_launch { "On" } else { "Off" }),
+                        item::IGNORE_CASE => String::from(if self.terminal_ui.find_ignore_case { "On" } else { "Off" }),
+                        item::WRAP => String::from(if self.terminal_ui.find_wrap { "On" } else { "Off" }),
+                        item::PROFILES => profiles::scheme_name(self.terminal_ui.settings.theme, self.terminal_ui.profile).into(),
+                        item::STARTUP => String::from(if self.terminal_ui.startup_command.is_some() { "Set" } else { "None" }),
+                        item::ALL_TABS => format!("{} open", self.term.len()),
                         item::LOGIN_SHELL => self.terminal_ui.login_shell.as_deref().map_or_else(|| "Account".to_string(), |path| path.rsplit('/').next().unwrap_or(path).to_string()),
                         _ => menu_key(i).map_or_else(|| "›".into(), String::from),
                     };
@@ -697,11 +754,17 @@ impl Shell {
         if panel == Panel::Command {
             button(s, ui, "Run", (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
         }
-        if matches!(panel, Panel::Title | Panel::Shell | Panel::Colors) {
+        if panel == Panel::Profiles {
+            button(s, ui, "Use at Launch", (px + pw - ui.pt(170.0), bottom - ui.pt(44.0), ui.pt(154.0), ui.pt(32.0)), false);
+        }
+        if panel == Panel::Processes {
+            button(s, ui, "Edit Title", (px + ui.pt(16.0), bottom - ui.pt(44.0), ui.pt(112.0), ui.pt(32.0)), false);
+        }
+        if matches!(panel, Panel::Title | Panel::Shell | Panel::Colors | Panel::Startup | Panel::GroupName | Panel::Export) {
             let label = match panel {
                 Panel::Title => "Set",
-                Panel::Shell => "Save",
-                _ => "Apply",
+                Panel::Colors => "Apply",
+                _ => "Save",
             };
             button(s, ui, label, (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
         }
@@ -717,13 +780,20 @@ impl Shell {
                 Panel::Shell => "New tabs run this shell. Empty: the account shell.",
                 Panel::Colors => "Text then background, in hex. Empty: no custom colors.",
                 Panel::Help => "Touch Done to go back to the terminal.",
+                Panel::Profiles => "Tap a theme or profile to use it in every tab.",
+                Panel::Groups => "Tap a group to open its tabs. Tap its cross twice to delete it.",
+                Panel::Tabs => "Tap a tab to show it.",
+                Panel::Startup => "Runs in the first tab each time the Terminal starts. Empty: none.",
+                Panel::GroupName => "The open tabs are saved under this name.",
+                Panel::Export => "The text is saved in Files under this name.",
                 _ => "Changes to text size and theme are saved automatically.",
             }
         };
         let reserved = match panel {
             Panel::Connections => 236.0,
             Panel::Processes => 264.0,
-            Panel::Command | Panel::Title | Panel::Shell | Panel::Colors => 136.0,
+            Panel::Command | Panel::Title | Panel::Shell | Panel::Colors | Panel::Startup | Panel::GroupName | Panel::Export => 136.0,
+            Panel::Profiles => 186.0,
             _ => 32.0,
         };
         text(

@@ -1,4 +1,6 @@
-//! Login shell and startup: which shell new tabs run, and whether the saved window group opens when the Terminal starts.
+//! Login shell and startup: which shell new tabs run, the window group that opens when the Terminal starts, and the
+//! command typed into the first tab at launch.
+use super::groups::{self, Group};
 use super::*;
 use std::os::unix::fs::PermissionsExt;
 
@@ -6,6 +8,8 @@ use std::os::unix::fs::PermissionsExt;
 pub const SHELL_KEY: &str = "terminal.shell";
 /// The pref that switches the window group on at launch.
 pub const LAUNCH_KEY: &str = "terminal.group_launch";
+/// The pref that holds the command typed into the first tab at launch.
+pub const COMMAND_KEY: &str = "terminal.startup_command";
 
 /// The shell a typed path names. Ok(None) for an empty line (the account's own login shell); an error says what is wrong.
 pub fn validate_shell(typed: &str) -> Result<Option<String>, String> {
@@ -23,14 +27,13 @@ pub fn validate_shell(typed: &str) -> Result<Option<String>, String> {
     Ok(Some(path.to_string()))
 }
 
-/// The folders of the tabs to open when the Terminal starts: those of the saved window group when that is switched on
-/// and a group is saved, else one tab in the home folder (None).
-pub fn launch_dirs(group_on: bool, saved_group: &str) -> Vec<Option<String>> {
-    let dirs = groups::decode(saved_group);
-    if group_on && !dirs.is_empty() {
-        dirs.into_iter().map(Some).collect()
+/// The group that opens when the Terminal starts: the first saved group, when that is switched on and it has tabs. None
+/// opens one tab in the home folder.
+pub fn launch_group(group_on: bool, saved: &[Group]) -> Option<Group> {
+    if group_on {
+        saved.first().filter(|group| !group.tabs.is_empty()).cloned()
     } else {
-        vec![None]
+        None
     }
 }
 
@@ -44,11 +47,19 @@ impl Shell {
         validate_shell(self.terminal_ui.login_shell.as_deref()?).ok().flatten()
     }
 
-    /// Opens the first tabs of a Terminal start: the saved window group when it is switched on, else a single tab.
+    /// Opens the first tabs of a Terminal start: the window group when it is switched on, else one tab in the home
+    /// folder. The startup command, when one is set, is typed into the first tab.
     pub(crate) fn terminal_launch_tabs(&mut self) {
-        let dirs = launch_dirs(self.terminal_ui.group_launch, self.prefs.get(groups::KEY).unwrap_or(""));
-        for dir in dirs {
-            self.new_terminal_tab(dir);
+        let saved = self.terminal_groups();
+        if launch_group(self.terminal_ui.group_launch, &saved).is_some() {
+            self.terminal_open_group_tabs(0);
+        } else {
+            self.new_terminal_tab(None);
+        }
+        if let Some(command) = self.terminal_ui.startup_command.clone() {
+            if let Some(term) = self.term.iter_mut().next() {
+                term.write(format!("{command}\r").as_bytes());
+            }
         }
     }
 
@@ -113,10 +124,16 @@ mod tests {
     }
 
     #[test]
-    fn the_window_group_opens_at_launch_only_when_switched_on_and_saved() {
-        let group = groups::encode(&["/a".to_string(), "/b".to_string()]);
-        assert_eq!(launch_dirs(true, &group), vec![Some("/a".to_string()), Some("/b".to_string())]);
-        assert_eq!(launch_dirs(false, &group), vec![None], "off: one tab");
-        assert_eq!(launch_dirs(true, ""), vec![None], "nothing saved: one tab");
+    fn the_first_saved_group_opens_at_launch_only_when_switched_on_and_it_has_tabs() {
+        let tab = |dir: &str| groups::Tab { dir: dir.into(), profile: None, command: String::new() };
+        let saved = vec![
+            Group { name: "Newest".into(), tabs: vec![tab("/a"), tab("/b")] },
+            Group { name: "Older".into(), tabs: vec![tab("/c")] },
+        ];
+        assert_eq!(launch_group(true, &saved).map(|g| g.name), Some("Newest".to_string()));
+        assert_eq!(launch_group(false, &saved), None, "off: one tab");
+        assert_eq!(launch_group(true, &[]), None, "nothing saved: one tab");
+        let empty = vec![Group { name: "Empty".into(), tabs: vec![] }];
+        assert_eq!(launch_group(true, &empty), None, "a group without tabs opens nothing");
     }
 }

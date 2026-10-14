@@ -71,6 +71,8 @@ pub enum TermKey {
     PreviousMark,
     /// Cmd+Down
     NextMark,
+    /// Cmd+Shift+V: paste the clipboard with the shell's special characters escaped
+    PasteEscaped,
 }
 
 impl TermKey {
@@ -96,6 +98,7 @@ impl TermKey {
             (22, false) => TermKey::Mark,
             (103, false) => TermKey::PreviousMark,
             (108, false) => TermKey::NextMark,
+            (47, true) => TermKey::PasteEscaped,
             _ => return None,
         })
     }
@@ -741,6 +744,7 @@ mod tests {
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 108), Some(Shortcut::Term(TermKey::NextMark)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_C), Some(Shortcut::Term(TermKey::Copy)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_A), Some(Shortcut::Term(TermKey::SelectAll)));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 47), Some(Shortcut::Term(TermKey::PasteEscaped)));
         // Ctrl chords are never Term's: Ctrl+F, Ctrl+K and Ctrl+T stay control characters for the pty
         for key in [33, 37, 20, 34] {
             assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], key), None);

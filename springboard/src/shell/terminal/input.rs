@@ -49,6 +49,7 @@ impl Shell {
             TermKey::Mark => self.terminal_toggle_mark(),
             TermKey::PreviousMark => self.terminal_jump_mark(false),
             TermKey::NextMark => self.terminal_jump_mark(true),
+            TermKey::PasteEscaped => self.terminal_paste_escaped(t),
             TermKey::Bigger => self.terminal_action(3, t),
             TermKey::Smaller => self.terminal_action(2, t),
             TermKey::ActualSize => {
@@ -117,6 +118,12 @@ impl Shell {
                 | Panel::Shell
                 | Panel::Colors
                 | Panel::Help
+                | Panel::Profiles
+                | Panel::Groups
+                | Panel::Tabs
+                | Panel::Startup
+                | Panel::GroupName
+                | Panel::Export
         );
         match ev {
             Event::Down(x, y)
@@ -127,12 +134,31 @@ impl Shell {
                 self.terminal_ui.down = Some((x, y));
                 self.terminal_ui.last_y = y;
                 self.terminal_ui.dragged = false;
+                // a press on a tab's name picks the tab up: dragging it along the bar moves it
+                let width = self.w as f32;
+                self.terminal_ui.tab_drag = match layout::Header::new(width, self.ui.s, self.term.len()).hit(x, width) {
+                    Some(layout::HeaderHit::Tab(i))
+                        if y >= self.ui.pt(scene::STATUS_PT) && y < top && self.terminal_ui.panel == Panel::None =>
+                    {
+                        Some(i)
+                    }
+                    _ => None,
+                };
                 true
             }
             Event::Move(x, y) if self.terminal_ui.down.is_some() => {
                 let (sx, sy) = self.terminal_ui.down.unwrap();
                 if (x - sx).hypot(y - sy) > self.ui.pt(6.0) {
                     self.terminal_ui.dragged = true;
+                }
+                if let Some(from) = self.terminal_ui.tab_drag {
+                    let width = self.w as f32;
+                    if let Some(layout::HeaderHit::Tab(to)) = layout::Header::new(width, self.ui.s, self.term.len()).hit(x, width) {
+                        if to != from && self.term.move_tab(from, to) {
+                            self.terminal_ui.tab_drag = Some(to);
+                            self.terminal_ui.message.clear();
+                        }
+                    }
                 }
                 let (px, py, pw, ph) = self.terminal_panel_rect();
                 if self.terminal_ui.dragged
@@ -146,6 +172,9 @@ impl Shell {
                         Panel::Processes => (self.terminal_ui.processes.len(), 40.0),
                         Panel::More => (MENU.len(), 44.0),
                         Panel::Help => (help::lines().len(), HELP_PITCH),
+                        Panel::Groups => (self.terminal_groups().len(), 44.0),
+                        Panel::Tabs => (self.term.len(), 44.0),
+                        Panel::Profiles => (self.terminal_profile_choices().len(), 44.0),
                         _ => (0, 0.0),
                     };
                     let limit =
@@ -158,6 +187,7 @@ impl Shell {
             }
             Event::Up(x, y) if self.terminal_ui.down.is_some() => {
                 let (sx, sy) = self.terminal_ui.down.take().unwrap();
+                self.terminal_ui.tab_drag = None;
                 if !self.terminal_ui.dragged && (x - sx).hypot(y - sy) < self.ui.pt(12.0) {
                     let old = self.term_area();
                     self.terminal_chrome_tap(x, y, t);

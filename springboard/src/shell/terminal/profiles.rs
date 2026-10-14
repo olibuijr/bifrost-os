@@ -37,6 +37,48 @@ pub fn scheme_name(theme: usize, profile: Option<usize>) -> &'static str {
     }
 }
 
+/// The pref that holds the profile a Terminal starts with: a profile number, or empty for the numbered theme.
+pub const DEFAULT_KEY: &str = "terminal.default_profile";
+
+/// The profile a Terminal starts with. The default the user set wins (empty: the numbered theme, no profile), else the
+/// profile in use when the Terminal last ran.
+pub fn startup_profile(default: Option<&str>, saved: Option<usize>, known: usize) -> Option<usize> {
+    match default {
+        Some("") => None,
+        Some(text) => text.trim().parse::<usize>().ok().filter(|p| (1..known).contains(p)).or(saved),
+        None => saved,
+    }
+}
+
+/// One row of the Profiles panel: a numbered theme (Basic) or a profile after it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Choice {
+    Theme(usize),
+    Profile(usize),
+}
+
+/// The rows of the Profiles panel: the themes, then the profiles after Basic, in the order of the Color theme cycle.
+/// `profiles` counts every profile, the user's own colours included.
+pub fn choices(themes: usize, profiles: usize) -> Vec<Choice> {
+    (0..themes).map(Choice::Theme).chain((1..profiles).map(Choice::Profile)).collect()
+}
+
+/// The name of a row: the theme's, the profile's, or Custom past the profiles.
+pub fn choice_name(choice: Choice) -> &'static str {
+    match choice {
+        Choice::Theme(t) => THEMES[t.min(THEMES.len() - 1)].name,
+        Choice::Profile(p) => PROFILES.get(p).map_or("Custom", |profile| profile.name),
+    }
+}
+
+/// Whether a row is the one in use: a theme row when no profile is chosen, a profile row when it is.
+pub fn is_current(choice: Choice, theme: usize, profile: Option<usize>) -> bool {
+    match choice {
+        Choice::Theme(t) => profile.is_none() && t == theme,
+        Choice::Profile(p) => profile == Some(p),
+    }
+}
+
 impl Shell {
     /// The colours the tabs draw with when a profile is chosen; None draws the numbered theme.
     pub(crate) fn terminal_scheme(&self) -> Option<Theme> {
@@ -162,6 +204,30 @@ mod tests {
         assert_eq!(&seen[1..4], &[(1, None), (2, None), (2, Some(1))]);
         assert_eq!(seen.last(), Some(&(2, Some(8))));
         assert_eq!(next_scheme(2, Some(8), themes, profiles), (0, None), "back to the first theme");
+    }
+
+    #[test]
+    fn the_default_profile_is_the_one_set_or_else_the_one_in_use() {
+        assert_eq!(startup_profile(None, Some(3), 9), Some(3), "no default: the saved profile");
+        assert_eq!(startup_profile(Some(""), Some(3), 9), None, "the default is the numbered theme");
+        assert_eq!(startup_profile(Some("5"), Some(3), 9), Some(5));
+        assert_eq!(startup_profile(Some("0"), Some(3), 9), Some(3), "Basic is a theme, not a profile: the saved one stays");
+        assert_eq!(startup_profile(Some("12"), None, 9), None, "a profile that is gone");
+        assert_eq!(startup_profile(Some("junk"), Some(2), 9), Some(2));
+    }
+
+    #[test]
+    fn the_profiles_panel_lists_each_theme_then_each_profile_once() {
+        let rows = choices(3, 9);
+        assert_eq!(rows.len(), 3 + 8);
+        assert_eq!(rows[0], Choice::Theme(0));
+        assert_eq!(rows[3], Choice::Profile(1));
+        assert_eq!(rows.last(), Some(&Choice::Profile(8)));
+        assert_eq!(choice_name(Choice::Theme(2)), "Solarized Dark");
+        assert_eq!(choice_name(Choice::Profile(9)), "Custom", "past the profiles is the user's own");
+        assert!(is_current(Choice::Theme(1), 1, None));
+        assert!(!is_current(Choice::Theme(1), 1, Some(4)), "a profile in use is not its theme");
+        assert!(is_current(Choice::Profile(4), 0, Some(4)));
     }
 
     #[test]

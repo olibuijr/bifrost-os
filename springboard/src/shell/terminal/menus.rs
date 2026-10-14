@@ -42,13 +42,15 @@ impl Shell {
                 }
                 true
             }
-            Panel::Title | Panel::Shell | Panel::Colors => {
+            Panel::Profiles | Panel::Groups | Panel::Tabs => {
+                if matches!(out, Out::Named("Escape")) {
+                    self.terminal_close_panel(t);
+                }
+                true
+            }
+            Panel::Title | Panel::Shell | Panel::Colors | Panel::Startup | Panel::GroupName | Panel::Export => {
                 if matches!(out, Out::Enter) {
-                    match self.terminal_ui.panel {
-                        Panel::Title => self.terminal_apply_title(t),
-                        Panel::Shell => self.terminal_apply_shell(t),
-                        _ => self.terminal_apply_colors(t),
-                    }
+                    self.terminal_apply_entry(t);
                 } else if matches!(out, Out::Named("Escape")) {
                     self.terminal_ui.entry = None;
                     self.terminal_close_panel(t);
@@ -79,7 +81,7 @@ impl Shell {
             self.ui.s,
             bottom,
             self.terminal_ui.panel == Panel::Form,
-            matches!(self.terminal_ui.panel, Panel::More | Panel::Help),
+            matches!(self.terminal_ui.panel, Panel::More | Panel::Help | Panel::Profiles | Panel::Groups | Panel::Tabs),
         )
     }
 
@@ -170,6 +172,13 @@ impl Shell {
         self.resize_terminals();
         self.dirty = true;
     }
+    /// A row of the menu bar's File, Edit, View, Window or Help menu while the Terminal is in front: runs the More row
+    /// it names.
+    pub(crate) fn terminal_menu_command(&mut self, i: usize, t: f64) {
+        self.terminal_menu_action(i, t);
+        self.dirty = true;
+    }
+
     pub(super) fn terminal_menu_action(&mut self, i: usize, t: f64) {
         match i {
             0 => self.terminal_action(1, t),
@@ -246,8 +255,8 @@ impl Shell {
             19 => self.terminal_open_command(t),
             20 => self.terminal_split(t),
             21 => self.terminal_close_split(t),
-            22 => self.terminal_save_group(),
-            23 => self.terminal_open_group(t),
+            22 => self.terminal_open_group_name(t),
+            23 => self.terminal_open_groups(t),
             item::TITLE => self.terminal_open_title(t),
             item::CLOSE_OTHERS => self.terminal_close_others(t),
             item::MOVE_LEFT => self.terminal_move_tab(true),
@@ -277,6 +286,15 @@ impl Shell {
             item::GROUP_LAUNCH => self.terminal_toggle_group_launch(),
             item::HELP => self.terminal_open_help(t),
             item::COLORS => self.terminal_open_colors(t),
+            item::IGNORE_CASE => self.terminal_toggle_ignore_case(),
+            item::WRAP => self.terminal_toggle_wrap(),
+            item::LOOK_UP => self.terminal_look_up(t),
+            item::MAN_SEARCH => self.terminal_man_search(t),
+            item::PROFILES => self.terminal_open_profiles(t),
+            item::STARTUP => self.terminal_open_startup(t),
+            item::ALL_TABS => self.terminal_open_tabs(t),
+            item::EXPORT => self.terminal_open_export(false, t),
+            item::EXPORT_SELECTION => self.terminal_open_export(true, t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self
