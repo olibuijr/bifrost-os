@@ -169,6 +169,8 @@ pub enum Toggle {
     ButtonShapes,
     /// Accessibility > Dim Flashing Lights (`a11y_dim_flashing_lights`)
     DimFlashingLights,
+    /// Settings > Accessibility > Guided Access (`a11y_guided_access`)
+    GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
     AutoTime,
@@ -1274,6 +1276,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         reduce_transparency_item(a.reduce_transparency, a.increase_contrast),
                         Item::new("Show Borders").switch(a.button_shapes, Action::Toggle(Toggle::ButtonShapes)),
                         Item::new("Dim Flashing Lights").switch(a.dim_flashing_lights, Action::Toggle(Toggle::DimFlashingLights)),
+                        Item::new("Guided Access").switch(a.guided_access, Action::Toggle(Toggle::GuidedAccess)),
                         Item::new("Screen Reader").switch(a.screen_reader, Action::Toggle(Toggle::ScreenReader)),
                     ])
                     .header("VISION")

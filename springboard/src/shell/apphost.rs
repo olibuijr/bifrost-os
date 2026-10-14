@@ -372,6 +372,10 @@ pub struct AppHost {
     pub announcements: Vec<(String, bifrost_proto::AnnouncePriority)>,
     /// The same announcements, waiting for the on-screen banner (`accessibility::banner`); the shell takes them each tick.
     pub announce_banner: Vec<(String, bifrost_proto::AnnouncePriority)>,
+    /// The app's custom rotors (`ToShell::AxRotors`), cleaned with `bifrost_ui::ax_rotor::clean`; empty when it declares none.
+    pub custom_rotors: Vec<bifrost_ui::ax::AxCustomRotor>,
+    /// Guided Access requests (`ToShell::GuidedAccessRequest`: start with restrictions, or end), oldest first, taken by the shell each tick.
+    pub guided_requests: Vec<(bool, Vec<bifrost_proto::GuidedRestriction>)>,
     last_notification: Option<f64>,
     /// `ToShell::SuddenTermination`: the app allows being killed with no Quit round trip.
     pub sudden: bool,
@@ -484,6 +488,8 @@ impl AppHost {
             ax_meta: Vec::new(),
             announcements: Vec::new(),
             announce_banner: Vec::new(),
+            custom_rotors: Vec::new(),
+            guided_requests: Vec::new(),
             last_notification: None,
             badge: String::new(),
             tile: Default::default(),
@@ -849,6 +855,13 @@ impl AppHost {
                 }
                 self.announce_banner.push((text.clone(), priority));
                 self.announcements.push((text, priority));
+            }
+            ToShell::AxRotors(list) => self.custom_rotors = bifrost_ui::ax_rotor::clean(list),
+            ToShell::GuidedAccessRequest { on, restrictions } => {
+                if self.guided_requests.len() >= 4 {
+                    self.guided_requests.remove(0);
+                }
+                self.guided_requests.push((on, restrictions));
             }
             ToShell::TextState(t) => {
                 // an empty state is the app saying no text field has focus any more
