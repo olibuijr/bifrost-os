@@ -3,23 +3,23 @@
   "doc": "https://developer.apple.com/documentation/coremotion",
   "macos_since": "10.15",
   "status": "partial",
-  "bifrost": "springboard/src/shell/rotate.rs (orientation consumer), springboard/render/src/gfx/rotate.rs (Orientation enum)",
-  "summary": "Core Motion reports accelerometer, gyroscope, magnetometer, pedometer, altitude and activity data from device sensors. BifrOSt has only a four-way screen orientation consumer in the shell; it has no app-facing motion API, and the sensor feed it expects is not present in this repo.",
+  "bifrost": "springboard/core/src/device_motion.rs, springboard/core/src/motion_manager.rs, springboard/sdk/src/sensors.rs, springboard/src/shell/rotate.rs (orientation consumer), springboard/render/src/gfx/rotate.rs (Orientation enum)",
+  "summary": "Core Motion reports accelerometer, gyroscope, magnetometer, pedometer, altitude and activity data from device sensors. BifrOSt has a shared model for raw accelerometer and gyroscope updates and for device motion (attitude, gravity, rotation rate), exposed to apps through the SDK. The sensor feed that drives screen orientation and the magnetometer, altitude, activity and pedometer readers are not wired yet.",
   "rea_evidence": "ev_51a71831ac23446ada95e1b098049a910caee7a9704e07103908e3b63269cfe2",
   "features": [
     {
       "feature": "Device motion (attitude, rotation rate, gravity-free acceleration)",
       "apple": "CMMotionManager, CMDeviceMotion, CMAttitude, CMAttitudeReferenceFrame",
-      "bifrost": "springboard/core/src/motion.rs, springboard/core/src/sensor_log.rs, springboard/render/src/gfx/rotate.rs; springboard/sdk/src/sensors.rs over springboard/core/src/motion.rs",
+      "bifrost": "springboard/core/src/device_motion.rs (DeviceMotionManager), springboard/core/src/motion.rs (MotionEstimator), springboard/core/src/sensor_log.rs, springboard/sdk/src/sensors.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attitude or rotation-rate values exist. The shell keeps only a discrete orientation from the sensor. round 75, host only: SDK path; no IMU feed."
+      "note": "built on parity/team-j-core-motion; not yet verified on Midget. DeviceMotionManager starts and stops updates, sets the interval and delivers attitude, gravity, user acceleration and rotation rate, fed by the accelerometer and gyroscope readings through SensorSource. The attitude frame is arbitrary (no magnetometer). The shell does not read it yet."
     },
     {
       "feature": "Device orientation (four-way)",
       "apple": "Derived from CMAccelerometerData or CMDeviceMotion by the app",
       "bifrost": "springboard/src/shell/rotate.rs (set_orientation, Rotation Lock), springboard/render/src/gfx/rotate.rs (Orientation)",
       "status": "partial",
-      "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. No in-repo code feeds set_orientation from a sensor (set_orientation has callers only in rotate.rs tests), so the sensor reader is missing or lives outside this repo."
+      "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. orientation_from_gravity (springboard/render/src/gfx/rotate.rs) classifies a gravity reading, but no in-repo code feeds set_orientation from a sensor (set_orientation has callers only in rotate.rs tests and an example), so the sensor reader is missing."
     },
     {
       "feature": "Raw accelerometer events",
@@ -107,7 +107,7 @@
     }
   ],
   "gaps": [
-    "No app-facing Core Motion equivalent in springboard/sdk/src: no CMMotionManager-style API for accelerometer, gyroscope, device motion or attitude.",
+    "No app-facing API for device motion on the shell side: DeviceMotionManager is in springboard/core/src/device_motion.rs and the SDK re-exports it, but no app or shell caller uses it yet.",
     "The orientation feed is missing from this repo: springboard/src/shell/rotate.rs documents set_orientation as fed by the accelerometer every 200 ms, but no non-test caller exists here.",
     "No magnetometer, barometer or altitude readers.",
     "No motion-activity recognition, pedometer or sensor recording or history."
