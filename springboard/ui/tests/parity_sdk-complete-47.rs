@@ -1,6 +1,9 @@
-//! Parity sdk-complete-47: headless tests for the linear PCM converter (sample depth, channel layout and sample rate) and
-//! the player controller model. Nothing is decoded from a file, no device is opened and no clock is read.
+//! Parity sdk-complete-47: headless tests for the linear PCM converter, the player controller, the web extension
+//! exchange and the capture view and camera direction models. Nothing is decoded from a file, no camera or device is
+//! opened, no clock is read and nothing is sent.
 
+use bifrost_ui::capture_direction::{Coordinator, DeviceDescriptor, Direction as CameraDirection, MediaType, Position as CameraPosition};
+use bifrost_ui::capture_view::{CaptureView, Event as CaptureEvent, Refusal as CaptureRefusal};
 use bifrost_ui::pcm_convert::{convert_bytes, decode, encode, ConvertError, Depth, PcmFormat};
 use bifrost_ui::player_view::{Chrome, Hit, PlayerHandle, PlayerViewController, PlayerViewDelegate};
 use bifrost_ui::web_extension::{Exchange, ExchangeError, Extension, HostPattern, Kind, Message, Registry};
@@ -341,4 +344,102 @@ fn a_hidden_full_screen_button_cannot_be_tapped_on_the_controller() {
     assert_ne!(hit, Some(Hit::FullScreenToggle));
     assert!(!controller.is_full_screen());
     assert!(log.stages.is_empty());
+}
+
+fn camera(unique_id: &str, position: CameraPosition, device_type: &str) -> DeviceDescriptor {
+    DeviceDescriptor {
+        unique_id: unique_id.to_string(),
+        localized_name: format!("Camera {unique_id}"),
+        device_type: device_type.to_string(),
+        media_types: vec![MediaType::Video],
+        position,
+    }
+}
+
+#[test]
+fn a_new_capture_view_refuses_to_record_without_a_session() {
+    let view = CaptureView::new();
+    assert_eq!(view.session(), None);
+    assert_eq!(view.request_recording("/var/clips/none.mov"), Err(CaptureRefusal::NoSession));
+}
+
+#[test]
+fn a_bound_session_records_its_preview_flags_until_it_is_cleared() {
+    let mut view = CaptureView::new();
+    view.set_session(42, true, false);
+    assert_eq!(view.session(), Some(42));
+    assert!(view.shows_video_preview());
+    assert!(!view.shows_audio_preview());
+    view.clear_session();
+    assert_eq!(view.session(), None);
+    assert!(!view.shows_video_preview());
+}
+
+#[test]
+fn a_recording_request_with_a_session_becomes_a_start_event_with_the_path() {
+    let mut view = CaptureView::new();
+    view.set_session(7, true, true);
+    assert_eq!(
+        view.request_recording("/var/clips/a.mov"),
+        Ok(CaptureEvent::StartRecording { path: "/var/clips/a.mov".to_string() })
+    );
+}
+
+#[test]
+fn a_blank_recording_path_is_refused_even_with_a_session() {
+    let mut view = CaptureView::new();
+    view.set_session(7, true, true);
+    assert_eq!(view.request_recording(""), Err(CaptureRefusal::EmptyPath));
+    assert_eq!(view.request_recording("   \t"), Err(CaptureRefusal::EmptyPath));
+}
+
+#[test]
+fn a_camera_on_the_view_side_faces_forward_and_the_other_side_faces_backward() {
+    let mut coordinator = Coordinator::new(CameraPosition::Back, Vec::new());
+    let devices = [camera("wide", CameraPosition::Back, "wide"), camera("selfie", CameraPosition::Front, "wide")];
+    let map = coordinator.update(&devices).expect("the first grouping is a change");
+    assert_eq!(map.direction_of("wide"), Some(CameraDirection::Forward));
+    assert_eq!(map.direction_of("selfie"), Some(CameraDirection::Backward));
+    assert_eq!(map.direction_of("absent"), None);
+}
+
+#[test]
+fn a_camera_with_an_unspecified_position_is_in_neither_list() {
+    let mut coordinator = Coordinator::new(CameraPosition::Front, Vec::new());
+    let map = coordinator.update(&[camera("external", CameraPosition::Unspecified, "wide")]).unwrap();
+    assert!(map.is_empty());
+    assert_eq!(map.direction_of("external"), None);
+}
+
+#[test]
+fn only_the_listed_device_types_are_tracked_and_an_empty_list_tracks_all() {
+    let devices = [camera("wide", CameraPosition::Back, "wide"), camera("tele", CameraPosition::Back, "telephoto")];
+    let mut filtered = Coordinator::new(CameraPosition::Front, vec!["telephoto".to_string()]);
+    let map = filtered.update(&devices).unwrap();
+    assert_eq!(map.backward.len(), 1);
+    assert_eq!(map.backward[0].unique_id, "tele");
+    let mut all = Coordinator::new(CameraPosition::Front, Vec::new());
+    assert_eq!(all.update(&devices).unwrap().backward.len(), 2);
+}
+
+#[test]
+fn lists_are_sorted_by_unique_id_so_the_same_cameras_compare_equal() {
+    let mut a = Coordinator::new(CameraPosition::Back, Vec::new());
+    let mut b = Coordinator::new(CameraPosition::Back, Vec::new());
+    let one = [camera("b-cam", CameraPosition::Back, "wide"), camera("a-cam", CameraPosition::Back, "wide")];
+    let two = [camera("a-cam", CameraPosition::Back, "wide"), camera("b-cam", CameraPosition::Back, "wide")];
+    let first = a.update(&one).unwrap();
+    assert_eq!(first.forward[0].unique_id, "a-cam");
+    assert_eq!(b.update(&two).unwrap(), first);
+}
+
+#[test]
+fn an_unchanged_device_list_reports_no_change_and_a_removed_camera_does() {
+    let mut coordinator = Coordinator::new(CameraPosition::Back, Vec::new());
+    let devices = [camera("wide", CameraPosition::Back, "wide"), camera("selfie", CameraPosition::Front, "wide")];
+    assert!(coordinator.update(&devices).is_some());
+    assert!(coordinator.update(&devices).is_none(), "the same cameras are not a change");
+    let fewer = coordinator.update(&devices[..1]).expect("a removed camera is a change");
+    assert_eq!(fewer.backward.len(), 0);
+    assert_eq!(coordinator.device_directions(), &fewer);
 }

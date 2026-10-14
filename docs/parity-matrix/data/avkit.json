@@ -73,9 +73,9 @@
   {
    "feature": "Capture view and camera viewfinder (AVCaptureView)",
    "apple": "AVCaptureView, AVCaptureViewDelegate",
-   "bifrost": "springboard/src/shell/camera/mod.rs (viewfinder, silent shutter, timer, grid, QR), springboard/src/shell/camera/qr.rs, springboard/ui/src/capture_view.rs",
+   "bifrost": "springboard/src/shell/camera/mod.rs (viewfinder, silent shutter, timer, grid, QR), springboard/src/shell/camera/qr.rs, springboard/ui/src/capture_view.rs; springboard/ui/tests/parity_sdk-complete-47.rs",
    "status": "partial",
-   "note": "The Camera app is a shell app, not an SDK view. springboard/ui/src/capture_view.rs models the capture view as pure state: session binding with video and audio preview flags, controls style, video gravity, and the start-recording delegate event with its refusals. Not wired into the SDK or the Camera app, and not yet verified on Midget."
+   "note": "The Camera app is a shell app, not an SDK view. springboard/ui/src/capture_view.rs models the capture view as pure state: session binding with video and audio preview flags, controls style, video gravity, and the start-recording delegate event with its refusals (headless tests in parity_sdk-complete-47.rs). Gap: not wired into the SDK or the Camera app, and no preview is drawn; needs the Midget camera for verification."
   },
   {
    "feature": "Capture events from hardware buttons",
@@ -87,9 +87,9 @@
   {
    "feature": "Camera facing direction",
    "apple": "AVCaptureDeviceDirectionCoordinator, AVCaptureDeviceDirectionMap, AVCaptureDeviceDescriptor",
-   "bifrost": "springboard/src/shell/camera/mod.rs (front/back switch), springboard/ui/src/capture_direction.rs",
+   "bifrost": "springboard/src/shell/camera/mod.rs (front/back switch), springboard/ui/src/capture_direction.rs; springboard/ui/tests/parity_sdk-complete-47.rs",
    "status": "partial",
-   "note": "Front and back switching exists in the Camera app. springboard/ui/src/capture_direction.rs models the direction coordinator and its map as pure state: device descriptors grouped into forward and backward facing lists relative to a view, a device-type filter, and a change report only when the grouping differs. Not wired to the capture service or the SDK; not yet verified on Midget."
+   "note": "Front and back switching exists in the Camera app. springboard/ui/src/capture_direction.rs models the direction coordinator and its map as pure state: forward and backward lists relative to a view, a device-type filter, sorted lists, and a change report only when the grouping differs (headless tests in parity_sdk-complete-47.rs). Gap: not wired to the capture service or the SDK, and the camera list comes from no live device; needs the Midget cameras for verification."
   },
   {
    "feature": "Audio input picker",
