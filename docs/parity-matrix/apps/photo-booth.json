@@ -46,8 +46,8 @@
    "area": "settings",
    "apple": "flash option",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:237",
-   "note": "View > Screen Flash toggles it; needs lab check",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs (flash_over); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::flash)",
+   "note": "View > Screen Flash turns a white overlay on over the viewfinder for 260 ms when a photo is taken, and the setting is remembered; the timing is tested headless in model.rs, and the flash itself still needs a lab check on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -64,8 +64,8 @@
    "area": "panel",
    "apple": "Effects browser",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:204",
-   "note": "Bulge, Twirl, Mirror (nearest sampling); no live-tunable strength",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs (Effect::apply); springboard/apps/photobooth-desktop/src/warp.rs (bulge, twirl, Strength)",
+   "note": "Bulge, Twirl and Mirror (nearest sampling) with Subtle, Normal and Strong strength from View > Distortion Strength, remembered; the strength is chosen from a menu rather than tuned on the effects row, and the effects have no preview thumbnails.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -73,8 +73,8 @@
    "area": "panel",
    "apple": "Effects backdrops",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/backdrop.rs:194",
-   "note": "Four gradient backdrops over a picture of the empty scene (background subtraction, not a person-segmentation model; no photo or movie backdrops); built on parity/team-d-photo-booth; not yet verified on Midget",
+   "bifrost": "springboard/apps/photobooth-desktop/src/backdrop.rs (replace, foreground_mask, Backdrop)",
+   "note": "Four gradient backdrops (Sunset, Ocean, Forest, Night Sky) over a picture of the empty scene taken three seconds after the choice; this is background subtraction, not a person-segmentation model, so a moved camera or a changed light needs View > Retake Empty Scene. No photo or movie backdrops, and not yet checked on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -100,8 +100,8 @@
    "area": "menu",
    "apple": "Edit > Delete",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:244",
-   "note": "Delete/Backspace key and File > Delete; no undo or Trash",
+   "bifrost": "springboard/apps/photobooth-desktop/src/trash.rs (put, restore); springboard/apps/photobooth-desktop/src/main.rs (delete_selected, undo_delete)",
+   "note": "Delete (Backspace or Edit > Delete) moves the capture into the desktop Trash folder with its record, and Edit > Undo Delete (cmd+z) brings it back to its place; the app has no Trash window of its own, so the file manager shows the Trash.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -109,8 +109,8 @@
    "area": "menu",
    "apple": "Edit > Auto Flip",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:178",
-   "note": "View > Auto Flip, applied in grab so stills, clips and viewfinder match",
+   "bifrost": "springboard/apps/photobooth-desktop/src/warp.rs (flip_horizontal); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::grab)",
+   "note": "Edit > Auto Flip is remembered and applied in grab, so stills, burst shots, clip frames and the viewfinder match; the item has no key equivalent.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -118,8 +118,8 @@
    "area": "menu",
    "apple": "View > Full Screen",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:492",
-   "note": "View > Full Screen Viewfinder hides the bars so the picture fills the window; the window itself goes full screen only through the shell's shortcut because an app cannot request it; built on parity/team-d-photo-booth; not yet verified on Midget",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs (layout_full_screen); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::set_full_screen)",
+   "note": "View > Full Screen Viewfinder (cmd+ctrl+f) hides the bars so the picture fills the window, and the layout is tested in model.rs; the window itself goes full screen only through the shell's shortcut because an app cannot request it, and the mode is not yet checked on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -127,8 +127,8 @@
    "area": "menu",
    "apple": "Camera menu",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:266",
-   "note": "Camera menu lists probed devices; list refreshes on camera start only",
+   "bifrost": "springboard/apps/photobooth-desktop/src/menu.rs (menus, decode); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::select_camera); springboard/apps/photobooth-desktop/src/model.rs (camera_retry_due)",
+   "note": "The Camera menu lists every probed device and checks the one in use, and the list is read again every 2 s while no camera is open, so a camera plugged in later appears. Choosing a camera while one is open does not rescan the list, and the menu is not yet checked on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -136,8 +136,8 @@
    "area": "menu",
    "apple": "View > Slideshow",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:276",
-   "note": "3 s per capture, Esc ends, arrows step; no transitions",
+   "bifrost": "springboard/apps/photobooth-desktop/src/slideshow.rs (Slideshow, fade_alpha)",
+   "note": "Each capture stays on screen for 3 s and the next one fades in over 0.4 s; Escape or a click ends the show, arrows step, Space pauses, and the timing is tested in slideshow.rs. No other transitions yet.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -145,8 +145,8 @@
    "area": "menu",
    "apple": "MainMenu",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:557",
-   "note": "File, View, Camera menus; shortcuts only for Take Photo and Slideshow",
+   "bifrost": "springboard/apps/photobooth-desktop/src/menu.rs (menus, decode)",
+   "note": "File, Edit, View (with Backdrop and Distortion Strength submenus) and Camera menus, with key equivalents for Take Photo, Export, Show Library, Undo Delete, Delete, Slideshow and Full Screen Viewfinder; there is no Window or Help menu.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
