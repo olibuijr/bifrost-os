@@ -59,6 +59,8 @@ pub enum TermKey {
     ActualSize,
     NewTab,
     CloseTab,
+    /// File > Close Other Tabs: no key equivalent, so no chord maps to it
+    CloseOtherTabs,
     NextTab,
     PrevTab,
     /// Cmd+1 .. Cmd+9, zero based

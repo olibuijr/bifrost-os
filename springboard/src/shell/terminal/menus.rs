@@ -235,14 +235,7 @@ impl Shell {
             22 => self.terminal_save_group(),
             23 => self.terminal_open_group(t),
             // Every tab but this one closes; tabs running a job stay open and are counted in the message.
-            24 => {
-                let busy = self.close_other_terminal_tabs();
-                self.terminal_ui.message = match busy {
-                    0 => "Other tabs closed".into(),
-                    1 => "1 tab is running a job and stayed open".into(),
-                    n => format!("{n} tabs are running jobs and stayed open"),
-                };
-            }
+            24 => self.terminal_close_other_tabs(),
             // Paste Escaped Text: the clipboard with the shell's special characters escaped, so a path pastes as one word.
             25 => {
                 let escaped = escape::shell_escape(&clipboard::text().unwrap_or_default());

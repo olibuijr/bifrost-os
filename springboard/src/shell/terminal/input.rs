@@ -75,6 +75,7 @@ impl Shell {
                     _ => self.close_terminal_tab(i),
                 }
             }
+            TermKey::CloseOtherTabs => self.terminal_close_other_tabs(),
             TermKey::NextTab | TermKey::PrevTab => {
                 let n = self.term.len();
                 if n > 1 {

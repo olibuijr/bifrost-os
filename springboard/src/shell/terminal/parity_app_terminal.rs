@@ -26,6 +26,15 @@ fn close_other_tabs_with_one_tab_changes_nothing() {
 }
 
 #[test]
+fn file_menu_close_other_tabs_runs_the_same_action() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.new_terminal_tab(None);
+    sh.terminal_hw_key(TermKey::CloseOtherTabs, 2000.0);
+    assert_eq!(sh.term.len(), 1);
+    assert_eq!(sh.terminal_ui.message, "Other tabs closed");
+}
+
+#[test]
 fn man_page_opens_the_selected_command_in_a_new_tab() {
     let mut sh = terminal(&["/bin/sh", "-c", "printf 'ls -la\\n'; read x"]);
     pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("ls -la"));
