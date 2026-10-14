@@ -1,7 +1,7 @@
 //! The compositor state: Smithay's protocol states, the window space, and the `wm` rules that place and move
 //! windows in it.
 
-use std::{ffi::OsString, sync::Arc, time::Instant};
+use std::{ffi::OsString, os::unix::net::UnixStream, sync::Arc, time::Instant};
 
 use smithay::{
     desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType},
@@ -29,6 +29,12 @@ use smithay::{
 };
 
 use crate::wm::{Rect, WindowId, Wm};
+
+/// Capture the Linux Unix-socket peer uid before registering the client with Wayland.
+/// Global visibility filters run inside Wayland backend dispatch and must not call back into its credential lock.
+fn peer_uid(stream: &UnixStream) -> Option<u32> {
+    smithay::reexports::rustix::net::sockopt::socket_peercred(stream).ok().map(|credentials| credentials.uid.as_raw())
+}
 
 /// The `wm` id of a Smithay window, kept in the window's user data.
 struct Id(WindowId);
@@ -120,7 +126,8 @@ impl WmState {
         let presentation = PresentationState::new::<WmState>(&dh, 1);
         handle
             .insert_source(listening, |stream, _, state: &mut WmState| {
-                if let Err(e) = state.dh.insert_client(stream, Arc::new(ClientState::default())) {
+                let data = Arc::new(ClientState { peer_uid: peer_uid(&stream), ..ClientState::default() });
+                if let Err(e) = state.dh.insert_client(stream, data) {
                     eprintln!("bifrost-wm: client refused: {e}");
                 }
             })
@@ -326,6 +333,8 @@ impl WmState {
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
+    /// Cached from SO_PEERCRED on accept; filters must not query the Wayland backend while dispatching globals.
+    pub peer_uid: Option<u32>,
 }
 
 impl ClientData for ClientState {

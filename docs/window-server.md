@@ -23,6 +23,10 @@ would make a root process the server for every untrusted app, so it stays out.
   with alpha on top. The compositor blurs what is behind the region every frame it is damaged.
 - Rounded material shapes and the BifrOSt glass styles come through the private `bifrost_material_v1` protocol (see
   Materials); the standard protocol carries rectangles only.
+- Accepted Wayland sockets cache their Linux `SO_PEERCRED` uid in `ClientState`. The input-method and virtual-keyboard
+  global filters use that cached uid: Wayland invokes the filters while holding its backend lock, so querying
+  `Client::get_credentials` from a filter re-enters the lock and deadlocks client dispatch. Missing cached credentials
+  (including foreign XWayland client data) fail closed under the same-user policy.
 
 ## What the former compositor did (parity checklist)
 

@@ -154,9 +154,8 @@ impl Compositor {
                 let display: Display<WmState> = Display::new()?;
                 let mut state = WmState::new(&mut event_loop, display, Some(&name));
                 let backend = std::rc::Rc::new(std::cell::RefCell::new(Headless::new(&mut state, w, h)?));
-                // Unlike the DRM backend, the offscreen backend has no initial scanout to produce. Avoid
-                // rendering an empty scene before the first client request: EGL work here can delay protocol
-                // dispatch, including the registry/sync roundtrip clients use to start.
+                // Unlike the DRM backend, the offscreen backend has no initial scanout to produce. Start idle;
+                // accepted client requests mark the scene dirty and drive the first frame.
                 state.dirty = false;
                 let b = backend.clone();
                 state.session.hooks.capture = Some(Box::new(move |state, spec| b.borrow_mut().capture(state, spec, CLEAR)));
