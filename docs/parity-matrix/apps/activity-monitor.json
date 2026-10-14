@@ -33,7 +33,7 @@
    "area": "view",
    "apple": "View menu process filters",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:250",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:262",
    "note": "All ten filters are in the sidebar and View > Filter Processes. Windowed Processes (owners of an on-screen window from the shell window list, polled each reading; native clients without an owner pid are not matched), Selected Processes (the selection and everything it started, via ppid), GPU Processes and Applications in the Last 8 Hours (start time from /proc/<pid>/stat and the boot time from /proc/stat, so no start-time history is kept) are built on the branch. Not yet verified on Midget.",
    "wire": "Check Windowed Processes and Applications in the Last 8 Hours on the lab machine."
   },
@@ -78,9 +78,9 @@
    "area": "menu",
    "apple": "View > Sample Process (Sample.nib)",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/deltas.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Probe /proc/<pid>/stack and wchan every 10 ms for N seconds on a thread, then show deltas::report in a window with Save."
+   "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs:202",
+   "note": "Process > Sample Process runs a background job (sample_proc.rs run) that reads each thread's wait point and kernel stack every 20 ms for 3, 10 or 30 seconds, then shows the report in the window. Parsing and the report are unit tested in sample_proc.rs. Not yet verified on Midget.",
+   "wire": "Check the report on the lab machine against a busy process, and that a second sample waits for the first to finish."
   },
   {
    "feature": "Run Spindump / System Diagnostics",
@@ -96,17 +96,17 @@
    "area": "menu",
    "apple": "View > Show Deltas for Process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/deltas.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Capture a Baseline when toggled in window.rs and show Baseline::delta in the counter columns."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:703",
+   "note": "Process > Show Deltas for Process stores the selected process's counters as a baseline (window.rs toggle_deltas). CPU time, bytes and GPU time then show the change (model.rs cell_text), sort by it, and the Since Baseline column shows its age. Host unit tests cover the cell text and the sort. Not yet verified on Midget.",
+   "wire": "Check on the lab machine that the counters count from the toggle and go back to totals when it is turned off."
   },
   {
    "feature": "Columns submenu (choose visible columns)",
    "area": "menu",
    "apple": "View > Columns",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:visible_columns",
-   "note": "View > Columns toggles User, Threads, PID, persisted. Other reference columns (Ports, Kind, Real Mem, Purgeable, CPU Time, Idle Wake Ups) remain.",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:178",
+   "note": "View > Columns toggles the per-tab columns (User, Threads, PID, CPU Time, Parent PID, Ports, Private Memory, Idle Wake Ups and more), persisted. Kind, Real Mem and Purgeable remain.",
    "wire": "Check the dash for unreadable Private Memory and the wake-up rate on the lab machine."
   },
   {
@@ -141,7 +141,7 @@
    "area": "settings",
    "apple": "View > Dock Icon",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:726",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:803",
    "note": "View > Dock Icon (Application Icon, CPU, Memory, Disk, Network) puts the live figure on the Dock badge (at most four characters) with a progress bar under it, through the dock service; remembered in app defaults. The tile does not draw the scrolling graph the reference shows, because the dock service takes only a text badge, a progress bar, a bounce and menu items. Not yet verified on Midget.",
    "wire": "Needs an image content for the dock tile in the shell's dock service; the SDK dock_tile module sends only badge, progress, bounce and menu."
   },
@@ -150,8 +150,8 @@
    "area": "view",
    "apple": "Memory tab footer: pressure graph, app/wired/compressed, cached, swap",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:166",
-   "note": "Pressure from PSI; detail line shows cached, shared, buffers, compressed (zswap) and swap. No separate breakdown rows or pressure graph.",
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:480",
+   "note": "Pressure from PSI is drawn as a minute of bars in the Memory footer (draw.rs); the detail line shows cached, shared, buffers, compressed (zswap) and swap. No separate App, Wired and Compressed rows, and no full pressure graph.",
    "wire": "Match the reference memory categories where Linux gives the same figure."
   },
   {
@@ -177,7 +177,7 @@
    "area": "view",
    "apple": "Network tab: sent/received bytes and packets per process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:272",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:288",
    "note": "Not changed in 0.5.0: the Network tab is still per interface. Per-process bytes need the sock_diag netlink dump (tcp_info byte counters); the inspector's socket tables give endpoints only.",
    "wire": "Attribute traffic per process with sock_diag (inode to pid via /proc/<pid>/fd) and the byte counters from the tcp_info netlink reply."
   },
