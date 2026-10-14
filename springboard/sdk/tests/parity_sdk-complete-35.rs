@@ -148,3 +148,75 @@ fn policy_errors_describe_the_refused_address() {
     let text = PolicyError::InsecureRequest("http://a.example/".to_string()).to_string();
     assert_eq!(text, "Plain http is not allowed for http://a.example/");
 }
+
+// --- bluetooth_picker: an app's request and the address it receives --------------------------------------------------
+
+mod bluetooth_requests {
+    use bifrost_app::bluetooth_picker::{BluetoothPicker, Candidate, PickerError, PickerRequest};
+    use bifrost_core::bt_address::{BdAddr, DeviceKind};
+
+    fn candidate(addr: &str, name: &str, kind: DeviceKind) -> Candidate {
+        Candidate { address: addr.parse().unwrap(), name: name.to_string(), kind, paired: false }
+    }
+
+    fn nearby() -> Vec<Candidate> {
+        vec![
+            candidate("00:11:22:33:44:01", "Trackpad", DeviceKind::Pointer),
+            candidate("00:11:22:33:44:02", "Keyboard K2", DeviceKind::Keyboard),
+            candidate("00:11:22:33:44:04", "Combo Desk", DeviceKind::KeyboardAndPointer),
+        ]
+    }
+
+    fn names(picker: &BluetoothPicker) -> Vec<&str> {
+        picker.shown().iter().map(|c| c.name.as_str()).collect()
+    }
+
+    #[test]
+    fn a_request_for_keyboards_shows_only_keyboards() {
+        let mut picker = BluetoothPicker::for_request(&PickerRequest { name_filter: None, kinds: vec![DeviceKind::Keyboard] });
+        assert_eq!(picker.offer(&nearby()), Ok(1));
+        assert_eq!(names(&picker), ["Keyboard K2"]);
+    }
+
+    #[test]
+    fn an_empty_kind_list_accepts_every_kind_of_device() {
+        let mut picker = BluetoothPicker::for_request(&PickerRequest::default());
+        assert_eq!(picker.offer(&nearby()), Ok(3));
+    }
+
+    #[test]
+    fn a_device_must_pass_both_the_name_filter_and_the_kind_list() {
+        let mut keyboards = BluetoothPicker::for_request(&PickerRequest {
+            name_filter: Some("trackpad".into()),
+            kinds: vec![DeviceKind::Keyboard],
+        });
+        assert_eq!(keyboards.offer(&nearby()), Ok(0));
+
+        let mut pointers = BluetoothPicker::for_request(&PickerRequest {
+            name_filter: Some("TRACK".into()),
+            kinds: vec![DeviceKind::Pointer],
+        });
+        assert_eq!(pointers.offer(&nearby()), Ok(1));
+        assert_eq!(names(&pointers), ["Trackpad"]);
+    }
+
+    #[test]
+    fn a_device_of_a_kind_the_app_did_not_ask_for_cannot_be_chosen() {
+        let mut picker = BluetoothPicker::for_request(&PickerRequest { name_filter: None, kinds: vec![DeviceKind::Pointer] });
+        picker.offer(&nearby()).unwrap();
+        assert_eq!(picker.select("00:11:22:33:44:02".parse().unwrap()), Err(PickerError::NotShown));
+        assert!(!picker.is_finished());
+    }
+
+    #[test]
+    fn the_app_receives_the_chosen_address_and_nothing_after_a_cancel() {
+        let mut picker = BluetoothPicker::for_request(&PickerRequest::default());
+        picker.offer(&nearby()).unwrap();
+        picker.select("00:11:22:33:44:04".parse::<BdAddr>().unwrap()).unwrap();
+        assert_eq!(picker.outcome().and_then(|o| o.address()), Some("00:11:22:33:44:04".parse::<BdAddr>().unwrap()));
+
+        let mut dismissed = BluetoothPicker::for_request(&PickerRequest::default());
+        dismissed.cancel().unwrap();
+        assert_eq!(dismissed.outcome().and_then(|o| o.address()), None);
+    }
+}

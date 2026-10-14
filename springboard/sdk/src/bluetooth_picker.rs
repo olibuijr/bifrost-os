@@ -1,10 +1,11 @@
 //! Bluetooth accessory picker for apps: an app asks for the nearby Bluetooth devices, the user chooses one, and the
 //! app receives the chosen address.
 //!
-//! This is a pure model with no radio access. The shell calls `BluetoothPicker::offer` with the devices its
-//! discovery found, and the user's choice comes back through `select` or `cancel`. The picker never pairs a device:
-//! pairing and bonding stay in the shell's Bluetooth service. Until the shell feeds the picker, the matrix row that
-//! uses it stays partial.
+//! An app describes what it wants in a [`PickerRequest`]: a name filter and the kinds of device it accepts. The shell
+//! builds a picker from the request, calls `BluetoothPicker::offer` with the devices its discovery found, and sends
+//! the user's choice back through `select` or `cancel`. The app receives only the chosen address
+//! ([`Outcome::address`]). The picker never pairs a device: pairing and bonding stay in the shell's Bluetooth service.
+//! The model has no radio access; the request crosses the shell boundary once the shell wires the app side.
 
 use std::fmt;
 
@@ -46,11 +47,32 @@ pub enum Outcome {
     Cancelled,
 }
 
-/// One picker session: the name filter, the devices shown, and the outcome once the user has answered.
+impl Outcome {
+    /// The address the app receives: the chosen device's address, or `None` when the user cancelled.
+    pub fn address(&self) -> Option<BdAddr> {
+        match self {
+            Outcome::Selected(candidate) => Some(candidate.address),
+            Outcome::Cancelled => None,
+        }
+    }
+}
+
+/// What an app asks the picker to show. An empty `kinds` accepts every kind of device; a device must pass both the
+/// name filter and the kind list to be shown.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PickerRequest {
+    /// Keeps only the devices whose name contains the text, ignoring case. `None` keeps every name.
+    pub name_filter: Option<String>,
+    /// The kinds of device the app accepts. Empty accepts every kind.
+    pub kinds: Vec<DeviceKind>,
+}
+
+/// One picker session: the request it serves, the devices shown, and the outcome once the user has answered.
 #[derive(Debug)]
 pub struct BluetoothPicker {
     /// Lower-cased name filter; `None` shows every device.
     name_filter: Option<String>,
+    kinds: Vec<DeviceKind>,
     shown: Vec<Candidate>,
     outcome: Option<Outcome>,
 }
@@ -59,18 +81,28 @@ impl BluetoothPicker {
     /// A new picker. `name_filter` keeps only the devices whose name contains the text, ignoring case. `None` keeps
     /// every device.
     pub fn new(name_filter: Option<&str>) -> Self {
+        Self::for_request(&PickerRequest {
+            name_filter: name_filter.map(str::to_string),
+            kinds: Vec::new(),
+        })
+    }
+
+    /// A picker that serves an app's request.
+    pub fn for_request(request: &PickerRequest) -> Self {
         BluetoothPicker {
-            name_filter: name_filter.map(|f| f.to_lowercase()),
+            name_filter: request.name_filter.as_ref().map(|f| f.to_lowercase()),
+            kinds: request.kinds.clone(),
             shown: Vec::new(),
             outcome: None,
         }
     }
 
     fn matches(&self, candidate: &Candidate) -> bool {
-        match &self.name_filter {
+        let named = match &self.name_filter {
             None => true,
             Some(filter) => candidate.name.to_lowercase().contains(filter.as_str()),
-        }
+        };
+        named && (self.kinds.is_empty() || self.kinds.contains(&candidate.kind))
     }
 
     /// Replaces the shown devices with the candidates that pass the name filter, in the order given. A second
