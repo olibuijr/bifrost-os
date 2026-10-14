@@ -614,6 +614,8 @@ pub mod bidi;
 pub mod observe;
 pub mod controller;
 pub mod controller_power;
+pub mod tab_controller;
+pub mod bar_appearance;
 pub mod calendar;
 pub mod calendar_access;
 pub mod calendar_conference;
