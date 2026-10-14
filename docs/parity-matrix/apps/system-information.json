@@ -299,9 +299,8 @@
    "area": "menu",
    "apple": "System Information Help",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:102",
-   "note": "Help > System Information Help opens the help page URL; no in-shell help viewer.",
-   "wire": "Add a Help menu entry that opens a short Help page in the shell help viewer."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/help.rs (rows, toggle_help); springboard/apps/sysinfo-desktop/src/main.rs (MENU_HELP, MENU_ONLINE_HELP)",
+   "note": "Help > System Information Help shows a short help card in the window, tested in help.rs; Help > System Information Online Help opens the web page. There is no shell help viewer, so the help is a card, not a separate page; check it on Midget."
   }
  ]
 }
