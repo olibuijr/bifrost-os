@@ -208,3 +208,44 @@ mod gpu_contracts {
         assert_eq!(choose(None, false).reason, Reason::GpuMissing);
     }
 }
+
+mod push_buffers {
+    use springboard::media::push_queue::{PushError, PushQueue, Priority, Pulled};
+
+    #[test]
+    fn a_pushed_block_plays_in_full_and_then_the_queue_is_empty() {
+        let mut q = PushQueue::new(8).unwrap();
+        q.push(Priority::Normal, &[5, 6, 7]).unwrap();
+        assert_eq!(q.pull(3), Pulled { samples: vec![5, 6, 7], underrun: 0 });
+        assert_eq!(q.free(), 8);
+    }
+
+    #[test]
+    fn a_full_queue_refuses_the_block_and_reports_the_room_left() {
+        let mut q = PushQueue::new(4).unwrap();
+        q.push(Priority::High, &[1, 2, 3]).unwrap();
+        assert_eq!(q.push(Priority::High, &[4, 5]), Err(PushError::Full { free: 1 }));
+    }
+
+    #[test]
+    fn a_high_priority_block_jumps_the_queue_of_normal_blocks() {
+        let mut q = PushQueue::new(16).unwrap();
+        q.push(Priority::Normal, &[1, 1]).unwrap();
+        q.push(Priority::High, &[9]).unwrap();
+        assert_eq!(q.pull(3).samples, vec![9, 1, 1]);
+    }
+
+    #[test]
+    fn an_empty_push_is_refused_and_a_zero_capacity_queue_is_not_built() {
+        assert!(PushQueue::new(0).is_none());
+        let mut q = PushQueue::new(2).unwrap();
+        assert_eq!(q.push(Priority::Low, &[]), Err(PushError::EmptyBlock));
+    }
+
+    #[test]
+    fn an_underrun_is_counted_per_missing_sample() {
+        let mut q = PushQueue::new(4).unwrap();
+        q.push(Priority::Normal, &[3]).unwrap();
+        assert_eq!(q.pull(3).underrun, 2);
+    }
+}

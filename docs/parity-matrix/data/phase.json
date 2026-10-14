@@ -24,9 +24,9 @@
     {
       "feature": "Streamed buffers (push and pull streams)",
       "apple": "PHASEPushStreamNode, PHASEPullStreamNode, PHASEStreamNode, PHASEPushStreamBufferOptions",
-      "bifrost": "springboard/src/media/stream.rs; springboard/src/media/player.rs",
+      "bifrost": "springboard/src/media/stream.rs; springboard/src/media/player.rs; springboard/src/media/push_queue.rs (PushQueue, Priority, Pulled)",
       "status": "partial",
-      "note": "the decoder pipeline streams internally; apps cannot supply their own buffers or set buffer priority"
+      "note": "The decoder pipeline streams internally, and an app can push its own sample blocks into a bounded queue with a priority and pull exact-length output with the underrun counted, as bifrost_app::kit::push_queue, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: the player does not yet read from an app's queue and there is no pull-stream callback, so the lab machine is needed for an app's stream to be heard."
     },
     {
       "feature": "Spatial sources and listener",
