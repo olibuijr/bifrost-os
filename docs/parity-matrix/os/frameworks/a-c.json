@@ -1258,7 +1258,7 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-foundation.json",
-   "status": "n/a",
+   "status": "partial",
    "note": "from SDK matrix core-foundation.json",
    "rea": [],
    "method": "assessed"
@@ -4197,9 +4197,9 @@
    "description": "",
    "role": "",
    "doc": "",
-  "bifrost": "springboard/ui/src/route_prediction.rs (suggest)",
-  "status": "partial",
-  "note": "A pure model ranks known destinations by use count and recency, with headless tests. It has no persisted history or picker integration, and does not depend on AirPlay transport.",
+   "bifrost": "springboard/ui/src/route_prediction.rs (suggest)",
+   "status": "partial",
+   "note": "A pure model ranks known destinations by use count and recency, with headless tests. It has no persisted history or picker integration, and does not depend on AirPlay transport.",
    "rea": [],
    "method": "assessed"
   },

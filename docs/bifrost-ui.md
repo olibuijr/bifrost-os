@@ -1267,6 +1267,7 @@ SDK module `bifrost_app::intents`, built on the control socket (`App::rpc`), so 
 | Parameter types | `ParamType::{String, Int, Bool, Date (ISO 8601 text), Url, Entity("Type"), Enum(cases), Double, Currency, Placemark, Measurement, File}`, `Param::optional()`. `People` is `Entity("Person")` |
 | `IndexedEntity`, `hideInSpotlight` | `indexed_entity::IndexedEntity::new(entity).keyword(..).hide_in_spotlight()`; `indexed_entity::index(ctx, &[..])` writes Core Search items in the `entity.<type>` domain (`springboard/sdk/src/indexed_entity.rs`) |
 | `AppEntity` | `Entity::new(type, id, title).subtitle(..)` |
+| Parameter editor model | `bifrost_app::intent_form::IntentForm`: declaration-order fields, typed values, missing-required checks and JSON arguments |
 | `EntityQuery`, `suggestedEntities`, `entities(for:)`, `entities(matching:)` | `EntityQuery::{Suggested, Ids, String}` |
 | `perform()` returning `IntentResult` (`ProvidesValue` + `ProvidesDialog`) | `IntentResult::value(json).with_dialog("..")` |
 | `AppShortcutsProvider` | `[[intent]]` tables in `manifest.toml` with `shortcut = true` |
@@ -1304,8 +1305,8 @@ Gaps (Apple behaviour not matched yet):
   `Intent::may_run` and `check_result`; the shell does not gate runs on the session), `IntentResult::with_snippet` (the
   shell does not draw the snippet), `donation` and `donations` (stores; Search does not read them), `focus_filter`
   (client of the shell's Do Not Disturb service only; there is no `SetFocusFilterIntent` model).
-- Parameter prompts: `controls::intent_resolve` plans ask, choose, confirm and block (`Plan`), but the control socket
-  replies with a plain error and the shell does not prompt for a value.
+- Parameter prompts: `IntentForm` is only a typed data model; `controls::intent_resolve` plans ask, choose, confirm and
+  block (`Plan`), but the control socket replies with a plain error and the shell does not draw a form or prompt for a value.
 - Not started: intents driving widgets, controls and Live Activities.
 - Shortcuts lists and runs its own intents only; intents of other apps (`intent.list` over their sockets) are not listed.
 - The Shortcuts app (`shortcuts-desktop`) does not list or run intents yet; it could read `intent.list` of running apps and
@@ -1638,6 +1639,9 @@ stay `partial` until a Midget check.
 - `metadata_query`: `MetadataQuery` with `predicate`, `search_scopes`, `start_query`, `poll(now)` delivering `DidStartGathering`,
   `GatheringProgress`, `DidFinishGathering`, then `DidUpdate { added, changed, removed }` from the watch stream;
   `MetadataItem::value(MetadataAttribute)`. Separate from the Core Spotlight index (`quicksearch`) and from `ui/src/metaquery.rs`.
+- `encrypted_archive`: `bifrost_app::encrypted_archive::{seal, open}` wraps caller-provided archive bytes in the custom
+  versioned BFEA format using ChaCha20-Poly1305. The header is authenticated and tests cover corruption and wrong keys.
+  This is not Apple's encrypted archive profile; compression and key derivation/storage remain caller responsibilities.
 
 Gaps: no iCloud or ubiquity containers, no file versions, no on-disk purgeable data, no metadata query sort descriptors, grouping or
 predicate text parser, no network volumes in bookmarks.
@@ -2611,6 +2615,9 @@ shell or the video path, and not yet run on the VM or Midget, so the matrix rows
 - Route picker button: `RoutePickerView` mirrors the button's style (`System`, `Inactive`, `Active`), its highlight rule, and the
   will-begin and did-end delegate events for the routing menu. The rows of the menu come from `route_picker.rs`, which already
   exists; this model does not choose routes. Decided: the button is unbordered unless an app sets `bordered`.
+- Receiver discovery: `bifrost_app::route_discovery::discovery_point(owner)` declares a namespaced point; `ReceiverFeed`
+  checks reports, emits `Found`/`Lost`, expires them by TTL and produces authorized picker rows. It opens no sockets and
+  does not run an extension or feed the shell picker, so discovery remains partial.
 - Display management: `DisplayManager` takes the criteria a playing app asks for (refresh rate and dynamic range, the shape of
   the display criteria) and picks the supported mode with the same dynamic range whose rate is closest to the content rate
   (ties go to the higher rate, so content is not slowed down). Rates within 0.05 Hz are the same rate. A switch is pending
@@ -2630,6 +2637,11 @@ not checked on Midget, so the matrix row stays `partial`.
 - `VideoPlayer<O>`: SwiftUI `VideoPlayer(player:videoOverlay:)` as a player view with inline controls plus an optional overlay.
 - Helpers: `scrub_time` (x to `MediaTime`), `format_time` (`m:ss`, `h:mm:ss`), `format_remaining`.
 - Gaps: nothing is drawn or decoded here; Picture in Picture is a flag only (see `pip_window.rs`); no delegate.
+
+Video audio output is separately exposed by `bifrost_app::video_playback::open(path, VideoAudio::{Speaker, Silent})`.
+It opens the system media player with a speaker or clocked silent output and distinguishes a missing file from other
+open failures. This does not add a network route picker, an app-facing video window, or shell integration; the feature
+stays partial until the playback path is checked on Midget.
 
 ## StoreKit parity round (product kinds and promoted purchases)
 
@@ -2664,6 +2676,11 @@ apps draw and capture touch.
 - **Gaps.** No serialised format beyond the text form in `drawing.rs`; no handwriting recognition or Scribble; no
   ruler; no stroke-level bitmap eraser. Parity rows stay partial until the shell and apps use these models and a
   Midget test passes.
+
+Markup has a separate `bifrost_ui::markup_ink::InkCanvas`: pointer gestures make pen, marker and pencil strokes, the
+eraser removes touched strokes, and committed edits have bounded undo. A gesture retains the tool it started with and
+an eraser pass that removes nothing does not consume history. The shell markup editor still owns its own stroke list;
+this model is not wired into that editor and does not model pressure input.
 
 ## Contacts access, fetch and save (`bifrost_app::contacts`, the `contacts` service)
 
@@ -2964,6 +2981,11 @@ the tag; it conforms to the requested type or `public.data`) and `is_public` (sy
 the two Apple classes or any declared class string. Not done: the shell does not call `register_manifest` at app
 launch yet, and nothing is checked on Midget (row stays `partial`).
 
+`bifrost_ui::content_sniff::sniff(bytes)` reads at most 512 leading bytes and maps common binary signatures, markup,
+scripts and UTF-8 text to built-in type identifiers. Shared containers such as ZIP report their container type for the
+caller to refine. This is not a `magic.mgc`-compatible database; the reference ContentKit API was not confirmed, and no
+picker or preview consumer calls the sniffer yet.
+
 ## CryptoKit signatures (`Curve25519.Signing`, `bifrost_ui::ed25519`)
 
 Ed25519 (RFC 8032) public-key signatures, a pure model with host unit tests. Field
@@ -3024,6 +3046,19 @@ result is unaffected. Access: `AccessLevel::AddOnly` may create but not read or 
 Gaps: not wired to the shell or an app yet, no `requestAVAsset` / `requestPlayerItem`, no editing or project
 extensions, trash is not exposed as a change request. Host tests only; a Midget check is still needed before the
 matrix rows can become parity.
+
+Photo projects (`bifrost_ui::photo_project`) are a separate pure model: an ordered set of sections containing ordered
+asset identifiers. `Project::apply(&[Change])` is all-or-nothing and supports section add/rename/remove/move and asset
+add/remove; text is trimmed and bounded and projects hold at most 200 sections. It does not create or own photo assets,
+persist projects, or provide the PhotoKit extension UI. See `docs/parity/photokit-projects.md`.
+
+## Rendering requirement and patch-graph models (`bifrost_ui::gl_requirements`, `patch_graph`)
+
+`GlVersion::parse` reads the API family, major/minor version and desktop core-profile marker from a reported
+`GL_VERSION`; `GlRequirement` checks OpenGL 3.2 Core and OpenGL ES 2.0/3.0 floors. `PatchGraph` validates typed port
+connections, single-source inputs and cycles, then evaluates patches in deterministic dependency order. Both are pure
+and headless-tested. Neither creates a GL context or draws a composition: apps cannot access the internal EGL presenter,
+and the graph has no Quartz Composer file format, editor, renderer or plug-in host.
 
 ## AppKit user interactions: wheel, tracking, drag sessions (models)
 
@@ -3223,6 +3258,14 @@ desktop UI; a tablet raises it for text fields with or without that UI, and keep
 attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
 `keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
 desktop.
+
+## Additional OS-shared policy models
+
+`bifrost_ui::account_policy` holds per-account app blocks and feature restrictions; `PolicyTable` checks requests but
+does not persist policies or enforce them in the launcher. `bifrost_ui::ambient_light` converts IIO illuminance text,
+smooths lux readings and maps light to a brightness fraction, but no sensor reader or display control consumes it.
+`bifrost_ui::route_prediction::suggest` ranks known audio destinations by use count and recency; the picker has no
+persisted history or integration yet. These remain partial; see `docs/parity/os-gaps-03.md`.
 
 ## Module index: modules without their own section
 

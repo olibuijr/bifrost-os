@@ -166,7 +166,7 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/matter-support.json",
-   "status": "n/a",
+   "status": "partial",
    "note": "from SDK matrix matter-support.json",
    "rea": [],
    "method": "assessed"

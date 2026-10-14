@@ -145,7 +145,7 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/devicediscoveryextension.json",
-   "status": "n/a",
+   "status": "partial",
    "note": "from SDK matrix devicediscoveryextension.json",
    "rea": [],
    "method": "assessed"
