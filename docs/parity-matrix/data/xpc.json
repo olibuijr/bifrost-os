@@ -17,16 +17,16 @@
     {
       "feature": "XPC services launched on demand, shut down when idle, restarted on crash",
       "apple": "XPC services (managed by launchd)",
-      "bifrost": "springboard/bifrostd/src/lib.rs (kind = \"service\" packages run as child processes, restarted with backoff, new version swapped in after a ping); springboard/sdk/src/service_management.rs (SMAppService, mainApp only)",
-      "status": "os",
-      "note": "The supervisor restarts services and swaps versions after a health check, but there is no on-demand launch and no idle shutdown. Apps get no SDK API to declare or connect to a service; SMAppService.register is the only app-facing call and it covers the main app only."
+      "bifrost": "springboard/sdk/src/service_client.rs (ServiceClient::connect, ping, call; ServiceId; socket_path); springboard/bifrostd/src/lib.rs (socket activation on the first connection, restart with backoff, new version swapped in after a ping); springboard/sdk/src/service_management.rs (SMAppService, mainApp only)",
+      "status": "partial",
+      "note": "An app connects to a service socket and the supervisor starts the service on that first connection; the client's connect, ping, call, timeout and disconnect paths are tested headless in sdk/tests/parity_sdk-rest-14.rs. Gap: services are never shut down when idle, an app cannot declare a service in its manifest, and the lab machine has not confirmed that a sandboxed app reaches a live service."
     },
     {
       "feature": "Privileged helper and root daemon",
       "apple": "XPC services with privileged LaunchDaemon (via Service Management)",
       "bifrost": "docs/privd-protocol.md (contract for the root daemon bifrost-privd, proto 1); springboard/src/bin/portal.rs (D-Bus org.freedesktop.portal.Settings service)",
       "status": "os",
-      "note": "Root work is planned to go through bifrost-privd, but the protocol is a system contract with no app-facing SDK API. The portal is a D-Bus service for Linux toolkit apps, not an XPC counterpart."
+      "note": "The blocker is access, not the protocol: bifrost-privd accepts a connection only from the shell, bifrost-mcp or a root tool (checked by the peer executable path), and the app sandbox never binds its socket, so no app can call it. The portal is a D-Bus service for Linux toolkit apps, not an XPC counterpart."
     },
     {
       "feature": "XPC activities (background activity scheduling)",

@@ -117,7 +117,7 @@
       "apple": "Feedback and diagnostic submission in Settings (MetricKit reports are read by the app, not shared by the system)",
       "bifrost": "springboard/src/shell/diag.rs (bundle, upload_url, post), springboard/src/shell/diagnostics_page.rs (Share with Developer)",
       "status": "os",
-      "note": "The shell uploads a bundle of build stamp, crash.log, heartbeat and perf files to the developer update server on user request. Apps have no access to this path."
+      "note": "The shell uploads a bundle of build stamp, crash.log, heartbeat and perf files to the developer update server only when the user presses Share with Developer. Apps have no SDK call for it on purpose: an app upload would send its own data without the user choosing it, so the blocker is that consent rule, not a missing API."
     }
   ],
   "gaps": [
