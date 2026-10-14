@@ -162,7 +162,7 @@ pub(crate) fn complete(request: u32, status: Status) {
 }
 
 /// A property list name: no path separator, and a `.plist` suffix with something before it.
-fn valid_plist_name(name: &str) -> bool {
+pub(crate) fn valid_plist_name(name: &str) -> bool {
     !name.contains('/') && name.len() > ".plist".len() && name.ends_with(".plist")
 }
 

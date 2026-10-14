@@ -114,6 +114,7 @@ pub mod notification_schedule;
 pub mod event_recurrence;
 pub mod messaging;
 pub mod service_management;
+pub mod service_bundle;
 pub mod login_items_approval;
 pub mod crash_report;
 pub mod exception_handler;

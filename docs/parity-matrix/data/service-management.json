@@ -26,28 +26,28 @@
       "apple": "unregister(completionHandler:)",
       "bifrost": "springboard/sdk/src/service_management.rs (unregister_with, complete)",
       "status": "partial",
-      "note": "unregister_with(ctx, done) calls done(None) when the shell reports NotRegistered and done(Some(ServiceError)) otherwise; unknown items fail at once with JobNotFound. Host unit tests only; verify on Midget for parity."
+      "note": "unregister_with(ctx, done) calls done(None) when the shell reports NotRegistered and done(Some(ServiceError)) otherwise; unknown items fail at once with JobNotFound. Tests: unregister_with_completes_when_the_shell_answers (host), unregister_with_reports_a_refused_call_at_once (springboard/sdk/tests/parity_sdk-tests-10.rs). Verify on Midget for parity."
     },
     {
       "feature": "Login item by bundle identifier",
       "apple": "SMAppService.loginItem(identifier:)",
-      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::login_item",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::login_item); springboard/sdk/src/service_bundle.rs (find_login_item, helper_status)",
       "status": "partial",
-      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt login items are app ids only; no helper bundles"
+      "note": "service_bundle.rs finds an embedded helper by its bundle identifier and gives the reference's JobNotFound and NotFound answers; the handle does not read the app bundle yet, so it still answers NotFound. Tests: a_login_item_identifier_finds_its_embedded_helper, a_helper_reports_enabled_only_when_the_user_switched_it_on (springboard/sdk/tests/parity_sdk-tests-10.rs). Not yet tested on the VM or Midget"
     },
     {
       "feature": "Launch agents",
       "apple": "SMAppService.agent(plistName:)",
-      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::agent",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::agent); springboard/sdk/src/service_bundle.rs (locate_job_plist, JobKind::Agent)",
       "status": "partial",
-      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no launch agent plist is loaded from an app bundle; bifrostd is the system supervisor and is not exposed to apps"
+      "note": "service_bundle.rs finds Contents/Library/LaunchAgents/<name>.plist in an app bundle's file list and gives InvalidPlist or JobPlistNotFound. No launch agent is loaded or started: bifrostd is the system supervisor and is not exposed to apps. Tests: a_job_plist_is_found_only_in_its_own_directory, a_job_plist_name_is_checked_before_the_bundle_is_searched (springboard/sdk/tests/parity_sdk-tests-10.rs). Not yet tested on the VM or Midget"
     },
     {
       "feature": "Launch daemons",
       "apple": "SMAppService.daemon(plistName:)",
-      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::daemon",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::daemon); springboard/sdk/src/service_bundle.rs (locate_job_plist, JobKind::Daemon)",
       "status": "partial",
-      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API for root daemons shipped in an app bundle"
+      "note": "service_bundle.rs finds Contents/Library/LaunchDaemons/<name>.plist in an app bundle's file list. No daemon is installed: there is no SDK API for root daemons shipped in an app bundle. Tests: a_job_plist_is_found_only_in_its_own_directory, a_valid_job_name_is_not_found_because_no_job_ships (springboard/sdk/tests/parity_sdk-tests-10.rs). Not yet tested on the VM or Midget"
     },
     {
       "feature": "Embedded helper executables",
@@ -68,14 +68,14 @@
       "apple": "SMAppService.statusForLegacyPlist(at:)",
       "bifrost": "springboard/sdk/src/service_management.rs (status_for_legacy_plist)",
       "status": "partial",
-      "note": "Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt has no earlier login-item plist format to check"
+      "note": "status_for_legacy_plist gives Enabled, NotRegistered or NotFound for absolute plist paths the shell lists; BifrOSt has no earlier login-item plist format, so nothing calls it yet. Tests: legacy_plist_status_follows_the_shell_list, legacy_plist_paths_must_be_absolute_plist_paths_without_parent_steps (springboard/sdk/tests/parity_sdk-tests-10.rs). Not yet tested on the VM or Midget"
     },
     {
       "feature": "Service Management error constants",
       "apple": "kSMErrorAlreadyRegistered, kSMErrorJobNotFound, kSMErrorLaunchDeniedByUser and the other kSMError values, SMAppServiceErrorDomain",
       "bifrost": "springboard/sdk/src/service_management.rs (ServiceError, ERROR_DOMAIN, error_for_reply); springboard/src/shell/services/login_items_approval.rs (call_error, reply_body)",
       "status": "partial",
-      "note": "ServiceError carries the kSMError* values 1 to 11 in SMAppServiceErrorDomain; AlreadyRegistered, JobNotFound, LaunchDeniedByUser and InvalidPlist are produced by register/unregister, and the login-items service reply carries error and code. Host unit tests only; verify on Midget for parity."
+      "note": "ServiceError carries the kSMError* values 1 to 11 in SMAppServiceErrorDomain with the reference texts; AlreadyRegistered, JobNotFound, LaunchDeniedByUser and InvalidPlist are produced by register/unregister, and the login-items service reply carries error and code. Tests: error_values_follow_the_reference_numbering, error_values_carry_the_service_error_domain, a_refused_register_reply_maps_to_its_error_value (springboard/sdk/tests/parity_sdk-tests-10.rs). Verify on Midget for parity."
     },
     {
       "feature": "Privileged helper authorization",
@@ -96,7 +96,7 @@
       "apple": "SMLoginItemSetEnabled(_:_:)",
       "bifrost": "springboard/sdk/src/service_management.rs (set_login_item_enabled)",
       "status": "partial",
-      "note": "Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. deprecated by Apple in favour of SMAppService; the SDK exposes only the replacement shape"
+      "note": "set_login_item_enabled fails with JobNotFound and sends nothing, because no helper ships; apps use SMAppService. Test: the_deprecated_enable_call_is_refused_without_a_request (springboard/sdk/tests/parity_sdk-tests-10.rs). Not yet tested on Midget"
     }
   ],
   "gaps": [
