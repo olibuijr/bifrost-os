@@ -17,6 +17,8 @@ pub const CLIP_SECS: f64 = 3.0;
 pub const CLIP_FPS: u32 = 10;
 /// The flash overlay lasts this long, in ms.
 pub const FLASH_MS: f64 = 260.0;
+/// While no camera is open the camera list is read again this often, in ms, so a camera plugged in later appears.
+pub const CAMERA_RETRY_MS: f64 = 2000.0;
 /// The widest the live preview is drawn, in pixels; the viewfinder never asks the camera for more.
 pub const PREVIEW_MAX_W: usize = 960;
 /// Bar heights from the bottom of the window, in points.
@@ -267,6 +269,11 @@ pub fn capture_stem(date: &Date, suffix: &str) -> String {
         "Photo Booth {:04}-{:02}-{:02} at {:02}.{:02}.{:02}{}",
         date.year, date.month, date.day, date.hour, date.min, date.sec, suffix
     )
+}
+
+/// True when the camera list is due to be read again: `CAMERA_RETRY_MS` after the last read, or later.
+pub fn camera_retry_due(last_read: f64, now: f64) -> bool {
+    now - last_read >= CAMERA_RETRY_MS
 }
 
 /// The first of `stem.ext`, `stem 2.ext`, `stem 3.ext`... that `exists` does not report as taken.
@@ -538,6 +545,13 @@ mod tests {
         assert_eq!(selection_after_delete(0, 3), Some(0));
         assert_eq!(selection_after_delete(3, 3), Some(2));
         assert_eq!(selection_after_delete(0, 0), None);
+    }
+
+    #[test]
+    fn the_camera_list_is_read_again_every_retry_interval() {
+        assert!(!camera_retry_due(1000.0, 1000.0 + CAMERA_RETRY_MS - 1.0));
+        assert!(camera_retry_due(1000.0, 1000.0 + CAMERA_RETRY_MS));
+        assert!(camera_retry_due(0.0, 1_000_000.0));
     }
 
     #[test]

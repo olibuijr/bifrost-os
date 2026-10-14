@@ -111,6 +111,10 @@ struct PhotoBooth {
     /// the cameras the system lists, and the device node of the one in use or last chosen
     cameras: Vec<CameraInfo>,
     camera_path: Option<String>,
+    /// when the camera list was last read, in ms on the app clock
+    probed_at: f64,
+    /// the app is shown (between resume and suspend); the camera is only looked for while it is
+    active: bool,
     /// Edit > Auto Flip: pictures are turned left to right, in the viewfinder and in every capture
     auto_flip: bool,
     /// View > Screen Flash: the white flash over the viewfinder when a photo is taken
@@ -158,6 +162,8 @@ impl PhotoBooth {
             status: String::new(),
             cameras: Vec::new(),
             camera_path: None,
+            probed_at: 0.0,
+            active: false,
             auto_flip: true,
             screen_flash: true,
             full_screen: false,
@@ -671,14 +677,17 @@ impl App for PhotoBooth {
             self.camera_path = defaults.string(PREF_CAMERA);
             self.distortion = defaults.string(PREF_DISTORTION).and_then(|key| Strength::from_key(&key)).unwrap_or(Strength::Normal);
         }
+        self.active = true;
         self.start();
     }
 
     fn resume(&mut self, _ctx: &Ctx) {
+        self.active = true;
         self.start();
     }
 
     fn suspend(&mut self, _ctx: &Ctx) {
+        self.active = false;
         self.stop();
     }
 
@@ -814,6 +823,12 @@ impl App for PhotoBooth {
     fn tick(&mut self, _ctx: &Ctx, t: f64) -> bool {
         self.now = t;
         let mut dirty = false;
+        if self.active && self.device.is_none() && model::camera_retry_due(self.probed_at, t) {
+            // no camera is open, so the list is read again: a camera plugged in since then appears in the Camera menu
+            self.probed_at = t;
+            self.start();
+            dirty = true;
+        }
         let polled = match self.device.as_mut() {
             Some(device) => device.latest(),
             None => Ok(None),
@@ -882,6 +897,8 @@ impl App for PhotoBooth {
     fn next_wake(&self, t: f64) -> Option<f64> {
         if self.device.is_some() || self.timed() {
             Some(t + FRAME_MS)
+        } else if self.active {
+            Some(t + model::CAMERA_RETRY_MS)
         } else {
             None
         }
