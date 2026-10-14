@@ -17,9 +17,9 @@
   {
    "feature": "Image editing panel and save options (IKImageEditPanel, IKSaveOptions)",
    "apple": "IKImageEditPanel, IKImageEditPanelDataSource, IKSaveOptions",
-   "bifrost": "springboard/src/shell/photos/edit.rs",
+   "bifrost": "springboard/ui/src/save_options.rs (SaveOptions, ImageFormat); springboard/src/shell/photos/edit.rs",
    "status": "partial",
-   "note": "Edit mode does quarter-turn rotate, straighten, crop to aspect presets, brightness and contrast, and saves a copy (save_copy). No edit panel for apps and no save-options UI."
+   "note": "Edit mode does quarter-turn rotate, straighten, crop to aspect presets, brightness and contrast, and saves a copy (save_copy). The save options are a tested model (format, JPEG quality clamped to 0 to 1, name suffix, numbered names when a file is taken) in save_options. Gap: the save sheet is not wired to that model, and there is no edit panel for apps; the panel needs the shell and the lab machine."
   },
   {
    "feature": "Slideshow (IKSlideshow)",

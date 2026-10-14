@@ -45,9 +45,9 @@
     {
       "feature": "Device list and Settings UI",
       "apple": "No direct Core Bluetooth equivalent; apps show device lists through their own UI",
-      "bifrost": "springboard/src/shell/pages.rs:322 (bluetooth_spec, paired and found devices with Connected, Connecting and Not Connected rows)",
+      "bifrost": "springboard/ui/src/bluetooth_devices.rs (device_list, DeviceRow, LinkState); springboard/src/shell/pages.rs:322 (bluetooth_spec, paired and found devices with Connected, Connecting and Not Connected rows)",
       "status": "partial",
-      "note": "Settings page only. No app can reuse the list."
+      "note": "The list model is tested headless in bluetooth_devices and parity_sdk-complete-21.rs: paired and found sections, connected devices first, names ignoring case, one row per address, and the link state labels. Gap: the Settings page does not build its rows from the model yet, and no app can reuse it; the device rows need the lab machine."
     },
     {
       "feature": "Audio output routing",
@@ -80,9 +80,9 @@
     {
       "feature": "ATT and Core Bluetooth errors",
       "apple": "CBError, CBATTError, CBErrorDomain, CBATTErrorDomain",
-      "bifrost": "springboard/src/bare/bluetooth.rs:136-144 (mgmt status codes mapped to strings such as Connection Failed, Already Paired), springboard/src/bare/bluetooth.rs:637 (Pairing Failed)",
+      "bifrost": "springboard/ui/src/bluetooth_errors.rs (MgmtStatus, AttError); springboard/src/bare/bluetooth.rs:136-144 (mgmt status codes mapped to strings such as Connection Failed, Already Paired), springboard/src/bare/bluetooth.rs:637 (Pairing Failed)",
       "status": "partial",
-      "note": "Errors are shown as Settings text. No typed error values reach apps, and no ATT error codes exist."
+      "note": "Typed MgmtStatus and AttError values (all specified ATT codes, application and profile ranges, text and retry advice) are tested headless in bluetooth_errors and parity_sdk-complete-21.rs. Gap: the shell still maps its status codes with its own function, the Core Bluetooth error domains are not modelled, and apps do not receive the values yet; a device must answer to show real ATT codes."
     },
     {
       "feature": "Bluetooth Classic and BR/EDR support",
