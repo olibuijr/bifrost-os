@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.0 — 2026-10-14
+
+- Text boxes, sticky notes and table cells have a caret you can move: Left and Right step through the text, Home and End go to its ends, and typing and Backspace act at the caret. The caret is drawn where it is in the wrapped text. Tab and Return start the next cell with the caret at its end. There is no selection yet.
+
 ## 1.10.0 — 2026-10-14
 
 - Edit > Paste centres pasted strokes, notes, links and text boxes on the pointer. With the pointer over the toolbar, the paste keeps the fixed offset; Duplicate is unchanged.
