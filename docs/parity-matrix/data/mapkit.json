@@ -31,9 +31,9 @@
     {
       "feature": "Forward geocoding (place name to coordinate)",
       "apple": "MKGeocodingRequest",
-      "bifrost": "springboard/src/shell/weather/data.rs:248 (geocode_url), :253 (parse_places), :456 (search_places)",
+      "bifrost": "springboard/core/src/weather.rs (geocode_url, parse_places)",
       "status": "partial",
-      "note": "text search via Open-Meteo, returns up to 6 places with name, region, lat and lon; not Apple's geocoder and no map display"
+      "note": "text search via Open-Meteo, returns up to 6 places with name, region, lat and lon; not Apple's geocoder and no map display. The network call is search_places in the Weather app's data module. Tests: geocode_url_encodes_the_typed_name, place_answers_become_locations_with_region_lines (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Reverse geocoding (coordinate to address)",
@@ -45,9 +45,9 @@
     {
       "feature": "Local search and search completion",
       "apple": "MKLocalSearch, MKLocalSearchCompleter, MKLocalPointsOfInterestRequest",
-      "bifrost": "springboard/src/shell/weather/data.rs:456 (search_places)",
+      "bifrost": "springboard/core/src/weather.rs (geocode_url, parse_places)",
       "status": "partial",
-      "note": "city and place text search only; no points-of-interest search, nearby search or completion list"
+      "note": "city and place text search only; no points-of-interest search, nearby search or completion list. The request is search_places in the Weather app's data module; the URL and answer parsing are the same as forward geocoding (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Points of interest and map features",
