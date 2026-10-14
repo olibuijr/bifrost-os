@@ -96,7 +96,7 @@
       "apple": "VTMotionEstimationSession",
       "bifrost": "springboard/render/src/block_motion.rs (MotionEstimation::estimate)",
       "status": "partial",
-      "note": "Wave 4 (w4-video-toolbox, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no motion estimation code found"
+      "note": "Full-search block motion between 8-bit planes (SAD per block, clipped edge blocks, zero offset first on ties) is tested headless in render/tests/parity_sdk-complete-30.rs. Gap: not wired into a decoder, the shell or apps, and there is no sub-pixel or hierarchical search; not yet verified on the VM or Midget."
     },
     {
       "feature": "CGImage from pixel buffer",
