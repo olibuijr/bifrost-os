@@ -584,3 +584,126 @@ fn headless_a_new_edit_after_an_undo_clears_the_redo_history() {
     assert!(!undo.can_redo());
     assert_eq!(undo.steps(), 1);
 }
+
+// Calendar events and reminders (bifrost_ui::calendar_store) behind calendar access. Headless: an in-memory store.
+
+use bifrost_ui::calendar_access::Access;
+use bifrost_ui::calendar_error::ErrorCode;
+use bifrost_ui::calendar_store::{Event, EventStore, Reminder, ReminderPredicate, Span};
+
+const DAY: i64 = 86_400;
+
+fn full_store() -> EventStore {
+    let mut access = Access::new();
+    access.request_full_events(true);
+    access.request_full_reminders(true);
+    EventStore::new(access)
+}
+
+#[test]
+fn headless_a_new_event_has_no_identifier_until_it_is_saved() {
+    let e = Event::new("Lunch", 1000, 4600);
+    assert!(e.calendar_item_identifier.is_empty());
+    assert!(!e.is_all_day);
+    assert_eq!(e.repeat_days, None);
+}
+
+#[test]
+fn headless_saving_assigns_an_identifier_and_the_event_reads_back() {
+    let mut store = full_store();
+    let mut lunch = Event::new("Lunch", 1000, 4600);
+    store.save_event(&mut lunch, Span::ThisEvent, true).unwrap();
+    assert!(!lunch.calendar_item_identifier.is_empty());
+    assert_eq!(store.events_between(0, 10_000).unwrap(), vec![lunch]);
+}
+
+#[test]
+fn headless_an_event_that_ends_before_it_starts_is_refused() {
+    let mut store = full_store();
+    let mut bad = Event::new("Bad", 5000, 1000);
+    assert_eq!(store.save_event(&mut bad, Span::ThisEvent, true), Err(ErrorCode::DatesInverted));
+    assert!(store.events_between(0, 10_000).unwrap().is_empty());
+}
+
+#[test]
+fn headless_an_uncommitted_save_stays_hidden_until_commit() {
+    let mut store = full_store();
+    let mut e = Event::new("Lunch", 1000, 4600);
+    store.save_event(&mut e, Span::ThisEvent, false).unwrap();
+    assert!(store.events_between(0, 10_000).unwrap().is_empty());
+    store.commit().unwrap();
+    assert_eq!(store.events_between(0, 10_000).unwrap().len(), 1);
+}
+
+#[test]
+fn headless_two_pending_saves_commit_as_one_store_change() {
+    let mut store = full_store();
+    let mut a = Event::new("A", 0, 1);
+    let mut b = Event::new("B", 0, 1);
+    store.save_event(&mut a, Span::ThisEvent, false).unwrap();
+    store.save_event(&mut b, Span::ThisEvent, false).unwrap();
+    store.commit().unwrap();
+    store.commit().unwrap();
+    assert_eq!(store.change_generation(), 1);
+}
+
+#[test]
+fn headless_this_event_skips_one_occurrence_of_a_repeating_series() {
+    let mut store = full_store();
+    let mut standup = Event::new("Standup", 0, 3600);
+    standup.repeat_days = Some(7);
+    store.save_event(&mut standup, Span::FutureEvents, true).unwrap();
+    let second = Event { start_date: 7 * DAY, end_date: 7 * DAY + 3600, ..standup.clone() };
+    store.remove_event(&second, Span::ThisEvent, true).unwrap();
+    let starts: Vec<i64> = store.events_between(0, 22 * DAY).unwrap().iter().map(|e| e.start_date).collect();
+    assert_eq!(starts, vec![0, 14 * DAY, 21 * DAY]);
+}
+
+#[test]
+fn headless_future_events_ends_the_series_before_the_chosen_occurrence() {
+    let mut store = full_store();
+    let mut standup = Event::new("Standup", 0, 3600);
+    standup.repeat_days = Some(7);
+    store.save_event(&mut standup, Span::FutureEvents, true).unwrap();
+    let second = Event { start_date: 7 * DAY, end_date: 7 * DAY + 3600, ..standup.clone() };
+    store.remove_event(&second, Span::FutureEvents, true).unwrap();
+    let starts: Vec<i64> = store.events_between(0, 60 * DAY).unwrap().iter().map(|e| e.start_date).collect();
+    assert_eq!(starts, vec![0]);
+}
+
+#[test]
+fn headless_removing_an_event_twice_reports_an_internal_failure() {
+    let mut store = full_store();
+    let mut lunch = Event::new("Lunch", 1000, 4600);
+    store.save_event(&mut lunch, Span::ThisEvent, true).unwrap();
+    store.remove_event(&lunch, Span::ThisEvent, true).unwrap();
+    assert!(store.events_between(0, 10_000).unwrap().is_empty());
+    assert_eq!(store.remove_event(&lunch, Span::ThisEvent, true), Err(ErrorCode::InternalFailure));
+}
+
+#[test]
+fn headless_writes_need_a_grant_and_reads_need_full_access() {
+    let mut e = Event::new("Lunch", 0, 10);
+    let mut none = EventStore::new(Access::new());
+    assert_eq!(none.save_event(&mut e, Span::ThisEvent, true), Err(ErrorCode::EventStoreNotAuthorized));
+    let mut write_only = Access::new();
+    write_only.request_write_only_events(true);
+    let mut store = EventStore::new(write_only);
+    store.save_event(&mut e, Span::ThisEvent, true).unwrap();
+    assert_eq!(store.events_between(0, 100), Err(ErrorCode::EventStoreNotAuthorized));
+}
+
+#[test]
+fn headless_reminders_save_complete_and_filter_by_completion() {
+    let mut store = full_store();
+    let mut milk = Reminder::new("Milk");
+    let mut tax = Reminder::new("Tax");
+    tax.is_completed = true;
+    store.save_reminder(&mut milk, true).unwrap();
+    store.save_reminder(&mut tax, true).unwrap();
+    assert_eq!(store.fetch_reminders(ReminderPredicate::All).unwrap().len(), 2);
+    assert_eq!(store.fetch_reminders(ReminderPredicate::Incomplete).unwrap(), vec![milk.clone()]);
+    assert_eq!(store.fetch_reminders(ReminderPredicate::Completed).unwrap(), vec![tax]);
+    store.remove_reminder(&milk, true).unwrap();
+    assert_eq!(store.fetch_reminders(ReminderPredicate::All).unwrap().len(), 1);
+}

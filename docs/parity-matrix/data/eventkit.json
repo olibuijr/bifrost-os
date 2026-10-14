@@ -17,9 +17,9 @@
     {
       "feature": "Events",
       "apple": "EKEvent",
-      "bifrost": "springboard/src/shell/calendar/store.rs (CalendarEvent), springboard/ui/src/calendar_store.rs (Event, Span)",
+      "bifrost": "springboard/ui/src/calendar_store.rs (Event, Span, EventStore::save_event, EventStore::remove_event, EventStore::events_between); springboard/src/shell/calendar/store.rs (CalendarEvent)",
       "status": "partial",
-      "note": "title, location, notes, date, duration, all-day; titles capped at 160 chars; no URL, availability or structured attendees. Sprint 4: calendarItemIdentifier, isAllDay, save/remove with .thisEvent/.futureEvents on repeat-every-N-days events (model only)."
+      "note": "The event model has title, start and end dates, the all-day flag, an identifier and a repeat interval in days; saving, removing with the ThisEvent and FutureEvents spans, and the access gate are verified headless by the headless_* tests in springboard/ui/tests/parity_sdk-tests-02.rs. The shell store (location, notes, titles capped at 160 chars) is not wired to this model, and there is no URL, availability or structured attendees."
     },
     {
       "feature": "Reminders",
