@@ -38,9 +38,9 @@
     {
       "feature": "Display timing and vsync (CVDisplayLink, CVTime, CVTimeStamp)",
       "apple": "CVDisplayLinkCreateWithActiveCGDisplays, CVDisplayLinkSetOutputHandler, CVDisplayLinkStart, CVDisplayLinkGetActualOutputVideoRefreshPeriod, CVTimeStamp",
-      "bifrost": "springboard/sdk/src/display_link.rs",
+      "bifrost": "springboard/sdk/src/display_link.rs (Time, DisplayLink::refresh_time, TimeStamp::time); tests: springboard/sdk/tests/parity_sdk-complete-20.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-core-video, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. vsync prediction is internal to the KMS path; the SDK ticks through next_wake, with no per-display callback and no refresh-period query. docs/bifrost-ui.md (around line 892) records the decision not to add CADisplayLink"
+      "note": "Output times are typed CVTime-style values: refresh_time and TimeStamp::time give nanoseconds at the video scale, indefinite times carry a flag, and the refresh period is queryable (headless_display_time_* and headless_the_refresh_time_* in sdk/tests/parity_sdk-complete-20.rs). Not wired into apps or the shell, and still needs a check on the VM or Midget; vsync prediction stays internal to the KMS path, and docs/bifrost-ui.md (around line 892) records the decision not to add CADisplayLink, so there is no per-display callback."
     },
     {
       "feature": "GPU presenter and frame submission",

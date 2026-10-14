@@ -10,9 +10,9 @@
   {
    "feature": "Compose post sheet",
    "apple": "SLComposeViewController, SLComposeServiceViewController",
-   "bifrost": "springboard/ui/src/compose.rs (ComposeSheet), springboard/sdk/src/social.rs (draft_request); wired: springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs (Compose Post target)",
+   "bifrost": "springboard/ui/src/compose.rs (ComposeSheet, ComposeSheet::with_draft), springboard/sdk/src/social.rs (draft_request); tests: springboard/ui/tests/parity_sdk-complete-20.rs; wired: springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs (Compose Post target)",
    "status": "partial",
-   "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. draft_request turns a sent draft into a form POST (text and links; images need the app's bytes). The share menu hands items to installed apps. It does not show an editor that posts to a network. built on parity/team-n-social; not yet verified on Midget"
+   "note": "A sheet starts from a draft (such as the items shared into it) and refuses changes once presented, tested headless in ui/tests/parity_sdk-complete-20.rs; draft_request turns a sent draft into a form POST (host unit tests in social.rs). Gap: no editor lets the user type or attach items, which needs shell text input and a Midget check."
   },
   {
    "feature": "Service availability check",
@@ -24,16 +24,16 @@
   {
    "feature": "Post contents (initial text, images, URLs)",
    "apple": "setInitialText(_:), add(_:) for images and URLs, removeAllImages(), removeAllURLs()",
-   "bifrost": "springboard/sdk/src/share.rs (Payload::Text, Url, File); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs, springboard/ui/tests/parity_sdk-tests-01b.rs; wired: springboard/src/shell/compose_sheet.rs (sheet_for, hand_off_text)",
+   "bifrost": "springboard/sdk/src/share.rs (Payload::Text, Url, File, compose_draft_from_items); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs, springboard/ui/tests/parity_sdk-tests-01b.rs, springboard/sdk/tests/parity_sdk-complete-20.rs; wired: springboard/src/shell/compose_sheet.rs (sheet_for, hand_off_text)",
    "status": "partial",
-   "note": "Text, URL and file items reach the share menu and Copy (headless_share_sheet_* in sdk/tests). The draft caps images and links at 8 each (headless_compose_draft_* in ui/tests). No composer edits or attaches items in the share sheet. Not yet verified on Midget."
+   "note": "Text, URL and file items reach the share menu and Copy (headless_share_sheet_* in sdk/tests), and compose_draft_from_items starts a draft with the text (joined by line breaks), images and links, refusing a non-web link or an over-full post (headless_shared_* in sdk/tests/parity_sdk-complete-20.rs). The draft caps images and links at 8 each. Gap: the share sheet does not edit or attach items, which needs a shell text view and a Midget check."
   },
   {
    "feature": "Completion result",
    "apple": "completionHandler, SLComposeViewControllerResult",
-   "bifrost": "springboard/sdk/src/share.rs (SharingServicePicker::share_done, show_picker); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs; springboard/src/shell/sharing.rs; wired: springboard/src/shell/compose_sheet.rs (compose_done), springboard/src/shell/sharing.rs (share_finish)",
+   "bifrost": "springboard/sdk/src/share.rs (SharingServicePicker::share_done, SharingServicePicker::compose_finished, show_picker, ShareError::Cancelled); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs, springboard/sdk/tests/parity_sdk-complete-20.rs; springboard/src/shell/sharing.rs; wired: springboard/src/shell/compose_sheet.rs (compose_done), springboard/src/shell/sharing.rs (share_finish)",
    "status": "partial",
-   "note": "A chosen app or Copy reports did_choose then did_share_items; a dismissed menu reports None; an answer for another request is ignored (headless_share_sheet_completion_* and headless_share_sheet_a_dismissed_* in sdk/tests). The share menu has no posted or cancelled states. The compose sheet's Done and Cancelled result is not reported through the share menu."
+   "note": "A chosen app or Copy reports did_choose then did_share_items; a dismissed menu reports None; an answer for another request is ignored (headless_share_sheet_completion_* in sdk/tests). Compose Post waits for the sheet: Done shares the items and Cancelled fails with ShareError::Cancelled (headless_a_done_compose_post_* and headless_a_cancelled_compose_post_* in sdk/tests/parity_sdk-complete-20.rs). Gap: the shell's compose sheet still reports its result to its own share menu rather than through this picker, which needs a Midget check."
   },
   {
    "feature": "Sharing service objects and picker delegate (NSSharingService, NSSharingServicePicker)",
