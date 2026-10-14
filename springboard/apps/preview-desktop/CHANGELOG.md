@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9.0
+
+- File > Save (Cmd+S) writes the markup, page order and turns into the document and opens it again. A PDF is written
+  with its markup as annotations; a picture is written in its own format. File > Revert to Saved opens the file again
+  and drops every change since it was saved. The copy the window keeps for a file chosen in the open panel is the one
+  Save replaces.
+- Edit > Copy (Cmd+C) puts the text of a PDF page on the clipboard, or only the lines inside the selection when there
+  is one; a picture goes to the clipboard as PNG. Edit > Select All (Cmd+A) selects the shown page. Copy works by
+  line, not by word: the extraction does not give the position of each word.
+- Tools > Text Box places a text box at a click and takes the typed text; it is saved into the PDF as a FreeText
+  annotation in Helvetica. Text boxes are not burned into exported pictures yet.
+- Tools > Star, Polygon and Speech Bubble draw closed shapes. They are saved into the PDF as polygon annotations and
+  burn into exports.
+- Tools > Redact draws a black box over a picture; the box is burned into saved and exported pictures. It is not offered
+  for a PDF, whose text under a box would stay.
+- Tools > Save Signature keeps the strokes drawn on the shown page (Sign tool) in a library of up to nine.
+  Tools > Insert Signature places one in the middle of the page as drawn strokes, at one undo step.
+- View > Hide Toolbar (Cmd+Option+T) hides the toolbar and gives its height to the page.
+- Adjust > Show Adjust Color shows sliders for exposure, contrast, saturation and temperature on the right side. A drag
+  is one undo step. Sharpness has no filter yet.
+- Settings menu: Remember Last Page reopens a document on the page it was last shown on; Open PDFs as Contact Sheet
+  opens them as the grid; Annotation Author sets the author written into new markup (typed in the status line).
+
 ## 0.8.0
 
 - Tools > Select drags out a rectangle on the page. Tools > Crop (Cmd+K) keeps the selection of a picture and moves its
