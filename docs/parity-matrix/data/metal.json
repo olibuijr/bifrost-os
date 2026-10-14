@@ -52,9 +52,9 @@
     {
       "feature": "Resource synchronization and buffer reuse",
       "apple": "MTLFence, MTLEvent, MTLHeap, resource barriers",
-      "bifrost": "springboard/src/gpu/wl.rs (BufferInfo, create_surface buffer count), springboard/src/gpu/damage.rs",
+      "bifrost": "springboard/src/gpu/wl.rs (BufferInfo, create_surface buffer count), springboard/src/gpu/damage.rs, springboard/src/gpu/buffer_pool.rs (BufferPool, Fence)",
       "status": "partial",
-      "note": "damage tracking and multi-buffer swap exist; no app-visible fences, events or heaps"
+      "note": "Damage tracking, multi-buffer swap and a reusable buffer pool with per-submission fences work and are tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: no events or heaps, and the compositor does not yet hand its surfaces to the pool, so the lab machine is needed to check the GPU waits on Midget."
     },
     {
       "feature": "Compute passes",
@@ -115,9 +115,9 @@
     {
       "feature": "Simulator and alternative render paths",
       "apple": "Metal in Simulator, render path fallback",
-      "bifrost": "springboard/src/gpu/mod.rs (CPU and GPU render fallbacks, BIFROST_GPU=0)",
+      "bifrost": "springboard/src/gpu/mod.rs (CPU and GPU render fallbacks, BIFROST_GPU=0); springboard/src/gpu/render_path.rs (choose, Choice, Reason)",
       "status": "partial",
-      "note": "fallback to SHM exists for the compositor; no app-facing fallback"
+      "note": "The render path rule (GPU when present, CPU when BIFROST_GPU=0 or no GPU) is a pure function tested headless in springboard/tests/parity_sdk-complete-32.rs, and the compositor falls back to shared memory. Gap: apps do not yet query the path, and there is no simulator target, so the lab machine is needed for the fallback on Midget."
     }
   ],
   "gaps": [

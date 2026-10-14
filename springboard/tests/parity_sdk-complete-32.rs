@@ -175,3 +175,36 @@ mod engine_registry {
         );
     }
 }
+
+mod gpu_contracts {
+    use springboard::gpu::buffer_pool::{BufferPool, Fence};
+    use springboard::gpu::render_path::{choose, Reason, RenderPath};
+
+    #[test]
+    fn a_pool_of_two_reuses_the_first_buffer_after_its_fence_completes() {
+        let mut pool = BufferPool::new(2).unwrap();
+        let first = pool.acquire().unwrap();
+        let first_index = first.index();
+        let fence: Fence = pool.submit(first);
+        assert!(!pool.is_done(fence));
+        assert!(pool.complete(fence));
+        assert_eq!(pool.acquire().map(|l| l.index()), Some(first_index));
+    }
+
+    #[test]
+    fn a_pool_of_one_has_no_buffer_while_its_frame_is_in_flight() {
+        let mut pool = BufferPool::new(1).unwrap();
+        let lease = pool.acquire().unwrap();
+        let _fence = pool.submit(lease);
+        assert!(pool.acquire().is_none());
+        assert_eq!(pool.capacity(), 1);
+    }
+
+    #[test]
+    fn the_render_path_follows_the_setting_and_the_hardware() {
+        assert_eq!(choose(None, true).path, RenderPath::Gpu);
+        assert_eq!(choose(Some("0"), true).reason, Reason::ForcedByUser);
+        assert_eq!(choose(None, false).path, RenderPath::Cpu);
+        assert_eq!(choose(None, false).reason, Reason::GpuMissing);
+    }
+}
