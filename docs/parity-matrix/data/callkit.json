@@ -17,9 +17,9 @@
     {
       "feature": "Incoming call UI",
       "apple": "CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes",
-      "bifrost": "springboard/sdk/src/usernotif.rs (generic notifications only)",
-      "status": "gap",
-      "note": "no full-screen/banner call interface with answer and decline"
+      "bifrost": "springboard/ui/src/call_ui.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (call_ui.rs); not wired into the shell or apps, not tested on Midget. no full-screen/banner call interface with answer and decline"
     },
     {
       "feature": "Outgoing calls",
@@ -52,9 +52,9 @@
     {
       "feature": "Default calling app",
       "apple": "Preparing your app to be the default calling app",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no default-app setting for calling"
+      "bifrost": "springboard/ui/src/call_apps.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (call_apps.rs); not wired into the shell or apps, not tested on Midget. no default-app setting for calling"
     }
   ],
   "gaps": [

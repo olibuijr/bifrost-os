@@ -24,9 +24,9 @@
     {
       "feature": "Safari web extensions and Safari app extensions",
       "apple": "SFSafariExtension, SFSafariExtensionHandler, SFSafariExtensionManager, SFSafariPage, SFSafariTab, SFSafariWindow, SFExtensionMessageKey, Web Inspector extensions",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No extension host, page or tab proxies, or extension messaging. The browser has no plug-in API."
+      "bifrost": "springboard/ui/src/web_extension.rs, springboard/sdk/src/web_extension.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (web_extension.rs, web_extension.rs); not wired into the shell or apps, not tested on Midget. No extension host, page or tab proxies, or extension messaging. The browser has no plug-in API."
     },
     {
       "feature": "Content blockers",
@@ -45,9 +45,9 @@
     {
       "feature": "Authentication sessions (shared Safari login)",
       "apple": "SFAuthenticationSession (deprecated) and its completion handler, SFAuthenticationError",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Nothing shares a one-time login between the browser and apps. The Apple successor (ASWebAuthenticationSession) is not in this framework."
+      "bifrost": "springboard/ui/src/web_auth.rs, springboard/ui/src/webauth_session.rs, springboard/sdk/src/web_auth.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (web_auth.rs, webauth_session.rs, web_auth.rs); not wired into the shell or apps, not tested on Midget. Nothing shares a one-time login between the browser and apps. The Apple successor (ASWebAuthenticationSession) is not in this framework."
     },
     {
       "feature": "Universal links and associated domains",

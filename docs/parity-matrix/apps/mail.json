@@ -27,7 +27,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/state.rs:open_draft",
    "note": "Fields shown from View menu toggles; Bcc kept out of headers (message.rs Draft::render). Not saved across runs.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Send message",
@@ -54,7 +54,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/message.rs:reply_all_draft",
    "note": "Menu item only (Message > Reply All); no toolbar button yet.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Forward, Forward as Attachment, Redirect",
@@ -63,7 +63,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/message.rs:forward_draft",
    "note": "Forward quotes the text under Fwd:. Forward as Attachment and Redirect are not done; the original files are not re-attached.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Rich text formatting (bold/italic/underline, fonts, colours, alignment, lists, indentation)",
@@ -171,7 +171,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/window.rs:menu_items",
    "note": "Move To, Copy To and Move Again in the Message menu. Dragging rows onto the sidebar is not done.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Move to Junk and junk filtering",
@@ -180,16 +180,16 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/window.rs:menu_items",
    "note": "Move to Junk moves to the account Junk mailbox (state.rs JUNK_NAMES). The $Junk keyword and junk filtering are not done.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Remind Me, follow-up, Send Later",
    "area": "menu",
    "apple": "Message > Remind Me; View > Sort by Send Later",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Keep a local reminder store keyed by Message-ID and a check in tick() that brings the row back; add a Send Later queue in front of submit"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Keep Remind and Scheduled queues in the data dir; check due_reminders / due_sends in tick(); add the Remind Me and Send Later menus using remind_time."
   },
   {
    "feature": "Mute conversation / Ignore follow-up",
@@ -207,7 +207,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/message.rs:Priority",
    "note": "Priority menu on the compose sheet sends X-Priority and Importance.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Remove attachments",
@@ -231,10 +231,10 @@
    "feature": "Rules and Apply Rules",
    "area": "settings",
    "apple": "RulesPreferences; Message > Apply Rules",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a rule model (criteria and actions) saved in the data dir, run it after apply_listing, and add a Rules settings pane"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/rules.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Save rules::to_text in the data dir, run rules::evaluate after apply_listing and perform the actions over imap.rs, add a Rules settings pane."
   },
   {
    "feature": "Conversations (organize by thread, expand/collapse)",
@@ -243,7 +243,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/state.rs:collapse_all",
    "note": "Collapse and expand through View menu items (one conversation or all); no disclosure triangle in the row yet.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Sort messages by field and order",
@@ -252,7 +252,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/state.rs:visible_rows",
    "note": "View > Sort By with Date Received, From, To, Subject and direction. Size and other keys are not done.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Filter the message list (unread, flagged, attachments)",
@@ -261,7 +261,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/state.rs:Filter",
    "note": "View > Filter: All, Unread, Flagged, Replied. Attachments filter and a toolbar button are not done.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Mailbox search",
@@ -276,10 +276,10 @@
    "feature": "Find in the message body",
    "area": "menu",
    "apple": "Edit > Find > Find, Find Next/Previous",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Find searches the list, not the open message",
-   "wire": "Add a find bar in the view pane that highlights matches in the drawn body"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a find bar in the view pane that draws organize::find_in_body matches over the body."
   },
   {
    "feature": "Sidebar with accounts and mailboxes",
@@ -303,10 +303,10 @@
    "feature": "Favorites bar",
    "area": "view",
    "apple": "View > Show Favorites Bar; FavoritesBarViewController",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a strip of pinned mailboxes under the toolbar, with the list saved"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Draw a strip of organize::Favorites under the toolbar and save to_text in the data dir."
   },
   {
    "feature": "New, rename and delete mailbox",
@@ -315,16 +315,16 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/sync.rs:Change",
    "note": "Mailbox menu items and a name sheet; IMAP CREATE, RENAME, DELETE.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Smart mailboxes",
    "area": "panel",
    "apple": "Mailbox > New Smart Mailbox; NewSmartMailbox",
-   "status": "gap",
-   "bifrost": "",
-   "note": "search.rs Query could back it",
-   "wire": "Show saved queries in the sidebar, matched with search::Query::matches"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "List organize::SmartMailbox rows in the sidebar and fill them with select over the cached docs."
   },
   {
    "feature": "Get new mail / synchronize",
@@ -342,16 +342,16 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/session.rs:erase_all",
    "note": "Mailbox > Erase Deleted Items and Erase Junk Mail.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Import and export mailboxes (mbox)",
    "area": "menu",
    "apple": "File > Import Mailboxes; Mailbox > Export",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add an mbox reader and writer; export the selected mailbox to a path from the save panel"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/mbox.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add File > Import Mailboxes and Export Mailbox with the open and save panels; read via mbox::read and APPEND each entry over imap.rs, write the selected mailbox with mbox::write."
   },
   {
    "feature": "Add account",
@@ -384,10 +384,10 @@
    "feature": "Signatures",
    "area": "settings",
    "apple": "SignaturePreferences",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Store a signature per account and append it in open_compose"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/signature.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Store a signature per account in accounts.rs, call signature::append / reply_body in open_compose, add a Signatures settings pane."
   },
   {
    "feature": "Viewing settings (headers shown, remote content, bold unread, dark backgrounds)",
@@ -459,7 +459,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/message.rs:quote_text",
    "note": "Edit > Paste as Quotation. Paste and Match Style is not done (compose is plain text).",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Spelling and grammar, substitutions, speech",
@@ -474,10 +474,10 @@
    "feature": "Categories (primary, transactions, updates, promotions)",
    "area": "view",
    "apple": "View > Categories",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a header-based classifier and a category filter in the sidebar or list"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Run organize::categorize on the header block when a listing is applied and add a category filter in the sidebar."
   },
   {
    "feature": "Out-of-office and server quota (Exchange)",
@@ -533,5 +533,13 @@
    "note": "",
    "wire": "Open a second MailWindow through SDK multi-window support"
   }
- ]
+ ],
+ "summary": {
+  "features": 58,
+  "parity": 13,
+  "partial": 31,
+  "gap": 10,
+  "n/a": 4,
+  "coverage_pct": 52.8
+ }
 }

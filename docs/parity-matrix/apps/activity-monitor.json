@@ -77,10 +77,10 @@
    "feature": "Sample Process",
    "area": "menu",
    "apple": "View > Sample Process (Sample.nib)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add Process > Sample Process: read /proc/<pid>/task/*/stack and wchan over N seconds in a new sample_proc.rs, show the text in a window with Save..."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/deltas.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Probe /proc/<pid>/stack and wchan every 10 ms for N seconds on a thread, then show deltas::report in a window with Save."
   },
   {
    "feature": "Run Spindump / System Diagnostics",
@@ -95,10 +95,10 @@
    "feature": "Show Deltas for Process",
    "area": "menu",
    "apple": "View > Show Deltas for Process",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Store a per-pid baseline when toggled in window.rs and show counters relative to it in the table columns."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/deltas.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Capture a Baseline when toggled in window.rs and show Baseline::delta in the counter columns."
   },
   {
    "feature": "Columns submenu (choose visible columns)",
@@ -217,5 +217,13 @@
    "note": "Platform help book; no help viewer for system apps.",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 23,
+  "parity": 6,
+  "partial": 12,
+  "gap": 4,
+  "n/a": 1,
+  "coverage_pct": 54.5
+ }
 }

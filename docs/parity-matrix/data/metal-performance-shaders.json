@@ -122,9 +122,9 @@
     {
       "feature": "Kernel base classes and keyed archiving",
       "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
-      "bifrost": "springboard/sdk/src/coding.rs (Codable and plist) for serialisation; no kernel base class",
-      "status": "gap",
-      "note": "There is no kernel abstraction for apps to subclass. Serialisation exists, but for app data, not GPU kernels."
+      "bifrost": "springboard/ui/src/image_kernels.rs, springboard/ui/src/cnn_layers.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (image_kernels.rs, cnn_layers.rs); not wired into the shell or apps, not tested on Midget. There is no kernel abstraction for apps to subclass. Serialisation exists, but for app data, not GPU kernels."
     }
   ],
   "gaps": [

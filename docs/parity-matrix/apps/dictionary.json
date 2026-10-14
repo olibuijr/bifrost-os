@@ -1,167 +1,167 @@
 {
-  "app": "Dictionary",
-  "bifrost_app": "dictionary-desktop",
-  "evidence": [
-    "ref27/System/Applications/Dictionary.app/Contents/Info.plist",
-    "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/MainMenu.nib",
-    "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/Preferences.nib",
-    "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/DictionaryWindow.nib",
-    "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/ScopeBarView.nib",
-    "note: static parse; REA had no active target"
-  ],
-  "features": [
-    {
-      "feature": "Search a word with suggestions",
-      "area": "toolbar",
-      "apple": "DictionaryWindow.nib search field; File > Search For a New Word",
-      "status": "parity",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:87",
-      "note": "Live suggestions list",
-      "wire": ""
-    },
-    {
-      "feature": "Look up a selection from other apps (service)",
-      "area": "integration",
-      "apple": "Info.plist NSServices",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:295",
-      "note": "look-up intent and Look Up Clipboard exist; no services-menu API in the SDK yet",
-      "wire": "Register a services-menu entry that opens the app with the selected word"
-    },
-    {
-      "feature": "dict: / x-dictionary URL schemes",
-      "area": "integration",
-      "apple": "Info.plist CFBundleURLTypes",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:763",
-      "note": "Input::Open handles dict: and x-dictionary: URLs; the manifest does not register the schemes yet",
-      "wire": ""
-    },
-    {
-      "feature": "Dictionary scope bar (All / per dictionary)",
-      "area": "view",
-      "apple": "ScopeBarView.nib; Go > Select Next/Previous Dictionary",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:897",
-      "note": "Scope bar and Go > Select Next/Previous Dictionary (cmd+alt+arrows); needs lab check",
-      "wire": ""
-    },
-    {
-      "feature": "Back / Forward history",
-      "area": "menu",
-      "apple": "MainMenu.nib History > Back, Forward",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:186",
-      "note": "Toolbar buttons, Go menu, cmd+[ / cmd+]; Clear History",
-      "wire": ""
-    },
-    {
-      "feature": "Follow cross-reference links",
-      "area": "view",
-      "apple": "definition view links",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:436",
-      "note": "Tapping a word known to a dictionary looks it up; words are not drawn as links",
-      "wire": ""
-    },
-    {
-      "feature": "New Window / New Tab",
-      "area": "menu",
-      "apple": "MainMenu.nib File > New Window, New Tab",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not done: the SDK has no multi-window or tab API",
-      "wire": "Support several windows through the SDK multi-window API"
-    },
-    {
-      "feature": "Print definition",
-      "area": "menu",
-      "apple": "MainMenu.nib File > Print",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:335",
-      "note": "File menu Print (cmd+p) sends text to the default printer",
-      "wire": ""
-    },
-    {
-      "feature": "Copy definition",
-      "area": "menu",
-      "apple": "MainMenu.nib Edit > Copy",
-      "status": "parity",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:238",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Find in definition",
-      "area": "menu",
-      "apple": "MainMenu.nib Edit > Find, Find Next/Previous",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:945",
-      "note": "Find bar with line highlight, cmd+f, cmd+g, cmd+shift+g; highlights whole lines, not the matched words",
-      "wire": ""
-    },
-    {
-      "feature": "Text size control",
-      "area": "toolbar",
-      "apple": "DictionaryWindow.nib text-size control",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:885",
-      "note": "A-/A+ toolbar buttons and View menu cmd+= / cmd+- / cmd+0; persisted in prefs.txt",
-      "wire": ""
-    },
-    {
-      "feature": "Front/back matter",
-      "area": "menu",
-      "apple": "MainMenu.nib Go > Front/Back Matter",
-      "status": "n/a",
-      "bifrost": "",
-      "note": "StarDict files carry no front-matter pages",
-      "wire": ""
-    },
-    {
-      "feature": "Open Dictionaries Folder",
-      "area": "menu",
-      "apple": "MainMenu.nib File > Open Dictionaries Folder",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:796",
-      "note": "Opens a file:// URL through the shell; depends on the shell routing it to Files",
-      "wire": ""
-    },
-    {
-      "feature": "Settings: choose and order dictionaries",
-      "area": "settings",
-      "apple": "Preferences.nib dictionary list with checkboxes and drag order",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:621",
-      "note": "Settings page (cmd+,) with On/Off, Up/Down; drag reorder not done",
-      "wire": ""
-    },
-    {
-      "feature": "Settings: font size",
-      "area": "settings",
-      "apple": "Preferences.nib font size",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:658",
-      "note": "Size buttons in the settings page",
-      "wire": ""
-    },
-    {
-      "feature": "Rename dictionary label",
-      "area": "panel",
-      "apple": "DictionaryWindow.nib label sheet",
-      "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:650",
-      "note": "Rename inline in the settings page; stored in prefs.txt",
-      "wire": ""
-    },
-    {
-      "feature": "Look-up intent",
-      "area": "intent",
-      "apple": "Look Up service role",
-      "status": "parity",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:295",
-      "note": "",
-      "wire": ""
-    }
-  ]
+ "app": "Dictionary",
+ "bifrost_app": "dictionary-desktop",
+ "evidence": [
+  "ref27/System/Applications/Dictionary.app/Contents/Info.plist",
+  "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/MainMenu.nib",
+  "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/Preferences.nib",
+  "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/DictionaryWindow.nib",
+  "ref27/System/Applications/Dictionary.app/Contents/Resources/Base.lproj/ScopeBarView.nib",
+  "note: static parse; REA had no active target"
+ ],
+ "features": [
+  {
+   "feature": "Search a word with suggestions",
+   "area": "toolbar",
+   "apple": "DictionaryWindow.nib search field; File > Search For a New Word",
+   "status": "parity",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:87",
+   "note": "Live suggestions list",
+   "wire": ""
+  },
+  {
+   "feature": "Look up a selection from other apps (service)",
+   "area": "integration",
+   "apple": "Info.plist NSServices",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:295",
+   "note": "look-up intent and Look Up Clipboard exist; no services-menu API in the SDK yet",
+   "wire": "Register a services-menu entry that opens the app with the selected word"
+  },
+  {
+   "feature": "dict: / x-dictionary URL schemes",
+   "area": "integration",
+   "apple": "Info.plist CFBundleURLTypes",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:763",
+   "note": "Input::Open handles dict: and x-dictionary: URLs; the manifest does not register the schemes yet",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Dictionary scope bar (All / per dictionary)",
+   "area": "view",
+   "apple": "ScopeBarView.nib; Go > Select Next/Previous Dictionary",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:897",
+   "note": "Scope bar and Go > Select Next/Previous Dictionary (cmd+alt+arrows); needs lab check",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Back / Forward history",
+   "area": "menu",
+   "apple": "MainMenu.nib History > Back, Forward",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:186",
+   "note": "Toolbar buttons, Go menu, cmd+[ / cmd+]; Clear History",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Follow cross-reference links",
+   "area": "view",
+   "apple": "definition view links",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:436",
+   "note": "Tapping a word known to a dictionary looks it up; words are not drawn as links",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "New Window / New Tab",
+   "area": "menu",
+   "apple": "MainMenu.nib File > New Window, New Tab",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Not done: the SDK has no multi-window or tab API",
+   "wire": "Support several windows through the SDK multi-window API"
+  },
+  {
+   "feature": "Print definition",
+   "area": "menu",
+   "apple": "MainMenu.nib File > Print",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:335",
+   "note": "File menu Print (cmd+p) sends text to the default printer",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Copy definition",
+   "area": "menu",
+   "apple": "MainMenu.nib Edit > Copy",
+   "status": "parity",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:238",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Find in definition",
+   "area": "menu",
+   "apple": "MainMenu.nib Edit > Find, Find Next/Previous",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:945",
+   "note": "Find bar with line highlight, cmd+f, cmd+g, cmd+shift+g; highlights whole lines, not the matched words",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Text size control",
+   "area": "toolbar",
+   "apple": "DictionaryWindow.nib text-size control",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:885",
+   "note": "A-/A+ toolbar buttons and View menu cmd+= / cmd+- / cmd+0; persisted in prefs.txt",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Front/back matter",
+   "area": "menu",
+   "apple": "MainMenu.nib Go > Front/Back Matter",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "StarDict files carry no front-matter pages",
+   "wire": ""
+  },
+  {
+   "feature": "Open Dictionaries Folder",
+   "area": "menu",
+   "apple": "MainMenu.nib File > Open Dictionaries Folder",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:796",
+   "note": "Opens a file:// URL through the shell; depends on the shell routing it to Files",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Settings: choose and order dictionaries",
+   "area": "settings",
+   "apple": "Preferences.nib dictionary list with checkboxes and drag order",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:621",
+   "note": "Settings page (cmd+,) with On/Off, Up/Down; drag reorder not done",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Settings: font size",
+   "area": "settings",
+   "apple": "Preferences.nib font size",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:658",
+   "note": "Size buttons in the settings page",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Rename dictionary label",
+   "area": "panel",
+   "apple": "DictionaryWindow.nib label sheet",
+   "status": "partial",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:650",
+   "note": "Rename inline in the settings page; stored in prefs.txt",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Look-up intent",
+   "area": "intent",
+   "apple": "Look Up service role",
+   "status": "parity",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:295",
+   "note": "",
+   "wire": ""
+  }
+ ]
 }

@@ -10,9 +10,9 @@
     {
       "feature": "Speech recognition on live or recorded audio (framework overview)",
       "apple": "Speech (collection); SpeechAnalyzer, SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule",
-      "bifrost": "none; springboard/audiod/src/main.rs records WAV only",
-      "status": "gap",
-      "note": "No transcription anywhere in springboard/sdk/src or springboard/ui/src. Apple's SpeechAnalyzer and module classes have no counterpart."
+      "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/recognition.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (speech_recognizer.rs, recognition.rs); not wired into the shell or apps, not tested on Midget. No transcription anywhere in springboard/sdk/src or springboard/ui/src. Apple's SpeechAnalyzer and module classes have no counterpart."
     },
     {
       "feature": "Analyzer modules and voice activity detection",

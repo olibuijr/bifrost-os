@@ -101,9 +101,9 @@
     {
       "feature": "Foundation models search tool",
       "apple": "SpotlightSearchTool, SearchSource, CoreSpotlightSource, FileSource, CustomStage, SearchPipelineData, ContactResolver, SearchCount, SearchResultsTable, SearchStatistic, SearchTextResult",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no app-facing way to expose indexed content to the on-device assistant as model context; springboard/apps/assistant-desktop exists but has no index tool Left as a gap on purpose (SpotlightSearchTool needs a model tool runtime)."
+      "bifrost": "springboard/ui/src/model_tool.rs, springboard/ui/src/searchindex.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_tool.rs, searchindex.rs); not wired into the shell or apps, not tested on Midget. no app-facing way to expose indexed content to the on-device assistant as model context; springboard/apps/assistant-desktop exists but has no index tool Left as a gap on purpose (SpotlightSearchTool needs a model tool runtime)."
     },
     {
       "feature": "Framework version",

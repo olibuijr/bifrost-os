@@ -24,9 +24,9 @@
     {
       "feature": "Shader-based effects",
       "apple": "GLKNamedEffect, GLKBaseEffect (lighting, transform), GLKReflectionMapEffect, GLKSkyboxEffect",
-      "bifrost": "none app-facing; shader sources in springboard/src/gpu/shaders.rs (layer_fragment_source, fade_fragment_source) are internal",
-      "status": "gap",
-      "note": "no app-supplied shaders or lighting model"
+      "bifrost": "springboard/ui/src/shader_library.rs, springboard/ui/src/shader_uniform.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (shader_library.rs, shader_uniform.rs); not wired into the shell or apps, not tested on Midget. no app-supplied shaders or lighting model"
     },
     {
       "feature": "Effect properties",

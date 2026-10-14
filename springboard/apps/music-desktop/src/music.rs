@@ -12,11 +12,14 @@
 pub mod browse;
 pub mod chrome;
 pub mod engine;
+pub mod equalizer;
 pub mod jobs;
 pub mod library;
+pub mod lyrics;
 pub mod marks;
 pub mod nowplay;
 pub mod playlists;
+pub mod smart;
 pub mod system;
 pub mod tempo;
 pub mod upnext;

@@ -10,9 +10,9 @@
     {
       "feature": "Adding support for app extensions to your app",
       "apple": "Extension model: define extension points, talk to extensions at runtime",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No extension model in SDK"
+      "bifrost": "springboard/sdk/src/extension.rs, springboard/ui/src/extensions.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (extension.rs, extensions.rs); not wired into the shell or apps, not tested on Midget. No extension model in SDK"
     },
     {
       "feature": "Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)",

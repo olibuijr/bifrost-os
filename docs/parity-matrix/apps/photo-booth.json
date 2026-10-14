@@ -1,162 +1,162 @@
 {
-  "app": "Photo Booth",
-  "bifrost_app": "photobooth-desktop",
-  "evidence": [
-    "reference bundle absent: ~/Projects/macos-ref/extract/ref27/System/Applications has no Photo Booth.app and `bifrost pc ref index` lists none, so there are no REA evidence ids; rows come from the shipped app's known menus and settings"
-  ],
-  "features": [
-    {
-      "feature": "Take a photo",
-      "area": "toolbar",
-      "apple": "shutter",
-      "status": "parity",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:194",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Four-up burst",
-      "area": "toolbar",
-      "apple": "mode switch",
-      "status": "parity",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:250",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Video clip",
-      "area": "toolbar",
-      "apple": "mode switch",
-      "status": "parity",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:205",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Countdown",
-      "area": "settings",
-      "apple": "countdown option",
-      "status": "parity",
-      "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:56",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Screen flash",
-      "area": "settings",
-      "apple": "flash option",
-      "status": "partial",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:237",
-      "note": "View > Screen Flash toggles it; needs lab check",
-      "wire": ""
-    },
-    {
-      "feature": "Colour effects",
-      "area": "panel",
-      "apple": "Effects browser",
-      "status": "parity",
-      "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:91",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Distortion effects",
-      "area": "panel",
-      "apple": "Effects browser",
-      "status": "partial",
-      "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:204",
-      "note": "Bulge, Twirl, Mirror (nearest sampling); no live-tunable strength",
-      "wire": ""
-    },
-    {
-      "feature": "Backdrops",
-      "area": "panel",
-      "apple": "Effects backdrops",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Skipped: needs a background segmentation model, none in the SDK",
-      "wire": "Background segmentation and replacement"
-    },
-    {
-      "feature": "Captures strip",
-      "area": "view",
-      "apple": "thumbnail strip",
-      "status": "parity",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:327",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Export capture",
-      "area": "menu",
-      "apple": "File > Export",
-      "status": "parity",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:314",
-      "note": "",
-      "wire": ""
-    },
-    {
-      "feature": "Delete capture",
-      "area": "menu",
-      "apple": "Edit > Delete",
-      "status": "partial",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:244",
-      "note": "Delete/Backspace key and File > Delete; no undo or Trash",
-      "wire": ""
-    },
-    {
-      "feature": "Auto flip / mirror",
-      "area": "menu",
-      "apple": "Edit > Auto Flip",
-      "status": "partial",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:178",
-      "note": "View > Auto Flip, applied in grab so stills, clips and viewfinder match",
-      "wire": ""
-    },
-    {
-      "feature": "Full screen",
-      "area": "menu",
-      "apple": "View > Full Screen",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Skipped: no app-level full-screen API in the SDK; the shell Zoom action covers the window",
-      "wire": "Window full-screen toggle"
-    },
-    {
-      "feature": "Camera selection",
-      "area": "menu",
-      "apple": "Camera menu",
-      "status": "partial",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:266",
-      "note": "Camera menu lists probed devices; list refreshes on camera start only",
-      "wire": ""
-    },
-    {
-      "feature": "Slideshow",
-      "area": "menu",
-      "apple": "View > Slideshow",
-      "status": "partial",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:276",
-      "note": "3 s per capture, Esc ends, arrows step; no transitions",
-      "wire": ""
-    },
-    {
-      "feature": "App menus",
-      "area": "menu",
-      "apple": "MainMenu",
-      "status": "partial",
-      "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:557",
-      "note": "File, View, Camera menus; shortcuts only for Take Photo and Slideshow",
-      "wire": ""
-    },
-    {
-      "feature": "Share capture",
-      "area": "menu",
-      "apple": "Share",
-      "status": "n/a",
-      "bifrost": "",
-      "note": "Vendor share services",
-      "wire": ""
-    }
-  ]
+ "app": "Photo Booth",
+ "bifrost_app": "photobooth-desktop",
+ "evidence": [
+  "reference bundle absent: ~/Projects/macos-ref/extract/ref27/System/Applications has no Photo Booth.app and `bifrost pc ref index` lists none, so there are no REA evidence ids; rows come from the shipped app's known menus and settings"
+ ],
+ "features": [
+  {
+   "feature": "Take a photo",
+   "area": "toolbar",
+   "apple": "shutter",
+   "status": "parity",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:194",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Four-up burst",
+   "area": "toolbar",
+   "apple": "mode switch",
+   "status": "parity",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:250",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Video clip",
+   "area": "toolbar",
+   "apple": "mode switch",
+   "status": "parity",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:205",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Countdown",
+   "area": "settings",
+   "apple": "countdown option",
+   "status": "parity",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:56",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Screen flash",
+   "area": "settings",
+   "apple": "flash option",
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:237",
+   "note": "View > Screen Flash toggles it; needs lab check",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Colour effects",
+   "area": "panel",
+   "apple": "Effects browser",
+   "status": "parity",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:91",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Distortion effects",
+   "area": "panel",
+   "apple": "Effects browser",
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:204",
+   "note": "Bulge, Twirl, Mirror (nearest sampling); no live-tunable strength",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Backdrops",
+   "area": "panel",
+   "apple": "Effects backdrops",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Skipped: needs a background segmentation model, none in the SDK",
+   "wire": "Background segmentation and replacement"
+  },
+  {
+   "feature": "Captures strip",
+   "area": "view",
+   "apple": "thumbnail strip",
+   "status": "parity",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:327",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Export capture",
+   "area": "menu",
+   "apple": "File > Export",
+   "status": "parity",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:314",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Delete capture",
+   "area": "menu",
+   "apple": "Edit > Delete",
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:244",
+   "note": "Delete/Backspace key and File > Delete; no undo or Trash",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Auto flip / mirror",
+   "area": "menu",
+   "apple": "Edit > Auto Flip",
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:178",
+   "note": "View > Auto Flip, applied in grab so stills, clips and viewfinder match",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Full screen",
+   "area": "menu",
+   "apple": "View > Full Screen",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Skipped: no app-level full-screen API in the SDK; the shell Zoom action covers the window",
+   "wire": "Window full-screen toggle"
+  },
+  {
+   "feature": "Camera selection",
+   "area": "menu",
+   "apple": "Camera menu",
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:266",
+   "note": "Camera menu lists probed devices; list refreshes on camera start only",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Slideshow",
+   "area": "menu",
+   "apple": "View > Slideshow",
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:276",
+   "note": "3 s per capture, Esc ends, arrows step; no transitions",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "App menus",
+   "area": "menu",
+   "apple": "MainMenu",
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:557",
+   "note": "File, View, Camera menus; shortcuts only for Take Photo and Slideshow",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
+  },
+  {
+   "feature": "Share capture",
+   "area": "menu",
+   "apple": "Share",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor share services",
+   "wire": ""
+  }
+ ]
 }

@@ -66,9 +66,9 @@
     {
       "feature": "Ahead-of-time model compilation",
       "apple": "coreai-build command-line tool, compiling Core AI models ahead of time",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No build step converts or compiles models."
+      "bifrost": "springboard/ui/src/model_specialization.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_specialization.rs); not wired into the shell or apps, not tested on Midget. No build step converts or compiles models."
     },
     {
       "feature": "Model debugging and profiling",

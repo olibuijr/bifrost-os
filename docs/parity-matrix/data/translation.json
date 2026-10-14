@@ -10,9 +10,9 @@
     {
       "feature": "System translation popover",
       "apple": "translationPresentation(isPresented:text:attachmentAnchor:arrowEdge:replacementAction:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no SDK popover that translates a selection in place; the triage pointer to springboard/src/shell/browser/ is wrong, those hits are geometric translate() transforms in tiles.rs and values.rs, not text translation"
+      "bifrost": "springboard/ui/src/translation.rs, springboard/sdk/src/translation.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (translation.rs, translation.rs); not wired into the shell or apps, not tested on Midget. no SDK popover that translates a selection in place; the triage pointer to springboard/src/shell/browser/ is wrong, those hits are geometric translate() transforms in tiles.rs and values.rs, not text translation"
     },
     {
       "feature": "Translation session and tasks",

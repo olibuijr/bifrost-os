@@ -66,9 +66,9 @@
     {
       "feature": "Credential import and export",
       "apple": "ASCredentialExportManager, ASCredentialImportManager, ASImportable* types (CXF)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no credential exchange format"
+      "bifrost": "springboard/sdk/src/credential_exchange.rs, springboard/ui/src/credential_exchange.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (credential_exchange.rs, credential_exchange.rs); not wired into the shell or apps, not tested on Midget. no credential exchange format"
     },
     {
       "feature": "Account authentication upgrades",

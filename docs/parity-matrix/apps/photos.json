@@ -86,10 +86,10 @@
    "feature": "Smart Albums with rule conditions",
    "area": "panel",
    "apple": "File > New Smart Album; IPXSmartAlbumEditorView.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a smart album model (conditions on date, favourite, file type, keyword, filename) in albums.rs, evaluated in album_list (mod.rs:491); an editor sheet with condition rows reachable from the album menu"
+   "status": "partial",
+   "bifrost": "springboard/ui/src/photo_smart_albums.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/photo_smart_albums.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add rule conditions on top of the built-in smart albums and an editor sheet in the album menu."
   },
   {
    "feature": "Rename / delete / sort albums",
@@ -532,5 +532,13 @@
    "note": "empty state only; no tour",
    "wire": "Add a first-launch tip card using the SDK tips state like Freeform freeform.rs:459"
   }
- ]
+ ],
+ "summary": {
+  "features": 58,
+  "parity": 16,
+  "partial": 18,
+  "gap": 19,
+  "n/a": 5,
+  "coverage_pct": 47.2
+ }
 }

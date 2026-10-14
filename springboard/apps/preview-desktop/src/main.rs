@@ -11,6 +11,7 @@ mod export;
 mod model;
 mod pdfjob;
 mod pdfmarks;
+mod picture_tools;
 mod printjob;
 mod recents;
 

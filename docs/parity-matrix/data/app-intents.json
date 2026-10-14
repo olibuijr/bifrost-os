@@ -115,9 +115,9 @@
     {
       "feature": "Widgets, controls and Live Activities",
       "apple": "Widgets, Live Activities, and Controls (intent-driven)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "springboard/sdk/src/widgets.rs is a drawing adapter for controls, not a widget extension point"
+      "bifrost": "springboard/ui/src/live_activity.rs, springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/widgets.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (live_activity.rs, widgets_timeline.rs, widgets.rs); not wired into the shell or apps, not tested on Midget. springboard/sdk/src/widgets.rs is a drawing adapter for controls, not a widget extension point"
     },
     {
       "feature": "Schema domains and visual presentation",

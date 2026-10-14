@@ -10,6 +10,7 @@ mod history;
 mod names;
 mod services;
 mod smart;
+mod tabular;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::internet_accounts::Service;

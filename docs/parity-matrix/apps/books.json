@@ -28,19 +28,19 @@
    "feature": "User collections",
    "area": "menu",
    "apple": "File > New Collection; Add to Collection",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add named collections to store.rs, sidebar rows under a My Collections header (books/mod.rs:987), and menu actions to add/remove books"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a My Collections sidebar header from Shelf::collections and add/remove menu actions."
   },
   {
    "feature": "Want to Read / Finished, mark as finished",
    "area": "menu",
    "apple": "book context menu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a finished flag to store.rs entries and Finished/Want to Read filters beside Filter::Reading"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add Finished and Want to Read filters beside Filter::Reading using Shelf::marked."
   },
   {
    "feature": "Library search",
@@ -118,10 +118,10 @@
    "feature": "Continuous scrolling",
    "area": "menu",
    "apple": "View > scrolling view",
-   "status": "gap",
-   "bifrost": "",
-   "note": "main.rs:95 notes it is not wired",
-   "wire": "Add a scroll layout mode in layout.rs and a View menu item"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Honour Display::continuous in layout.rs and add a View menu item."
   },
   {
    "feature": "Table of contents",
@@ -154,10 +154,10 @@
    "feature": "Highlight colours and underline",
    "area": "menu",
    "apple": "highlight colour submenu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "single colour",
-   "wire": "Add a colour index to highlights in store.rs and a Highlight Color submenu"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a colour index (HighlightColour::index) to highlights in store.rs and a Highlight Color submenu."
   },
   {
    "feature": "Find in book with next/previous and whole words",
@@ -208,19 +208,19 @@
    "feature": "Font family choice",
    "area": "panel",
    "apple": "Aa font list",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a font to store::Settings and a font row in the Display panel; repaginate in layout.rs"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add Display to store::Settings and a font row in the Display panel; repaginate in layout.rs."
   },
   {
    "feature": "Line spacing / margins / justification",
    "area": "panel",
    "apple": "Aa customise",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add spacing and justification to Settings and layout metrics"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add Display spacing, margin and justify to layout metrics."
   },
   {
    "feature": "Page scrubber",
@@ -298,10 +298,10 @@
    "feature": "Reading goals",
    "area": "settings",
    "apple": "Settings > Reading Goals",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Track minutes read per day in store.rs and show a goal in Reading Now"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Record minutes per day into Goal and show the goal card in Reading Now."
   },
   {
    "feature": "Save PDF to Books share target",
@@ -321,5 +321,13 @@
    "note": "",
    "wire": "Add a settings pane for library folders and reader defaults"
   }
- ]
+ ],
+ "summary": {
+  "features": 35,
+  "parity": 19,
+  "partial": 9,
+  "gap": 5,
+  "n/a": 2,
+  "coverage_pct": 71.2
+ }
 }

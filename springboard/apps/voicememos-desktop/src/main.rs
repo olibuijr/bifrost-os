@@ -3,6 +3,7 @@
 //! `services`: the microphone permission (`privacy`), the audio devices (`audio-devices`) and Now Playing.
 
 mod enhance;
+mod organize;
 mod services;
 mod store;
 mod voicememos;

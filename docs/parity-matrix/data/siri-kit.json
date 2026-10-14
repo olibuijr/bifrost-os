@@ -66,9 +66,9 @@
     {
       "feature": "Siri voice input and spoken responses",
       "apple": "Requesting Authorization to Use Siri, SiriKit voice requests, Localizing Your Vocabulary",
-      "bifrost": "springboard/apps/assistant-desktop/src/model.rs (text chat over a model API)",
-      "status": "gap",
-      "note": "No speech recognition or synthesis in the desktop. The Assistant app sends typed text only."
+      "bifrost": "springboard/ui/src/speech.rs, springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/voice_commands.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (speech.rs, speech_recognizer.rs, voice_commands.rs); not wired into the shell or apps, not tested on Midget. No speech recognition or synthesis in the desktop. The Assistant app sends typed text only."
     },
     {
       "feature": "Custom vocabulary, synonyms and intent phrases",

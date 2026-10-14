@@ -606,11 +606,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/sdk/src/url_background.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/Frameworks/BrowserEngineCore.framework",
@@ -732,11 +731,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/ui/src/calendar_store.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/Frameworks/CallKit.framework",
@@ -1320,11 +1318,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/core/src/force_effect.rs, springboard/core/src/rumble.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework",

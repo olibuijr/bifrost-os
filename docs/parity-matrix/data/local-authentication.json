@@ -24,9 +24,9 @@
     {
       "feature": "Authentication prompt UI (LocalAuthenticationView)",
       "apple": "LocalAuthenticationView (SwiftUI)",
-      "bifrost": "springboard/src/shell/login.rs (login field), springboard/src/shell/passcode.rs (passcode prompt)",
-      "status": "gap",
-      "note": "The Rust shell has no SwiftUI. Only the system login and lock prompts exist; an app cannot show a reusable authentication sheet."
+      "bifrost": "springboard/ui/src/auth_view.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (auth_view.rs); not wired into the shell or apps, not tested on Midget. The Rust shell has no SwiftUI. Only the system login and lock prompts exist; an app cannot show a reusable authentication sheet."
     },
     {
       "feature": "Keychain items protected by user presence or biometrics",

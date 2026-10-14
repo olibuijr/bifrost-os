@@ -7,6 +7,7 @@ mod dates;
 mod history;
 mod layout;
 mod model;
+mod rgb;
 mod store;
 
 use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};

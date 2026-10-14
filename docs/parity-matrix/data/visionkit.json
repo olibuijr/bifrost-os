@@ -38,16 +38,16 @@
     {
       "feature": "Subject lifting and background removal",
       "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No subject segmentation found in the repo, including PhotoCraft and the render crate."
+      "bifrost": "springboard/ui/src/subject_lift.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (subject_lift.rs); not wired into the shell or apps, not tested on Midget. No subject segmentation found in the repo, including PhotoCraft and the render crate."
     },
     {
       "feature": "Visual Look Up",
       "apple": "ImageAnalysisInteraction (visual Look Up button)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The only Look Up reference in springboard/src/shell/pages.rs:868 is the dictionary list used by the keyboard. It is not an image lookup."
+      "bifrost": "springboard/ui/src/visual_lookup.rs, springboard/ui/src/look_up.rs, springboard/ui/src/visual_search.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (visual_lookup.rs, look_up.rs, visual_search.rs); not wired into the shell or apps, not tested on Midget. The only Look Up reference in springboard/src/shell/pages.rs:868 is the dictionary list used by the keyboard. It is not an image lookup."
     },
     {
       "feature": "Document scanning through the camera",

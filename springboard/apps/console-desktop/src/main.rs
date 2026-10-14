@@ -2,6 +2,7 @@
 //! The window is `console.rs` and `draw.rs`; the reading is `source.rs`; the entries, the parsers and the search
 //! are `model.rs`.
 
+mod columns;
 mod console;
 mod cursor;
 mod diagnostics;

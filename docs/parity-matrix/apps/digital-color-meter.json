@@ -28,10 +28,10 @@
    "feature": "Aperture size",
    "area": "settings",
    "apple": "View > Aperture Size slider",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add an aperture slider (1-31 px) in the window panel; average the pixels in that square in window.rs reading() and outline it in the loupe in draw.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/aperture.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add an aperture slider in the window panel using aperture::average in reading() and outline the square in the loupe."
   },
   {
    "feature": "Magnification",
@@ -109,10 +109,10 @@
    "feature": "Update Continuously",
    "area": "menu",
    "apple": "View > Update Continuously",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a toggle that stops refresh() polling when off and only samples on pointer move."
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/aperture.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add the toggle and gate refresh() with Sampling::should_sample."
   },
   {
    "feature": "App menus (View and Color)",
@@ -141,5 +141,13 @@
    "note": "No help viewer.",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 15,
+  "parity": 3,
+  "partial": 9,
+  "gap": 1,
+  "n/a": 2,
+  "coverage_pct": 57.7
+ }
 }

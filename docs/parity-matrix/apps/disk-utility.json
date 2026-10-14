@@ -98,19 +98,19 @@
    "feature": "Rename volume",
    "area": "menu",
    "apple": "Disk > Rename",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs a text field in a sheet; the sheet kit has none yet.",
-   "wire": "Inline rename in the sidebar or a sheet; privd request using e2label/fatlabel/exfatlabel."
+   "status": "partial",
+   "bifrost": "springboard/core/src/disk_commands.rs",
+   "note": "Audit 2026-10-13: kit model core/src/disk_commands.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add an inline rename sheet; send disk_commands::rename's plan through the privd request."
   },
   {
    "feature": "Create image (blank, from folder, from device)",
    "area": "menu",
    "apple": "File > New Image",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs a save panel plus privileged mkfs/dd plans.",
-   "wire": "Add File > New Image submenu: blank image via truncate+mkfs, from folder via mkfs -d / mksquashfs, from device via dd, with a save panel (CreateDiskImageAccessory equivalent)."
+   "status": "partial",
+   "bifrost": "springboard/core/src/disk_image.rs",
+   "note": "Audit 2026-10-13: kit model core/src/disk_image.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add File > New Image: blank via disk_image::create_raw then mkfs, with a save panel."
   },
   {
    "feature": "Open / attach disk image",
@@ -125,10 +125,10 @@
    "feature": "Convert / Resize image, Change Password",
    "area": "menu",
    "apple": "Images > Convert, Resize, Scan Image For Restore; File > Change Password",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs image tool plans and a password field.",
-   "wire": "Images menu with Convert (qemu-img convert), Resize (truncate + resize2fs); LUKS change password via cryptsetup through privd."
+   "status": "partial",
+   "bifrost": "springboard/core/src/disk_image.rs",
+   "note": "Audit 2026-10-13: kit model core/src/disk_image.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Images menu with Resize (ImageProperties::truncate plus resize2fs) and Convert; LUKS change password via privd."
   },
   {
    "feature": "Container volume add/delete",
@@ -184,5 +184,13 @@
    "note": "Platform file-system specific.",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 19,
+  "parity": 4,
+  "partial": 10,
+  "gap": 2,
+  "n/a": 3,
+  "coverage_pct": 56.2
+ }
 }

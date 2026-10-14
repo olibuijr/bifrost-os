@@ -59,9 +59,9 @@
     {
       "feature": "Contextual embedding (NLContextualEmbedding)",
       "apple": "NLContextualEmbedding, NLContextualEmbeddingKey",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no on-device contextual model and no asset loader; Apple downloads per-script assets, which has no BifrOSt counterpart yet"
+      "bifrost": "springboard/ui/src/embedding.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (embedding.rs); not wired into the shell or apps, not tested on Midget. no on-device contextual model and no asset loader; Apple downloads per-script assets, which has no BifrOSt counterpart yet"
     },
     {
       "feature": "Custom text models (NLModel, Create ML text classifier and word tagger)",

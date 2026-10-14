@@ -80,9 +80,9 @@
     {
       "feature": "App Store interactions",
       "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
+      "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/subscription.rs, springboard/ui/src/product.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (purchase.rs, subscription.rs, product.rs); not wired into the shell or apps, not tested on Midget. no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
     },
     {
       "feature": "Storefront information",

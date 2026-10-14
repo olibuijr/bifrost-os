@@ -11,6 +11,7 @@ pub mod layout;
 pub mod narrate;
 pub mod quote;
 pub mod search_index;
+pub mod shelf;
 pub mod store;
 
 mod draw;

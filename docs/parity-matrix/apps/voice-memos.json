@@ -18,10 +18,10 @@
    "feature": "Pause and resume recording",
    "area": "toolbar",
    "apple": "pause while recording",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Recording only stops",
-   "wire": "Pause state between start_recording and finish_recording; append on resume"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Hold a RecordClock in start_recording / finish_recording and append the resumed audio."
   },
   {
    "feature": "Recordings list with dates and durations",
@@ -72,10 +72,10 @@
    "feature": "Recently Deleted with recover",
    "area": "view",
    "apple": "sidebar Recently Deleted",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Delete removes at once",
-   "wire": "Move to a .deleted folder; Recently Deleted sidebar row with Recover and Delete Forever"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Move deletes to organize::deleted_path, add the sidebar row with Recover and Delete Forever, purge with due_for_purge on launch."
   },
   {
    "feature": "Trim",
@@ -126,10 +126,10 @@
    "feature": "Playback speed",
    "area": "settings",
    "apple": "playback options",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Rate control in the transport passed to the audio player"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a rate control in the transport stepping with organize::step_rate and pass it to the audio player."
   },
   {
    "feature": "Notes per memo",
@@ -153,28 +153,28 @@
    "feature": "Folders",
    "area": "menu",
    "apple": "File > New Folder",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Subfolders in the memo directory, a sidebar section, Move to Folder"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Show subfolders from organize::folder_of in the sidebar and add Move to Folder via move_target."
   },
   {
    "feature": "Favourites",
    "area": "menu",
    "apple": "Favorite",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Favourite flag in the sidecar, Favourites row"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Keep Favourites in a sidecar file, add the Favourites row and a toolbar toggle."
   },
   {
    "feature": "Search recordings",
    "area": "toolbar",
    "apple": "search field",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Search titles and notes in the sidebar"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a sidebar search field feeding organize::search."
   },
   {
    "feature": "Transcription",
@@ -221,5 +221,13 @@
    "note": "Vendor cloud",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 24,
+  "parity": 12,
+  "partial": 8,
+  "gap": 2,
+  "n/a": 2,
+  "coverage_pct": 72.7
+ }
 }

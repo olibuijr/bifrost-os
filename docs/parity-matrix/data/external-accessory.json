@@ -59,9 +59,9 @@
     {
       "feature": "USB and serial accessories",
       "apple": "Not part of this framework (MFi uses Lightning and 30-pin, which BifrOSt does not expose); USB is covered by AccessoryAccess and serial is not an Apple accessory API",
-      "bifrost": "none in springboard/src/ for USB or serial access by apps (no hits for tty, serialport, hidraw or libusb in SDK code)",
-      "status": "gap",
-      "note": "Checked for serial and USB device access in springboard/ with a text search: only the PTY (springboard/src/term/pty.rs), the installer and the DRM driver (springboard/wm/src/drm.rs) matched. Recorded for completeness; the USB side belongs to the AccessoryAccess matrix row."
+      "bifrost": "springboard/core/src/serial_ports.rs, springboard/sdk/src/serial_ports.rs, springboard/sdk/src/external_accessory.rs, springboard/core/src/usb_descriptors.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (serial_ports.rs, serial_ports.rs, external_accessory.rs, usb_descriptors.rs); not wired into the shell or apps, not tested on Midget. Checked for serial and USB device access in springboard/ with a text search: only the PTY (springboard/src/term/pty.rs), the installer and the DRM driver (springboard/wm/src/drm.rs) matched. Recorded for completeness; the USB side belongs to the AccessoryAccess matrix row."
     }
   ],
   "gaps": [

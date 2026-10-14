@@ -17,9 +17,9 @@
     {
       "feature": "View configuration (environment, modifiers, state)",
       "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
-      "bifrost": "springboard/sdk/src/view/app.rs",
-      "status": "gap",
-      "note": "no environment values or generic modifiers; properties are set on each view"
+      "bifrost": "springboard/ui/src/environment.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (environment.rs); not wired into the shell or apps, not tested on Midget. no environment values or generic modifiers; properties are set on each view"
     },
     {
       "feature": "View styles",

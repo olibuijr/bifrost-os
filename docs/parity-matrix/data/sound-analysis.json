@@ -52,9 +52,9 @@
     {
       "feature": "Live audio classification sample",
       "apple": "Classifying Live Audio Input with a Built-in Sound Classifier (sample code)",
-      "bifrost": "springboard/apps/voicememos-desktop (recording only)",
-      "status": "gap",
-      "note": "Voice Memos records audio and has no classification"
+      "bifrost": "springboard/ui/src/sound_analyzer.rs, springboard/ui/src/sound_classify.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (sound_analyzer.rs, sound_classify.rs); not wired into the shell or apps, not tested on Midget. Voice Memos records audio and has no classification"
     },
     {
       "feature": "Errors",

@@ -12,8 +12,12 @@
 
 pub mod attach;
 pub mod folders;
+mod grouping;
 pub mod import;
+mod fold;
 mod lists;
+mod lock;
+mod mathline;
 mod table;
 mod chrome;
 pub mod icon;
@@ -26,6 +30,7 @@ mod pdf;
 mod picker;
 pub mod store;
 pub mod system;
+mod tags;
 
 pub use icon::icon;
 

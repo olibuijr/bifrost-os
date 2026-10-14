@@ -52,9 +52,9 @@
     {
       "feature": "Contacts search in LDAP or Open Directory",
       "apple": "ODQuery against an LDAP node for contact attributes (framework summary)",
-      "bifrost": "springboard/apps/contacts-desktop/manifest.toml (contacts app; contacts sync lives in ~/Projects/bifrost-cloud)",
-      "status": "gap",
-      "note": "The contacts app stores local contacts. Searching a directory server for contacts has no counterpart."
+      "bifrost": "springboard/ui/src/directory_query.rs, springboard/ui/src/directory_node.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (directory_query.rs, directory_node.rs); not wired into the shell or apps, not tested on Midget. The contacts app stores local contacts. Searching a directory server for contacts has no counterpart."
     }
   ],
   "gaps": [

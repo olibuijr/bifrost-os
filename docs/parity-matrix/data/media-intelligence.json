@@ -31,9 +31,9 @@
     {
       "feature": "On-device ML analysis runtime (shared by all requests)",
       "apple": "In-process on-device analysis, no data leaves the system (per the framework overview)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No ML inference runtime in springboard/. Searches for onnx, tflite and inference found nothing in springboard source. ML inference lives in the separate hamr project, which is not a BifrOSt desktop feature."
+      "bifrost": "springboard/ui/src/ml_model.rs, springboard/sdk/src/inference.rs, springboard/ui/src/tensor.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (ml_model.rs, inference.rs, tensor.rs); not wired into the shell or apps, not tested on Midget. No ML inference runtime in springboard/. Searches for onnx, tflite and inference found nothing in springboard source. ML inference lives in the separate hamr project, which is not a BifrOSt desktop feature."
     },
     {
       "feature": "Errors (MediaIntelligenceError)",

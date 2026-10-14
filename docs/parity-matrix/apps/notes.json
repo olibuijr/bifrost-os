@@ -193,10 +193,10 @@
    "feature": "Group notes by date",
    "area": "view",
    "apple": "MainMenu: View > Group by Date; Settings: Group notes by date",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Section the note list into Today / Previous 7 Days / Previous 30 Days / month headers when sorted by date; Prefs flag + list menu toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/grouping.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a Prefs flag and a list-menu toggle; draw grouping::group sections as headers in the note list."
   },
   {
    "feature": "Gallery view",
@@ -220,19 +220,19 @@
    "feature": "Tags: inline #tags, tag browser, tag filter",
    "area": "view",
    "apple": "TagCollectionViewItem; TagSelectionDetailHeaderCellView; View > Use Tags",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Tags in text are not parsed",
-   "wire": "Parse #words in notes/store.rs, add a Tags section to the sidebar (chrome.rs:233) with a tag chip grid; selecting tags filters the list."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/tags.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a Tags section to the sidebar (chrome.rs:233) from tags::tag_counts, chip selection state feeding tags::filter, and tags::narrowing for the remaining chips."
   },
   {
    "feature": "Locked notes (password)",
    "area": "settings",
    "apple": "MainMenu: File > Lock Note, Close All Locked Notes; Settings: Locked notes password",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Lock Note action encrypting the note file with a password (shell keychain service), lock icon in the list, unlock sheet; Settings section to set/reset the password."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/lock.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a Lock Note action calling lock::lock with fresh random salt and nonce (sdk entropy), a lock icon in the list, an unlock sheet, and a Settings section for the password."
   },
   {
    "feature": "Shared notes, collaboration, mentions, activity",
@@ -292,10 +292,10 @@
    "feature": "Collapsible sections under headings",
    "area": "view",
    "apple": "MainMenu: View > Collapse/Expand Section, All Sections",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Disclosure triangle beside heading lines in the editor; fold state per note; View menu Collapse All / Expand All."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/fold.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Draw a disclosure triangle beside headings from fold::headings and hide fold::Folds::hidden_lines; View menu Collapse All / Expand All."
   },
   {
    "feature": "Settings window: default text size, dark note background, new notes start with, group by date",
@@ -364,10 +364,10 @@
    "feature": "Math results (calculations in text)",
    "area": "menu",
    "apple": "MainMenu: Edit > Math Results",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Evaluate lines ending with \"=\" via a small expression parser and show the result inline; Edit menu toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mathline.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add an Edit menu toggle; draw mathline::results after the matching lines in the editor and insert on Return."
   },
   {
    "feature": "Undo and redo",
@@ -387,5 +387,13 @@
    "note": "",
    "wire": "Edit > Speech items sending the selection to the shell speech service."
   }
- ]
+ ],
+ "summary": {
+  "features": 42,
+  "parity": 11,
+  "partial": 22,
+  "gap": 7,
+  "n/a": 2,
+  "coverage_pct": 55.0
+ }
 }

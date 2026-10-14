@@ -59,9 +59,9 @@
     {
       "feature": "ColorSync Manager (profiles, transforms, CMM)",
       "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
-      "bifrost": "springboard/render/src/cg/pdf/image.rs (ICCBased colour space decode only)",
-      "status": "gap",
-      "note": "PDF ICC-based images decode, but there is no profile or transform API and no display profile handling for apps."
+      "bifrost": "springboard/render/src/icc.rs, springboard/render/src/colorspace.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (icc.rs, colorspace.rs); not wired into the shell or apps, not tested on Midget. PDF ICC-based images decode, but there is no profile or transform API and no display profile handling for apps."
     },
     {
       "feature": "Speech Synthesis Manager",

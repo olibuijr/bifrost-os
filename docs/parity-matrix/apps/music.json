@@ -63,10 +63,10 @@
    "feature": "Smart Playlists with rules",
    "area": "menu",
    "apple": "File > New > Smart Playlist",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a rule model (field/op/value, live update) next to Playlists in music.rs; a New Smart Playlist row in draw_playlists (music.rs:1775); a rules editor sheet"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/smart.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a New Smart Playlist row in draw_playlists (music.rs:1775), store SmartPlaylist::to_text blocks beside Playlists, a rules editor sheet, and evaluate with SmartPlaylist::select using Marks facts."
   },
   {
    "feature": "Playlist folders",
@@ -111,7 +111,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:75",
    "note": "Song menu and Song > Favourite flag a song (kept by path); heart in song rows; Favourite Songs sidebar list. Not yet written into file tags.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Star ratings",
@@ -120,7 +120,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:90",
    "note": "Song > Rating 1-5 for the playing song and a Top Rated list (4+ stars). No rating from the song menu, no sortable column.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Internet radio stations",
@@ -153,19 +153,19 @@
    "feature": "Lyrics view",
    "area": "panel",
    "apple": "View > Lyrics",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Read embedded or .lrc lyrics in the library scan; a Lyrics panel in the player sheet with the current line highlighted"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/lyrics.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Load lyrics::candidates beside the song in the library scan; draw the Lyrics panel in the player sheet highlighting Lyrics::current."
   },
   {
    "feature": "Equalizer",
    "area": "panel",
    "apple": "Window > Equalizer",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "EQ presets and a 10-band gain stage in the audio engine; an Equalizer panel from the Window menu"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/equalizer.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Run Equalizer::process in the engine's gain stage and add an Equalizer panel from the Window menu."
   },
   {
    "feature": "Playback settings: crossfade, Sound Check",
@@ -183,7 +183,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:150",
    "note": "Recently Added (date added) and Recently Played (play log) sidebar lists.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "System Now Playing and media keys",
@@ -210,7 +210,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/app.rs:main_menu",
    "note": "Song (Favourite, Rating) and Controls (Play/Pause, Next, Previous, Shuffle, Repeat, Volume) menus with shortcuts. No Get Info or Add to Playlist items, no View menu.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Visualizer",
@@ -239,5 +239,13 @@
    "note": "Optical drive hardware",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 26,
+  "parity": 8,
+  "partial": 12,
+  "gap": 4,
+  "n/a": 2,
+  "coverage_pct": 58.3
+ }
 }

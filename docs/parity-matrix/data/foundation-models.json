@@ -10,9 +10,9 @@
     {
       "feature": "On-device system language model (SystemLanguageModel)",
       "apple": "SystemLanguageModel, LanguageModelError",
-      "bifrost": "none; wired: springboard/apps/assistant-desktop/src/view.rs (banner, draw_banner): network and service availability banner; local model availability remains a gap",
-      "status": "gap",
-      "note": "no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_session.rs, model_provider.rs); not wired into the shell or apps, not tested on Midget. no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Sessions and prompts",

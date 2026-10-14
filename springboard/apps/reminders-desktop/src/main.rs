@@ -3,10 +3,13 @@
 
 mod alerts;
 mod app;
+mod mark;
 mod model;
 mod quick;
 mod repeat;
+mod smartdef;
 mod store;
+mod templates;
 mod system;
 
 use bifrost_app::kit::{Damage, Event, Surface};

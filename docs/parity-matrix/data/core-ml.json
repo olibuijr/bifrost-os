@@ -73,9 +73,9 @@
     {
       "feature": "Domain frameworks built on Core ML",
       "apple": "Vision, Natural Language, Speech, Sound Analysis (named in the Core ML overview)",
-      "bifrost": "springboard/sdk/src/spellcheck.rs (spelling only); springboard/src/media/hwdec/vaapi.rs (video decode, not inference)",
-      "status": "gap",
-      "note": "no image classification, speech, sound or sentiment API; the spellcheck module is dictionary-based"
+      "bifrost": "springboard/ui/src/text_classifier.rs, springboard/ui/src/sound_classify.rs, springboard/ui/src/embedding.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (text_classifier.rs, sound_classify.rs, embedding.rs); not wired into the shell or apps, not tested on Midget. no image classification, speech, sound or sentiment API; the spellcheck module is dictionary-based"
     },
     {
       "feature": "Text prediction on the on-screen keyboard",

@@ -76,10 +76,10 @@
    "feature": "Multi-select and New Group from Selection",
    "area": "menu",
    "apple": "File > New Group From Selection",
-   "status": "gap",
-   "bifrost": "",
-   "note": "List is single selection",
-   "wire": "Add Shift/Cmd multi-select to the list and a New Group From Selection command in main_menu."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/contact_groups.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/contact_groups.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add Shift/Cmd multi-select to the list and New Group From Selection backed by contact_groups."
   },
   {
    "feature": "Smart lists with user rules",
@@ -130,10 +130,10 @@
    "feature": "Import LDIF / CSV text files",
    "area": "document",
    "apple": "ABTextFileImport.nib; Info.plist LDIF type",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add CSV and LDIF readers in exchange.rs with a column-mapping review sheet, reachable from File > Import."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/tabular.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add CSV and LDIF to File > Import; show the column-mapping review sheet from tabular::guess_columns before tabular::import_csv, then assign ids and save like the vCard import."
   },
   {
    "feature": "Print and Export as PDF (list, labels, envelopes)",
@@ -175,10 +175,10 @@
    "feature": "Contact photo (choose / clear image)",
    "area": "menu",
    "apple": "Card > Choose Custom Image, Clear Custom Image",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Initials avatar only",
-   "wire": "Store an image per contact in the Contacts folder, set from an open panel on the edit form avatar; read/write PHOTO in exchange.rs."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/contact_photo.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/contact_photo.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Store an image per contact beside its record, set from an open panel on the edit-form avatar."
   },
   {
    "feature": "Share and copy contact",
@@ -274,10 +274,10 @@
    "feature": "Directory (LDAP) search",
    "area": "menu",
    "apple": "Edit > Find in Directories",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add LDAP directory accounts and a Directories sidebar section querying them."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/directory_query.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/directory_query.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add LDAP directory accounts and a Directories sidebar section querying through directory_query."
   },
   {
    "feature": "Recent changes / last import list",
@@ -324,5 +324,13 @@
    "note": "Vendor mail-based card update feature",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 35,
+  "parity": 14,
+  "partial": 11,
+  "gap": 8,
+  "n/a": 2,
+  "coverage_pct": 59.1
+ }
 }

@@ -52,9 +52,9 @@
     {
       "feature": "PDF multi-page preview context",
       "apple": "QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
-      "bifrost": "springboard/src/files/preview.rs (is_pdf) and springboard/src/files/mod.rs (PDF text through springboard/src/shell/books/engine)",
-      "status": "gap",
-      "note": "PDFs show extracted text, not a rendered page view with a PDF style option."
+      "bifrost": "springboard/ui/src/pdfview.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (pdfview.rs); not wired into the shell or apps, not tested on Midget. PDFs show extracted text, not a rendered page view with a PDF style option."
     },
     {
       "feature": "Preview of USDZ in augmented reality",

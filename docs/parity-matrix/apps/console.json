@@ -87,10 +87,10 @@
    "feature": "Visible Columns",
    "area": "menu",
    "apple": "View > Visible Columns",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Columns are fixed with narrow-width fallback (console.rs:831).",
-   "wire": "Add View > Visible Columns submenu (Type, Time, Process, PID, Subsystem, Category, Message) with a column set in console.rs used by columns()."
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/columns.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add View > Visible Columns using columns::Visible and size the table with Visible::widths."
   },
   {
    "feature": "Show Activities / Show Sources toggles",
@@ -105,10 +105,10 @@
    "feature": "Expand / Collapse selected rows",
    "area": "menu",
    "apple": "View > Expand Selected Rows, Collapse Selected Rows",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add per-row expansion state so multi-line messages show in full in the table; menu items in main.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/columns.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Keep a columns::Expanded set and size rows with row_lines; menu items in main.rs."
   },
   {
    "feature": "Show messages after selected / only this subsystem",
@@ -218,5 +218,13 @@
    "note": "Platform tracing formats.",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 23,
+  "parity": 8,
+  "partial": 9,
+  "gap": 4,
+  "n/a": 2,
+  "coverage_pct": 59.5
+ }
 }

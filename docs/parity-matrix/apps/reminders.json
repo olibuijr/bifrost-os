@@ -58,10 +58,10 @@
    "feature": "Custom smart lists with filters (date, time, priority, tags, lists, flag)",
    "area": "panel",
    "apple": "ListDetailFilterEditor nib + strings; File > Create Smart List, Convert to Smart List",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add SmartDef { name, rules } to model::Data and a filter editor sheet (due range/relative, time of day, priority, tags any/all, include/exclude lists, flagged); evaluate in model::visible via View::SmartCustom(id); sidebar section and File menu item."
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/smartdef.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Persist SmartDef lines beside the lists in store.rs, add View::SmartCustom(id) using SmartDef::select, a sidebar section and a filter editor sheet."
   },
   {
    "feature": "Flag",
@@ -211,10 +211,10 @@
    "feature": "Mark due date as Today/Tomorrow/This Weekend/Next Week; all overdue to today",
    "area": "menu",
    "apple": "Reminder > Mark Due Date As; Mark All Overdue to Today",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a Mark Due Date As submenu and Mark All Overdue to Today in main_menu acting on the selection / overdue items with one undo step."
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/mark.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a Mark Due Date As submenu and Mark All Overdue to Today in main_menu calling mark::mark_due / overdue_to_today; keep the returned Previous list as one undo step."
   },
   {
    "feature": "Show Info inspector",
@@ -256,10 +256,10 @@
    "feature": "Templates: save as template, view templates",
    "area": "menu",
    "apple": "File > Save as Template, View Templates; templates placeholder nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Save a list (items without dates/completion) as a template in the store and a Templates sheet to create a list from one."
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/templates.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add Save as Template and a Templates sheet creating a list through templates::instantiate; store with to_text."
   },
   {
    "feature": "Shared lists and assignment",
@@ -328,10 +328,10 @@
    "feature": "Auto-categorize (grocery sections)",
    "area": "menu",
    "apple": "Edit > Auto-Categorize",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Keyword table that assigns grocery items to sections (depends on sections)."
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/templates.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Offer Auto-Categorize in a grocery list: group with templates::auto_categorize into sections (needs the sections row)."
   },
   {
    "feature": "Rich text in reminder notes (bold, lists)",
@@ -355,10 +355,10 @@
    "feature": "Time zone override",
    "area": "panel",
    "apple": "Time zone picker sheet nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Optional per-reminder time zone in the editor, applied in model::due_unix."
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/templates.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add an optional zone to the editor and compute the alert with templates::due_in_zone."
   },
   {
    "feature": "Settings: default list, all-day alert time, badge",
@@ -387,5 +387,13 @@
    "note": "",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 42,
+  "parity": 21,
+  "partial": 11,
+  "gap": 8,
+  "n/a": 2,
+  "coverage_pct": 66.2
+ }
 }

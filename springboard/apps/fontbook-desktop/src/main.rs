@@ -5,6 +5,7 @@
 //! in an install preview first and refused when it fails validation (a setting). The model is in `model.rs`; the font
 //! checks are in `validate.rs`.
 
+mod libraries;
 mod model;
 mod validate;
 

@@ -9,10 +9,10 @@
  "summary": {
   "features": 26,
   "parity": 11,
-  "partial": 5,
-  "gap": 9,
+  "partial": 9,
+  "gap": 5,
   "n/a": 1,
-  "coverage_pct": 54.0
+  "coverage_pct": 62.0
  },
  "features": [
   {
@@ -82,19 +82,19 @@
    "feature": "Programmer mode (hex/dec/oct/bin bases, bitwise AND/OR/XOR/NOR/NOT, shifts, rotate, byte/word flip, 2's complement, binary view, ASCII/Unicode display)",
    "area": "view",
    "apple": "Localizable: Programmer, Hexadecimal, Bitwise …, Shift Left/Right, Rotate, Byte Flip, Word Flip, Show Binary, ASCII value, Unicode value",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Paste accepts 0x/0b/0o (paste.rs) but there is no programmer keypad.",
-   "wire": "Add a \"Programmer\" segment in the toolbar (calc.rs:396) and a new programmer.rs: u64 value with base (2/8/10/16), keypad A-F, AND/OR/XOR/NOR/NOT, <<, >>, shift by y, rotate, byte flip, word flip, negate; a clickable 64-bit binary row; ASCII/Unicode readout. Wire keyboard keys for and, or, xor, not and shifts in main.rs:78."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/programmer.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a Programmer segment in the toolbar (calc.rs:396) driving programmer::Programmer: keypad A-F, operator keys, a clickable binary row from bits(), ASCII readout from ascii()."
   },
   {
    "feature": "RPN mode (enter, drop, swap, roll up/down, stack display)",
    "area": "view",
    "apple": "Localizable: RPN Mode On/Off, Enter, Drop, Swap, Rotate stack up/down",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No RPN.",
-   "wire": "Add an RPN flag in Settings (history.rs:106) with a View-menu toggle; rpn.rs stack (Vec<f64>) where operators pop two; keypad replaces = with enter; keys cmd+E swap, cmd+Delete drop, cmd+Up/Down roll."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/rpn.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add an RPN flag in Settings (history.rs:106) with a View-menu toggle; route the keypad to rpn::Rpn (= becomes enter) and draw stack() above the display."
   },
   {
    "feature": "Unit conversion",
@@ -163,19 +163,19 @@
    "feature": "Thousands separator toggle",
    "area": "settings",
    "apple": "Localizable: Show/Hide Thousands Separator",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Always on (format.rs).",
-   "wire": "Add a View-menu toggle stored in Settings (history.rs:106) and pass it to format.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/options.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add a View-menu toggle stored in Settings (history.rs:106) and render through options::Options in format.rs."
   },
   {
    "feature": "Decimal places and scientific notation display",
    "area": "settings",
    "apple": "Localizable: Decimal Places, Scientific Notation",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Automatic 9-digit formatting only.",
-   "wire": "Add View > Decimal Places submenu (auto, 0-15) and a Scientific Notation toggle; store in Settings, apply in format.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/options.rs",
+   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "wire": "Add View > Decimal Places submenu (Options::place_choices) and a Scientific Notation toggle; store with Options::to_text."
   },
   {
    "feature": "Keyboard entry for every key",

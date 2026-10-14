@@ -13,10 +13,10 @@
  "summary": {
   "features": 46,
   "parity": 10,
-  "partial": 24,
-  "gap": 10,
+  "partial": 27,
+  "gap": 7,
   "n/a": 2,
-  "coverage_pct": 50.0
+  "coverage_pct": 53.4
  },
  "features": [
   {
@@ -293,19 +293,19 @@
    "feature": "Tables",
    "area": "menu",
    "apple": "Edit.nib: Format > Table…",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No tables.",
-   "wire": "Large: table cell blocks in the text model and RTF \\trowd; defer."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/text_table.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/text_table.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add table blocks to the text model and RTF \\trowd; lay out with bifrost_ui::text_table."
   },
   {
    "feature": "Writing direction (left-to-right / right-to-left)",
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Writing Direction",
-   "status": "gap",
-   "bifrost": "",
-   "note": "LTR only.",
-   "wire": "Add a paragraph direction prop and right-aligned bidi layout in layout.rs; menu items under Text."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/bidi.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/bidi.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add a paragraph direction prop and run bifrost_ui::bidi in layout.rs; menu items under Text."
   },
   {
    "feature": "Show/Hide Ruler, Copy/Paste Ruler",
@@ -347,10 +347,10 @@
    "feature": "Allow Hyphenation",
    "area": "menu",
    "apple": "Edit.nib: Format > Allow Hyphenation",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No hyphenation.",
-   "wire": "Low priority; soft-hyphen breaking in layout.rs."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/textbreak.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/textbreak.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Use bifrost_ui::textbreak line-break opportunities plus soft hyphens in layout.rs."
   },
   {
    "feature": "Vertical layout",

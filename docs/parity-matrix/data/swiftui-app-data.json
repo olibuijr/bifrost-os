@@ -80,9 +80,9 @@
     {
       "feature": "App extensions",
       "apple": "WidgetBundle, Widget, widget configuration",
-      "bifrost": "springboard/sdk/src/intents.rs",
-      "status": "gap",
-      "note": "App Intents exist; no desktop widgets or extension points"
+      "bifrost": "springboard/ui/src/extensions.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (extensions.rs); not wired into the shell or apps, not tested on Midget. App Intents exist; no desktop widgets or extension points"
     },
     {
       "feature": "Model data",

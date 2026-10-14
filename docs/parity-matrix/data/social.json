@@ -59,9 +59,9 @@
     {
       "feature": "Social account credentials",
       "apple": "SLRequest.account (signed-in account used to authenticate)",
-      "bifrost": "springboard/sdk/src/keychain.rs (generic secrets only)",
-      "status": "gap",
-      "note": "No account store and no OAuth or token signing. BifrOSt Cloud accounts live in ~/Projects/bifrost-cloud, outside this repo."
+      "bifrost": "springboard/sdk/src/social.rs, springboard/sdk/src/accounts.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (social.rs, accounts.rs); not wired into the shell or apps, not tested on Midget. No account store and no OAuth or token signing. BifrOSt Cloud accounts live in ~/Projects/bifrost-cloud, outside this repo."
     },
     {
       "feature": "Receiving shared content in an extension",

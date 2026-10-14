@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/ui/src/smartcard_slot.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/Frameworks/PDFKit.framework",

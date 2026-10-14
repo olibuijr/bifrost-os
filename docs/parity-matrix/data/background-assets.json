@@ -17,9 +17,9 @@
     {
       "feature": "System-scheduled downloads while the app is not running (ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks)",
       "apple": "ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks",
-      "bifrost": "none for apps; the OS updater downloads only system updates in springboard/src/shell/update.rs",
-      "status": "gap",
-      "note": "the updater is not exposed to apps"
+      "bifrost": "springboard/ui/src/assetpack.rs, springboard/sdk/src/url_background.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (assetpack.rs, url_background.rs); not wired into the shell or apps, not tested on Midget. the updater is not exposed to apps"
     },
     {
       "feature": "Apple-hosted packs and App Store Connect upload",

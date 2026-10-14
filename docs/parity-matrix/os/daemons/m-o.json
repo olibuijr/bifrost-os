@@ -19,10 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "partial",
+   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.apache.httpd.plist",
@@ -40,10 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "partial",
+   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cups-lpd.plist",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
+   "status": "partial",
+   "note": "rule: CUPS client and IPP models; Print Center app",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cupsd.plist",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
+   "status": "partial",
+   "note": "rule: CUPS client and IPP models; Print Center app",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.net-snmp.snmpd.plist",
@@ -103,10 +103,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "partial",
+   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.openldap.slapd.plist",
@@ -124,10 +124,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "status": "partial",
+   "note": "rule: standard Unix service shipped by the Linux base (a systemd unit); not yet surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   }
  ]
 }

@@ -24,9 +24,9 @@
     {
       "feature": "Smart card token driver and token",
       "apple": "TKSmartCardTokenDriver, TKSmartCardToken, TKSmartCardTokenSession",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No app extension or driver mechanism for tokens. No counterpart in springboard/src/bare/ (checked the file list)."
+      "bifrost": "springboard/ui/src/token_registry.rs, springboard/ui/src/token_objects.rs, springboard/ui/src/smartcard_slot.rs, springboard/ui/src/token_registration.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (token_registry.rs, token_objects.rs, smartcard_slot.rs, token_registration.rs); not wired into the shell or apps, not tested on Midget. No app extension or driver mechanism for tokens. No counterpart in springboard/src/bare/ (checked the file list)."
     },
     {
       "feature": "Token watcher, driver and session base classes",

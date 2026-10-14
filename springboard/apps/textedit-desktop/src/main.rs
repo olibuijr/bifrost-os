@@ -7,6 +7,7 @@
 //! wires them to the SDK: the document controller, menus, keys, touches and the canvas.
 
 mod docx;
+mod encoding;
 mod document;
 mod html;
 mod layout;

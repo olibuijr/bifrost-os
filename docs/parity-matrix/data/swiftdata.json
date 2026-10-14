@@ -87,9 +87,9 @@
     {
       "feature": "Sync of model data across a person's devices (iCloud)",
       "apple": "Syncing model data across a person's devices",
-      "bifrost": "none in this repo; account and backup services live in ~/Projects/bifrost-cloud (outside bifrost-os)",
-      "status": "gap",
-      "note": "no SDK sync API; backup is a cloud service, not a store-level sync"
+      "bifrost": "springboard/ui/src/record_sync.rs, springboard/ui/src/save_sync.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (record_sync.rs, save_sync.rs); not wired into the shell or apps, not tested on Midget. no SDK sync API; backup is a cloud service, not a store-level sync"
     },
     {
       "feature": "Errors (SwiftDataError, DataStoreError)",
