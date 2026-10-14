@@ -3,6 +3,50 @@
 
 use bifrost_ui::fs_maintenance::{MaintenanceError, MaintenanceQueue, Operation, Phase};
 use bifrost_ui::fs_resource::{Resource, ResourceError};
+use bifrost_ui::photo_changes::{details, Asset, Error as ChangeError};
+
+fn asset(id: &str, modified: u64) -> Asset {
+    Asset { id: id.to_string(), modified }
+}
+
+#[test]
+fn headless_an_unchanged_library_listing_reports_no_changes() {
+    let listing = [asset("a", 1), asset("b", 2)];
+    assert!(details(&listing, &listing).unwrap().is_empty());
+}
+
+#[test]
+fn headless_a_removed_and_an_inserted_asset_are_listed_by_their_positions() {
+    let old = [asset("a", 1), asset("b", 1), asset("c", 1)];
+    let new = [asset("a", 1), asset("c", 1), asset("d", 1)];
+    let change = details(&old, &new).unwrap();
+    assert_eq!(change.removed, vec![1]);
+    assert_eq!(change.inserted, vec![2]);
+    assert!(change.moved.is_empty());
+    assert!(change.changed.is_empty());
+}
+
+#[test]
+fn headless_a_new_modification_stamp_keeps_the_identifier_and_marks_a_content_change() {
+    let old = [asset("a", 1), asset("b", 2)];
+    let new = [asset("a", 9), asset("b", 2)];
+    let change = details(&old, &new).unwrap();
+    assert_eq!(change.changed, vec![0]);
+    assert!(change.removed.is_empty() && change.inserted.is_empty() && change.moved.is_empty());
+}
+
+#[test]
+fn headless_a_reordered_asset_is_reported_once_at_its_new_position() {
+    let old = [asset("a", 1), asset("b", 1), asset("c", 1)];
+    let new = [asset("b", 1), asset("c", 1), asset("a", 1)];
+    assert_eq!(details(&old, &new).unwrap().moved, vec![2]);
+}
+
+#[test]
+fn headless_a_listing_that_repeats_an_identifier_is_refused() {
+    let repeated = [asset("a", 1), asset("a", 2)];
+    assert_eq!(details(&repeated, &[]), Err(ChangeError::Duplicate("a".into())));
+}
 
 #[test]
 fn headless_a_block_device_is_one_node_name_under_dev() {
