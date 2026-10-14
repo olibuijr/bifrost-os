@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.7.2
+
+- Upstream lightcraft v0.7.1.
+  ## What's Changed
+  * Add shared docking while preserving photo tools and catalog drops by @skylartaylor in https://github.com/storytold/lightcraft/pull/869
+  * Integration batch 26: 31 reviewed contributor PRs by @bflatastic in https://github.com/storytold/lightcraft/pull/975
+  * Brush mask: holding the brush still adds no coverage; flow builds up by passes (#518) by @bitshiftza in https://github.com/storytold/lightcraft/pull/767
+  * KEY-ESC: Esc leaves the crop tool before leaving Detail by @PiMinusMax in https://github.com/storytold/lightcraft/pull/772
+
 ## 0.7.1
 
 - Upstream lightcraft v0.7.1.
