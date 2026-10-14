@@ -10,51 +10,51 @@
     {
       "feature": "Single-step buffer compression",
       "apple": "compression_encode_buffer, compression_encode_scratch_buffer_size",
-      "bifrost": "springboard/sdk/src/compression.rs (encode_buffer, encode_buffer_threaded)",
+      "bifrost": "springboard/sdk/src/compression.rs (encode_buffer, encode_buffer_threaded); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "DEFLATE and zlib only; takes a Level and a thread count; returns a Vec, so no scratch buffer. Tests: parity_sdk-tests-04 every_level_and_algorithm_round_trips, zlib_header_flevel_follows_the_level, zlib_trailer_is_the_adler32_of_the_input, one_thread_gives_the_same_bytes_as_the_single_step_call. Not yet verified on Midget."
+      "note": "DEFLATE and zlib only; takes a Level and a thread count; returns a Vec, so no scratch buffer. Tests: parity_sdk-tests-20 zlib_header_second_byte_follows_the_level, zlib_trailer_is_the_big_endian_adler32_of_the_input, threads_change_the_bytes_but_never_the_decoded_data, every_codec_and_level_round_trips_every_sample; parity_sdk-tests-04 every_level_and_algorithm_round_trips, zlib_header_flevel_follows_the_level, zlib_trailer_is_the_adler32_of_the_input, one_thread_gives_the_same_bytes_as_the_single_step_call. Not yet verified on Midget."
     },
     {
       "feature": "Single-step buffer decompression",
       "apple": "compression_decode_buffer, compression_decode_scratch_buffer_size",
-      "bifrost": "springboard/sdk/src/compression.rs (decode_buffer, decode_buffer_limited) over springboard/render/src/cg/pdf/inflate.rs",
+      "bifrost": "springboard/sdk/src/compression.rs (decode_buffer, decode_buffer_limited) over springboard/render/src/cg/pdf/inflate.rs; springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "DEFLATE and zlib only; output is capped at inflate::MAX_OUT (256 MiB) or a caller-given limit. Tests: parity_sdk-tests-04 zlib_reference_bytes_decode_to_hello, decode_limit_is_inclusive_and_refuses_one_byte_more, decode_reports_truncated_input. Not yet verified on Midget."
+      "note": "DEFLATE and zlib only; output is capped at inflate::MAX_OUT (256 MiB) or a caller-given limit. Tests: parity_sdk-tests-20 the_reference_zlib_bytes_decode_to_hello, the_decode_limit_is_inclusive_and_one_byte_less_refuses, a_deflate_stream_cut_short_is_truncated, zlib_header_with_a_method_other_than_deflate_is_invalid; parity_sdk-tests-04 zlib_reference_bytes_decode_to_hello, decode_limit_is_inclusive_and_refuses_one_byte_more, decode_reports_truncated_input. Not yet verified on Midget."
     },
     {
       "feature": "Algorithm selection",
       "apple": "compression_algorithm, Algorithm (LZFSE, LZ4, LZ4_RAW, LZMA, ZLIB)",
-      "bifrost": "springboard/sdk/src/compression.rs (Algorithm)",
+      "bifrost": "springboard/sdk/src/compression.rs (Algorithm); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Algorithm cases exist for LZFSE, LZ4, LZBITMAP, LZMA and Brotli but fail with Unsupported; Zlib and Deflate are implemented. Tests: parity_sdk-tests-04 unsupported_algorithms_fail_in_every_entry_point. Not yet verified on Midget."
+      "note": "Algorithm cases exist for LZFSE, LZ4, LZBITMAP, LZMA and Brotli but fail with Unsupported; Zlib and Deflate are implemented. Tests: parity_sdk-tests-20 only_zlib_and_raw_deflate_are_supported, unsupported_algorithms_are_named_in_every_buffer_and_stream_entry_point; parity_sdk-tests-04 unsupported_algorithms_fail_in_every_entry_point. Not yet verified on Midget."
     },
     {
       "feature": "Multiple-step stream compression",
       "apple": "compression_stream, compression_stream_init, compression_stream_process, compression_stream_destroy",
-      "bifrost": "springboard/sdk/src/compression.rs (Stream)",
+      "bifrost": "springboard/sdk/src/compression.rs (Stream); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Input is buffered and the codec runs on the finalizing call, which returns all output; no incremental encoder or decoder state. Tests: parity_sdk-tests-04 compress_stream_returns_everything_on_the_finalizing_call, decompress_stream_accepts_input_in_pieces, decompress_stream_reports_bad_input_on_finalize. Not yet verified on Midget."
+      "note": "Input is buffered and the codec runs on the finalizing call, which returns all output; no incremental encoder or decoder state. Tests: parity_sdk-tests-20 a_compress_stream_returns_nothing_until_it_is_finalized, a_decompress_stream_accepts_the_input_in_pieces, a_finalized_stream_refuses_more_input, a_decompress_stream_reports_bad_input_when_finalized; parity_sdk-tests-04 compress_stream_returns_everything_on_the_finalizing_call, decompress_stream_accepts_input_in_pieces, decompress_stream_reports_bad_input_on_finalize. Not yet verified on Midget."
     },
     {
       "feature": "Input and output filters",
       "apple": "InputFilter, OutputFilter, FilterOperation, FilterError",
-      "bifrost": "springboard/sdk/src/compression.rs (InputFilter, OutputFilter, FilterOperation)",
+      "bifrost": "springboard/sdk/src/compression.rs (InputFilter, OutputFilter, FilterOperation); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Input is drained on the first read; output reaches the sink in chunks of the buffer capacity. Tests: parity_sdk-tests-04 input_filter_serves_decoded_data_in_requested_sizes, input_filter_failure_is_sticky, input_filter_compresses_to_a_stream_that_decodes, output_filter_decodes_and_sends_chunks_of_the_capacity, output_filter_compress_output_decodes_back, output_filter_leaves_the_sink_untouched_when_the_data_is_invalid. Not yet verified on Midget."
+      "note": "Input is drained on the first read; output reaches the sink in chunks of the buffer capacity. Tests: parity_sdk-tests-20 an_input_filter_serves_the_decoded_data_in_requested_sizes, an_input_filter_drains_its_source_in_buffer_sized_requests, an_input_filter_failure_is_sticky, an_input_filter_refuses_an_unsupported_algorithm, an_output_filter_delivers_the_result_in_chunks_of_the_capacity, an_output_filter_compresses_data_that_decodes_back, an_output_filter_refuses_writes_and_a_second_finalize_after_finishing, an_output_filter_leaves_the_sink_untouched_when_the_data_is_invalid; parity_sdk-tests-04 input_filter_serves_decoded_data_in_requested_sizes, input_filter_failure_is_sticky, input_filter_compresses_to_a_stream_that_decodes, output_filter_decodes_and_sends_chunks_of_the_capacity, output_filter_compress_output_decodes_back, output_filter_leaves_the_sink_untouched_when_the_data_is_invalid. Not yet verified on Midget."
     },
     {
       "feature": "DEFLATE decoding (RFC 1951)",
       "apple": "compression_decode_buffer with ZLIB or raw DEFLATE",
-      "bifrost": "springboard/sdk/src/compression.rs (decode_buffer) over springboard/render/src/cg/pdf/inflate.rs:194",
+      "bifrost": "springboard/sdk/src/compression.rs (decode_buffer) over springboard/render/src/cg/pdf/inflate.rs:194; springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Decoder written out for the Books engine and exposed through the SDK module; no crate. Tests: parity_sdk-tests-04 raw_deflate_reference_bytes_decode_to_hello, decode_rejects_a_reserved_block_type, decode_reports_truncated_input. Not yet verified on Midget."
+      "note": "Decoder written out for the Books engine and exposed through the SDK module; no crate. Tests: parity_sdk-tests-20 the_reference_raw_deflate_bytes_decode_to_hello, a_deflate_stream_cut_short_is_truncated; parity_sdk-tests-04 raw_deflate_reference_bytes_decode_to_hello, decode_rejects_a_reserved_block_type, decode_reports_truncated_input. Not yet verified on Midget."
     },
     {
       "feature": "DEFLATE encoding",
       "apple": "compression_encode_buffer with ZLIB",
-      "bifrost": "springboard/sdk/src/compression/dynamic.rs (encode, encode_threaded)",
+      "bifrost": "springboard/sdk/src/compression/dynamic.rs (encode, encode_threaded); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Greedy LZ77 over a 32 KiB window with dynamic Huffman blocks; Fast, Default and Best levels set the chain depth; no lazy matching or stored-block fallback. Tests: inline dynamic.rs empty_input_round_trips, short_text_round_trips_at_every_level, long_runs_and_random_bytes_round_trip; parity_sdk-tests-04 repetitive_input_compresses_and_random_input_expands_little, large_input_split_over_two_threads_is_deterministic_and_round_trips. The Files app zip writer still uses its fixed-Huffman encoder (springboard/src/files/zip.rs:331)."
+      "note": "Greedy LZ77 over a 32 KiB window with dynamic Huffman blocks; Fast, Default and Best levels set the chain depth; no lazy matching or stored-block fallback. Tests: parity_sdk-tests-20 deflate_output_has_no_zlib_wrapper, repetitive_text_compresses_far_below_its_size_at_every_level; inline dynamic.rs empty_input_round_trips, short_text_round_trips_at_every_level, long_runs_and_random_bytes_round_trip; parity_sdk-tests-04 repetitive_input_compresses_and_random_input_expands_little, large_input_split_over_two_threads_is_deterministic_and_round_trips. The Files app zip writer still uses its fixed-Huffman encoder (springboard/src/files/zip.rs:331)."
     },
     {
       "feature": "zlib stream for PNG output",
@@ -66,9 +66,9 @@
     {
       "feature": "Error reporting",
       "apple": "FilterError, compression_status",
-      "bifrost": "springboard/sdk/src/compression.rs (Error, FilterError)",
+      "bifrost": "springboard/sdk/src/compression.rs (Error, FilterError); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Decode failures and unsupported algorithms; the encode side reports only Unsupported. Tests: parity_sdk-tests-04 error_messages_name_the_failure, zlib_header_errors_are_invalid_data, decode_rejects_a_reserved_block_type. Not yet verified on Midget."
+      "note": "Decode failures and unsupported algorithms; the encode side reports only Unsupported. Tests: parity_sdk-tests-20 error_messages_name_each_failure, zlib_header_whose_check_bits_do_not_divide_by_31_is_invalid, zlib_header_that_asks_for_a_preset_dictionary_is_invalid; parity_sdk-tests-04 error_messages_name_the_failure, zlib_header_errors_are_invalid_data, decode_rejects_a_reserved_block_type. Not yet verified on Midget."
     },
     {
       "feature": "Zip archive creation",
@@ -87,9 +87,9 @@
     {
       "feature": "SDK compression API for apps",
       "apple": "Compression module (Swift and C)",
-      "bifrost": "springboard/sdk/src/compression.rs (bifrost_app::compression)",
+      "bifrost": "springboard/sdk/src/compression.rs (bifrost_app::compression); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "App-facing module for buffers, streams and filters. Tests: parity_sdk-tests-04 (every test in the file uses bifrost_app::compression, for example zlib_reference_bytes_decode_to_hello and compress_stream_returns_everything_on_the_finalizing_call). Not yet verified on Midget."
+      "note": "App-facing module for buffers, streams and filters. Tests: parity_sdk-tests-20 (imports bifrost_app::compression and checks buffer, stream and filter results); parity_sdk-tests-04 (every test in the file uses bifrost_app::compression, for example zlib_reference_bytes_decode_to_hello and compress_stream_returns_everything_on_the_finalizing_call). Not yet verified on Midget."
     },
     {
       "feature": "Scratch buffer sizing",
