@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4 — 2026-10-14
+
+- Keep mode, timer, shutter and export hit targets inside the controls bar without overlap as the window narrows.
+- Document the intentional white camera flash and shutter face fills.
+
 ## 0.5.3 — 2026-10-14
 
 - Named preview and clip-frame pixel limits by their media purpose rather than as window dimensions.

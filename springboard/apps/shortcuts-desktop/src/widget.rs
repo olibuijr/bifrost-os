@@ -4,7 +4,7 @@
 //! duplicates, reorders, files and exports a shortcut. One text field serves the search, the name and the text of a
 //! step.
 
-use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
+use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT};
 use crate::automation;
 use springboard::shortcuts as model;
@@ -1683,7 +1683,7 @@ impl Shortcuts {
                     };
                     let dragged = self.reorder.is_some_and(|r| r.from == k);
                     let col = if pressed || dragged { LINK } else { LABEL_3.now() };
-                    let (cx, cy, half, gap, t) = (x + cw / 2.0, y + ch / 2.0, ui.pt(7.0), ui.pt(4.0), ui.pt(SPACE_XXS));
+                    let (cx, cy, half, gap, t) = (x + cw / 2.0, y + ch / 2.0, ui.pt(7.0), ui.pt(SPACE_XS), ui.pt(SPACE_XXS));
                     for dy in [-gap, 0.0, gap] {
                         glyphs::line(s, (cx - half, cy + dy), (cx + half, cy + dy), t, col);
                     }

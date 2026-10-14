@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 — 2026-10-14
+
+- Mark the fixed test-window dimensions as a geometry fixture; production geometry is configured by the host.
+
 ## 0.1.3 — 2026-10-14
 
 - Derive the initial content geometry from the host-provided window size instead of assuming a default resolution.

@@ -1062,6 +1062,7 @@ impl PhotoBooth {
             label_centred(s, ui, &left.to_string(), size, WHITE, centre_x, top, vw as f32);
         }
         if self.flash_at.is_some() {
+            // compliance-allow: COL-03 camera flash is intentionally white, matching a physical shutter flash.
             s.fill_rect(x0, y0, vw, vh, WHITE);
         }
         if let Some(clip) = &self.clip {
@@ -1127,6 +1128,7 @@ impl PhotoBooth {
         let (cx, cy) = ((shutter.x + shutter.w / 2.0) * scale, (shutter.y + shutter.h / 2.0) * scale);
         let r = shutter.w * scale / 2.0;
         fill_disc(s, cx, cy, r, ui::LABEL.now());
+        // compliance-allow: COL-03 the white center is the stock camera shutter face, not a scheme background.
         fill_disc(s, cx, cy, r - 3.0 * scale, if self.clip.is_some() { ui::DESTRUCTIVE } else { WHITE });
     }
 }

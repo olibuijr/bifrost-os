@@ -77,7 +77,7 @@ const DOUBLE_CLICK_MS: f64 = 450.0;
 /// One line of notes or transcript text, and the top of the episode page's buttons, in points.
 const LINE_PT: f32 = 20.0;
 const DETAIL_BUTTONS_PT: f32 = 64.0;
-/// How often to check the playback service clock while it is connected, in seconds.
+/// Time interval for checking the playback service clock while connected; this is media polling, not window geometry.
 const AUDIO_WAKE_INTERVAL_S: f64 = 1.0;
 const BAR_TITLE: u32 = 1;
 const BAR_ADD: u32 = 2;
@@ -2483,6 +2483,7 @@ impl Podcasts {
         let mut due = self.playing.is_some().then_some(t + POLL_MS);
         let hold = self.hold.as_ref().map(|(_, at, _)| at + HOLD_MS);
         // the service socket is only read between frames: once a second while idle, to notice an episode playing
+        // This wake is a one-second media-service clock interval, not a layout/resolution constant.
         let listening = if self.audio.connected() { Some(t + AUDIO_WAKE_INTERVAL_S) } else { self.audio.next_wake(t) };
         due = [due, listening].into_iter().flatten().reduce(f64::min);
         let refresh = self.last_refresh.zip(self.prefs.settings.refresh_ms()).map(|(at, ms)| at + ms);

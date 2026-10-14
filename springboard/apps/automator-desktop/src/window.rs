@@ -572,6 +572,7 @@ mod tests {
 
     fn window() -> Automator {
         let mut app = Automator::new("/home/u".into());
+        // Test-only fixture size for geometry assertions; runtime size comes from Configure.
         app.resize(1000.0, 640.0);
         app
     }
