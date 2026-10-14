@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/pencilkit",
   "macos_since": "10.15",
   "status": "partial",
-  "bifrost": "springboard/src/shell/markup.rs (screenshot markup editor, shell-only); springboard/apps/freeform-desktop/src/freeform.rs (drawing app); springboard/sdk/src/glyphs.rs (pencil glyph only); no PencilKit-shaped type in springboard/sdk/src or springboard/ui/src",
-  "summary": "BifrOSt has two working drawing surfaces: the shell's screenshot markup editor (pen, marker, pencil, eraser, undo, PNG save) and the Freeform app (pen, marker, eraser, palette, undo, PNG save). Neither is exposed to apps through the SDK. There is no stroke or drawing data model, no tool picker, no lasso, no curve import, no handwriting recognition and no pressure or tilt input.",
+  "bifrost": "springboard/src/shell/markup.rs (screenshot markup editor, shell-only); springboard/apps/freeform-desktop/src/freeform.rs (drawing app); springboard/sdk/src/glyphs.rs (pencil glyph only); pure models in springboard/ui/src/drawing.rs, lasso.rs, handwriting.rs and scribble.rs; no PencilKit-shaped type in springboard/sdk/src; built on parity/team-j-pencilkit; not yet verified on Midget",
+  "summary": "BifrOSt has two working drawing surfaces: the shell's screenshot markup editor (pen, marker, pencil, eraser, undo, PNG save) and the Freeform app (pen, marker, eraser, palette, undo, PNG save). Neither is exposed to apps through the SDK. The ui crate holds pure models for a stroke and drawing data model with a text save format, stroke-level erasing, lasso selection, handwriting line segmentation with a recogniser hook, and Scribble gesture resolution. No shell or app calls those models yet, and there is no handwriting recogniser, no pressure input from a device, and no SDK canvas view.",
   "rea_evidence": "ev_d8cb7973764b54aa73ace7b160012147dcb953f7ba035402f0e5962ec1621650",
   "features": [
     {
@@ -45,9 +45,9 @@
     {
       "feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)",
       "apple": "PKInkingTool, PKEraserTool",
-      "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink)",
+      "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink); springboard/ui/src/drawing.rs (Drawing::erase_strokes_at, stroke-level erasing model); built on parity/team-j-pencilkit; not yet verified on Midget",
       "status": "partial",
-      "note": "Shell has four tools, Freeform has three. Neither has a stroke-level eraser; the eraser paints over with the paper colour in Freeform and repaints from the stroke list in the shell. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Shell has four tools, Freeform has three. The ui drawing model has a stroke-level eraser (erase_strokes_at) that no editor calls yet. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Lasso selection and transform (PKLassoTool)",
@@ -80,16 +80,16 @@
     {
       "feature": "Handwriting recognition (PKStrokeRecognizer)",
       "apple": "PKStrokeRecognizer, handwriting to text",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No handwriting recogniser in springboard/sdk/src or springboard/ui/src. The spelling service in springboard/sdk/src/spellcheck.rs works on typed text."
+      "bifrost": "springboard/ui/src/handwriting.rs (segment_lines, recognize_lines, Recognizer trait); no recogniser implementation; built on parity/team-j-pencilkit; not yet verified on Midget",
+      "status": "partial",
+      "note": "Line layout is modelled: strokes group into lines by vertical overlap and read top to bottom, left to right, with unit tests. No letter recognition exists in BifrOSt, so an app or the shell must supply a Recognizer. Not wired into the shell or apps."
     },
     {
       "feature": "Scribble on non-text views",
       "apple": "Scribble interactions",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No handwriting input path for text fields or other views."
+      "bifrost": "springboard/ui/src/scribble.rs (classify, resolve: tap, scratch-out and write targets); built on parity/team-j-pencilkit; not yet verified on Midget",
+      "status": "partial",
+      "note": "Gesture model only: a short stroke is a tap, a tight zigzag is a scratch-out, anything else is writing for the view under its centre. Input routing into text fields and rendering are not built. Not wired into the shell or apps."
     },
     {
       "feature": "Pressure, tilt and stylus input",
@@ -114,12 +114,12 @@
     }
   ],
   "gaps": [
-    "No SDK canvas view or drawing model: apps cannot capture, store or reopen strokes (springboard/sdk/src has no equivalent).",
-    "No serialised drawing format; both editors save flattened PNG only.",
-    "No handwriting recognition and no Scribble-style input.",
-    "No pressure, tilt or altitude data on touch input.",
-    "No lasso selection, stroke transform or Bezier path import.",
+    "No SDK canvas view or drawing model: apps cannot capture, store or reopen strokes (the ui models are not exposed through springboard/sdk/src).",
+    "No serialised drawing format in the shell or Freeform: both editors save flattened PNG only. The ui crate's text format is not used by them yet.",
+    "No handwriting recogniser: the line layout and Recognizer hook exist in springboard/ui/src/handwriting.rs, but nothing recognises letters.",
+    "No Scribble input path into text fields: the gesture model exists in springboard/ui/src/scribble.rs, but nothing routes stylus strokes to views.",
+    "No pressure, tilt or altitude data from the input device: the stroke point model carries those fields, but the shell and Freeform only read touch position.",
     "No system tool picker that apps can attach to a canvas; the markup tools and palette are private to the shell.",
-    "The shell markup editor (springboard/src/shell/markup.rs) and the Freeform app each keep their own stroke code, so there is no shared drawing module."
+    "The shell markup editor (springboard/src/shell/markup.rs) and the Freeform app each keep their own stroke code, so they do not use the shared ui drawing module."
   ]
 }
