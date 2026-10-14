@@ -186,9 +186,9 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
+   "status": "partial",
+   "note": "Mesh layout models exist as pure data. No vertex shader draws 3D content yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -270,9 +270,9 @@
    "description": "",
    "role": "Video enhancement (deghosting, virtual shutter angle, common video-effect kernels)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no video enhancement pipeline beyond frame_interp.rs and upscale.rs; role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/temporal_upscale.rs",
+   "status": "partial",
+   "note": "A temporal accumulation model exists on CPU rasters. There is no virtual shutter kernel.",
    "rea": [],
    "method": "assessed"
   },
@@ -334,8 +334,8 @@
    "role": "Effects shader of TSReading (app or system UI animation)",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "TSReading UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Presentation effects belong to a presentation app that BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   }
