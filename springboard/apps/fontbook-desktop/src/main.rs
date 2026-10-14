@@ -4,10 +4,11 @@
 //! membership. Fonts are added from the Font menu (Add Fonts), by Open With, or by a `fontbook:` link; a file is shown
 //! in an install preview first and refused when it fails validation (a setting). The model is in `model.rs`; the font
 //! checks are in `validate.rs`. Libraries (named sets of font folders) switch what the list reads; Export Font saves a
-//! copy of the selected font through the save panel, Show in Files reveals a font of the user's, and Print Sample Sheet
-//! sends the font's details and sample line to the printer.
+//! copy of the selected font through the save panel, Export Fonts to Folder copies every family the list shows into a
+//! folder (`export.rs`), Validate File checks a font file from the panel without installing it, Show in Files reveals
+//! a font of the user's, and Print Sample Sheet sends the font's details and sample line to the printer.
 
-mod libraries;
+mod export;
 mod model;
 mod validate;
 
@@ -82,6 +83,8 @@ const MENU_LIBRARY_REMOVE: u32 = 23;
 const MENU_REVEAL: u32 = 24;
 const MENU_EXPORT: u32 = 25;
 const MENU_PRINT: u32 = 26;
+const MENU_VALIDATE_FILE: u32 = 27;
+const MENU_EXPORT_FOLDER: u32 = 28;
 /// The library items of the menu: this id plus the library's index in `model::library_names`.
 const MENU_LIBRARY_BASE: u32 = 100;
 
@@ -140,6 +143,12 @@ struct FontBookApp {
     reveal: Option<u32>,
     /// the save panel request of an export, with the font file it copies
     export: Option<(u32, PathBuf)>,
+    /// the folder panel request of Export Fonts to Folder, with the font files it copies
+    export_folder: Option<(u32, Vec<PathBuf>)>,
+    /// the open panel request of Validate File
+    validate_file: Option<u32>,
+    /// the file chosen in Validate File, checked and not installed, shown in place of the selected family
+    checked: Option<(String, validate::Report)>,
     /// a message from a completion closure (the workspace answers later), shown at the next draw
     notice: Rc<RefCell<String>>,
 }
@@ -271,6 +280,40 @@ impl FontBookApp {
                 ctx.abort_document(request);
                 self.status = format!("Could not export the font: {e}");
             }
+        }
+    }
+
+    /// The font files of the families the list shows now, in list order.
+    fn shown_paths(&self) -> Vec<PathBuf> {
+        self.library.as_ref().map(|l| l.visible(&self.source, &self.query).iter().map(|f| PathBuf::from(&f.path)).collect()).unwrap_or_default()
+    }
+
+    /// The folder panel answered Export Fonts to Folder: each font file in `files` is copied into the folder, under a
+    /// name no file there uses. The folder is reached through its descriptor, so the copies are made inside it.
+    fn export_into_folder(&mut self, ctx: &Ctx, doc: bifrost_app::Document, files: Vec<PathBuf>) {
+        use std::os::fd::AsRawFd;
+        let dest = PathBuf::from(format!("/proc/self/fd/{}", doc.file.as_raw_fd()));
+        ctx.release_document(doc.grant);
+        let existing: Vec<String> = std::fs::read_dir(&dest)
+            .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+            .unwrap_or_default();
+        let failed = export::plan(&files, &dest, &existing).iter().filter(|(src, target)| export::copy_new(src, target).is_err()).count();
+        self.status = if failed == 0 {
+            format!("Exported {} fonts to {}.", files.len(), doc.name)
+        } else {
+            format!("Exported {} of {} fonts; {failed} could not be copied.", files.len() - failed, files.len())
+        };
+    }
+
+    /// The file chosen in Validate File is read and checked. Nothing is installed.
+    fn check_chosen_file(&mut self, doc: bifrost_app::Document) {
+        let mut bytes = Vec::new();
+        match (&doc.file).read_to_end(&mut bytes) {
+            Ok(_) => {
+                self.status = format!("Checked {}; it is not installed.", doc.name);
+                self.checked = Some((doc.name, validate::check(&bytes)));
+            }
+            Err(e) => self.status = format!("Cannot read {}: {e}", doc.name),
         }
     }
 
@@ -512,6 +555,9 @@ impl FontBookApp {
         if self.pending.is_some() {
             return self.pending_touch(ctx, x, y, preview_x);
         }
+        if x < SIDEBAR_PT + LIST_PT {
+            self.checked = None;
+        }
         if x < SIDEBAR_PT {
             let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
             let index = ((y - HEADER_PT) / ROW_PT).floor();
@@ -722,6 +768,8 @@ impl App for FontBookApp {
                     self.edit = Edit::None;
                 } else if self.pending.is_some() {
                     self.cancel_install(ctx);
+                } else if self.checked.is_some() {
+                    self.checked = None;
                 } else {
                     self.query.clear();
                 }
@@ -751,6 +799,17 @@ impl App for FontBookApp {
                 self.reveal_granted(ctx, doc);
                 return true;
             }
+            DocumentEvent::Opened(doc) if self.export_folder.as_ref().is_some_and(|(r, _)| *r == doc.request) => {
+                if let Some((_, files)) = self.export_folder.take() {
+                    self.export_into_folder(ctx, doc, files);
+                }
+                return true;
+            }
+            DocumentEvent::Opened(doc) if self.validate_file == Some(doc.request) => {
+                self.validate_file = None;
+                self.check_chosen_file(doc);
+                return true;
+            }
             DocumentEvent::SaveTo(doc) => {
                 self.write_export(ctx, doc);
                 return true;
@@ -761,6 +820,12 @@ impl App for FontBookApp {
                 }
                 if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
                     self.export = None;
+                }
+                if self.export_folder.as_ref().is_some_and(|(r, _)| *r == request) {
+                    self.export_folder = None;
+                }
+                if self.validate_file == Some(request) {
+                    self.validate_file = None;
                 }
                 if self.reveal == Some(request) {
                     self.reveal = None;
@@ -799,6 +864,7 @@ impl App for FontBookApp {
         let collection = self.current_collection().is_some();
         let has_query = !self.query.trim().is_empty();
         let reveal = self.selected.as_deref().is_some_and(|n| self.revealable(n));
+        let has_list = !self.shown_paths().is_empty();
         let mut items = vec![
                 AppMenuItem::new(MENU_ADD, "Add Fonts...").key("cmd+o"),
                 AppMenuItem::separator(),
@@ -816,6 +882,7 @@ impl App for FontBookApp {
                 AppMenuItem::new(MENU_TOGGLE, if on == Some(false) { "Turn Font On" } else { "Turn Font Off" }).enabled(has_font),
                 AppMenuItem::new(MENU_REMOVE, "Remove Font").enabled(has_font && is_user),
                 AppMenuItem::new(MENU_VALIDATE, "Validate Font").key("cmd+shift+v").enabled(has_font),
+                AppMenuItem::new(MENU_VALIDATE_FILE, "Validate File..."),
                 AppMenuItem::new(MENU_DUPLICATES, if self.duplicates.is_empty() { "Resolve Duplicates" } else { "Resolve Duplicates (Confirm)" }),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_SAMPLE, "Sample").key("cmd+1").checked(self.mode == Mode::Sample),
@@ -840,6 +907,7 @@ impl App for FontBookApp {
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_REVEAL, "Show in Files").enabled(has_font && reveal),
             AppMenuItem::new(MENU_EXPORT, "Export Font...").key("cmd+e").enabled(has_font),
+            AppMenuItem::new(MENU_EXPORT_FOLDER, "Export Fonts to Folder...").enabled(has_list),
             AppMenuItem::new(MENU_PRINT, "Print Sample Sheet").key("cmd+p").enabled(has_font),
         ]);
         vec![AppMenu { title: "Font".into(), items }]
@@ -867,7 +935,19 @@ impl App for FontBookApp {
             }
             MENU_RENAME => self.start_rename(),
             MENU_DELETE => self.delete_current(&data),
-            MENU_VALIDATE => self.mode = Mode::Validation,
+            MENU_VALIDATE => {
+                self.checked = None;
+                self.mode = Mode::Validation;
+            }
+            MENU_VALIDATE_FILE => {
+                let options = OpenOptions { title: "Validate Font File".into(), filters: vec!["ttf".into(), "otf".into()], ..OpenOptions::default() };
+                self.validate_file = Some(ctx.open_panel(&options));
+            }
+            MENU_EXPORT_FOLDER => {
+                let files = self.shown_paths();
+                let options = OpenOptions { title: "Export Fonts".into(), files: false, directories: true, create_directories: true, ..OpenOptions::default() };
+                self.export_folder = Some((ctx.open_panel(&options), files));
+            }
             MENU_DUPLICATES => self.resolve_duplicates(&data),
             MENU_SAMPLE => self.mode = Mode::Sample,
             MENU_REPERTOIRE => self.mode = Mode::Repertoire,
@@ -985,6 +1065,10 @@ impl App for FontBookApp {
         let avail = wp - px - PAD_PT;
         if self.pending.is_some() {
             self.draw_pending(ui, s, px, avail);
+        } else if let Some((name, report)) = &self.checked {
+            put(s, ui, name, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
+            put(s, ui, "Checked, not installed. Select a font to leave this view.", ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, HEADER_PT + 44.0, avail);
+            self.draw_validation(ui, s, Some(report), px, avail);
         } else if let Some(name) = self.selected.clone() {
             self.draw_selected(ui, s, &name, px, avail, hp);
         } else {
@@ -1208,6 +1292,9 @@ fn main() {
         add_library: None,
         reveal: None,
         export: None,
+        export_folder: None,
+        validate_file: None,
+        checked: None,
         notice: Rc::new(RefCell::new(String::new())),
     });
 }
