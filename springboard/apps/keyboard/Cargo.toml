@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-keyboard"
-version = "1.1.2"
+version = "1.1.3"
 edition = "2021"
 description = "BifrOSt on-screen keyboard (system app, provides = [\"keyboard\"])"
 

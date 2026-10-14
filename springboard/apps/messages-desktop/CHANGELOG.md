@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4 — 2026-10-14
+
+- Replaced the hand-drawn conversation list with the shared Golden Gate source-list widget and its matching row hit-testing.
+
 ## 0.5.3
 
 - Made the keychain-backed account-row type explicit at its import so the declared keychain permission is traceable to its use.

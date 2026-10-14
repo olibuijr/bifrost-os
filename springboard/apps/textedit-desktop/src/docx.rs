@@ -278,15 +278,18 @@ fn parse(document: &str, lists: &HashMap<String, ListKind>, targets: &HashMap<St
 }
 
 /// The numbering part: id 1 is the bullet list and id 2 the numbered one.
+const LIST_INDENT_TWIPS: u16 = 720;
+const LIST_HANGING_INDENT_TWIPS: u16 = 360;
+
 fn numbering_part() -> String {
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<w:numbering xmlns:w=\"{NS}\">\
 <w:abstractNum w:abstractNumId=\"0\"><w:multiLevelType w:val=\"hybridMultilevel\"/>\
 <w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"\u{2022}\"/><w:lvlJc w:val=\"left\"/>\
-<w:pPr><w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr></w:lvl></w:abstractNum>\
+<w:pPr><w:ind w:left=\"{LIST_INDENT_TWIPS}\" w:hanging=\"{LIST_HANGING_INDENT_TWIPS}\"/></w:pPr></w:lvl></w:abstractNum>\
 <w:abstractNum w:abstractNumId=\"1\"><w:multiLevelType w:val=\"hybridMultilevel\"/>\
 <w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/><w:lvlJc w:val=\"left\"/>\
-<w:pPr><w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr></w:lvl></w:abstractNum>\
+<w:pPr><w:ind w:left=\"{LIST_INDENT_TWIPS}\" w:hanging=\"{LIST_HANGING_INDENT_TWIPS}\"/></w:pPr></w:lvl></w:abstractNum>\
 <w:num w:numId=\"1\"><w:abstractNumId w:val=\"0\"/></w:num>\
 <w:num w:numId=\"2\"><w:abstractNumId w:val=\"1\"/></w:num></w:numbering>"
     )

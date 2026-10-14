@@ -116,6 +116,7 @@ impl App for KeyboardApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination();
         let (w, s) = (ctx.cfg.w as f32, ctx.cfg.scale);
         match &mut self.kb {
             Some(kb) => {

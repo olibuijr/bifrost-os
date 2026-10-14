@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2 — 2026-10-14
+
+- Named document-format list indentation and bold-weight thresholds so exported document dimensions remain semantic, not resolution-like literals.
+
 ## 1.6.1 — 2026-10-14
 
 - Text specific editing commands are in a Text menu; standard undo, redo, cut, copy, paste and select all use the shell Edit menu.

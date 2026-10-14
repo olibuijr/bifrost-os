@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.3 — 2026-10-14
+
+- Wind and pressure dial tick spacing uses the shared extra-small spacing token.
+
 ## 1.7.2
 
 - Named the dial extent as geometry rather than spacing so the wind and pressure diagrams keep their intended dimensions.

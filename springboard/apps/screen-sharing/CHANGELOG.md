@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Removed the unused connection polling hook; dispatch completions and the shell service pipe wake the viewer when its state changes.
+
 ## 0.1.2
 
 - Moved the RFB reader and writer onto utility dispatch tasks; connection events wake the app through the main dispatch queue instead of a frame polling timer.

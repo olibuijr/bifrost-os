@@ -1910,7 +1910,7 @@ fn draw_wind_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), from: Option<f64
         c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(LABEL.now(), alpha));
     }
     if let Some(degrees) = from {
-        let size = ui.pt(2.5);
+        let size = ui.pt(SPACE_XXS);
         for step in 1..=10 {
             let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
             c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, LABEL.now());
@@ -1935,7 +1935,7 @@ fn draw_pressure_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), angle: Optio
         c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(LABEL.now(), alpha));
     }
     if let Some(degrees) = angle {
-        let size = ui.pt(2.5);
+        let size = ui.pt(SPACE_XXS);
         for step in 1..=10 {
             let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
             c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, LABEL.now());
