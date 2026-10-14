@@ -160,6 +160,8 @@ pub struct Console {
     /// View > Show Sidebar and View > Show Details.
     pub show_sidebar: bool,
     pub show_details: bool,
+    /// View > Hide Toolbar: the toolbar's items and search field are neither drawn nor reachable.
+    pub show_toolbar: bool,
     /// Sequence numbers of the rows whose whole message is shown (View > Expand Message).
     expanded: BTreeSet<u64>,
     /// The text Find Next and Find Previous step to; empty means the search field's.
@@ -204,6 +206,7 @@ impl Console {
             columns: ColumnSet::default(),
             show_sidebar: true,
             show_details: true,
+            show_toolbar: true,
             expanded: BTreeSet::new(),
             find_text: String::new(),
             reveal: None,
@@ -579,7 +582,7 @@ impl Console {
 
     /// The enabled toolbar item under a point.
     fn toolbar_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<u32> {
-        if y >= UNIFIED_BAR_PT {
+        if !self.show_toolbar || y >= UNIFIED_BAR_PT {
             return None;
         }
         let (bar, layout) = self.bar_layout(ui);
@@ -775,6 +778,9 @@ impl Console {
 
     /// Accessibility nodes for the toolbar items and the search field, in points.
     pub fn controls(&self, ui: &Ui) -> Vec<Node> {
+        if !self.show_toolbar {
+            return Vec::new();
+        }
         let (bar, layout) = self.bar_layout(ui);
         let mut nodes = Vec::new();
         for (id, r) in layout.visible {
@@ -815,6 +821,7 @@ impl Console {
             MENU_RELOAD => self.reload(),
             MENU_SIDEBAR => self.show_sidebar = !self.show_sidebar,
             MENU_DETAILS => self.show_details = !self.show_details,
+            MENU_TOOLBAR => self.toggle_toolbar(),
             MENU_ACTIVITY => self.toggle_activity(),
             MENU_EXPAND => self.toggle_expanded(),
             MENU_COLLAPSE_ALL => self.expanded.clear(),
@@ -937,6 +944,14 @@ impl Console {
             Ok(path) => format!("Saved {}", path.display()),
             Err(e) => format!("Could not save: {e}"),
         };
+    }
+
+    /// View > Hide Toolbar and Show Toolbar. Hiding also gives up the search field's focus, which it no longer shows.
+    pub fn toggle_toolbar(&mut self) {
+        self.show_toolbar = !self.show_toolbar;
+        if !self.show_toolbar {
+            self.search_focused = false;
+        }
     }
 
     /// View > Show Only This Activity: narrows the table to the selected message's invocation. Again shows every activity.
@@ -1078,6 +1093,8 @@ pub const MENU_EXPAND: u32 = 15;
 pub const MENU_COLLAPSE_ALL: u32 = 16;
 /// View menu: Show Only This Activity, which again shows every activity when one is narrowed.
 pub const MENU_ACTIVITY: u32 = 24;
+/// View menu: Hide Toolbar or Show Toolbar.
+pub const MENU_TOOLBAR: u32 = 25;
 /// Edit menu: Find Next, Find Previous, Use Selection for Find.
 pub const MENU_FIND_NEXT: u32 = 17;
 pub const MENU_FIND_PREVIOUS: u32 = 18;

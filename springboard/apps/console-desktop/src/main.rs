@@ -24,6 +24,8 @@ mod source;
 #[cfg(test)]
 mod filter_tests;
 #[cfg(test)]
+mod toolbar_tests;
+#[cfg(test)]
 mod wire_tests;
 
 use bifrost_app::controls::Node;
@@ -451,6 +453,7 @@ fn menus(c: &Console, can_reveal: bool, can_trash: bool) -> Vec<AppMenu> {
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_SIDEBAR, "Show Sidebar").key("ctrl+cmd+s").checked(c.show_sidebar),
         AppMenuItem::new(MENU_DETAILS, "Show Details").checked(c.show_details),
+        AppMenuItem::new(MENU_TOOLBAR, if c.show_toolbar { "Hide Toolbar" } else { "Show Toolbar" }),
         AppMenuItem::new(MENU_ACTIVITY, if c.activity.is_some() { "Show All Activities" } else { "Show Only This Activity" })
             .enabled(c.activity.is_some() || c.selected_entry().is_some_and(|e| !e.invocation.is_empty())),
         AppMenuItem::separator(),
