@@ -10,9 +10,9 @@
     {
       "feature": "Share local files without an extension",
       "apple": "UIFileSharingEnabled / LSSupportsOpeningDocumentsInPlace, document browser (landing page 'Share files locally')",
-      "bifrost": "springboard/src/bare/docbroker.rs (Opener, Grants), springboard/src/shell/docpanel.rs (desktop document panel), springboard/sdk/src/document.rs",
+      "bifrost": "springboard/src/bare/docbroker.rs (Opener, Grants), springboard/src/shell/docpanel.rs (desktop document panel), springboard/sdk/src/document.rs; springboard/tests/parity_sdk-tests-11.rs",
       "status": "partial",
-      "note": "Per-app grants open and save files through a broker with a 'documents' permission. There is no in-place sharing setting, and the picker is confined to the account home (docs/file-portal-design.md)."
+      "note": "The broker's file name rules, reads beneath the account home, refused escapes and symlinks, atomic saves and per-app grants (restart, release, stale files) are tested headless in parity_sdk-tests-11.rs. Gap: there is no in-place sharing setting, the picker is confined to the account home (docs/file-portal-design.md), and the desktop panel is not tested."
     },
     {
       "feature": "Replicated File Provider extension (sync local copies with remote storage)",

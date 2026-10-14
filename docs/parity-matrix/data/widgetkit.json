@@ -59,9 +59,9 @@
   {
    "feature": "Dynamic dates and clock content in widgets",
    "apple": "Displaying dynamic dates in widgets, Text date styles",
-   "bifrost": "springboard/ui/src/widget_date.rs",
+   "bifrost": "springboard/ui/src/widget_date.rs (text, next_change); springboard/ui/tests/parity_sdk-tests-11.rs",
    "status": "partial",
-   "note": "Wave 4 (w4-widgetkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell clock tile shows the current time. Apps have no date-styled text in widgets."
+   "note": "Relative and timer wording and the next change instant are tested headless in widget_date::tests and parity_sdk-tests-11.rs. Gap: the model is not wired into apps or the shell, so widgets show no date-styled text yet, and it is untested on Midget."
   },
   {
    "feature": "Widget views (Text, Image, stacks, shapes, gradients, GeometryReader)",

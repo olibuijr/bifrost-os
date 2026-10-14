@@ -10,9 +10,9 @@
   {
    "feature": "Scene and scene lifecycle",
    "apple": "SKScene, SKView, SKRenderer, SpriteView",
-   "bifrost": "springboard/ui/src/scene_loop.rs",
+   "bifrost": "springboard/ui/src/scene_loop.rs (SceneLoop, Frame, Step); springboard/ui/tests/parity_sdk-tests-11.rs",
    "status": "partial",
-   "note": "Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scene object with an update loop, no game-scene presenter; apps get a retained UI view tree and a Surface"
+   "note": "The present, dismiss, pause, resize and clamped frame clock with the ordered steps is tested headless in scene_loop::tests and parity_sdk-tests-11.rs. Gap: the model is not wired into apps or the shell, there is no scene object that runs the steps, and no game-scene presenter; apps get a retained UI view tree and a Surface."
   },
   {
    "feature": "Node tree and camera",

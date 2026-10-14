@@ -17,9 +17,9 @@
     {
       "feature": "Model container and model context (fetch, insert, delete, save)",
       "apple": "ModelContainer, ModelContext",
-      "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs (one .md file per note, atomic write); springboard/apps/books-desktop/src/books/store.rs; springboard/sdk/src/defaults.rs (atomic write of defaults.txt)",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs (one .md file per note, atomic write; load, save, delete, Autosave); springboard/apps/notes-desktop/tests/parity_sdk-tests-11.rs; springboard/apps/books-desktop/src/books/store.rs; springboard/sdk/src/defaults.rs (atomic write of defaults.txt)",
       "status": "partial",
-      "note": "each app hand-rolls its own file store; no shared container, no context, no unsaved-changes tracking, no SDK API"
+      "note": "The notes file store's fetch, insert, update and delete, its id allocation and the debounced autosave are tested headless in parity_sdk-tests-11.rs. Gap: each app still hand-rolls its store; there is no shared container, no context, no unsaved-changes tracking and no SDK API."
     },
     {
       "feature": "Relationships between models (delete rules, inverses, model count limits)",
