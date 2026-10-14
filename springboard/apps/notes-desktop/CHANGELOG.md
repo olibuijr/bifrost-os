@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.18.0 — 2026-10-14
+
+- Note links open their note: the manifest registers the notes scheme, and an Open event with a notes://note/<id> link shows that note when it exists (src/main.rs, Input::Open). The lab machine has not yet verified the routing.
+
 ## 1.17.0 — 2026-10-14
 
 - Attachment browser model (notes/attachments.rs): every attachment of every note, newest note first, with its folder and caption. The browser grid is not drawn yet.

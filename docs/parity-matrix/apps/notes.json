@@ -329,9 +329,9 @@
    "area": "integration",
    "apple": "Info.plist CFBundleURLTypes; NSUserActivityTypes edit-note activity",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs (note_url, note_id)",
-   "note": "Links of the form notes://note/<id> are built and read back, with the id validated; tested headless in tests/parity_app-notes.rs. Gap: the scheme is not registered in the manifest and the open handler does not yet route a link to its note.",
-   "wire": "Register a notes URL scheme in the app manifest and open the note id from the URL in the restore/open handler."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs (note_url, note_id); springboard/apps/notes-desktop/src/main.rs:497 (Input::Open)",
+   "note": "Links of the form notes://note/<id> are built and read back, with the id validated; the manifest registers the notes scheme and an open event shows the named note. Tested headless in tests/parity_app-notes.rs. Gap: the link is not yet published as a user activity, and the lab machine has not verified the routing.",
+   "wire": "Verify on Midget that an opened notes:// link shows its note; add the edit-note user activity."
   },
   {
    "feature": "Shortcuts intents: new note, create, search, open note/folder",
