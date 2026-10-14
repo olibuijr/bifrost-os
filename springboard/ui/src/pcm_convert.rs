@@ -146,6 +146,92 @@ impl Resampler {
     }
 }
 
+/// The storage depth of one linear PCM sample.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Depth {
+    /// 8-bit unsigned, 128 is silence.
+    U8,
+    /// 16-bit signed, little-endian.
+    S16,
+    /// 32-bit float, little-endian, from -1.0 to 1.0.
+    F32,
+}
+
+impl Depth {
+    /// Bytes per sample.
+    pub fn bytes(self) -> usize {
+        match self {
+            Depth::U8 => 1,
+            Depth::S16 => 2,
+            Depth::F32 => 4,
+        }
+    }
+}
+
+/// A linear PCM stream format: the rate in frames per second, the interleaved channel count and the sample depth.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PcmFormat {
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub depth: Depth,
+}
+
+impl PcmFormat {
+    /// Bytes in one frame (one sample per channel).
+    pub fn frame_bytes(self) -> usize {
+        self.depth.bytes() * self.channels as usize
+    }
+}
+
+/// Decodes little-endian interleaved bytes of `depth` into floats from -1.0 to 1.0. A byte count that is not a whole
+/// number of samples is refused.
+pub fn decode(bytes: &[u8], depth: Depth) -> Result<Vec<f32>, ConvertError> {
+    let width = depth.bytes();
+    if bytes.len() % width != 0 {
+        return Err(ConvertError::Ragged);
+    }
+    Ok(bytes
+        .chunks_exact(width)
+        .map(|c| match depth {
+            Depth::U8 => u8_to_f32(c[0]),
+            Depth::S16 => s16_to_f32(i16::from_le_bytes([c[0], c[1]])),
+            Depth::F32 => f32::from_le_bytes([c[0], c[1], c[2], c[3]]),
+        })
+        .collect())
+}
+
+/// Encodes floats as little-endian interleaved bytes of `depth`. Integer depths clamp the floats to range first.
+pub fn encode(samples: &[f32], depth: Depth) -> Vec<u8> {
+    match depth {
+        Depth::U8 => samples.iter().map(|&f| f32_to_u8(f)).collect(),
+        Depth::S16 => samples.iter().flat_map(|&f| f32_to_s16(f).to_le_bytes()).collect(),
+        Depth::F32 => samples.iter().flat_map(|f| f.to_le_bytes()).collect(),
+    }
+}
+
+/// Converts a block of interleaved bytes from one PCM format to another: channel layout first, then sample rate, then
+/// the target depth. The rate conversion is one-shot, so the output holds ceil(frames * to_rate / from_rate) frames:
+/// the newest input frame is repeated once so the converter can emit its final output frames.
+pub fn convert_bytes(input: &[u8], from: PcmFormat, to: PcmFormat) -> Result<Vec<u8>, ConvertError> {
+    if from.sample_rate == 0 || to.sample_rate == 0 {
+        return Err(ConvertError::ZeroRate);
+    }
+    if from.channels == 0 || to.channels == 0 {
+        return Err(ConvertError::ZeroChannels);
+    }
+    let samples = decode(input, from.depth)?;
+    let mut mixed = remap_channels(&samples, from.channels, to.channels)?;
+    let channels = to.channels as usize;
+    if mixed.is_empty() {
+        return Ok(Vec::new());
+    }
+    let last_frame = mixed.len() - channels;
+    mixed.extend_from_within(last_frame..);
+    let mut resampler = Resampler::new(from.sample_rate, to.sample_rate, to.channels)?;
+    let resampled = resampler.process(&mixed)?;
+    Ok(encode(&resampled, to.depth))
+}
+
 /// One sample of frame `idx`, where -1 is the held frame of the previous block.
 fn frame_sample(prev: &[f32], input: &[f32], ch: usize, idx: i64, c: usize) -> f32 {
     if idx < 0 {
