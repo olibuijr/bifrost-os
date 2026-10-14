@@ -87,9 +87,9 @@
   {
    "feature": "Guided Access",
    "apple": "UIGuidedAccessRestrictionDelegate",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "single-app lock with custom restrictions"
+   "bifrost": "springboard/sdk/src/guided_access.rs, springboard/proto/src/guided.rs, springboard/src/shell/accessibility/guided.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-accessibility; not yet verified on the tablet. App restrictions are declared with the request and answered as GuidedAccessChange; the shell's session options sheet to change them is not built"
   },
   {
    "feature": "App extensions",
@@ -126,6 +126,7 @@
   "Form-factor idiom query for apps (B3 owns the definition)",
   "Supported orientations declared by apps (B7)",
   "Home icon quick actions",
-  "Status bar and home indicator hiding"
+  "Status bar and home indicator hiding",
+  "Guided Access restriction options sheet for the user (the app side and the session model exist)"
  ]
 }
