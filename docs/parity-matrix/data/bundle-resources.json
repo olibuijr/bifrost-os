@@ -66,9 +66,9 @@
   {
    "feature": "Universal links service (applinks)",
    "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
-   "bifrost": "springboard/core/src/app_links.rs, springboard/sdk/src/app_links.rs",
+   "bifrost": "springboard/core/src/app_links.rs (AppLinks::claim_from_association); springboard/sdk/src/app_links.rs; tests: springboard/core/tests/parity_sdk-complete-12.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (app_links.rs, app_links.rs); not wired into the shell or apps, not tested on Midget. No domain association file, no verification and no https link routing to a non-browser app. The browser claims http and https by default (springboard/src/shell/defaultapps.rs builtin)."
+   "note": "Claims are read from a site association document (applinks.details appID or appIDs, wildcard paths) and host-tested in parity_sdk-complete-12.rs; exclusion paths are refused. Not wired into the shell or apps, and the document is not fetched or verified over https; no https link routing to a non-browser app, and the browser claims http and https by default (springboard/src/shell/defaultapps.rs builtin). Needs a Midget run with a live site for verification."
   }
  ],
  "gaps": [
