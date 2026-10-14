@@ -61,21 +61,21 @@
       "apple": "QLPreviewPanel protocols, QLPreviewItem, QLPreviewPanelDelegate",
       "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel, PreviewItem); springboard/proto/src/lib.rs:678 (ToShell::Preview), :1354; wired: springboard/src/shell/preview_panel.rs",
       "status": "partial",
-      "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. The shell decodes the Preview message but never draws the panel, so nothing shows on screen. No app is adopted yet. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "The SDK has the panel model: items, index clamp, step, toggle, show and close. The shell decodes the Preview message but never draws the panel, so nothing shows on screen. No app is adopted yet. Model tests (springboard/sdk/tests/parity_sdk-tests-01c.rs): the_panel_steps_without_wrapping_and_the_index_stays_in_range, a_pull_clamps_the_current_index_into_the_new_list, a_display_state_past_the_end_is_refused. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Quick Look thumbnails (QLThumbnailGenerator, QLThumbnailGenerator update)",
       "apple": "QLThumbnailGenerator-style generation for file URLs",
-      "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, ThumbnailCache)",
+      "bifrost": "springboard/sdk/src/thumbnails.rs (request, reply, event, State, load_pixels); springboard/ui/src/thumb_service.rs (request and answer models)",
       "status": "partial",
-      "note": "Cache of thumbnail PNG paths keyed by URL, size and scale, with a caller-supplied generator. No built-in renderer for any file type and no update handlers, only a single result."
+      "note": "Apps ask the thumbnails service for a picture of a file at a size and scale; the shell keeps a disk cache shared by all apps, answers pending requests with ready or failed events, and gives the type icon for files with no picture. The shell providers draw the pictures; there is no app-side generator and no update handlers. Tests (springboard/sdk/tests/parity_sdk-tests-01c.rs): a_picture_answer_names_the_cached_image_and_its_size, an_icon_answer_keeps_the_type_and_the_badge_and_pending_has_neither, a_failed_answer_carries_the_reason, only_the_thumbnail_events_of_the_thumbnail_service_are_read."
     },
     {
       "feature": "QLPreviewView (embedded preview)",
       "apple": "QLPreviewView, QLPreviewViewStyle",
-      "bifrost": "springboard/sdk/src/peek.rs (PreviewView",
+      "bifrost": "springboard/sdk/src/peek.rs (PreviewView)",
       "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No embeddable preview view; the peek.rs gap list says the same."
+      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests (preview_view_tests in sdk/src/peek.rs, and springboard/sdk/tests/parity_sdk-tests-01c.rs: an_embedded_view_loads_a_new_item_until_the_app_reports_ready, without_autostart_an_embedded_item_waits_at_ready, a_refresh_needs_an_item_and_is_counted, closing_a_view_returns_its_item_and_resets_the_state, a_window_close_closes_the_view_only_when_the_switch_is_on); not wired into apps or the shell, not yet tested on the VM or Midget. No embeddable preview view; the peek.rs gap list says the same."
     },
     {
       "feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)",
