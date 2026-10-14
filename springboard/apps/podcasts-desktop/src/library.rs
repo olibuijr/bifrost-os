@@ -28,6 +28,11 @@ impl Library {
         was != played
     }
 
+    /// Marks every episode in `urls` played or unplayed. Returns how many of them changed.
+    pub fn set_all_played<'a>(&mut self, urls: impl IntoIterator<Item = &'a str>, played: bool) -> usize {
+        urls.into_iter().filter(|u| self.set_played(u, played)).count()
+    }
+
     pub fn queue(&self) -> &[String] {
         &self.queue
     }
@@ -184,6 +189,25 @@ mod tests {
         assert!(lib.set_played("a", false));
         assert!(!lib.set_played("a", false));
         assert!(!lib.is_played("a"));
+    }
+
+    #[test]
+    fn marking_a_show_played_counts_only_the_episodes_that_change() {
+        let mut lib = Library::default();
+        lib.set_played("b", true);
+        assert_eq!(lib.set_all_played(["a", "b", "c"], true), 2);
+        assert!(lib.is_played("a") && lib.is_played("b") && lib.is_played("c"));
+        assert_eq!(lib.set_all_played(["a", "b", "c"], true), 0, "a second pass changes nothing");
+    }
+
+    #[test]
+    fn marking_a_show_unplayed_clears_only_its_own_episodes() {
+        let mut lib = Library::default();
+        lib.set_all_played(["a", "b"], true);
+        lib.set_played("other", true);
+        assert_eq!(lib.set_all_played(["a", "b"], false), 2);
+        assert!(!lib.is_played("a") && !lib.is_played("b"));
+        assert!(lib.is_played("other"), "episodes of other shows keep their flag");
     }
 
     #[test]
