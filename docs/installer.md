@@ -43,7 +43,7 @@ and its SHA-256, `packages` lists repository archive basenames and SHA-256 check
 shell archive and checksum, and `apps` identifies the two app package paths (`apps/<id>-<version>.aap`) and checksums.
 Pacman's temporary file-repository configuration is not copied into the installation; the installed system keeps the
 normal Arch sources plus the `[bifrost]` update repo. The ISO bundle also includes dependency archives, which the
-installer checks against pacman's resolved package plan before any disk changes.
+installer checks against pacman's resolved package plan, using an empty temporary package database, before any disk changes.
 
 A lab install with the `mirror` config field set retains its existing route: pacstrap uses only the lab mirror
 (`offline_pacman_conf`, `http://10.99.0.1:8078/mirror/`, built by `tools/lab-mirror.sh`), and the installed system

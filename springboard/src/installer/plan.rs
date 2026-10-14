@@ -284,28 +284,60 @@ fn strip_repo_section(conf: &str, name: &str) -> String {
     out
 }
 
+fn offline_sync_args(config: &str, dbpath: &str) -> Vec<String> {
+    vec!["pacman".into(), "-Sy".into(), "--noconfirm".into(), "--config".into(), config.into(), "--dbpath".into(), dbpath.into()]
+}
+
+fn offline_resolve_args(config: &str, dbpath: &str, packages: &[&str]) -> Vec<String> {
+    let mut args = vec!["pacman".into(), "-Sp".into(), "--print-format".into(), "%l".into(), "--config".into(), config.into(), "--dbpath".into(), dbpath.into()];
+    args.extend(packages.iter().map(|p| (*p).to_string()));
+    args
+}
+
 fn offline_resolve(r: &Run, bundle: &OfflineBundle, gpu: &[&'static str]) -> Result<(), String> {
     let required = offline_required_packages(gpu);
-    for name in &required {
-        if !bundle.packages.iter().any(|f| f.starts_with(&format!("{name}-"))) {
-            return Err(format!("offline bundle lacks package {name}"));
-        }
-    }
     let config = "/run/bifrost-offline-pacman.conf";
-    std::fs::write(config, offline_pacman_config(&bundle.repo)).map_err(|e| format!("{config}: {e}"))?;
-    let sync = ["pacman", "-Sy", "--noconfirm", "--config", config];
-    r.cmd(&sync)?;
-    let mut resolve = vec!["pacman", "-Sp", "--print-format", "%l", "--config", config];
-    resolve.extend(required);
-    let locations = r.cmd(&resolve)?;
-    for location in locations.lines().map(str::trim).filter(|line| line.starts_with("file://")) {
-        let file = Path::new(location.trim_start_matches("file://")).file_name().and_then(|f| f.to_str())
-            .ok_or_else(|| format!("pacman returned an invalid offline package path: {location}"))?;
-        if !bundle.packages.iter().any(|listed| listed == file) {
-            return Err(format!("offline repository references unverified package {file}"));
+    // Never let the live ISO's installed-package database make a missing dependency look satisfied. This DB is
+    // deliberately empty and separate from the config used later by pacstrap.
+    let dbpath = format!("/run/bifrost-offline-preflight-{}", std::process::id());
+    use std::os::unix::fs::PermissionsExt;
+    let result = (|| {
+        std::fs::create_dir(&dbpath).map_err(|e| format!("{dbpath}: {e}"))?;
+        std::fs::set_permissions(&dbpath, std::fs::Permissions::from_mode(0o700)).map_err(|e| format!("{dbpath}: {e}"))?;
+        std::fs::create_dir(Path::new(&dbpath).join("local")).map_err(|e| format!("{dbpath}/local: {e}"))?;
+        std::fs::create_dir(Path::new(&dbpath).join("sync")).map_err(|e| format!("{dbpath}/sync: {e}"))?;
+        std::fs::write(config, offline_pacman_config(&bundle.repo)).map_err(|e| format!("{config}: {e}"))?;
+        let sync = offline_sync_args(config, &dbpath);
+        r.cmd(&sync.iter().map(String::as_str).collect::<Vec<_>>())?;
+        let resolve = offline_resolve_args(config, &dbpath, &required);
+        let locations = r.cmd(&resolve.iter().map(String::as_str).collect::<Vec<_>>())?;
+        let mut resolved = 0usize;
+        for location in locations.lines().map(str::trim).filter(|line| !line.is_empty()) {
+            let Some(path) = location.strip_prefix("file://") else {
+                return Err(format!("offline resolver returned a non-local package source: {location}"));
+            };
+            let path = Path::new(path).canonicalize().map_err(|e| format!("offline package path {path}: {e}"))?;
+            if !path.starts_with(&bundle.repo) {
+                return Err(format!("offline repository references a package outside the bundle: {}", path.display()));
+            }
+            let file = path.file_name().and_then(|f| f.to_str())
+                .ok_or_else(|| format!("pacman returned an invalid offline package path: {}", path.display()))?;
+            if !bundle.packages.iter().any(|listed| listed == file) {
+                return Err(format!("offline repository references unverified package {file}"));
+            }
+            resolved += 1;
         }
+        if resolved < required.len() {
+            return Err(format!("offline resolver returned only {resolved} package sources for {} requested packages", required.len()));
+        }
+        Ok(())
+    })();
+    let cleanup = std::fs::remove_dir_all(&dbpath).map_err(|e| format!("remove offline preflight database {dbpath}: {e}"));
+    match (result, cleanup) {
+        (Err(e), _) => Err(e),
+        (Ok(()), Err(e)) => Err(e),
+        (Ok(()), Ok(())) => Ok(()),
     }
-    Ok(())
 }
 
 fn install_offline_desktop(r: &Run, bundle: &OfflineBundle) -> Result<(), String> {
@@ -634,7 +666,7 @@ impl Run<'_> {
 /// The shell, its units and session come from the package, which is installed last so it wins any overlap.
 /// They are copied into RAM first: if the medium is a network CD that drops out half way, the install can still finish.
 const LIVE_FILES: &[&str] = &["/usr/share/bifrost/bootweave.efi"];
-const LIVE_DIRS: &[&str] = &["/usr/share/springboard/assets", "/usr/share/bifrost"];
+const LIVE_DIRS: &[&str] = &["/usr/share/springboard/assets", "/usr/share/bifrost/installer", "/usr/share/bifrost/video"];
 const STAGE: &str = "/run/bifrost-stage";
 
 /// Waits (at most 2 min) while the lab sync is still writing the newest installer files and assets into the medium:
@@ -1120,6 +1152,8 @@ mod tests {
         assert!(!conf.contains("https://") && !conf.contains("[core]") && !conf.contains("[extra]"));
         let args = pacstrap_args(&["base", "linux-rt"], Some("/run/bifrost-offline-pacman.conf"));
         assert_eq!(args, ["pacstrap", "-K", "-C", "/run/bifrost-offline-pacman.conf", "/mnt", "base", "linux-rt"]);
+        assert_eq!(offline_sync_args("offline.conf", "/run/preflight"), ["pacman", "-Sy", "--noconfirm", "--config", "offline.conf", "--dbpath", "/run/preflight"]);
+        assert_eq!(offline_resolve_args("offline.conf", "/run/preflight", &["base", "linux-rt"]), ["pacman", "-Sp", "--print-format", "%l", "--config", "offline.conf", "--dbpath", "/run/preflight", "base", "linux-rt"]);
         let conf = strip_repo_section("[core]\nServer = https://mirror/\n\n[offline]\nServer = file:///iso/repo\n[bifrost]\nServer = https://updates/\n", "offline");
         assert!(!conf.contains("[offline]") && !conf.contains("file:///iso"));
         assert!(conf.contains("[core]") && conf.contains("[bifrost]"));
