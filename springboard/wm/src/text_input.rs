@@ -29,7 +29,7 @@ use smithay::{
     },
 };
 
-use crate::{state::WmState, wm::Rect};
+use crate::{state::{ClientState, WmState}, wm::Rect};
 
 /// Environment variable that selects the `Trust` policy.
 pub const POLICY_ENV: &str = "BIFROST_WM_INPUT_METHOD";
@@ -71,8 +71,8 @@ fn own_uid() -> Option<u32> {
 }
 
 /// The global filter of the privileged protocols: true for the clients `trust` admits.
-fn client_filter(dh: DisplayHandle, trust: Trust, own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
-    move |client: &Client| trust.admits(client.get_credentials(&dh).ok().map(|c| c.uid), own)
+fn client_filter(trust: Trust, own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
+    move |client: &Client| trust.admits(client.get_data::<ClientState>().and_then(|data| data.peer_uid), own)
 }
 
 /// Where a popup of `size` (w, h) goes for a text cursor at `cursor`, inside `bounds` (all output pixels): left edges
@@ -116,8 +116,8 @@ impl TextInputProtocols {
         let own = own_uid();
         TextInputProtocols {
             _text_input: Some(TextInputManagerState::new::<WmState>(dh)),
-            _input_method: Some(InputMethodManagerState::new::<WmState, _>(dh, client_filter(dh.clone(), trust, own))),
-            _virtual_keyboard: Some(VirtualKeyboardManagerState::new::<WmState, _>(dh, client_filter(dh.clone(), trust, own))),
+            _input_method: Some(InputMethodManagerState::new::<WmState, _>(dh, client_filter(trust, own))),
+            _virtual_keyboard: Some(VirtualKeyboardManagerState::new::<WmState, _>(dh, client_filter(trust, own))),
             popups: Vec::new(),
         }
     }
