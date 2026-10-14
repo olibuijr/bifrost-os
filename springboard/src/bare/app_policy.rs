@@ -7,6 +7,85 @@ use std::{
     process::{Command, Stdio},
 };
 pub use super::account::Account;
+
+/// A policy failure with a stable domain and code. The functions here still return `io::Result`, so the error travels
+/// inside an `io::Error`; [`PolicyError::of`] reads it back for an app or a shell caller that branches on the cause.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PolicyError {
+    /// A manifest permission this shell does not know.
+    UnsupportedPermission(String),
+    /// Remote sharing needs both the network and the storage permissions.
+    RemoteNeedsNetworkAndStorage,
+    /// The app is not the remote desktop app, or it does not hold the remote grant.
+    RemoteDenied,
+    /// The remote server script resolves to a path outside its package.
+    RemoteServerEscapesPackage,
+    /// The remote service could not be started or stopped.
+    RemoteServiceFailed,
+    /// The app data directory is a symbolic link, which is refused.
+    DataIsSymlink,
+    /// The app data directory could not be handed to the app's account.
+    DataOwnershipFailed,
+    /// The executable has no containing package directory.
+    MissingPackageDirectory,
+}
+
+impl PolicyError {
+    /// The domain every policy error belongs to.
+    pub const DOMAIN: &'static str = "bifrost.app-policy";
+
+    /// The domain name, the same for every variant.
+    pub fn domain(&self) -> &'static str {
+        Self::DOMAIN
+    }
+
+    /// The code of this failure inside its domain. Codes are stable: a new failure takes a new number.
+    pub fn code(&self) -> i32 {
+        match self {
+            Self::UnsupportedPermission(_) => 1,
+            Self::RemoteNeedsNetworkAndStorage => 2,
+            Self::RemoteDenied => 3,
+            Self::RemoteServerEscapesPackage => 4,
+            Self::RemoteServiceFailed => 5,
+            Self::DataIsSymlink => 6,
+            Self::DataOwnershipFailed => 7,
+            Self::MissingPackageDirectory => 8,
+        }
+    }
+
+    /// The failure inside `err`, when `err` came from this module. `None` for any other I/O error.
+    pub fn of(err: &io::Error) -> Option<&PolicyError> {
+        err.get_ref()?.downcast_ref::<PolicyError>()
+    }
+}
+
+impl std::fmt::Display for PolicyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedPermission(name) => write!(f, "Unsupported app permission: {name}"),
+            Self::RemoteNeedsNetworkAndStorage => f.write_str("Remote sharing requires network and storage"),
+            Self::RemoteDenied => f.write_str("Remote sharing permission denied"),
+            Self::RemoteServerEscapesPackage => f.write_str("Remote server escapes package"),
+            Self::RemoteServiceFailed => f.write_str("Remote service request failed"),
+            Self::DataIsSymlink => f.write_str("App data must not be a symlink"),
+            Self::DataOwnershipFailed => f.write_str("Cannot assign app data ownership"),
+            Self::MissingPackageDirectory => f.write_str("Missing app directory"),
+        }
+    }
+}
+
+impl std::error::Error for PolicyError {}
+
+impl From<PolicyError> for io::Error {
+    fn from(err: PolicyError) -> io::Error {
+        let kind = match err {
+            PolicyError::RemoteDenied => io::ErrorKind::PermissionDenied,
+            _ => io::ErrorKind::Other,
+        };
+        io::Error::new(kind, err)
+    }
+}
+
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
 pub const ENTITLEMENT_NAMES: [&str; 10] = [
@@ -86,17 +165,11 @@ impl Policy {
                 "accessibility" => p.accessibility = true,
                 "display-config" => p.display_config = true,
                 "remote-desktop" if id == "is.olibuijr.remote.desktop" => p.remote = true,
-                _ => {
-                    return Err(io::Error::other(format!(
-                        "Unsupported app permission: {permission}"
-                    )))
-                }
+                _ => return Err(PolicyError::UnsupportedPermission(permission.clone()).into()),
             }
         }
         if p.remote && (!p.network || !p.storage) {
-            return Err(io::Error::other(
-                "Remote sharing requires network and storage",
-            ));
+            return Err(PolicyError::RemoteNeedsNetworkAndStorage.into());
         }
         Ok(p)
     }
@@ -157,7 +230,7 @@ fn drop_identity(cmd: &mut Command, account: &Account) -> io::Result<()> {
 fn prepare_data(data: &Path, account: &Account) -> io::Result<()> {
     fs::create_dir_all(data)?;
     if fs::symlink_metadata(data)?.file_type().is_symlink() {
-        return Err(io::Error::other("App data must not be a symlink"));
+        return Err(PolicyError::DataIsSymlink.into());
     }
     if unsafe { geteuid() } == 0 {
         // GNU chown -P does not traverse symlinks. Only this app's data is migrated.
@@ -167,7 +240,7 @@ fn prepare_data(data: &Path, account: &Account) -> io::Result<()> {
             .arg(data)
             .status()?;
         if !status.success() {
-            return Err(io::Error::other("Cannot assign app data ownership"));
+            return Err(PolicyError::DataOwnershipFailed.into());
         }
     }
     Ok(())
@@ -187,7 +260,7 @@ pub fn command(
     let exec = fs::canonicalize(exec)?;
     let package = exec
         .parent()
-        .ok_or_else(|| io::Error::other("Missing app directory"))?;
+        .ok_or_else(|| io::Error::from(PolicyError::MissingPackageDirectory))?;
     let mut c = Command::new("/usr/bin/bwrap");
     c.args([
         "--die-with-parent",
@@ -329,17 +402,14 @@ pub fn command(
 /// manifest, never from a claimed id or caller-supplied executable path.
 pub fn remote_sharing(id: &str, policy: Policy, on: bool, package: &Path) -> io::Result<()> {
     if id != "is.olibuijr.remote.desktop" || !policy.remote {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Remote sharing permission denied",
-        ));
+        return Err(PolicyError::RemoteDenied.into());
     }
     let account = Account::installed()?;
     let mut c = if on {
         let server = fs::canonicalize(package.join("assets/server.py"))?;
         let package = fs::canonicalize(package)?;
         if !server.starts_with(&package) {
-            return Err(io::Error::other("Remote server escapes package"));
+            return Err(PolicyError::RemoteServerEscapesPackage.into());
         }
         let mut c = Command::new("/usr/bin/systemd-run");
         c.args([
@@ -372,7 +442,7 @@ pub fn remote_sharing(id: &str, policy: Policy, on: bool, package: &Path) -> io:
     if status.success() {
         Ok(())
     } else {
-        Err(io::Error::other("Remote service request failed"))
+        Err(PolicyError::RemoteServiceFailed.into())
     }
 }
 #[cfg(test)]

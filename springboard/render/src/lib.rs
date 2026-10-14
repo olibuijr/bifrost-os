@@ -69,6 +69,7 @@ pub mod transform_stack;
 pub mod block_motion;
 pub mod kernel;
 pub mod gaussian_filter;
+pub mod laplacian_pyramid;
 pub mod lanczos;
 pub mod generators;
 pub mod spot_light;
