@@ -26,7 +26,7 @@
    "apple": "NSGestureRecognizer and subclasses (click, pan, magnification, rotation, press)",
    "bifrost": "springboard/ui/src/gesture.rs, springboard/ui/src/trackpad_gesture.rs, springboard/src/shell/gestures.rs",
    "status": "partial",
-   "note": "recognizer state machines (tap, pan, long press, magnify, rotate) exist as pure models; ui::trackpad_gesture runs the pinch and the rotation together on one two-finger touch and returns Began, Changed and Ended events in order. The compositor does not yet send two-finger touches to apps. built on parity/team-k-appkit-user-interactions; not yet verified on Midget."
+   "note": "Recognizer state machines (tap, pan, long press, magnify, rotate) are tested headless in springboard/ui/tests/parity_sdk-tests-07-w7.rs, as are the two-finger events of ui::trackpad_gesture, which runs the pinch and the rotation together and returns Began, Changed and Ended events in order. The compositor does not yet send two-finger touches to apps. built on parity/team-k-appkit-user-interactions; not yet verified on Midget."
   },
   {
    "feature": "Touch Bar",

@@ -52,9 +52,9 @@
     {
       "feature": "Widget suggestions via intent donation",
       "apple": "WidgetKit Smart Stack suggestions (widget-suggestions-in-smart-stacks article), App Intents donation",
-      "bifrost": "springboard/sdk/src/intents.rs (IntentResult, Intent, shortcut flag); springboard/sdk/src/widgets.rs (widget drawing adapters)",
+      "bifrost": "springboard/sdk/src/intents.rs (IntentResult, Intent, shortcut flag)",
       "status": "partial",
-      "note": "Intents are invoked on request over the control socket, with no donation or suggestion feed. Widgets do not declare relevance."
+      "note": "Intent declarations, the shortcut flag, parameter validation, result checks and result JSON are tested headless in springboard/sdk/tests/parity_sdk-tests-07-w7.rs. Gap: intents are invoked on request over the control socket with no donation or suggestion feed, and widgets do not declare relevance."
     }
   ],
   "gaps": [

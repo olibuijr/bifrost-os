@@ -66,9 +66,9 @@
     {
       "feature": "Image decoding into the filter input (CIImage from data or file)",
       "apple": "CIImage(data:), CIImage(contentsOf:), CIRAWFilter",
-      "bifrost": "springboard/render/src/imgdec.rs (decode at :12: JPEG and PNG to premultiplied RGBA, MAX_SIDE 8192)",
+      "bifrost": "springboard/render/src/cg/imageio/mod.rs (decode, is_image, pixel_size, MAX_SIDE 8192); springboard/render/src/imgdec.rs (MAX_SIDE)",
       "status": "partial",
-      "note": "JPEG and PNG only. No RAW decode (CIRAWFilter), no HEIF, and no colour-managed input"
+      "note": "JPEG and PNG decode to premultiplied RGBA, and pictures past the 8192 point limit are refused, as tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: no RAW decode (CIRAWFilter), no HEIF, and no colour-managed input."
     },
     {
       "feature": "Custom kernels (CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel)",

@@ -17,9 +17,9 @@
     {
       "feature": "Pixel format and data layout",
       "apple": "ColorSyncDataLayout, ColorSyncAlphaInfo, ColorSyncDataDepth (8/16/32-bit, float, premultiplied alpha)",
-      "bifrost": "springboard/render/src/imgdec.rs",
+      "bifrost": "springboard/render/src/imgdec.rs (fit, cover, contain); springboard/render/src/cg/imageio/mod.rs (decode)",
       "status": "partial",
-      "note": "Images are 8-bit premultiplied RGBA. No layout descriptor is exposed, and no 16-bit, float or extended-range buffers exist."
+      "note": "The 8-bit premultiplied RGBA byte layout of decoded pictures is tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: no layout descriptor is exposed, and no 16-bit, float or extended-range buffers exist."
     },
     {
       "feature": "Color profiles (ICC load, create, inspect, embed)",

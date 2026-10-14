@@ -89,7 +89,7 @@
    "apple": "Scribble interactions",
    "bifrost": "springboard/ui/src/scribble.rs (classify, resolve: tap, scratch-out and write targets); built on parity/team-j-pencilkit; not yet verified on Midget",
    "status": "partial",
-   "note": "Gesture model only: a short stroke is a tap, a tight zigzag is a scratch-out, anything else is writing for the view under its centre. Input routing into text fields and rendering are not built. Not wired into the shell or apps."
+   "note": "Gesture model only: a short stroke is a tap, a tight zigzag is a scratch-out, anything else is writing for the view under its centre. The classification and target resolution are tested headless in springboard/ui/tests/parity_sdk-tests-07-w7.rs. Input routing into text fields and rendering are not built. Not wired into the shell or apps."
   },
   {
    "feature": "Pressure, tilt and stylus input",
