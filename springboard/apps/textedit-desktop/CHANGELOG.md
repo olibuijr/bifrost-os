@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0 — 2026-10-14
+
+- Format > Text > Left to Right and Right to Left set the writing direction of the selected paragraphs (one undo entry).
+  A left-aligned right to left paragraph starts its lines at the right edge, and the direction is kept in RTF.
+
 ## 1.4.0 — 2026-10-14
 
 - Copy and paste keep formatting: a paste of text copied in this document keeps its character and paragraph formatting.
