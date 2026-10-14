@@ -332,13 +332,17 @@ impl Freeform {
         Item { text, ..Item::new(ItemKind::Text, x, y, ui.pt(360.0), ui.pt(TEXT_BOX_PT.1)) }
     }
 
-    /// Edit > Paste with only text on the pasteboard: it lands on the board as an item (see `text_item`).
+    /// Edit > Paste with only text on the pasteboard: it lands on the board as an item centred at the pointer (see
+    /// `text_item`).
     pub fn paste_text_item(&mut self, ui: &Ui, text: String) {
         if text.trim().is_empty() {
             return;
         }
         let (w, h) = (ui.pt(NOTE_PT_SIDE), ui.pt(NOTE_PT_SIDE));
-        let (x, y) = self.spot(ui, w, h);
+        let (x, y) = match self.paste_anchor(ui) {
+            Some((cx, cy)) => (cx - w / 2.0, cy - h / 2.0),
+            None => self.spot(ui, w, h),
+        };
         let item = Self::text_item(ui, text, x, y);
         self.add_item(ui, item, None);
     }
