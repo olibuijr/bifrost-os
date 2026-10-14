@@ -271,6 +271,11 @@ pub fn capture_stem(date: &Date, suffix: &str) -> String {
     )
 }
 
+/// True once the screen flash that began at `started` (ms on the app clock) has lasted `FLASH_MS` at time `t`.
+pub fn flash_over(started: f64, t: f64) -> bool {
+    t - started >= FLASH_MS
+}
+
 /// True when the camera list is due to be read again: `CAMERA_RETRY_MS` after the last read, or later.
 pub fn camera_retry_due(last_read: f64, now: f64) -> bool {
     now - last_read >= CAMERA_RETRY_MS
@@ -545,6 +550,14 @@ mod tests {
         assert_eq!(selection_after_delete(0, 3), Some(0));
         assert_eq!(selection_after_delete(3, 3), Some(2));
         assert_eq!(selection_after_delete(0, 0), None);
+    }
+
+    #[test]
+    fn the_screen_flash_is_on_until_its_time_runs_out() {
+        assert!(!flash_over(1000.0, 1000.0));
+        assert!(!flash_over(1000.0, 1000.0 + FLASH_MS - 1.0));
+        assert!(flash_over(1000.0, 1000.0 + FLASH_MS));
+        assert!(flash_over(1000.0, 1000.0 + FLASH_MS * 4.0));
     }
 
     #[test]

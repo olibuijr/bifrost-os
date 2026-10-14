@@ -3,13 +3,17 @@
 //! save panel. Captures are saved in `~/Pictures/Photo Booth Library`; the layout, the effects, the names and the clip
 //! container are in `model.rs` and `avi.rs`. The menus (File, Edit, View, Camera) are in `menu.rs`; the distortion
 //! effects and the mirror flip in `warp.rs`; the slideshow's timing in `slideshow.rs`; the backdrops, which swap the
-//! room for a gradient using a picture of the empty scene, in `backdrop.rs`.
+//! room for a gradient using a picture of the empty scene, in `backdrop.rs`. Deleted captures go to the desktop Trash
+//! folder (`trash.rs`), from where Undo Delete brings them back.
 
+#[cfg(test)]
+mod scratch;
 mod avi;
 mod backdrop;
 mod menu;
 mod model;
 mod slideshow;
+mod trash;
 mod warp;
 
 use backdrop::{Backdrop, Reference};
@@ -20,6 +24,7 @@ use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use menu::{Command, MenuState};
 use model::{Button, Effect, Layout, Mode, Rect, Timer};
 use slideshow::Slideshow;
+use trash::Trashed;
 use warp::Strength;
 use springboard::media::v4l2::{self, CameraInfo, Device, Frame};
 use springboard::shell::camera::jpeg;
@@ -60,12 +65,12 @@ struct Capture {
     shown: Image,
 }
 
-/// The capture that Delete took away last: where it sat in the strip, its picture and the file's bytes, so that
-/// Undo Delete can write the file back.
+/// The capture that Delete took away last: where it sat in the strip, its picture and where the Trash keeps the file,
+/// so that Undo Delete can take it back out.
 struct Removed {
     index: usize,
     capture: Capture,
-    bytes: Vec<u8>,
+    trashed: Trashed,
 }
 
 struct Burst {
@@ -106,6 +111,8 @@ struct PhotoBooth {
     /// a save panel is open for this capture (request id, file)
     export: Option<(u32, PathBuf)>,
     library: PathBuf,
+    /// the desktop Trash folder that Delete moves captures into
+    trash: PathBuf,
     now: f64,
     status: String,
     /// the cameras the system lists, and the device node of the one in use or last chosen
@@ -158,6 +165,7 @@ impl PhotoBooth {
             selected: None,
             export: None,
             library: PathBuf::new(),
+            trash: PathBuf::new(),
             now: 0.0,
             status: String::new(),
             cameras: Vec::new(),
@@ -475,44 +483,38 @@ impl PhotoBooth {
         self.export = Some((request, path));
     }
 
-    /// Removes the selected capture's file and takes it out of the strip; the next capture is selected. The file's bytes
-    /// are kept in memory so that Undo Delete can write them back.
+    /// Moves the selected capture's file into the Trash and takes it out of the strip; the next capture is selected.
+    /// A file that is already gone leaves the strip too, with nothing to undo.
     fn delete_selected(&mut self) {
         let Some(index) = self.selected.filter(|i| *i < self.captures.len()) else {
             self.status = "Select a capture to delete".to_string();
             return;
         };
         let path = self.captures[index].path.clone();
-        let bytes = match std::fs::read(&path) {
-            Ok(bytes) => Some(bytes),
-            // a file that is already gone is not a reason to keep the capture in the strip; there is nothing to put back
+        let trashed = match trash::put(&self.trash, &path, &now_date()) {
+            Ok(trashed) => Some(trashed),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => {
                 self.status = format!("Could not delete: {e}");
                 return;
             }
         };
-        if bytes.is_some() {
-            if let Err(e) = std::fs::remove_file(&path) {
-                self.status = format!("Could not delete: {e}");
-                return;
-            }
-        }
         let gone = self.captures.remove(index);
         self.slide = None;
         self.selected = model::selection_after_delete(index, self.captures.len());
-        self.status = format!("Deleted {}", file_name_of(&path));
-        self.undo = bytes.map(|bytes| Removed { index, capture: gone, bytes });
+        self.status = format!("Moved {} to the Trash", file_name_of(&path));
+        self.undo = trashed.map(|trashed| Removed { index, capture: gone, trashed });
     }
 
-    /// Edit > Undo Delete: writes the last deleted capture's file back and returns it to its place in the strip.
+    /// Edit > Undo Delete: takes the last deleted capture back out of the Trash and returns it to its place in the strip.
     fn undo_delete(&mut self) {
         let Some(removed) = self.undo.take() else { return };
-        match std::fs::write(&removed.capture.path, &removed.bytes) {
-            Ok(()) => {
-                let index = removed.index.min(self.captures.len());
-                self.status = format!("Restored {}", file_name_of(&removed.capture.path));
-                self.captures.insert(index, removed.capture);
+        match trash::restore(&removed.trashed, &removed.capture.path) {
+            Ok(path) => {
+                let Removed { index, capture, .. } = removed;
+                let index = index.min(self.captures.len());
+                self.status = format!("Restored {}", file_name_of(&path));
+                self.captures.insert(index, Capture { path, thumb: capture.thumb, shown: capture.shown });
                 self.selected = Some(index);
                 self.slide = None;
             }
@@ -668,6 +670,7 @@ impl App for PhotoBooth {
     fn configure(&mut self, ctx: &Ctx) {
         let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
         self.library = model::library_dir(&home);
+        self.trash = trash::trash_dir(&home, std::env::var_os("XDG_DATA_HOME").map(PathBuf::from));
         if !self.prefs_loaded {
             self.prefs_loaded = true;
             let mut defaults = ctx.defaults_mut();
@@ -885,7 +888,7 @@ impl App for PhotoBooth {
             dirty = true;
             self.clip_step(t);
         }
-        if self.flash_at.is_some_and(|f| t - f >= model::FLASH_MS) {
+        if self.flash_at.is_some_and(|f| model::flash_over(f, t)) {
             self.flash_at = None;
         }
         if self.flash_at.is_some() {
@@ -1124,27 +1127,12 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scratch::Scratch;
 
-    /// A folder for one test's files under the app's target folder, removed when the test ends.
-    struct Scratch(PathBuf);
-
-    impl Scratch {
-        fn new(name: &str) -> Scratch {
-            let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("{name}-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).expect("scratch folder");
-            Scratch(dir)
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    fn booth_with(paths: &[PathBuf]) -> PhotoBooth {
+    /// A booth whose strip holds one capture per path, and whose Trash is the `Trash` folder of `dir`.
+    fn booth_with(dir: &Scratch, paths: &[PathBuf]) -> PhotoBooth {
         let mut booth = PhotoBooth::new();
+        booth.trash = dir.0.join("Trash");
         booth.captures = paths
             .iter()
             .map(|path| {
@@ -1156,20 +1144,24 @@ mod tests {
     }
 
     #[test]
-    fn delete_then_undo_puts_the_file_back_in_its_place() {
+    fn delete_moves_the_file_to_the_trash_and_undo_brings_it_back_in_its_place() {
         let dir = Scratch::new("photobooth-undo");
         let paths: Vec<PathBuf> = ["a.jpg", "b.jpg", "c.jpg"].iter().map(|n| dir.0.join(n)).collect();
         for (i, path) in paths.iter().enumerate() {
             std::fs::write(path, [i as u8; 3]).unwrap();
         }
-        let mut booth = booth_with(&paths);
+        let mut booth = booth_with(&dir, &paths);
         booth.selected = Some(1);
         booth.delete_selected();
         assert!(!paths[1].exists());
+        assert_eq!(std::fs::read(dir.0.join("Trash/files/b.jpg")).unwrap(), vec![1u8; 3]);
+        assert!(dir.0.join("Trash/info/b.jpg.trashinfo").exists());
         assert_eq!(booth.captures.len(), 2);
         assert_eq!(booth.selected, Some(1), "the capture that moved up is selected");
         booth.undo_delete();
         assert_eq!(std::fs::read(&paths[1]).unwrap(), vec![1u8; 3]);
+        assert!(!dir.0.join("Trash/files/b.jpg").exists());
+        assert!(!dir.0.join("Trash/info/b.jpg.trashinfo").exists());
         assert_eq!(booth.captures.len(), 3);
         assert_eq!(booth.captures[1].path, paths[1]);
         assert_eq!(booth.selected, Some(1));
@@ -1179,7 +1171,7 @@ mod tests {
     #[test]
     fn a_file_already_gone_leaves_the_strip_and_has_nothing_to_undo() {
         let dir = Scratch::new("photobooth-gone");
-        let mut booth = booth_with(&[dir.0.join("gone.jpg")]);
+        let mut booth = booth_with(&dir, &[dir.0.join("gone.jpg")]);
         booth.selected = Some(0);
         booth.delete_selected();
         assert!(booth.captures.is_empty());
