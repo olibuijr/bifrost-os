@@ -70,6 +70,7 @@ pub mod notify_bus;
 pub mod launch_services;
 pub mod display_services;
 pub mod window_services;
+pub mod scene_services;
 pub mod event_services;
 pub mod thumbnails;
 pub mod thumb_providers;
@@ -140,6 +141,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(launch_services::LaunchServices),
         Box::new(display_services::DisplayServices::default()),
         Box::new(window_services::WindowServices),
+        Box::new(scene_services::SceneServices::default()),
         Box::new(event_services::EventServices),
         Box::new(thumbnails::Thumbnails::default()),
         Box::new(disks::Disks::default()),

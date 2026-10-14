@@ -4,7 +4,7 @@
  "macos_since": "",
  "status": "partial",
  "bifrost": "springboard/src/shell/desk.rs, springboard/src/shell/splitview.rs, springboard/src/shell/switcher.rs, springboard/src/shell/overview.rs, springboard/sdk/src/screens.rs, springboard/wm",
- "summary": "The shell has two modes that already look like the two form factors: floating windows with a dock, and full-screen apps with Split View, Slide Over, a switcher and a home screen. Apps see one surface and a screen list, with no window scenes, no external display scenes and no per-window API for size classes or resizing.",
+ "summary": "The shell has two modes that already look like the two form factors: floating windows with a dock, and full-screen apps with Split View, Slide Over, a switcher and a home screen. Apps see one surface and a screen list. Apps can open up to eight scene windows through the scenes service, with cascade placement and size restrictions, but the desk does not yet draw a second surface for them, and there is no external display scene and no per-window size class.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -52,9 +52,9 @@
   {
    "feature": "Scenes",
    "apple": "UIWindowScene, multiple windows of one app",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "see uikit-app-scene-lifecycle"
+   "bifrost": "springboard/sdk/src/scene_session.rs, springboard/src/shell/services/scene_services.rs, springboard/ui/src/window_scene.rs, springboard/wm/src/scene_stack.rs",
+   "status": "partial",
+   "note": "scene windows of one app: open, list, focus, reopen and close, with the shared cascade and size restrictions; built on parity/team-p-scenes; not yet verified on the tablet. Not drawn by the desk yet"
   },
   {
    "feature": "Screens",
@@ -93,7 +93,7 @@
   }
  ],
  "gaps": [
-  "Scene API for multiple app windows",
+  "Desk surfaces for scene windows (the desk holds one window per app) and the scene windows in the windows list",
   "Touch move and resize of floating windows in desktop mode on a tablet",
   "Touch gesture for the desktop overview",
   "Scene size restrictions and per-window size class",

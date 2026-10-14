@@ -4,7 +4,7 @@
  "macos_since": "",
  "status": "partial",
  "bifrost": "springboard/sdk/src/lib.rs, springboard/sdk/src/runtime.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/layout.rs, springboard/src/shell/apphost.rs",
- "summary": "Apps have configure, suspend and resume callbacks, state restoration, launch URLs and documents, and a size-derived layout model with a top safe inset. There is no scene concept (several UI instances per app), no trait collection, no device idiom query, no orientation API and no status bar control for apps.",
+ "summary": "Apps have configure, suspend and resume callbacks, state restoration, launch URLs and documents, and a size-derived layout model with a top safe inset. Apps have scene sessions: a registry of window scenes with the platform's lifecycle callbacks, a shell service that opens, lists, focuses, reopens and closes one app's windows, and window size restrictions. There is no trait collection object, no device idiom query, no orientation API and no status bar control for apps.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -31,9 +31,9 @@
   {
    "feature": "Scenes",
    "apple": "UIScene, UIWindowScene, UISceneSession, UISceneDelegate, multiple instances",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "one app owns one surface in the shell protocol; there is no scene session, no request for a second window and no per-scene restoration. Needed for multi-window apps on the tablet"
+   "bifrost": "springboard/sdk/src/scene_session.rs, springboard/src/shell/services/scene_services.rs, springboard/ui/src/window_scene.rs, springboard/wm/src/scene_stack.rs",
+   "status": "partial",
+   "note": "scene sessions with per-scene state, user info and restorable state; lifecycle callbacks in the platform order; the shell opens, lists, focuses, reopens and closes up to eight windows per app with cascade placement. built on parity/team-p-scenes; not yet verified on the tablet. The desk still draws one window per app, so a second scene window has no surface yet, and scene windows are not in the windows service list"
   },
   {
    "feature": "State restoration",
@@ -121,7 +121,7 @@
   }
  ],
  "gaps": [
-  "Scene sessions: a way for an app to open and close several windows, with per-scene restoration",
+  "Second surface for a scene window in the desk (one window per app today) and a per-scene window list in the windows service",
   "Trait collection object with size class pair and change callback",
   "Form-factor idiom query for apps (B3 owns the definition)",
   "Supported orientations declared by apps (B7)",

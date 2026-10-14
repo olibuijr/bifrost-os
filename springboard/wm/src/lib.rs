@@ -24,6 +24,7 @@ pub mod render_server;
 #[cfg(feature = "nested")]
 pub mod nested;
 pub mod scene;
+pub mod scene_stack;
 pub mod session_protocols;
 pub mod overview;
 pub mod spaces;
