@@ -181,9 +181,9 @@
    "area": "menu",
    "apple": "MainMenu",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:29",
-   "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find) and Shortcuts (Run, Gallery and one item per shortcut with its menu key) with key equivalents (build, menus.rs:29); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:949). Not yet checked on the lab machine.",
-   "wire": "Window and Help items"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:30 (build); springboard/apps/shortcuts-desktop/src/widget.rs:217 (help_snippet)",
+   "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find), Shortcuts (Run, Gallery and one item per shortcut with its menu key) and Help (Shortcuts Help, which opens a panel with one row per task) with key equivalents (build, menus.rs:30); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:966). Gap: no Window menu. Not yet checked on the lab machine.",
+   "wire": "A Window menu with the window commands"
   },
   {
    "feature": "Cloud sharing links",
