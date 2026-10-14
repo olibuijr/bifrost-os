@@ -94,9 +94,9 @@
   {
    "feature": "App extensions host (NEAppExtensionConfiguration)",
    "apple": "NEAppExtensionConfiguration",
-   "bifrost": "springboard/sdk/src/intents.rs is the App Intents layer, not an extension host for network providers",
-   "status": "gap",
-   "note": "Blocked: there is no system extension host or network provider runtime. springboard/core/src/tunnel.rs has the tunnel model only, and nothing starts an app's provider or hands it traffic."
+   "bifrost": "springboard/core/src/provider_host.rs (Configuration, ProviderHost)",
+   "status": "partial",
+   "note": "Provider configurations (bundle identifier, extension point, provider class) are validated, registered and enabled one per point, and the provider's process comes from the extension process table; tested headless in springboard/core/tests/parity_sdk-rest-16.rs. Gap: nothing launches the provider process, and no traffic is handed to a provider."
   },
   {
    "feature": "Error types (NEVPNError, NETunnelProviderError, NERelayClientErrorDomain)",

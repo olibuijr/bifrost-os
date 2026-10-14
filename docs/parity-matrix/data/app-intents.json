@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs",
-  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. Apple's execution model (foreground/background modes, authentication policy, snippets, enum and common data types, donations, Focus filters, widgets and controls, schema domains) is not covered, and Siri and Apple Intelligence have no counterpart.",
+  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. Apple's execution model (foreground/background modes, authentication policy, snippets, enum and common data types, donations, Focus filters, widgets and controls) is not covered; schema domains and presentations are modelled in springboard/sdk/src/intent_presentation.rs, and Siri and Apple Intelligence have no counterpart.",
   "rea_evidence": "ev_d0e83cf707606d76adf0707300c745b42e7847dacf037c0925b97338090514ee",
   "features": [
     {
@@ -122,9 +122,9 @@
     {
       "feature": "Schema domains and visual presentation",
       "apple": "App schema domains, visual intelligence, Action button, side button",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Blocked: the intent layer (springboard/sdk/src/intents.rs) has no schema domains, and the system has no schema registry for apps to adopt. The Action button and side button entry points need hardware that BifrOSt does not have, and the visual search entry point has no BifrOSt counterpart."
+      "bifrost": "springboard/sdk/src/intent_presentation.rs (SchemaDomain, Presentation)",
+      "status": "partial",
+      "note": "Schema domains (a closed set of thirteen categories, read back by name) and presentations (a checked title, subtitle, symbol and domain) are tested headless in springboard/sdk/tests/parity_sdk-rest-16.rs. Gap: no schema registry reads the domains yet, no picker shows the presentation, and the side button and visual search entry points are not built."
     },
     {
       "feature": "Siri and Apple Intelligence",

@@ -192,6 +192,8 @@ pub mod transfer_drag;
 pub mod layout;
 pub mod control;
 pub mod intents;
+pub mod intent_presentation;
+pub mod system_audio;
 pub mod intent_catalog;
 pub mod intent_resolve;
 pub mod donation;

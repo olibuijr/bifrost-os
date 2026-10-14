@@ -52,9 +52,9 @@
     {
       "feature": "System audio service",
       "apple": "Audio Unit host and Core Audio I/O (not a separate Apple feature row)",
-      "bifrost": "springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/speaker.rs (ALSA output through dl.rs)",
-      "status": "os",
-      "note": "the service exists, but the SDK has no audio module (springboard/sdk/src/ has no audio file)"
+      "bifrost": "springboard/sdk/src/system_audio.rs (Command, AudioClient); springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/speaker.rs (ALSA output through dl.rs)",
+      "status": "partial",
+      "note": "The SDK client checks each command before it is sent (volume, seek, queue sources, recording path) and frames it in the service's wire format; tested over a socket pair in springboard/sdk/tests/parity_sdk-rest-16.rs. Gap: no app uses the client yet, and the round trip against audiod has not run on Midget."
     },
     {
       "feature": "MIDI input and note data",
@@ -68,6 +68,6 @@
     "No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app.",
     "No app-facing audio unit or render API; the DAW's rendering and devices are internal.",
     "No MIDI input or MIDI event API.",
-    "The audio service (springboard/audiod) has no SDK module for apps."
+    "The audio service (springboard/audiod) has an SDK client (springboard/sdk/src/system_audio.rs), but no app uses it yet."
   ]
 }
