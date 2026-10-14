@@ -10,7 +10,7 @@
     {"feature": "Suggested actions view under a message", "apple": "SuggestedActionsView, init(message:previousMessages:)", "bifrost": "nothing found", "status": "n/a", "note": "needs a messaging app with message threads; BifrOSt has none"},
     {"feature": "Fetch and cache suggestions for a message", "apple": "SuggestedActionsView.generate(message:previousMessages:)", "bifrost": "nothing found", "status": "n/a", "note": "depends on the Apple on-device suggestion model"},
     {"feature": "Per-message suggested actions flag", "apple": "Suggested Actions (Boolean property)", "bifrost": "nothing found", "status": "n/a", "note": "property of the messaging app's message view"},
-    {"feature": "Create event from proposed meeting time", "apple": "Essentials example: Calendar event from a proposed time", "bifrost": "springboard/apps/calendar-desktop (Calendar app)", "status": "partial", "note": "Calendar app exists, but no suggestion hook from messages"}
+    {"feature": "Create event from proposed meeting time", "apple": "Essentials example: Calendar event from a proposed time", "bifrost": "springboard/ui/src/proposed_event.rs (find_proposal, Day, ProposedEvent::days_from); springboard/apps/calendar-desktop (Calendar app)", "status": "partial", "note": "find_proposal reads a day, a clock time and a duration phrase from message text into a relative day, start and length; tested headless in ui/tests/parity_sdk-complete-10.rs. Gap: no messaging app passes message text to the finder and no suggestion is shown, so the flow needs a messaging app and the lab machine."}
   ],
   "gaps": ["No messaging app or message view that could host the suggestions view", "No on-device suggestion model or API for message content"]
 }
