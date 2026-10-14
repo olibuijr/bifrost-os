@@ -44,6 +44,42 @@ impl VirtualDevice {
     pub fn stream_format(&self) -> StreamFormat {
         StreamFormat::float32(self.sample_rate, self.channels)
     }
+
+    /// Reads a plug-in's device description: one `key=value` line each for `uid`, `name`, `channels` and `sample_rate`.
+    /// Blank lines and lines that start with `#` are skipped. A key that is missing, repeated or unknown is refused, and
+    /// the values are checked by [`VirtualDevice::validate`].
+    pub fn from_descriptor(text: &str) -> Result<Self, String> {
+        let (mut uid, mut name, mut channels, mut sample_rate) = (None, None, None, None);
+        for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+            let (key, value) = line.split_once('=').ok_or_else(|| format!("'{line}' is not a key=value line"))?;
+            let (key, value) = (key.trim(), value.trim());
+            let slot = match key {
+                "uid" => &mut uid,
+                "name" => &mut name,
+                "channels" => &mut channels,
+                "sample_rate" => &mut sample_rate,
+                other => return Err(format!("unknown key '{other}' in a virtual device description")),
+            };
+            if slot.is_some() {
+                return Err(format!("key '{key}' is given twice"));
+            }
+            *slot = Some(value.to_string());
+        }
+        let missing = |key: &str| format!("the virtual device description has no '{key}'");
+        let device = VirtualDevice {
+            uid: uid.ok_or_else(|| missing("uid"))?,
+            name: name.ok_or_else(|| missing("name"))?,
+            channels: channels.ok_or_else(|| missing("channels"))?.parse().map_err(|_| "channels is not a whole number".to_string())?,
+            sample_rate: sample_rate.ok_or_else(|| missing("sample_rate"))?.parse().map_err(|_| "sample_rate is not a number".to_string())?,
+        };
+        device.validate()?;
+        Ok(device)
+    }
+
+    /// The description that [`VirtualDevice::from_descriptor`] reads back to the same device.
+    pub fn to_descriptor(&self) -> String {
+        format!("uid={}\nname={}\nchannels={}\nsample_rate={}\n", self.uid, self.name, self.channels, self.sample_rate)
+    }
 }
 
 /// A set of virtual devices a plug-in publishes together. Uids must be unique within the set.
@@ -69,6 +105,18 @@ impl VirtualDeviceSet {
         }
         self.devices.push(device);
         Ok(())
+    }
+
+    /// Reads one description per device (see [`VirtualDevice::from_descriptor`]) and publishes them in order. The first
+    /// refused description stops the load, and its message names its position.
+    pub fn load(descriptions: &[&str]) -> Result<Self, String> {
+        let mut set = VirtualDeviceSet::new();
+        for (index, text) in descriptions.iter().enumerate() {
+            let position = index + 1;
+            let device = VirtualDevice::from_descriptor(text).map_err(|e| format!("device {position}: {e}"))?;
+            set.publish(device).map_err(|e| format!("device {position}: {e}"))?;
+        }
+        Ok(set)
     }
 }
 

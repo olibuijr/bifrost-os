@@ -11,6 +11,7 @@
 
 pub use crate::proto::{dragop, DragItem, DragPhase, DragPreview, Payload};
 use crate::proto::ToShell;
+use crate::image_metadata::Format;
 use crate::Ctx;
 
 /// What `App::drag` is called with.
@@ -50,6 +51,25 @@ pub fn performed(ctx: &Ctx, session: u32, accepted: bool) {
 /// The source gives the session up (Escape).
 pub fn cancel(ctx: &Ctx, session: u32) {
     ctx.send_to_shell(ToShell::DragCancel { session });
+}
+
+/// The picture format an item carries: from its first type that names a picture format, or, for a file item with no such
+/// type, from the extension of its name. `None` for text, links and other data.
+///
+/// The item's bytes do not travel with the drag yet (the payload is a grant or text), so this tells a window what the
+/// picture is before any data is read.
+pub fn image_format_of(item: &DragItem) -> Option<Format> {
+    let by_type = item.types.iter().find_map(|t| Format::from_type_identifier(t));
+    by_type.or_else(|| match &item.payload {
+        Payload::File { name, .. } => name.rsplit_once('.').and_then(|(_, ext)| Format::from_extension(ext)),
+        _ => None,
+    })
+}
+
+/// Whether a window that registered `types` (see [`register_types`]) takes a picture of `format`. `public.image` takes
+/// every picture format; a picture type takes only its own format.
+pub fn accepts_image(registered: &[&str], format: Format) -> bool {
+    registered.iter().any(|t| *t == "public.image" || Format::from_type_identifier(t) == Some(format))
 }
 
 /// A drag image from straight RGBA pixels of any size: sampled down (nearest) to fit `proto::rich::MAX_PREVIEW` pixels per

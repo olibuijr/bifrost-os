@@ -17,9 +17,9 @@
   {
    "feature": "Audio server driver plug-ins (virtual devices)",
    "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
-   "bifrost": "springboard/sdk/src/audio_virtual.rs",
+   "bifrost": "springboard/sdk/src/audio_virtual.rs (VirtualDevice::from_descriptor, to_descriptor, VirtualDeviceSet::load); springboard/sdk/tests/parity_sdk-complete-07.rs",
    "status": "partial",
-   "note": "built on parity/team-k-core-audio; not yet verified on Midget. Pure model: VirtualDevice (uid, name, channels, sample rate) validated like a published HAL device, VirtualDeviceSet with unique uids, and DriverStatus, which reports that no user-space loader exists. Nothing publishes a device to the sound server."
+   "note": "A virtual device (uid, name, channels, sample rate) is read from a key=value description and validated before it joins a set with unique uids; tested headless in parity_sdk-complete-07. DriverStatus reports that no user-space loader exists, so nothing publishes a device to the sound server; that needs a loader on the lab machine."
   },
   {
    "feature": "Aggregate devices",

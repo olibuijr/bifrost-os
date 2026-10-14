@@ -24,9 +24,9 @@
     {
       "feature": "Audio input for analysis (file and microphone sequence providers, converter)",
       "apple": "AssetInputSequenceProvider, CaptureInputSequenceProvider, AnalyzerInputConverter, AnalyzerInput",
-      "bifrost": "springboard/ui/src/analyzer_input.rs",
+      "bifrost": "springboard/ui/src/analyzer_input.rs (AnalyzerInput, AnalyzerInputConverter, FileSequence, MicrophoneSequence); springboard/ui/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Microphone capture exists in the system layer only. No SDK type gives an app a time-coded buffer stream; capture is WAV to a path through the audio service."
+      "note": "A time-coded analyzer block converts to 16 kHz mono, and file blocks and a bounded microphone queue (format, timeline order and capacity checks) are tested headless in parity_sdk-complete-07. Gap: no app or shell wiring yet, and the microphone queue has no capture source on the SDK side (capture is WAV to a path through the audio service); the capture path needs the lab machine."
     },
     {
       "feature": "Microphone consent and ownership",
