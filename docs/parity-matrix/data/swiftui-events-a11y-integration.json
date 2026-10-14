@@ -108,9 +108,9 @@
     {
       "feature": "Previews in Xcode",
       "apple": "#Preview, PreviewProvider",
-      "bifrost": "docs/bifrost-pc-workflow.md",
+      "bifrost": "springboard/sdk/src/testing.rs (TestWindow: offscreen render and element queries)",
       "status": "partial",
-      "note": "host previews via bifrost pc smoke/gallery, not live in an IDE"
+      "note": "A view renders headless into a pixel buffer, tested in springboard/sdk/tests/parity_sdk-tests-09.rs (a_headless_preview_renders_the_view_into_a_pixel_buffer_of_the_window_size, the_offscreen_render_of_a_button_differs_from_an_empty_window). Host previews are bifrost pc smoke and gallery; there is no live preview in an IDE."
     },
     {
       "feature": "Xcode library customization and performance analysis",
