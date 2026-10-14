@@ -167,6 +167,8 @@ enum Target {
     Grip(usize),
     /// the Menu Key row of the open shortcut: steps to the next key
     MenuKey,
+    /// the Automation row of the open shortcut: steps to the next app or battery level
+    Automation,
     /// a variable row under an open text step: inserts `{name}` into the text (the index is into `variable_names`)
     InsertVar(usize),
     /// a row of the menu a long press opens on a tile
@@ -211,6 +213,10 @@ pub enum Command {
     Import,
     /// shows the help panel
     Help,
+    /// shows every shortcut in the grid (Window > All Shortcuts)
+    ShowAll,
+    /// opens the shortcut before (false) or after (true) the one in the editor (Window > Previous or Next Shortcut)
+    Adjacent(bool),
 }
 
 /// The help panel: one row per task, in the order a first-time user needs them.
@@ -769,7 +775,9 @@ impl Shortcuts {
                 let folder = model::folder_name(sc.folder).unwrap_or("None");
                 self.row(ui, &mut cells, &mut y, "Folder", folder, LABEL.now(), 0, Some(Target::Folder));
                 let key = if sc.key == 0 { "None".to_string() } else { format!("Ctrl+Cmd+{}", sc.key) };
-                self.row(ui, &mut cells, &mut y, "Menu Key", &key, LABEL.now(), ROW_POS_LAST, Some(Target::MenuKey));
+                self.row(ui, &mut cells, &mut y, "Menu Key", &key, LABEL.now(), 0, Some(Target::MenuKey));
+                let automation = model::automation_label(sc.automation);
+                self.row(ui, &mut cells, &mut y, "Automation", &automation, LABEL.now(), ROW_POS_LAST, Some(Target::Automation));
                 y += ui.pt(35.0) - ui.pt(SPACE_S);
                 cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Color".into()) });
                 y += ui.pt(SPACE_XXXL);
@@ -1151,9 +1159,22 @@ impl Shortcuts {
             Command::Export => self.queue_export(),
             Command::Import => self.import_request = true,
             Command::Help => self.show_help(),
+            Command::ShowAll => self.activate(Target::Side(ROW_ALL)),
+            Command::Adjacent(next) => self.step_editor(next),
             Command::Duplicate | Command::Delete | Command::Rename | Command::RunOpen => {}
         }
         self.dirty = true;
+    }
+
+    /// Opens the shortcut before or after the one in the editor, committing the name being typed first. Does nothing
+    /// outside the editor or at the first or last shortcut.
+    fn step_editor(&mut self, next: bool) {
+        let View::Editor(i) = self.view else { return };
+        if let Some(j) = model::neighbour(self.list.len(), i, next) {
+            self.commit_edit();
+            self.view = View::Editor(j);
+            self.scroll = 0.0;
+        }
     }
 
     /// Queues an export: the open shortcut, or the whole list when none is open.
@@ -1269,6 +1290,12 @@ impl Shortcuts {
                             Err(why) => self.toast = Some((why, self.now + 3000.0)),
                         }
                     }
+                }
+            }
+            Target::Automation => {
+                if let Some(s) = self.editing() {
+                    s.automation = model::next_automation(s.automation);
+                    self.save();
                 }
             }
             Target::InsertVar(v) => {
@@ -2315,6 +2342,40 @@ mod tests {
         w.activate(Target::InsertVar(1));
         assert_eq!(&*w.field, "Hi{Name}");
         assert!(w.wants_keyboard(), "the field stays open");
+    }
+
+    #[test]
+    fn the_automation_row_steps_the_open_shortcut_and_saves_it() {
+        let mut w = window("automation-row");
+        w.view = View::Editor(0);
+        assert!(w.list()[0].automation.is_none());
+        w.activate(Target::Automation);
+        assert_eq!(w.list()[0].automation, Some(model::Automation::AppOpens(0)));
+        let saved = std::fs::read_to_string(&w.path).unwrap();
+        assert!(saved.lines().next().unwrap().contains("open:0"), "the automation is saved with the line");
+    }
+
+    #[test]
+    fn the_automation_row_is_in_the_editor_under_the_menu_key() {
+        let mut w = window("automation-layout");
+        w.view = View::Editor(0);
+        let (cells, _) = w.layout(&ui());
+        assert!(cells.iter().any(|c| c.target == Some(Target::Automation)));
+    }
+
+    #[test]
+    fn the_window_commands_move_between_shortcuts_in_the_editor() {
+        let mut w = window("window-commands");
+        assert!(w.list().len() >= 2);
+        w.view = View::Editor(0);
+        w.command(Command::Adjacent(true));
+        assert_eq!(w.view, View::Editor(1));
+        w.command(Command::Adjacent(false));
+        assert_eq!(w.view, View::Editor(0));
+        w.command(Command::Adjacent(false));
+        assert_eq!(w.view, View::Editor(0), "the first shortcut has no previous");
+        w.command(Command::ShowAll);
+        assert_eq!(w.view, View::Grid);
     }
 
     #[test]

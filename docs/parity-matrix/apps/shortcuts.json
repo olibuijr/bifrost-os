@@ -109,9 +109,9 @@
    "area": "view",
    "apple": "Automation",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:624 (Automation, due, battery_fell_below); springboard/tests/parity_app-shortcuts.rs",
-   "note": "The shortcut model stores one automation per shortcut, an app opening or the charge falling below a level, in the list file; due returns the shortcuts that an app opening or a battery change starts, tested headless. Gap: the editor has no Automation row, and the app feeds no app-open or battery events to due, so an automation does not run on its own yet.",
-   "wire": "An Automation row in the editor's Details group (When App Opens, When Battery Is Low, with a stepper); the shell's battery reading and app-open events passed to shortcuts::due"
+   "bifrost": "springboard/src/shortcuts.rs:624 (Automation, due, battery_fell_below); springboard/src/shortcuts.rs:822 (next_automation); springboard/apps/shortcuts-desktop/src/widget.rs:1295 (Target::Automation, the editor's Automation row); springboard/tests/parity_app-shortcuts.rs",
+   "note": "The editor's Automation row steps through none, each app opening and the charge falling below 10, 20, 30 or 50 percent, saved in the list file; due returns the shortcuts that an app opening or a battery change starts, tested headless. Gap: the app feeds no app-open or battery events to due, so an automation does not run on its own yet.",
+   "wire": "The shell's battery reading and app-open events passed to shortcuts::due, so the stored automation runs while the app is open"
   },
   {
    "feature": "Open at login",
@@ -181,9 +181,9 @@
    "area": "menu",
    "apple": "MainMenu",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:30 (build); springboard/apps/shortcuts-desktop/src/widget.rs:217 (help_snippet)",
-   "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find), Shortcuts (Run, Gallery and one item per shortcut with its menu key) and Help (Shortcuts Help, which opens a panel with one row per task) with key equivalents (build, menus.rs:30); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:966). Gap: no Window menu. Not yet checked on the lab machine.",
-   "wire": "A Window menu with the window commands"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:34 (build, Window menu); springboard/apps/shortcuts-desktop/src/menus.rs:85 (command); springboard/apps/shortcuts-desktop/src/widget.rs:1171 (step_editor); springboard/apps/shortcuts-desktop/src/widget.rs:223 (help_snippet)",
+   "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find), Shortcuts (Run, Gallery and one item per shortcut with its menu key), Window (All Shortcuts, and Previous and Next Shortcut in the editor) and Help (Shortcuts Help, which opens a panel with one row per task) with key equivalents (build, menus.rs:34); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:966). Not yet checked on the lab machine.",
+   "wire": ""
   },
   {
    "feature": "Cloud sharing links",
