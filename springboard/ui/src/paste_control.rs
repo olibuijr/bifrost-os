@@ -6,7 +6,7 @@
 //! read itself is in `bifrost-sdk` (`paste_control::paste`), which takes a [`Tap`] as proof that the person pressed it.
 
 use crate::text_drag::TEXT_TYPE;
-use bifrost_ui::uttype;
+use crate::uttype;
 
 pub const DEFAULT_LABEL: &str = "Paste";
 
