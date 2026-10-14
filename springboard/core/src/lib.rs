@@ -35,6 +35,8 @@ pub mod matter;
 pub mod matter_interaction;
 pub mod matter_cluster;
 pub mod extension_process;
+pub mod provider_host;
+pub mod ff_cooperation;
 pub mod motion;
 pub mod sensor_log;
 pub mod magnetometer;
