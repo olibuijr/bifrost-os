@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.6.2
+
+- Upstream wordcraft v0.6.1.
+  ## What's Changed
+  * Hyperlinks cover only their own text (#413) by @vangel76 in https://github.com/storytold/wordcraft/pull/449
+  * Groups keep rotated members' orientation; group resize; ink erase after rotation (#441, #442, #443, #445) by @vangel76 in https://github.com/storytold/wordcraft/pull/474
+  * Mail merge: SKIPIF, NEXT, IF in preview, header/footer fields (#427, #428, #429, #430) by @vangel76 in https://github.com/storytold/wordcraft/pull/478
+  * Options: interface size setting (#475) by @vangel76 in https://github.com/storytold/wordcraft/pull/480
+
 ## 0.6.1
 
 - Upstream wordcraft v0.6.1.
