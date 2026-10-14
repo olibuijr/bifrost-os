@@ -12,7 +12,7 @@
       "apple": "CMIOExtensionProvider, CMIOExtensionProviderSource, CMIOExtensionProviderProperties; article: Creating a camera extension with Core Media I/O",
       "bifrost": "none",
       "status": "gap",
-      "note": "Blocked: a virtual camera needs a loopback capture device, which the shell does not create, and a way for the shell to publish that device to other apps. Neither exists in this repository, so nothing was written for this row."
+      "note": "Stays gap. Exact blocker: a provider publishes a camera to other apps only through a loopback capture node, and the Linux source for that is the v4l2loopback kernel module, which is not in the Arch base install, not in the repository, and not loaded by any shell service; the shell has no code that creates a /dev/video node for other apps. Writing a provider model without that node would only be a data type, so nothing was written for this row."
     },
     {
       "feature": "Devices (device, device source, device properties)",

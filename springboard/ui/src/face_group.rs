@@ -7,6 +7,9 @@
 //! * A zero vector, or two vectors of different length, have similarity 0 with everything.
 //! * Face ids count up from 1 in insertion order and are never reused, even after a delete.
 //! * Entities are listed in the order of their first face, and each lists its face ids in ascending order.
+//! * `try_insert_face` and `try_entities` refuse bad inputs with a typed error instead of storing or grouping them.
+
+use crate::media_intelligence_error::{check_embedding, check_threshold, MediaIntelligenceError};
 
 /// A stored face: its id, the image asset it came from, and its embedding.
 #[derive(Clone, Debug, PartialEq)]
@@ -52,6 +55,20 @@ impl FaceGroups {
     /// Removes every face of every asset.
     pub fn delete_all(&mut self) {
         self.faces.clear();
+    }
+
+    /// `insert_face` with the embedding checked first: it must be non-empty, finite, and as long as the faces already
+    /// stored. A refused face is not stored.
+    pub fn try_insert_face(&mut self, asset: u64, embedding: Vec<f64>) -> Result<u64, MediaIntelligenceError> {
+        let expected = self.faces.first().map(|f| f.embedding.len());
+        check_embedding(&embedding, expected)?;
+        Ok(self.insert_face(asset, embedding))
+    }
+
+    /// `entities` with the threshold checked first: it must be finite and within -1 to 1.
+    pub fn try_entities(&self, threshold: f64) -> Result<Vec<Vec<u64>>, MediaIntelligenceError> {
+        check_threshold(threshold)?;
+        Ok(self.entities(threshold))
     }
 
     /// The ids of the faces of `asset`, in insertion order.

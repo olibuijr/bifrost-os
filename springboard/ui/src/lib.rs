@@ -1106,6 +1106,7 @@ pub use bifrost_core::disk_image;
 pub mod keyframe_pick;
 pub mod highlight_rank;
 pub mod face_group;
+pub mod media_intelligence_error;
 pub mod emitter;
 pub mod scene_audio;
 pub mod particle_system3d;
