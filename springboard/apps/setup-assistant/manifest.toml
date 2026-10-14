@@ -1,6 +1,6 @@
 id = "is.olibuijr.setup.desktop"
 name = "Setup Assistant"
-version = "0.1.0"
+version = "0.1.1"
 exec = "bifrost-setup-assistant"
 icon = "icon.svg"
 min_shell = "0.4.84"
