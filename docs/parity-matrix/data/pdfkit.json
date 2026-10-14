@@ -59,9 +59,9 @@
     {
       "feature": "Annotations",
       "apple": "PDFAnnotation, PDFPage addAnnotation(_:), removeAnnotation(_:), annotation(at:), displaysAnnotations, ink and stamp types",
-      "bifrost": "springboard/ui/src/annotation.rs (Annotation, PageAnnotations: stacking, hit testing, visibility)",
+      "bifrost": "springboard/ui/src/annotation.rs (Annotation, PageAnnotations: stacking, hit testing, visibility, set_contents, move_to, set_color, ids_of, Subtype::is_markup); springboard/ui/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "The page annotation model keeps annotations in stacking order, hit-tests points against their bounds and hides them as a whole. Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs: a_new_annotation_has_no_contents_an_opaque_black_colour_and_no_drawing, a_hit_returns_the_topmost_annotation_whose_bounds_contain_the_point, removing_an_annotation_exposes_the_one_below_and_ids_are_never_reused, hidden_annotations_stay_on_the_page_but_cannot_be_hit. The model does not read or write PDF annotation objects; the Books notes wiring (springboard/apps/books-desktop/src/books/mod.rs) is not covered; pdfcraft-desktop is an upstream package with no source here; verify on Midget for parity."
+      "note": "The page annotation model keeps annotations in stacking order, hit-tests points, hides them as a whole, edits contents, colour and position in place, and lists annotations by kind. Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs and springboard/ui/tests/parity_sdk-complete-43.rs. Gap: the model does not read or write PDF annotation objects, and the Books notes wiring (springboard/apps/books-desktop/src/books/mod.rs) is not covered; verify on Midget for parity."
     },
     {
       "feature": "Widgets and form fields",
