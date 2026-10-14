@@ -67,9 +67,9 @@
    "area": "menu",
    "apple": "MainMenu: File > Print…",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1239",
-   "note": "File > Print... (Cmd+P) sends the focused note as plain text through the SDK print operation, laid out for the session's page: File > Paper Size and File > Orientation set the PrintInfo paper and orientation (main.rs:1239). The result is reported as a notification. No print preview and no margin or scale settings; not yet checked on the lab machine.",
-   "wire": "Add margins and scale through the SDK PageSetup model (print_panel.rs) and print preview through the print panel; the page choice is not yet kept across launches."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1239; springboard/apps/stickies-desktop/src/page.rs",
+   "note": "File > Print... (Cmd+P) sends the focused note as plain text through the SDK print operation, laid out for the page that File > Paper Size and File > Orientation set (main.rs:1239). The page is saved in the app's defaults and lasts across launches (page.rs, tested headless). The result is reported as a notification. No print preview and no margin or scale settings; not yet checked on the lab machine.",
+   "wire": "Add margins and scale through the SDK PageSetup model (print_panel.rs) and print preview through the print panel."
   },
   {
    "feature": "Undo / Redo of edits and arrange",
@@ -112,9 +112,9 @@
    "area": "menu",
    "apple": "MainMenu: Edit > Find submenu",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1191 (Ignore Case), main.rs:1181 (replace scopes), model.rs:1029 Board::replace_all",
-   "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes, Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Edit > Ignore Case (on by default, kept in the defaults) switches between either-case and same-case matching. Replace... adds a replace field (Tab switches field, Return replaces and steps), Replace All replaces in every note and Replace All in Current Note in the focused note only, each undoable. No whole-word option. Not yet checked on the lab machine.",
-   "wire": "Add a Whole Word option; the SDK text find model (controls textfind.rs) has the whole-word option to reuse."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1191 (Ignore Case, Whole Word), main.rs:1181 (replace scopes), springboard/apps/stickies-desktop/src/model.rs (Board::matches, Board::replace_all), springboard/apps/stickies-desktop/src/words.rs",
+   "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes, Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Edit > Ignore Case (on by default, kept in the defaults) switches between either-case and same-case matching. Edit > Whole Word (off by default, kept in the defaults) skips matches inside longer words for Find, Replace and Replace All (words.rs, tested headless). Replace... adds a replace field (Tab switches field, Return replaces and steps), Replace All replaces in every note and Replace All in Current Note in the focused note only, each undoable. Not yet checked on the lab machine.",
+   "wire": ""
   },
   {
    "feature": "Spelling and Grammar / Substitutions / Transformations",
@@ -193,9 +193,9 @@
    "area": "menu",
    "apple": "Localizable: Customize Color…, Customized Color",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1096",
-   "note": "Colour > Custom Colour... opens a bar for a #RRGGBB value with a live swatch; Return applies it. The colour is saved with the note as hex (swatch.rs, model.rs) and carried to new notes by Use as Default. Text on a dark custom colour is still drawn in the chosen ink, which may not read. No SDK colour panel. Not yet tested on Midget.",
-   "wire": "Choose a legible text colour for dark custom colours, and open the SDK colour panel once the shell has one."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1096; springboard/apps/stickies-desktop/src/board.rs (ink_on); springboard/apps/stickies-desktop/src/swatch.rs (is_dark)",
+   "note": "Colour > Custom Colour... opens a bar for a #RRGGBB value with a live swatch; Return applies it. The colour is saved with the note as hex (swatch.rs, model.rs) and carried to new notes by Use as Default. Black text turns white on a dark custom colour (board.rs ink_on, tested with swatch::is_dark), so it stays readable. No SDK colour panel. Not yet tested on Midget.",
+   "wire": "Open the SDK colour panel once the shell has one."
   },
   {
    "feature": "Use as Default (colour/font for new notes)",
