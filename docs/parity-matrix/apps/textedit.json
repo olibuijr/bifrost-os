@@ -13,10 +13,10 @@
  "summary": {
   "features": 46,
   "parity": 10,
-  "partial": 27,
-  "gap": 7,
+  "partial": 31,
+  "gap": 3,
   "n/a": 2,
-  "coverage_pct": 53.4
+  "coverage_pct": 58.0
  },
  "features": [
   {
@@ -35,7 +35,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:370, springboard/apps/textedit-desktop/src/main.rs:1855",
    "note": "File > Save All (cmd+alt+s) saves every edited document; untitled ones each open their save panel. Not checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify Save All on Midget with multiple edited documents, including separate save panels for untitled documents."
   },
   {
    "feature": "Rich text documents (RTF read/write)",
@@ -98,7 +98,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1306, springboard/apps/textedit-desktop/src/main.rs:1856",
    "note": "File > Export as PDF... asks through a save panel and writes the same PDF the printer gets. Not checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify the exported PDF on Midget opens and includes the same page content as the print path."
   },
   {
    "feature": "Print with page setup",
@@ -107,7 +107,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1280, springboard/apps/textedit-desktop/src/print.rs:184, springboard/apps/textedit-desktop/src/main.rs:1861",
    "note": "File > Print Header and Footer (the title top left, \"Page n of m\" bottom right) and File > Rewrap to Fit Page are checked items. With rewrap off the lines print where the window breaks them, scaled down to the page width. Not checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify header/footer and rewrap toggles on Midget with short and overlong lines; check a real print queue when available."
   },
   {
    "feature": "Show/Hide document properties (author, title, subject, keywords, copyright)",
@@ -179,7 +179,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:423, springboard/apps/textedit-desktop/src/main.rs:522",
    "note": "Edit > Find > Use Selection for Find (cmd+E) puts the selection on the find pasteboard and fills the find field; the find field takes the find pasteboard's text when the find bar opens. Jump to Selection (cmd+J) scrolls the caret into view. Not checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify Use Selection for Find populates the find field and Jump to Selection scrolls the caret into view on Midget."
   },
   {
    "feature": "Spelling: check now, while typing, learn, ignore, correct",
@@ -206,7 +206,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/text.rs:702 (transform), springboard/apps/textedit-desktop/src/main.rs:1726",
    "note": "Edit > Transformations: Make Upper Case, Make Lower Case and Capitalize act on the selection as one undo entry (text.rs transformations_change_case_in_one_undo). Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify all three text transformations on Midget and confirm each operation is undone as one step."
   },
   {
    "feature": "Speech",
@@ -260,7 +260,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:761, springboard/apps/textedit-desktop/src/text.rs:674",
    "note": "Format > Copy Style (cmd+alt+c) keeps the caret's character and paragraph formatting. Paste Style (cmd+alt+v) applies both to the selection (or the typing style and the paragraph at the caret) as one undo entry. Not checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify character and paragraph style copy/paste on Midget for both a selection and a caret insertion point."
   },
   {
    "feature": "Alignment (left, centre, right, justify)",
@@ -332,7 +332,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:441, springboard/apps/textedit-desktop/src/document.rs:15",
    "note": "Format > Prevent Editing / Allow Editing sets read_only on the window document: typing, deleting, paste, undo, replace, transformations, formatting and the panels that change the document refuse with a status note. It is not stored in the file. Not checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify read-only mode blocks edits, undo and formatting on Midget, and Allow Editing restores input."
   },
   {
    "feature": "Wrap to Page / Wrap to Window",
@@ -341,7 +341,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:451, springboard/apps/textedit-desktop/src/main.rs:1790",
    "note": "Format > Wrap to Page and View > Wrap to Window toggle the text column width (the window or the readable width); kept in the preferences.",
-   "wire": ""
+   "wire": "Verify both wrap modes change the text column as expected and persist across relaunch on Midget."
   },
   {
    "feature": "Allow Hyphenation",
@@ -368,7 +368,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:459, springboard/apps/textedit-desktop/src/main.rs:1807",
    "note": "View > Zoom In (cmd+alt+=), Zoom Out (cmd+alt+-) and Actual Size (cmd+0) scale the text 50% to 400% (sizes are scaled for layout and drawing; the page width stays). Not checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify zoom bounds, shortcuts and Actual Size on Midget, including layout at the smallest and largest supported sizes."
   },
   {
    "feature": "Full screen and dark background for windows",
@@ -377,7 +377,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/view.rs:906, springboard/apps/textedit-desktop/src/main.rs:472",
    "note": "View > Use Dark Background for Windows: the page is dark and text with no colour of its own is white; kept in the preferences. Full screen is the window chrome of the shell, not the app, so the app has nothing to add.",
-   "wire": ""
+   "wire": "Verify dark page background and automatic white text on Midget; full-screen window behaviour is owned by the shell."
   },
   {
    "feature": "Go to line (Select Line…)",
@@ -386,7 +386,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1159, springboard/apps/textedit-desktop/src/main.rs:1224, springboard/apps/textedit-desktop/src/text.rs:740",
    "note": "Edit > Find > Select Line... (cmd+L) opens a panel for a line number or a range such as 12-20; Select selects those lines, and a line the document does not have keeps the panel open with the number of lines.",
-   "wire": ""
+   "wire": "Verify selecting a line and range on Midget and that an out-of-range entry keeps the panel open with its validation message."
   },
   {
    "feature": "Settings: new document format, window size, fonts",
@@ -413,7 +413,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/textedit-desktop/src/main.rs:988, springboard/apps/textedit-desktop/src/prefs.rs:138",
    "note": "Check Spelling While Typing, Correct Spelling Automatically, Smart Quotes, Smart Dashes, Smart Links, Text Replacement, the ruler, wrapping, the header and footer, rewrap and the dark background are listed in the Preferences panel and saved to the preferences.",
-   "wire": ""
+   "wire": "Verify preference toggles persist across relaunch on Midget and affect spelling, substitutions, wrapping and print defaults as described."
   },
   {
    "feature": "Services: new window with selection / open selected file",

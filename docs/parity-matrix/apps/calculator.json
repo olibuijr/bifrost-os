@@ -9,10 +9,10 @@
  "summary": {
   "features": 26,
   "parity": 11,
-  "partial": 9,
-  "gap": 5,
+  "partial": 11,
+  "gap": 3,
   "n/a": 1,
-  "coverage_pct": 62.0
+  "coverage_pct": 66.0
  },
  "features": [
   {

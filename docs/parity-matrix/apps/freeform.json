@@ -280,9 +280,9 @@
  "summary": {
   "features": 30,
   "parity": 9,
-  "partial": 15,
-  "gap": 5,
+  "partial": 20,
+  "gap": 0,
   "n/a": 1,
-  "coverage_pct": 56.9
+  "coverage_pct": 65.5
  }
 }

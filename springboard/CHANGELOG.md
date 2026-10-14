@@ -2,6 +2,7 @@
 
 ## 0.8.0 — 2026-10-14
 
+- Installer: release ISOs carry a checksum-verified offline package repository, shell and default apps; dependency resolution is preflighted from an empty package database before disk changes.
 - App isolation: camera permission is limited to Photo Booth and supported capture devices; screen sampling is limited to Color Meter and requires the existing privacy consent. Undeclared or unauthorized capabilities remain denied.
 - App safety: Archive stages complete outputs before publishing them without replacing existing files; Passwords exports through an owner-only temporary file and refuses incomplete keychain imports. Both apps now declare safe termination.
 - App compliance: repaired lifecycle, worker wake, layout and annotation findings across the reviewed apps; added executable-target validation so incomplete Screenshot packaging is reported rather than published.

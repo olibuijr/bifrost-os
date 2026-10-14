@@ -93,7 +93,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:966",
    "note": "The Name row types a new name (Return saves, Escape cancels); Duplicate Shortcut in the editor and File > Duplicate Shortcut; delete in the editor and Shortcut > Delete Shortcut. A long press on a tile opens Run, Rename, Duplicate and Delete under it (choice_cells, widget.rs:966; choose, widget.rs:1003). Not yet checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify rename, duplicate and delete from both editor and tile context menu on Midget, including cancel and confirmation paths."
   },
   {
    "feature": "Folders",
@@ -156,7 +156,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:955",
    "note": "A search field in the toolbar of the grid, the Add Action list and the gallery filters what is listed as you type: tiles by name, step or folder; built-in actions and intents by title; starters by name, line or heading (fits, widget.rs:955). Find focuses it on the grid; Escape clears it. Not yet checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify grid, action-list and gallery search results update as text is typed and Escape clears the query on Midget."
   },
   {
    "feature": "Shortcuts exposed as system intents and RPC",
@@ -174,7 +174,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shortcuts.rs:949 (starters); springboard/tests/parity_app-shortcuts.rs",
    "note": "A Gallery row in the sidebar lists fourteen starter shortcuts under three headings (Focus, Everyday, Tools), each with a line of its steps; the search narrows them; tapping one adds a copy. Not yet checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify each gallery starter can be added and edited on Midget and that gallery search narrows by title and steps."
   },
   {
    "feature": "App menus",
@@ -183,7 +183,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:34 (build, Window menu); springboard/apps/shortcuts-desktop/src/menus.rs:85 (command); springboard/apps/shortcuts-desktop/src/widget.rs:1171 (step_editor); springboard/apps/shortcuts-desktop/src/widget.rs:223 (help_snippet)",
    "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find), Shortcuts (Run, Gallery and one item per shortcut with its menu key), Window (All Shortcuts, and Previous and Next Shortcut in the editor) and Help (Shortcuts Help, which opens a panel with one row per task) with key equivalents (build, menus.rs:34); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:966). Not yet checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify menu items, keyboard equivalents and Help panel navigation on Midget; confirm editor-specific items are only enabled in the editor."
   },
   {
    "feature": "Cloud sharing links",

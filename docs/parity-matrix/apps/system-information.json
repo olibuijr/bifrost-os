@@ -9,10 +9,10 @@
  "summary": {
   "features": 32,
   "parity": 5,
-  "partial": 20,
-  "gap": 5,
+  "partial": 25,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 50.0
+  "coverage_pct": 58.3
  },
  "features": [
   {
@@ -300,7 +300,8 @@
    "apple": "System Information Help",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/help.rs (rows, toggle_help); springboard/apps/sysinfo-desktop/src/main.rs (MENU_HELP, MENU_ONLINE_HELP)",
-   "note": "Help > System Information Help shows a short help card in the window, tested in help.rs; Help > System Information Online Help opens the web page. There is no shell help viewer, so the help is a card, not a separate page; check it on Midget."
+   "note": "Help > System Information Help shows a short help card in the window, tested in help.rs; Help > System Information Online Help opens the web page. There is no shell help viewer, so the help is a card, not a separate page; check it on Midget.",
+   "wire": "Verify the in-window help card and online help action on Midget, including that the card closes and returns to the selected view."
   }
  ]
 }

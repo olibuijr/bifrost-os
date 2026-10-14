@@ -11,10 +11,10 @@
  "summary": {
   "features": 37,
   "parity": 10,
-  "partial": 14,
-  "gap": 12,
+  "partial": 21,
+  "gap": 5,
   "n/a": 1,
-  "coverage_pct": 47.2
+  "coverage_pct": 56.9
  },
  "features": [
   {
@@ -60,7 +60,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/terminal/menus.rs (terminal_menu_action: rows 5 and 24); springboard/src/shell/terminal/input.rs (TermKey::CloseTab)",
    "note": "Close Tab (Cmd+W, File menu), Close Other Tabs and Reopen Closed Tab (More) are in the code. The Midget check is pending.",
-   "wire": ""
+   "wire": "Verify on Midget that Cmd+W, Close Other Tabs and Reopen Closed Tab act on the intended tabs, including a tab with a running process."
   },
   {
    "feature": "Prompt before closing a running process",
@@ -265,9 +265,9 @@
    "area": "file",
    "apple": "Shell > Export Text As…, Save Selected Text As…",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/panels.rs:191",
+   "bifrost": "springboard/src/shell/terminal/menus.rs:186",
    "note": "Save scrollback to Files and Save selected text to Files write fixed file names in the Files folder. Gap: no save panel, so the folder and the name are not chosen by the user.",
-   "wire": "Use the SDK save panel for the folder choice (Export Text As and Save Selected Text As)."
+   "wire": "Verify on Midget that Save scrollback and Save selected text write the expected content to Files; then wire the SDK save panel so users choose the name and folder."
   },
   {
    "feature": "Split pane",
@@ -294,7 +294,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/terminal/command.rs (terminal_open_title_edit, terminal_run_command)",
    "note": "More menu row Edit title sets a per-tab title (Terminal::set_custom_title); empty restores the automatic one. No Inspector field yet.",
-   "wire": ""
+   "wire": "Verify on Midget that a custom title appears on its tab and an empty title restores the automatic title."
   },
   {
    "feature": "Open URL / links",
@@ -339,7 +339,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/terminal/extras.rs (SHORTCUTS, help_line)",
    "note": "More menu row Terminal help shows every Terminal shortcut from one table, checked by unit tests in extras.rs (keys unique, line in table order). Shown as a one-line message; no help page yet.",
-   "wire": ""
+   "wire": "Verify on Midget that Terminal help exposes the shortcut table and displayed shortcuts match the active key bindings."
   },
   {
    "feature": "Low memory notice",

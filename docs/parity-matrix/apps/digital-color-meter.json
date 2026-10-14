@@ -145,9 +145,9 @@
  "summary": {
   "features": 15,
   "parity": 3,
-  "partial": 9,
-  "gap": 1,
+  "partial": 10,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 57.7
+  "coverage_pct": 61.5
  }
 }

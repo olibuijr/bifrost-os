@@ -140,7 +140,7 @@
    "area": "document",
    "apple": "BackupRestore.nib; File > Export > Calendar Archive",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:232; springboard/apps/calendar-desktop/src/calendar/archive.rs::import_archive",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs; springboard/apps/calendar-desktop/src/calendar/archive.rs::import_archive",
    "note": "File > Export Calendar Archive writes Calendar Archive.bfcal (events.tsv and calendar.ics in one file, calendar/archive.rs), through the save job in main.rs. File > Import Calendar Archive... adds the events the calendar does not hold and never removes any (archive.rs merge_events), keeping events.tsv.bak.",
    "wire": "Check File > Export Archive... and Import Archive... on Midget; an import adds what is missing and never removes, so a restore over a changed calendar is a merge."
   },
@@ -176,7 +176,7 @@
    "area": "toolbar",
    "apple": "MainMenu.nib Edit > Search; toolbar search field",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs::split_range; springboard/apps/calendar-desktop/src/calendar/sheets.rs:108",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs::split_range; springboard/apps/calendar-desktop/src/calendar/search.rs",
    "note": "Go > Search Events... (Command-F) and a toolbar button open a search screen with a query field and scrolling result list; Return or a click opens the event. Saved events match on title, location and notes, and from:YYYY-MM-DD and to:YYYY-MM-DD words limit the hits to a date range (search.rs, tested headless in tests/parity_app-calendar.rs). Uses its own list rather than the kit search_field; the caret does not move by click.",
    "wire": "Match locations and notes of saved events (the store keeps them, search.rs reads only titles for them), search by date range, and move the caret by click. The compliance snapshot needs a re-bless on Midget for the new toolbar field."
   },
@@ -221,7 +221,7 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib General/Advanced panes",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:74; springboard/apps/calendar-desktop/src/main.rs:85",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs; springboard/apps/calendar-desktop/src/main.rs:70",
    "note": "File > Settings... (Command-comma) sheet: week start, day start hour, default duration; persisted in calendar-prefs.txt (calendar/prefs.rs) and used by the month grid, week view, scroll position and new events. The default calendar is a Default Calendar submenu (main.rs:85). Missing: day end, days per week, and a separate Settings window (no shell Settings hook found).",
    "wire": "Add day end hour, days per week and a default calendar (needs multiple calendars) to the Settings menu in main.rs."
   },
@@ -230,7 +230,7 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib Alerts pane",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:63",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs",
    "note": "Default alert for timed and all-day events in the Settings sheet; applied to new drafts and swapped when All-day is toggled. Birthday default alert missing (no Birthdays calendar).",
    "wire": "Add a default alert for birthdays once the Birthdays calendar exists."
   },

@@ -48,7 +48,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_queue",
    "note": "Play Next and Play Last in the Song menu; a drag handle reorders the upcoming songs, each row has move-up and remove, Clear Up Next ends the queue, and History (the last 100 starts) opens from the Up Next toolbar and the View menu. Not yet checked on Midget.",
-   "wire": ""
+   "wire": "Verify queue insertion, drag reordering, removal, clearing, and History on Midget; check track changes and history persistence across relaunch."
   },
   {
    "feature": "Playlists: new, add to, remove from, rename, delete",
@@ -66,7 +66,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_rules",
    "note": "New Smart Playlist opens a rules editor (match all or any, field, operator, value, add and remove); the songs come from SmartPlaylist::select over the library and the listening data, and follow new ratings and plays. Not yet checked on Midget.",
-   "wire": ""
+   "wire": "Verify on Midget that saved all/any rules select the expected songs and update when ratings or play counts change."
   },
   {
    "feature": "Playlist folders",
@@ -120,7 +120,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music/stats.rs:133",
    "note": "Song > Rating sets 0 to 5 stars for the playing song, and a song's ... menu steps its rating; stars show under each song's length and Sort By Rating orders the list. Ratings are kept in stats.txt, not in file tags. Not yet checked on Midget.",
-   "wire": ""
+   "wire": "Verify rating changes and ordering on Midget, including that zero stars clears the displayed rating."
   },
   {
    "feature": "Internet radio stations",
@@ -156,7 +156,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_lyrics",
    "note": "A .lrc file beside a song adds a Lyrics switch on the Now Playing sheet; the line being sung is highlighted and follows the song. View > Show Lyrics does the same. Plain-text lyrics are listed without highlight. Not yet checked on Midget.",
-   "wire": ""
+   "wire": "Verify timed .lrc highlighting and plain-text lyrics in the Now Playing sheet on Midget."
   },
   {
    "feature": "Equalizer",
@@ -183,7 +183,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music/stats.rs:173",
    "note": "Recently Added and Recently Played lists under Songs; Recently Played comes from the play log in stats.txt, and Favourite Songs is listed beside them. Not yet checked on Midget.",
-   "wire": ""
+   "wire": "Verify Recently Added and Recently Played lists on Midget, including play history after relaunch."
   },
   {
    "feature": "System Now Playing and media keys",
@@ -243,9 +243,9 @@
  "summary": {
   "features": 26,
   "parity": 8,
-  "partial": 12,
-  "gap": 4,
+  "partial": 16,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 58.3
+  "coverage_pct": 66.7
  }
 }
