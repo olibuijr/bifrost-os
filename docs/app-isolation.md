@@ -24,6 +24,8 @@ Supported manifest capabilities:
 | network | Host network namespace |
 | storage | Local account's full home directory (Files compatibility) |
 | audio | Sound devices and the existing audio service socket, when present |
+| camera | Photo Booth only: the specific `/dev/videoN` character devices that probe as supported streaming-capture nodes; no `/dev` subtree or unrelated hardware is mounted |
+| screen | Color Meter only: declares intent to use screen sampling; each read still requires the person's existing screen-recording authorization through the shell service |
 | notifications | May post notifications through the shell |
 | documents | May ask for files through the shell's open and save panels; binds nothing, each chosen file arrives as a descriptor ([file-portal-design.md](file-portal-design.md)) |
 | keychain | May store secrets with the shell (`ToShell::Keychain`); binds nothing |
@@ -34,6 +36,8 @@ Supported manifest capabilities:
 Entitlements are separate from permissions and first-party only (`is.olibuijr.*`). `entitlements = ["log-store"]` on a
 `system-app` mounts the system journal read-only so `LogStore::local()` works (the Console app); it is set by
 `Policy::with_entitlements`, never from `permissions`.
+
+The `camera` and `screen` capabilities are restricted to the Photo Booth and Color Meter package identities respectively; another package declaring either is rejected at launch. A `camera` declaration only exposes the host's enumerated V4L2 streaming-capture nodes matching supported formats, one node per bind. The `screen` declaration does not itself grant capture: `screen_sample` and window-image services require both this manifest capability and the person's authorized screen-recording status. A missing declaration or denied/not-yet-authorized consent fails closed.
 
 Unsupported permissions fail launch. Storage currently grants the full home,
 not individual user-selected files. Native applications additionally receive

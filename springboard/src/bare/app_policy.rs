@@ -88,10 +88,12 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 10] = [
+pub const ENTITLEMENT_NAMES: [&str; 12] = [
     "network",
     "storage",
     "audio",
+    "camera",
+    "screen",
     "notifications",
     "documents",
     "keychain",
@@ -101,11 +103,19 @@ pub const ENTITLEMENT_NAMES: [&str; 10] = [
     bifrost_core::log::ENTITLEMENT,
 ];
 
+/// First-party app identities allowed to declare capture device permissions.
+pub const CAMERA_APP_ID: &str = "is.olibuijr.photobooth.desktop";
+pub const SCREEN_APP_ID: &str = "is.olibuijr.colormeter.desktop";
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Policy {
     pub network: bool,
     pub storage: bool,
     pub audio: bool,
+    /// `camera`: binds detected V4L2 capture nodes for Photo Booth.
+    pub camera: bool,
+    /// `screen`: declaration for Color Meter; use remains consent-gated by shell services.
+    pub screen: bool,
     pub remote: bool,
     pub notifications: bool,
     /// `documents`: may ask for files through the shell's open and save panels (`docs/file-portal-design.md`).
@@ -137,6 +147,8 @@ impl Policy {
             "network" => self.network,
             "storage" => self.storage,
             "audio" => self.audio,
+            "camera" => self.camera,
+            "screen" => self.screen,
             "notifications" => self.notifications,
             "documents" => self.documents,
             "keychain" => self.keychain,
@@ -159,6 +171,8 @@ impl Policy {
                 "network" => p.network = true,
                 "storage" => p.storage = true,
                 "audio" => p.audio = true,
+                "camera" if id == CAMERA_APP_ID => p.camera = true,
+                "screen" if id == SCREEN_APP_ID => p.screen = true,
                 "notifications" => p.notifications = true,
                 "documents" => p.documents = true,
                 "keychain" => p.keychain = true,
@@ -274,6 +288,12 @@ pub fn command(
     .arg(account.uid.to_string())
     .arg("--gid")
     .arg(account.gid.to_string());
+    if policy.camera {
+        for device in camera_capture_devices() {
+            // Bind only detected V4L2 capture nodes; no camera directory, USB tree, or unrelated device is exposed.
+            c.arg("--dev-bind").arg(&device).arg(&device);
+        }
+    }
     if policy.network {
         c.arg("--share-net");
     }
@@ -398,6 +418,29 @@ pub fn command(
     drop_identity(&mut c, &account)?;
     Ok(c)
 }
+
+/// Enumerated video nodes that can stream one of the formats supported by Photo Booth.
+/// Path and file-type checks keep the bind list limited to actual `/dev/videoN` character devices.
+fn camera_capture_devices() -> Vec<PathBuf> {
+    use std::os::unix::fs::FileTypeExt;
+
+    crate::media::v4l2::probe()
+        .into_iter()
+        .filter_map(|camera| {
+            let path = PathBuf::from(camera.path);
+            if !is_video_node_path(&path) || !fs::symlink_metadata(&path).ok()?.file_type().is_char_device() {
+                return None;
+            }
+            Some(path)
+        })
+        .collect()
+}
+
+fn is_video_node_path(path: &Path) -> bool {
+    path.parent() == Some(Path::new("/dev"))
+        && path.file_name().and_then(|name| name.to_str()).and_then(|name| name.strip_prefix("video"))
+            .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit()))
+}
 /// Permission and identity come from the authenticated app's socket/installed
 /// manifest, never from a claimed id or caller-supplied executable path.
 pub fn remote_sharing(id: &str, policy: Policy, on: bool, package: &Path) -> io::Result<()> {
@@ -458,6 +501,14 @@ mod tests {
     #[test]
     fn isolation_permissions_fail_closed() {
         assert!(Policy::from_permissions("example", &["system-update".into()]).is_err());
+        assert!(Policy::from_permissions("example", &["camera".into()]).is_err());
+        assert!(Policy::from_permissions("example", &["screen".into()]).is_err());
+        assert!(Policy::from_permissions(CAMERA_APP_ID, &["screen".into()]).is_err());
+        assert!(Policy::from_permissions(SCREEN_APP_ID, &["camera".into()]).is_err());
+        let camera = Policy::from_permissions(CAMERA_APP_ID, &["camera".into()]).unwrap();
+        assert!(camera.camera && !camera.screen);
+        let screen = Policy::from_permissions(SCREEN_APP_ID, &["screen".into()]).unwrap();
+        assert!(screen.screen && !screen.camera);
         assert!(Policy::from_permissions("example", &["remote-desktop".into()]).is_err());
         assert!(
             Policy::from_permissions("is.olibuijr.remote.desktop", &["remote-desktop".into()])
@@ -471,6 +522,15 @@ mod tests {
         // `documents` binds nothing: it is the picker grant, not the home
         let d = Policy::from_permissions("example", &["documents".into()]).unwrap();
         assert!(d.documents && !d.storage && !d.network);
+    }
+
+    #[test]
+    fn camera_mount_paths_are_video_nodes_only() {
+        assert!(is_video_node_path(Path::new("/dev/video0")));
+        assert!(is_video_node_path(Path::new("/dev/video12")));
+        for path in ["/dev/video", "/dev/video1x", "/dev/video2/extra", "/dev/v4l/video0", "/dev/dri/card0"] {
+            assert!(!is_video_node_path(Path::new(path)), "unexpected camera mount path: {path}");
+        }
     }
     #[test]
     fn isolation_root_accounts_rejected() {
