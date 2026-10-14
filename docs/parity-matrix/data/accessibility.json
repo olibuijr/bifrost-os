@@ -19,7 +19,7 @@
    "apple": "AccessibilityTechnology, NSAccessibility roles",
    "bifrost": "springboard/src/shell/atspi/model.rs:37 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
    "status": "partial",
-   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles. Tests (springboard/tests/parity_sdk-tests-01c.rs): each_element_role_maps_to_one_atspi_role_and_role_name, a_checkbox_reads_its_checked_state_from_the_value_text, static_text_is_not_focusable_and_a_disabled_control_is_not_enabled. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Element hierarchy (parent, focus, checked state)",
@@ -33,35 +33,35 @@
    "apple": "accessibilityLabel, accessibilityTitle, accessibilityHelp",
    "bifrost": "springboard/ui/src/ax.rs (AxMeta), springboard/src/shell/atspi/bridge.rs; wired: springboard/src/shell/accessibility/walk.rs (speech); springboard/src/shell/accessibility/reader.rs",
    "status": "partial",
-   "note": "Name falls back from label to title, Description from help to role name; SDK hooks App::ax_meta and View::ax_meta exist. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Name falls back from label to title, Description from help to role name (tests: the_name_falls_back_to_the_title_and_help_is_kept_apart in springboard/tests/parity_sdk-tests-01c.rs); SDK hooks App::ax_meta and View::ax_meta exist. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Text attributes and text events",
    "apple": "AXSelectedText, AXSelectedTextRange, AXVisibleCharacterRange, text change notifications",
    "bifrost": "springboard/ui/src/ax.rs (AxText), springboard/src/shell/atspi/bridge.rs",
    "status": "partial",
-   "note": "Caret, selection and visible range are exported as char offsets; TextChanged, TextCaretMoved and TextSelectionChanged are diffed on publish. Implemented for the shell TextField only, plus the sign-in sheet's fields."
+   "note": "Caret, selection and visible range are exported as char offsets; TextChanged, TextCaretMoved and TextSelectionChanged are diffed on publish. Implemented for the shell TextField only, plus the sign-in sheet's fields. Tests: text_attributes_are_char_offsets_of_the_selection_and_the_caret, offsets_count_characters_and_round_a_byte_inside_one_down (springboard/ui/tests/parity_sdk-tests-01c.rs); text_edits_report_an_insert_a_delete_and_a_replace (springboard/tests/parity_sdk-tests-01c.rs)."
   },
   {
    "feature": "Secure text fields",
    "apple": "isSecureTextEntry fields",
    "bifrost": "springboard/ui/src/ax.rs (secure flag), springboard/src/shell/atspi/model.rs (build_ax)",
    "status": "partial",
-   "note": "Value is masked and selected text is always empty; only the length crosses the wire."
+   "note": "Value is masked and selected text is always empty; only the length crosses the wire. Tests: a_secure_field_exposes_only_its_length (springboard/ui/tests/parity_sdk-tests-01c.rs); a_secure_field_reads_as_password_and_its_value_is_only_bullets (springboard/tests/parity_sdk-tests-01c.rs)."
   },
   {
    "feature": "Accessibility announcements",
    "apple": "AccessibilityNotification, announcement requested (low, medium, high priority)",
    "bifrost": "springboard/ui/src/ax.rs:52 (announce priority), Ctx::announce in the SDK; wired: springboard/src/shell/accessibility/banner.rs; springboard/src/shell/apphost.rs (announce_banner); springboard/src/shell/mod.rs (tick, draw); wired: springboard/src/shell/accessibility/reader.rs (speech queued on each move via Banner::post); springboard/src/shell/accessibility/banner.rs",
    "status": "partial",
-   "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Live on a screen reader not verified. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Tests (springboard/ui/tests/parity_sdk-tests-01c.rs): an_assertive_announcement_is_spoken_first_and_a_full_queue_drops_a_polite_one, announcement_priority_maps_to_politeness. Live on a screen reader not verified. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
   },
   {
    "feature": "Custom actions and value setting",
    "apple": "accessibilityPerformPress, accessibilityIncrement, setAccessibilityValue",
    "bifrost": "springboard/ui/src/ax.rs (Settable, Request, Notification); springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
    "status": "partial",
-   "note": "Default ax_set maps Press to a tap. springboard/ui/src/ax.rs now has role-keyed default handlers (Settable: slider SetValue clamps, Increment/Decrement step, text field SetValue, Focus; ValueChanged and FocusedUIElementChanged notifications); not yet routed from every app's ax_set, live Orca untested. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+   "note": "Default ax_set maps Press to a tap. springboard/ui/src/ax.rs now has role-keyed default handlers (Settable: slider SetValue clamps, Increment/Decrement step, text field SetValue, Focus; ValueChanged and FocusedUIElementChanged notifications); not yet routed from every app's ax_set, live Orca untested. Tests (springboard/ui/tests/parity_sdk-tests-01c.rs): a_slider_clamps_its_value_and_steps_stop_at_the_ends, a_slider_takes_a_typed_number_and_refuses_text_that_is_not_one, a_text_field_takes_a_value_and_its_focus_once, custom_actions_belong_to_one_element_and_refuse_duplicates. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
   },
   {
    "feature": "System accessibility settings readable by apps",
