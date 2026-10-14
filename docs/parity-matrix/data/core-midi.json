@@ -4,36 +4,36 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "springboard/apps/daw/src/compose.rs (midi(), pitches()), springboard/apps/daw/src/dsp.rs (mtof), springboard/src/bare/bluetooth.rs (Bluetooth management socket, audio-class devices only)",
-  "summary": "BifrOSt has no MIDI device I/O, no MIDI message encoding (1.0 or UMP), no MIDI driver, network or Bluetooth MIDI profile, and no app SDK API for MIDI. The only MIDI-related code is note-number math in the DAW (note names to pitch, pitch to frequency), which is a small part of what a MIDI note carries.",
+  "summary": "The MIDI stack exists as pure models with host unit tests: UMP and MIDI 1.0 messages, an endpoint registry and routing hub, thru transforms, BLE MIDI packets, MIDI-CI discovery and Property Exchange, and RTP-MIDI session packets. None of it is wired into the shell or apps or verified on Midget, and there is no MIDI driver. Note-number math in the DAW is one small use of it.",
   "rea_evidence": "ev_ef3f87daee6586bf7d1842912581de9266baebc583129c4b3454c831ae785502",
   "features": [
     {
       "feature": "MIDI Services (clients, ports, device and entity lookup)",
       "apple": "MIDIClientCreate, MIDIInputPortCreateWithProtocol, MIDIOutputPortCreate, MIDIGetNumberOfDevices, MIDIPortConnectSource, MIDIReceiveBlock (https://developer.apple.com/documentation/coremidi/midi-services)",
-      "bifrost": "springboard/audio/midi/src/endpoints.rs",
+      "bifrost": "springboard/audio/midi/src/endpoints.rs (Registry: clients, devices, entities, endpoints, connections), springboard/audio/midi/src/hub.rs (routing), springboard/audio/midid/ (ALSA rawmidi and seq, BLE link)",
       "status": "partial",
-      "note": "Wave 3 (w3-core-midi, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No client, port or endpoint code. Searches for snd_seq, /dev/snd/seq and rawmidi in the repo return nothing. Input devices in springboard/src/bare/input.rs are evdev keyboards, mice and touch only."
+      "note": "Pure models with host unit tests: client and endpoint registry, virtual endpoints, connect_source, and a routing hub with stable timestamp ordering. The midid daemon crate describes ALSA rawmidi and seq and BLE links, not yet verified on the VM or Midget. Not wired into apps or the shell. No app-facing API for device I/O in the SDK beyond the existing MIDI module. Built on parity/team-n-core-midi; not yet verified on Midget."
     },
     {
       "feature": "MIDI System Setup (driver and external device management)",
       "apple": "MIDISetupAddExternalDevice, MIDIExternalDeviceCreate, MIDIDeviceNewEntity, MIDIEntityAddOrRemoveEndpoints (https://developer.apple.com/documentation/coremidi/midi-system-setup)",
-      "bifrost": "springboard/audio/midi/src/endpoints.rs (remove_entity",
+      "bifrost": "springboard/audio/midi/src/endpoints.rs (Registry: add_device, add_entity, remove_entity, remove_external_device)",
       "status": "partial",
-      "note": "Wave 5 (w5-core-midi, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-wide MIDI device registry. Hotplug for audio devices is in springboard/src/media/ and springboard/src/bare/input.rs, not for MIDI."
+      "note": "Pure model with host unit tests: external devices, entities and endpoints in the registry, with removal. No hotplug event source and no driver list; the Linux side (ALSA) is described by the midid crate but not verified. Not wired into apps or the shell. Built on parity/team-n-core-midi; not yet verified on Midget."
     },
     {
       "feature": "MIDI Bluetooth (BLE MIDI peripherals)",
       "apple": "MIDIBluetoothDriverActivateAllConnections, MIDIBluetoothDriverDisconnect (https://developer.apple.com/documentation/coremidi/midi-bluetooth)",
-      "bifrost": "springboard/ui/src/midi_ble.rs",
+      "bifrost": "springboard/ui/src/midi_ble.rs, springboard/audio/midi/src/ble.rs (BLE MIDI packet framing), springboard/sdk/src/ble_midi.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-04, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The system layer pairs and tracks Bluetooth devices and classifies audio-class devices. There is no MIDI GATT service support and no app-facing SDK API for it."
+      "note": "BLE MIDI packet encode and decode with timestamps and MTU splitting (audio/midi/src/ble.rs), host unit tests. The system layer pairs and tracks Bluetooth devices and classifies audio-class devices. GATT service discovery on the live link is not verified. Built on parity/team-n-core-midi; not yet verified on Midget."
     },
     {
       "feature": "MIDI Messages (MIDI 1.0 and 2.0 / UMP construction)",
       "apple": "MIDI1UPNoteOn, MIDI1UPControlChange, MIDI2NoteOn, MIDI2PitchBend, MIDIMessage_32, MIDIMessage_64 (https://developer.apple.com/documentation/coremidi/midi-messages)",
-      "bifrost": "springboard/apps/daw/src/model.rs:152 (note struct: pitch p, velocity v in 0..1)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 3 tests. The DAW note model holds a pitch number and a velocity. There is no encoding to or from MIDI 1.0 bytes or Universal MIDI Packets, and no control change, pitch bend or SysEx support."
+      "bifrost": "springboard/audio/midi/src/ump.rs (UMP and MIDI 1.0 conversion, SysEx), springboard/audio/midi/src/events.rs (MIDI 1.0 parser and encoder), springboard/apps/daw/src/model.rs:152 (note struct)",
+      "status": "partial",
+      "note": "Universal MIDI Packets with MIDI 1.0 and 2.0 channel voice, system, 64-bit and 128-bit data, SysEx assembly, and conversion to and from MIDI 1.0 bytes (ump.rs), with host unit tests. The DAW note model still stores only pitch and velocity. Not yet wired to a device or verified on Midget. Built on parity/team-n-core-midi; not yet verified on Midget."
     },
     {
       "feature": "Note number to pitch and frequency",
@@ -45,9 +45,9 @@
     {
       "feature": "MIDI Thru Connection (play-through, value maps, transforms)",
       "apple": "MIDIThruConnectionCreate, MIDIThruConnectionSetParams, MIDIValueMap, MIDIControlTransform (https://developer.apple.com/documentation/coremidi/midi-thru-connection)",
-      "bifrost": "springboard/ui/src/midi_thru.rs",
+      "bifrost": "springboard/audio/midi/src/thru.rs (ValueMap, ControlTransform, ThruConnection), springboard/audio/midi/src/hub.rs (routing between sources and destinations)",
       "status": "partial",
-      "note": "Wave 3 (w3-core-midi, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No routing layer between MIDI sources and destinations. No transform tables."
+      "note": "Thru connection with parameters and enable state, value maps (identity, table, linear), control transforms, and routing through the hub, with host unit tests. Not wired into apps or the shell, and not yet verified on Midget. Built on parity/team-n-core-midi; not yet verified on Midget."
     },
     {
       "feature": "MIDI Networking (network sessions and hosts)",
@@ -66,19 +66,17 @@
     {
       "feature": "MIDI Capability Inquiry (MIDI-CI discovery, profiles, property exchange)",
       "apple": "MIDICIDiscoveryManager, MIDICISession, MIDICIProfile, MIDICIResponder, MIDICIDevice (https://developer.apple.com/documentation/coremidi/midi-capability-inquiry)",
-      "bifrost": "springboard/sdk/src/midi_ci.rs",
+      "bifrost": "springboard/sdk/src/midi_ci.rs, springboard/sdk/src/midi_ci_property.rs",
       "status": "partial",
-      "note": "Sprint 3: MIDI-CI 1.1 discovery, invalidate MUID and profile inquiry/set/enabled messages, DiscoveryManager, Device and Profile, with host unit tests; no property exchange, no transport, not yet checked on Midget."
+      "note": "Sprint 3: MIDI-CI 1.1 discovery, invalidate MUID and profile inquiry/set/enabled messages, DiscoveryManager, Device and Profile, with host unit tests. Property Exchange messages (capabilities, Get and Set Property Data) with chunk split and in-order reassembly, with host unit tests (parity/team-n-core-midi). No transport, no subscription messages, not yet checked on Midget."
     }
   ],
   "gaps": [
-    "No MIDI device I/O for apps: no client, input or output port, and no source or destination enumeration (MIDI Services).",
-    "No MIDI 1.0 or UMP message encoding and decoding; the DAW note model stores only pitch and velocity (model.rs:152).",
-    "No MIDI over Bluetooth LE (BLE MIDI service) on top of springboard/src/bare/bluetooth.rs.",
-    "No USB or hardware MIDI device hotplug, no system-level MIDI device registry, and no virtual endpoints.",
-    "No MIDI thru routing, value maps or transforms.",
-    "No MIDI network sessions.",
-    "No MIDI-CI discovery, profiles or property exchange.",
-    "No app-facing SDK API for MIDI. The SDK (springboard/sdk/src/) has no MIDI module."
+    "Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app.",
+    "No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link.",
+    "No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received.",
+    "No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified).",
+    "The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW.",
+    "No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs."
   ]
 }

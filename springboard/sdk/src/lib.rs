@@ -189,6 +189,7 @@ pub mod serial_ports;
 pub mod ble_midi;
 pub mod midi;
 pub mod midi_ci;
+pub mod midi_ci_property;
 pub mod midi_network;
 pub mod motion_raw;
 pub mod device_registry;
