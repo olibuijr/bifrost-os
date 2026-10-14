@@ -76,10 +76,6 @@ impl Tab {
         self.enabled = false;
         self
     }
-    /// Screens that can be selected: an enabled screen or search tab.
-    fn is_leaf(&self) -> bool {
-        !matches!(self.kind, TabKind::Group(_))
-    }
 }
 
 /// The result of a pointer tap on the bar or sidebar.
