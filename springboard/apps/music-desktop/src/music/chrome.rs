@@ -18,6 +18,8 @@ pub const BAR_QUEUE: u32 = 7;
 /// Edit Rules on a smart playlist, and History on the Up Next page.
 pub const BAR_EDIT: u32 = 8;
 pub const BAR_HISTORY: u32 = 9;
+/// Move to Folder on a playlist page.
+pub const BAR_FOLDER: u32 = 10;
 
 /// Sidebar row ids: the Library tabs, the lists under Songs (Recently Added, Recently Played, Favourite Songs), then one
 /// row per playlist and one per smart playlist.
@@ -51,6 +53,7 @@ impl Music {
             Page::Album(a) => self.library.albums[a].name.clone(),
             Page::Queue => "Up Next".into(),
             Page::History => "History".into(),
+            Page::Info => "Get Info".into(),
             Page::Playlist(p) => match &self.renaming {
                 Some(typed) => format!("{typed}|"),
                 None => self.playlists.lists().get(p).map_or(String::new(), |l| l.name.clone()),
@@ -87,6 +90,9 @@ impl Music {
         if let Page::Smart(_) = self.page() {
             items.push(ToolbarItem::button(BAR_EDIT, "Edit Rules"));
         }
+        if let Page::Playlist(_) = self.page() {
+            items.push(ToolbarItem::icon(BAR_FOLDER, "Move to Folder", "folder"));
+        }
         if let Page::Playlist(_) | Page::Smart(_) = self.page() {
             items.push(ToolbarItem::button(BAR_RENAME, if self.renaming.is_some() { "Done" } else { "Rename" }));
             items.push(ToolbarItem::icon(BAR_DELETE, "Delete Playlist", "trash"));
@@ -109,7 +115,9 @@ impl Music {
     /// A toolbar button was pressed.
     pub fn bar_press(&mut self, id: u32, t: f64) {
         self.commit_rule_edit();
+        self.commit_info_edit();
         let target = match id {
+            BAR_FOLDER => Target::MoveToFolder,
             BAR_BACK => Target::Back,
             BAR_SORT => Target::Sort,
             BAR_EDIT => Target::EditRules,
@@ -140,6 +148,10 @@ impl Music {
 
     /// Esc: closes the search field, stops renaming or drops a rule value being typed.
     pub fn cancel(&mut self, t: f64) -> bool {
+        if self.info_edit.take().is_some() {
+            self.dirty = true;
+            return true;
+        }
         if self.rule_edit.take().is_some() {
             self.dirty = true;
             return true;

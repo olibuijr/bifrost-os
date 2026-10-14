@@ -12,6 +12,8 @@
 pub mod browse;
 pub mod chrome;
 pub mod engine;
+pub mod folders;
+pub mod info;
 pub mod jobs;
 pub mod library;
 pub mod lyrics;
@@ -36,6 +38,8 @@ use browse::{Scope, SortKey};
 use bifrost_app::audio::Client;
 use bifrost_app::proto::sys::now_ms;
 use engine::{AudioPlayer, LiveStatus, Phase, Repeat, Snapshot, Track};
+use folders::{Folders, Row as TabRow};
+use info::{Field, Info};
 use library::Library;
 use lyrics::Lyrics;
 use menus::{Command, MenuState, Place};
@@ -126,6 +130,13 @@ pub const BIG: u8 = 2;
 const PLAYLIST_HEADER_PT: f32 = 68.0;
 const MENU_ROW_PT: f32 = 48.0;
 const MENU_HEAD_PT: f32 = 44.0;
+/// The route button of the mini player bar sits this far left of Play; its touch reach is MINI_ROUTE_HIT_PT.
+const MINI_ROUTE_GAP_PT: f32 = 56.0;
+const MINI_ROUTE_HIT_PT: f32 = 24.0;
+/// The Get Info page's rows: Title, Artist, Album, Restore Original Tags, File, Length.
+const INFO_ROWS: usize = 6;
+/// The width of the label column on the Get Info page.
+const INFO_LABEL_PT: f32 = 110.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
@@ -151,6 +162,8 @@ pub enum Page {
     Smart(usize),
     /// a smart playlist's rules
     SmartEdit(usize),
+    /// Get Info for the song at `Music::info_path`
+    Info,
 }
 
 /// Something a touch can land on.
@@ -192,6 +205,13 @@ pub enum Target {
     /// the lyrics switch and the output route on the Now Playing sheet
     Lyrics,
     Route,
+    /// the route button of the mini player bar
+    MiniRoute,
+    /// Get Info: the i-th field (Title, Artist, Album), and Restore Original Tags
+    InfoField(usize),
+    InfoReset,
+    /// the Move to Folder button of a playlist page
+    MoveToFolder,
     /// a row of the open song menu, or outside it
     MenuItem(usize),
     MenuDismiss,
@@ -215,6 +235,10 @@ enum MenuItem {
     RemoveFromPlaylist(usize, usize),
     /// the k-th output device of `Music::outputs`
     Output(usize),
+    /// Get Info for the song the menu is open on
+    GetInfo,
+    /// put the playlist on screen in a folder (an index into the folders), or in none
+    MoveToFolder(Option<usize>),
 }
 
 /// The action sheet opened by a song row's "..." (or by the route button of the Now Playing sheet).
@@ -233,8 +257,8 @@ struct QueueDrag {
 }
 
 enum Done {
-    /// A full scan: the library and the change stamps of its files.
-    Scanned(Library, Vec<Stamp>),
+    /// A full scan: the scanned files and the change stamps of their files.
+    Scanned(Vec<library::Scanned>, Vec<Stamp>),
     /// A check of the files on disk against the last scan (`MediaLibrary::observe`).
     Stamps(Vec<Stamp>),
     Art { album: usize, kind: u8, image: Option<Image> },
@@ -316,6 +340,9 @@ pub struct Music {
     /// the saved queue, waiting for the scan to finish
     restore: Option<(UpNext, f64)>,
     playlists: Playlists,
+    /// the playlist folders, and the folders hidden in the Playlists tab (by name)
+    folders: Folders,
+    collapsed: Vec<String>,
     /// the smart playlists, the songs of the one shown (`sync_smart`), and what that list was worked out for: the
     /// playlist and `smart_rev`, which moves whenever rules, ratings, plays or the library change
     smart: SmartPlaylists,
@@ -335,6 +362,10 @@ pub struct Music {
     lyrics_on: bool,
     /// the Up Next row being dragged
     qdrag: Option<QueueDrag>,
+    /// the edits of Get Info, the path of the song its page shows, and the field being typed
+    info: Info,
+    info_path: Option<PathBuf>,
+    info_edit: Option<(Field, String)>,
     /// output devices as (id, name), the default one, and the hand-offs to the window: it fetches the list when
     /// `output_request` is set and applies `output_choice`
     outputs: Vec<(String, String)>,
@@ -377,7 +408,7 @@ const LIBRARY_CHECK_SECS: f64 = 5.0;
 fn scan_now(roots: &[PathBuf], load: &LoadOptions) -> Done {
     let files = library_files(roots, load);
     let stamps = library::stamps_of(&files);
-    Done::Scanned(Library::build(library::scan_all(&files)), stamps)
+    Done::Scanned(library::scan_all(&files), stamps)
 }
 
 /// The stamps of the files the music folders hold now.
@@ -460,6 +491,8 @@ impl Music {
             store: None,
             restore: None,
             playlists: Playlists::default(),
+            folders: Folders::default(),
+            collapsed: Vec::new(),
             smart: SmartPlaylists::default(),
             smart_view: Vec::new(),
             smart_key: None,
@@ -472,6 +505,9 @@ impl Music {
             lyrics_for: None,
             lyrics_on: false,
             qdrag: None,
+            info: Info::default(),
+            info_path: None,
+            info_edit: None,
             outputs: Vec::new(),
             output_now: None,
             output_request: false,
@@ -506,6 +542,8 @@ impl Music {
         self.playlists = Playlists::open(dir.join("Playlists"));
         self.smart = SmartPlaylists::open(dir.join("Smart"));
         self.stats = Stats::open(dir.join("stats.txt"));
+        self.folders = Folders::open(dir.join("Playlists").join("folders.txt"));
+        self.info = Info::open(dir.join("info.txt"));
         self.smart_rev += 1;
         self.restore = std::fs::read_to_string(dir.join("queue.txt")).ok().and_then(|t| UpNext::from_text(&t));
         self.store = Some(dir);
@@ -514,7 +552,7 @@ impl Music {
 
     /// Whether a text field (Songs search, playlist name, a rule's value) wants the keyboard.
     pub fn wants_keyboard(&self) -> bool {
-        self.searching || self.renaming.is_some() || self.rule_edit.is_some()
+        self.searching || self.renaming.is_some() || self.rule_edit.is_some() || self.info_edit.is_some()
     }
 
     /// Typed text for the field that has the keyboard; a newline accepts it.
@@ -523,11 +561,14 @@ impl Music {
             if c == '\n' {
                 self.commit_rename();
                 self.commit_rule_edit();
+                self.commit_info_edit();
             } else if c.is_control() {
                 continue;
             } else if let Some(name) = &mut self.renaming {
                 name.push(c);
             } else if let Some((_, value)) = &mut self.rule_edit {
+                value.push(c);
+            } else if let Some((_, value)) = &mut self.info_edit {
                 value.push(c);
             } else if self.searching {
                 self.search.push(c);
@@ -542,6 +583,8 @@ impl Music {
             name.pop();
         } else if let Some((_, value)) = &mut self.rule_edit {
             value.pop();
+        } else if let Some((_, value)) = &mut self.info_edit {
+            value.pop();
         } else if self.searching && self.search.pop().is_some() {
             self.refilter();
         }
@@ -553,9 +596,14 @@ impl Music {
         let clean = playlists::clean_name(&name).unwrap_or_default().to_lowercase();
         match self.page() {
             Page::Playlist(p) => {
+                let old = self.playlists.lists().get(p).map(|l| l.name.clone());
                 if self.playlists.rename(p, &name) {
                     if let Some(i) = self.playlists.lists().iter().position(|l| l.name.to_lowercase() == clean) {
                         *self.pages.last_mut().unwrap() = Page::Playlist(i);
+                        if let Some(old) = old {
+                            let new = self.playlists.lists()[i].name.clone();
+                            self.folders.rename_playlist(&old, &new);
+                        }
                     }
                 }
             }
@@ -579,6 +627,97 @@ impl Music {
                 self.smart_rev += 1;
             }
         }
+    }
+
+    /// Get Info: commits the field being typed. A changed value is saved and the library scanned again, so it shows.
+    fn commit_info_edit(&mut self) {
+        let Some((field, text)) = self.info_edit.take() else { return };
+        let Some(path) = self.info_path.clone() else { return };
+        let shown = self.info_song().map(|id| self.info_shown(&self.library.songs[id], field));
+        if shown.as_deref() != Some(text.trim()) && self.info.set(&path, field, &text) {
+            self.start_scan();
+        }
+        self.dirty = true;
+    }
+
+    /// Opens Get Info for the song at library id `id`, closing the Now Playing sheet.
+    fn open_info(&mut self, id: usize) {
+        self.commit_info_edit();
+        let Some(path) = self.library.songs.get(id).map(|song| song.path.clone()) else { return };
+        self.info_path = Some(path);
+        self.info_edit = None;
+        if self.page() != Page::Info {
+            let t = self.last_t;
+            self.open_sheet(false, t);
+            self.push(Page::Info);
+        }
+        self.dirty = true;
+    }
+
+    /// The library id of the song Get Info shows, while it is in the library.
+    fn info_song(&self) -> Option<usize> {
+        self.info_path.as_ref().and_then(|p| self.path_id.get(p).copied())
+    }
+
+    /// The title, artist or album Get Info shows for a song: its edit, else the file's tag.
+    fn info_shown(&self, song: &library::Song, field: Field) -> String {
+        self.info.value(&song.path, field).map(str::to_string).unwrap_or_else(|| match field {
+            Field::Title => song.title.clone(),
+            Field::Artist => song.artist.clone(),
+            Field::Album => song.album.clone(),
+        })
+    }
+
+    /// Makes a playlist folder named "Folder", "Folder 2", ...; the Playlists tab lists it.
+    fn new_folder(&mut self) {
+        let name = self.folders.fresh_name();
+        let _ = self.folders.create(&name);
+        self.dirty = true;
+    }
+
+    /// Shows or hides the playlists of folder `f` in the Playlists tab.
+    fn toggle_folder(&mut self, f: usize) {
+        let Some(name) = self.folders.names().get(f).cloned() else { return };
+        match self.collapsed.iter().position(|c| *c == name) {
+            Some(at) => {
+                self.collapsed.remove(at);
+            }
+            None => self.collapsed.push(name),
+        }
+        self.dirty = true;
+    }
+
+    /// The Move to Folder menu of the playlist on screen: No Folder, then each folder.
+    fn open_folder_menu(&mut self) {
+        if !matches!(self.page(), Page::Playlist(_)) {
+            return;
+        }
+        let mut items = vec![MenuItem::MoveToFolder(None)];
+        items.extend((0..self.folders.names().len()).map(|f| MenuItem::MoveToFolder(Some(f))));
+        self.menu = Some(Menu { song: 0, items, heading: Some("Move to Folder".to_string()) });
+        self.dirty = true;
+    }
+
+    /// Puts the playlist on screen in `folder` (an index into the folders), or in none for None.
+    fn move_shown_playlist(&mut self, folder: Option<usize>) {
+        let Page::Playlist(p) = self.page() else { return };
+        let Some(name) = self.playlists.lists().get(p).map(|l| l.name.clone()) else { return };
+        if self.folders.put(&name, folder) {
+            self.dirty = true;
+        }
+    }
+
+    /// The folder the playlist on screen is in, as an index into the folders.
+    fn shown_folder(&self) -> Option<usize> {
+        match self.page() {
+            Page::Playlist(p) => self.playlists.lists().get(p).and_then(|l| self.folders.folder_index(&l.name)),
+            _ => None,
+        }
+    }
+
+    /// The centre of the mini player's route button: just left of Play.
+    fn mini_route(ui: &Ui, mini: &Mini) -> (f32, f32) {
+        (mini.play.0 - ui.pt(MINI_ROUTE_GAP_PT), mini.play.1)
     }
 
     fn rebuild_view(&mut self) {
@@ -708,7 +847,12 @@ impl Music {
 
     fn apply(&mut self, done: Done) {
         match done {
-            Done::Scanned(lib, stamps) => {
+            Done::Scanned(mut files, stamps) => {
+                // the edits of Get Info are laid over the tags before the library groups the songs
+                for file in &mut files {
+                    self.info.apply(file);
+                }
+                let lib = Library::build(files);
                 self.album_of = (0..lib.songs.len()).map(|s| lib.album_of(s).unwrap_or(0)).collect();
                 self.path_id = lib.songs.iter().map(|s| (s.path.clone(), s.id)).collect();
                 self.library = lib;
@@ -929,6 +1073,7 @@ impl Music {
                     wanted.extend(self.smart_view.iter().skip(first).take(last.saturating_sub(first)).map(|&id| (self.album_of[id], THUMB)));
                 }
                 (Page::SmartEdit(_), _) => {}
+                (Page::Info, _) => {}
                 (Page::Root, Tab::Artists | Tab::Radio | Tab::Playlists) => {}
             }
         }
@@ -1045,6 +1190,7 @@ impl Music {
                 let clear = if self.queue.upcoming().is_empty() { 0.0 } else { 1.0 };
                 (rows + clear) * ui.pt(SONG_ROW_PT) + ui.pt(SPACE_L)
             }
+            (Page::Info, _) => n(INFO_ROWS) * ui.pt(SONG_ROW_PT) + ui.pt(SPACE_L),
             (Page::Root, Tab::Artists) => n(self.library.artists.len()) * ui.pt(ARTIST_ROW_PT) + ui.pt(SPACE_L),
             (Page::Root, Tab::Radio) => n(self.radio.stations().len()) * ui.pt(STATION_ROW_PT) + ui.pt(SPACE_L),
             (Page::Root, Tab::Albums) => self.grid_cells(ui, self.library.albums.len()).last().map_or(0.0, |c| c.1 + c.3 + ui.pt(SPACE_L)),
@@ -1134,6 +1280,14 @@ impl Music {
                     Target::Row(i)
                 })
             }
+            (Page::Info, _) => {
+                let i = (y / ui.pt(SONG_ROW_PT)) as usize;
+                match i {
+                    0..=2 => Some(Target::InfoField(i)),
+                    3 => Some(Target::InfoReset),
+                    _ => None,
+                }
+            }
             (Page::Root, Tab::Artists) => Some((y / ui.pt(ARTIST_ROW_PT)) as usize).filter(|&i| i < self.library.artists.len()).map(Target::Row),
             (Page::Root, Tab::Radio) => Some((y / ui.pt(STATION_ROW_PT)) as usize).filter(|&i| i < self.radio.stations().len()).map(|i| if x >= self.w as f32 - ui.pt(FAV_ZONE_PT) { Target::Fav(i) } else { Target::Row(i) }),
             (Page::Root, Tab::Albums) => in_grid(self.grid_cells(ui, self.library.albums.len())),
@@ -1216,7 +1370,12 @@ impl Music {
             return self.sheet_extra(ui, x, y).or_else(|| Layout::new(ui, self.w, self.h).hit(x, y).map(Target::Np));
         }
         if self.has_track() {
-            if let Some(t) = Mini::new(ui, self.w, self.h).hit(x, y) {
+            let mini = Mini::new(ui, self.w, self.h);
+            let (rx, ry) = Self::mini_route(ui, &mini);
+            if (x - rx).abs() <= ui.pt(MINI_ROUTE_HIT_PT) && (y - ry).abs() <= ui.pt(MINI_ROUTE_HIT_PT) {
+                return Some(Target::MiniRoute);
+            }
+            if let Some(t) = mini.hit(x, y) {
                 return Some(Target::Mini(t));
             }
         }
@@ -1630,9 +1789,14 @@ impl Music {
         list.songs.iter().enumerate().filter_map(|(at, path)| self.path_id.get(path).map(|&id| (at, id))).collect()
     }
 
-    /// The rows of the Playlists tab: New Playlist, New Smart Playlist, the playlists, then the smart playlists.
+    /// The rows of the Playlists tab (`folders::rows`).
+    fn tab_rows(&self) -> Vec<TabRow> {
+        folders::rows(&self.folders, self.playlists.lists(), self.smart.lists().len(), &self.collapsed)
+    }
+
+    /// How many rows the Playlists tab has.
     fn playlist_rows(&self) -> usize {
-        self.playlists.lists().len() + self.smart.lists().len() + 2
+        self.tab_rows().len()
     }
 
     /// The x edges of a rule row's cells in px: the field, the operator, the value, and the remove button after them.
@@ -1741,6 +1905,11 @@ impl Music {
                     self.stats_changed();
                 }
             }
+            Command::GetInfo => song.into_iter().for_each(|id| self.open_info(id)),
+            Command::NewFolder => {
+                self.show_tab(Tab::Playlists, Scope::All);
+                self.new_folder();
+            }
             Command::Show(place) => self.show_place(place),
             Command::SortBy(key) => {
                 if self.tab != Tab::Songs || self.page() != Page::Root {
@@ -1840,7 +2009,7 @@ impl Music {
     }
 
     fn open_menu(&mut self, song: usize, from: Option<(usize, usize)>) {
-        let mut items = vec![MenuItem::PlayNext, MenuItem::PlayLast, MenuItem::Rate, MenuItem::ToggleFavourite];
+        let mut items = vec![MenuItem::PlayNext, MenuItem::PlayLast, MenuItem::Rate, MenuItem::ToggleFavourite, MenuItem::GetInfo];
         items.extend((0..self.playlists.lists().len()).map(MenuItem::AddTo));
         items.push(MenuItem::NewPlaylist);
         if let Some((p, at)) = from {
@@ -1854,9 +2023,14 @@ impl Music {
             self.output_choice = self.outputs.get(k).map(|(id, _)| id.clone());
             return;
         }
+        if let MenuItem::MoveToFolder(folder) = item {
+            self.move_shown_playlist(folder);
+            return;
+        }
         let path = self.library.songs[song].path.clone();
         match item {
-            MenuItem::Output(_) => {}
+            MenuItem::Output(_) | MenuItem::MoveToFolder(_) => {}
+            MenuItem::GetInfo => self.open_info(song),
             MenuItem::PlayNext => self.queue_add(song, true),
             MenuItem::PlayLast => self.queue_add(song, false),
             MenuItem::Rate => {
@@ -1890,8 +2064,9 @@ impl Music {
     }
 
     fn activate(&mut self, target: Target, t: f64) -> Vec<Effect> {
-        // a rule value being typed is kept when anything else is tapped
+        // a rule value or a Get Info field being typed is kept when anything else is tapped
         self.commit_rule_edit();
+        self.commit_info_edit();
         match target {
             Target::Seg(i) => {
                 let tab = [Tab::Artists, Tab::Albums, Tab::Songs, Tab::Radio, Tab::Playlists][i.min(4)];
@@ -1921,26 +2096,27 @@ impl Music {
             }
             Target::Row(i) => match (self.page(), self.tab) {
                 (Page::Root, Tab::Songs) => self.play_songs(self.view.clone(), i, false),
-                (Page::Root, Tab::Playlists) => {
-                    let plain = self.playlists.lists().len();
-                    if i == 0 {
+                (Page::Root, Tab::Playlists) => match self.tab_rows().get(i).copied() {
+                    Some(TabRow::NewPlaylist) => {
                         let name = self.playlists.fresh_name();
                         if let Some(p) = self.playlists.create(&name) {
                             self.push(Page::Playlist(p));
                         }
-                    } else if i == 1 {
+                    }
+                    Some(TabRow::NewSmart) => {
                         // a new smart playlist opens on its rules
                         let name = self.smart.fresh_name();
                         if let Some(p) = self.smart.create(&name) {
                             self.smart_rev += 1;
                             self.push(Page::SmartEdit(p));
                         }
-                    } else if i < 2 + plain {
-                        self.push(Page::Playlist(i - 2));
-                    } else if i < self.playlist_rows() {
-                        self.push(Page::Smart(i - 2 - plain));
                     }
-                }
+                    Some(TabRow::NewFolder) => self.new_folder(),
+                    Some(TabRow::Folder(f)) => self.toggle_folder(f),
+                    Some(TabRow::Playlist { index, .. }) => self.push(Page::Playlist(index)),
+                    Some(TabRow::Smart(p)) => self.push(Page::Smart(p)),
+                    None => {}
+                },
                 (Page::Playlist(p), _) => {
                     let ids: Vec<usize> = self.playlist_entries(p).into_iter().map(|e| e.1).collect();
                     if i < ids.len() {
@@ -1959,6 +2135,7 @@ impl Music {
                     }
                 }
                 (Page::SmartEdit(_), _) => {}
+                (Page::Info, _) => {}
                 (Page::Queue, _) => {
                     if i > 0 && i <= self.queue.upcoming().len() {
                         self.player.jump_to(self.queue.current() + i);
@@ -2022,6 +2199,9 @@ impl Music {
             },
             Target::DeletePlaylist => match self.page() {
                 Page::Playlist(p) => {
+                    if let Some(name) = self.playlists.lists().get(p).map(|l| l.name.clone()) {
+                        self.folders.forget_playlist(&name);
+                    }
                     self.playlists.delete(p);
                     self.renaming = None;
                     self.pages.pop();
@@ -2047,7 +2227,7 @@ impl Music {
                     self.lyrics_on = !self.lyrics_on;
                 }
             }
-            Target::Route => self.output_request = true,
+            Target::Route | Target::MiniRoute => self.output_request = true,
             Target::MenuItem(k) => {
                 if let Some(menu) = self.menu.take() {
                     if let Some(&item) = menu.items.get(k) {
@@ -2055,6 +2235,21 @@ impl Music {
                     }
                 }
             }
+            Target::InfoField(k) => {
+                if let (Some(field), Some(id)) = (Field::ALL.get(k).copied(), self.info_song()) {
+                    let value = self.info_shown(&self.library.songs[id], field);
+                    self.info_edit = Some((field, value));
+                }
+            }
+            Target::InfoReset => {
+                self.info_edit = None;
+                if let Some(path) = self.info_path.clone() {
+                    if self.info.reset(&path) {
+                        self.start_scan();
+                    }
+                }
+            }
+            Target::MoveToFolder => self.open_folder_menu(),
             Target::MenuDismiss => self.menu = None,
             Target::Mini(nowplaying::Target::Open) | Target::Mini(nowplaying::Target::Artwork) => self.open_sheet(true, t),
             Target::Mini(nowplaying::Target::Queue) => {}
@@ -2223,6 +2418,7 @@ impl Music {
                     let albums = self.library.artists[a].albums.clone();
                     self.draw_grid(&mut band, ui, &albums, cy(0.0), bottom, pressed);
                 }
+                (Page::Info, _) => self.draw_info(&mut band, ui, cy(0.0), bottom, pressed),
                 (Page::Album(a), _) => self.draw_album(&mut band, ui, a, cy(0.0), bottom, pressed),
             }
             // empty-state text sits on the middle of the content area, whatever its height
@@ -2249,7 +2445,7 @@ impl Music {
             } else if page == Page::History && self.history_ids().is_empty() {
                 self.label(&mut band, ui, "No History", MAC_TITLE1_PT, Weight::Semibold, LABEL_2.now(), self.w as f32 / 2.0, mid - ui.pt(SPACE_L), 0.5);
                 self.label(&mut band, ui, "Songs you play show up here", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_L), 0.5);
-            } else if page == Page::Root && self.tab == Tab::Playlists || matches!(page, Page::Playlist(_) | Page::Smart(_) | Page::SmartEdit(_)) {
+            } else if page == Page::Root && self.tab == Tab::Playlists || matches!(page, Page::Playlist(_) | Page::Smart(_) | Page::SmartEdit(_) | Page::Info) {
             } else if !radio && self.library.is_empty() {
                 let text = if self.scanning { "Looking for music…" } else { "No Music" };
                 self.label(&mut band, ui, text, MAC_TITLE1_PT, Weight::Semibold, LABEL_2.now(), self.w as f32 / 2.0, mid - ui.pt(SPACE_L), 0.5);
@@ -2377,17 +2573,13 @@ impl Music {
         }
     }
 
-    /// The Playlists tab: "New Playlist" and "New Smart Playlist", then each playlist with its song count, then each
-    /// smart playlist with its rule count.
+    /// The Playlists tab (`folders::rows`): New Playlist, New Smart Playlist and New Playlist Folder; each folder with
+    /// its playlists under it (Show or Hide on the folder row); the playlists in no folder; the smart playlists.
     fn draw_playlists(&mut self, s: &mut Surface, ui: &Ui, y0: f32, bottom: f32, pressed: Option<Target>) {
         let row = ui.pt(ARTIST_ROW_PT);
-        let m = ui.pt(MARGIN_PT);
-        let rows: Vec<(String, String)> = [("New Playlist".to_string(), String::new()), ("New Smart Playlist".to_string(), String::new())]
-            .into_iter()
-            .chain(self.playlists.lists().iter().map(|l| (l.name.clone(), format!("{} {}", l.songs.len(), if l.songs.len() == 1 { "song" } else { "songs" }))))
-            .chain(self.smart.lists().iter().map(|l| (l.name.clone(), format!("Smart Playlist · {} {}", l.rules.len(), if l.rules.len() == 1 { "rule" } else { "rules" }))))
-            .collect();
-        for (i, (name, sub)) in rows.into_iter().enumerate() {
+        let (m, w) = (ui.pt(MARGIN_PT), self.w as f32);
+        let rows = self.tab_rows();
+        for (i, entry) in rows.into_iter().enumerate() {
             let y = y0 + i as f32 * row;
             if y + row < s.y0 as f32 || y > bottom {
                 continue;
@@ -2396,16 +2588,46 @@ impl Music {
                 s.fill_rect(0, y.max(0.0) as usize, self.w as usize, row as usize, ROW_PRESSED.now());
             }
             let mid = y + row / 2.0;
-            let text_x = m + ui.pt(SPACE_S);
-            let name = ui.fit(&name, MAC_BODY_PT, self.w as f32 - text_x - ui.pt(60.0));
-            if i < 2 {
-                self.label(s, ui, &name, MAC_BODY_PT, Weight::Regular, PINK, text_x, mid, 0.0);
-            } else {
-                self.label(s, ui, &name, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, mid - ui.pt(SPACE_M), 0.0);
-                self.label(s, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, mid + ui.pt(SPACE_M), 0.0);
-                self.label(s, ui, "›", MAC_TITLE1_PT, Weight::Semibold, LABEL_3.now(), self.w as f32 - m, mid, 1.0);
+            let indent = if matches!(entry, TabRow::Playlist { in_folder: true, .. }) { ui.pt(SPACE_XL) } else { 0.0 };
+            let text_x = m + ui.pt(SPACE_S) + indent;
+            let room = w - text_x - ui.pt(60.0);
+            match entry {
+                TabRow::NewPlaylist | TabRow::NewSmart | TabRow::NewFolder => {
+                    let text = match entry {
+                        TabRow::NewPlaylist => "New Playlist",
+                        TabRow::NewSmart => "New Smart Playlist",
+                        _ => "New Playlist Folder",
+                    };
+                    self.label(s, ui, text, MAC_BODY_PT, Weight::Regular, PINK, text_x, mid, 0.0);
+                }
+                TabRow::Folder(f) => {
+                    let name = self.folders.names().get(f).cloned().unwrap_or_default();
+                    let count = self.playlists.lists().iter().filter(|l| self.folders.folder_index(&l.name) == Some(f)).count();
+                    let hidden = self.collapsed.contains(&name);
+                    let name = ui.fit(&name, MAC_BODY_PT, room);
+                    self.label(s, ui, &name, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, mid - ui.pt(SPACE_M), 0.0);
+                    let sub = format!("{count} {}", if count == 1 { "playlist" } else { "playlists" });
+                    self.label(s, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, mid + ui.pt(SPACE_M), 0.0);
+                    self.label(s, ui, if hidden { "Show" } else { "Hide" }, MAC_SUBHEAD_PT, Weight::Regular, PINK, w - m, mid, 1.0);
+                }
+                TabRow::Playlist { index, .. } => {
+                    let Some((name, count)) = self.playlists.lists().get(index).map(|l| (l.name.clone(), l.songs.len())) else { continue };
+                    let name = ui.fit(&name, MAC_BODY_PT, room);
+                    self.label(s, ui, &name, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, mid - ui.pt(SPACE_M), 0.0);
+                    let sub = format!("{count} {}", if count == 1 { "song" } else { "songs" });
+                    self.label(s, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, mid + ui.pt(SPACE_M), 0.0);
+                    self.label(s, ui, "›", MAC_TITLE1_PT, Weight::Semibold, LABEL_3.now(), w - m, mid, 1.0);
+                }
+                TabRow::Smart(p) => {
+                    let Some((name, rules)) = self.smart.lists().get(p).map(|l| (l.name.clone(), l.rules.len())) else { continue };
+                    let name = ui.fit(&name, MAC_BODY_PT, room);
+                    self.label(s, ui, &name, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, mid - ui.pt(SPACE_M), 0.0);
+                    let sub = format!("Smart Playlist · {rules} {}", if rules == 1 { "rule" } else { "rules" });
+                    self.label(s, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, mid + ui.pt(SPACE_M), 0.0);
+                    self.label(s, ui, "›", MAC_TITLE1_PT, Weight::Semibold, LABEL_3.now(), w - m, mid, 1.0);
+                }
             }
-            s.fill_rrect(text_x, y + row - 1.0, self.w as f32 - text_x, 1.0, 0.0, SEPARATOR_C.now());
+            s.fill_rrect(text_x, y + row - 1.0, w - text_x, 1.0, 0.0, SEPARATOR_C.now());
         }
     }
 
@@ -2592,6 +2814,7 @@ impl Music {
         let heading = heading.unwrap_or_else(|| self.library.songs[song].title.clone());
         let title = ui.fit(&heading, MAC_SUBHEAD_PT, card.w - ui.pt(SPACE_XXXL));
         self.label(s, ui, &title, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), card.x + card.w / 2.0, card.y + ui.pt(MENU_HEAD_PT) / 2.0, 0.5);
+        let here = self.shown_folder();
         for (k, item) in items.into_iter().enumerate() {
             let y = card.y + ui.pt(MENU_HEAD_PT) + k as f32 * ui.pt(MENU_ROW_PT);
             if pressed == Some(Target::MenuItem(k)) {
@@ -2613,6 +2836,11 @@ impl Music {
                 MenuItem::AddTo(p) => (format!("Add to {}", self.playlists.lists().get(p).map_or("", |l| l.name.as_str())), LABEL.now()),
                 MenuItem::NewPlaylist => ("Add to New Playlist".to_string(), LABEL.now()),
                 MenuItem::RemoveFromPlaylist(..) => ("Remove from Playlist".to_string(), PINK),
+                MenuItem::GetInfo => ("Get Info".to_string(), LABEL.now()),
+                MenuItem::MoveToFolder(f) => {
+                    let name = f.and_then(|i| self.folders.names().get(i).cloned()).unwrap_or_else(|| "No Folder".to_string());
+                    (name, if f == here { PINK } else { LABEL.now() })
+                }
             };
             let text = ui.fit(&text, MAC_BODY_PT, card.w - ui.pt(SPACE_HUGE));
             self.label(s, ui, &text, MAC_BODY_PT, Weight::Regular, color, card.x + ui.pt(SPACE_XL), y + ui.pt(MENU_ROW_PT) / 2.0, 0.0);
@@ -2716,6 +2944,56 @@ impl Music {
         self.draw_song_rows(s, ui, &songs, y0 + ui.pt(ALBUM_HEADER_PT), bottom, pressed, false);
     }
 
+    /// The Get Info page of the song at `info_path`: Title, Artist and Album (tap one to type a new value), Restore
+    /// Original Tags, then the file's name and its length.
+    fn draw_info(&mut self, s: &mut Surface, ui: &Ui, y0: f32, bottom: f32, pressed: Option<Target>) {
+        let Some(id) = self.info_song() else { return };
+        let song = self.library.songs[id].clone();
+        let row = ui.pt(SONG_ROW_PT);
+        let (m, w) = (ui.pt(MARGIN_PT), self.w as f32);
+        let value_x = m + ui.pt(INFO_LABEL_PT);
+        for i in 0..INFO_ROWS {
+            let y = y0 + i as f32 * row;
+            if y + row < s.y0 as f32 || y > bottom {
+                continue;
+            }
+            let mid = y + row / 2.0;
+            let target = match i {
+                0..=2 => Some(Target::InfoField(i)),
+                3 => Some(Target::InfoReset),
+                _ => None,
+            };
+            if target.is_some() && pressed == target {
+                s.fill_rect(0, y.max(0.0) as usize, w as usize, row as usize, ROW_PRESSED.now());
+            }
+            match i {
+                0..=2 => {
+                    let field = Field::ALL[i];
+                    let typed = self.info_edit.as_ref().filter(|(f, _)| *f == field).map(|(_, text)| format!("{text}|"));
+                    let value = typed.unwrap_or_else(|| self.info_shown(&song, field));
+                    let value = ui.fit(&value, MAC_BODY_PT, w - value_x - m);
+                    self.label(s, ui, field.label(), MAC_BODY_PT, Weight::Regular, LABEL.now(), m, mid, 0.0);
+                    self.label(s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), value_x, mid, 0.0);
+                }
+                3 => {
+                    self.label(s, ui, "Restore Original Tags", MAC_BODY_PT, Weight::Regular, PINK, w / 2.0, mid, 0.5);
+                }
+                4 => {
+                    let file = song.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    let file = ui.fit(&file, MAC_BODY_PT, w - value_x - m);
+                    self.label(s, ui, "File", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), m, mid, 0.0);
+                    self.label(s, ui, &file, MAC_BODY_PT, Weight::Regular, LABEL.now(), value_x, mid, 0.0);
+                }
+                _ => {
+                    let length = song.duration_ms.map_or_else(|| "-:--".to_string(), clock);
+                    self.label(s, ui, "Length", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), m, mid, 0.0);
+                    self.label(s, ui, &length, MAC_BODY_PT, Weight::Regular, LABEL.now(), value_x, mid, 0.0);
+                }
+            }
+            s.fill_rrect(m, y + row - 1.0, w - m, 1.0, 0.0, SEPARATOR_C.now());
+        }
+    }
+
     /// The mini player bar above the home indicator.
     fn draw_mini(&mut self, s: &mut Surface, ui: &Ui) {
         let mini = Mini::new(ui, self.w, self.h);
@@ -2738,6 +3016,8 @@ impl Music {
         let dim = |t: nowplaying::Target| if self.pressed == Some(Target::Mini(t)) { LABEL_3.now() } else { LABEL.now() };
         icons::play_pause(s, mini.play, ui.pt(SPACE_XXL), self.snap.playing, dim(nowplaying::Target::Play));
         icons::skip(s, mini.next, ui.pt(SPACE_XL), true, dim(nowplaying::Target::Next));
+        let color = if self.pressed == Some(Target::MiniRoute) { LABEL_3.now() } else { LABEL.now() };
+        draw_route(s, ui, Self::mini_route(ui, &mini), color);
     }
 
     /// The lyrics over the artwork of the Now Playing sheet: the line being sung in the middle, with the lines around it.
@@ -2820,15 +3100,8 @@ impl Music {
         draw_slider(s, ui, vol, self.volume, false);
         icons::speaker(s, (vol.x - ui.pt(SPACE_XL), vol.y + vol.h / 2.0), ui.pt(SPACE_L), 0, dim);
         icons::speaker(s, (vol.x + vol.w + ui.pt(SPACE_L), vol.y + vol.h / 2.0), ui.pt(SPACE_L), 2, dim);
-        // route glyph (AirPlay-like): triangle under two arcs, beside Up Next
-        {
-            let c = (self.w as f32 - side - ui.pt(SPACE_L), l.queue.1 + dy);
-            let k = ui.pt(SPACE_S);
-            icons::fill_poly(s, &[(c.0 - k * 0.7, c.1 + k), (c.0 + k * 0.7, c.1 + k), (c.0, c.1 + k * 0.1)], dim);
-            s.fill_rrect(c.0 - k, c.1 - k, 2.0 * k, ui.pt(1.8), 0.0, dim);
-            s.fill_rrect(c.0 - k, c.1 - k, ui.pt(1.8), k * 1.3, 0.0, dim);
-            s.fill_rrect(c.0 + k - ui.pt(1.8), c.1 - k, ui.pt(1.8), k * 1.3, 0.0, dim);
-        }
+        // the output route, beside Up Next
+        draw_route(s, ui, (self.w as f32 - side - ui.pt(SPACE_L), l.queue.1 + dy), dim);
         // the lyrics switch, when the song has lyrics
         if self.lyrics.is_some() && !live {
             let (left, _) = self.sheet_buttons(ui);
@@ -2868,6 +3141,15 @@ const ART_RADIUS: f32 = nowplaying::ART_RADIUS_PT;
 /// The height of one line of lyrics on the Now Playing sheet.
 const LYRIC_LINE_PT: f32 = 32.0;
 
+/// The output route glyph (AirPlay-like): a triangle under a bar, centred on `c`.
+fn draw_route(s: &mut Surface, ui: &Ui, c: (f32, f32), color: u32) {
+    let k = ui.pt(SPACE_S);
+    icons::fill_poly(s, &[(c.0 - k * 0.7, c.1 + k), (c.0 + k * 0.7, c.1 + k), (c.0, c.1 + k * 0.1)], color);
+    s.fill_rrect(c.0 - k, c.1 - k, 2.0 * k, ui.pt(1.8), 0.0, color);
+    s.fill_rrect(c.0 - k, c.1 - k, ui.pt(1.8), k * 1.3, 0.0, color);
+    s.fill_rrect(c.0 + k - ui.pt(1.8), c.1 - k, ui.pt(1.8), k * 1.3, 0.0, color);
+}
+
 /// A dark background colour drawn from the artwork's average, as bifrost tints
 /// the sheet with the picture.
 pub fn tint_of(img: &Image) -> u32 {
@@ -2889,7 +3171,7 @@ pub fn tint_of(img: &Image) -> u32 {
 fn scrolls(t: Target) -> bool {
     matches!(
         t,
-        Target::Row(_) | Target::Fav(_) | Target::More(_) | Target::QUp(_) | Target::QDel(_) | Target::QClear | Target::Content | Target::Play | Target::Shuffle
+        Target::Row(_) | Target::Fav(_) | Target::More(_) | Target::QUp(_) | Target::QDel(_) | Target::QClear | Target::Content | Target::Play | Target::Shuffle | Target::InfoField(_) | Target::InfoReset
             | Target::MatchToggle | Target::RuleField(_) | Target::RuleOp(_) | Target::RuleValue(_) | Target::RuleDel(_) | Target::RuleAdd
     )
 }
@@ -2928,7 +3210,7 @@ mod tests {
         let mut m = Music::new(800, 600, vec![dir.join("Music")], LoadOptions::all(), Client::for_root(dir)).unwrap();
         m.enable_library_store(dir.join("data"));
         let files = vec![scanned("Alpha", "Abba", 300), scanned("Bravo", "Blur", 200), scanned("Charlie", "Abba", 100)];
-        m.apply(Done::Scanned(Library::build(files), Vec::new()));
+        m.apply(Done::Scanned(files, Vec::new()));
         m
     }
 
@@ -2988,10 +3270,10 @@ mod tests {
         let dir = folder("smart");
         let mut m = music(&dir);
         m.activate(Target::Seg(4), 0.0);
-        assert_eq!(m.playlist_rows(), 2, "New Playlist and New Smart Playlist");
+        assert_eq!(m.playlist_rows(), 3, "New Playlist, New Smart Playlist and New Playlist Folder");
         m.activate(Target::Row(1), 0.0);
         assert_eq!(m.page(), Page::SmartEdit(0));
-        assert_eq!(m.playlist_rows(), 3);
+        assert_eq!(m.playlist_rows(), 4);
         m.sync_smart();
         assert_eq!(m.smart_view, [0, 1, 2], "a rule without a value keeps every song");
         // Artist contains "abba"
@@ -3012,7 +3294,7 @@ mod tests {
         assert_eq!(m.smart_view, [0, 1, 2], "tapping elsewhere keeps the typed value");
         // back to the list: the playlist is there, opens, renames and deletes
         m.activate(Target::Back, 0.0);
-        m.activate(Target::Row(2), 0.0);
+        m.activate(Target::Row(3), 0.0);
         assert_eq!(m.page(), Page::Smart(0));
         assert_eq!(m.title(), "Smart Playlist");
         m.activate(Target::Rename, 0.0);
@@ -3140,6 +3422,51 @@ mod tests {
         assert!(!m.is_scanning(), "nothing copied, nothing to scan");
         m.imports_done(1);
         assert!(m.is_scanning());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn get_info_edits_a_song_and_the_scan_lays_the_edit_over_its_tag() {
+        let dir = folder("get-info");
+        let mut m = music(&dir);
+        let bravo = song_path(&m, 1);
+        m.open_info(1);
+        assert_eq!(m.page(), Page::Info);
+        assert_eq!(m.title(), "Get Info");
+        m.activate(Target::InfoField(0), 0.0);
+        assert!(m.wants_keyboard());
+        assert_eq!(m.info_edit.as_ref().map(|(f, t)| (*f, t.as_str())), Some((Field::Title, "Bravo")));
+        m.info_edit = Some((Field::Title, "Bravo Live".into()));
+        m.type_text("\n");
+        assert!(!m.wants_keyboard());
+        assert_eq!(m.info.value(&bravo, Field::Title), Some("Bravo Live"));
+        // the scan that follows reads the tags again and lays the edit over them
+        m.apply(Done::Scanned(vec![scanned("Bravo", "Blur", 200)], Vec::new()));
+        assert!(m.library.songs.iter().any(|s| s.path == bravo && s.title == "Bravo Live"));
+        m.activate(Target::InfoReset, 0.0);
+        assert_eq!(m.info.value(&bravo, Field::Title), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_playlist_moves_into_a_folder_from_its_page_and_the_tab_nests_it() {
+        let dir = folder("folders");
+        let mut m = music(&dir);
+        m.activate(Target::Seg(4), 0.0);
+        m.run_command(Command::NewFolder);
+        assert_eq!(m.tab, Tab::Playlists);
+        assert_eq!(m.folders.names(), ["Folder"]);
+        m.activate(Target::Row(0), 0.0);
+        assert_eq!(m.page(), Page::Playlist(0));
+        m.open_folder_menu();
+        m.activate(Target::MenuItem(1), 0.0);
+        assert_eq!(m.folders.folder_of("Playlist"), Some("Folder"));
+        m.activate(Target::Back, 0.0);
+        let rows = m.tab_rows();
+        assert_eq!(rows[3], TabRow::Folder(0));
+        assert_eq!(rows[4], TabRow::Playlist { index: 0, in_folder: true });
+        m.activate(Target::Row(3), 0.0);
+        assert_eq!(m.tab_rows().len(), 4, "the folder is hidden and its playlist with it");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
