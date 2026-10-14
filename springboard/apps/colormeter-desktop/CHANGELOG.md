@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Changed: the aperture is always odd (1 to 31 pixels). An even square had no centre pixel, so its mean was offset from the pointer; an even size now rounds up to the odd size above it. The slider, the assistive steps and the View menu step between odd sizes (two pixels at a time).
+- Changed: the matrix citations for the Color Meter rows point at the current file and line of each symbol, and the aperture note describes the centred square.
+
 ## 0.4.0
 
 - Changed: the aperture model that was kept beside the window (an odd-size aperture type, its bounds and an update gate) is removed. The window already reads the aperture, the loupe outline and Update Continuously through its own tested state, so the unused copy only duplicated them.
