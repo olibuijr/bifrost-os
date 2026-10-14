@@ -18,9 +18,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/ui/src/pip_window.rs",
+   "status": "partial",
+   "note": "Picture in Picture state and window geometry; no shell window yet. built on arm; not yet verified on Midget",
    "rea": []
   },
   {
@@ -99,8 +99,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "people and messaging service, no counterpart yet",
+   "status": "n/a",
+   "note": "Apple Messages people-suggestion service; BifrOSt has no messaging service",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "people view service, no counterpart yet",
+   "bifrost": "springboard/src/shell/contactstore.rs",
+   "status": "partial",
+   "note": "contact parsing, sorting and search; no people card view yet. built on arm; not yet verified on Midget",
    "rea": []
   },
   {
@@ -139,8 +139,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "power connect sound, no counterpart yet",
+   "status": "n/a",
+   "note": "Apple power-adapter connect chime tied to Apple hardware; BifrOSt plays no sound on power events",
    "rea": []
   },
   {
@@ -239,8 +239,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Apple configuration profile (MDM) helper; BifrOSt has no profile installs",
    "rea": []
   },
   {
@@ -278,9 +278,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/mod.rs",
+   "status": "partial",
+   "note": "input source list and controllers; no plugin registration for third-party input method apps. built on arm; not yet verified on Midget",
    "rea": []
   },
   {
@@ -419,8 +419,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Telephony App Intents; BifrOSt has no phone hardware or calling service",
    "rea": []
   },
   {
@@ -478,9 +478,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/shell/photos/mod.rs",
+   "status": "partial",
+   "note": "photo-backed wallpapers (set_wallpaper) feed the lock screen; no poster layers. built on arm; not yet verified on Midget",
    "rea": []
   },
   {
@@ -558,9 +558,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/print_scan_page.rs",
+   "status": "partial",
+   "note": "Scanners group lists devices via bifrost_ui::scanner; no App Intents for scanning. built on arm; not yet verified on Midget",
    "rea": []
   },
   {
@@ -619,8 +619,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Remote poster catalogue served by Apple's service; BifrOSt has no such catalogue",
    "rea": []
   },
   {
