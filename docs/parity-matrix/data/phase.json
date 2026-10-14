@@ -10,9 +10,9 @@
     {
       "feature": "Engine and asset registry",
       "apple": "PHASEEngine, PHASEAssetRegistry, PHASESoundAsset, PHASEAsset",
-      "bifrost": "springboard/audiod/src/main.rs (one process owns speaker and mic); springboard/sdk/src/lib.rs:87 (audio::Client)",
+      "bifrost": "springboard/audiod/src/main.rs (one process owns speaker and mic); springboard/sdk/src/lib.rs:87 (audio::Client); springboard/src/media/engine.rs (Engine, AssetRegistry, UpdateMode)",
       "status": "partial",
-      "note": "a shared playback service exists; no engine object, no asset registry and no update-mode control"
+      "note": "The shared playback service and an app-side engine model work: named assets with loop modes, a start and stop lifecycle, and an update mode locked while running, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: the engine does not yet drive audiod, so playing a name is not heard; the lab machine is needed to confirm an asset plays through the server."
     },
     {
       "feature": "Sampler playback of complete audio",
