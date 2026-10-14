@@ -900,8 +900,17 @@ impl Freeform {
     /// A press while the search is open: a row opens that board, a press outside the panel closes the search.
     pub(super) fn search_press(&mut self, ui: &Ui, x: f32, y: f32) {
         let hits = self.search_hits();
-        let (panel, _, rows) = self.search_layout(ui);
+        let (panel, field, rows) = self.search_layout(ui);
         let inside = |r: &Rect| x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+        let scale = ui.pt(1.0);
+        let field_points = bifrost_app::controls::Rect {
+            x: field.x / scale, y: field.y / scale, w: field.w / scale, h: field.h / scale,
+        };
+        if bifrost_app::controls::search::hits_clear(field_points, self.search.as_ref().is_some_and(|s| !s.query.is_empty()), x / scale, y / scale) {
+            if let Some(search) = self.search.as_mut() { search.query.clear(); search.sel = 0; }
+            self.dirty = true;
+            return;
+        }
         if let Some(i) = rows.iter().position(|r| inside(r)) {
             if let Some(&id) = hits.get(i) {
                 self.open_search_hit(ui, id);
@@ -921,12 +930,19 @@ impl Freeform {
         s.fill_rrect(panel.x, panel.y, panel.w, panel.h, ui.pt(6.0), SIDEBAR_BG.now());
         let line = ui.pt(1.0).max(1.0);
         s.fill_rect(panel.x as usize, (field.y + field.h) as usize, panel.w as usize, line as usize, SEPARATOR_C.now());
-        let pad = ui.pt(SPACE_M);
         let hint = if search.rename { "Board name" } else { "Search boards" };
-        let (text, color) = if search.query.is_empty() { (hint.to_string(), LABEL_2.now()) } else { (search.query.clone(), LABEL.now()) };
-        let shown = ui.fit(&text, MAC_CALLOUT_PT, panel.w - 2.0 * pad);
-        let img = ui.text(&shown, MAC_CALLOUT_PT, Weight::Regular, color);
-        s.blit(&img, (field.x + pad) as i32, (field.y + (field.h - img.h as f32) / 2.0) as i32, 255, 255);
+        let mut field_value = bifrost_app::controls::TextField::new();
+        field_value.push_str(&search.query);
+        let scale = ui.pt(1.0);
+        widgets::search_field(
+            s,
+            ui,
+            &field_value,
+            bifrost_app::controls::Rect { x: field.x / scale, y: field.y / scale, w: field.w / scale, h: field.h / scale },
+            hint,
+            true,
+        );
+        let pad = ui.pt(SPACE_M);
         let hits = self.search_hits();
         for (i, (row, id)) in rows.iter().zip(hits.iter()).enumerate() {
             let chosen = i == search.sel;

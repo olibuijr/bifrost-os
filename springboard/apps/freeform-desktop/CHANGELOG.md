@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.1 — 2026-10-14
+
+- Draw board search with the shared Golden Gate search field and make its clear button interactive.
+
 ## 1.12.0 — 2026-10-14
 
 - Route standard Undo, Redo, Copy and Paste through the shell's Edit commands; keep Duplicate and Delete in Arrange.
