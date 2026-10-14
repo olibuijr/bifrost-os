@@ -160,6 +160,50 @@ pub fn signal_sheet_hit(card: Rect, x: f32, y: f32) -> Option<SheetHit> {
     (0..model::SIGNALS.len()).find(|i| inside(signal_sheet_row(card, *i))).map(SheetHit::Row)
 }
 
+/// The quit confirmation: a card with the question, a line on what is lost, and Cancel, Force Quit and Quit. The
+/// default button is the one Return chooses: Force Quit when the menu item was Force Quit Process, else Quit.
+const QUIT_HEAD_PT: f32 = 52.0;
+const QUIT_FOOT_PT: f32 = 48.0;
+
+/// The state of the quit confirmation: the process it is about and whether Return forces the quit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct QuitSheet {
+    pub pid: u32,
+    pub force_default: bool,
+}
+
+/// What a point on the quit confirmation is over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuitHit {
+    Cancel,
+    Force,
+    Quit,
+}
+
+/// The three buttons of a quit confirmation whose card is `card`, left to right: Cancel, Force Quit, Quit.
+pub fn quit_sheet_buttons(card: Rect) -> [Rect; 3] {
+    let y = card.y + card.h - QUIT_FOOT_PT + (QUIT_FOOT_PT - SHEET_BUTTON_H_PT) / 2.0;
+    let quit = Rect { x: card.x + card.w - SHEET_PAD_PT - SHEET_BUTTON_W_PT, y, w: SHEET_BUTTON_W_PT, h: SHEET_BUTTON_H_PT };
+    let force = Rect { x: quit.x - 8.0 - SHEET_BUTTON_W_PT, ..quit };
+    let cancel = Rect { x: force.x - 8.0 - SHEET_BUTTON_W_PT, ..quit };
+    [cancel, force, quit]
+}
+
+/// What the point is over on a quit confirmation whose card is `card`.
+pub fn quit_sheet_hit(card: Rect, x: f32, y: f32) -> Option<QuitHit> {
+    let inside = |b: Rect| x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
+    let [cancel, force, quit] = quit_sheet_buttons(card);
+    if inside(cancel) {
+        Some(QuitHit::Cancel)
+    } else if inside(force) {
+        Some(QuitHit::Force)
+    } else if inside(quit) {
+        Some(QuitHit::Quit)
+    } else {
+        None
+    }
+}
+
 /// Where a press started, so the release can act on the same thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Press {
@@ -228,6 +272,8 @@ pub struct Monitor {
     pub request: Option<Request>,
     /// The signal sheet, with the index of the chosen signal in `model::SIGNALS`.
     pub signal_sheet: Option<usize>,
+    /// The quit confirmation, when Quit Process or Force Quit Process has been chosen.
+    pub quit_sheet: Option<QuitSheet>,
     /// The pids that own a window on the desktop, as the shell last listed them (for Windowed Processes).
     pub window_owners: HashSet<u32>,
     /// The window list should be asked for again; taken with `take_window_poll`.
@@ -271,6 +317,7 @@ impl Monitor {
             report: None,
             request: None,
             signal_sheet: None,
+            quit_sheet: None,
             window_owners: HashSet::new(),
             window_poll: false,
             dock_mode: DockMode::Off,
@@ -588,20 +635,83 @@ impl Monitor {
         self.selected_proc().map_or(false, |p| p.uid == self.sampler.own_uid && p.pid != std::process::id())
     }
 
-    /// Sends SIGTERM to the selected process (its own user's, checked here as well as in the toolbar).
+    /// Quit Process: asks first, with the quit confirmation. Only for a process that may be signalled.
     pub fn quit_selected(&mut self) {
-        self.signal_selected(SIGTERM, "quit");
+        self.open_quit_sheet(false);
     }
 
-    /// Sends SIGKILL to the selected process. Same ownership rule as Quit: a process that cannot be quit cannot be forced.
+    /// Force Quit Process: asks first too, and Return forces the quit.
     pub fn force_quit_selected(&mut self) {
-        self.signal_selected(SIGKILL, "force quit");
+        self.open_quit_sheet(true);
+    }
+
+    /// Opens the quit confirmation on the selected process. `force_default` makes Force Quit the button Return chooses.
+    pub fn open_quit_sheet(&mut self, force_default: bool) {
+        if !self.can_quit_selected() {
+            return;
+        }
+        self.signal_sheet = None;
+        self.quit_sheet = self.selected.map(|pid| QuitSheet { pid, force_default });
+    }
+
+    /// The name of a process for the sheets' text, or a plain word when it is no longer listed.
+    pub fn process_name(&self, pid: u32) -> String {
+        self.snapshot.as_ref().and_then(|s| s.procs.iter().find(|p| p.pid == pid)).map_or_else(|| "the process".to_string(), |p| p.name.clone())
+    }
+
+    /// The quit confirmation's card, centred on the content like the signal sheet.
+    pub fn quit_sheet_rect(&self, ui: &Ui) -> Rect {
+        let g = self.geo(ui);
+        let h = QUIT_HEAD_PT + QUIT_FOOT_PT;
+        let top = UNIFIED_BAR_PT + GAP_PT;
+        Rect { x: SIDE_PT + ((g.w - SIDE_PT - SHEET_W_PT) / 2.0).max(0.0), y: ((g.h - h) / 2.0).max(top), w: SHEET_W_PT, h }
+    }
+
+    /// A release on the quit confirmation: Cancel closes it; Quit and Force Quit send their signal to that process.
+    fn quit_sheet_released(&mut self, ui: &Ui, x: f32, y: f32) {
+        let Some(sheet) = self.quit_sheet else { return };
+        match quit_sheet_hit(self.quit_sheet_rect(ui), x, y) {
+            Some(QuitHit::Cancel) => self.quit_sheet = None,
+            Some(QuitHit::Quit) => self.confirm_quit(sheet, false),
+            Some(QuitHit::Force) => self.confirm_quit(sheet, true),
+            None => {}
+        }
+    }
+
+    /// Return on the quit confirmation: the default button's action.
+    pub fn confirm_quit_default(&mut self) {
+        if let Some(sheet) = self.quit_sheet {
+            self.confirm_quit(sheet, sheet.force_default);
+        }
+    }
+
+    /// Closes the confirmation and sends SIGTERM (or SIGKILL when forced) to its process.
+    fn confirm_quit(&mut self, sheet: QuitSheet, force: bool) {
+        self.quit_sheet = None;
+        let (sig, verb) = if force { (SIGKILL, "force quit") } else { (SIGTERM, "quit") };
+        self.signal_pid(sheet.pid, sig, verb);
     }
 
     /// Process > Send Signal...: opens the sheet with TERM chosen. Only for a process that may be signalled.
     pub fn open_signal_sheet(&mut self) {
         if self.can_quit_selected() {
+            self.quit_sheet = None;
             self.signal_sheet = model::SIGNALS.iter().position(|s| s.number == SIGTERM).or(Some(0));
+        }
+    }
+
+    /// Moves the chosen signal on the sheet by `step` rows, stopping at the first and the last.
+    fn move_signal_choice(&mut self, step: i32) {
+        if let Some(i) = self.signal_sheet {
+            let last = model::SIGNALS.len() as i32 - 1;
+            self.signal_sheet = Some((i as i32 + step).clamp(0, last) as usize);
+        }
+    }
+
+    /// Sends the signal chosen on the sheet and closes it (Send, or Return).
+    fn send_chosen_signal(&mut self) {
+        if let Some(i) = self.signal_sheet.take() {
+            self.send_signal(model::SIGNALS[i]);
         }
     }
 
@@ -618,11 +728,7 @@ impl Monitor {
         match signal_sheet_hit(self.signal_sheet_rect(ui), x, y) {
             Some(SheetHit::Row(i)) => self.signal_sheet = Some(i),
             Some(SheetHit::Cancel) => self.signal_sheet = None,
-            Some(SheetHit::Send) => {
-                if let Some(i) = self.signal_sheet.take() {
-                    self.send_signal(model::SIGNALS[i]);
-                }
-            }
+            Some(SheetHit::Send) => self.send_chosen_signal(),
             None => {}
         }
     }
@@ -643,14 +749,21 @@ impl Monitor {
     }
 
     fn signal_selected(&mut self, sig: i32, verb: &str) {
-        let Some(p) = self.selected_proc().cloned() else { return };
-        if !self.can_quit_selected() {
+        let Some(pid) = self.selected else { return };
+        self.signal_pid(pid, sig, verb);
+    }
+
+    /// Sends `sig` to one process of the signed-in user. Anything else is refused, and this process is never signalled.
+    fn signal_pid(&mut self, pid: u32, sig: i32, verb: &str) {
+        let name = self.process_name(pid);
+        let owned = self.snapshot.as_ref().and_then(|s| s.procs.iter().find(|p| p.pid == pid)).map_or(false, |p| p.uid == self.sampler.own_uid && p.pid != std::process::id());
+        if !owned {
             self.status = format!("Only processes you own can be {verb}");
             return;
         }
         // SAFETY: kill(2) takes a pid and a signal number and touches no memory of ours.
-        let rc = unsafe { kill(p.pid as i32, sig) };
-        self.status = if rc == 0 { format!("Sent {verb} to {}", p.name) } else { format!("Could not {verb} {}", p.name) };
+        let rc = unsafe { kill(pid as i32, sig) };
+        self.status = if rc == 0 { format!("Sent {verb} to {name}") } else { format!("Could not {verb} {name}") };
     }
 
     /// Whether a process row is selected (any process can be inspected; the reading says what is denied).
@@ -893,9 +1006,23 @@ impl Monitor {
 
     /// Editing keys (shell key codes: 8 backspace, 1 escape). True when a frame is needed.
     pub fn key(&mut self, code: u32) -> bool {
-        // Escape closes the signal sheet
-        if self.signal_sheet.is_some() && code == 1 {
-            self.signal_sheet = None;
+        // the sheets take the keys while they are open: Escape closes, Return confirms, the arrows move the signal
+        if self.quit_sheet.is_some() {
+            match code {
+                1 | 27 => self.quit_sheet = None,
+                13 => self.confirm_quit_default(),
+                _ => return false,
+            }
+            return true;
+        }
+        if self.signal_sheet.is_some() {
+            match code {
+                1 | 27 => self.signal_sheet = None,
+                38 => self.move_signal_choice(-1),
+                40 => self.move_signal_choice(1),
+                13 => self.send_chosen_signal(),
+                _ => return false,
+            }
             return true;
         }
         // Escape leaves the report
@@ -931,7 +1058,7 @@ impl Monitor {
         match kind {
             TouchKind::Down => {
                 // the sheet takes every press while it is open
-                if self.signal_sheet.is_some() {
+                if self.signal_sheet.is_some() || self.quit_sheet.is_some() {
                     self.press = Press::Sheet;
                     self.search_focused = false;
                     return true;
@@ -995,7 +1122,13 @@ impl Monitor {
                             report.scroll.up(y, t);
                         }
                     }
-                    Press::Sheet => self.sheet_released(ui, x, y),
+                    Press::Sheet => {
+                        if self.quit_sheet.is_some() {
+                            self.quit_sheet_released(ui, x, y);
+                        } else {
+                            self.sheet_released(ui, x, y);
+                        }
+                    }
                     Press::Tab(i) => {
                         let seg = self.seg_rect(ui);
                         if sheet::segment_hit(seg, Tab::ALL.len(), x, y) == Some(i) {
@@ -1410,5 +1543,78 @@ mod tests {
         assert_eq!(m.signal_sheet.map(|i| model::SIGNALS[i].name), Some("TERM"));
         assert!(m.key(1));
         assert_eq!(m.signal_sheet, None, "Escape closes the sheet");
+    }
+
+    fn quit_card() -> Rect {
+        Rect { x: 100.0, y: 50.0, w: SHEET_W_PT, h: QUIT_HEAD_PT + QUIT_FOOT_PT }
+    }
+
+    #[test]
+    fn the_quit_buttons_are_cancel_force_quit_and_quit_left_to_right() {
+        let c = quit_card();
+        let [cancel, force, quit] = quit_sheet_buttons(c);
+        assert!(cancel.x + cancel.w < force.x && force.x + force.w < quit.x, "left to right");
+        assert!(quit.x + quit.w <= c.x + c.w && cancel.x >= c.x, "the buttons fit the card");
+        assert_eq!(quit_sheet_hit(c, cancel.x + 1.0, cancel.y + 1.0), Some(QuitHit::Cancel));
+        assert_eq!(quit_sheet_hit(c, force.x + 1.0, force.y + 1.0), Some(QuitHit::Force));
+        assert_eq!(quit_sheet_hit(c, quit.x + 1.0, quit.y + 1.0), Some(QuitHit::Quit));
+        assert_eq!(quit_sheet_hit(c, c.x + 1.0, c.y + 1.0), None, "the title is nothing");
+    }
+
+    #[test]
+    fn quit_asks_first_and_cancel_keeps_the_process() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let own = m.sampler.own_uid;
+        let mut mine = proc(4_000_010, 1, "mine");
+        mine.uid = own;
+        with_rows(&mut m, vec![mine]);
+        m.selected = Some(4_000_010);
+        m.quit_selected();
+        assert_eq!(m.quit_sheet, Some(QuitSheet { pid: 4_000_010, force_default: false }));
+        assert!(m.status.is_empty(), "nothing sent yet");
+        assert!(m.key(27), "Escape closes the confirmation");
+        assert_eq!(m.quit_sheet, None);
+        m.force_quit_selected();
+        assert_eq!(m.quit_sheet.map(|q| q.force_default), Some(true));
+        assert!(m.key(13), "Return chooses the default");
+        assert_eq!(m.quit_sheet, None);
+        assert_eq!(m.status, "Could not force quit mine", "the process does not exist, so the kill is refused");
+    }
+
+    #[test]
+    fn the_quit_confirmation_refuses_other_users_processes() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let own = m.sampler.own_uid;
+        let mut theirs = proc(4_000_011, 1, "theirs");
+        theirs.uid = own.wrapping_add(1);
+        with_rows(&mut m, vec![theirs]);
+        m.selected = Some(4_000_011);
+        m.quit_selected();
+        assert_eq!(m.quit_sheet, None, "no sheet for someone else's process");
+    }
+
+    #[test]
+    fn the_signal_sheet_moves_with_the_arrows_and_sends_on_return() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let own = m.sampler.own_uid;
+        let mut mine = proc(4_000_012, 1, "mine");
+        mine.uid = own;
+        with_rows(&mut m, vec![mine]);
+        m.selected = Some(4_000_012);
+        m.open_signal_sheet();
+        let name = |m: &Monitor| m.signal_sheet.map(|i| model::SIGNALS[i].name);
+        assert_eq!(name(&m), Some("TERM"));
+        assert!(m.key(40));
+        assert_eq!(name(&m), Some("CONT"), "down the list");
+        for _ in 0..20 {
+            m.key(40);
+        }
+        assert_eq!(name(&m), Some("CONT"), "stops at the last signal");
+        m.key(38);
+        assert_eq!(name(&m), Some("STOP"));
+        assert!(!m.key(65), "other keys are not taken by the sheet");
+        assert!(m.key(13));
+        assert_eq!(m.signal_sheet, None);
+        assert_eq!(m.status, "Could not signal STOP mine", "the process does not exist, so the signal is refused");
     }
 }

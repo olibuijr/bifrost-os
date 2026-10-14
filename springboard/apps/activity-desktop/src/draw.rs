@@ -6,10 +6,10 @@
 use crate::inspect::Inspection;
 use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, DISK_FLOOR, HISTORY, NET_FLOOR, SIGNALS};
 use crate::sample::{ProcSample, Snapshot};
-use crate::window::{signal_sheet_buttons, signal_sheet_row, Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
+use crate::window::{quit_sheet_buttons, signal_sheet_buttons, signal_sheet_row, Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::colors::{SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -139,6 +139,29 @@ impl Monitor {
         }
         if self.signal_sheet.is_some() {
             self.draw_signal_sheet(ui, s);
+        }
+        if self.quit_sheet.is_some() {
+            self.draw_quit_sheet(ui, s);
+        }
+    }
+
+    /// The quit confirmation: the question with the process's name, what is at risk, and Cancel, Force Quit, Quit.
+    fn draw_quit_sheet(&mut self, ui: &Ui, s: &mut Surface) {
+        let Some(sheet) = self.quit_sheet else { return };
+        let card = self.quit_sheet_rect(ui);
+        let name = self.process_name(sheet.pid);
+        rounded(s, ui, card.x - 1.0, card.y - 1.0, card.w + 2.0, card.h + 2.0, CARD_RADIUS_PT + 1.0, SEPARATOR_C.now());
+        rounded(s, ui, card.x, card.y, card.w, card.h, CARD_RADIUS_PT, CARD_BG.now());
+        let inner = card.w - 2.0 * CARD_PAD;
+        let title = format!("Are you sure you want to quit {name}?");
+        text(&mut self.labels, s, ui, &title, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), card.x + CARD_PAD, card.y + 22.0, inner);
+        text(&mut self.labels, s, ui, "Unsaved changes may be lost. Force Quit ends the process at once.", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), card.x + CARD_PAD, card.y + 40.0, inner);
+        let [cancel, force, quit] = quit_sheet_buttons(card);
+        let buttons = [(cancel, "Cancel", SEPARATOR_C.now(), LABEL.now()), (force, "Force Quit", DESTRUCTIVE, WHITE), (quit, "Quit", SYSTEM_BLUE.now(), WHITE)];
+        for (b, label, fill_color, ink) in buttons {
+            rounded(s, ui, b.x, b.y, b.w, b.h, 5.0, fill_color);
+            let lx = b.x + (b.w - width(ui, label, MAC_SUBHEAD_PT, Weight::Regular)) / 2.0;
+            text(&mut self.labels, s, ui, label, MAC_SUBHEAD_PT, Weight::Regular, ink, lx, b.y + b.h / 2.0, b.w);
         }
     }
 
