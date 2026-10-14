@@ -8,7 +8,11 @@ use bifrost_render::gfx::{pack, Image};
 use bifrost_render::imgdec::{box_down, contain, cover, fit, fit_dims, fit_size};
 
 fn solid(w: usize, h: usize, c: u32) -> Image {
-    Image { w, h, px: vec![c; w * h] }
+    Image {
+        w,
+        h,
+        px: vec![c; w * h],
+    }
 }
 
 fn channel(p: u32, shift: u32) -> i32 {
@@ -32,7 +36,12 @@ fn headless_a_png_decodes_to_the_same_eight_bit_pixels_it_was_written_from() {
     assert_eq!((img.w, img.h), (2, 2));
     assert_eq!(
         img.px,
-        vec![pack(255, 0, 0, 255), pack(0, 255, 0, 255), pack(0, 0, 255, 255), pack(255, 255, 255, 255)]
+        vec![
+            pack(255, 0, 0, 255),
+            pack(0, 255, 0, 255),
+            pack(0, 0, 255, 255),
+            pack(255, 255, 255, 255)
+        ]
     );
 }
 
@@ -41,20 +50,36 @@ fn headless_decoded_pixels_are_premultiplied_by_their_alpha() {
     let rgba: [u8; 8] = [255, 0, 0, 128, 255, 255, 255, 0];
     let png = encode_png(2, 1, &rgba, &PngOptions::default()).expect("encodes");
     let img = decode(&png).expect("decodes");
-    assert_eq!(img.px[0], pack(128, 0, 0, 128), "half-transparent red keeps half of its red");
-    assert_eq!(img.px[1], pack(0, 0, 0, 0), "fully transparent white has no colour left");
+    assert_eq!(
+        img.px[0],
+        pack(128, 0, 0, 128),
+        "half-transparent red keeps half of its red"
+    );
+    assert_eq!(
+        img.px[1],
+        pack(0, 0, 0, 0),
+        "fully transparent white has no colour left"
+    );
 }
 
 #[test]
 fn headless_a_jpeg_decodes_to_a_picture_of_the_same_size_and_colour() {
     let rgba: Vec<u8> = (0..16 * 16).flat_map(|_| [128u8, 128, 128, 255]).collect();
-    let options = JpegOptions { quality: 100, subsample: false, ..JpegOptions::default() };
+    let options = JpegOptions {
+        quality: 100,
+        subsample: false,
+        ..JpegOptions::default()
+    };
     let jpeg = encode_jpeg(16, 16, &rgba, &options).expect("a 16 by 16 picture encodes");
     let img = decode(&jpeg).expect("the encoded picture decodes");
     assert_eq!((img.w, img.h), (16, 16));
     for p in &img.px {
         for shift in [0, 8, 16] {
-            assert!((channel(*p, shift) - 128).abs() <= 4, "grey stays near 128, got {:#010x}", p);
+            assert!(
+                (channel(*p, shift) - 128).abs() <= 4,
+                "grey stays near 128, got {:#010x}",
+                p
+            );
         }
         assert_eq!(channel(*p, 24), 255, "an opaque jpeg stays opaque");
     }
@@ -81,7 +106,10 @@ fn headless_the_pixel_size_is_read_from_the_header_alone() {
 fn headless_a_picture_wider_than_the_limit_is_refused_not_decoded() {
     let width = MAX_SIDE + 1;
     let png = encode_png(width, 1, &vec![0u8; width * 4], &PngOptions::default()).expect("encodes");
-    assert!(decode(&png).is_none(), "a picture past 8192 points is refused");
+    assert!(
+        decode(&png).is_none(),
+        "a picture past 8192 points is refused"
+    );
 }
 
 #[test]
@@ -94,12 +122,25 @@ fn headless_box_down_averages_each_block_of_pixels() {
     let img = Image {
         w: 2,
         h: 2,
-        px: vec![pack(0, 0, 0, 255), pack(255, 255, 255, 255), pack(0, 0, 0, 255), pack(255, 255, 255, 255)],
+        px: vec![
+            pack(0, 0, 0, 255),
+            pack(255, 255, 255, 255),
+            pack(0, 0, 0, 255),
+            pack(255, 255, 255, 255),
+        ],
     };
     let small = box_down(&img, 2);
     assert_eq!((small.w, small.h), (1, 1));
-    assert_eq!(small.px, vec![pack(128, 128, 128, 255)], "half black and half white is mid grey");
-    assert_eq!(box_down(&img, 1).px, img.px, "a factor of one keeps every pixel");
+    assert_eq!(
+        small.px,
+        vec![pack(128, 128, 128, 255)],
+        "half black and half white is mid grey"
+    );
+    assert_eq!(
+        box_down(&img, 1).px,
+        img.px,
+        "a factor of one keeps every pixel"
+    );
 }
 
 #[test]
@@ -113,9 +154,21 @@ fn headless_cover_fills_the_frame_with_the_same_colour_when_the_picture_is_solid
 #[test]
 fn headless_fit_dims_shrinks_inside_the_box_and_never_enlarges() {
     assert_eq!(fit_dims(4000, 3000, 1200, 1920), (1200, 900));
-    assert_eq!(fit_dims(300, 3000, 1200, 1920), (192, 1920), "a tall picture is limited by its height");
-    assert_eq!(fit_dims(10, 20, 100, 100), (10, 20), "a small picture keeps its size");
-    assert_eq!(fit_dims(0, 5, 10, 10), (0, 0), "an empty picture has no size");
+    assert_eq!(
+        fit_dims(300, 3000, 1200, 1920),
+        (192, 1920),
+        "a tall picture is limited by its height"
+    );
+    assert_eq!(
+        fit_dims(10, 20, 100, 100),
+        (10, 20),
+        "a small picture keeps its size"
+    );
+    assert_eq!(
+        fit_dims(0, 5, 10, 10),
+        (0, 0),
+        "an empty picture has no size"
+    );
 }
 
 #[test]

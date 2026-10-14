@@ -28,7 +28,11 @@ fn headless_a_single_tap_ends_a_one_tap_recognizer_on_release() {
 fn headless_a_double_tap_ends_only_on_the_second_release() {
     let mut tap = Tap::new(2);
     tap.down(0.0, 0.0, 0.0);
-    assert_eq!(tap.up(0.1), State::Possible, "the first tap of two is not the end");
+    assert_eq!(
+        tap.up(0.1),
+        State::Possible,
+        "the first tap of two is not the end"
+    );
     tap.down(0.0, 0.0, 0.2);
     assert_eq!(tap.up(0.3), State::Ended);
 }
@@ -39,7 +43,11 @@ fn headless_a_pause_longer_than_the_multi_tap_window_restarts_the_count() {
     tap.down(0.0, 0.0, 0.0);
     assert_eq!(tap.up(0.1), State::Possible);
     tap.down(0.0, 0.0, 1.0);
-    assert_eq!(tap.up(1.1), State::Possible, "the second tap came too late to count with the first");
+    assert_eq!(
+        tap.up(1.1),
+        State::Possible,
+        "the second tap came too late to count with the first"
+    );
 }
 
 #[test]
@@ -53,7 +61,11 @@ fn headless_a_press_held_past_the_long_press_time_is_not_a_tap() {
 fn headless_a_tap_that_drifts_past_the_slop_fails_and_a_small_drift_does_not() {
     let mut tap = Tap::new(1);
     tap.down(0.0, 0.0, 0.0);
-    assert_eq!(tap.moved(2.0, 2.0), State::Possible, "2.8 points is inside the 4 point slop");
+    assert_eq!(
+        tap.moved(2.0, 2.0),
+        State::Possible,
+        "2.8 points is inside the 4 point slop"
+    );
     assert_eq!(tap.moved(10.0, 0.0), State::Failed);
     let mut drifted = Tap::new(1);
     drifted.down(0.0, 0.0, 0.0);
@@ -71,7 +83,11 @@ fn headless_a_long_press_begins_after_its_hold_time_and_ends_on_release() {
     let mut press = LongPress::new();
     press.down(0.0, 0.0, 0.0);
     assert_eq!(press.tick(0.2), State::Possible);
-    assert_eq!(press.tick(0.5), State::Began, "held for the full 0.5 seconds");
+    assert_eq!(
+        press.tick(0.5),
+        State::Began,
+        "held for the full 0.5 seconds"
+    );
     assert_eq!(press.tick(0.7), State::Changed);
     assert_eq!(press.up(), State::Ended);
 }
@@ -103,7 +119,11 @@ fn headless_a_long_press_that_already_began_ignores_later_movement() {
 fn headless_a_pan_begins_past_the_slop_and_reports_its_translation() {
     let mut pan = Pan::new();
     pan.down(10.0, 10.0, 0.0);
-    assert_eq!(pan.moved(12.0, 10.0, 0.01), State::Possible, "2 points is inside the slop");
+    assert_eq!(
+        pan.moved(12.0, 10.0, 0.01),
+        State::Possible,
+        "2 points is inside the slop"
+    );
     assert_eq!(pan.moved(30.0, 10.0, 0.02), State::Began);
     assert_eq!(pan.moved(40.0, 10.0, 0.03), State::Changed);
     assert_eq!(pan.translation(), (30.0, 0.0));
@@ -118,7 +138,10 @@ fn headless_a_pan_reports_release_velocity_in_points_per_second() {
     pan.moved(30.0, 10.0, 0.02);
     pan.moved(40.0, 10.0, 0.03);
     let (vx, vy) = pan.velocity();
-    assert!((vx - 1000.0).abs() < 1.0, "30 points over 0.03 seconds is 1000 points per second, got {vx}");
+    assert!(
+        (vx - 1000.0).abs() < 1.0,
+        "30 points over 0.03 seconds is 1000 points per second, got {vx}"
+    );
     assert!(near(vy, 0.0));
 }
 
@@ -134,7 +157,10 @@ fn headless_a_pinch_reports_magnification_relative_to_the_first_spacing() {
     let mut pinch = Magnify::default();
     assert_eq!(pinch.touches((0.0, 0.0), (100.0, 0.0)), State::Possible);
     assert_eq!(pinch.touches((0.0, 0.0), (150.0, 0.0)), State::Began);
-    assert!(near(pinch.magnification(), 0.5), "150 over 100 is a magnification of 0.5");
+    assert!(
+        near(pinch.magnification(), 0.5),
+        "150 over 100 is a magnification of 0.5"
+    );
     assert_eq!(pinch.touches((0.0, 0.0), (200.0, 0.0)), State::Changed);
     assert!(near(pinch.magnification(), 1.0), "twice the spacing is 1.0");
     assert_eq!(pinch.up(), State::Ended);
@@ -174,7 +200,10 @@ fn headless_a_quarter_turn_of_the_fingers_begins_a_rotation_in_degrees() {
     let mut turn = Rotate::default();
     assert_eq!(turn.touches((0.0, 0.0), (10.0, 0.0)), State::Possible);
     assert_eq!(turn.touches((0.0, 0.0), (0.0, 10.0)), State::Began);
-    assert!(near(turn.rotation(), FRAC_PI_2), "a quarter turn is pi over two radians");
+    assert!(
+        near(turn.rotation(), FRAC_PI_2),
+        "a quarter turn is pi over two radians"
+    );
     assert!((turn.rotation_degrees() - 90.0).abs() < 1e-3);
     assert_eq!(turn.touches((0.0, 0.0), (-10.0, 0.0)), State::Changed);
     assert!(near(turn.rotation(), PI));
@@ -187,15 +216,26 @@ fn headless_a_rotation_crossing_the_half_turn_keeps_counting_the_short_way() {
     let start = 0.9 * PI;
     let end = -0.9 * PI;
     turn.touches((0.0, 0.0), (10.0 * start.cos(), 10.0 * start.sin()));
-    assert_eq!(turn.touches((0.0, 0.0), (10.0 * end.cos(), 10.0 * end.sin())), State::Began);
-    assert!((turn.rotation() - 0.2 * PI).abs() < 1e-3, "0.9 pi to -0.9 pi is a 0.2 pi turn, got {}", turn.rotation());
+    assert_eq!(
+        turn.touches((0.0, 0.0), (10.0 * end.cos(), 10.0 * end.sin())),
+        State::Began
+    );
+    assert!(
+        (turn.rotation() - 0.2 * PI).abs() < 1e-3,
+        "0.9 pi to -0.9 pi is a 0.2 pi turn, got {}",
+        turn.rotation()
+    );
 }
 
 #[test]
 fn headless_a_turn_under_the_rotation_slop_does_not_begin() {
     let mut turn = Rotate::default();
     turn.touches((0.0, 0.0), (10.0, 0.0));
-    assert_eq!(turn.touches((0.0, 0.0), (10.0, 0.1)), State::Possible, "about 0.01 radians is inside the slop");
+    assert_eq!(
+        turn.touches((0.0, 0.0), (10.0, 0.1)),
+        State::Possible,
+        "about 0.01 radians is inside the slop"
+    );
 }
 
 #[test]
@@ -213,11 +253,19 @@ fn headless_a_two_finger_pinch_reports_began_then_changed_events() {
     assert!(touch.frame((0.0, 0.0), (100.0, 0.0)).is_empty());
     assert_eq!(
         touch.frame((0.0, 0.0), (150.0, 0.0)),
-        vec![Event { kind: Kind::Magnify, state: State::Began, value: 0.5 }]
+        vec![Event {
+            kind: Kind::Magnify,
+            state: State::Began,
+            value: 0.5
+        }]
     );
     assert_eq!(
         touch.frame((0.0, 0.0), (200.0, 0.0)),
-        vec![Event { kind: Kind::Magnify, state: State::Changed, value: 1.0 }]
+        vec![Event {
+            kind: Kind::Magnify,
+            state: State::Changed,
+            value: 1.0
+        }]
     );
 }
 
@@ -250,7 +298,14 @@ fn headless_lifting_fingers_ends_each_gesture_that_began() {
     touch.frame((0.0, 0.0), (100.0, 0.0));
     touch.frame((0.0, 0.0), (150.0, 0.0));
     touch.frame((0.0, 0.0), (200.0, 0.0));
-    assert_eq!(touch.lift(), vec![Event { kind: Kind::Magnify, state: State::Ended, value: 1.0 }]);
+    assert_eq!(
+        touch.lift(),
+        vec![Event {
+            kind: Kind::Magnify,
+            state: State::Ended,
+            value: 1.0
+        }]
+    );
 }
 
 #[test]
@@ -264,17 +319,35 @@ fn headless_lifting_fingers_that_never_began_reports_nothing() {
 // ---- stylus: digitizer ranges, pen angles and stroke points ----
 
 const PROFILE: StylusProfile = StylusProfile {
-    pressure: LogicalRange { min: 0.0, max: 1024.0 },
-    tilt: LogicalRange { min: -90.0, max: 90.0 },
+    pressure: LogicalRange {
+        min: 0.0,
+        max: 1024.0,
+    },
+    tilt: LogicalRange {
+        min: -90.0,
+        max: 90.0,
+    },
 };
 
 fn report(pressure: f32, tilt_x: f32, tilt_y: f32) -> StylusReport {
-    StylusReport { x: 3.0, y: 4.0, time_offset: 0.5, pressure, tilt_x, tilt_y, touching: true, eraser: false }
+    StylusReport {
+        x: 3.0,
+        y: 4.0,
+        time_offset: 0.5,
+        pressure,
+        tilt_x,
+        tilt_y,
+        touching: true,
+        eraser: false,
+    }
 }
 
 #[test]
 fn headless_a_logical_range_maps_values_to_zero_to_one_and_clamps_outside() {
-    let r = LogicalRange { min: 0.0, max: 1024.0 };
+    let r = LogicalRange {
+        min: 0.0,
+        max: 1024.0,
+    };
     assert!(near(r.unit(256.0), 0.25));
     assert!(near(r.unit(-1.0), 0.0), "below the range clamps to 0");
     assert!(near(r.unit(2000.0), 1.0), "above the range clamps to 1");
@@ -282,7 +355,10 @@ fn headless_a_logical_range_maps_values_to_zero_to_one_and_clamps_outside() {
 
 #[test]
 fn headless_a_signed_range_puts_its_midpoint_at_zero() {
-    let tilt = LogicalRange { min: -90.0, max: 90.0 };
+    let tilt = LogicalRange {
+        min: -90.0,
+        max: 90.0,
+    };
     assert!(near(tilt.signed(0.0), 0.0));
     assert!(near(tilt.signed(-90.0), -1.0));
     assert!(near(tilt.signed(90.0), 1.0));
@@ -318,7 +394,9 @@ fn headless_a_pen_lying_flat_along_y_points_its_azimuth_along_y() {
 
 #[test]
 fn headless_a_touching_report_becomes_a_stroke_point_with_mapped_force_and_angles() {
-    let p = report(512.0, 0.0, 0.0).to_point(&PROFILE).expect("a touching report is a stroke point");
+    let p = report(512.0, 0.0, 0.0)
+        .to_point(&PROFILE)
+        .expect("a touching report is a stroke point");
     assert_eq!((p.x, p.y, p.time_offset), (3.0, 4.0, 0.5));
     assert!(near(p.force, 0.5));
     assert!(near(p.altitude, FRAC_PI_2));
@@ -329,7 +407,9 @@ fn headless_a_touching_report_becomes_a_stroke_point_with_mapped_force_and_angle
 
 #[test]
 fn headless_pressure_above_the_device_range_clamps_to_full_force() {
-    let p = report(4096.0, 0.0, 0.0).to_point(&PROFILE).expect("touching");
+    let p = report(4096.0, 0.0, 0.0)
+        .to_point(&PROFILE)
+        .expect("touching");
     assert!(near(p.force, 1.0));
 }
 
@@ -342,7 +422,9 @@ fn headless_a_full_tilt_on_the_device_range_lies_the_pen_flat() {
 
 #[test]
 fn headless_a_negative_tilt_points_the_azimuth_the_other_way() {
-    let p = report(0.0, -90.0, 0.0).to_point(&PROFILE).expect("touching");
+    let p = report(0.0, -90.0, 0.0)
+        .to_point(&PROFILE)
+        .expect("touching");
     assert!(near(p.altitude, 0.0));
     assert!((p.azimuth.abs() - PI).abs() < 1e-5, "azimuth {}", p.azimuth);
 }
@@ -352,7 +434,9 @@ fn headless_hover_reports_are_not_stroke_points_and_the_eraser_end_maps_like_the
     let mut hover = report(800.0, 0.0, 0.0);
     hover.touching = false;
     assert!(hover.to_point(&PROFILE).is_none());
-    let pen = report(512.0, 0.0, 0.0).to_point(&PROFILE).expect("touching");
+    let pen = report(512.0, 0.0, 0.0)
+        .to_point(&PROFILE)
+        .expect("touching");
     let mut eraser = report(512.0, 0.0, 0.0);
     eraser.eraser = true;
     let erased = eraser.to_point(&PROFILE).expect("touching");
@@ -365,7 +449,11 @@ fn headless_hover_reports_are_not_stroke_points_and_the_eraser_end_maps_like_the
 
 fn stroke(points: &[(f32, f32)]) -> Stroke {
     Stroke {
-        ink: Ink { kind: InkKind::Pen, color: 0xff00_0000, width: 2.0 },
+        ink: Ink {
+            kind: InkKind::Pen,
+            color: 0xff00_0000,
+            width: 2.0,
+        },
         points: points.iter().map(|&(x, y)| StrokePoint::at(x, y)).collect(),
     }
 }
@@ -407,7 +495,14 @@ fn headless_a_tight_zigzag_is_a_scratch_out() {
 
 #[test]
 fn headless_steps_under_the_jitter_limit_are_not_turns() {
-    let shaky = stroke(&[(0.0, 0.0), (1.0, 0.0), (0.0, 0.0), (1.0, 0.0), (0.0, 0.0), (40.0, 0.0)]);
+    let shaky = stroke(&[
+        (0.0, 0.0),
+        (1.0, 0.0),
+        (0.0, 0.0),
+        (1.0, 0.0),
+        (0.0, 0.0),
+        (40.0, 0.0),
+    ]);
     assert_eq!(classify(&shaky), Some(Gesture::Write));
 }
 
@@ -419,7 +514,10 @@ fn headless_a_zigzag_with_too_few_turns_is_writing() {
 
 #[test]
 fn headless_a_tap_selects_the_topmost_view_under_it() {
-    let targets = [(1, rect(0.0, 0.0, 100.0, 100.0)), (2, rect(20.0, 20.0, 40.0, 40.0))];
+    let targets = [
+        (1, rect(0.0, 0.0, 100.0, 100.0)),
+        (2, rect(20.0, 20.0, 40.0, 40.0)),
+    ];
     assert_eq!(resolve(&stroke(&[(30.0, 30.0)]), &targets), Action::Tap(2));
 }
 
@@ -436,7 +534,10 @@ fn headless_a_scratch_out_deletes_each_view_it_crosses_bottom_first() {
         (8, rect(200.0, 200.0, 10.0, 10.0)),
         (9, rect(25.0, 0.0, 20.0, 60.0)),
     ];
-    assert_eq!(resolve(&zigzag(30.0, 4), &targets), Action::Delete(vec![7, 9]));
+    assert_eq!(
+        resolve(&zigzag(30.0, 4), &targets),
+        Action::Delete(vec![7, 9])
+    );
 }
 
 #[test]
@@ -454,7 +555,10 @@ fn headless_writing_goes_to_the_view_under_the_centre_of_the_stroke() {
 
 #[test]
 fn headless_overlapping_views_receive_writing_on_the_top_one() {
-    let targets = [(1, rect(0.0, 0.0, 200.0, 40.0)), (2, rect(0.0, 0.0, 200.0, 40.0))];
+    let targets = [
+        (1, rect(0.0, 0.0, 200.0, 40.0)),
+        (2, rect(0.0, 0.0, 200.0, 40.0)),
+    ];
     let line = stroke(&[(10.0, 10.0), (50.0, 12.0), (90.0, 14.0)]);
     assert_eq!(resolve(&line, &targets), Action::Write(2));
 }
