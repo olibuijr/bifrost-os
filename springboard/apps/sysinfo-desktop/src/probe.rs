@@ -1215,6 +1215,90 @@ pub fn read_diagnostics(dirs: &[PathBuf], limit: usize) -> Vec<DiagnosticReport>
     out
 }
 
+// ---------------------------------------------------------------- installations, printer software
+
+/// One package change from the package manager's log.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Installation {
+    /// "2026-10-01 12:00".
+    pub when: String,
+    /// "installed", "upgraded", "removed", "downgraded" or "reinstalled".
+    pub action: String,
+    pub package: String,
+    /// The version (for an upgrade, "old -> new"); "" when the log gives none.
+    pub version: String,
+}
+
+/// The package changes in a pacman log (`[2026-10-01T12:00:00+0000] [ALPM] installed foo (1.0-1)` lines), newest first,
+/// at most `limit`.
+pub fn parse_pacman_log(text: &str, limit: usize) -> Vec<Installation> {
+    let mut out: Vec<Installation> = text
+        .lines()
+        .filter_map(|line| {
+            let (stamp, rest) = line.strip_prefix('[')?.split_once(']')?;
+            let (action, rest) = rest.strip_prefix(" [ALPM] ")?.split_once(' ')?;
+            if !matches!(action, "installed" | "upgraded" | "removed" | "downgraded" | "reinstalled") {
+                return None;
+            }
+            let (package, version) = rest.split_once(' ').unwrap_or((rest, ""));
+            let version = version.trim().trim_start_matches('(').trim_end_matches(')').to_string();
+            let when = stamp.get(..16).unwrap_or(stamp).replace('T', " ");
+            Some(Installation { when, action: action.to_string(), package: package.to_string(), version })
+        })
+        .collect();
+    out.reverse();
+    out.truncate(limit);
+    out
+}
+
+pub fn read_installations(log: &Path, limit: usize) -> Vec<Installation> {
+    parse_pacman_log(&read_trim_text(log), limit)
+}
+
+/// A printer driver file (a PPD) installed for the printing system.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrinterDriver {
+    pub file: String,
+    pub manufacturer: String,
+    pub model: String,
+}
+
+/// The value of a PPD keyword line such as `*ModelName: "LaserJet"`, without its quotes.
+fn ppd_value(text: &str, key: &str) -> String {
+    text.lines()
+        .find_map(|l| l.strip_prefix(key))
+        .and_then(|rest| {
+            let (_, after_open) = rest.split_once('"')?;
+            let (value, _) = after_open.split_once('"')?;
+            Some(value.trim().to_string())
+        })
+        .unwrap_or_default()
+}
+
+/// The first bytes of a file as text. The keywords a driver is named by come first, so a driver file is read only to
+/// there.
+fn read_head(path: &Path, limit: u64) -> String {
+    use std::io::Read;
+    let Ok(file) = fs::File::open(path) else { return String::new() };
+    let mut buf = Vec::new();
+    let _ = file.take(limit).read_to_end(&mut buf);
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
+/// The printer drivers in `dirs`, by model name, at most `limit`.
+pub fn read_printer_drivers(dirs: &[PathBuf], limit: usize) -> Vec<PrinterDriver> {
+    let mut out = Vec::new();
+    for dir in dirs {
+        for name in entries(dir).into_iter().filter(|n| n.ends_with(".ppd")) {
+            let text = read_head(&dir.join(&name), 8192);
+            out.push(PrinterDriver { manufacturer: ppd_value(&text, "*Manufacturer:"), model: ppd_value(&text, "*ModelName:"), file: name });
+        }
+    }
+    out.sort_by(|a, b| a.model.cmp(&b.model).then(a.file.cmp(&b.file)));
+    out.truncate(limit);
+    out
+}
+
 // ---------------------------------------------------------------- everything
 
 /// Everything above, read once.
@@ -1246,6 +1330,8 @@ pub struct Hardware {
     pub sas_phys: Vec<SasPhy>,
     pub optical: Vec<OpticalDrive>,
     pub diagnostics: Vec<DiagnosticReport>,
+    pub installs: Vec<Installation>,
+    pub printer_drivers: Vec<PrinterDriver>,
 }
 
 impl Hardware {
@@ -1293,6 +1379,8 @@ impl Hardware {
             sas_phys: read_sas_phys(p("/sys/class/sas_phy")),
             optical: read_optical_drives(p("/sys/block")),
             diagnostics: read_diagnostics(&[PathBuf::from("/var/crash"), PathBuf::from("/var/lib/systemd/coredump")], 50),
+            installs: read_installations(p("/var/log/pacman.log"), 300),
+            printer_drivers: read_printer_drivers(&[PathBuf::from("/usr/share/cups/model"), PathBuf::from("/usr/share/ppd")], 300),
         }
     }
 }
@@ -1404,6 +1492,31 @@ mod tests {
         assert!(reports.iter().any(|r| r.name == "b.core" && r.bytes == 5));
         assert!(reports.iter().all(|r| r.day > 19_000), "a file written now is dated after 2022");
         assert_eq!(read_diagnostics(&[dir.clone()], 1).len(), 1, "the limit holds");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_package_log_gives_the_changes_newest_first() {
+        let log = "[2026-09-30T08:00:00+0000] [PACMAN] Running 'pacman -Syu'\n[2026-09-30T08:01:00+0000] [ALPM] upgraded linux (6.1.1-1 -> 6.1.2-1)\n[2026-10-01T12:00:00+0000] [ALPM] installed foo (1.0-1)\n[2026-10-02T09:30:00+0000] [ALPM] removed bar (0.9-2)\nnot a line\n";
+        let changes = parse_pacman_log(log, 10);
+        assert_eq!(changes.len(), 3, "the pacman lines that are not package changes are left out");
+        assert_eq!(changes[0], Installation { when: "2026-10-02 09:30".into(), action: "removed".into(), package: "bar".into(), version: "0.9-2".into() });
+        assert_eq!(changes[2].version, "6.1.1-1 -> 6.1.2-1");
+        assert_eq!(parse_pacman_log(log, 1).len(), 1, "the limit holds");
+        assert!(parse_pacman_log("", 10).is_empty());
+    }
+
+    #[test]
+    fn printer_drivers_name_their_maker_and_model() {
+        let text = "*PPD-Adobe: \"4.3\"\n*Manufacturer: \"HP\"\n*ModelName: \"HP LaserJet 4\"\n*NickName: \"x\"\n";
+        assert_eq!(ppd_value(text, "*Manufacturer:"), "HP");
+        assert_eq!(ppd_value(text, "*ModelName:"), "HP LaserJet 4");
+        assert_eq!(ppd_value(text, "*Missing:"), "");
+        let dir = scratch("ppd");
+        put(&dir.join("hp4.ppd"), text);
+        put(&dir.join("notes.txt"), "not a driver");
+        let drivers = read_printer_drivers(&[dir.clone(), dir.join("missing")], 10);
+        assert_eq!(drivers, vec![PrinterDriver { file: "hp4.ppd".into(), manufacturer: "HP".into(), model: "HP LaserJet 4".into() }]);
         let _ = fs::remove_dir_all(&dir);
     }
 

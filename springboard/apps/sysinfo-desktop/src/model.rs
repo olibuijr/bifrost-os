@@ -72,14 +72,16 @@ pub enum Category {
     Volumes,
     System,
     Apps,
+    Installations,
     Extensions,
     StartupItems,
     Fonts,
     Logs,
+    PrinterSoftware,
     Language,
 }
 
-pub const ALL: [Category; 34] = [
+pub const ALL: [Category; 36] = [
     Category::Overview,
     Category::Processor,
     Category::Memory,
@@ -109,10 +111,12 @@ pub const ALL: [Category; 34] = [
     Category::Volumes,
     Category::System,
     Category::Apps,
+    Category::Installations,
     Category::Extensions,
     Category::StartupItems,
     Category::Fonts,
     Category::Logs,
+    Category::PrinterSoftware,
     Category::Language,
 ];
 
@@ -133,7 +137,9 @@ impl Category {
     pub fn section(self) -> Section {
         match self {
             Category::Wifi | Category::Ethernet | Category::Wwan | Category::Firewall | Category::Volumes => Section::Network,
-            Category::System | Category::Apps | Category::Extensions | Category::StartupItems | Category::Fonts | Category::Logs | Category::Language => Section::Software,
+            Category::System | Category::Apps | Category::Installations | Category::Extensions | Category::StartupItems | Category::Fonts | Category::Logs | Category::PrinterSoftware | Category::Language => {
+                Section::Software
+            }
             _ => Section::Hardware,
         }
     }
@@ -169,6 +175,8 @@ impl Category {
             Category::Volumes => "Volumes",
             Category::System => "Operating System",
             Category::Apps => "Installed Apps",
+            Category::Installations => "Installations",
+            Category::PrinterSoftware => "Printer Software",
             Category::Extensions => "Extensions",
             Category::StartupItems => "Startup Items",
             Category::Fonts => "Fonts",
@@ -209,6 +217,8 @@ impl Category {
             Category::Volumes => "externaldrive",
             Category::System => "gearshape",
             Category::Apps => "app.badge",
+            Category::Installations => "shippingbox",
+            Category::PrinterSoftware => "printer.filled.and.paper",
             Category::Extensions => "puzzlepiece.extension",
             Category::StartupItems => "power",
             Category::Fonts => "textformat",
@@ -249,6 +259,8 @@ impl Category {
             Category::Volumes => "The mounted volumes and the space left on them.",
             Category::System => "The operating system and the kernel it runs.",
             Category::Apps => "The apps installed on this computer, with their newest version.",
+            Category::Installations => "The packages installed, upgraded and removed, newest first.",
+            Category::PrinterSoftware => "The printer drivers installed for the printing system.",
             Category::Extensions => "The kernel modules that are loaded now.",
             Category::StartupItems => "The apps and helpers that start when you sign in.",
             Category::Fonts => "The font families the desktop can draw.",
@@ -406,6 +418,8 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
         Category::Volumes => Content::list(x.hw.volumes.iter().map(volume_item).collect()),
         Category::System => Content::card(system_rows(r, x)),
         Category::Apps => Content::list(r.apps.iter().map(|a| app_item(a, x)).collect()),
+        Category::Installations => Content::list(x.hw.installs.iter().map(install_item).collect()),
+        Category::PrinterSoftware => Content::list(x.hw.printer_drivers.iter().map(printer_driver_item).collect()),
         Category::Extensions => Content::card(x.modules.iter().map(|m| kv(m.name.clone(), format!("{} · used by {}", size_label(m.size_bytes, 1 << 10, "KB"), m.used_by))).collect()),
         Category::StartupItems => Content::card(x.startup.iter().map(|n| kv(n.clone(), "Opens at sign-in")).collect()),
         Category::Fonts => Content::card(x.hw.fonts.iter().map(|f| kv(f.name.clone(), font_line(f))).collect()),
@@ -876,6 +890,19 @@ fn app_item(a: &InstalledApp, x: &Extras) -> Item {
         format!("{} · {kind}", a.version),
         vec![kv("Name", name), kv("Identifier", a.id.clone()), kv("Version", a.version.clone()), kv("Kind", kind), kv("Installed", installed), kv("Package", package)],
     )
+}
+
+fn install_item(c: &probe::Installation) -> Item {
+    item(
+        c.package.clone(),
+        format!("{} · {}", capitalize(&c.action), c.when),
+        vec![kv("Package", c.package.clone()), kv("Action", capitalize(&c.action)), kv("Version", or_dash(&c.version)), kv("Date", c.when.clone())],
+    )
+}
+
+fn printer_driver_item(d: &probe::PrinterDriver) -> Item {
+    let title = if d.model.is_empty() { d.file.clone() } else { d.model.clone() };
+    item(title, or_dash(&d.manufacturer), vec![kv("Model", or_dash(&d.model)), kv("Manufacturer", or_dash(&d.manufacturer)), kv("File", d.file.clone())])
 }
 
 /// Which sidebar category an interface belongs to.
@@ -1405,6 +1432,21 @@ mod tests {
         let reports = content(Category::Diagnostics, &Report::default(), &x);
         assert_eq!(reports.items[0].title, "core.app.1");
         assert_eq!(reports.items[0].detail.last(), Some(&kv("Date", "2024-10-04")));
+    }
+
+    #[test]
+    fn installations_and_printer_drivers_list_from_the_logs_and_files() {
+        let mut x = Extras::default();
+        x.hw.installs = vec![probe::Installation { when: "2026-10-02 09:30".into(), action: "removed".into(), package: "bar".into(), version: "0.9-2".into() }];
+        x.hw.printer_drivers = vec![probe::PrinterDriver { file: "hp4.ppd".into(), manufacturer: "HP".into(), model: "HP LaserJet 4".into() }, probe::PrinterDriver { file: "x.ppd".into(), ..Default::default() }];
+        let installs = content(Category::Installations, &Report::default(), &x);
+        assert_eq!(installs.items[0].title, "bar");
+        assert_eq!(installs.items[0].summary, "Removed · 2026-10-02 09:30");
+        assert!(installs.items[0].detail.contains(&kv("Action", "Removed")));
+        let printers = content(Category::PrinterSoftware, &Report::default(), &x);
+        assert_eq!(printers.items[0].title, "HP LaserJet 4");
+        assert_eq!(printers.items[1].title, "x.ppd", "a driver without a model is named by its file");
+        assert_eq!(in_section(Section::Software).len(), 9);
     }
 
     #[test]
