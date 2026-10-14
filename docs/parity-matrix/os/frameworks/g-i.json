@@ -1467,8 +1467,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "Versioned storage behind the reference revisions daemon (Support/revisiond in the framework). BifrOSt has document autosave in place (springboard/sdk/src/document.rs) but no per-document version history, browse or restore. Build a revision store in the SDK document controller and a versions browser in the shell.",
    "rea": [],
    "method": "assessed"
   },
@@ -1489,7 +1489,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Checked the framework bundle: only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgents) and a diagnostics extension. The purpose of the agent layer is not determinable from the bundle alone; the nearest BifrOSt runtime is the agent automation daemon (springboard/mcp), which is not a counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1510,7 +1510,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgentsEvaluation) is present in the reference tree. Evaluation harness purpose is not confirmed by a binary or resource; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1531,7 +1531,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgentsTransportRuntime) is present in the reference tree. Transport purpose is inferred from the name only; no binary was readable in the extract yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1657,7 +1657,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeExperiences) is present in the reference tree; no binary or resource names the experiences it provides, so the job is not determined.",
    "rea": [],
    "method": "assessed"
   },
@@ -1678,7 +1678,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Runtime daemon bundle (generativeexperiencesd, plus Info.plist). The daemon's job is not confirmed beyond its name; no BifrOSt counterpart exists for generative experiences.",
    "rea": [],
    "method": "assessed"
   },
@@ -1699,7 +1699,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "UI bundle with Assets.car and localized strings, and no exported view names in the tree. The interface job is not confirmed beyond the name; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1719,8 +1719,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "Typed functions a model can invoke, the layer under the on-device model API. BifrOSt has no model-invoked tools API for apps. Build it in the SDK next to the model session API, reusing the typed action shape of springboard/sdk/src/intents.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1740,8 +1740,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "Foundation types for model-invoked functions, the base of the function layer. BifrOSt has none; build with the function layer, after the on-device model runtime exists.",
    "rea": [],
    "method": "assessed"
   },
@@ -1762,7 +1762,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist is present in the reference tree. The instrumentation job is not confirmed by a binary; the name suggests usage reporting, which is not confirmed, so no row is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -1783,7 +1783,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The learning platform job is not confirmed beyond its name; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1804,7 +1804,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The foundation job is not confirmed beyond its name; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1825,7 +1825,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond its name; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1846,7 +1846,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist is present in the reference tree. The services job is not confirmed beyond its name; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1866,8 +1866,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine.",
    "rea": [],
    "method": "assessed"
   },
@@ -1887,8 +1887,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "Model foundation types (requests, responses, model identifiers) under the on-device model runtime. BifrOSt has none; build it with the local model session API.",
    "rea": [],
    "method": "assessed"
   },
@@ -1908,8 +1908,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Partner program service that signs in and declares third-party generative model providers (ProviderDeclarations.plist in the reference tree). The provider accounts belong to the reference vendor's partner program, so the component has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1929,8 +1929,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Sign-in and consent sheets for third-party generative model accounts (the bundle ships a third-party provider icon). The accounts come from the reference vendor's partner program, so the sheets have no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1951,7 +1951,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The search job is not confirmed beyond the name; BifrOSt search lives in springboard/ui/src/search.rs, which is not a counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1972,7 +1972,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist is present in the reference tree. The adapter job is not confirmed beyond the name; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1993,7 +1993,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist is present in the reference tree. The ranking job is not confirmed beyond the name; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -2014,7 +2014,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Analytics daemon (geoanalyticsd) in the reference tree; its job is not confirmed by strings or symbols, and it may report usage, so no row is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2033,9 +2033,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/apps/maps-desktop/src/state.rs; springboard/ui/src/map_user_location.rs",
+   "status": "partial",
+   "note": "Maps state, route and user-location tracking are headless and tested in the maps app and the user-location model. Gap: the reference world map data, time zone map and city picker are not provided.",
    "rea": [],
    "method": "assessed"
   },
@@ -2054,9 +2054,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/services/location.rs",
+   "status": "partial",
+   "note": "The location service gives the current position from a manual place or an opt-in IP lookup, and reverse lookup within known places. Gap: no GPS source and no worldwide gazetteer, so reverse geocoding does not cover the world.",
    "rea": [],
    "method": "assessed"
   },
@@ -2077,7 +2077,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Core library of the location services stack; the reference tree holds only Info.plist. The shared core job is not confirmed beyond the name; the BifrOSt location service is springboard/src/shell/services/location.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -2098,7 +2098,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist is present in the reference tree. The UI job is not confirmed; the nearest BifrOSt map UI is springboard/ui/src/map_user_location.rs, which may not be the same job.",
    "rea": [],
    "method": "assessed"
   },
@@ -2117,9 +2117,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/render/src/masked_blur.rs",
+   "status": "partial",
+   "note": "Depth and portrait effect operations are on CPU pixels with a depth-of-field blur that follows a depth map. Gap: no depth from camera hardware, and no effect graph API for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2140,7 +2140,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The geometry job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2161,7 +2161,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The compression job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2180,9 +2180,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/wm/src/input.rs; springboard/ui/src/trackpad_gesture.rs; springboard/src/shell/gestures.rs",
+   "status": "partial",
+   "note": "Trackpad swipe, pinch and hold reach the window server and clients with paired begin and end events; the shell has touch state machines for edge gestures. Gap: no SDK-level gesture recognizers for trackpad hold or three-finger swipes.",
    "rea": [],
    "method": "assessed"
   },
@@ -2203,7 +2203,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "No Info.plist or binary is in the reference tree for this name. The job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2224,7 +2224,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2245,7 +2245,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Framework binary and two cursor images are present in the reference tree. Symbol names were not extracted yet, so the graph job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2266,7 +2266,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The sync job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2287,7 +2287,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version data are present in the reference tree. The visualizer job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2308,7 +2308,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "No Info.plist or binary is in the reference tree for this name. The support job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
    "method": "assessed"
   },
