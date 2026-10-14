@@ -196,8 +196,11 @@ impl SceneSessions {
         self.scenes.iter_mut().find(|s| s.persistent_id == persistent_id)
     }
 
-    /// The scene that has focus, if any.
+    /// The scene that has focus, if any. A background app has no focused scene, even though it keeps the last one.
     pub fn focused(&self) -> Option<&SceneSession> {
+        if !self.foreground {
+            return None;
+        }
         self.focused.as_deref().and_then(|id| self.get(id))
     }
 
