@@ -33,7 +33,7 @@ use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
     sync::{
-        atomic::AtomicBool,
+        atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver, Sender},
         Arc,
     },
