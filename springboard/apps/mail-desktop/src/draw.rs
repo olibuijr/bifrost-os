@@ -118,15 +118,6 @@ pub enum Hit {
     None,
 }
 
-/// The height of the toolbar: 0 when it is hidden (View > Hide Toolbar).
-fn toolbar_height(ui: &Ui, mail: &Mail) -> f32 {
-    if mail.show_toolbar {
-        ui.pt(TOOLBAR_PT)
-    } else {
-        0.0
-    }
-}
-
 /// The height of the favourites bar under the toolbar: 0 when it is hidden or has nothing on it.
 fn favorites_height(ui: &Ui, mail: &Mail) -> f32 {
     if mail.prefs.show_favorites && !mail.prefs.favorites.is_empty() {
@@ -138,7 +129,7 @@ fn favorites_height(ui: &Ui, mail: &Mail) -> f32 {
 
 /// The height of the toolbar and the favourites bar together: where the panes start.
 pub fn chrome_height(ui: &Ui, mail: &Mail) -> f32 {
-    toolbar_height(ui, mail) + favorites_height(ui, mail)
+    ui.pt(TOOLBAR_PT) + favorites_height(ui, mail)
 }
 
 /// What a favourite shows: the mailbox, with its account's name when there is more than one account.
@@ -489,7 +480,7 @@ impl MailWindow {
             }
             return l.fields.iter().position(|r| inside(*r, x, y)).map_or(Hit::None, Hit::Field);
         }
-        let bar = toolbar_height(ui, &self.mail);
+        let bar = ui.pt(TOOLBAR_PT);
         let top = chrome_height(ui, &self.mail);
         if y < bar {
             let open = self.mail.open.is_some();
@@ -536,7 +527,7 @@ impl MailWindow {
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui) {
         let (w, h) = (s.w as f32, s.h as f32);
         let [side, list, view] = columns(ui, w, self.mail.show_sidebar);
-        let bar = toolbar_height(ui, &self.mail);
+        let bar = ui.pt(TOOLBAR_PT);
         let top = chrome_height(ui, &self.mail);
         let rule = (ui.pt(1.0) as usize).max(1);
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
@@ -548,9 +539,7 @@ impl MailWindow {
         self.draw_reader(s, ui, side + list, view, top, h);
         s.fill_rect(px(side), px(top), rule, px(h - top), SEPARATOR_C.now());
         s.fill_rect(px(side + list), px(top), rule, px(h - top), SEPARATOR_C.now());
-        if bar > 0.0 {
-            self.draw_toolbar(s, ui, w, bar);
-        }
+        self.draw_toolbar(s, ui, w, bar);
         if top > bar {
             self.draw_favorites(s, ui, bar, top - bar);
         }

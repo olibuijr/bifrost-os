@@ -605,8 +605,6 @@ pub struct Mail {
     pub arrived: Vec<(String, Row)>,
     /// What Mail did lately, oldest first: each line starts with the time (Mailbox > Show Activity).
     pub activity: Vec<String>,
-    /// View > Hide Toolbar.
-    pub show_toolbar: bool,
 }
 
 impl Mail {
@@ -645,7 +643,6 @@ impl Mail {
             find: None,
             arrived: Vec::new(),
             activity: Vec::new(),
-            show_toolbar: true,
         }
     }
 

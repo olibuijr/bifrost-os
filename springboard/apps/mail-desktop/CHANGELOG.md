@@ -37,7 +37,7 @@ Organising:
   Apply Rules. Rules also run on mail that arrives in an inbox, and a message a rule moves or reads raises no
   notification.
 - View > Category shows Primary, Transactions, Updates or Promotions only. View > Filter adds With Attachments, View >
-  Sort By adds Flag and Read Status, and View > Hide Toolbar hides the toolbar. A Reply All button joins the toolbar.
+  Sort By adds Flag and Read Status. A Reply All button joins the toolbar.
 - Conversations fold and unfold from a triangle in the first row. Muted conversations carry a Muted tag in the list.
 - Message > Move to Junk marks the message `$Junk`; moving it out of Junk sets `$NotJunk`.
 - Mailbox > Export Mailbox and Import Mailbox read and write mbox files through the save and open panels.

@@ -295,9 +295,9 @@
    "area": "view",
    "apple": "View > Show Sidebar, Use Column Layout",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:122",
-   "note": "View > Hide Sidebar and View > Hide Toolbar. Column layout and the side preview are not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Column layout and side preview toggles that feed layout::panes (layout.rs:11)"
+   "bifrost": "springboard/apps/mail-desktop/src/layout.rs:panes_for",
+   "note": "View > Hide/Show Sidebar. Toolbar hiding, column layout and the side preview are not done.",
+   "wire": "Add View menu toggles that feed layout::panes (layout.rs:11)"
   },
   {
    "feature": "Favorites bar",

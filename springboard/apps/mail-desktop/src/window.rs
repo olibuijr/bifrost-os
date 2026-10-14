@@ -115,7 +115,6 @@ pub const MENU_NEXT_MISSPELLING: u32 = 71;
 pub const MENU_CORRECT_SPELLING: u32 = 72;
 pub const MENU_ACTIVITY: u32 = 73;
 pub const MENU_CHECK_CONNECTION: u32 = 74;
-pub const MENU_SHOW_TOOLBAR: u32 = 75;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -411,7 +410,6 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
 
     let mut view = vec![
         AppMenuItem::new(MENU_SHOW_SIDEBAR, if mail.show_sidebar { "Hide Sidebar" } else { "Show Sidebar" }).key("cmd+ctrl+s"),
-        AppMenuItem::new(MENU_SHOW_TOOLBAR, if mail.show_toolbar { "Hide Toolbar" } else { "Show Toolbar" }),
         AppMenuItem::new(MENU_SHOW_FAVORITES, if mail.prefs.show_favorites { "Hide Favorites Bar" } else { "Show Favorites Bar" }),
         AppMenuItem::new(MENU_RAW_SOURCE, "Raw Source").key("cmd+alt+u").checked(mail.show_raw).enabled(open),
         AppMenuItem::separator(),
@@ -1120,7 +1118,6 @@ impl MailWindow {
                 }
             }
             MENU_CHECK_CONNECTION => self.check_connection(),
-            MENU_SHOW_TOOLBAR => self.mail.show_toolbar = !self.mail.show_toolbar,
             MENU_ALL_CATEGORIES => self.mail.category = None,
             MENU_BOLD => self.format(Compose::toggle_bold),
             MENU_ITALIC => self.format(Compose::toggle_italic),
