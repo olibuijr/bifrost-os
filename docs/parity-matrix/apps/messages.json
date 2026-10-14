@@ -30,7 +30,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/window.rs:465 (document); springboard/apps/messages-desktop/src/window.rs:550 (drag)",
       "note": "Any file via Attach File (pictures as pictures, others as file messages); files dropped on the window go to the open conversation when signed in (the drop policy is tested headless in tests/parity_app-messages.rs; the drop flow itself is not yet verified on Midget)",
-      "wire": ""
+      "wire": "Verify attaching files and dropping files into a signed-in conversation on Midget; confirm unsupported file types are reported cleanly."
     },
     {
       "feature": "Paste into composer",
@@ -129,7 +129,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/messages-desktop/src/draw.rs:334 (quote hit), springboard/apps/messages-desktop/src/draw.rs:683 (quoted line), springboard/apps/messages-desktop/src/draw.rs:684 (outline of the message jumped to)",
       "note": "Reply in the message context menu; quoted line in the bubble; tapping the quoted line scrolls to the original message and outlines it until the next press (the outline state and reply start are tested headless in tests/parity_app-messages.rs; the stroke is not yet verified on Midget)",
-      "wire": ""
+      "wire": "Verify reply creation, quoted-line navigation and temporary outline on Midget; check that navigation works for older messages."
     },
     {
       "feature": "Edit and unsend",

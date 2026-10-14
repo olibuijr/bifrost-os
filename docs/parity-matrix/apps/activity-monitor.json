@@ -206,7 +206,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/activity-desktop/src/window.rs:848 (copy_text); springboard/apps/activity-desktop/src/model.rs:444 (row_text)",
    "note": "Edit > Copy (cmd+C) copies the selected row as tab-separated text of the columns the tab shows (window.rs copy_text), counting from the baseline when Show Deltas is on and including the Since Baseline column when shown. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify on Midget that Copy writes the selected process row with visible columns, tabs intact, and baseline values when delta mode is on."
   },
   {
    "feature": "Help book",
@@ -221,9 +221,9 @@
  "summary": {
   "features": 23,
   "parity": 6,
-  "partial": 12,
-  "gap": 4,
+  "partial": 15,
+  "gap": 1,
   "n/a": 1,
-  "coverage_pct": 54.5
+  "coverage_pct": 61.4
  }
 }

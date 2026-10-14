@@ -181,9 +181,9 @@
  "summary": {
   "features": 19,
   "parity": 4,
-  "partial": 13,
-  "gap": 1,
+  "partial": 14,
+  "gap": 0,
   "n/a": 1,
-  "coverage_pct": 58.3
+  "coverage_pct": 61.1
  }
 }

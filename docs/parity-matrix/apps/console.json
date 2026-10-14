@@ -222,9 +222,9 @@
  "summary": {
   "features": 23,
   "parity": 8,
-  "partial": 9,
-  "gap": 4,
+  "partial": 13,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 59.5
+  "coverage_pct": 69.0
  }
 }

@@ -53,7 +53,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/commands.rs:277; springboard/src/shell/photos/mod.rs:3041 (select_cell); springboard/src/shell/hwkeys.rs:608 (set_photos_shift); springboard/src/shell/desktop_bar.rs:photo_overlay (Edit rows)",
    "note": "Edit > Select All (cmd+a) and Deselect All (cmd+shift+a) while Photos is in front; Deselect All clears the set and keeps selecting (albums.rs deselect_all). A Shift-held tap on a grid cell selects the run from the last photo tapped (select_cell, fed the Shift state by bin/shell.rs). Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify on Midget that Select All, Deselect All and Shift-range selection update the selection correctly; check batch delete, share and slideshow actions against that selection."
   },
   {
    "feature": "New Album and add photo to album",
@@ -98,7 +98,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/commands.rs:277 (RenameAlbum, DeleteAlbum, AlbumsByName); springboard/src/shell/desktop_bar.rs:photo_overlay (File and View rows)",
    "note": "File > Rename Album and Delete Album run on the open user album; View > Sort Albums by Name is checked when the picker sorts by name. Custom order is creation order. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify rename and delete on a user album and Sort Albums by Name on Midget; confirm built-in albums are not destructively affected."
   },
   {
    "feature": "Sort by date newest/oldest",
@@ -134,7 +134,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/mod.rs:595 (fit_rect); springboard/src/shell/photos/mod.rs:2440 (thumb_key); springboard/src/shell/photos/commands.rs:277 (AspectGrid)",
    "note": "View > Aspect Ratio Grid shows whole pictures letterboxed in their cells, with a thumbnail cache of its own (pref grid). The square cropped grid stays the default. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify the aspect-ratio grid displays full images and switching back to square crop restores the expected grid on Midget."
   },
   {
    "feature": "Full-size viewer with navigation",
@@ -161,7 +161,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/desktop_bar.rs:photo_overlay (View, Enter Full Screen row, Action::Zoom)",
    "note": "View > Enter Full Screen (ctrl+cmd+f) zooms the Photos window to the screen, as the window Zoom does. There is no separate full-screen mode for the grid. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify the menu command and shortcut zoom the Photos window on Midget and that the window returns to its prior size."
   },
   {
    "feature": "Info panel with EXIF metadata",
@@ -260,7 +260,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/commands.rs:277 (RotateLeft, RotateRight, FlipHorizontal, FlipVertical)",
    "note": "Image > Rotate Left (cmd+r), Rotate Right (cmd+alt+r), Flip Horizontal and Flip Vertical act on the open photo or the selection, one undoable step each, and keep the saved edit. Crop and straighten stay in the editor. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify rotate and flip on Midget and confirm edits can be undone; crop and straighten remain editor-only operations."
   },
   {
    "feature": "Auto Enhance",
@@ -269,7 +269,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/commands.rs:277 (AutoEnhance); springboard/src/shell/desktop_bar.rs:photo_image_rows; springboard/src/shell/photos/mod.rs:2344 (Adjust pane Auto row)",
    "note": "Image > Auto Enhance toggles the tone stretch on the open photo or the selection, checked when it is on. The Adjust pane has an Auto Enhance button in the row under its sliders. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify Auto Enhance from both the Image menu and Adjust pane on Midget, including toggling it off again."
   },
   {
    "feature": "Revert to Original",
@@ -287,7 +287,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/commands.rs:277 (CopyEdits, PasteEdits); springboard/src/shell/photos/extras.rs:782 (paste_edits_to)",
    "note": "Image > Copy Edits (cmd+shift+c) and Paste Edits (cmd+shift+v) use the copied look; Paste Edits lands on the open photo or the selection as one undoable step. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify copied edits paste onto one photo and a multi-selection on Midget as a single undoable change."
   },
   {
    "feature": "Duplicate photo",
@@ -296,7 +296,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/commands.rs:277 (Duplicate, cmd+d); springboard/src/shell/photos/mod.rs:3010 (duplicate_photos); springboard/src/shell/photos/library.rs:72",
    "note": "Image > Duplicate (cmd+d) copies the open photo, or every selected photo, with its edit, rating and details, as Share > Duplicate does; one rescan lists the copies. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify duplicate creates a separate file and preserves edit, rating and metadata on Midget."
   },
   {
    "feature": "Hide photo and Hidden album with password unlock",
@@ -314,7 +314,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/commands.rs:277 (Rate); springboard/src/shell/desktop_bar.rs:photo_image_rows",
    "note": "Image > Clear Rating (cmd+0) and 1 to 5 Stars (cmd+1 to cmd+5) rate the open photo or the selection, one undoable step each; the current rating is checked. No rating filter control in the toolbar (the rating:N search works). Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify Clear Rating and one through five stars on Midget for one photo and a selection; confirm undo restores the prior rating."
   },
   {
    "feature": "Video / Live Photo playback and poster frame",
@@ -404,7 +404,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/desktop_bar.rs:photo_overlay (Edit rows); springboard/src/shell/photos/commands.rs:277 (Undo, Redo)",
    "note": "Edit > Undo and Redo name the change they take back (for example Undo Rating); cmd+z and cmd+y reach the same stack. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify Edit menu Undo/Redo labels and Cmd+Z/Cmd+Y restore the named photo change on Midget."
   },
   {
    "feature": "Search",
@@ -512,7 +512,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/defaultapps.rs:36 (scheme photos); springboard/src/shell/photos/link.rs:21",
    "note": "The photos scheme is registered for the app (defaultapps.rs:36). photos://photo/<path> shows a picture, photos://album/<name> opens an album and photos://search/<text> searches. Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify photo, album and search URLs route to Photos on Midget and handle missing paths or albums without crashing."
   },
   {
    "feature": "Library package document types",
@@ -536,9 +536,9 @@
  "summary": {
   "features": 58,
   "parity": 16,
-  "partial": 18,
-  "gap": 19,
+  "partial": 31,
+  "gap": 6,
   "n/a": 5,
-  "coverage_pct": 47.2
+  "coverage_pct": 59.4
  }
 }

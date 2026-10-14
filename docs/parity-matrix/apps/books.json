@@ -31,7 +31,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/store.rs:513 (Store::create_collection, rename_collection, delete_collection, toggle_in_collection); springboard/apps/books-desktop/src/main.rs:216 (Library menu: New, Rename and Delete Collection, Add to Collection)",
    "note": "Library menu and right-click make, rename and delete collections and add or remove books; the sidebar lists them and they persist across restarts. Tested headless in books/library_tests.rs (collections_are_made_renamed_filled_and_deleted). Gap: the sidebar has no My Collections header yet and nothing is verified on Midget.",
-   "wire": ""
+   "wire": "Verify collection creation, rename, deletion, membership changes and persistence on Midget; add the missing My Collections sidebar header."
   },
   {
    "feature": "Want to Read / Finished, mark as finished",
@@ -39,7 +39,8 @@
    "apple": "book context menu",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/store.rs:488 (set_status); springboard/apps/books-desktop/src/books/store.rs:493 (toggle_status); springboard/apps/books-desktop/src/books/mod.rs:1156 (toggle_open_status); springboard/apps/books-desktop/src/main.rs:214 (Library menu)",
-   "note": "The Library menu and a cover's context menu mark a book Want to Read or Finished, the sidebar lists both, and reaching the last page marks a book Finished. Tested headless in books/library_tests.rs (want_to_read_and_finished_hold_the_books_with_that_status, reaching_the_last_page_marks_the_book_finished). Gap: not verified on Midget."
+   "note": "The Library menu and a cover's context menu mark a book Want to Read or Finished, the sidebar lists both, and reaching the last page marks a book Finished. Tested headless in books/library_tests.rs (want_to_read_and_finished_hold_the_books_with_that_status, reaching_the_last_page_marks_the_book_finished). Gap: not verified on Midget.",
+   "wire": "Verify status changes and automatic Finished marking at the last page on Midget, including persistence after relaunch."
   },
   {
    "feature": "Library search",
@@ -56,7 +57,8 @@
    "apple": "View > Sort By",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/store.rs:103 (SortBy, sort_key); springboard/apps/books-desktop/src/books/mod.rs:1265 (set_sort); springboard/apps/books-desktop/src/main.rs:154 (View > Sort By)",
-   "note": "View > Sort By orders the library by recent use, title, author or reading progress, and the choice is kept across restarts. Tested headless in books/store.rs (sort_keys_order_by_title_and_author) and books/library_tests.rs (sort_by_orders_the_shelf_and_leaves_the_reading_now_row_to_recent). Gap: no series order and nothing is verified on Midget."
+   "note": "View > Sort By orders the library by recent use, title, author or reading progress, and the choice is kept across restarts. Tested headless in books/store.rs (sort_keys_order_by_title_and_author) and books/library_tests.rs (sort_by_orders_the_shelf_and_leaves_the_reading_now_row_to_recent). Gap: no series order and nothing is verified on Midget.",
+   "wire": "Verify each sort order and its persisted selection on Midget; implement series ordering if the source provides usable series metadata."
   },
   {
    "feature": "Grid / list library view",
@@ -64,7 +66,8 @@
    "apple": "View > As Grid / As List",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/draw.rs:238 (draw_list_row); springboard/apps/books-desktop/src/books/draw.rs:117 (draw_library); springboard/apps/books-desktop/src/books/mod.rs:1280 (set_view_mode)",
-   "note": "View > as Grid and as List show the library as covers or as rows with title, author and status, and the choice is kept. Tested headless in books/library_tests.rs (the_list_view_has_a_row_per_book_that_a_tap_reaches, the_list_scrolls_to_its_last_row). Gap: not verified on Midget."
+   "note": "View > as Grid and as List show the library as covers or as rows with title, author and status, and the choice is kept. Tested headless in books/library_tests.rs (the_list_view_has_a_row_per_book_that_a_tap_reaches, the_list_scrolls_to_its_last_row). Gap: not verified on Midget.",
+   "wire": "Verify Grid and List switching, row selection and persisted mode on Midget."
   },
   {
    "feature": "Add to Library",
@@ -72,7 +75,8 @@
    "apple": "File > Add to Library",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/main.rs:194 (library_action opens the panel); springboard/apps/books-desktop/src/main.rs:395 (document copies each book); springboard/apps/books-desktop/src/books/mod.rs:1314 (import_book)",
-   "note": "File > Add to Library opens the panel for .epub and .pdf files (documents permission) and copies the chosen books into the Books folder, onto the shelf. Tested headless in books/library_tests.rs (adding_books_copies_them_into_the_books_folder_and_the_shelf). Gap: not verified on Midget."
+   "note": "File > Add to Library opens the panel for .epub and .pdf files (documents permission) and copies the chosen books into the Books folder, onto the shelf. Tested headless in books/library_tests.rs (adding_books_copies_them_into_the_books_folder_and_the_shelf). Gap: not verified on Midget.",
+   "wire": "Verify importing EPUB and PDF from Files on Midget and confirm each appears on the shelf after relaunch."
   },
   {
    "feature": "Remove book",
@@ -116,7 +120,8 @@
    "apple": "View > scrolling view",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1701 (set_continuous); springboard/apps/books-desktop/src/books/mod.rs:185 (page_at, the page in view); springboard/apps/books-desktop/src/main.rs:227 (View > Continuous Scroll)",
-   "note": "View > Continuous Scroll lays the pages out one below the other and scrolls them by drag or fling, with the middle page as the current one. Tested headless in books/library_tests.rs (continuous_scrolling_follows_the_scroll_and_scrolls_to_a_page, a_drag_scrolls_the_pages_and_a_tap_still_works, the_pages_are_drawn_one_below_the_other_at_the_scroll_position). Gap: not verified on Midget."
+   "note": "View > Continuous Scroll lays the pages out one below the other and scrolls them by drag or fling, with the middle page as the current one. Tested headless in books/library_tests.rs (continuous_scrolling_follows_the_scroll_and_scrolls_to_a_page, a_drag_scrolls_the_pages_and_a_tap_still_works, the_pages_are_drawn_one_below_the_other_at_the_scroll_position). Gap: not verified on Midget.",
+   "wire": "Verify continuous scrolling, fling, page tracking and switching back to paginated mode on Midget."
   },
   {
    "feature": "Table of contents",
@@ -151,7 +156,8 @@
    "apple": "highlight colour submenu",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/store.rs:191 (HIGHLIGHT_STYLES); springboard/apps/books-desktop/src/books/store.rs:460 (highlight_style, set_highlight_style); springboard/apps/books-desktop/src/books/mod.rs:1303 (set_match_style); springboard/apps/books-desktop/src/books/draw.rs:82 (highlight_colour)",
-   "note": "Find > Highlight Color gives the match yellow, green, blue, pink or purple, or underlines it, and the style is kept with the highlight, in PDF books too. Tested headless in books/highlight_tests.rs and books/library_tests.rs (highlight_colours_and_the_underline_draw_differently, the_highlight_color_menu_styles_the_text_the_last_find_went_to, pdf_highlight_annotations_carry_their_style). Gap: not verified on Midget."
+   "note": "Find > Highlight Color gives the match yellow, green, blue, pink or purple, or underlines it, and the style is kept with the highlight, in PDF books too. Tested headless in books/highlight_tests.rs and books/library_tests.rs (highlight_colours_and_the_underline_draw_differently, the_highlight_color_menu_styles_the_text_the_last_find_went_to, pdf_highlight_annotations_carry_their_style). Gap: not verified on Midget.",
+   "wire": "Verify each highlight colour and underline survives reopening an EPUB and PDF on Midget."
   },
   {
    "feature": "Find in book with next/previous and whole words",
@@ -205,7 +211,7 @@
    "status": "gap",
    "bifrost": "",
    "note": "Not built: the reader draws every page in the system face and the Display panel has no family row. The unwired font model was removed; a serif or sans face and a family setting in store::Settings are still needed, then the page layout measures with that face.",
-   "wire": ""
+   "wire": "Add a font family setting to the Display panel, measure/reflow EPUB pages with the selected face, and verify PDF behaviour remains explicit."
   },
   {
    "feature": "Line spacing / margins / justification",
@@ -213,7 +219,8 @@
    "apple": "Aa customise",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/store.rs:42 (SPACINGS); springboard/apps/books-desktop/src/books/store.rs:45 (MARGINS); springboard/apps/books-desktop/src/books/mod.rs:873 (set_line_spacing); springboard/apps/books-desktop/src/books/mod.rs:879 (set_margins); springboard/apps/books-desktop/src/books/mod.rs:885 (set_justified); springboard/apps/books-desktop/src/books/draw.rs:610 (draw_display); springboard/apps/books-desktop/src/books/layout.rs:17 (line height)",
-   "note": "The Display panel and View menu set line spacing (tight, normal, loose), margins (narrow, normal, wide) and Justify Text; the pages are laid out again and the reader keeps its place. Tested headless in books/library_tests.rs (line_spacing_margins_and_justification_lay_the_pages_out_again_and_persist, only_lines_inside_a_paragraph_are_stretched_when_justified) and books/layout.rs (line_spacing_changes_how_many_lines_fit_a_page). Gap: not verified on Midget."
+   "note": "The Display panel and View menu set line spacing (tight, normal, loose), margins (narrow, normal, wide) and Justify Text; the pages are laid out again and the reader keeps its place. Tested headless in books/library_tests.rs (line_spacing_margins_and_justification_lay_the_pages_out_again_and_persist, only_lines_inside_a_paragraph_are_stretched_when_justified) and books/layout.rs (line_spacing_changes_how_many_lines_fit_a_page). Gap: not verified on Midget.",
+   "wire": "Verify spacing, margins, justification, current-page retention and preference persistence on Midget."
   },
   {
    "feature": "Page scrubber",
@@ -239,7 +246,8 @@
    "apple": "File > Print",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/main.rs:330 (File > Print); springboard/apps/books-desktop/src/books/mod.rs:744 (print_text)",
-   "note": "File > Print sends a PDF as it is, and an EPUB as its headings and paragraphs through the print service. Tested headless in books/library_tests.rs (a_book_prints_as_its_text_without_pictures) and main.rs (print_needs_a_book_and_a_print_service). Gap: the EPUB printout uses the printer face without pictures or the reading theme, and no CUPS queue has been tried on Midget."
+   "note": "File > Print sends a PDF as it is, and an EPUB as its headings and paragraphs through the print service. Tested headless in books/library_tests.rs (a_book_prints_as_its_text_without_pictures) and main.rs (print_needs_a_book_and_a_print_service). Gap: the EPUB printout uses the printer face without pictures or the reading theme, and no CUPS queue has been tried on Midget.",
+   "wire": "Verify PDF and EPUB print output on Midget; a CUPS queue and richer EPUB layout remain to be checked or improved."
   },
   {
    "feature": "Show/hide sidebar",
@@ -292,7 +300,8 @@
    "apple": "Settings > Reading Goals",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/books/store.rs:558 (add_reading); springboard/apps/books-desktop/src/books/store.rs:581 (goal_streak); springboard/apps/books-desktop/src/books/store.rs:612 (goal_label); springboard/apps/books-desktop/src/books/mod.rs:1133 (set_reading_goal); springboard/apps/books-desktop/src/books/mod.rs:1141 (goal_text, the Reading Now line)",
-   "note": "Library > Reading Goal sets 10 to 120 minutes a day; the time a book is open counts, and Reading Now shows today's minutes against the goal and the streak. Tested headless in books/library_tests.rs (the_reading_goal_counts_the_time_a_book_is_open, the_goal_shows_in_the_reading_now_section). Gap: the goal sits in the Library menu rather than a Settings page, and it is a text line, not a card."
+   "note": "Library > Reading Goal sets 10 to 120 minutes a day; the time a book is open counts, and Reading Now shows today's minutes against the goal and the streak. Tested headless in books/library_tests.rs (the_reading_goal_counts_the_time_a_book_is_open, the_goal_shows_in_the_reading_now_section). Gap: the goal sits in the Library menu rather than a Settings page, and it is a text line, not a card.",
+   "wire": "Verify the daily goal and streak across day boundaries and relaunch on Midget; consider a Settings page and card presentation."
   },
   {
    "feature": "Save PDF to Books share target",
@@ -300,7 +309,8 @@
    "apple": "SharingExtension.appex (accepts one PDF; BKShareViewController.nib)",
    "status": "partial",
    "bifrost": "springboard/apps/books-desktop/src/main.rs:395 (document: copies each shared PDF into the Books folder); springboard/apps/books-desktop/src/main.rs:410 (opens the lone shared book); springboard/apps/books-desktop/src/books/share.rs:8 (book_to_open); springboard/apps/books-desktop/manifest.toml (handles com.adobe.pdf, documents permission)",
-   "note": "A PDF shared to Books is copied into the Books folder and a lone shared book opens; the open rule is tested headless in books/share_tests.rs (a_lone_shared_book_opens_at_once, several_shared_books_stay_on_the_shelf). Gap: the share request itself is not covered by a test, and it is not verified on Midget from Files or Preview."
+   "note": "A PDF shared to Books is copied into the Books folder and a lone shared book opens; the open rule is tested headless in books/share_tests.rs (a_lone_shared_book_opens_at_once, several_shared_books_stay_on_the_shelf). Gap: the share request itself is not covered by a test, and it is not verified on Midget from Files or Preview.",
+   "wire": "Verify sharing one and several PDFs from Files and Preview to Books on Midget; add coverage for the share request path."
   },
   {
    "feature": "Settings window",
@@ -315,9 +325,9 @@
  "summary": {
   "features": 35,
   "parity": 19,
-  "partial": 9,
-  "gap": 5,
+  "partial": 11,
+  "gap": 3,
   "n/a": 2,
-  "coverage_pct": 71.2
+  "coverage_pct": 74.2
  }
 }

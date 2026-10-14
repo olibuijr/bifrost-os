@@ -11,10 +11,10 @@
  "summary": {
   "features": 33,
   "parity": 5,
-  "partial": 22,
-  "gap": 5,
+  "partial": 25,
+  "gap": 2,
   "n/a": 1,
-  "coverage_pct": 50.0
+  "coverage_pct": 54.7
  },
  "features": [
   {
@@ -114,7 +114,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1191 (Ignore Case, Whole Word), main.rs:1181 (replace scopes), springboard/apps/stickies-desktop/src/model.rs (Board::matches, Board::replace_all), springboard/apps/stickies-desktop/src/words.rs",
    "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes, Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Edit > Ignore Case (on by default, kept in the defaults) switches between either-case and same-case matching. Edit > Whole Word (off by default, kept in the defaults) skips matches inside longer words for Find, Replace and Replace All (words.rs, tested headless). Replace... adds a replace field (Tab switches field, Return replaces and steps), Replace All replaces in every note and Replace All in Current Note in the focused note only, each undoable. Not yet checked on the lab machine.",
-   "wire": ""
+   "wire": "Verify Find, Replace, case sensitivity, whole-word matching and Replace All in both scopes on Midget; confirm undo restores affected note text."
   },
   {
    "feature": "Spelling and Grammar / Substitutions / Transformations",
@@ -150,7 +150,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/board.rs:272",
    "note": "Underline (Cmd+U), Strikethrough and Outline, whole-note, drawn in board.rs draw_body (outline is a ring of the text colour). Per-run attributes remain.",
-   "wire": ""
+   "wire": "Verify whole-note underline, strikethrough and outline drawing on Midget; per-run text formatting remains a separate gap."
   },
   {
    "feature": "Bigger / Smaller text and Show Fonts",
@@ -222,7 +222,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/board.rs:190",
    "note": "Window > Translucent is a checked per-note toggle, saved in the file (model.rs translucent flag). draw_note uses it instead of a fixed rule (board.rs:195 see_through). Not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify translucency can be toggled per note and remains set after closing and reopening that note on Midget."
   },
   {
    "feature": "Collapse / Expand note (and all)",
@@ -231,7 +231,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/main.rs:471",
    "note": "Collapse All, Expand All and a double press on the title bar (main.rs:471) added. Built on parity/team-d-stickies; not yet verified on Midget.",
-   "wire": ""
+   "wire": "Verify Collapse All, Expand All and title-bar double press on Midget; ensure collapsed notes can be expanded again."
   },
   {
    "feature": "Arrange By (colour, content, date, location) with undo",
@@ -249,7 +249,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/model.rs:712",
    "note": "Window > Zoom Sticky Note toggles the focused note between its size and a large size (model.rs toggle_zoom). Minimise and Bring All to Front stay with the shell.",
-   "wire": ""
+   "wire": "Keep Minimise and Bring All to Front as shell-owned window actions; verify Zoom Sticky Note on Midget."
   },
   {
    "feature": "Move and resize notes",

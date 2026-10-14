@@ -292,10 +292,10 @@
    "feature": "Collapsible sections under headings",
    "area": "view",
    "apple": "MainMenu: View > Collapse/Expand Section, All Sections",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/fold.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Draw a disclosure triangle beside headings from fold::headings and hide fold::Folds::hidden_lines; View menu Collapse All / Expand All."
+   "status": "gap",
+   "bifrost": "",
+   "note": "No folding model or UI is present in the Notes source; the prior fold.rs citation was stale.",
+   "wire": "Implement heading detection and collapsed-line state, draw a disclosure control beside headings, and add Collapse/Expand Section and All commands."
   },
   {
    "feature": "Settings window: default text size, dark note background, new notes start with, group by date",
@@ -365,9 +365,9 @@
    "area": "menu",
    "apple": "MainMenu: Edit > Math Results",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mathline.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add an Edit menu toggle; draw mathline::results after the matching lines in the editor and insert on Return."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/math.rs; springboard/apps/notes-desktop/src/notes/mod.rs:1676",
+   "note": "Math result parsing is in math.rs and Notes applies it from editor/menu actions. It is integrated but not yet verified on Midget.",
+   "wire": "Verify on Midget that the Math Results toggle updates a trailing expression when typed and Calculate Math Results completes eligible lines."
   },
   {
    "feature": "Undo and redo",
@@ -391,9 +391,9 @@
  "summary": {
   "features": 42,
   "parity": 11,
-  "partial": 22,
-  "gap": 7,
+  "partial": 25,
+  "gap": 4,
   "n/a": 2,
-  "coverage_pct": 55.0
+  "coverage_pct": 58.8
  }
 }
