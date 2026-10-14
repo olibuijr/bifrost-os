@@ -76,6 +76,7 @@ fn row(event: Event, sub: &Subscription) -> LogEntry {
         category: category_label(event.kind.category()).into(),
         level: if event.needs_verdict() { Level::Notice } else { Level::Info },
         message: message(event, sub),
+        ..LogEntry::default()
     }
 }
 

@@ -3,6 +3,7 @@
 //! are `model.rs`. Files opened and archives captured are `opened.rs` and `capture.rs`; the kernel's crash records are
 //! `kernel.rs`. This file is the glue to the shell: the menus and the document, workspace and power services.
 
+mod activity;
 mod capture;
 mod columns;
 mod console;
@@ -446,6 +447,8 @@ fn menus(c: &Console, can_reveal: bool, can_trash: bool) -> Vec<AppMenu> {
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_SIDEBAR, "Show Sidebar").key("ctrl+cmd+s").checked(c.show_sidebar),
         AppMenuItem::new(MENU_DETAILS, "Show Details").checked(c.show_details),
+        AppMenuItem::new(MENU_ACTIVITY, if c.activity.is_some() { "Show All Activities" } else { "Show Only This Activity" })
+            .enabled(c.activity.is_some() || c.selected_entry().is_some_and(|e| !e.invocation.is_empty())),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Visible Columns"),
     ];

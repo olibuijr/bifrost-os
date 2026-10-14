@@ -1,6 +1,7 @@
 //! The Console window's state and behaviour: the views, the streaming, the search and the table selection, and the
 //! geometry that drawing and hit tests share. Points for the kit (`Rect`, `ui.pt`), pixels only where drawing.
 
+use crate::activity;
 use crate::columns::{self, ColumnSet};
 use crate::cursor;
 use crate::draw;
@@ -167,6 +168,8 @@ pub struct Console {
     reveal: Option<u64>,
     /// Files opened and archives captured, shown under Opened Files in the sidebar.
     pub opened: Vec<OpenedLog>,
+    /// The systemd unit invocation the table is narrowed to (View > Show Only This Activity), if any.
+    pub activity: Option<String>,
 }
 
 impl Console {
@@ -205,6 +208,7 @@ impl Console {
             find_text: String::new(),
             reveal: None,
             opened: Vec::new(),
+            activity: None,
         }
     }
 
@@ -319,7 +323,7 @@ impl Console {
         };
         let mut changed = !batch.is_empty();
         for e in batch {
-            let shown = self.levels.shows(e.level) && self.query.matches(&e);
+            let shown = self.levels.shows(e.level) && self.query.matches(&e) && activity::shows(self.activity.as_deref(), &e);
             let seq = self.buffer.push(e);
             if shown {
                 self.visible.push(seq);
@@ -356,8 +360,14 @@ impl Console {
     pub fn rebuild(&mut self) {
         let levels = self.levels;
         let query = &self.query;
+        let activity = self.activity.as_deref();
         let signposts_only = self.view == View::Signposts;
-        let mut visible: Vec<u64> = self.buffer.iter().filter(|(_, e)| levels.shows(e.level) && query.matches(e) && (!signposts_only || signposts::parse(&e.message).is_some())).map(|(s, _)| s).collect();
+        let mut visible: Vec<u64> = self
+            .buffer
+            .iter()
+            .filter(|(_, e)| levels.shows(e.level) && query.matches(e) && activity::shows(activity, e) && (!signposts_only || signposts::parse(&e.message).is_some()))
+            .map(|(s, _)| s)
+            .collect();
         if let Some(from) = self.after {
             let newer = cursor::after(&self.positions(), from);
             visible.retain(|s| newer.contains(s));
@@ -805,6 +815,7 @@ impl Console {
             MENU_RELOAD => self.reload(),
             MENU_SIDEBAR => self.show_sidebar = !self.show_sidebar,
             MENU_DETAILS => self.show_details = !self.show_details,
+            MENU_ACTIVITY => self.toggle_activity(),
             MENU_EXPAND => self.toggle_expanded(),
             MENU_COLLAPSE_ALL => self.expanded.clear(),
             MENU_FIND_NEXT => self.find_step(true),
@@ -926,6 +937,16 @@ impl Console {
             Ok(path) => format!("Saved {}", path.display()),
             Err(e) => format!("Could not save: {e}"),
         };
+    }
+
+    /// View > Show Only This Activity: narrows the table to the selected message's invocation. Again shows every activity.
+    pub fn toggle_activity(&mut self) {
+        if self.activity.is_some() {
+            self.activity = None;
+        } else {
+            self.activity = self.selected_entry().and_then(activity::filter_for);
+        }
+        self.rebuild();
     }
 
     /// Log menu: walk mode. Shows the messages after the selected one, or back to every message.
@@ -1055,6 +1076,8 @@ pub const MENU_SIDEBAR: u32 = 13;
 pub const MENU_DETAILS: u32 = 14;
 pub const MENU_EXPAND: u32 = 15;
 pub const MENU_COLLAPSE_ALL: u32 = 16;
+/// View menu: Show Only This Activity, which again shows every activity when one is narrowed.
+pub const MENU_ACTIVITY: u32 = 24;
 /// Edit menu: Find Next, Find Previous, Use Selection for Find.
 pub const MENU_FIND_NEXT: u32 = 17;
 pub const MENU_FIND_PREVIOUS: u32 = 18;
