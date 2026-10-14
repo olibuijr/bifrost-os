@@ -434,6 +434,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-automator"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+ "png",
+]
+
+[[package]]
+name = "bifrost-bluetooth-exchange"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+ "zbus",
+]
+
+[[package]]
 name = "bifrost-books"
 version = "1.7.0"
 dependencies = [
@@ -468,6 +486,13 @@ dependencies = [
  "bifrost-app",
  "bifrost-core",
  "springboard",
+]
+
+[[package]]
+name = "bifrost-chess"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
 ]
 
 [[package]]
@@ -507,6 +532,15 @@ dependencies = [
 [[package]]
 name = "bifrost-colormeter"
 version = "0.3.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+ "springboard",
+]
+
+[[package]]
+name = "bifrost-colour-utility"
+version = "0.1.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -608,6 +642,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-grapher"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+]
+
+[[package]]
 name = "bifrost-image-capture"
 version = "0.1.0"
 dependencies = [
@@ -623,6 +664,14 @@ dependencies = [
  "bifrost-audio-hal",
  "bifrost-audio-types",
  "libc",
+]
+
+[[package]]
+name = "bifrost-journal"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
 ]
 
 [[package]]
@@ -822,6 +871,13 @@ name = "bifrost-screenshot"
 version = "0.1.0"
 
 [[package]]
+name = "bifrost-script-editor"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+]
+
+[[package]]
 name = "bifrost-setup-assistant"
 version = "0.1.0"
 dependencies = [
@@ -849,6 +905,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-stocks"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "springboard",
+]
+
+[[package]]
 name = "bifrost-sysinfo"
 version = "0.5.0"
 dependencies = [
@@ -864,6 +928,13 @@ version = "1.3.0"
 dependencies = [
  "bifrost-app",
  "springboard",
+]
+
+[[package]]
+name = "bifrost-tips"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
 ]
 
 [[package]]
@@ -914,6 +985,14 @@ dependencies = [
 [[package]]
 name = "bifrost-wire"
 version = "0.1.0"
+
+[[package]]
+name = "bifrost-wireless-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "springboard",
+]
 
 [[package]]
 name = "bifrost-wm"
