@@ -618,6 +618,8 @@ impl Daily {
 /// The lowest and highest charge, in percent, a battery automation can name.
 pub const MIN_BATTERY: u8 = 5;
 pub const MAX_BATTERY: u8 = 95;
+/// The charge levels the editor's Automation row offers, in order, after the app openings.
+pub const BATTERY_CHOICES: [u8; 4] = [10, 20, 30, 50];
 
 /// A personal automation: a condition that runs its shortcut by itself, besides its menu key and daily reminder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -812,6 +814,42 @@ pub fn next_key(cur: u8) -> u8 {
         0
     } else {
         cur + 1
+    }
+}
+
+/// The automation after `cur` in the order the editor's Automation row steps through: none, each app in
+/// `APP_CHOICES`, each level in `BATTERY_CHOICES`, then none again. `None` for a value the row never offers.
+pub fn next_automation(cur: Option<Automation>) -> Option<Automation> {
+    let order: Vec<Automation> =
+        (0..APP_CHOICES.len()).map(Automation::AppOpens).chain(BATTERY_CHOICES.iter().map(|&p| Automation::BatteryBelow(p))).collect();
+    match cur {
+        None => order.first().copied(),
+        Some(a) => order.iter().position(|&x| x == a).and_then(|k| order.get(k + 1).copied()),
+    }
+}
+
+/// The text the Automation row shows for `cur`: "Off", "When Notes Opens" or "Battery Below 20%".
+pub fn automation_label(cur: Option<Automation>) -> String {
+    match cur {
+        None => "Off".into(),
+        Some(Automation::AppOpens(i)) => match APP_CHOICES.get(i) {
+            Some(app) => format!("When {app} Opens"),
+            None => "Off".into(),
+        },
+        Some(Automation::BatteryBelow(p)) => format!("Battery Below {p}%"),
+    }
+}
+
+/// The position of the shortcut before (`next` false) or after (`next` true) `i` in a list of `len`, or `None` at an
+/// end or for a position outside the list.
+pub fn neighbour(len: usize, i: usize, next: bool) -> Option<usize> {
+    if i >= len {
+        return None;
+    }
+    if next {
+        (i + 1 < len).then_some(i + 1)
+    } else {
+        i.checked_sub(1)
     }
 }
 

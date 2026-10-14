@@ -1,6 +1,7 @@
 //! The app's menus and the window commands they send. File holds New, Duplicate, Import, Export and Delete; Edit holds
 //! Rename and Find; Shortcuts holds Run, the Gallery and one item per shortcut, each with its menu key (Control and
-//! Command with a digit) when it has one, which runs it while the app is in front.
+//! Command with a digit) when it has one, which runs it while the app is in front. Window holds All Shortcuts and, in the
+//! editor, Previous and Next Shortcut.
 
 use crate::widget::Command;
 use bifrost_app::{AppMenu, AppMenuItem};
@@ -17,6 +18,9 @@ const FIND: u32 = 7;
 const RUN: u32 = 8;
 const GALLERY: u32 = 9;
 const HELP: u32 = 10;
+const WINDOW_ALL: u32 = 11;
+const WINDOW_PREVIOUS: u32 = 12;
+const WINDOW_NEXT: u32 = 13;
 /// The menu id of "Run" for shortcut number `i` is `RUN_BASE + i`.
 const RUN_BASE: u32 = 100;
 /// The most shortcuts the Shortcuts menu lists.
@@ -64,6 +68,15 @@ pub fn build(list: &[Shortcut], open: bool) -> Vec<AppMenu> {
             ],
         },
         AppMenu { title: "Shortcuts".into(), items: shortcuts },
+        AppMenu {
+            title: "Window".into(),
+            items: vec![
+                AppMenuItem::new(WINDOW_ALL, "All Shortcuts").key("cmd+1"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(WINDOW_PREVIOUS, "Previous Shortcut").key("cmd+[").enabled(open),
+                AppMenuItem::new(WINDOW_NEXT, "Next Shortcut").key("cmd+]").enabled(open),
+            ],
+        },
         AppMenu { title: "Help".into(), items: vec![AppMenuItem::new(HELP, "Shortcuts Help")] },
     ]
 }
@@ -81,6 +94,9 @@ pub fn command(id: u32) -> Option<Command> {
         RUN => Command::RunOpen,
         GALLERY => Command::Gallery,
         HELP => Command::Help,
+        WINDOW_ALL => Command::ShowAll,
+        WINDOW_PREVIOUS => Command::Adjacent(false),
+        WINDOW_NEXT => Command::Adjacent(true),
         id if id >= RUN_BASE && ((id - RUN_BASE) as usize) < MENU_RUNS => Command::Run((id - RUN_BASE) as usize),
         _ => return None,
     })
@@ -97,15 +113,33 @@ mod tests {
     }
 
     #[test]
-    fn the_menus_are_file_edit_shortcuts_and_help() {
+    fn the_menus_are_file_edit_shortcuts_window_and_help() {
         let titles: Vec<String> = build(&defaults(), false).into_iter().map(|m| m.title).collect();
-        assert_eq!(titles, vec!["File", "Edit", "Shortcuts", "Help"]);
+        assert_eq!(titles, vec!["File", "Edit", "Shortcuts", "Window", "Help"]);
+    }
+
+    #[test]
+    fn the_window_items_move_between_shortcuts_only_in_the_editor() {
+        for open in [false, true] {
+            let menus = build(&defaults(), open);
+            let window = &menus[3].items;
+            assert_eq!(window[0].title, "All Shortcuts");
+            assert!(window[0].enabled);
+            assert_eq!(window[0].key, "cmd+1");
+            assert_eq!(window[2].title, "Previous Shortcut");
+            assert_eq!(window[2].enabled, open);
+            assert_eq!(window[3].title, "Next Shortcut");
+            assert_eq!(window[3].enabled, open);
+        }
+        assert_eq!(command(WINDOW_ALL), Some(Command::ShowAll));
+        assert_eq!(command(WINDOW_PREVIOUS), Some(Command::Adjacent(false)));
+        assert_eq!(command(WINDOW_NEXT), Some(Command::Adjacent(true)));
     }
 
     #[test]
     fn the_help_item_opens_the_help_panel_and_is_always_enabled() {
         let menus = build(&[], false);
-        let help = &menus[3].items;
+        let help = &menus[4].items;
         assert_eq!(help.len(), 1);
         assert_eq!(help[0].title, "Shortcuts Help");
         assert!(help[0].enabled);

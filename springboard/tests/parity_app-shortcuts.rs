@@ -115,3 +115,57 @@ fn a_starter_added_from_the_gallery_keeps_its_glyph_and_folder() {
     assert_eq!(list[at].glyph, 7);
     assert_eq!(list[at].folder, 1);
 }
+
+#[test]
+fn the_automation_row_starts_at_the_first_app_and_ends_with_no_automation() {
+    assert_eq!(model::next_automation(None), Some(Automation::AppOpens(0)));
+    assert_eq!(model::next_automation(Some(Automation::AppOpens(0))), Some(Automation::AppOpens(1)));
+    let last_app = model::APP_CHOICES.len() - 1;
+    assert_eq!(model::next_automation(Some(Automation::AppOpens(last_app))), Some(Automation::BatteryBelow(10)));
+    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(20))), Some(Automation::BatteryBelow(30)));
+    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(50))), None);
+}
+
+#[test]
+fn the_automation_row_cycles_through_every_offered_automation_once() {
+    let mut seen = Vec::new();
+    let mut cur = None;
+    for _ in 0..=model::APP_CHOICES.len() + model::BATTERY_CHOICES.len() {
+        cur = model::next_automation(cur);
+        if cur.is_none() {
+            break;
+        }
+        seen.push(cur);
+    }
+    assert_eq!(seen.len(), model::APP_CHOICES.len() + model::BATTERY_CHOICES.len());
+    assert_eq!(cur, None, "the row returns to none after the last level");
+}
+
+#[test]
+fn an_automation_the_row_never_offers_steps_to_none() {
+    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(42))), None);
+}
+
+#[test]
+fn the_automation_row_labels_name_the_app_or_the_level() {
+    assert_eq!(model::automation_label(None), "Off");
+    assert_eq!(model::automation_label(Some(Automation::AppOpens(0))), "When Notes Opens");
+    assert_eq!(model::automation_label(Some(Automation::AppOpens(99))), "Off", "an unknown app shows as off");
+    assert_eq!(model::automation_label(Some(Automation::BatteryBelow(20))), "Battery Below 20%");
+}
+
+#[test]
+fn the_neighbour_of_a_shortcut_is_the_one_before_or_after_it() {
+    assert_eq!(model::neighbour(3, 0, true), Some(1));
+    assert_eq!(model::neighbour(3, 1, true), Some(2));
+    assert_eq!(model::neighbour(3, 2, true), None, "the last shortcut has no next");
+    assert_eq!(model::neighbour(3, 2, false), Some(1));
+    assert_eq!(model::neighbour(3, 0, false), None, "the first shortcut has no previous");
+}
+
+#[test]
+fn a_position_outside_the_list_has_no_neighbour() {
+    assert_eq!(model::neighbour(0, 0, true), None);
+    assert_eq!(model::neighbour(3, 5, false), None);
+    assert_eq!(model::neighbour(3, 3, true), None);
+}

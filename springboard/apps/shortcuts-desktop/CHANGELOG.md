@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.11.0 — 2026-10-14
+
+- Automation row in the editor's Details group, under Menu Key. Each tap steps through Off, each app opening (When Notes Opens and so on) and the charge falling below 10, 20, 30 or 50 percent. The choice is saved in the list file.
+- Window menu: All Shortcuts (Command-1); Previous Shortcut and Next Shortcut (Command-[ and Command-]) while a shortcut is open in the editor.
+- Not done: the app does not feed app-open or battery events to the automations, so an automation does not run by itself yet; user-made folders, a custom colour, Choose from Menu, the Output step, Ask for Input and Get Contents of URL running in the app, live preview while dragging a step, drag-to-import of files, the share sheet, and a shell-wide hotkey.
+
 ## 1.10.0 — 2026-10-14
 
 - Personal automations in the shortcut model: a shortcut can run when an app opens or when the battery charge falls below a level (5 to 95 percent). The automation is saved after the menu key in the list file; older versions read the file and ignore it. A battery change starts an automation only when the charge crosses below its level, so the first reading starts nothing. Duplicating a shortcut and importing one drop its automation.
