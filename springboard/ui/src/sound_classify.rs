@@ -110,7 +110,7 @@ impl ClassifyRequest {
 }
 
 /// Sorts a classifier's output into the kept candidates. A confidence outside 0.0..=1.0 (or NaN) fails the window.
-fn top_candidates(mut raw: Vec<(String, f64)>) -> Result<Vec<Classification>, SoundError> {
+pub(crate) fn top_candidates(mut raw: Vec<(String, f64)>) -> Result<Vec<Classification>, SoundError> {
     if raw.iter().any(|(_, c)| !(0.0..=1.0).contains(c)) {
         return Err(SoundError::OperationFailed);
     }

@@ -958,6 +958,7 @@ pub mod speech_assets;
 pub mod voice_commands;
 pub mod tool_calls;
 pub mod sound_classify;
+pub mod sound_stream;
 pub mod sound_envelope;
 pub mod event_envelope;
 pub mod event_distance;
