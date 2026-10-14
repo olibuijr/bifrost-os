@@ -4,7 +4,7 @@
   "macos_since": "10.13",
   "status": "partial",
   "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet, UserActivity), springboard/src/shell/spotindex.rs (per-app on-disk index and search), springboard/src/shell/quicksearch.rs (Search panel, Documents section), springboard/proto/src/quicksearch.rs (wire messages)",
-  "summary": "BifrOSt covers the core indexing path: an app can add, replace and delete its own searchable items, the shell keeps a bounded per-app index, and the system Search panel lists the items under Documents. It does not cover app-side queries and suggestions, index extensions and delegates, custom or person attributes, error reporting, or the Foundation models search tool.",
+  "summary": "BifrOSt covers the core indexing path: an app can add, replace and delete its own searchable items, the shell keeps a bounded per-app index, and the system Search panel lists the items under Documents. A query, suggestion and assistant search tool exist as host-tested models over the same matching. None of the query, delegate, extension or tool models is wired to the shell or SDK yet, and index extensions and the Foundation pipeline types are not built.",
   "rea_evidence": "ev_4438bf59535e4bd6ba0ca70598c6a17e34d2cbccb6b6a1ca563a4e22a50cb41b",
   "features": [
     {
@@ -101,9 +101,9 @@
     {
       "feature": "Foundation models search tool",
       "apple": "SpotlightSearchTool, SearchSource, CoreSpotlightSource, FileSource, CustomStage, SearchPipelineData, ContactResolver, SearchCount, SearchResultsTable, SearchStatistic, SearchTextResult",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no app-facing way to expose indexed content to the on-device assistant as model context; springboard/apps/assistant-desktop exists but has no index tool Left as a gap on purpose (SpotlightSearchTool needs a model tool runtime)."
+      "bifrost": "springboard/ui/src/spotlight_tool.rs (search_indexed_content tool over usersearch)",
+      "status": "partial",
+      "note": "Model tool (spotlight_tool::tool) that searches indexed items the caller supplies and returns ranked text with app and identifier; registers in a model_tool::ToolSet. Not wired to springboard/apps/assistant-desktop or the shell index yet, and the Foundation pipeline types (sources, stages, result tables, statistics) are not modelled. built on parity/team-n-core-spotlight; not yet verified on Midget."
     },
     {
       "feature": "Framework version",
@@ -116,8 +116,8 @@
   "gaps": [
     "No app-facing query API (CSSearchQuery, CSUserQuery) and no suggestions, so apps cannot search their own index or build a search field on it.",
     "No index client delegate and no index extensions for on-demand regeneration (CSSearchableIndexDelegate, CSIndexExtensionRequestHandler, CSImportExtension).",
-    "No Foundation models search tool (SpotlightSearchTool and its pipeline types), so indexed content cannot be given to the on-device assistant as context.",
     "No index descriptions or protection classes; the shell index is a single JSON file per app with oldest-first eviction at 1000 items.",
-    "The shell index does not acknowledge calls, so remoteConnectionError is never raised and the shell's own oldest-first eviction is not visible to the SDK ledger."
+    "The shell index does not acknowledge calls, so remoteConnectionError is never raised and the shell's own oldest-first eviction is not visible to the SDK ledger.",
+    "The Foundation models search tool is a model only: SpotlightSearchTool is not offered to the assistant app, and the pipeline types (SearchSource, CustomStage, SearchResultsTable and the rest) are not modelled."
   ]
 }
