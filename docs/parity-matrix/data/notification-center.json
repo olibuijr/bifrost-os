@@ -10,16 +10,16 @@
     {
       "feature": "Widget provider (NCWidgetProviding)",
       "apple": "NCWidgetProviding: widgetPerformUpdate(completionHandler:), widgetMarginInsets(forProposedMarginInsets:), widgetActiveDisplayModeDidChange(_:withMaximumSize:), NCWidgetDisplayMode, NCUpdateResult (https://developer.apple.com/documentation/notificationcenter/ncwidgetproviding)",
-      "bifrost": "springboard/ui/src/widget.rs, springboard/ui/src/widget_list.rs",
+      "bifrost": "springboard/ui/src/widget.rs (DisplayMode, Insets, margin_insets, Limits), springboard/ui/src/widget_list.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding."
+      "note": "Display modes, margin insets and the per-mode maximum size are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding."
     },
     {
       "feature": "Widget content controller (NCWidgetController)",
       "apple": "NCWidgetController: widgetController(), setHasContent(_:forWidgetWithBundleIdentifier:), default()",
-      "bifrost": "springboard/ui/src/widget.rs, springboard/ui/src/widget_list.rs",
+      "bifrost": "springboard/ui/src/widget.rs (Controller); tests: springboard/ui/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf."
+      "note": "The has-content flag per widget is tested headless in ui/tests/parity_sdk-tests-15.rs: unreported widgets show, empty ones are left out in order, and forgetting an app restores its widget. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf."
     },
     {
       "feature": "Widget editing and ordering",
@@ -38,9 +38,9 @@
     {
       "feature": "List view (NCWidgetListViewController)",
       "apple": "NCWidgetListViewController: contents, row(for:), viewController(atRow:makeIfNecessary:), minimumVisibleRowCount, hasDividerLines; NCWidgetListViewDelegate",
-      "bifrost": "springboard/ui/src/widget.rs, springboard/ui/src/widget_list.rs",
+      "bifrost": "springboard/ui/src/widget_list.rs (WidgetList); tests: springboard/ui/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No list-of-content view for a third-party widget. Shell-side lists are drawn in springboard/src/shell/today.rs and springboard/src/shell/notify/center.rs and are not reusable by apps."
+      "note": "Row lookup, the visible row count with its minimum, the Add button and deletion while editing are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. No list-of-content view for a third-party widget. Shell-side lists are drawn in springboard/src/shell/today.rs and springboard/src/shell/notify/center.rs and are not reusable by apps."
     },
     {
       "feature": "Notification list in the system column",

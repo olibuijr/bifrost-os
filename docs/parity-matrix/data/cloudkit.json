@@ -66,9 +66,9 @@
     {
       "feature": "Privacy: encryption and data export/delete",
       "apple": "encrypted values, access and deletion articles",
-      "bifrost": "springboard/src/shell/backup.rs (local backup and restore); springboard/sdk/src/keychain.rs",
+      "bifrost": "springboard/src/shell/backup.rs (encode, decode, create, restore, stage, apply_pending); springboard/sdk/src/keychain.rs; tests: springboard/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "local backup only; keychain has no iCloud sync (docs/bifrost-ui.md)"
+      "note": "The archive format, its checksums, the name rules, restore and the staged restore are tested headless in springboard/tests/parity_sdk-tests-15.rs. Backup is local only and export is a file in the data directory; there is no delete action and the keychain has no iCloud sync (docs/bifrost-ui.md)"
     },
     {
       "feature": "Errors",

@@ -45,7 +45,7 @@
     {
       "feature": "Entity annotation and onscreen context",
       "apple": "ViewAnnotation (entity, isSelected)",
-      "bifrost": "springboard/ui/src/onscreen_entity.rs; wired: springboard/ui/src/onscreen_entity.rs (used by springboard/apps/shortcuts-desktop/src/automation.rs onscreen_context, frontmost; src/widget.rs on_screen; src/main.rs frontmost)",
+      "bifrost": "springboard/ui/src/onscreen_entity.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs; wired: springboard/ui/src/onscreen_entity.rs (used by springboard/apps/shortcuts-desktop/src/automation.rs onscreen_context, frontmost; src/widget.rs on_screen; src/main.rs frontmost)",
       "status": "partial",
       "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No API to annotate a view with an entity; the accessibility tree (bifrost_ui::ax, springboard/ui/src/ax.rs) carries labels but no entity link Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
