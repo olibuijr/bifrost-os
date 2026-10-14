@@ -176,6 +176,12 @@ impl ComposeSheet {
         Self::default()
     }
 
+    /// A sheet that starts from `draft`, such as the content another app shared into it. The draft stays editable until
+    /// the sheet is presented.
+    pub fn with_draft(draft: ComposeDraft) -> Self {
+        ComposeSheet { draft, ..Self::default() }
+    }
+
     pub fn state(&self) -> SheetState {
         self.state
     }
