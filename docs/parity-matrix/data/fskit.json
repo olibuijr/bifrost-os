@@ -24,9 +24,9 @@
     {
       "feature": "Resources (block device, path URL, generic URL)",
       "apple": "FSResource, FSBlockDeviceResource, FSPathURLResource, FSGenericURLResource",
-      "bifrost": "springboard/src/bare/docbroker.rs (grants resolve a path beneath the account home and return a descriptor)",
+      "bifrost": "springboard/src/bare/docbroker.rs (grants resolve a path beneath the account home and return a descriptor); springboard/ui/src/fs_resource.rs (Resource: block device, path URL, generic URL)",
       "status": "partial",
-      "note": "The grant model covers one path per app and per file. There is no block device resource and no generic URL resource."
+      "note": "The resource kinds and their checks are tested headless in tests/parity_sdk-complete-23.rs, and the grant model still covers one path per app and per file. Gap: no resource is opened or mounted from a block device node or a generic URL yet."
     },
     {
       "feature": "Containers and probing",
@@ -52,9 +52,9 @@
     {
       "feature": "Tasks and operation identifiers",
       "apple": "FSTask, FSTaskOptions, FSOperationID",
-      "bifrost": "springboard/src/bare/docbroker.rs (per-request grant ids and cancellation)",
+      "bifrost": "springboard/src/bare/docbroker.rs (per-request grant ids and cancellation); springboard/ui/src/fs_maintenance.rs (operation ids, task log, completion)",
       "status": "partial",
-      "note": "Grant requests have ids and can be cancelled. There is no FSTask log or completion channel for file system modules."
+      "note": "Operation ids, the per-task message log, finish-once completion with a failure reason and cancellation are tested headless in tests/parity_sdk-complete-23.rs. Gap: there are no FSTaskOptions and no completion channel into a file system module, which needs a running module to exist."
     },
     {
       "feature": "File change notification",

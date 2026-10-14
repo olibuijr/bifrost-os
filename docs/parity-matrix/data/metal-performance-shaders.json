@@ -26,14 +26,14 @@
    "apple": "MPSImageErode, MPSImageDilate, MPSImageAreaMin, MPSImageAreaMax",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No morphology code in springboard/render or springboard/ui."
+   "note": "Rectangular minimum and maximum (erode, dilate, area min and area max) are tested headless in tests/parity_sdk-complete-23.rs, including edge clamping and even-side refusal. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
   },
   {
    "feature": "Convolution, median, Sobel and Laplacian filters",
    "apple": "MPSImageConvolution, MPSImageMedian, MPSImageSobel, MPSImageLaplacian",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "Wave 3 (w3-metal-performance-shaders, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. springboard/apps/daw/src/conv.rs is an audio convolver and is not an image counterpart."
+   "note": "Convolution with a caller kernel, median, Sobel magnitude and Laplacian are tested headless in tests/parity_sdk-complete-23.rs with concrete pixel values. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
   },
   {
    "feature": "Pyramid filters (Gaussian, Laplacian)",
@@ -47,14 +47,14 @@
    "apple": "MPSImageThresholdBinary, ThresholdToZero, ThresholdTruncate and their inverses",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No image thresholding in the repo."
+   "note": "The five threshold modes (binary, binary inverse, to zero, to zero inverse, truncate) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
   },
   {
    "feature": "Histogram, histogram equalization and specification",
    "apple": "MPSImageHistogram, MPSImageHistogramEqualization, MPSImageHistogramSpecification",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The index and a grep for histogram found nothing in the render or shell code."
+   "note": "Histogram binning, histogram equalization and histogram specification (filter::specify) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
   },
   {
    "feature": "Integral images and statistics (mean, variance, min and max)",

@@ -150,9 +150,9 @@
     {
       "feature": "Convolution filters (3x3 to 9x9, horizontal and vertical, RGB variants)",
       "apple": "CIConvolution3X3, CIConvolution5X5, CIConvolution7X7, CIConvolution9X9Horizontal, CIConvolution9X9Vertical, CIConvolutionRGB3X3",
-      "bifrost": "springboard/render/src/filter.rs (generic convolution)",
+      "bifrost": "springboard/render/src/filter.rs (convolve, convolve_axis, convolve_rgb, is_convolution_side)",
       "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "note": "Odd square kernels from 3 to 9, one-dimensional horizontal and vertical kernels, and per-channel RGB convolution are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing filter object and no 9x9 horizontal or vertical preset names, and the per-shader inventory from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md) is still pending."
     },
     {
       "feature": "Depth and portrait effects (depth blur, disparity, masked variable blur)",

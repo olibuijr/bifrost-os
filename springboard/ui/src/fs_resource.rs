@@ -1,4 +1,4 @@
-//! Resources (`FSResource` parity): the things a file system module is asked to act on. A block device is a device
+//! Resources (file system resource parity): the things a file system module is asked to act on. A block device is a device
 //! node directly under `/dev`, a path URL is an absolute file path, and a generic URL is any other URL with a scheme.
 //! Pure model: no device is opened, no path is read and no URL is fetched. The checks only decide whether the text
 //! names a resource of the right kind.
