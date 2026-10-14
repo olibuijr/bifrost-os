@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0 — 2026-10-14
+
+- Validate File...: the Font menu item opens a panel for a .ttf or .otf file and shows its
+  validation (pass, warnings or each problem) without installing it. Any list or sidebar press, Escape or Validate
+  Font returns to the selected family.
+- Export Fonts to Folder: copies every family the list shows into a folder chosen in a panel. Names never overwrite:
+  a file that already exists in the folder is numbered (`Name 2.ttf`). Files that cannot be copied are counted in the
+  status line.
+- The unused library module is removed: the libraries are the model's font sets, switched from the Font menu's
+  Library submenu. The export naming moved to `export.rs` with tests.
+- Still missing: Type 1 and font collections, a Libraries sidebar section, a slider for the sample size, rules on
+  style or language, and a choice of install location.
+
 ## 0.4.0 — 2026-10-13
 
 - Libraries: Font > Library switches the list between Computer (every font), User (your installs) and your own
