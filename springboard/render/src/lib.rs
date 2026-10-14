@@ -66,6 +66,10 @@ pub mod block_motion;
 pub mod kernel;
 pub mod gaussian_filter;
 pub mod lanczos;
+pub mod affine;
+pub mod generators;
+pub mod spot_light;
+pub mod comic_filter;
 
 #[cfg(test)]
 mod tests {

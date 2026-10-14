@@ -122,6 +122,38 @@ pub fn glass(img: &Image, texture: &Image, scale: f32) -> Image {
     out
 }
 
+/// Moves each pixel inside `radius` to the source distance `map(d, radius)` along its ray from
+/// `center`. Pixels at or beyond the radius, and the centre itself, stay put.
+fn remap_radius(img: &Image, c: (f32, f32), radius: f32, map: impl Fn(f32, f32) -> f32) -> Image {
+    let r = clean(radius);
+    warp(img, |x, y| {
+        let (dx, dy) = (x - c.0, y - c.1);
+        let d = (dx * dx + dy * dy).sqrt();
+        if r <= 0.0 || d >= r || d == 0.0 {
+            return (x, y);
+        }
+        let k = map(d, r) / d;
+        (c.0 + dx * k, c.1 + dy * k)
+    })
+}
+
+/// The circle splash distortion: magnifies the middle of the circle. A pixel at distance `d` takes
+/// its colour from distance `d * d / radius`, so the centre spreads over a wider area and the rim
+/// is unchanged. Differences from the reference: the magnification profile is quadratic, not the
+/// reference spline.
+pub fn circle_splash(img: &Image, center: (f32, f32), radius: f32) -> Image {
+    remap_radius(img, center, radius, |d, r| d * d / r)
+}
+
+/// The torus lens distortion: refracts the disc of `radius` around `center`, so the picture inside
+/// is pulled towards the centre. `refraction` runs from 0 (no change) to 1 (the strongest bend, which keeps
+/// the centre and the rim fixed). Differences from the reference: the whole disc is refracted and
+/// there is no separate ring width.
+pub fn torus_lens(img: &Image, center: (f32, f32), radius: f32, refraction: f32) -> Image {
+    let k = if refraction.is_finite() { refraction.clamp(0.0, 1.0) } else { 0.0 };
+    remap_radius(img, center, radius, |d, r| d + k * (d / r) * (r - d))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
