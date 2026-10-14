@@ -10,9 +10,9 @@
     {
       "feature": "Cross-process shared framebuffers",
       "apple": "IOSurface, IOSurfaceRef, IOSurfaceCreate",
-      "bifrost": "springboard/proto/src/sys.rs (shm_create, memfd with ashmem fallback)",
-      "status": "os",
-      "note": "memfd shared memory exists in the proto layer; no app-facing SDK type wraps it"
+      "bifrost": "springboard/proto/src/sys.rs (shm_create, shm_len, shm_resize)",
+      "status": "partial",
+      "note": "memfd shared memory (ashmem fallback) is created, sized and resized, and tested headless in springboard/proto/tests/parity_sdk-os-05.rs. Gap: no app-facing SDK type wraps a shared file, and it is not a texture or framebuffer."
     },
     {
       "feature": "Passing a buffer to another process",
@@ -45,9 +45,9 @@
     {
       "feature": "Multi-plane video buffers",
       "apple": "IOSurfaceGetPlaneCount, IOSurfaceGetWidthOfPlane, kIOSurfacePlaneBase",
-      "bifrost": "springboard/src/media/mod.rs:134 (DmaPicture: stride, uv_offset, crop); springboard/src/media/v4l2.rs:170 (FOURCC list)",
-      "status": "os",
-      "note": "hardware decode path only; apps do not receive planes"
+      "bifrost": "springboard/ui/src/surface_layout.rs (SurfaceLayout::new, Plane); springboard/src/media/mod.rs:134 (DmaPicture: stride, uv_offset, crop)",
+      "status": "partial",
+      "note": "Plane count, width, height, row stride and offset for packed, NV12 and I420 buffers are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the decode path does not use this model, and apps do not receive decoded planes."
     },
     {
       "feature": "CPU lock and unlock of buffer memory",
