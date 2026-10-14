@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 — 2026-10-14
+
+- Add the generated app compliance harness.
+
 ## 0.2.1 — 2026-10-14
 
 - Add the Video Player store icon.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.2.2 — 2026-10-14
+
+- Use the appearance-aware separator for archive progress.
+
 ## 0.2.1 — 2026-10-14
 
 - Schedule archive work through the shared utility queue.

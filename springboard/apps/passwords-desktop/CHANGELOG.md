@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 — 2026-10-14
+
+- Add the generated app compliance harness.
+
 ## 0.2.3 — 2026-10-14
 
 - Render and hit-test password entries with the shared source-list widget.

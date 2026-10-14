@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1 — 2026-10-14
+
+- Add the generated app compliance harness.
+
 ## 0.11.0
 
 - The Inspector lists each piece of markup on its own row, with its kind, its page and the text of a note or text box,

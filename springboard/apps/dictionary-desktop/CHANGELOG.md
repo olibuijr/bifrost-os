@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4 — 2026-10-14
+
+- Add the generated app compliance harness.
+
 ## 0.5.3 — 2026-10-14
 
 - Export the Dictionary icon at the store's required 180 × 180 size.

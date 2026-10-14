@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 — 2026-10-14
+
+- Add the generated app compliance harness.
+
 ## 0.1.1 — 2026-10-14
 
 - Schedule workflow execution and script input work through the shared dispatch queues.

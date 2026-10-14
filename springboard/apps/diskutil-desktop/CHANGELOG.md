@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3 — 2026-10-14
+
+- Add the generated app compliance harness.
+
 ## 0.7.2 — 2026-10-14
 
 - Export the Disk Utility icon at the store's required 180 × 180 size.
