@@ -54,7 +54,7 @@
    "apple": "AVDisplayManager, AVDisplayDynamicRange",
    "bifrost": "springboard/ui/src/display_manager.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (display_manager.rs); not wired into the shell or apps, not tested on Midget. No display mode switching API; the video path is in springboard/src/media/ only."
+   "note": "The mode choice is a headless model: the closest refresh rate in the requested dynamic range wins, a tie goes to the higher rate, a request no mode can meet cancels a pending switch, and a retargeted request replaces an earlier one (ui/tests/parity_sdk-complete-05.rs). Still missing: no display mode switching API in the shell or apps, and the model has not been run against a panel on Midget; the video path is in springboard/src/media/ only."
   },
   {
    "feature": "Route selection (AirPlay and nearby receivers)",

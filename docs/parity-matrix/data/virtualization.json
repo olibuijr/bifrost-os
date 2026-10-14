@@ -40,7 +40,7 @@
       "apple": "VZVirtualMachineView",
       "bifrost": "springboard/core/src/guest_display.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tools/arch-vm-iso.sh opens QEMU in a Hyprland window; the desktop has no embeddable guest view"
+      "note": "GuestView (core/src/guest_display.rs) places a guest picture in a view, maps view points to guest pixels and routes keys with click and release-key capture; these are tested headless in core/tests/parity_sdk-complete-05.rs. Still missing: it is not wired into apps or the shell, and no guest has been shown on the VM or Midget; tools/arch-vm-iso.sh opens QEMU in a Hyprland window, and the desktop has no embeddable guest view."
     },
     {
       "feature": "Graphics device for guests",
