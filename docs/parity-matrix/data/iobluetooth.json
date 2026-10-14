@@ -52,9 +52,9 @@
     {
       "feature": "L2CAP channels",
       "apple": "IOBluetoothL2CAPChannel, IOBluetoothL2CAPChannelDelegate, IOBluetoothL2CAPChannelRef",
-      "bifrost": "springboard/src/bare/bluetooth.rs:894 (link: AF_BLUETOOTH SEQPACKET socket to PSM 1 for BR/EDR or ATT CID 4 for LE)",
+      "bifrost": "springboard/core/src/l2cap.rs (validate_psm, is_dynamic, keep_alive_endpoint); springboard/src/bare/bluetooth.rs:894 (link: AF_BLUETOOTH SEQPACKET socket to PSM 1 for BR/EDR or ATT CID 4 for LE)",
       "status": "partial",
-      "note": "The shell opens L2CAP links only to keep a device connected. Apps cannot open a channel to an arbitrary PSM, and there is no channel-close notification."
+      "note": "PSM validity and range, the fixed CIDs and the keep-alive endpoint of each transport are tested headless in springboard/core/tests/parity_sdk-complete-40.rs. Gap: apps still cannot open a channel to a PSM and there is no channel-close notification, and the shell's link is checked only on Midget."
     },
     {
       "feature": "RFCOMM channels",
@@ -108,9 +108,9 @@
     {
       "feature": "Low-level HCI structures and commands",
       "apple": "IOBluetooth Structures (BluetoothHCI*, BluetoothL2CAP*, BluetoothLE*)",
-      "bifrost": "springboard/src/bare/bluetooth.rs:1-24 (module header: uses the mgmt API instead of raw HCI, by design)",
+      "bifrost": "springboard/core/src/hci.rs (Opcode, Command, Event, CommandComplete); springboard/src/bare/bluetooth.rs:1-24 (module header: uses the mgmt API instead of raw HCI, by design)",
       "status": "partial",
-      "note": "The shell uses mgmt commands, not the HCI structure set. Apps get none of the HCI or LE types."
+      "note": "Opcode packing, command encoding, event framing and command complete results are tested headless in springboard/core/tests/parity_sdk-complete-40.rs. Gap: the shell still uses mgmt commands by design and sends no HCI packets, apps get none of the HCI types, and no LE event types are modelled."
     }
   ],
   "gaps": [

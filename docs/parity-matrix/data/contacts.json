@@ -87,9 +87,9 @@
   {
    "feature": "Search index for system search",
    "apple": "Spotlight-style indexing of contacts (no direct CNContact symbol)",
-   "bifrost": "springboard/src/shell/quicksearch.rs:201 (results_with_contacts); springboard/sdk/src/quicksearch.rs",
+   "bifrost": "springboard/src/shell/quicksearch.rs:201 (results_with_contacts); springboard/sdk/src/quicksearch.rs; springboard/sdk/src/contact_index.rs (searchable_item, searchable_items)",
    "status": "partial",
-   "note": "Shell Search returns contacts from the store. Apps index their own content through the SDK quicksearch module, which the contact store does not use."
+   "note": "Shell Search returns contacts from the store, and the SDK maps each named contact to a searchable item (title, phone, email and organization keywords) that the quicksearch index accepts; tested headless in springboard/sdk/tests/parity_sdk-complete-40.rs. Gap: the shell does not feed the store's contacts into the SDK index, so the two searches are separate, and the lab machine must check the Search panel on Midget."
   },
   {
    "feature": "Contact picker and access UI (ContactsUI)",

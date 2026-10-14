@@ -1,8 +1,10 @@
-//! Parity sdk-complete-40: headless tests for the remote device model (name, class, paired, connected) and the
-//! Bluetooth audio and link rows. They use the model only: no radio, no socket, no device.
+//! Parity sdk-complete-40: headless tests for the remote device model (name, class, paired, connected) and for the
+//! contact search items. They use the models only: no radio, no socket, no index service.
 
 use bifrost_app::bluetooth_devices::{DeviceList, RemoteDevice};
+use bifrost_app::contact_index::{self, DOMAIN};
 use bifrost_core::bt_address::{BdAddr, ClassOfDevice};
+use bifrost_ui::contact_book::{Contact, LabeledValue};
 
 fn addr(n: u8) -> BdAddr {
     BdAddr([0, 0, 0, 0, 0, n])
@@ -79,4 +81,61 @@ fn a_device_list_forgets_a_device_and_its_state() {
     assert!(list.forget(addr(11)));
     assert!(list.is_empty());
     assert!(!list.forget(addr(11)), "a second forget finds nothing");
+}
+
+fn ada() -> Contact {
+    Contact {
+        identifier: "c-ada".into(),
+        given_name: "Ada".into(),
+        family_name: "Lovelace".into(),
+        organization_name: "Analytical Engine Co".into(),
+        phone_numbers: vec![LabeledValue::new(Some("mobile"), "+44 20 7946 0000".to_string())],
+        email_addresses: vec![LabeledValue::new(Some("home"), "ada@example.com".to_string())],
+        ..Contact::default()
+    }
+}
+
+#[test]
+fn a_contact_title_is_the_personal_name_in_order() {
+    assert_eq!(contact_index::display_name(&ada()), "Ada Lovelace");
+}
+
+#[test]
+fn a_contact_without_a_personal_name_is_titled_by_its_organization() {
+    let company = Contact { identifier: "c-co".into(), organization_name: "Acme".into(), ..Contact::default() };
+    assert_eq!(contact_index::display_name(&company), "Acme");
+}
+
+#[test]
+fn a_searchable_item_is_identified_by_its_contact_and_grouped_under_the_contacts_domain() {
+    let item = contact_index::searchable_item(&ada()).expect("a named contact is indexed");
+    assert_eq!(item.unique_identifier, "contacts.c-ada");
+    assert_eq!(item.domain_identifier, DOMAIN);
+    assert_eq!(item.attribute_set.title, "Ada Lovelace");
+    assert_eq!(item.attribute_set.content_type, "public.contact");
+}
+
+#[test]
+fn a_searchable_item_finds_the_person_by_phone_email_and_organization() {
+    let item = contact_index::searchable_item(&ada()).expect("a named contact is indexed");
+    let keywords = &item.attribute_set.keywords;
+    assert!(keywords.contains(&"ada@example.com".to_string()));
+    assert!(keywords.contains(&"+44 20 7946 0000".to_string()));
+    assert!(keywords.contains(&"Analytical Engine Co".to_string()));
+    assert_eq!(keywords.len(), 3, "no blank nickname or job title is added");
+}
+
+#[test]
+fn a_contact_with_no_name_or_no_identifier_is_not_indexed() {
+    assert!(contact_index::searchable_item(&Contact { identifier: "c-x".into(), ..Contact::default() }).is_none());
+    assert!(contact_index::searchable_item(&Contact { given_name: "Grace".into(), ..Contact::default() }).is_none());
+}
+
+#[test]
+fn a_batch_keeps_the_indexable_contacts_in_order() {
+    let unnamed = Contact { given_name: "Unsaved".into(), ..Contact::default() };
+    let batch = [ada(), unnamed, Contact { identifier: "c-grace".into(), given_name: "Grace".into(), ..Contact::default() }];
+    let items = contact_index::searchable_items(&batch);
+    let ids: Vec<&str> = items.iter().map(|i| i.unique_identifier.as_str()).collect();
+    assert_eq!(ids, vec!["contacts.c-ada", "contacts.c-grace"]);
 }
