@@ -59,9 +59,9 @@
     {
       "feature": "App state restoration across launches",
       "apple": "Preserving your app's model data across launches (model storage, not window state)",
-      "bifrost": "springboard/sdk/src/restoration.rs (restorable-state.json, debounced writes); springboard/sdk/src/defaults.rs (UserDefaults)",
+      "bifrost": "springboard/sdk/src/restoration.rs (restorable-state.json, debounced writes); springboard/sdk/src/defaults.rs (UserDefaults); springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "covers small window and preference state only; not a store of many records"
+      "note": "Covers small window and preference state, tested headless across a relaunch in parity_sdk-complete-19.rs; not a store of many records, which is still missing."
     },
     {
       "feature": "Data store abstraction (DataStore, DefaultStore, custom stores, batching)",
