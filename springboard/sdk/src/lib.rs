@@ -137,6 +137,8 @@ pub mod decimal;
 pub mod random;
 pub mod csv_writer;
 pub mod accounts;
+pub mod cloud_account;
+pub mod buffer_share;
 pub mod testing;
 pub mod usernotif;
 pub mod usernotif_model;
