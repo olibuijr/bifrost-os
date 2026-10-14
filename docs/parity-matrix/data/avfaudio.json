@@ -89,7 +89,7 @@
       "apple": "audio output for media playback (AVFAudio audio output)",
       "bifrost": "springboard/src/media/player.rs (open_parts takes an AudioOut); springboard/src/media/speaker.rs",
       "status": "os",
-      "note": "the video player writes audio through the AudioOut trait; apps do not reach it through the SDK audio API"
+      "note": "the video player writes audio through the AudioOut trait, and the only caller is the shell's video screen (springboard/src/shell/video.rs); the SDK has no app-facing call that opens a video Player, so apps cannot route playback audio through it."
     },
     {
       "feature": "Spatial audio, stereo capture and multidevice routing",

@@ -52,9 +52,9 @@
     {
       "feature": "Reading and indexing tar packages for install",
       "apple": "No direct equivalent; closest is the archive read path",
-      "bifrost": "springboard/src/shell/store/install.rs:276 (read_tar), :287 (index_tar), :345 (extract_from)",
-      "status": "os",
-      "note": "Used by the App Store installer; headers are indexed without loading file data; not an app-facing API"
+      "bifrost": "springboard/sdk/src/tar_package.rs (read, index, extract_from); springboard/src/shell/store/install.rs:276 (read_tar), :287 (index_tar), :345 (extract_from)",
+      "status": "partial",
+      "note": "Tar packages are read, indexed and extracted through the SDK tar_package module with the App Store install rules, and the installer uses the same reader. Tests: parity_sdk-rest-04 read_returns_every_member_in_archive_order_with_its_contents, index_reads_the_headers_and_leaves_the_contents_unloaded, a_package_with_a_path_that_climbs_out_is_refused, a_symbolic_link_member_is_refused_as_an_unsupported_entry, a_damaged_header_fails_its_checksum, extract_from_refuses_a_hand_built_entry_that_climbs_out_and_writes_nothing. Gap: ownership, times and extended attributes are not kept, pax headers are refused, and the module is not yet verified on Midget."
     },
     {
       "feature": "DEFLATE decoding",
@@ -68,7 +68,7 @@
       "apple": "Apple Encrypted Archive; ArchiveEncryptionContext",
       "bifrost": "none found",
       "status": "gap",
-      "note": "No encrypted archive format in the code. Blocked: the SDK has no cipher (springboard/sdk/src/crypto_key.rs provides HMAC authentication only), and the reference encryption profiles are not implemented."
+      "note": "No encrypted archive format in the code. Blocked: springboard/sdk/Cargo.toml has no AEAD cipher crate (chacha20 appears in Cargo.lock only as a transitive dependency), so a direct dependency and a lock change are needed first; springboard/sdk/src/crypto_key.rs provides HMAC authentication only, and the reference encryption profiles are not implemented."
     }
   ],
   "gaps": [

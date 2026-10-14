@@ -1,41 +1,23 @@
-# Apple Archive
+# Apple Archive parity: tar packages (sdk-rest-04)
 
-Framework: Apple Archive, https://developer.apple.com/documentation/applearchive (matrix slug `apple-archive`).
-Built on parity/team-j-apple-archive. Not yet verified on Midget.
+## What it mirrors
 
-## What is built
+No direct reference equivalent exists for the tar reader. It is the read side of the archive family: the package store
+installer reads ustar packages, and `bifrost_app::tar_package` exposes the same reader to apps.
 
-`springboard/sdk/src/archive.rs` (`bifrost_app::archive`), on top of the compression module:
+## What is wired
 
-- Folders and single files as ZIP: `compress_directory`, `compress_file` and `expand` (through the Files app
-  zip code in `springboard/src/files/zip.rs`). The format is ZIP, so the archives open in the Files app and other
-  ZIP tools. They are not Apple Archive containers.
-- Buffers and strings: `compress`, `decompress`, `compress_text` and `decompress_text` (raw DEFLATE, caller-given
-  size limit).
-- Byte streams: `ByteStream` is an in-memory buffer with a cursor that implements `Read`, `Write` and `Seek`, with
-  `read_at`, `write_at` and `cancel`. `compress_to` and `compress_to_threaded` write DEFLATE at the cursor, and
-  `decompress_from` reads from it.
-- Thread count: `compress_to_threaded` uses the dynamic-Huffman encoder over up to the given number of threads
-  for inputs of 2 MiB or more (see `docs/parity/compression.md`).
+- `springboard/sdk/src/tar_package.rs`: `read` (every member with contents), `index` (headers only), `extract_from`
+  (writes members below a folder, re-checking every path).
+- The install path in `springboard/src/shell/store/install.rs` uses the same `read_tar`, `index_tar` and `extract_from`.
+- Tests: `springboard/sdk/tests/parity_sdk-rest-04.rs`.
 
-## What is not built
+## What needs the lab machine
 
-- The Apple Archive container: the header, entry messages and the stream traits (`ArchiveStream`,
-  `fileStream`). The byte formats are not implemented here.
-- Encrypted archives (`ArchiveEncryptionContext`, `encryptionStream`, `decryptionStream`). Blocked: the SDK has
-  no cipher (`springboard/sdk/src/crypto_key.rs` provides HMAC authentication only), and key derivation is not
-  built. This row stays a gap.
-- Ownership, flags and extended attributes in archive headers. Tar entries keep mode only.
+- Installing a real package through the store install flow on Midget, which is not verified here.
 
-## REA evidence
+## Not covered
 
-- Apple Archive landing page: `ev_d29483e649b181c7241be638022e1dc6ebfbd3923c5a414205cc47a344dd7a4d` (from the
-  matrix row).
-- ArchiveByteStream: `ev_71a78c3dfcb443ec778a6f63a304187d3d325aeba0c68705a1d78ea311bc2f57`
-- ArchiveByteStreamProtocol: `ev_04b35f10e23b02386e5dc8e5866e84a4067d7917f17f9f746164d4df721557ba`
-
-## Tests
-
-`#[cfg(test)]` in `archive.rs`: stream write, seek and read back; zero-filled gaps; `read_at` clipping; seek before
-the start; cancelled streams; empty and stored blocks; the threaded stream write from a non-zero cursor. Not built or
-run, per the wave rules.
+- Encrypted archives (no AEAD cipher crate is a direct dependency).
+- Ownership, times and extended attributes; pax headers are refused.
+- Apple Archive's own container format. Compressed archives use ZIP in `springboard/sdk/src/archive.rs`.

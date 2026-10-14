@@ -110,7 +110,7 @@
    "apple": "QCComposition, QCCompositionLayer, QCView, QCRenderer, QCPlugIn, QCPlugInContext, QCCompositionRepository",
    "bifrost": "none found",
    "status": "gap",
-   "note": "Blocked: a node-graph composition runtime (patch graph, renderer and plug-in host) is not in this repository, and no part of it was written this round. The deprecation status was not checked against the official documentation."
+   "note": "Blocked: no node-graph composition runtime (patch graph, renderer, plug-in host) exists in this repository, and it is a separate multi-module project rather than a surface over existing code. The deprecation status was not checked against the official documentation."
   }
  ],
  "gaps": [
