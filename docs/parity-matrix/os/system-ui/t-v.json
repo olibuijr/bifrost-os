@@ -99,8 +99,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no tips app",
+   "status": "n/a",
+   "note": "Apple Tips content and its Spotlight handler; BifrOSt has no Tips product",
    "rea": []
   },
   {
@@ -159,8 +159,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "cross-device control, no counterpart yet",
+   "status": "n/a",
+   "note": "Keyboard and pointer sharing across Apple devices; needs the Apple device ecosystem",
    "rea": []
   },
   {
@@ -319,8 +319,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Device transfer and reset intents for Apple Setup Assistant; no BifrOSt equivalent",
    "rea": []
   },
   {
@@ -338,9 +338,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/sdk/src/translation.rs",
+   "status": "partial",
+   "note": "In-app TranslationSession only; no system translation popover or language packs. built on os/team-l-08-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -359,8 +359,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Language pack download service for the Apple translation API; BifrOSt has no system language packs",
    "rea": []
   },
   {
@@ -379,8 +379,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents for the Apple translation service; BifrOSt has no system translation intent",
    "rea": []
   },
   {
@@ -399,8 +399,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Intents for USD 3D assets; BifrOSt has no 3D asset document type",
    "rea": []
   },
   {
@@ -478,9 +478,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/sdk/src/vpn_intents.rs",
+   "status": "partial",
+   "note": "Connect and disconnect intent descriptors only; the tunnel client is not built, so nothing runs them. built on os/team-l-08-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -539,8 +539,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Spatial intents for visionOS hardware; no BifrOSt counterpart",
    "rea": []
   },
   {
