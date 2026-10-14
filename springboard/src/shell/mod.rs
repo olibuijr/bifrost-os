@@ -122,6 +122,9 @@ pub mod settings_load;
 // the settings App Intents catalogue; Search does not list it yet, so unused items are expected for now
 #[allow(dead_code)]
 pub mod settings_intents;
+// action intents (Wi-Fi, wallpaper); not wired to Search yet
+#[allow(dead_code)]
+pub mod settings_actions;
 pub mod settings_search;
 pub mod screensaver;
 pub mod storage;
@@ -167,6 +170,7 @@ pub mod timeset_page;
 pub mod night_shift;
 pub mod notify_page;
 pub mod wallpaper_page;
+pub mod wallpaper_schedule;
 pub mod widgets;
 pub mod widgetgallery;
 pub mod wifi_page;
