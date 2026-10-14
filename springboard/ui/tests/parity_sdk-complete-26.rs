@@ -7,8 +7,9 @@ use std::io;
 use bifrost_ui::geo::Coordinate;
 use bifrost_ui::location::LocationFix;
 use bifrost_ui::location_auth::AuthorizationStatus;
+use bifrost_ui::map_controls::MapControls;
 use bifrost_ui::map_user_location::{UserLocation, MAX_FIX_ACCURACY_M, MAX_FIX_AGE_S};
-use bifrost_ui::mapview::{MapCamera, UserTracking};
+use bifrost_ui::mapview::{MapCamera, MapView, UserTracking, MAX_ZOOM, MIN_ZOOM};
 use bifrost_ui::media_picker::{Error, Kind, MediaPicker, PickItem, Selection};
 use bifrost_ui::scene_phase::{SceneTracker, ScenePhase};
 use bifrost_ui::search_scope::{SearchBar, SearchScope, SearchToken};
@@ -422,4 +423,65 @@ fn headless_required_ids_the_app_does_not_offer_are_ignored() {
     let t = ToolbarCustomization::new(vec![1, 2], vec![7]);
     assert_eq!(t.hide(7), Err(ToolbarError::UnknownItem));
     assert_eq!(t.visible(), vec![1, 2]);
+}
+
+// ---- map controls: compass, zoom, scale and buttons (bifrost_ui::map_controls) ----
+
+fn view_at(zoom: f64) -> MapView {
+    MapView::new(MapCamera::new(at(64.1, -21.9), zoom, 800.0, 600.0).expect("a valid camera"))
+}
+
+#[test]
+fn headless_a_north_up_map_shows_no_compass_and_both_zoom_controls() {
+    let controls = MapControls::for_view(&view_at(10.0), 200.0);
+    assert!(!controls.compass);
+    assert!(controls.zoom_in);
+    assert!(controls.zoom_out);
+    assert!(controls.scale.is_some());
+}
+
+#[test]
+fn headless_a_turned_map_shows_the_compass() {
+    let mut view = view_at(10.0);
+    assert!(view.rotate(45.0));
+    assert!(MapControls::for_view(&view, 200.0).compass);
+}
+
+#[test]
+fn headless_zoom_in_is_off_at_the_largest_zoom() {
+    let controls = MapControls::for_view(&view_at(MAX_ZOOM + 5.0), 200.0);
+    assert!(!controls.zoom_in);
+    assert!(controls.zoom_out);
+}
+
+#[test]
+fn headless_zoom_out_is_off_at_the_smallest_zoom() {
+    let controls = MapControls::for_view(&view_at(MIN_ZOOM - 5.0), 200.0);
+    assert!(controls.zoom_in);
+    assert!(!controls.zoom_out);
+}
+
+#[test]
+fn headless_switching_zoom_off_hides_both_zoom_controls() {
+    let mut view = view_at(10.0);
+    view.interaction.zoom = false;
+    let controls = MapControls::for_view(&view, 200.0);
+    assert!(!controls.zoom_in);
+    assert!(!controls.zoom_out);
+}
+
+#[test]
+fn headless_the_buttons_follow_the_view_flags() {
+    let mut view = view_at(10.0);
+    assert!(!MapControls::for_view(&view, 200.0).tracking_button);
+    view.show_tracking_button = true;
+    view.show_pitch_button = true;
+    let controls = MapControls::for_view(&view, 200.0);
+    assert!(controls.tracking_button);
+    assert!(controls.pitch_button);
+}
+
+#[test]
+fn headless_no_scale_bar_without_a_positive_width() {
+    assert!(MapControls::for_view(&view_at(10.0), 0.0).scale.is_none());
 }
