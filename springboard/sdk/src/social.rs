@@ -7,8 +7,9 @@
 //!   fields of a `multipart/form-data` body (see [`crate::multipart`]), followed by the upload parts in the order added.
 //! - Uploads need POST or PUT; any other method is rejected.
 //!
-//! Not mirrored: the service type (no named networks), the signed-in account (`account`) and the handler, which is the
-//! `URLSession` completion. Requests are not signed, so a service that needs a token gets one from the app.
+//! Not mirrored: the service type (no named networks) and the handler, which is the `URLSession` completion. The
+//! signed-in account (`account`) is in [`crate::social_account`]: `signed_service_request` prepares a request and signs
+//! it with the account's credentials, then the caller sends it with `URLSession`.
 
 /// The compose sheet's content and state (`SLComposeViewController`), from `bifrost_ui::compose`. Showing the sheet is
 /// up to the shell; the sheet hands its draft to the share menu.
@@ -108,7 +109,7 @@ fn encode_pairs(pairs: &[(String, String)], form: bool) -> String {
 }
 
 /// Percent-encodes everything except the RFC 3986 unreserved characters.
-fn encode(s: &str, form: bool) -> String {
+pub(crate) fn encode(s: &str, form: bool) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
