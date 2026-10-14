@@ -52,9 +52,9 @@
     {
       "feature": "Reduced-resolution GPU work with linear upscale",
       "apple": "Render at low resolution, upscale to output (MetalFX landing page)",
-      "bifrost": "springboard/src/gpu/wl.rs:724 (blur pyramid upscale, GL_LINEAR), docs/gpu-first.md:85 (quarter-size base), springboard/render/src/gfx.rs:423 (blur_material)",
-      "status": "os",
-      "note": "The only GPU upscale: the blur pyramid and material blur run at 1/2 or 1/4 size and scale back up with a linear filter. Internal to the shell; no app-facing scaler."
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (blur_plan, BlurPlan); springboard/src/gpu/wl.rs:724 (blur pyramid upscale, GL_LINEAR), docs/gpu-first.md:85 (quarter-size base), springboard/render/src/gfx.rs:423 (blur_material)",
+      "status": "partial",
+      "note": "The divisor, working size and full-size fallback for a reduced copy are tested headless in tests/parity_sdk-os-02.rs. Gap: the linear upscale runs only inside the shell's presenter, and apps get no scaler."
     }
   ],
   "gaps": [

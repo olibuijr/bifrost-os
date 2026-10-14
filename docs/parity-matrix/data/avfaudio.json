@@ -31,9 +31,9 @@
     {
       "feature": "Route changes",
       "apple": "AVAudioSession route-change notifications, routing to specific devices",
-      "bifrost": "springboard/src/media/route.rs (jack, Route::Speaker and Route::Headphones); springboard/src/shell/mod.rs:1318; springboard/src/shell/volume_hud.rs",
-      "status": "os",
-      "note": "the shell switches speaker and headphones through card switches; apps get no route notification and cannot pick a device; audio_session::SessionHub::set_route models routeChangeNotification (reason, previous route), not wired to the shell yet; the model also has currentRoute (port descriptions), availableInputs, setPreferredInput, overrideOutputAudioPort and mediaServicesWereReset"
+      "bifrost": "springboard/sdk/src/audio_session.rs (SessionHub::set_route, RouteChange events); springboard/src/media/route.rs (jack, Route::Speaker and Route::Headphones); springboard/src/shell/mod.rs:1318; springboard/src/shell/volume_hud.rs",
+      "status": "partial",
+      "note": "Route change events with the previous route, the override rules and currentRoute are tested in audio_session's unit tests. Gap: the shell does not post these events from its card switches yet, so apps see no real route change, and the model has no device choice beyond the preferred input."
     },
     {
       "feature": "AirPods automatic switching (AVAudioRoutingArbiter)",

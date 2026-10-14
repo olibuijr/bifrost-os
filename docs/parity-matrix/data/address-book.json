@@ -10,9 +10,9 @@
     {
       "feature": "Address book store and person records",
       "apple": "ABAddressBook, ABPerson, ABRecord, ABAddressBookSave",
-      "bifrost": "springboard/src/shell/contactstore.rs (Contact struct, atomic save to Contacts/contacts.tsv)",
-      "status": "os",
-      "note": "The shell owns the store; no SDK type or call lets an app read or write contacts"
+      "bifrost": "springboard/sdk/src/contacts.rs (access, fetch, save, decode_contacts); springboard/src/shell/contactstore.rs (Contact struct, atomic save to Contacts/contacts.tsv)",
+      "status": "partial",
+      "note": "Apps ask for access, fetch the fields they may see and save changes through the contacts service, and the reply decoding is tested inline in contacts.rs. Gap: the shell keeps the store and the record format, and no person record type is shared with the shell."
     },
     {
       "feature": "Multi-value properties and labels",
