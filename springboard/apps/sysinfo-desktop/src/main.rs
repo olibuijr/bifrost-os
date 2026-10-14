@@ -20,8 +20,8 @@ use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, Input
 use export::Format;
 use std::io::{Read, Write};
 use window::{
-    Focus, PendingExport, SysInfo, Target, COLLAPSED_KEY, MENU_CLEAR_RECENTS, MENU_COPY, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREVIOUS, MENU_HELP, MENU_LESS, MENU_NEXT_CATEGORY, MENU_OPEN,
-    MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, STEP_PT,
+    Focus, PendingExport, SysInfo, Target, COLLAPSED_KEY, MENU_CLEAR_RECENTS, MENU_COPY, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREVIOUS, MENU_HELP, MENU_JUMP_SELECTION, MENU_LESS, MENU_NEXT_CATEGORY, MENU_OPEN,
+    MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, MENU_USE_SELECTION, STEP_PT,
 };
 
 /// The help page the Help menu opens.
@@ -79,6 +79,8 @@ impl App for SysInfo {
                     AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
                     AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(finding),
                     AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(finding),
+                    AppMenuItem::new(MENU_USE_SELECTION, "Use Selection for Find").key("cmd+e").enabled(self.selection_text().is_some()),
+                    AppMenuItem::new(MENU_JUMP_SELECTION, "Jump to Selection").key("cmd+j").enabled(self.can_jump()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_SPEAK, "Speak Serial Number"),
                 ],
@@ -303,6 +305,8 @@ impl SysInfo {
             MENU_FIND => self.begin_find(),
             MENU_FIND_NEXT => self.find_step(true),
             MENU_FIND_PREVIOUS => self.find_step(false),
+            MENU_USE_SELECTION => self.use_selection_for_find(),
+            MENU_JUMP_SELECTION => self.jump_to_selection(),
             MENU_SPEAK => {
                 let text = self.serial_speech().unwrap_or_else(|| "No serial number is available".to_string());
                 ctx.announce(&text, AnnouncePriority::High);

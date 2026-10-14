@@ -67,6 +67,8 @@ pub const MENU_PREVIOUS_CATEGORY: u32 = 15;
 pub const MENU_OVERVIEW: u32 = 16;
 pub const MENU_SAVE_RTF: u32 = 17;
 pub const MENU_SAVE_JSON: u32 = 18;
+pub const MENU_USE_SELECTION: u32 = 19;
+pub const MENU_JUMP_SELECTION: u32 = 20;
 /// Open Recent entry `i` is `MENU_RECENT + i`.
 pub const MENU_RECENT: u32 = 200;
 
@@ -418,6 +420,64 @@ impl SysInfo {
             Some(c) => self.select(c),
             None => false,
         }
+    }
+
+    /// The text Use Selection for Find takes: the value of the first picked row, or the title of the picked item while
+    /// the item list has the focus. None when nothing is picked.
+    pub fn selection_text(&self) -> Option<String> {
+        let view = self.view();
+        let text = match self.selection {
+            Selection::One(i) => view.detail().get(i).map(|(_, v)| v.clone()),
+            Selection::All => view.detail().first().map(|(_, v)| v.clone()),
+            Selection::None if self.focus == Focus::List && view.content.list => view.content.items.get(view.item).map(|i| i.title.trim().to_string()),
+            Selection::None => None,
+        };
+        text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+    }
+
+    /// Edit > Use Selection for Find: the find bar opens with the picked text as its query.
+    pub fn use_selection_for_find(&mut self) -> bool {
+        let Some(text) = self.selection_text() else { return false };
+        let mut field = TextField::new();
+        field.push_str(&text);
+        self.find = Some(field);
+        self.after_find_change();
+        true
+    }
+
+    /// Edit > Jump to Selection: scrolls the picked row of the card into view, or the picked item of the list when the
+    /// list has the focus. True when a scroll moved.
+    pub fn jump_to_selection(&mut self) -> bool {
+        let view = self.view();
+        let panes = self.panes(&view);
+        match self.selection {
+            Selection::One(i) => {
+                let next = scroll_into_view(self.scroll, i, panes.detail.h);
+                let moved = (next - self.scroll).abs() >= f32::EPSILON;
+                self.scroll = next;
+                moved
+            }
+            Selection::All => {
+                let moved = self.scroll != 0.0;
+                self.scroll = 0.0;
+                moved
+            }
+            Selection::None if self.focus == Focus::List && view.content.list => match panes.list {
+                Some(list) => {
+                    let next = scroll_into_view(self.list_scroll, view.item, list.h);
+                    let moved = (next - self.list_scroll).abs() >= f32::EPSILON;
+                    self.list_scroll = next;
+                    moved
+                }
+                None => false,
+            },
+            Selection::None => false,
+        }
+    }
+
+    /// Whether Jump to Selection has something to jump to.
+    pub fn can_jump(&self) -> bool {
+        self.selection != Selection::None || (self.focus == Focus::List && self.view().content.list)
     }
 
     // ------------------------------------------------------------ selection and copy
@@ -1372,5 +1432,58 @@ mod tests {
         assert!(w.note_recent([2; 16], "B").is_empty());
         assert_eq!(w.recents[0].name, "B");
         assert!(w.recents_text().contains("\tA\n"));
+    }
+
+    #[test]
+    fn use_selection_for_find_takes_the_picked_value() {
+        let mut w = loaded();
+        w.select(Category::System);
+        assert_eq!(w.selection_text(), None);
+        assert!(!w.use_selection_for_find(), "nothing is picked");
+        assert!(w.activate(Target::Line(3)));
+        assert_eq!(w.selection_text(), Some("midget".to_string()));
+        assert!(w.use_selection_for_find());
+        assert!(w.find.is_some());
+        assert_eq!(w.query(), "midget");
+        assert_eq!(w.rows(), vec![kv("Computer Name", "midget")]);
+    }
+
+    #[test]
+    fn use_selection_for_find_takes_the_picked_item_in_the_list() {
+        let mut w = with_usb();
+        assert!(w.activate(Target::Item(1)));
+        assert!(w.use_selection_for_find());
+        assert_eq!(w.query(), "Hub");
+        assert_eq!(w.view().content.items.len(), 1);
+    }
+
+    #[test]
+    fn jump_to_selection_scrolls_the_picked_row_into_view() {
+        let mut w = loaded();
+        w.size = (1200.0, 300.0);
+        let rows: Vec<Row> = (0..40).map(|i| kv(format!("Key {i}"), "v")).collect();
+        w.show_stored(Stored::of("long.json", vec![(Category::Overview, Content::card(rows))]));
+        assert!(!w.can_jump(), "nothing is picked and the card has no list");
+        assert!(!w.jump_to_selection());
+        assert!(w.activate(Target::Line(35)));
+        assert!(w.can_jump());
+        assert!(w.jump_to_selection());
+        assert!(w.scroll > 0.0);
+        let h = w.panes(&w.view()).detail.h;
+        let top = 6.0 + 35.0 * LINE_PT;
+        assert!(top >= w.scroll && top + LINE_PT <= w.scroll + h, "the line is inside the pane");
+        assert!(!w.jump_to_selection(), "already in view");
+    }
+
+    #[test]
+    fn jump_to_selection_scrolls_the_list_when_it_has_the_focus() {
+        let mut w = with_usb();
+        w.size = (1200.0, 200.0);
+        w.step_item(3);
+        w.focus = Focus::List;
+        w.list_scroll = 0.0;
+        assert!(w.can_jump());
+        assert!(w.jump_to_selection());
+        assert!(w.list_scroll > 0.0 || w.view().item == 0);
     }
 }
