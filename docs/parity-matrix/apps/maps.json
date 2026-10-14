@@ -110,7 +110,7 @@
    "area": "directions",
    "apple": "Route with distance, time, steps and alternates",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/state.rs:709",
+   "bifrost": "springboard/apps/maps-desktop/src/route.rs:143 (parse_routes); springboard/apps/maps-desktop/src/state.rs:710 (Act::PickRoute)",
    "note": "The directions card: from and to, Swap, Drive/Walk/Cycle, every route of the server reply with its time and distance (alternatives=true), the steps, the route drawn on the map. With no routing server set (routing_url in settings.json) a labelled straight-line estimate shows.",
    "wire": "Request alternatives=true in Router::route_url (route.rs:78), parse every route in parse_route (route.rs:103) and offer alternates with their times in a directions panel."
   },
@@ -128,8 +128,8 @@
    "area": "directions",
    "apple": "Public transport routes with lines and departures",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/transit.rs:50",
-   "note": "built on parity/team-d-maps; not yet verified on Midget. Journeys come from an OpenTripPlanner-compatible planner set as transit_url in settings.json (Profile::Transit, transit::Planner); each leg lists the line, stops and times. No planner is bundled, so without the setting the card says transit is not set up.",
+   "bifrost": "springboard/apps/maps-desktop/src/transit.rs:23 (Departure); springboard/apps/maps-desktop/src/transit.rs:103 (plan_url_at)",
+   "note": "built on parity/team-d-maps; not yet verified on Midget. Journeys come from an OpenTripPlanner-compatible planner set as transit_url in settings.json (Profile::Transit, transit::Planner); each leg lists the line, the stops in between and the times. No planner is bundled, so without the setting the card says transit is not set up. Leave-at and arrive-by times are in the planner request and tested headless in tests/parity_app-maps.rs; the card has no time picker yet.",
    "wire": "Bundle or default a public journey planner endpoint for the region; add departure-time choice (leave at, arrive by) to Planner::plan_url and show the legs' stop counts."
   },
   {
@@ -146,8 +146,8 @@
    "area": "location",
    "apple": "Show your location on the map and route from it (NSLocationUsageDescription)",
    "status": "partial",
-   "bifrost": "springboard/sdk/src/core_location.rs",
-   "note": "Audit 2026-10-13: kit model sdk/src/core_location.rs (host tests) already provides this; the app does not use it yet.",
+   "bifrost": "springboard/apps/maps-desktop/src/window.rs:1099 (ask_location); springboard/sdk/src/core_location.rs",
+   "note": "The Current Location toolbar button and the Go menu item (main.rs:55) ask the SDK location manager for a position, centre the map on it and use it as the Directions origin; a refusal or an unknown position is shown as a reason.",
    "wire": "Add a Locate button centring MapView on the location service and use it as default origin."
   },
   {
@@ -209,8 +209,8 @@
    "area": "share",
    "apple": "Print the map or directions",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/printmap.rs:13",
-   "note": "File > Print (Cmd+P) prints the map as the loaded tiles show it (printmap.rs draw_tiles, window.rs map_picture) on the first page, then the place or the directions text with its steps on the pages after it, through the print service. The route and pin overlays are not in the picture yet.",
+   "bifrost": "springboard/apps/maps-desktop/src/printmap.rs:13 (draw_tiles); springboard/apps/maps-desktop/src/printmap.rs:55 (draw_line, draw_dot); springboard/apps/maps-desktop/src/window.rs:731 (map_picture)",
+   "note": "File > Print (Cmd+P) prints the map as the loaded tiles show it on the first page, with the followed route line and the pins drawn over it (printmap.rs draw_line, draw_dot; window.rs map_picture), then the place or the directions text with its steps on the pages after it, through the print service. The overlay pixels are tested headless in tests/parity_app-maps.rs; the printed page is not yet checked on the lab machine.",
    "wire": "Draw the route line and the pins into the picture with the same projection as draw_map, so a printed route shows its line."
   },
   {
@@ -272,7 +272,7 @@
    "area": "legal",
    "apple": "Attribution of the map data",
    "status": "partial",
-   "bifrost": "springboard/apps/maps-desktop/src/window.rs:1126",
+   "bifrost": "springboard/apps/maps-desktop/src/window.rs:1507 (draws the credit); springboard/apps/maps-desktop/src/source.rs:63 (attribution)",
    "note": "The credit for the active tile source (OpenStreetMap contributors, or the imagery credit) is drawn in the bottom-right corner of the map (source.rs:47).",
    "wire": "Draw the data credit line the tile source requires (OpenStreetMap contributors) in the map corner."
   }

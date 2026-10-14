@@ -18,6 +18,67 @@ pub struct Planner {
 /// Journeys asked for in one request.
 const ITINERARIES: usize = 3;
 
+/// When a journey leaves or must arrive. `Now` leaves at the planner's default time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Departure {
+    Now,
+    /// leave at this local date (YYYY-MM-DD) and time (HH:MM)
+    LeaveAt { date: String, time: String },
+    /// arrive at this local date (YYYY-MM-DD) and time (HH:MM)
+    ArriveBy { date: String, time: String },
+}
+
+impl Departure {
+    /// A journey that leaves at `date` `time`, both in the agency's local time.
+    pub fn leave_at(date: &str, time: &str) -> Result<Self, String> {
+        let (date, time) = checked_date_time(date, time)?;
+        Ok(Departure::LeaveAt { date, time })
+    }
+
+    /// A journey that arrives by `date` `time`, both in the agency's local time.
+    pub fn arrive_by(date: &str, time: &str) -> Result<Self, String> {
+        let (date, time) = checked_date_time(date, time)?;
+        Ok(Departure::ArriveBy { date, time })
+    }
+
+    /// The query parameters that set the time of the journey, each with its leading `&`.
+    fn query(&self) -> String {
+        match self {
+            Departure::Now => String::new(),
+            Departure::LeaveAt { date, time } => format!("&date={date}&time={time}"),
+            Departure::ArriveBy { date, time } => format!("&date={date}&time={time}&arriveBy=true"),
+        }
+    }
+}
+
+/// Two ASCII digits as a number, or `None` for anything else.
+fn two_digits(b: &[u8]) -> Option<u32> {
+    (b.len() == 2 && b.iter().all(u8::is_ascii_digit)).then(|| u32::from(b[0] - b'0') * 10 + u32::from(b[1] - b'0'))
+}
+
+/// Checks a date as YYYY-MM-DD and a time as HH:MM and returns them trimmed. Only plain digits are accepted, so the
+/// text can go into a URL unchanged.
+fn checked_date_time(date: &str, time: &str) -> Result<(String, String), String> {
+    let d = date.trim();
+    let t = time.trim();
+    let db = d.as_bytes();
+    let date_ok = db.len() == 10
+        && db[..4].iter().all(u8::is_ascii_digit)
+        && db[4] == b'-'
+        && matches!(two_digits(&db[5..7]), Some(1..=12))
+        && db[7] == b'-'
+        && matches!(two_digits(&db[8..10]), Some(1..=31));
+    let tb = t.as_bytes();
+    let time_ok = tb.len() == 5 && tb[2] == b':' && matches!(two_digits(&tb[..2]), Some(0..=23)) && matches!(two_digits(&tb[3..]), Some(0..=59));
+    if !date_ok {
+        return Err("the date must be YYYY-MM-DD".into());
+    }
+    if !time_ok {
+        return Err("the time must be HH:MM".into());
+    }
+    Ok((d.to_string(), t.to_string()))
+}
+
 impl Planner {
     /// `base` is the router URL. `None` or blank means transit is not configured.
     pub fn new(base: Option<&str>) -> Result<Self, String> {
@@ -35,12 +96,21 @@ impl Planner {
     /// The plan request from `from` to `to` as (lat, lon), leaving now. Errors when transit is not configured, so no
     /// request is made.
     pub fn plan_url(&self, from: (f64, f64), to: (f64, f64)) -> Result<String, String> {
+        self.plan_url_at(from, to, &Departure::Now)
+    }
+
+    /// The plan request for a journey that leaves or arrives at the time `when` sets.
+    pub fn plan_url_at(&self, from: (f64, f64), to: (f64, f64), when: &Departure) -> Result<String, String> {
         let base = self.base.as_deref().ok_or("transit is not configured")?;
         check_coord(from)?;
         check_coord(to)?;
         Ok(format!(
-            "{base}/plan?fromPlace={:.6},{:.6}&toPlace={:.6},{:.6}&mode=TRANSIT,WALK&numItineraries={ITINERARIES}",
-            from.0, from.1, to.0, to.1
+            "{base}/plan?fromPlace={:.6},{:.6}&toPlace={:.6},{:.6}&mode=TRANSIT,WALK&numItineraries={ITINERARIES}{}",
+            from.0,
+            from.1,
+            to.0,
+            to.1,
+            when.query()
         ))
     }
 }
@@ -91,8 +161,18 @@ fn place_of(p: Option<&Json>) -> Option<(f64, f64)> {
     Some((p.get("lat")?.number()?, p.get("lon")?.number()?))
 }
 
-/// The text of one leg: "Walk to Hlemmur" or "Bus 14 from Hlemmur 10:05 to Haholt 10:31".
+/// The text of one leg: "Walk to Hlemmur" or "Bus 14 from Hlemmur 10:05 to Haholt 10:31", with the stops in between
+/// when the planner lists them.
 fn leg_text(leg: &Json) -> String {
+    let text = ride_text(leg);
+    match leg.get("intermediateStops").and_then(Json::as_array).map_or(0, <[Json]>::len) {
+        0 => text,
+        1 => format!("{text}, 1 stop in between"),
+        n => format!("{text}, {n} stops in between"),
+    }
+}
+
+fn ride_text(leg: &Json) -> String {
     let mode = leg.str_field("mode").unwrap_or_default();
     let name = |key: &str| leg.get(key).and_then(|p| p.str_field("name")).filter(|n| !n.is_empty());
     let offset = leg.get("agencyTimeZoneOffset").and_then(Json::number).unwrap_or(0.0);

@@ -737,7 +737,19 @@ impl Window {
             return None;
         }
         let (w, h) = self.maps.view.size();
-        Some(crate::printmap::draw_tiles(&tiles, side, w, h))
+        let mut picture = crate::printmap::draw_tiles(&tiles, side, w, h);
+        let view = self.maps.view;
+        // the route and the pins as the map shows them: the followed route while the directions card is open
+        if matches!(self.maps.panel, Panel::Directions | Panel::Navigation) {
+            if let Some(r) = self.maps.current_route() {
+                let line: Vec<(f64, f64)> = r.geometry.iter().map(|&(la, lo)| view.to_screen(la, lo)).collect();
+                crate::printmap::draw_line(&mut picture, &line, 5.0, [0x1e, 0x6b, 0x8a]);
+            }
+        }
+        for (_, x, y) in self.maps.pins.visible(&view) {
+            crate::printmap::draw_dot(&mut picture, x, y, 4.0, [0xd0, 0x30, 0x30]);
+        }
+        Some(picture)
     }
 
     fn to_map_pt(&self, x: f32, y: f32) -> (f32, f32) {
