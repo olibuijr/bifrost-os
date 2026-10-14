@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.3 — 2026-10-14
+
+- History uses the shared Golden Gate source-list rows; calculator geometry now names its display, menu and history
+  dimensions and takes sidebar width from the shared layout token.
+
 ## 1.11.2 — 2026-10-14
 
 - Derive the wide-keypad activation width from its key grid, and align menu assertions with the app-specific Calculator menu.

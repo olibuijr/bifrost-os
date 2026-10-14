@@ -2,7 +2,7 @@
 //! coordinates, the sidecar file that keeps markup, and the burn-in used by export. Everything here
 //! is plain data, so the tests run without a window.
 
-use bifrost_app::kit::ui::{SYSTEM_BLUE, SYSTEM_RED, SYSTEM_YELLOW};
+use bifrost_app::kit::ui::{BLACK, SYSTEM_BLUE, SYSTEM_RED, SYSTEM_YELLOW};
 use bifrost_app::kit::Image;
 use std::rc::Rc;
 
@@ -578,8 +578,9 @@ pub fn neighbour(positions: &[usize], current: usize, forward: bool) -> Option<u
 /// A note's marker on an exported picture, in pixels.
 const NOTE_PX: usize = 14;
 
-/// Highlight colour: system yellow at about 45 per cent.
-pub const HIGHLIGHT: u32 = (SYSTEM_YELLOW & 0x00ff_ffff) | (115 << 24);
+/// Highlight colour: system yellow; the renderer and picture burn-in apply the highlight opacity separately.
+pub const HIGHLIGHT: u32 = SYSTEM_YELLOW;
+pub const HIGHLIGHT_ALPHA: u8 = 115;
 /// Note and shape colour: system blue.
 pub const MARK_BLUE: u32 = SYSTEM_BLUE;
 /// Strike-through colour: system red.
@@ -697,7 +698,12 @@ pub fn sidecar_name(path: &str) -> String {
 
 /// Source-over of a straight-alpha colour `src` onto a premultiplied pixel `dst`.
 fn over(dst: u32, src: u32) -> u32 {
-    let sa = (src >> 24) & 0xff;
+    over_alpha(dst, src, ((src >> 24) & 0xff) as u8)
+}
+
+/// Source-over with an explicit opacity, used for highlights whose named system colour is opaque.
+fn over_alpha(dst: u32, src: u32, opacity: u8) -> u32 {
+    let sa = u32::from(opacity);
     let inv = 255 - sa;
     let ch = |shift: u32| {
         let s = (src >> shift) & 0xff;
@@ -833,7 +839,7 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
                 for y in y0..y1 {
                     for x in x0..x1 {
                         let i = y * w + x;
-                        img.px[i] = over(img.px[i], m.color);
+                        img.px[i] = over_alpha(img.px[i], m.color, HIGHLIGHT_ALPHA);
                     }
                 }
             }
@@ -859,7 +865,8 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
                 burn_path(img, &[(x0 as f32, y), (x1 as f32, y)], m.color);
             }
             MarkKind::Redact => {
-                let black = pack(0, 0, 0, 255);
+                // Redaction permanently removes picture content; black is the semantic concealment fill.
+                let black = BLACK;
                 for y in y0..y1 {
                     for x in x0..x1 {
                         img.px[y * w + x] = black;

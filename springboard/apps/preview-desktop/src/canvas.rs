@@ -8,8 +8,10 @@ use crate::find::Hit;
 use crate::signature::Signature;
 use crate::signature_panel;
 use crate::model::{self, Adjust, Mark, MarkKind, Norm, Slider, View, HIGHLIGHT, MARK_BLUE};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{rgba, Image, Surface};
+use bifrost_app::widgets;
 
 /// The tool a drag or tap on the canvas uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -573,6 +575,52 @@ pub fn side_items(doc: &Document, side: Side, found: &[Hit]) -> Vec<(String, Opt
     }
 }
 
+/// Shared source-list rows for the text-based sidebar modes. Page thumbnails retain their variable-height gallery
+/// rows; outline, markup, bookmark and search entries use the Golden Gate source-list widget and hit model.
+fn source_list(ui: &Ui, doc: &Document, side: Side, found: &[Hit], current_page: usize) -> SourceList {
+    let (entries, symbol): (Vec<(String, Option<usize>, Option<String>)>, &str) = match side {
+        Side::Outline => (
+            doc.outline
+                .iter()
+                .map(|item| {
+                    let page = item.page.and_then(|p| doc.display_of(p));
+                    let trailing = page.map(|p| format!("Page {}", p + 1));
+                    (item.title.clone(), page, trailing)
+                })
+                .collect(),
+            "doc",
+        ),
+        Side::Notes => (side_items(doc, side, found).into_iter().map(|(label, page)| (label, page, None)).collect(), "tag"),
+        Side::Bookmarks => (side_items(doc, side, found).into_iter().map(|(label, page)| (label, page, None)).collect(), "bookmark"),
+        Side::Search => (side_items(doc, side, found).into_iter().map(|(label, page)| (label, page, None)).collect(), "magnifyingglass"),
+        Side::Pages => (Vec::new(), "doc"),
+    };
+    let mut items = Vec::with_capacity(entries.len());
+    let mut selected = None;
+    for (index, (label, page, trailing)) in entries.into_iter().enumerate() {
+        let mut row = SidebarItem::row(index as u32, &label).with_symbol(symbol);
+        if let Some(trailing) = trailing { row = row.with_trailing(&trailing); }
+        if page == Some(current_page) && selected.is_none() { selected = Some(index as u32); }
+        items.push(row);
+    }
+    let mut list = SourceList::new(items, ui::MAC_BODY_PT * 2.0, ui::MAC_FOOTNOTE_PT * 2.0);
+    list.set_selected(selected);
+    list
+}
+
+/// Hit-tests a text-based sidebar using the same shared source-list model used to draw it.
+pub fn source_list_hit(ui: &Ui, lay: &Layout, doc: &Document, side: Side, found: &[Hit], current_page: usize, scroll: f32, x: f32, y: f32) -> Option<usize> {
+    let scale = ui.pt(1.0).max(0.001);
+    let list = source_list(ui, doc, side, found, current_page);
+    let bounds = bifrost_app::controls::Rect {
+        x: 0.0,
+        y: lay.bar as f32 / scale,
+        w: lay.side as f32 / scale,
+        h: (lay.h - lay.bar) as f32 / scale,
+    };
+    list.hit(bounds, scroll / scale, x / scale, y / scale).map(|id| id as usize)
+}
+
 /// The contact sheet's grid: equal cells in rows, the grid centred across the canvas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Sheet {
@@ -1134,7 +1182,7 @@ fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
         MarkKind::Highlight => {
             // the highlight colour as a premultiplied tile, blended source-over
             let c = HIGHLIGHT;
-            let hl = rgba((c & 0xff) as u8, ((c >> 8) & 0xff) as u8, ((c >> 16) & 0xff) as u8, (c >> 24) as u8);
+            let hl = rgba((c & 0xff) as u8, ((c >> 8) & 0xff) as u8, ((c >> 16) & 0xff) as u8, model::HIGHLIGHT_ALPHA);
             let px = vec![hl; (w.max(1) * h.max(1)) as usize];
             let tile = Image { w: w.max(1) as usize, h: h.max(1) as usize, px };
             s.blit(&tile, x, y, 255, 255);
@@ -1159,30 +1207,26 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     if lay.side <= 0 {
         return;
     }
-    fill(s, 0, lay.bar, lay.side, lay.h - lay.bar, ui::SIDEBAR_BG.now());
-    let Some(doc) = scene.doc else { return };
+    let Some(doc) = scene.doc else {
+        fill(s, 0, lay.bar, lay.side, lay.h - lay.bar, ui::SIDEBAR_BG.now());
+        return;
+    };
     match scene.side {
-        Side::Pages => draw_pages(s, ui, lay, scene, doc),
-        Side::Outline => draw_outline(s, ui, lay, scene, doc),
-        Side::Notes | Side::Bookmarks | Side::Search => draw_items(s, ui, lay, scene, &side_items(doc, scene.side, scene.found)),
-    }
-}
-
-/// The markup list or the bookmarks list: one line per entry, the entry for the shown page marked.
-fn draw_items(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, items: &[(String, Option<usize>)]) {
-    let rows = list_rows(ui, items.len());
-    let pad = ui.pt(ui::SPACE_S) as i32;
-    for ((text, page), &(top, h)) in items.iter().zip(rows.iter()) {
-        let y = lay.bar + top - scene.view.sidebar_scroll as i32;
-        if y + h < lay.bar || y > lay.h {
-            continue;
+        Side::Pages => {
+            fill(s, 0, lay.bar, lay.side, lay.h - lay.bar, ui::SIDEBAR_BG.now());
+            draw_pages(s, ui, lay, scene, doc);
         }
-        if *page == Some(scene.view.page) {
-            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SELECTION.now());
+        side => {
+            let scale = ui.pt(1.0).max(0.001);
+            let bounds = bifrost_app::controls::Rect {
+                x: 0.0,
+                y: lay.bar as f32 / scale,
+                w: lay.side as f32 / scale,
+                h: (lay.h - lay.bar) as f32 / scale,
+            };
+            let list = source_list(ui, doc, side, scene.found, scene.view.page);
+            widgets::source_list(s, ui, bounds, &list, scene.view.sidebar_scroll / scale, None);
         }
-        let text = fit_text(ui, text, ui::MAC_BODY_PT, (lay.side - 2 * pad).max(0) as f32);
-        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-        s.blit_colored(&img, pad, y + (h - img.h as i32) / 2, ui::LABEL.now(), 255);
     }
 }
 
@@ -1195,7 +1239,8 @@ fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
             continue;
         }
         if i == scene.view.page {
-            s.fill_rrect(pad as f32 / 2.0, (y + pad / 2) as f32, (lay.side - pad) as f32, (h - pad) as f32, ui.pt(ui::SPACE_S), ui::SELECTION.now());
+            // The selected thumbnail uses the same neutral plate as a selected source-list row.
+            s.fill_rrect(pad as f32 / 2.0, (y + pad / 2) as f32, (lay.side - pad) as f32, (h - pad) as f32, ui.pt(ui::SPACE_S), ui::MATERIAL_SELECTION_INACTIVE.now());
         }
         // only the thumbnails of visible rows are drawn; each is kept after its first draw
         let (bw, bh) = doc.thumb_box(i).unwrap_or((THUMB_W, (THUMB_W as f32 * 1.3) as usize));
@@ -1214,26 +1259,6 @@ fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
         let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
         let tw = ui.measure(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular) as i32;
         s.blit_colored(&img, (lay.side - tw) / 2, y + pad + box_h + pad / 4, ui::LABEL_2.now(), 255);
-    }
-}
-
-fn draw_outline(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
-    let rows = outline_rows(ui, doc);
-    let pad = ui.pt(ui::SPACE_S) as i32;
-    let indent = ui.pt(ui::SPACE_L) as i32;
-    for (item, &(top, h)) in doc.outline.iter().zip(rows.iter()) {
-        let y = lay.bar + top - scene.view.sidebar_scroll as i32;
-        if y + h < lay.bar || y > lay.h {
-            continue;
-        }
-        let here = item.page.and_then(|p| doc.display_of(p)) == Some(scene.view.page);
-        if here {
-            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SELECTION.now());
-        }
-        let x = pad + indent * item.level as i32;
-        let text = fit_text(ui, &item.title, ui::MAC_BODY_PT, (lay.side - x - pad).max(0) as f32);
-        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
-        s.blit_colored(&img, x, y + (h - img.h as i32) / 2, ui::LABEL.now(), 255);
     }
 }
 

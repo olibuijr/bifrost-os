@@ -74,6 +74,20 @@ const WIDE_KEY_PT: f32 = 40.0;
 const WIDE_INSET_PT: f32 = 48.0;
 const WIDE_COLUMNS: f32 = 10.0;
 const WIDE_GAPS: f32 = 9.0;
+/// Vertical room reserved for the display and the keypad's controls before sizing the keys.
+const DISPLAY_AND_KEYS_RESERVE_PT: f32 = 230.0;
+/// Backspace is a compact trailing control sized to fit a wide keypad's final cell cluster.
+const BACKSPACE_CONTROL_WIDTH_PT: f32 = 105.0;
+/// The display's minimum breathing room above the keypad deck.
+const DISPLAY_DECK_INSET_PT: f32 = 145.0;
+/// Context menu geometry for the two display actions.
+const DISPLAY_MENU_TRAILING_INSET_PT: f32 = 236.0;
+const DISPLAY_MENU_WIDTH_PT: f32 = 224.0;
+const DISPLAY_MENU_HEIGHT_PT: f32 = 52.0;
+/// Maximum history row height and the room reserved for its heading and footer controls.
+const HISTORY_ROW_MAX_PT: f32 = 84.0;
+const HISTORY_CHROME_RESERVE_PT: f32 = 145.0;
+const HISTORY_VIEWPORT_RESERVE_PT: f32 = 136.0;
 
 /// The label of Clear History after one tap: a second tap clears.
 const CLEAR_CONFIRM_LABEL: &str = "Tap to Confirm";
@@ -420,7 +434,7 @@ impl Calculator {
     fn layout(&self, ui: &Ui) -> Layout {
         let bottom = self.h as f32 - home_zone(ui) - ui.pt(SPACE_XXL);
         let extra = self.strip_h(ui) + if self.convert.is_some() { ui.pt((category_rows() - 1) as f32 * CATEGORY_H_PT) } else { 0.0 };
-        let available = bottom - ui.pt(230.0) - extra;
+        let available = bottom - ui.pt(DISPLAY_AND_KEYS_RESERVE_PT) - extra;
         if self.wide(ui) {
             let gap = ui.pt(SPACE_S);
             let cw = ((self.w as f32 - ui.pt(48.0) - gap * 9.0) / 10.0).max(ui.pt(SPACE_XXL));
@@ -666,9 +680,9 @@ impl Calculator {
     fn backspace_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let l = self.layout(ui);
         (
-            l.x + l.width - ui.pt(105.0),
+            l.x + l.width - ui.pt(BACKSPACE_CONTROL_WIDTH_PT),
             self.deck_top(ui) - ui.pt(55.0),
-            ui.pt(105.0),
+            ui.pt(BACKSPACE_CONTROL_WIDTH_PT),
             ui.pt(44.0),
         )
     }
@@ -697,13 +711,13 @@ impl Calculator {
             l.x,
             ui.pt(90.0),
             l.width,
-            (self.deck_top(ui) - ui.pt(145.0)).max(ui.pt(SPACE_HUGE)),
+            (self.deck_top(ui) - ui.pt(DISPLAY_DECK_INSET_PT)).max(ui.pt(SPACE_HUGE)),
         )
     }
 
     fn menu_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let (x, y, w, _) = self.display_rect(ui);
-        (x + w - ui.pt(236.0), y + ui.pt(SPACE_S), ui.pt(224.0), ui.pt(52.0))
+        (x + w - ui.pt(DISPLAY_MENU_TRAILING_INSET_PT), y + ui.pt(SPACE_S), ui.pt(DISPLAY_MENU_WIDTH_PT), ui.pt(DISPLAY_MENU_HEIGHT_PT))
     }
 
     fn menu_item(&self, ui: &Ui, paste: bool) -> (f32, f32, f32, f32) {
@@ -713,18 +727,18 @@ impl Calculator {
 
     fn panel(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         // A full-height history sidebar under the traffic lights (Golden Gate Calculator's sidebar).
-        (0.0, 0.0, ui.pt(280.0).min(self.w as f32 * 0.85), self.h as f32 - home_zone(ui))
+        (0.0, 0.0, ui.pt(m::SIDEBAR_W).min(self.w as f32 * 0.85), self.h as f32 - home_zone(ui))
     }
 
     fn row_height(&self, ui: &Ui) -> f32 {
         let (_, _, _, h) = self.panel(ui);
-        ui.pt(84.0).min((h - ui.pt(145.0)) / 8.0).max(ui.pt(30.0))
+        ui.pt(HISTORY_ROW_MAX_PT).min((h - ui.pt(HISTORY_CHROME_RESERVE_PT)) / 8.0).max(ui.pt(30.0))
     }
 
     /// How many history rows fit between the title and Clear History.
     fn rows_visible(&self, ui: &Ui) -> usize {
         let (_, _, _, h) = self.panel(ui);
-        (((h - ui.pt(136.0)) / self.row_height(ui)).floor() as usize).max(1)
+        (((h - ui.pt(HISTORY_VIEWPORT_RESERVE_PT)) / self.row_height(ui)).floor() as usize).max(1)
     }
 
     /// The `visual`-th visible row (0 is the top one on screen).
