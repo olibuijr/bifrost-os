@@ -96,14 +96,14 @@
       "apple": "CBChannelSoundingSessionConfiguration, CBChannelSoundingProcedureResults, CBUUIDCharacteristicObservationScheduleString",
       "bifrost": "none found",
       "status": "gap",
-      "note": "Needs LE Channel Sounding hardware and a controller that exposes it. Nothing in the repo."
+      "note": "Blocked: the shell's Bluetooth module drives the kernel management socket (springboard/src/bare/bluetooth.rs), which has no channel sounding command, and LE Channel Sounding needs raw HCI commands from a controller that reports the capability; the module avoids raw HCI on purpose."
     },
     {
       "feature": "Background execution and Live Activity privileges",
       "apple": "Core Bluetooth background modes (not supported in iPad apps on macOS); Live Activity scanning privileges",
-      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox; no Bluetooth background policy found)",
+      "bifrost": "springboard/src/bare/app_policy.rs (ENTITLEMENT_NAMES has no Bluetooth entry); springboard/src/bare/bluetooth.rs (L2CAP links held by the shell, with no per-app owner)",
       "status": "gap",
-      "note": "Apple's background rules do not apply. BifrOSt has no app-level Bluetooth background policy, so no app can keep a link alive."
+      "note": "Gap: a background Bluetooth privilege needs a new entitlement in the shell policy and a per-app link owner in the Bluetooth service. Neither exists, and the shell holds links for the system rather than for an app, so no app privilege can be granted yet."
     },
     {
       "feature": "Usage permission and privacy declarations",

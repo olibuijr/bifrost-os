@@ -10,9 +10,9 @@
     {
       "feature": "Memory and context (object lifetime, allocation)",
       "apple": "gss_release_buffer, gss_release_oid_set, GSS object release functions (Allocating and Releasing Objects)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Rust ownership replaces GSS release calls; no GSS objects exist to release"
+      "bifrost": "springboard/sdk/src/gss_buffer.rs (Buffer, BufferSet); springboard/sdk/src/gss_oid.rs (OidSet); springboard/sdk/src/gss_context.rs (Context)",
+      "status": "partial",
+      "note": "Release calls map to drop: buffers, buffer sets, identifier sets and contexts free their memory when they go out of scope, tested headless in gss_buffer's unit tests and tests/parity_sdk-rest-06.rs. Gap: no GSS library is linked, so the release calls have no C side to match."
     },
     {
       "feature": "Function status codes (GSS_S_*, GSSCreateError, gss_display_status)",

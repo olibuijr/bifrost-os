@@ -73,9 +73,9 @@
   {
    "feature": "File sharing staging",
    "apple": "not part of the framework",
-   "bifrost": "springboard/src/net/share.rs (.part staging)",
+   "bifrost": "springboard/src/net/share.rs (part_name, create_unique, check_incoming)",
    "status": "os",
-   "note": "system only"
+   "note": "Incoming nearby transfers stage in a hidden .share-*.part file and are renamed to their final name only after the SHA-256 matches. The staging path is a shell detail and is never exposed to apps, so there is no SDK surface to build."
   },
   {
    "feature": "Errors (ManagedBackgroundAssetsError, BAErrorCode, LocalAvailabilityError)",
