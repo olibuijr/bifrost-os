@@ -57,3 +57,10 @@ The matrix row's previous evidence id, `ev_db48755bdd049ac960cdd61e81535120a7dc9
 - Still gaps: a web extension host and Safari page or tab proxies, the open-url wiring for the in-app browser sheet
   (`browser_sheet.rs`), and content-blocker enforcement in the web view. Status for the matrix rows is partial, not parity:
   the device test (Midget) has not run.
+
+## Authentication sessions (team A5 reconciliation)
+
+The shared-login session model in `springboard/ui/src/web_auth.rs` (with `webauth_session.rs` and the SDK re-export in
+`springboard/sdk/src/web_auth.rs`) covers the older `SFAuthenticationSession` name. Team A5 found the matrix row still
+said "none" and moved it to partial with these paths. The shell does not drive the session yet. Built on
+parity/team-a-05; not yet verified on Midget.

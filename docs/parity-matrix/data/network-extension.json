@@ -1,118 +1,118 @@
 {
-  "framework": "Network Extension",
-  "doc": "https://developer.apple.com/documentation/networkextension",
-  "macos_since": "10.10",
-  "status": "partial",
-  "bifrost": "springboard/src/net/ (wifi.rs, wifi_config.rs, wpa.rs, dhcp.rs, wifi_event.rs), springboard/netd/src, springboard/src/shell/pages.rs (PageId::Vpn)",
-  "summary": "BifrOSt has a system-level Wi-Fi client (wpa_supplicant control, saved networks, DHCP, DNS from the lease written to resolv.conf) but no app-facing Network Extension API. There is no VPN client, tunnel, relay, content filter, URL filter, DNS proxy or local push; the VPN settings page is a static placeholder showing Not Connected.",
-  "rea_evidence": "ev_ddbc332a1dc5f4c399f025abe104945e408ce39544875e293b957f3ad23c93fd",
-  "features": [
-    {
-      "feature": "Wi-Fi configuration (persistent networks, join)",
-      "apple": "NEHotspotConfiguration, NEHotspotConfigurationManager (Wi-Fi configuration collection group)",
-      "bifrost": "springboard/sdk/src/hotspot_configuration.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-network-extension, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Saved networks are written as wpa_supplicant blocks with priority ordering (move_network, upsert). Only the shell can use them; no SDK API exposes a join or add-configuration call to apps."
-    },
-    {
-      "feature": "Hotspot helper",
-      "apple": "Hotspot helper collection group",
-      "bifrost": "springboard/sdk/src/hotspot_configuration.rs, springboard/sdk/src/accessory_hotspot.rs",
-      "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (hotspot_configuration.rs, accessory_hotspot.rs); not wired into the shell or apps, not tested on Midget. No hotspot subsystem and no API for apps to hook into one."
-    },
-    {
-      "feature": "Configuring a Wi-Fi accessory to join a network",
-      "apple": "Wi-Fi configuration sample code (accessory setup)",
-      "bifrost": "springboard/sdk/src/accessory_hotspot.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-network-extension, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Accessory onboarding flow is not built. The network-config primitives exist only inside the shell."
-    },
-    {
-      "feature": "VPN configuration (personal VPN, IKEv2/IPsec)",
-      "apple": "Personal VPN collection group (NEVPNManager, NEVPNProtocol, NEVPNError)",
-      "bifrost": "springboard/core/src/tunnel.rs; wired: springboard/src/shell/pages.rs (PageId::Vpn, desktop_vpn_page); springboard/src/shell/desktop_network.rs (vpn_profiles, vpn_summary); springboard/core/src/tunnel.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The VPN & Device Management page is a static placeholder ('VPN' value 'Not Connected'). No VPN profile storage, no IKEv2 or IPsec client. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "Packet tunnel provider and app proxy provider (custom VPN)",
-      "apple": "Packet tunnel provider, App proxy provider, NEAppProxyUDPFlowHandling, NETunnelProviderError",
-      "bifrost": "springboard/core/src/tunnel.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension point for a system-level VPN client and no flow or packet API. The NetworkExtension app-extension host (NEAppExtensionConfiguration) is not present."
-    },
-    {
-      "feature": "Routing VPN traffic (include and exclude)",
-      "apple": "Routing your VPN network traffic (article)",
-      "bifrost": "springboard/core/src/tunnel.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on the VPN tunnel above; no routing policy layer."
-    },
-    {
-      "feature": "Network relays",
-      "apple": "Relays collection group (NERelayManager, NERelayManagerClientError)",
-      "bifrost": "springboard/core/src/relay.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 4 tests. Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No HTTP/2 or HTTP/3 relay configuration. The browser at springboard/src/shell/browser/doc.rs does its own requests and is not a system proxy."
-    },
-    {
-      "feature": "Content filter providers",
-      "apple": "Content filter providers collection group",
-      "bifrost": "springboard/core/src/content_filter.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device flow filter. The only content blocking seen is the browser's own CSS and element handling, not a network filter."
-    },
-    {
-      "feature": "URL filters",
-      "apple": "URL filters collection group",
-      "bifrost": "springboard/ui/src/url_filter.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No URL analysis or filtering layer."
-    },
-    {
-      "feature": "DNS settings (system-wide encrypted DNS)",
-      "apple": "DNS settings collection group (NEDNSSettingsManager)",
-      "bifrost": "springboard/core/src/dns_settings.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The DHCP-supplied resolvers are applied to the system. No DoH or DoT configuration, no user-set DNS profile and no API for apps."
-    },
-    {
-      "feature": "DNS proxy provider",
-      "apple": "DNS proxy provider collection group",
-      "bifrost": "springboard/core/src/dns_proxy.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-network-extension, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device DNS proxy extension point."
-    },
-    {
-      "feature": "Local push connectivity",
-      "apple": "Local push connectivity collection group",
-      "bifrost": "springboard/core/src/local_push.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-network-extension, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The notification path in springboard/src/shell/usernotif.rs is local to the shell and has no network-independent push channel."
-    },
-    {
-      "feature": "App extensions host (NEAppExtensionConfiguration)",
-      "apple": "NEAppExtensionConfiguration",
-      "bifrost": "springboard/sdk/src/intents.rs is the App Intents layer, not an extension host for network providers",
-      "status": "gap",
-      "note": "No Network Extension app-extension host. Apps cannot ship a network provider."
-    },
-    {
-      "feature": "Error types (NEVPNError, NETunnelProviderError, NERelayClientErrorDomain)",
-      "apple": "Structures, variables and enumerations listed on the landing page",
-      "bifrost": "springboard/core/src/tunnel.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Errors are internal to the Wi-Fi code. No SDK error types for network extensions."
-    }
-  ],
-  "gaps": [
-    "No VPN client or tunnel: no IKEv2, IPsec, WireGuard or custom packet-tunnel provider, and the VPN settings page is a static placeholder.",
-    "No app-facing Wi-Fi configuration API (NEHotspotConfiguration equivalent): join and add-network are shell-only.",
-    "No content filter, URL filter or DNS proxy extension points for apps.",
-    "No system-wide encrypted DNS (DoH or DoT) settings; only DHCP-supplied resolvers are applied.",
-    "No network relay (HTTP/2 or HTTP/3 proxying) configuration.",
-    "No hotspot helper or tethering subsystem.",
-    "No local push connectivity when the internet is unavailable."
-  ]
+ "framework": "Network Extension",
+ "doc": "https://developer.apple.com/documentation/networkextension",
+ "macos_since": "10.10",
+ "status": "partial",
+ "bifrost": "springboard/src/net/ (wifi.rs, wifi_config.rs, wpa.rs, dhcp.rs, wifi_event.rs), springboard/netd/src, springboard/src/shell/pages.rs (PageId::Vpn)",
+ "summary": "BifrOSt has a system-level Wi-Fi client (wpa_supplicant control, saved networks, DHCP, DNS from the lease written to resolv.conf) but no working app-facing Network Extension API (only a pure hotspot helper model that the system does not drive). There is no VPN client, tunnel, relay, content filter, URL filter, DNS proxy or local push; the VPN settings page is a static placeholder showing Not Connected.",
+ "rea_evidence": "ev_ddbc332a1dc5f4c399f025abe104945e408ce39544875e293b957f3ad23c93fd",
+ "features": [
+  {
+   "feature": "Wi-Fi configuration (persistent networks, join)",
+   "apple": "NEHotspotConfiguration, NEHotspotConfigurationManager (Wi-Fi configuration collection group)",
+   "bifrost": "springboard/sdk/src/hotspot_configuration.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-network-extension, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Saved networks are written as wpa_supplicant blocks with priority ordering (move_network, upsert). Only the shell can use them; no SDK API exposes a join or add-configuration call to apps."
+  },
+  {
+   "feature": "Hotspot helper",
+   "apple": "Hotspot helper collection group",
+   "bifrost": "springboard/sdk/src/hotspot_configuration.rs, springboard/sdk/src/accessory_hotspot.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (hotspot_configuration.rs, accessory_hotspot.rs); not wired into the shell or apps, not tested on Midget. No hotspot subsystem and no API for apps to hook into one."
+  },
+  {
+   "feature": "Configuring a Wi-Fi accessory to join a network",
+   "apple": "Wi-Fi configuration sample code (accessory setup)",
+   "bifrost": "springboard/sdk/src/accessory_hotspot.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-network-extension, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Accessory onboarding flow is not built. The network-config primitives exist only inside the shell."
+  },
+  {
+   "feature": "VPN configuration (personal VPN, IKEv2/IPsec)",
+   "apple": "Personal VPN collection group (NEVPNManager, NEVPNProtocol, NEVPNError)",
+   "bifrost": "springboard/core/src/tunnel.rs; wired: springboard/src/shell/pages.rs (PageId::Vpn, desktop_vpn_page); springboard/src/shell/desktop_network.rs (vpn_profiles, vpn_summary); springboard/core/src/tunnel.rs",
+   "status": "partial",
+   "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The VPN & Device Management page is a static placeholder ('VPN' value 'Not Connected'). No VPN profile storage, no IKEv2 or IPsec client. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+  },
+  {
+   "feature": "Packet tunnel provider and app proxy provider (custom VPN)",
+   "apple": "Packet tunnel provider, App proxy provider, NEAppProxyUDPFlowHandling, NETunnelProviderError",
+   "bifrost": "springboard/core/src/tunnel.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension point for a system-level VPN client and no flow or packet API. The NetworkExtension app-extension host (NEAppExtensionConfiguration) is not present."
+  },
+  {
+   "feature": "Routing VPN traffic (include and exclude)",
+   "apple": "Routing your VPN network traffic (article)",
+   "bifrost": "springboard/core/src/tunnel.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on the VPN tunnel above; no routing policy layer."
+  },
+  {
+   "feature": "Network relays",
+   "apple": "Relays collection group (NERelayManager, NERelayManagerClientError)",
+   "bifrost": "springboard/core/src/relay.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 4 tests. Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No HTTP/2 or HTTP/3 relay configuration. The browser at springboard/src/shell/browser/doc.rs does its own requests and is not a system proxy."
+  },
+  {
+   "feature": "Content filter providers",
+   "apple": "Content filter providers collection group",
+   "bifrost": "springboard/core/src/content_filter.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device flow filter. The only content blocking seen is the browser's own CSS and element handling, not a network filter."
+  },
+  {
+   "feature": "URL filters",
+   "apple": "URL filters collection group",
+   "bifrost": "springboard/ui/src/url_filter.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No URL analysis or filtering layer."
+  },
+  {
+   "feature": "DNS settings (system-wide encrypted DNS)",
+   "apple": "DNS settings collection group (NEDNSSettingsManager)",
+   "bifrost": "springboard/core/src/dns_settings.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (w3-network-extension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The DHCP-supplied resolvers are applied to the system. No DoH or DoT configuration, no user-set DNS profile and no API for apps."
+  },
+  {
+   "feature": "DNS proxy provider",
+   "apple": "DNS proxy provider collection group",
+   "bifrost": "springboard/core/src/dns_proxy.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-network-extension, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device DNS proxy extension point."
+  },
+  {
+   "feature": "Local push connectivity",
+   "apple": "Local push connectivity collection group",
+   "bifrost": "springboard/core/src/local_push.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-network-extension, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The notification path in springboard/src/shell/usernotif.rs is local to the shell and has no network-independent push channel."
+  },
+  {
+   "feature": "App extensions host (NEAppExtensionConfiguration)",
+   "apple": "NEAppExtensionConfiguration",
+   "bifrost": "springboard/sdk/src/intents.rs is the App Intents layer, not an extension host for network providers",
+   "status": "gap",
+   "note": "No Network Extension app-extension host. Apps cannot ship a network provider."
+  },
+  {
+   "feature": "Error types (NEVPNError, NETunnelProviderError, NERelayClientErrorDomain)",
+   "apple": "Structures, variables and enumerations listed on the landing page",
+   "bifrost": "springboard/core/src/tunnel.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Errors are internal to the Wi-Fi code. No SDK error types for network extensions."
+  }
+ ],
+ "gaps": [
+  "No VPN client or tunnel: no IKEv2, IPsec, WireGuard or custom packet-tunnel provider, and the VPN settings page is a static placeholder.",
+  "No app-facing Wi-Fi configuration API (NEHotspotConfiguration equivalent): join and add-network are shell-only.",
+  "No content filter, URL filter or DNS proxy extension points for apps.",
+  "No system-wide encrypted DNS (DoH or DoT) settings; only DHCP-supplied resolvers are applied.",
+  "No network relay (HTTP/2 or HTTP/3 proxying) configuration.",
+  "No hotspot helper or tethering subsystem.",
+  "No local push connectivity when the internet is unavailable."
+ ]
 }

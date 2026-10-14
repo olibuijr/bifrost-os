@@ -45,3 +45,9 @@ Not run: per the task, no cargo build or test was run in this stage. Another sta
 4. Share-sheet extensions installed by apps: the share menu (`springboard/sdk/src/share.rs`, shell side in `springboard/src/shell/sharing.rs`) does not read the registry.
 5. Extension point attributes for user interface and enhanced security are not modelled, and there is no availability update stream (Apple's deprecated `availabilityUpdates`, and `AppExtensionPoint.Monitor`).
 6. The `ExtensionPointDefining` protocol has no equivalent. A point is declared with a value, not a type conforming to a trait.
+
+## Adding support for app extensions (team A5 reconciliation)
+
+The row "Adding support for app extensions to your app" was still marked gap with no code. The extension model from wave 1
+(`springboard/ui/src/extension.rs`, `springboard/core/src/extension_process.rs`, `springboard/sdk/src/extension.rs`) is the
+implementation, so the row is partial now. Built on parity/team-a-05; not yet verified on Midget.
