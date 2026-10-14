@@ -10,6 +10,7 @@ use bifrost_app::controls::mapview::{MapCamera, MapType, MapView};
 use bifrost_app::controls::precipitation::{MinuteForecast, MinuteWeather, Precipitation};
 use bifrost_app::controls::weather_alert::WeatherAvailability;
 use bifrost_app::controls::weather_attribution::WeatherAttribution;
+use bifrost_app::controls::weather_stats::Deviation;
 use springboard::shell::weather::data::{Day, Hour, Quarter, Units};
 
 /// The data service the forecast comes from, and the page that carries its terms.
@@ -312,6 +313,18 @@ pub fn visibility_text(metres: Option<f64>, units: Units) -> (String, String) {
     (format_distance(m, system), note.to_string())
 }
 
+/// The averages tile: the average high for the date in the setting's unit, and how today's high compares with the years
+/// around it (`compare`: above or below their interquartile range, or typical). None when there are no years to compare.
+pub fn average_text(average_c: f64, units: Units, deviation: Option<Deviation>) -> (String, String) {
+    let note = match deviation {
+        Some(Deviation::Above) => "Warmer than usual for the date",
+        Some(Deviation::Below) => "Cooler than usual for the date",
+        Some(Deviation::Normal) => "Typical for the date",
+        None => "Not available",
+    };
+    (units.degrees(average_c), note.to_string())
+}
+
 /// The point a compass needle reaches at `radius` from its centre, for a bearing in degrees clockwise from north
 /// (screen y grows downwards, so north is up).
 pub fn bearing_offset(degrees: f64, radius: f64) -> (f64, f64) {
@@ -414,6 +427,13 @@ mod tests {
         assert_eq!(note, "Clear view");
         assert!(visibility_text(Some(16_000.0), Units::Fahrenheit).0.ends_with(" mi"));
         assert_eq!(visibility_text(None, Units::Celsius).1, "Not available");
+    }
+
+    #[test]
+    fn the_average_tile_names_the_comparison_for_the_date() {
+        assert_eq!(average_text(7.4, Units::Celsius, Some(Deviation::Above)), ("7\u{b0}".to_string(), "Warmer than usual for the date".to_string()));
+        assert_eq!(average_text(7.4, Units::Celsius, Some(Deviation::Normal)).1, "Typical for the date");
+        assert_eq!(average_text(7.4, Units::Celsius, None).1, "Not available");
     }
 
     #[test]

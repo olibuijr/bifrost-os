@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 
 pub const FORECAST_API: &str = "https://api.open-meteo.com/v1/forecast";
 pub const GEOCODE_API: &str = "https://geocoding-api.open-meteo.com/v1/search";
+pub const HISTORY_API: &str = "https://archive-api.open-meteo.com/v1/archive";
 pub const QUOTE_API: &str = "https://stooq.com/q/l/";
 const BODY_LIMIT: usize = 512 * 1024;
 const LOCATIONS_FILE: &str = "locations.tsv";
@@ -537,6 +538,36 @@ pub fn search_places(query: &str, net: &dyn Fetch) -> io::Result<Vec<Location>> 
     parse_places(&String::from_utf8_lossy(&body)).ok_or_else(|| io::Error::other("unexpected search answer"))
 }
 
+/// The archive request for the same calendar day in the ten years before `today` ("2026-10-14"): the daily highs.
+pub fn history_url(loc: &Location, today: &str) -> Option<String> {
+    let year: i32 = today.get(0..4)?.parse().ok()?;
+    let md = today.get(5..10)?;
+    Some(format!(
+        "{HISTORY_API}?latitude={:.4}&longitude={:.4}&start_date={}-{md}&end_date={}-{md}&daily=temperature_2m_max&timezone=auto",
+        loc.lat,
+        loc.lon,
+        year - 10,
+        year - 1
+    ))
+}
+
+/// The daily highs (Celsius) of the calendar day of `today` in an archive answer, one per year.
+pub fn parse_history(text: &str, today: &str) -> Option<Vec<f64>> {
+    let md = today.get(5..10)?;
+    let root = json::parse(text)?;
+    let daily = root.get("daily")?;
+    let dates = daily.get("time")?.array()?;
+    let highs = numbers(daily.get("temperature_2m_max"))?;
+    Some(dates.iter().zip(highs).filter_map(|(d, high)| (d.string()?.get(5..10)? == md).then_some(high)).filter(|h| h.is_finite()).collect())
+}
+
+/// The ten-year history of the calendar day of `today` for a place.
+pub fn fetch_history(loc: &Location, today: &str, net: &dyn Fetch) -> io::Result<Vec<f64>> {
+    let url = history_url(loc, today).ok_or_else(|| io::Error::other("no date for the history"))?;
+    let body = net.get(&url, BODY_LIMIT)?;
+    parse_history(&String::from_utf8_lossy(&body), today).ok_or_else(|| io::Error::other("unexpected history answer"))
+}
+
 pub fn fetch_quotes(symbols: &[String], net: &dyn Fetch) -> io::Result<Vec<Quote>> {
     let body = net.get(&quote_url(symbols), BODY_LIMIT)?;
     Ok(parse_quotes(&String::from_utf8_lossy(&body)))
@@ -643,5 +674,14 @@ mod tests {
         assert!(st.fetch_forecast(&more[0], &Canned("{}".into())).is_err());
         assert!(st.load_forecast(&more[0]).is_none(), "a bad answer is not cached");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn history_keeps_only_the_calendar_day_and_asks_for_the_ten_years_before() {
+        let answer = r#"{"daily":{"time":["2024-10-13","2024-10-14","2025-10-14","2025-10-15"],"temperature_2m_max":[4.0,7.5,9.0,3.0]}}"#;
+        assert_eq!(parse_history(answer, "2026-10-14"), Some(vec![7.5, 9.0]));
+        let url = history_url(&Location { name: "A".into(), region: "B".into(), lat: 64.0, lon: -21.0 }, "2026-10-14").unwrap();
+        assert!(url.contains("start_date=2016-10-14&end_date=2025-10-14"), "{url}");
+        assert!(history_url(&Location { name: "A".into(), region: "B".into(), lat: 64.0, lon: -21.0 }, "bad").is_none());
     }
 }

@@ -34,6 +34,7 @@ use crate::insights::HourlyColumn;
 use crate::places;
 use bifrost_app::{AppMenuItem, ContextItem};
 use bifrost_app::controls::weather_model::{illuminated_fraction, MoonPhase, Wind, WeatherError};
+use bifrost_app::controls::weather_stats::compare;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -95,7 +96,7 @@ const DAILY_H: f32 = 28.0 + 10.0 * DAY_ROW + 8.0;
 const DETAILS_TOP: f32 = DAILY_TOP + DAILY_H + 16.0;
 const TILE_H: f32 = 104.0;
 const TILE_GAP: f32 = 12.0;
-/// The detail tiles: nine, in two columns (five rows with the last one alone).
+/// The detail tiles: ten, in two columns of five rows.
 const TILE_ROWS: f32 = 5.0;
 const DETAILS_H: f32 = TILE_ROWS * TILE_H + (TILE_ROWS - 1.0) * TILE_GAP;
 /// The wind dial in the wind tile: its radius and how far its centre sits from the tile's right edge (points).
@@ -136,6 +137,8 @@ const RADIUS: f32 = m::CARD_RADIUS;
 const REFRESH_MS: f64 = 15.0 * 60_000.0;
 const RETRY_MS: f64 = 30_000.0;
 const QUOTES_MS: f64 = 60_000.0;
+/// the ten-year history of today's date is asked for once a day per place
+const HISTORY_MS: f64 = 24.0 * 3_600_000.0;
 const MIN_REFRESH_MS: f64 = 5_000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,6 +166,8 @@ enum Done {
     Forecast { key: String, result: Result<Forecast, WeatherError> },
     Places { query: String, result: Result<Vec<Location>, String> },
     Quotes(Result<Vec<Quote>, String>),
+    /// the daily highs of the same calendar day in the years before, for a place
+    History { key: String, result: Result<Vec<f64>, String> },
 }
 
 enum Row {
@@ -238,6 +243,9 @@ pub struct Weather {
     note: Option<String>,
     watch: Vec<String>,
     quotes: Vec<Quote>,
+    /// the daily highs of today's calendar day in the ten years before, per place, and when each was asked for (ms)
+    history: HashMap<String, Vec<f64>>,
+    history_at: HashMap<String, f64>,
     quotes_at: f64,
     /// when `maintain` next has anything to do (ms); reset by input and finished jobs
     maintain_at: f64,
@@ -294,6 +302,8 @@ impl Weather {
             searching: false,
             note: None,
             quotes: vec![],
+            history: HashMap::new(),
+            history_at: HashMap::new(),
             quotes_at: f64::NEG_INFINITY,
             maintain_at: f64::NEG_INFINITY,
             backdrop_img: None,
@@ -782,6 +792,12 @@ impl Weather {
                         Err(e) => self.quotes_error = Some(e),
                     }
                 }
+                // a failed history keeps its ask time, so it is tried again a day later rather than at once
+                Done::History { key, result } => {
+                    if let Ok(values) = result {
+                        self.history.insert(key, values);
+                    }
+                }
             }
         }
         self.dirty |= changed;
@@ -836,6 +852,20 @@ impl Weather {
             self.pending.insert(key.clone());
             let (store, net) = (self.store.clone(), self.fetcher.clone());
             self.spawn(move || Done::Forecast { key, result: store.fetch_forecast(&p, &*net).map_err(|e| WeatherError::from_io(&e)) });
+        }
+        // the ten-year history of today's date for the selected place, once a day; the date comes from its forecast
+        let key = self.place().key();
+        if let Some(today) = self.forecasts.get(&key).and_then(|f| f.days.first()).map(|d| d.date.clone()) {
+            let fresh = self.history_at.get(&key).copied().filter(|at| t - at < HISTORY_MS);
+            match fresh {
+                Some(at) => next = next.min(at + HISTORY_MS),
+                None => {
+                    self.history_at.insert(key.clone(), t);
+                    next = next.min(t + HISTORY_MS);
+                    let (loc, net) = (self.place().clone(), self.fetcher.clone());
+                    self.spawn(move || Done::History { key, result: data::fetch_history(&loc, &today, &*net).map_err(|e| e.to_string()) });
+                }
+            }
         }
         if self.screen == Screen::Stocks && !self.watch.is_empty() {
             if !self.quotes_pending && t - self.quotes_at >= QUOTES_MS {
@@ -1442,6 +1472,15 @@ impl Weather {
             Some(hpa) => insights::pressure_text(hpa, f.pressure_trend_hpa, self.units),
             None => ("\u{2013}".to_string(), "Not available".to_string()),
         };
+        // today's high against the same day in the ten years before (the quartiles of those years, from the kit)
+        let today_high = today.map_or(f.current.temp, |d| d.max);
+        let (average_value, average_note) = match self.history.get(&self.place().key()).filter(|v| !v.is_empty()) {
+            Some(values) => {
+                let mean = values.iter().sum::<f64>() / values.len() as f64;
+                insights::average_text(mean, units, compare(today_high, values))
+            }
+            None => ("\u{2013}".to_string(), "Not available".to_string()),
+        };
         let tiles = [
             ("UV INDEX", format!("{}", uv.round() as i32), uv_note.to_string()),
             ("SUNRISE", sun(today, true), format!("Sunset: {}", sun(today, false))),
@@ -1452,6 +1491,7 @@ impl Weather {
             ("PRECIPITATION", precip_value, precip_note),
             ("VISIBILITY", visibility_value, visibility_note),
             ("PRESSURE", pressure_value, pressure_note),
+            ("AVERAGE HIGH", average_value, average_note),
         ];
         let tile_w = (card_w - ui.pt(TILE_GAP)) / 2.0;
         for (i, (name, value, note)) in tiles.iter().enumerate() {
