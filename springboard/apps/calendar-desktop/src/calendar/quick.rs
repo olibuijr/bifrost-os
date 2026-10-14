@@ -16,6 +16,8 @@ pub struct Quick {
     pub minute: Option<u16>,
     /// The first street address, as written.
     pub location: Option<String>,
+    /// The words after "note:" or "notes:", which become the event's notes.
+    pub notes: Option<String>,
 }
 
 /// Weekday names, Sunday first (the index `Date::weekday` returns).
@@ -58,7 +60,7 @@ fn next_weekday(today: Date, wd: usize, strict: bool) -> Date {
 }
 
 /// `2026-10-20` or `20.10.2026`, a real calendar date.
-fn parse_date(text: &str) -> Option<Date> {
+pub fn parse_date(text: &str) -> Option<Date> {
     let (year, month, day) = if text.len() == 10 && text.as_bytes()[4] == b'-' {
         let mut p = text.split('-');
         (p.next()?, p.next()?, p.next()?)
@@ -118,14 +120,35 @@ fn clock(lows: &[String], i: usize) -> Option<(u16, usize)> {
     Some((minute, used))
 }
 
+/// Splits the notes off a sentence: the sentence before "note:" or "notes:" (any case, at a word start) and the trimmed
+/// text after the marker. Empty notes are no notes.
+fn split_notes(line: &str) -> (&str, Option<&str>) {
+    let lower = line.to_ascii_lowercase();
+    for marker in ["notes:", "note:"] {
+        let at = lower
+            .match_indices(marker)
+            .map(|(at, _)| at)
+            .find(|&at| at == 0 || lower.as_bytes()[at - 1].is_ascii_whitespace());
+        if let Some(at) = at {
+            let body = line[at + marker.len()..].trim();
+            return (line[..at].trim_end(), (!body.is_empty()).then_some(body));
+        }
+    }
+    (line, None)
+}
+
 /// Reads `text` (its first line) as an event, with `today` as the day "today", "tomorrow" and the weekdays refer to.
 pub fn parse(text: &str, today: Date) -> Quick {
-    let line = text.lines().next().unwrap_or("").trim();
+    let (line, notes) = split_notes(text.lines().next().unwrap_or("").trim());
     let toks = words(line);
     let lows: Vec<String> = toks.iter().map(|&(s, e)| line[s..e].to_lowercase()).collect();
     let dates = detect::find(line, &[Kind::Date]);
     let location = detect::find(line, &[Kind::Address]).into_iter().next();
-    let mut quick = Quick { location: location.as_ref().map(|m| m.text(line).to_string()), ..Quick::default() };
+    let mut quick = Quick {
+        location: location.as_ref().map(|m| m.text(line).to_string()),
+        notes: notes.map(str::to_string),
+        ..Quick::default()
+    };
     // where the scheduling phrase begins: everything before it is the title
     let mut start: Option<usize> = None;
     let mut tonight = false;
