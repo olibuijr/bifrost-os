@@ -40,14 +40,14 @@
       "apple": "SKAction, Getting Started with Actions",
       "bifrost": "springboard/sdk/src/view/animation.rs; wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
       "status": "partial",
-      "note": "Window::animate interpolates frame, opacity and background when a closure changes them; there are no composable action objects (sequence, group, repeat, remove) run by a node Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Window::animate interpolates frame, opacity and background when a closure changes them (headless_swatch_is_drawn_where_the_animation_has_moved_it, headless_group_completes_once_after_all_of_its_tracks in springboard/sdk/src/view/animation.rs); there are no composable action objects (sequence, group, repeat, remove) run by a node Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Timing curves and springs",
       "apple": "SKActionTimingMode, SKActionTimingFunction, SKKeyframeSequence interpolation",
       "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs",
       "status": "partial",
-      "note": "curves and springs exist as pure functions; keyframe sequences with per-key interpolation modes do not"
+      "note": "curves and springs exist as pure functions (headless_linear_and_bezier_curves_map_time_to_progress_one_to_one, headless_only_an_underdamped_spring_overshoots_its_target in springboard/ui/tests/parity_sdk-tests-05.rs); keyframe sequences with per-key interpolation modes do not"
     },
     {
       "feature": "Node constraints",

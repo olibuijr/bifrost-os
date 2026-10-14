@@ -17,9 +17,9 @@
     {
       "feature": "Render loop controller",
       "apple": "GLKViewController (preferredFramesPerSecond, isPaused, pauseOnWillResignActive, resumeOnDidBecomeActive); iOS and tvOS only per docc, not on macOS",
-      "bifrost": "springboard/sdk/src/view/app.rs:216 draw(), :222 draw_at(ctx, s, t) time-based drawing; springboard/sdk/src/view/animation.rs (Timing, Transaction)",
+      "bifrost": "springboard/ui/src/render_loop.rs (frame rate, on-demand drawing, pause and app activity); springboard/sdk/src/view/animation.rs (Timing, Transaction)",
       "status": "partial",
-      "note": "apps are redrawn by the SDK's timed draw path, with no frame-rate, pause or app-activation controls"
+      "note": "frame rate (1 to 120), on-demand drawing, pause and pause and resume with app activity are modelled in render_loop.rs (headless_the_frame_rate_is_clamped_to_the_documented_range, headless_a_timed_loop_draws_on_schedule_and_does_not_catch_up_after_a_late_tick, headless_an_on_demand_loop_draws_one_frame_per_batch_of_requests, headless_an_app_resigning_active_pauses_the_loop_until_it_becomes_active_again in springboard/ui/tests/parity_sdk-tests-05.rs); the SDK's timed draw path (ViewApp::draw_at) does not use the model yet; not verified on Midget"
     },
     {
       "feature": "Shader-based effects",

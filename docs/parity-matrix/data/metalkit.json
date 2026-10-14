@@ -12,7 +12,7 @@
       "apple": "MTKView, MTKViewDelegate",
       "bifrost": "springboard/ui/src/render_loop.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"
+      "note": "Pure model: host unit tests in render_loop.rs and headless tests (headless_a_timed_loop_draws_on_schedule_and_does_not_catch_up_after_a_late_tick, headless_an_on_demand_loop_draws_one_frame_per_batch_of_requests in springboard/ui/tests/parity_sdk-tests-05.rs). Not wired into apps or the shell, not yet tested on the VM or Midget. Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"
     },
     {
       "feature": "Device and drawable setup",
