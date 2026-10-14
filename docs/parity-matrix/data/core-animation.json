@@ -12,7 +12,7 @@
    "apple": "CALayer, CALayerDelegate, CALayoutManager, CAConstraintLayoutManager, CAConstraint",
    "bifrost": "springboard/ui/src/layer_tree.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (layer_tree.rs); not wired into the shell or apps, not tested on Midget. views have no backing layer, sublayers or delegate; docs/bifrost-ui.md 'Animation (Core Animation parity)' records this as decided"
+   "note": "Sublayer order, hit testing, coordinate conversion, observers, key paths, delegates, constraint layout and the flattened render list are tested headless in springboard/ui/tests/parity_sdk-tests-17.rs. Not wired into the shell or apps, not tested on Midget. Views have no backing layer, sublayers or delegate; docs/bifrost-ui.md 'Animation (Core Animation parity)' records this as decided."
   },
   {
    "feature": "Implicit animation via transactions (CATransaction, CAMediaTiming, timing functions)",
