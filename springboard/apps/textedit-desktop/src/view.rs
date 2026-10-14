@@ -3,7 +3,7 @@
 //! reached in device pixels through `Ui::pt`. Colours and type come from the shared tokens only.
 
 use crate::layout::{self, Layout, Line, Marker};
-use crate::properties::{self, ListLayout, PanelLayout};
+use crate::properties::{ListLayout, PanelLayout};
 use crate::text::{Align, Cell, ListKind, Style, Transform, COLORS, FAMILIES, SPACINGS};
 use bifrost_app::controls::Rect;
 use bifrost_app::document::item;

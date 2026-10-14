@@ -238,7 +238,7 @@ impl Stocks {
     }
 
     /// Loads the selected symbol's cached chart when it is not in memory yet, and asks for a fresh one when due.
-    fn show_selected(&mut self, t: f64) {
+    fn show_selected(&mut self, _t: f64) {
         let Some(symbol) = self.list.selected_symbol().map(str::to_string) else { return };
         if !self.feed.history.contains_key(&symbol) {
             if let Some((raw, age)) = self.store.load_history(&symbol) {

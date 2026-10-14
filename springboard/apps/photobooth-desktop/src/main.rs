@@ -19,7 +19,7 @@ mod warp;
 use backdrop::{Backdrop, Reference};
 use bifrost_app::defaults::Value;
 use bifrost_app::kit::ui::{self, Ui, Weight};
-use bifrost_app::kit::{pack, Damage, Image, Surface};
+use bifrost_app::kit::{Damage, Image, Surface};
 use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use menu::{Command, MenuState};
 use model::{Button, Effect, Layout, Mode, Rect, Timer};

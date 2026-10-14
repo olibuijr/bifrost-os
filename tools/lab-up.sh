@@ -38,7 +38,7 @@ fi
 # Docker's FORWARD policy would drop the lab traffic
 sudo iptables -C DOCKER-USER -i "$LAB_NIC" -o "$LAN_NIC" -j ACCEPT 2>/dev/null || sudo iptables -I DOCKER-USER -i "$LAB_NIC" -o "$LAN_NIC" -j ACCEPT
 sudo iptables -C DOCKER-USER -i "$LAN_NIC" -o "$LAB_NIC" -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || sudo iptables -I DOCKER-USER -i "$LAN_NIC" -o "$LAB_NIC" -m state --state ESTABLISHED,RELATED -j ACCEPT
-sudo "$IV/iventoy.sh" status 2>/dev/null | grep -q running || sudo "$IV/iventoy.sh" start
+sudo "$IV/iventoy.sh" status 2>/dev/null | grep -q 'is running' || sudo "$IV/iventoy.sh" start
 for _ in $(seq 20); do curl -s http://127.0.0.1:26000/ >/dev/null && break; sleep 0.5; done
 # start the PXE service on the lab NIC ONLY (the UI defaults to the LAN interface; never use that)
 curl -s http://127.0.0.1:26000/iventoy/json -H 'Content-Type: application/json' \

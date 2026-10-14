@@ -357,7 +357,7 @@ fn install_offline_desktop(r: &Run, bundle: &OfflineBundle) -> Result<(), String
         }
         let shell_rel = bundle.shell.strip_prefix(&bundle.root).map_err(|e| e.to_string())?.to_str().ok_or("offline shell path is not UTF-8")?;
         let shell_target = format!("/var/cache/bifrost-offline/{shell_rel}");
-        r.chroot(&["pacman", "-U", "--noconfirm", "--config", config_rel, &shell_target])?;
+        r.chroot(&["pacman", "-U", "--noconfirm", "--overwrite", "*", "--config", config_rel, &shell_target])?;
         for app in &bundle.apps {
             if sha256_file(&app.file)? != app.sha256 { return Err(format!("offline app checksum mismatch: {}", app.id)); }
             let app_rel = app.file.strip_prefix(&bundle.root).map_err(|e| e.to_string())?.to_str().ok_or("offline app path is not UTF-8")?;
@@ -854,7 +854,11 @@ pub fn install(cfg: &Config, progress: &Shared) {
             let source = if cfg.mirror.is_empty() { "/etc/pacman.conf" } else { "/etc/pacman.conf.online" };
             let base = std::fs::read_to_string(source).or_else(|_| std::fs::read_to_string("/etc/pacman.conf")).unwrap_or_default();
             let conf = strip_repo_section(&strip_repo_section(&base, "offline"), "bifrost");
-            if conf.contains("file://") {
+            let has_active_file_repo = conf.lines().any(|l| {
+                let trimmed = l.trim_start();
+                !trimmed.starts_with('#') && trimmed.contains("file://")
+            });
+            if has_active_file_repo {
                 return Err("refusing to write ISO-only file repositories into the installed pacman.conf".into());
             }
             r.write(&sys("/etc/pacman.conf"), &format!("{conf}\n[bifrost]\nSigLevel = Optional TrustAll\nServer = {server}\n"))?;
@@ -873,7 +877,7 @@ pub fn install(cfg: &Config, progress: &Shared) {
         if let Some(bundle) = offline.as_ref() {
             install_offline_desktop(&r, bundle)?;
         } else {
-            r.chroot(&["pacman", "-Sy", "--noconfirm", "springboard-shell"])?;
+            r.chroot(&["pacman", "-Sy", "--noconfirm", "--overwrite", "*", "springboard-shell"])?;
         }
 
         r.set(2, 89, if offline.is_some() { "Installing bundled desktop apps" } else { "Installing default apps from App Store" });

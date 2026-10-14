@@ -5,7 +5,7 @@
 use crate::color::Rgb8;
 use crate::loupe::{aperture_cells, cell_of};
 use crate::source::PixelRect;
-use crate::window::{ColorMeter, CTL_APERTURE, LINE_PT, PAD_PT};
+use crate::window::{ColorMeter, CTL_APERTURE, LINE_PT};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, SEPARATOR_C, TINT};
 use bifrost_app::kit::{pack, Surface, TextCache, Ui, Weight};

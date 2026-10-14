@@ -69,7 +69,6 @@ libxslt
 logrotate
 lsof
 man-db
-mandoc
 mg
 nano
 ncompress

@@ -9,7 +9,7 @@ use crate::model::{self, Bar};
 use crate::state::{now_unix, Stocks};
 use bifrost_app::kit::ui::{
     CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT,
-    MAC_TITLE3_PT, ROW_PRESSED, SEPARATOR_C, SPACE_L, SPACE_M, SPACE_XL, SPACE_XXL, SYSTEM_GREEN, SYSTEM_RED,
+    MAC_TITLE3_PT, ROW_PRESSED, SEPARATOR_C, SPACE_L, SPACE_M, SPACE_XXL, SYSTEM_GREEN, SYSTEM_RED,
 };
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::controls::prefs_layout::m::CARD_RADIUS;

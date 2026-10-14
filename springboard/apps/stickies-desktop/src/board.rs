@@ -19,7 +19,6 @@ use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SHADOW};
 use bifrost_app::kit::Image;
 use bifrost_app::widgets::{self, Material};
 use std::collections::HashMap;
-use std::ops::Range;
 
 /// Corner radius of a note (points): the grouped card radius of the design rules.
 pub const RADIUS_PT: f32 = m::CARD_RADIUS;

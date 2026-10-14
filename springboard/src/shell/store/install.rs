@@ -170,6 +170,9 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             }
             continue;
         }
+        if k == "sdk_protocol" || v.parse::<u64>().is_ok() || v == "true" || v == "false" {
+            continue;
+        }
         let Some(s) = toml_string(v) else {
             return Err(format!("manifest line {}: {k} must be a string", n + 1));
         };
