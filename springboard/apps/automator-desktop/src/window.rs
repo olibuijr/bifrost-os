@@ -5,6 +5,7 @@
 
 use crate::model::{self, Kind, LogLine, Step, Value, Workflow, KINDS, MAX_FIELDS};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
@@ -516,7 +517,7 @@ impl Automator {
         self.status.clear();
         let steps = self.workflow.steps.clone();
         let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::UserInitiated).async_(move || {
             let result = model::execute(&steps, &mut |line: LogLine| {
                 let _ = tx.send(Message::Log(line));
             });

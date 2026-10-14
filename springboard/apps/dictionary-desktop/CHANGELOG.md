@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 — 2026-10-14
+
+- Run printing on the shared utility queue and declare sudden termination safe when the app configures.
+
 ## 0.5.1 — 2026-10-14
 
 - Use the shared extra-small spacing token for suggestion label fitting.

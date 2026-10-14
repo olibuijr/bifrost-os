@@ -6,6 +6,7 @@
 mod archive;
 
 use archive::{Op, Outcome};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, Ctx, Input};
@@ -87,7 +88,7 @@ impl ArchiveApp {
         let result = Arc::new(Mutex::new(None));
         let (d, t, r) = (done.clone(), total.clone(), result.clone());
         let (op, path) = (req.op, req.path.clone());
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let mut progress = |a: u64, b: u64| {
                 d.store(a, Ordering::Relaxed);
                 t.store(b, Ordering::Relaxed);

@@ -4,6 +4,7 @@
 
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SPACE_XS};
 use bifrost_app::kit::{Damage, Scroller};
@@ -381,7 +382,7 @@ impl DictionaryApp {
         }
         let body = model::definition_text(&hits);
         let job = bifrost_app::print::PrintOperation::text(shown.word.clone(), format!("{}\n\n{body}", shown.word));
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             if let Err(e) = job.run() {
                 eprintln!("Dictionary print: {e:?}");
             }
@@ -732,6 +733,7 @@ impl App for DictionaryApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination();
         if self.library.is_none() {
             self.folder = ctx.data_dir.join("dictionaries").display().to_string();
             let library = load_library(&ctx.data_dir);

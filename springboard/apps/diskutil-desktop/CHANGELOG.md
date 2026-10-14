@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — 2026-10-14
+
+- Run disk operations through the shared utility queue and wake the app loop when each result is ready, without polling.
+
 ## 0.7.0
 
 - File > Open Disk Image attaches the chosen image read-only, as its menu name says. File > Open Disk Image for Writing attaches it with read and write access.
