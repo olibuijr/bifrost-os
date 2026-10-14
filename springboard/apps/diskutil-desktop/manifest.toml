@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Disks and volumes: capacity, file system, mount point and SMART status, with mount, unmount, eject, erase and first aid."
 category = "Utilities"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage"]
 window = "full-size"

@@ -40,3 +40,42 @@ Sources: Apple Support, "Choose an app to open a file on Mac"; AppKit `NSWorkspa
   It is read-only: no shell call opens a file in a chosen app yet, so a row cannot open the file.
 - Not done yet: opening a file in a chosen app (the missing shell call), Get Info > Open with in Files, and Open With in the
   context menu.
+
+## Preinstalled apps (2026-10-13)
+
+The apps the reference OS ships in `/System/Applications` and `/System/Applications/Utilities` are installed with the
+system and are not store purchases. In BifrOSt that is manifest `kind = "system-app"` (`springboard/src/shell/kinds.rs`):
+the store plan (`api::system_plan`) installs them in the background, the store shows no Get or Remove for them, and the
+home grid still lists them. Apps with no reference counterpart stay `kind = "app"` store apps.
+
+| Reference app | BifrOSt app | Kind |
+|---|---|---|
+| Activity Monitor | activity-desktop | system-app (new) |
+| Books | books-desktop | system-app (new) |
+| Calculator | calculator-desktop | system-app (new) |
+| Calendar | calendar-desktop | system-app (new) |
+| Console | console-desktop | system-app (already) |
+| Contacts | contacts-desktop | system-app (new) |
+| Dictionary | dictionary-desktop | system-app (new) |
+| Digital Color Meter | colormeter-desktop | system-app (already) |
+| Disk Utility | diskutil-desktop | system-app (new) |
+| Font Book | fontbook-desktop | system-app (new) |
+| Freeform | freeform-desktop | system-app (new) |
+| Mail | mail-desktop | system-app (new) |
+| Maps | maps-desktop | system-app (new) |
+| Notes | notes-desktop | system-app (new) |
+| Preview | preview-desktop | system-app (new) |
+| Print Center | printers-desktop | system-app (already) |
+| Reminders | reminders-desktop | system-app (new) |
+| Stickies | stickies-desktop | system-app (new) |
+| System Information | sysinfo-desktop | system-app (already) |
+| TextEdit | textedit-desktop | system-app (new) |
+| Weather | weather-desktop | system-app (new) |
+| Photos | shell built-in (`src/shell/photos`) | built in, no package |
+| Terminal | shell built-in (`src/shell/terminal`) | built in, no package |
+| Find My | none | no BifrOSt app |
+
+Left as store apps: messages, music, podcasts, shortcuts, voicememos and photobooth (their reference bundles are absent
+from the extracted `ref27` tree, so the list above does not show them as preinstalled; revisit if the full reference
+list does), image-capture (already `system-app`), and every app with no reference counterpart (assistant, archive,
+audio-setup, the `*craft` apps, games, news, passwords, screenshot, videoplayer, ...).

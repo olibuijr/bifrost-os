@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Basic and scientific calculator with history."
 category = "Utilities"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage"]
 window = "full-size"

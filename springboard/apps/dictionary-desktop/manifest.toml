@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Looks words up in installed StarDict dictionaries, with suggestions as you type."
 category = "Reference"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage"]
 window = "full-size"

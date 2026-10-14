@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Small floating notes in six colours that restore on launch."
 category = "Productivity"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 window = "full-size"

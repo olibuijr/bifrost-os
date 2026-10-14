@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Views images and PDFs with zoom, rotation, page thumbnails and outline, page moves and deletes, markup and signatures saved into the PDF, and PNG, JPEG and PDF export."
 category = "Utilities"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 window = "full-size"

@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Maps with search, directions, saved places, offline areas and GPX files."
 category = "Travel"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "network", "documents"]
 window = "full-size"
