@@ -215,6 +215,7 @@ pub mod quick_look;
 pub mod permission_kit;
 pub mod authorization;
 pub mod audio_session;
+pub mod video_playback;
 pub mod audio_hal;
 pub mod hid_virtual;
 pub mod input_grab;
