@@ -124,6 +124,8 @@ struct PhotoBooth {
     slideshow: Option<Slideshow>,
     /// the slide fitted to the window, kept until the slide or the window size changes: (index, width, height)
     slide: Option<((usize, usize, usize), Image)>,
+    /// the slide that is fading out over the one on screen, and when the fade began, in ms on the app clock
+    fade: Option<(Image, f64)>,
     /// the backdrop that replaces the room, the picture of the empty scene it needs, and when that picture is taken
     backdrop: Backdrop,
     reference: Option<Reference>,
@@ -163,6 +165,7 @@ impl PhotoBooth {
             distortion: Strength::Normal,
             slideshow: None,
             slide: None,
+            fade: None,
             backdrop: Backdrop::None,
             reference: None,
             scene_at: None,
@@ -232,6 +235,7 @@ impl PhotoBooth {
             || self.clip.is_some()
             || self.flash_at.is_some()
             || self.scene_at.is_some()
+            || self.fade.is_some()
             || self.slideshow.as_ref().is_some_and(|show| !show.paused())
     }
 
@@ -522,6 +526,7 @@ impl PhotoBooth {
         let start = self.selected.unwrap_or(0).min(self.captures.len() - 1);
         self.slideshow = Some(Slideshow::start(start, self.now));
         self.slide = None;
+        self.fade = None;
     }
 
     /// Ends the slideshow and selects the capture it stopped on.
@@ -532,6 +537,7 @@ impl PhotoBooth {
             }
         }
         self.slide = None;
+        self.fade = None;
     }
 
     fn set_full_screen(&mut self, on: bool) {
@@ -850,6 +856,12 @@ impl App for PhotoBooth {
                 dirty = true;
             }
         }
+        if let Some(at) = self.fade.as_ref().map(|(_, at)| *at) {
+            dirty = true;
+            if t - at >= slideshow::FADE_MS {
+                self.fade = None;
+            }
+        }
         if self.burst.is_some() {
             dirty = true;
             self.burst_step(t);
@@ -958,10 +970,22 @@ impl PhotoBooth {
         let (fw, fh) = model::fit_inside(cw, ch, s.w, s.h);
         let key = (show.index, fw, fh);
         if self.slide.as_ref().map(|slide| slide.0) != Some(key) {
-            self.slide = Some((key, self.captures[show.index].shown.resized(fw, fh)));
+            // a new capture fades in over the one it replaces; a window resize alone does not fade
+            let turned = self.slide.as_ref().is_some_and(|((index, _, _), _)| *index != show.index);
+            let next = self.captures[show.index].shown.resized(fw, fh);
+            let leaving = self.slide.replace((key, next));
+            if let Some((_, old)) = leaving.filter(|_| turned) {
+                self.fade = Some((old, self.now));
+            }
         }
         if let Some((_, img)) = &self.slide {
             s.blit(img, (s.w as i32 - img.w as i32) / 2, (s.h as i32 - img.h as i32) / 2, 255, 255);
+        }
+        if let Some((old, at)) = &self.fade {
+            let alpha = slideshow::fade_alpha(self.now - *at);
+            if alpha > 0 {
+                s.blit(old, (s.w as i32 - old.w as i32) / 2, (s.h as i32 - old.h as i32) / 2, 255, alpha);
+            }
         }
         let name = self.captures[show.index].path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let paused = if show.paused() { "  (paused)" } else { "" };
