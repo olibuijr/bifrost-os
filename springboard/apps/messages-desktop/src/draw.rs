@@ -297,7 +297,7 @@ impl MessagesWindow {
                 (true, false) => None,
             };
             let mut item = SidebarItem::row(i as u32, &room.title(&self.model.user_id))
-                .with_symbol("bubble.left")
+                .with_symbol("person.crop.circle")
                 .with_subtitle(&room.preview());
             if room.unread > 0 {
                 item = item.with_count(room.unread.min(u32::MAX as u64) as u32);
