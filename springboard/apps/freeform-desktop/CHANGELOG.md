@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.1 — 2026-10-14
+
+- Draw board search with the shared Golden Gate search field and make its clear button interactive.
+
+## 1.12.0 — 2026-10-14
+
+- Route standard Undo, Redo, Copy and Paste through the shell's Edit commands; keep Duplicate and Delete in Arrange.
+
 ## 1.11.0 — 2026-10-14
 
 - Text boxes, sticky notes and table cells have a caret you can move: Left and Right step through the text, Home and End go to its ends, and typing and Backspace act at the caret. The caret is drawn where it is in the wrapped text. Tab and Return start the next cell with the caret at its end. There is no selection yet.

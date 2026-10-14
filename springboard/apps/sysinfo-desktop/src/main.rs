@@ -19,7 +19,7 @@ use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::proto::{AnnouncePriority, DocErrorCode, DocMode};
 use bifrost_app::displays;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, Document, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use export::Format;
 use std::io::{Read, Write};
@@ -34,6 +34,10 @@ const HELP_URL: &str = "https://bifrost.olibuijr.com/docs/system-information";
 impl App for SysInfo {
     fn id(&self) -> &str {
         "is.olibuijr.sysinfo.desktop"
+    }
+
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        Commands::default().with(Command::Copy, self.can_copy()).with(Command::SelectAll, true)
     }
 
     fn configure(&mut self, ctx: &Ctx) {
@@ -76,20 +80,16 @@ impl App for SysInfo {
         vec![
             AppMenu { title: "File".into(), items: file },
             AppMenu {
-                title: "Edit".into(),
+                title: "Find".into(),
                 items: vec![
-                    AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(self.can_copy()),
-                    AppMenuItem::new(MENU_SELECT_ALL, "Select All").key("cmd+a"),
-                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
                     AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(finding),
                     AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(finding),
                     AppMenuItem::new(MENU_USE_SELECTION, "Use Selection for Find").key("cmd+e").enabled(self.selection_text().is_some()),
                     AppMenuItem::new(MENU_JUMP_SELECTION, "Jump to Selection").key("cmd+j").enabled(self.can_jump()),
-                    AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_SPEAK, "Speak Serial Number"),
                 ],
             },
+            AppMenu { title: "Tools".into(), items: vec![AppMenuItem::new(MENU_SPEAK, "Speak Serial Number")] },
             AppMenu {
                 title: "View".into(),
                 items: vec![
@@ -189,8 +189,8 @@ impl App for SysInfo {
         false
     }
 
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        self.is_loading().then_some(t + 50.0)
+    fn next_wake(&self, _t: f64) -> Option<f64> {
+        None // load completion is delivered on the main dispatch queue
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
@@ -231,6 +231,8 @@ impl SysInfo {
     /// A touch, key or published control.
     fn handle(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
+            Input::Command(Command::Copy) => self.menu(ctx, MENU_COPY),
+            Input::Command(Command::SelectAll) => self.select_all(),
             Input::Touch { kind, x, y, .. } => {
                 let scale = ctx.ui.pt(1.0);
                 let (x, y) = (x / scale, y / scale);

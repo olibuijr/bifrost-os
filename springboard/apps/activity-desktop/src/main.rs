@@ -26,7 +26,7 @@ use bifrost_app::proto::DocErrorCode;
 use bifrost_app::windows::{self, WindowListOptions};
 use bifrost_app::workspace;
 use bifrost_core::json::Json;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use model::{ColumnSet, DockMode, Filter, Tab, UpdateFrequency, SIGNALS};
 use std::io::Write;
 use std::path::PathBuf;
@@ -103,6 +103,12 @@ impl ActivityApp {
                 let t = bifrost_app::proto::sys::now_ms();
                 m.touch(&ctx.ui, TouchKind::Down, x, y, t);
                 m.touch(&ctx.ui, TouchKind::Up, x, y, t)
+            }
+            Input::Command(Command::Copy) => {
+                if let Some(text) = m.copy_text() {
+                    ctx.set_pasteboard_string(&text);
+                }
+                true
             }
             _ => false,
         };
@@ -211,6 +217,10 @@ impl ActivityApp {
 impl App for ActivityApp {
     fn id(&self) -> &str {
         "is.olibuijr.activity.desktop"
+    }
+
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        Commands::default().with(Command::Copy, self.monitor.as_ref().is_some_and(Monitor::has_selected))
     }
 
     fn configure(&mut self, ctx: &Ctx) {
@@ -386,7 +396,6 @@ impl App for ActivityApp {
                     AppMenuItem::new(MENU_CLOSE_REPORT, "Close Report").enabled(has_report),
                 ],
             },
-            AppMenu { title: "Edit".into(), items: vec![AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected())] },
             AppMenu { title: "View".into(), items: view },
             AppMenu { title: "Process".into(), items: process },
         ]

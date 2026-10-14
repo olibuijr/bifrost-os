@@ -371,9 +371,9 @@ impl App for NotesApp {
             MENU_PRINT => {
                 if let Some(text) = n.printable_text() {
                     let title: String = text.lines().next().unwrap_or("Note").chars().take(60).collect();
-                    // the job goes to CUPS on its own thread, so the window keeps drawing while the scheduler answers
+                    // the job goes to CUPS on the shared worker pool, so the window keeps drawing while the scheduler answers
                     let job = bifrost_app::print::PrintOperation::text(title, text);
-                    std::thread::spawn(move || {
+                    bifrost_app::dispatch::DispatchQueue::global(bifrost_app::dispatch::Qos::Utility).async_(move || {
                         if let Err(e) = job.run() {
                             eprintln!("Notes print: {e:?}");
                         }

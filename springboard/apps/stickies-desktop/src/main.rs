@@ -1305,16 +1305,9 @@ impl StickiesApp {
         let has_word = note.is_some_and(|n| spell::word_at(&n.text, n.caret).is_some());
         let p = self.prefs;
         AppMenu {
-            title: "Edit".into(),
+            title: "Text".into(),
             items: vec![
-                AppMenuItem::new(MENU_UNDO, &self.history.undo_title()).key("cmd+z").enabled(self.history.can_undo()),
-                AppMenuItem::new(MENU_REDO, &self.history.redo_title()).key("cmd+shift+z").enabled(self.history.can_redo()),
-                AppMenuItem::separator(),
-                AppMenuItem::new(MENU_CUT, "Cut").key("cmd+x").enabled(has_selection),
-                AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(has_focus),
-                AppMenuItem::new(MENU_PASTE, "Paste").key("cmd+v").enabled(can_paste),
                 AppMenuItem::new(MENU_PASTE_PLAIN, "Paste and Match Style").key("cmd+alt+shift+v").enabled(can_paste),
-                AppMenuItem::new(MENU_SELECT_ALL, "Select All").key("cmd+a").enabled(has_focus),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f").enabled(any),
                 AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(any && has_find),

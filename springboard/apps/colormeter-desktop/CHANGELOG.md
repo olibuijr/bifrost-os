@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.2
+
+- Added the SDK and design compliance test harness.
+
+## 0.5.1
+
+- Exported the app icon at the required 180 x 180 pixel size.
+
 ## 0.5.0
 
 - Changed: the aperture is always odd (1 to 31 pixels). An even square had no centre pixel, so its mean was offset from the pointer; an even size now rounds up to the odd size above it. The slider, the assistive steps and the View menu step between odd sizes (two pixels at a time).

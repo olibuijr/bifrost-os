@@ -189,10 +189,12 @@ pub struct Loading {
 
 fn spawn_load() -> Receiver<(Report, Extras)> {
     let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
+    bifrost_app::dispatch::DispatchQueue::global(bifrost_app::dispatch::Qos::Utility).async_(move || {
         let report = Report::collect(&Roots::system());
         let extras = Extras::collect();
-        let _ = tx.send((report, extras)); // the window may have cancelled and gone on
+        bifrost_app::dispatch::DispatchQueue::main().async_(move || {
+            let _ = tx.send((report, extras)); // the window may have cancelled and gone on
+        });
     });
     rx
 }

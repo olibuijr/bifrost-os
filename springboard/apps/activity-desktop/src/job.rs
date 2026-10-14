@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::Arc;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 
 /// What a job does, for the label and the menu state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -81,10 +82,12 @@ impl Job {
         let progress = Arc::new(Progress::default());
         let (tx, rx) = channel();
         let shared = progress.clone();
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let outcome = work(&shared);
             // the window may have been closed meanwhile; nobody is waiting then
-            let _ = tx.send(outcome);
+            DispatchQueue::main().async_(move || {
+                let _ = tx.send(outcome);
+            });
         });
         Job { kind, label: label.to_string(), progress, rx }
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- Routed Copy and Select All through the shell Edit menu; app search and speech actions have separate menus. Added the compliance test harness.
+
 ## 0.8.0
 
 - Help > System Information Help shows a short help card in the window: what each part of the window does and which keys and menu items reach it. Choosing a category or starting a find brings the facts back. Help > System Information Online Help opens the web page, as before.

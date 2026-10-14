@@ -14,6 +14,8 @@ mod validate;
 
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{Damage, Font, Surface};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::widgets;
 use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::DocErrorCode;
 use bifrost_app::workspace;
@@ -1018,29 +1020,25 @@ impl App for FontBookApp {
         let (w, h) = (s.w, s.h);
         let (wp, hp) = (w as f32 / scale, h as f32 / scale);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
-        // sidebar
-        s.fill_rect(0, 0, p(SIDEBAR_PT), h, ui::SIDEBAR_BG.now());
+        // Sidebar source list uses the shared Golden Gate neutral selection and row treatment.
         let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
-        for (i, (label, source)) in rows.iter().enumerate() {
-            let y = HEADER_PT + i as f32 * ROW_PT;
-            if *source == self.source {
-                s.fill_rect(p(6.0), p(y), p(SIDEBAR_PT - 12.0), p(ROW_PT), ui::SIDEBAR_SELECTED);
-            }
+        let entries = rows.iter().enumerate().map(|(i, (label, source))| {
             let editing = match (&self.edit, source) {
-                (Edit::Rename { old, smart, text }, Source::Collection(n)) if !*smart && old == n => Some(text.clone()),
-                (Edit::Rename { old, smart, text }, Source::Smart(n)) if *smart && old == n => Some(text.clone()),
+                (Edit::Rename { old, smart, text }, Source::Collection(n)) if !*smart && old == n => Some(text.as_str()),
+                (Edit::Rename { old, smart, text }, Source::Smart(n)) if *smart && old == n => Some(text.as_str()),
                 _ => None,
             };
-            let shown = match editing {
-                Some(text) => format!("{text}|"),
-                None => label.clone(),
-            };
-            put(s, ui, &shown, ui::MAC_BODY_PT, ui::LABEL.now(), PAD_PT, y + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
-        }
+            let shown = editing.map_or(label.as_str(), |text| text);
+            let symbol = match i { 0 => "textformat", 1 => "eye.slash", _ => "folder" };
+            SidebarItem::row(i as u32 + 1, shown).with_symbol(symbol)
+        }).collect();
+        let mut sidebar = SourceList::new(entries, ROW_PT, ROW_PT);
+        sidebar.set_selected(rows.iter().position(|(_, source)| *source == self.source).map(|i| i as u32 + 1));
+        widgets::source_list(s, ui, bifrost_app::controls::Rect { x: 0.0, y: HEADER_PT, w: SIDEBAR_PT, h: (hp - HEADER_PT).max(0.0) }, &sidebar, 0.0, None);
         put(s, ui, "New Collection", ui::MAC_BODY_PT, ui::LINK, PAD_PT, HEADER_PT + rows.len() as f32 * ROW_PT + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
         // list column
         let x0 = SIDEBAR_PT;
-        s.fill_rect(p(x0 + LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR);
+        s.fill_rect(p(x0 + LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR_C.now());
         let shown = self.shown();
         let heading = match (self.query.is_empty(), self.prefs.library.eq_ignore_ascii_case(model::LIBRARY_COMPUTER)) {
             (true, true) => format!("{} families", shown.len()),
@@ -1055,7 +1053,7 @@ impl App for FontBookApp {
             }
             let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
             if self.selected.as_deref() == Some(name.as_str()) {
-                s.fill_rect(p(x0 + 6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(x0 + 6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT), ui::SIDEBAR_PLATE.now());
             }
             let colour = if on { ui::LABEL.now() } else { ui::LABEL_2.now() };
             put(s, ui, name, ui::MAC_BODY_PT, colour, x0 + PAD_PT, y + 6.0, LIST_PT - 2.0 * PAD_PT);
@@ -1088,8 +1086,8 @@ impl FontBookApp {
     fn draw_pending(&self, ui: &Ui, s: &mut Surface, px: f32, avail: f32) {
         let Some(pending) = &self.pending else { return };
         let can = pending.family.is_some() && (!self.prefs.validate_before_install || pending.report.is_valid());
-        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR }, px, PAD_PT, BUTTON_PT, 28.0);
-        button(s, ui, "Cancel", ui::SEPARATOR, px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR_C.now() }, px, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, "Cancel", ui::SEPARATOR_C.now(), px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
         let title = pending.family.clone().unwrap_or_else(|| pending.name.clone());
         put(s, ui, &title, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
         let verdict = match pending.report.verdict() {
@@ -1121,7 +1119,7 @@ impl FontBookApp {
     /// The selected family: switch and Remove Font, the name, the mode tabs and the mode's content.
     fn draw_selected(&self, ui: &Ui, s: &mut Surface, name: &str, px: f32, avail: f32, hp: f32) {
         let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
-        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR }, px, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR_C.now() }, px, PAD_PT, BUTTON_PT, 28.0);
         if self.is_user_font(name) {
             button(s, ui, "Remove Font", ui::DESTRUCTIVE, px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
         }
@@ -1131,7 +1129,7 @@ impl FontBookApp {
             let active = self.mode == *mode;
             let p = |v: f32| (v * ui.s) as usize;
             if active {
-                s.fill_rect(p(x), p(TABS_TOP_PT), p(TAB_PT - 4.0), p(TAB_H_PT), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(x), p(TABS_TOP_PT), p(TAB_PT - 4.0), p(TAB_H_PT), ui::SIDEBAR_PLATE.now());
             }
             put(s, ui, label, ui::MAC_BODY_PT, ui::LABEL.now(), x + 10.0, TABS_TOP_PT + 4.0, TAB_PT - 20.0);
         }
@@ -1158,8 +1156,8 @@ impl FontBookApp {
         put(s, ui, &text, ui::MAC_BODY_PT, colour, px + 8.0, CONTENT_TOP_PT + 5.0, FIELD_W_PT - 16.0);
         let smaller_x = px + FIELD_W_PT + 12.0;
         let bigger_x = smaller_x + SIZE_BTN_PT + 4.0;
-        button(s, ui, "-", ui::SEPARATOR, smaller_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
-        button(s, ui, "+", ui::SEPARATOR, bigger_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
+        button(s, ui, "-", ui::SEPARATOR_C.now(), smaller_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
+        button(s, ui, "+", ui::SEPARATOR_C.now(), bigger_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
         put(s, ui, &format!("{} pt", self.prefs.sample_size.round() as i32), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), bigger_x + SIZE_BTN_PT + 8.0, CONTENT_TOP_PT + 6.0, 60.0);
         let Some(font) = preview else { return };
         let mut y = CONTENT_TOP_PT + FIELD_H_PT + 14.0;

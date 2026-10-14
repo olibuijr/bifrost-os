@@ -13,6 +13,7 @@ use std::os::unix::net::UnixStream;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::time::Duration;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 
 /// What a mailbox listing read: the mailboxes of the account and the newest messages of the one asked for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,7 +89,7 @@ const WATCH_RETRY: Duration = Duration::from_secs(60);
 /// Runs `work` on a new thread and sends its event. The wake pipe, when there is one, is written after the event is
 /// queued.
 pub fn spawn(tx: Sender<Event>, wake: Option<UnixStream>, work: impl FnOnce() -> Event + Send + 'static) {
-    std::thread::spawn(move || {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let event = work();
         if tx.send(event).is_ok() {
             if let Some(mut wake) = wake {
@@ -272,7 +273,7 @@ enum WatchEnd {
 /// `Event::Arrived`, with the connection's state as `Event::Watch`. Runs on its own thread until a `Stop`. The poll
 /// covers an account whose watcher has stopped or is between connections.
 pub fn watch(transport: Arc<dyn Transport>, account: Account, password: String, tx: Sender<Event>, wake: Option<UnixStream>) {
-    std::thread::spawn(move || loop {
+    DispatchQueue::serial_qos("mail.inbox-watch", Qos::Utility).async_(move || loop {
         let end = watch_inbox(transport.as_ref(), &account, &password, &tx, &wake);
         report(&tx, &wake, Event::Watch { account: account.id.clone(), live: false });
         match end {

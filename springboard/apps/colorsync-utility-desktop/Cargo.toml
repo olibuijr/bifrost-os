@@ -1,9 +1,12 @@
 [package]
 name = "bifrost-colour-utility"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 
 [dependencies]
 bifrost-app = { path = "../../sdk" }
 bifrost-core = { path = "../../core" }
 springboard = { path = "../.." }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

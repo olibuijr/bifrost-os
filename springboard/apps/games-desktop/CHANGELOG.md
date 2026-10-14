@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4 — 2026-10-14
+
+- Keep game-board marks at the title 1 text style instead of using the large-title style.
+
 ## 1.6.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

@@ -4,7 +4,7 @@
 //! into the pixel canvas, so the host tests cover it; `freeform.rs` owns the gestures and the keyboard.
 use crate::ink;
 use bifrost_app::controls::Rect;
-use bifrost_app::kit::ui::{Ui, Weight};
+use bifrost_app::kit::ui::{Ui, Weight, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, SPACE_M, SPACE_XXS};
 use bifrost_app::kit::Image;
 use std::collections::HashMap;
 
@@ -20,8 +20,6 @@ const MAX_CONNECTORS: usize = 4000;
 pub const TEXT_PT: f32 = 18.0;
 pub const NOTE_PT: f32 = 15.0;
 pub const CELL_PT: f32 = 13.0;
-const CARD_TITLE_PT: f32 = 13.0;
-const CARD_SUB_PT: f32 = 11.0;
 const PAD_PT: f32 = 8.0;
 const CELL_PAD_PT: f32 = 5.0;
 const MIN_TEXT_H_PT: f32 = 32.0;
@@ -734,7 +732,7 @@ pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictu
         match it.kind {
             Kind::Text => draw_text(px, cw, ch, ui, &it.text, TEXT_PT * z, Weight::Regular, it.color, r, ui.pt(PAD_PT) * z, caret_cell.map(|_| caret)),
             Kind::Sticky => {
-                let off = Rect { x: r.x + ui.pt(2.0) * z, y: r.y + ui.pt(3.0) * z, w: r.w, h: r.h };
+                let off = Rect { x: r.x + ui.pt(SPACE_XXS) * z, y: r.y + ui.pt(SPACE_XXS + 1.0) * z, w: r.w, h: r.h };
                 fill(px, cw, ch, off, SHADOW);
                 fill(px, cw, ch, r, it.color);
                 draw_text(px, cw, ch, ui, &it.text, NOTE_PT * z, Weight::Regular, INK, r, ui.pt(PAD_PT) * z, caret_cell.map(|_| caret));
@@ -748,7 +746,7 @@ pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictu
                     fill(px, cw, ch, r, CARD_FILL);
                     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), GRID);
                     let pad = ui.pt(PAD_PT) * z;
-                    draw_line(px, cw, ch, ui, "Picture", CARD_TITLE_PT * z, Weight::Regular, SUB_INK, r.x + pad, r.y + pad, r.w - 2.0 * pad, r);
+                    draw_line(px, cw, ch, ui, "Picture", MAC_HEADLINE_PT * z, Weight::Regular, SUB_INK, r.x + pad, r.y + pad, r.w - 2.0 * pad, r);
                 }
             },
         }
@@ -787,15 +785,15 @@ fn paint_link(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret: O
     fill(px, cw, ch, r, LINK_FILL);
     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), LINK_INK);
     if let Some(caret) = caret {
-        draw_text(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, LINK_INK, r, pad, Some(caret));
+        draw_text(px, cw, ch, ui, &it.text, MAC_SUBHEAD_PT * z, Weight::Regular, LINK_INK, r, pad, Some(caret));
         return;
     }
     let max = r.w - 2.0 * pad;
     let host = link_host(&it.text);
     let title = if host.is_empty() { "Link".to_string() } else { host };
-    draw_line(px, cw, ch, ui, &title, CARD_TITLE_PT * z, Weight::Semibold, LINK_INK, r.x + pad, r.y + pad, max, r);
-    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT * z);
-    draw_line(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
+    draw_line(px, cw, ch, ui, &title, MAC_HEADLINE_PT * z, Weight::Semibold, LINK_INK, r.x + pad, r.y + pad, max, r);
+    let sub_y = r.y + pad + line_height(ui, MAC_HEADLINE_PT * z);
+    draw_line(px, cw, ch, ui, &it.text, MAC_SUBHEAD_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
 }
 
 fn paint_file(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, z: f32) {
@@ -804,9 +802,9 @@ fn paint_file(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, z: f32) 
     fill(px, cw, ch, r, CARD_FILL);
     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), GRID);
     let max = r.w - 2.0 * pad;
-    draw_line(px, cw, ch, ui, &it.text, CARD_TITLE_PT * z, Weight::Semibold, INK, r.x + pad, r.y + pad, max, r);
-    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT * z);
-    draw_line(px, cw, ch, ui, &human_size(it.size), CARD_SUB_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
+    draw_line(px, cw, ch, ui, &it.text, MAC_HEADLINE_PT * z, Weight::Semibold, INK, r.x + pad, r.y + pad, max, r);
+    let sub_y = r.y + pad + line_height(ui, MAC_HEADLINE_PT * z);
+    draw_line(px, cw, ch, ui, &human_size(it.size), MAC_SUBHEAD_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
 }
 
 /// Paints the connectors; the one at index `picked` is drawn thicker. `z` is the board's magnification.
@@ -820,7 +818,7 @@ pub fn paint_connectors(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &I
             let len = (dx * dx + dy * dy).sqrt();
             if len > 1.0 {
                 let (ux, uy) = (dx / len, dy / len);
-                let head = (ui.pt(12.0) * z).min(len);
+                let head = (ui.pt(SPACE_M) * z).min(len);
                 let (bx, by) = (b.0 - ux * head, b.1 - uy * head);
                 let (nx, ny) = (-uy * head * 0.5, ux * head * 0.5);
                 ink::stroke_polyline(px, cw, ch, &[(bx + nx, by + ny), b, (bx - nx, by - ny)], width, None, CONNECTOR_INK, 1.0);

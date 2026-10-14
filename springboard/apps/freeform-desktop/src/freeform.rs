@@ -80,7 +80,7 @@ const GRID_DOT_PT: f32 = 2.0;
 const PANEL_PT: f32 = 220.0;
 /// Inspector layout (points, below the toolbar): the heading band, then one row per setting.
 const HEAD_PT: f32 = 40.0;
-const CAPTION_PT: f32 = 16.0;
+const CAPTION_GAP_PT: f32 = 16.0;
 const CONTROL_PT: f32 = 24.0;
 const ROW_PT: f32 = 60.0;
 
@@ -1132,7 +1132,7 @@ impl Freeform {
     fn row_control(&self, ui: &Ui, i: usize) -> Rect {
         Rect {
             x: self.panel_x(ui) + SPACE_M,
-            y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT + CAPTION_PT,
+            y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT + CAPTION_GAP_PT,
             w: self.panel_width(ui) - 2.0 * SPACE_M,
             h: CONTROL_PT,
         }
@@ -1191,7 +1191,7 @@ impl Freeform {
         for (i, (row, caption, labels)) in ROWS.iter().enumerate() {
             let r = self.row_control(ui, i);
             let cap = ui.text(caption, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-            s.blit(&cap, ui.pt(r.x) as i32, ui.pt(r.y - CAPTION_PT) as i32, 255, 255);
+            s.blit(&cap, ui.pt(r.x) as i32, ui.pt(r.y - CAPTION_GAP_PT) as i32, 255, 255);
             let current = look.as_ref().and_then(|(st, ink)| Self::current_index(*row, st, ink)).unwrap_or(labels.len());
             widgets::segmented(s, ui, r, *labels, current, enabled);
         }

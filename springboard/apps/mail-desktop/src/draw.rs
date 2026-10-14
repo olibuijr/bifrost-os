@@ -11,8 +11,13 @@ use crate::prefs::Favorite;
 use crate::richtext::{self, Style, TextColor};
 use crate::state::{is_multiline, Compose, Filter, Mail, Sheet, MAX_CHOICES};
 use crate::window::{MailWindow, Region};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
+use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXS, WHITE};
+use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SYSTEM_ORANGE};
 use bifrost_app::kit::{colors, rgba, Image, Surface, TextCache, Ui, Weight};
+use bifrost_app::widgets;
 
 pub const TOOLBAR_PT: f32 = 52.0;
 const BUTTON_H_PT: f32 = 28.0;
@@ -43,8 +48,8 @@ const DOT_PT: f32 = 8.0;
 /// stay at the last).
 const INDENT_PT: f32 = 14.0;
 const MAX_INDENT_LEVELS: usize = 6;
-const RADIUS_PT: f32 = 8.0;
-const PANEL_RADIUS_PT: f32 = 12.0;
+const RADIUS_PT: f32 = m::ICON_RADIUS;
+const PANEL_RADIUS_PT: f32 = m::CARD_RADIUS;
 
 /// A rectangle in pixels: x, y, width, height.
 pub type Rect = [f32; 4];
@@ -156,7 +161,7 @@ fn favorite_items(mail: &Mail, ui: &Ui, y: f32, h: f32) -> Vec<(usize, Rect)> {
     for (i, fav) in mail.prefs.favorites.iter().enumerate() {
         let width = ui.measure(&favorite_label(mail, fav), MAC_FOOTNOTE_PT, Weight::Regular) + 2.0 * pad;
         items.push((i, [x, y + ui.pt(3.0), width, (h - ui.pt(6.0)).max(0.0)]));
-        x += width + ui.pt(4.0);
+        x += width + ui.pt(SPACE_XS);
     }
     items
 }
@@ -164,10 +169,7 @@ fn favorite_items(mail: &Mail, ui: &Ui, y: f32, h: f32) -> Vec<(usize, Rect)> {
 /// The toolbar buttons and their rectangles, from the right edge inwards: Compose, then Reply, Reply All (only when the
 /// message has other recipients), Archive and Trash when a message is open, then the filter chip while a filter is
 /// applied, then Refresh.
-fn toolbar_items(ui: &Ui, w: f32, open: bool, others: bool, filter: Filter) -> Vec<(Button, String, Rect)> {
-    let h = ui.pt(BUTTON_H_PT);
-    let y = (ui.pt(TOOLBAR_PT) - h) / 2.0;
-    let pad = ui.pt(SPACE_M);
+fn toolbar_items(open: bool, others: bool, filter: Filter) -> Vec<(Button, String)> {
     let mut order: Vec<(Button, String)> = vec![(Button::Compose, "Compose".to_string())];
     if open {
         order.push((Button::Reply, "Reply".to_string()));
@@ -181,14 +183,56 @@ fn toolbar_items(ui: &Ui, w: f32, open: bool, others: bool, filter: Filter) -> V
         order.push((Button::Filter, filter.label().to_string()));
     }
     order.push((Button::Refresh, "Refresh".to_string()));
-    let mut right = w - pad;
-    let mut items = Vec::new();
-    for (button, label) in order {
-        let width = ui.measure(&label, MAC_BODY_PT, Weight::Regular) + 2.0 * pad;
-        items.push((button, label, [right - width, y, width, h]));
-        right -= width + ui.pt(SPACE_S);
+    order
+}
+
+fn toolbar_model(mail: &Mail) -> Toolbar {
+    let mut items = vec![ToolbarItem::custom(90, "Mailbox title", 180.0), ToolbarItem::flexible_space()];
+    let visible = toolbar_items(mail.open.is_some(), open_has_others(mail), mail.filter);
+    for (button, label) in visible.into_iter().rev() {
+        let id = match button {
+            Button::Refresh => 1, Button::Compose => 2, Button::Reply => 3, Button::ReplyAll => 4,
+            Button::Archive => 5, Button::Trash => 6, Button::Filter => 7,
+        };
+        items.push(ToolbarItem::button(id, &label));
     }
-    items
+    Toolbar::new(items)
+}
+
+fn toolbar_button(id: u32) -> Option<Button> {
+    Some(match id {
+        1 => Button::Refresh, 2 => Button::Compose, 3 => Button::Reply, 4 => Button::ReplyAll,
+        5 => Button::Archive, 6 => Button::Trash, 7 => Button::Filter, _ => return None,
+    })
+}
+
+fn sidebar_model(mail: &Mail) -> (SourceList, Vec<(u32, Side)>) {
+    let mut items = Vec::new();
+    let mut actions = Vec::new();
+    for (index, account) in mail.accounts.iter().enumerate() {
+        let id = actions.len() as u32 + 1;
+        items.push(SidebarItem::row(id, &account.name));
+        actions.push((id, Side::Account(index)));
+        if index == mail.account {
+            for name in &mail.mailboxes {
+                let id = actions.len() as u32 + 1;
+                items.push(SidebarItem::row(id, mailbox_title(name)).with_symbol("folder"));
+                actions.push((id, Side::Mailbox(name.clone())));
+            }
+        }
+    }
+    if !mail.prefs.smart.is_empty() {
+        items.push(SidebarItem::header("Smart Mailboxes"));
+        for (index, smart) in mail.prefs.smart.iter().enumerate() {
+            let id = actions.len() as u32 + 1;
+            items.push(SidebarItem::row(id, &smart.name).with_symbol("folder"));
+            actions.push((id, Side::Smart(index)));
+        }
+    }
+    let id = actions.len() as u32 + 1;
+    items.push(SidebarItem::row(id, "Add Account...").with_symbol("plus"));
+    actions.push((id, Side::Add));
+    (SourceList::new(items, SIDE_ROW_PT, SIDE_HEAD_PT), actions)
 }
 
 /// True when the open message has recipients besides its sender and the user (Reply All is offered).
@@ -211,34 +255,6 @@ pub fn header_block(raw: &str) -> String {
         Some(end) => text[..end].to_string(),
         None => text,
     }
-}
-
-/// The sidebar rows top to bottom: each account, the mailboxes of the shown account under it, then Add Account.
-fn side_items(mail: &Mail, ui: &Ui, width: f32, top: f32) -> Vec<(Side, Rect)> {
-    let head = ui.pt(SIDE_HEAD_PT);
-    let row = ui.pt(SIDE_ROW_PT);
-    let mut y = top + ui.pt(SPACE_S);
-    let mut items = Vec::new();
-    for index in 0..mail.accounts.len() {
-        items.push((Side::Account(index), [0.0, y, width, head]));
-        y += head;
-        if index == mail.account {
-            for name in &mail.mailboxes {
-                items.push((Side::Mailbox(name.clone()), [0.0, y, width, row]));
-                y += row;
-            }
-        }
-    }
-    if !mail.prefs.smart.is_empty() {
-        items.push((Side::Heading("Smart Mailboxes"), [0.0, y, width, head]));
-        y += head;
-        for index in 0..mail.prefs.smart.len() {
-            items.push((Side::Smart(index), [0.0, y, width, row]));
-            y += row;
-        }
-    }
-    items.push((Side::Add, [0.0, y, width, row]));
-    items
 }
 
 /// The sheet's panel, field rectangles and buttons. Compose's message field is taller than the others, and its sheet also
@@ -544,16 +560,25 @@ impl MailWindow {
         let bar = ui.pt(TOOLBAR_PT);
         let top = chrome_height(ui, &self.mail);
         if y < bar {
-            let open = self.mail.open.is_some();
-            let others = open_has_others(&self.mail);
-            return toolbar_items(ui, w, open, others, self.mail.filter).into_iter().find(|(_, _, r)| inside(*r, x, y)).map_or(Hit::None, |(b, _, _)| Hit::Button(b));
+            let scale = ui.pt(1.0);
+            let model = toolbar_model(&self.mail);
+            let bounds = bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / scale, h: TOOLBAR_PT };
+            let placed = widgets::toolbar_layout(ui, bounds, &model);
+            return placed.hit(x / scale, y / scale).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
         }
         if y < top {
             return favorite_items(&self.mail, ui, bar, top - bar).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(i, _)| Hit::Favorite(i));
         }
         let [side, list, _] = columns(ui, w, self.mail.show_sidebar);
         if x < side {
-            return side_items(&self.mail, ui, side, top).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(s, _)| Hit::Side(s));
+            let scale = ui.pt(1.0);
+            let (model, actions) = sidebar_model(&self.mail);
+            let bounds = bifrost_app::controls::Rect {
+                x: 0.0, y: (top + ui.pt(SPACE_S)) / scale, w: side / scale, h: (h - top) / scale,
+            };
+            return model.hit(bounds, 0.0, x / scale, y / scale)
+                .and_then(|id| actions.iter().find(|(key, _)| *key == id).map(|(_, side)| side.clone()))
+                .map_or(Hit::None, |side| Hit::Side(side));
         }
         if x < side + list {
             let row = ui.pt(ROW_PT);
@@ -626,54 +651,29 @@ impl MailWindow {
     }
 
     fn draw_toolbar(&mut self, s: &mut Surface, ui: &Ui, w: f32, top: f32) {
-        s.fill_rect(0, 0, s.w, px(top), CONTENT_BG.now());
-        s.fill_rect(0, px(top) - 1, s.w, 1, SEPARATOR_C.now());
-        let pad = ui.pt(SPACE_M);
+        widgets::toolbar_band(s, ui, bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT });
         let title = if self.mail.accounts.is_empty() { "Mail" } else { mailbox_title(&self.mail.mailbox) };
-        put_mid(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), pad, top / 2.0);
-        let others = open_has_others(&self.mail);
-        for (button, label, r) in toolbar_items(ui, w, self.mail.open.is_some(), others, self.mail.filter) {
-            let (fill, color) = if button == Button::Compose { (colors::SYSTEM_BLUE.now(), WHITE) } else { (FIELD_BG.now(), LABEL.now()) };
-            s.fill_rrect(r[0], r[1], r[2], r[3], ui.pt(RADIUS_PT), fill);
-            put_centred(s, &mut self.labels, ui, &label, MAC_BODY_PT, Weight::Regular, color, r[0] + r[2] / 2.0, r[1] + r[3] / 2.0);
+        let model = toolbar_model(&self.mail);
+        let bounds = bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT };
+        let placed = widgets::toolbar(s, ui, bounds, &model, None);
+        if let Some(r) = placed.rect_of(90) {
+            put_mid(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), ui.pt(r.x), ui.pt(r.y + r.h / 2.0));
         }
     }
 
     fn draw_sidebar(&mut self, s: &mut Surface, ui: &Ui, side: f32, top: f32) {
-        let pad = ui.pt(SPACE_M);
-        let inset = ui.pt(SPACE_S);
-        for (item, r) in side_items(&self.mail, ui, side, top) {
-            let cy = r[1] + r[3] / 2.0;
-            match item {
-                Side::Account(index) => {
-                    let name = self.mail.accounts.get(index).map_or("", |a| a.name.as_str());
-                    put_mid(s, &mut self.labels, ui, name, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), pad, cy);
-                }
-                Side::Heading(title) => {
-                    put_mid(s, &mut self.labels, ui, title, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), pad, cy);
-                }
-                Side::Smart(index) => {
-                    let selected = self.mail.smart_active == Some(index);
-                    if selected {
-                        s.fill_rrect(r[0] + inset, r[1], r[2] - 2.0 * inset, r[3], ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
-                    }
-                    let color = if selected { WHITE } else { LABEL.now() };
-                    let name = self.mail.prefs.smart.get(index).map_or("", |m| m.name.as_str());
-                    put_mid(s, &mut self.labels, ui, name, MAC_BODY_PT, Weight::Regular, color, pad + inset, cy);
-                }
-                Side::Mailbox(name) => {
-                    let selected = name == self.mail.mailbox && self.mail.smart_active.is_none();
-                    if selected {
-                        s.fill_rrect(r[0] + inset, r[1], r[2] - 2.0 * inset, r[3], ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
-                    }
-                    let color = if selected { WHITE } else { LABEL.now() };
-                    put_mid(s, &mut self.labels, ui, mailbox_title(&name), MAC_BODY_PT, Weight::Regular, color, pad + inset, cy);
-                }
-                Side::Add => {
-                    put_mid(s, &mut self.labels, ui, "Add Account...", MAC_BODY_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), pad, cy);
-                }
-            }
-        }
+        let (mut model, actions) = sidebar_model(&self.mail);
+        let selected = actions.iter().find_map(|(id, side)| match side {
+            Side::Smart(index) if self.mail.smart_active == Some(*index) => Some(*id),
+            Side::Mailbox(name) if name == &self.mail.mailbox && self.mail.smart_active.is_none() => Some(*id),
+            _ => None,
+        });
+        model.set_selected(selected);
+        let scale = ui.pt(1.0);
+        let bounds = bifrost_app::controls::Rect {
+            x: 0.0, y: (top + ui.pt(SPACE_S)) / scale, w: side / scale, h: (s.h as f32 - top) / scale,
+        };
+        widgets::source_list(s, ui, bounds, &model, 0.0, None);
     }
 
     fn draw_list(&mut self, s: &mut Surface, ui: &Ui, x0: f32, width: f32, top: f32, h: f32) {
@@ -722,7 +722,7 @@ impl MailWindow {
             let subject = fit(ui, &label, MAC_BODY_PT, Weight::Regular, (right - text_x - flag_room - tag_w).max(0.0));
             if !tag.is_empty() {
                 let tag_x = right - flag_room - tag_w + inset;
-                put(s, &mut self.labels, ui, &tag, MAC_FOOTNOTE_PT, Weight::Regular, if selected { WHITE } else { LABEL_2.now() }, tag_x, y + row * 0.5 + ui.pt(2.0));
+                put(s, &mut self.labels, ui, &tag, MAC_FOOTNOTE_PT, Weight::Regular, if selected { WHITE } else { LABEL_2.now() }, tag_x, y + row * 0.5 + ui.pt(SPACE_XXS));
             }
             if let Some(color) = r.flags.color() {
                 s.fill_rrect(right - dot, y + row * 0.64 - dot / 2.0, dot, dot, dot / 2.0, flag_rgb(color));
@@ -843,8 +843,8 @@ impl MailWindow {
                 for (k, span) in matches.iter().enumerate().filter(|(_, m)| m.line == i) {
                     let before = ui.measure(&line[..span.start], MAC_BODY_PT, Weight::Regular);
                     let wide = ui.measure(&line[span.start..span.end], MAC_BODY_PT, Weight::Regular);
-                    let tint = if k == current { rgba(255, 159, 10, 150) } else { rgba(255, 214, 10, 110) };
-                    s.fill_rrect(x + before, y, wide, line_h, ui.pt(2.0), tint);
+                    let tint = if k == current { SYSTEM_ORANGE.now() } else { FIND_HIGHLIGHT.now() };
+                    s.fill_rrect(x + before, y, wide, line_h, ui.pt(m::ICON_RADIUS), tint);
                 }
                 put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), x, y);
             }
@@ -874,7 +874,7 @@ impl MailWindow {
             s.fill_rrect(r[0], r[1], r[2], r[3], ui.pt(RADIUS_PT), FIELD_BG.now());
             put_centred(s, &mut self.labels, ui, label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), r[0] + r[2] / 2.0, r[1] + r[3] / 2.0);
             rects[slot] = r;
-            right -= bw + ui.pt(4.0);
+            right -= bw + ui.pt(SPACE_XS);
         }
         self.find_hits = Some(rects);
         let count = if bar.text.is_empty() {
@@ -920,13 +920,13 @@ impl MailWindow {
     fn draw_styled_message(&mut self, s: &mut Surface, ui: &Ui, compose: &Compose, r: Rect, focused: bool) {
         let pad = ui.pt(SPACE_S);
         let tx = r[0] + pad;
-        let value_y = r[1] + ui.pt(20.0);
+        let value_y = r[1] + ui.pt(SPACE_XL);
         let line_h = ui.pt(BODY_LINE_PT);
         let rule = (ui.pt(1.0) as usize).max(1);
         let caret = ui.pt(1.0).max(1.0);
         let measure = |text: &str, style: Style| ui.measure(text, MAC_BODY_PT, style_weight(style));
         let lines = richtext::layout(compose.message(), &compose.styles, r[2] - 2.0 * pad, &measure);
-        let room = ((r[1] + r[3] - value_y - ui.pt(4.0)) / line_h).floor().max(1.0) as usize;
+        let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
         let first = lines.len().saturating_sub(room);
         let current = compose.misspelled.get(compose.misspelled_at);
         let mut end_x = tx;
@@ -952,7 +952,7 @@ impl MailWindow {
                         let before: String = chars[..a - run.start].iter().collect();
                         let word: String = chars[a - run.start..b - run.start].iter().collect();
                         let thick = if current == Some(mark) { 2 * rule } else { rule };
-                        s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(2.0)), px(measure(&word, run.style)), thick, colors::SYSTEM_RED.now());
+                        s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(SPACE_XXS)), px(measure(&word, run.style)), thick, colors::SYSTEM_RED.now());
                     }
                 }
                 x += wide;
@@ -988,7 +988,7 @@ impl MailWindow {
             s.fill_rrect(r[0], r[1], r[2], r[3], ui.pt(RADIUS_PT), FIELD_BG.now());
             let tx = r[0] + pad;
             put(s, &mut self.labels, ui, field.label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), tx, r[1] + ui.pt(5.0));
-            let value_y = r[1] + ui.pt(20.0);
+            let value_y = r[1] + ui.pt(SPACE_XL);
             if field.label == "From" || field.choice {
                 let hint = "Click to change";
                 let hint_w = ui.measure(hint, MAC_FOOTNOTE_PT, Weight::Regular);
@@ -1009,7 +1009,7 @@ impl MailWindow {
                     continue;
                 }
                 let lines = wrap(ui, &field.value, text_w, MAC_BODY_PT, Weight::Regular);
-                let room = ((r[1] + r[3] - value_y - ui.pt(4.0)) / line_h).floor().max(1.0) as usize;
+                let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
                 let start = lines.len().saturating_sub(room);
                 for (k, line) in lines[start..].iter().enumerate() {
                     put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), tx, value_y + k as f32 * line_h);

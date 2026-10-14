@@ -898,8 +898,8 @@ impl Games {
             let bg = if i == self.ttt.cursor() { FIELD_BG.now() } else { CARD_BG.now() };
             s.fill_rrect(rect.0, rect.1, rect.2, rect.3, ui.pt(SPACE_S), bg);
             match self.ttt.cell(i) {
-                Some(Mark::X) => self.text_c(s, ui, "X", MAC_LARGE_TITLE_PT, Weight::Bold, SYSTEM_BLUE, rect),
-                Some(Mark::O) => self.text_c(s, ui, "O", MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), rect),
+                Some(Mark::X) => self.text_c(s, ui, "X", MAC_TITLE1_PT, Weight::Bold, SYSTEM_BLUE, rect),
+                Some(Mark::O) => self.text_c(s, ui, "O", MAC_TITLE1_PT, Weight::Bold, LABEL.now(), rect),
                 None => {}
             }
         }
