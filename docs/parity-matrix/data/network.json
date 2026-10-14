@@ -31,9 +31,9 @@
     {
       "feature": "Service discovery on the local network",
       "apple": "NWBrowser, Bonjour (struct Bonjour, Bonjour Listener Provider)",
-      "bifrost": "springboard/core/src/dns_browse.rs, springboard/sdk/src/network_browser.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs and springboard/sdk/src/network_path.rs (partial: browse lifecycle only, no daemon)",
+      "bifrost": "springboard/core/src/dns_browse.rs, springboard/sdk/src/network_browser.rs; springboard/core/tests/parity_sdk-tests-05.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs and springboard/sdk/src/network_path.rs (partial: browse lifecycle only, no daemon)",
       "status": "partial",
-      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon is a private protocol for nearby sharing. No mDNS or DNS-SD, and no browse or advertise API for apps Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Service type rules, browse and resolve replies, and name building are tested headless in core/tests/parity_sdk-tests-05.rs, and the SDK exposes the browser under its own names in sdk/src/network_browser.rs. The shell's network service runs browse references over this model. Gaps: replies are fed in, with no socket or daemon query; there is no advertise or registration API; and the nearby-sharing beacon is a private protocol, not DNS-SD. Verify on Midget for parity."
     },
     {
       "feature": "Multicast groups",

@@ -115,9 +115,9 @@
   {
    "feature": "Visual effect material catalogue and blending (sidebar, titlebar, menu, popover, HUD, sheet, header, window and content backgrounds; behind- and within-window)",
    "apple": "NSVisualEffectView.Material, NSVisualEffectView.BlendingMode, NSVisualEffectView.State",
-   "bifrost": "springboard/sdk/src/widgets.rs (visual_effect, Material, Blending, State)",
+   "bifrost": "springboard/sdk/src/widgets.rs (visual_effect, Material, Blending, State); springboard/sdk/tests/parity_sdk-tests-05.rs",
    "status": "partial",
-   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+   "note": "The 14-material catalogue, its window-server wire values, blur and tint rules, and within- and behind-window drawing are tested headless in sdk/tests/parity_sdk-tests-05.rs with pixel assertions on an offscreen surface. Gap: the per-shader inventory from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md) is not yet extracted."
   },
   {
    "feature": "Glass effect views (NSGlassEffectView, NSGlassEffectContainerView)",
