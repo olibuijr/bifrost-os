@@ -83,6 +83,8 @@ pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;
+pub mod dwell;
+pub mod sticky_keys;
 pub mod game_controllers_page;
 mod now_playing_menu;
 pub mod dnd;
