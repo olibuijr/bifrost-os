@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 — 2026-10-14
+
+- Radio readings and scan results return through the main dispatch queue; idle polling threads and periodic window wakes are gone.
+
 ## 0.1.0
 
 - New: Wireless Diagnostics. The Connection card shows the network, BSSID, channel, band, signal, noise, signal-to-noise ratio, a quality rating, and the receive and transmit rates, read from the kernel (`/proc/net/wireless`) and `iw` every second.
