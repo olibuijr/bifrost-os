@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/backup_page.rs",
+   "status": "partial",
+   "note": "Time Machine and Backup pages exist; App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -58,9 +58,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/clock/timer.rs",
+   "status": "partial",
+   "note": "Clock timer exists; App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/mouse_page.rs",
+   "status": "partial",
+   "note": "Pointer settings page exists; the Trackpad pane and its App Intents are not exposed.",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "status": "partial",
+   "note": "Reduce Transparency setting exists under accessibility; App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/users_page.rs",
+   "status": "partial",
+   "note": "Settings Users page exists; App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -198,9 +198,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/sdk/src/vpn_configuration.rs",
+   "status": "partial",
+   "note": "VPN configuration SDK exists; no shell VPN settings page yet.",
    "rea": []
   },
   {
