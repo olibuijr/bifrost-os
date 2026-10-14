@@ -742,4 +742,106 @@ mod tests {
         let v2 = (frame(&w, id).x - x2) / 0.01;
         assert!((v2 - v).abs() / v < 0.3, "{v} vs {v2}");
     }
+
+    // Headless: the tests below read model values or draw into an in-memory Surface. No display, device or clock is used.
+    fn test_ui() -> crate::kit::Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).expect("SFUI.ttf").into_boxed_slice());
+        crate::kit::Ui::new(crate::kit::Font::parse(data).expect("font"), 1.0)
+    }
+
+    /// A 4 x 4 window whose only child is a green 2 x 4 swatch at the origin.
+    fn swatch() -> (Window, u64) {
+        let mut w: Window = Window::new(Container::new(vec![Box::new(Container::default())]), 10);
+        let id = w.root().children()[0].id();
+        w.root_mut().set_frame(rect(0.0, 0.0, 4.0, 4.0));
+        let child = &mut w.root_mut().children_mut()[0];
+        child.set_frame(rect(0.0, 0.0, 2.0, 4.0));
+        child.base_mut().background = Some(0xff00_ff00);
+        w.set_reduce_motion(Some(false));
+        (w, id)
+    }
+
+    #[test]
+    fn headless_swatch_is_drawn_where_the_animation_has_moved_it() {
+        let ui = test_ui();
+        let (mut w, id) = swatch();
+        w.animate(lin(1.0), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(2.0, 0.0, 2.0, 4.0)));
+        w.tick(0.0);
+        w.tick(0.5);
+        let mut px = vec![0xff00_0000u32; 16];
+        let mut s = Surface { w: 4, h: 4, stride: 4, px: &mut px, y0: 0 };
+        w.draw(&mut s, &ui);
+        assert_eq!(s.px[1], 0xff00_ff00, "the swatch covers columns 1 and 2 at the midpoint");
+        assert_eq!(s.px[2], 0xff00_ff00);
+        assert_ne!(s.px[0], 0xff00_ff00);
+        assert_ne!(s.px[3], 0xff00_ff00);
+    }
+
+    #[test]
+    fn headless_swatch_settles_on_the_new_frame_when_the_animation_ends() {
+        let ui = test_ui();
+        let (mut w, id) = swatch();
+        w.animate(lin(1.0), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(2.0, 0.0, 2.0, 4.0)));
+        w.tick(0.0);
+        w.tick(1.0);
+        let mut px = vec![0xff00_0000u32; 16];
+        let mut s = Surface { w: 4, h: 4, stride: 4, px: &mut px, y0: 0 };
+        w.draw(&mut s, &ui);
+        assert_eq!(s.px[2], 0xff00_ff00);
+        assert_eq!(s.px[3], 0xff00_ff00);
+        assert_ne!(s.px[1], 0xff00_ff00, "the old column is no longer covered");
+    }
+
+    #[test]
+    fn headless_frame_opacity_and_size_interpolate_together() {
+        let (mut w, id) = win();
+        w.animate(lin(1.0), |w| {
+            let v = w.view_mut::<Container>(id).unwrap();
+            v.set_frame(rect(100.0, 40.0, 200.0, 90.0));
+            v.base_mut().opacity = 0.0;
+        });
+        w.tick(0.0);
+        w.tick(0.5);
+        let b = w.view::<Container>(id).unwrap().base();
+        assert_eq!(b.frame, rect(50.0, 20.0, 150.0, 70.0));
+        assert!((b.opacity - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn headless_underdamped_spring_passes_its_target_then_rests_on_it() {
+        let (mut w, id) = win();
+        w.animate(Timing::spring(0.3, 0.4), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        let mut peak = f32::MIN;
+        for i in 0..=400 {
+            w.tick(i as f64 * 0.01);
+            peak = peak.max(frame(&w, id).x);
+        }
+        assert!(peak > 110.0, "an underdamped spring passes its target: {peak}");
+        assert_eq!(frame(&w, id).x, 100.0);
+        assert!(!w.is_animating(None));
+    }
+
+    #[test]
+    fn headless_group_completes_once_after_all_of_its_tracks() {
+        use std::{cell::Cell, rc::Rc};
+        let (mut w, id) = win();
+        let n = Rc::new(Cell::new(0));
+        let c = n.clone();
+        let tx = Transaction::new(lin(1.0)).completion(move |ok| {
+            assert!(ok);
+            c.set(c.get() + 1);
+        });
+        w.transaction(tx, |w| {
+            let v = w.view_mut::<Container>(id).unwrap();
+            v.set_frame(rect(100.0, 0.0, 100.0, 50.0));
+            v.base_mut().opacity = 0.0;
+        });
+        w.tick(0.0);
+        w.tick(0.5);
+        assert_eq!(n.get(), 0, "still running at the midpoint");
+        w.tick(1.0);
+        assert_eq!(n.get(), 1);
+        w.tick(2.0);
+        assert_eq!(n.get(), 1, "the completion runs once");
+    }
 }
