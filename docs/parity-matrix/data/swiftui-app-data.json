@@ -31,9 +31,9 @@
     {
       "feature": "Windows",
       "apple": "Window, WindowGroup, openWindow, window styles and sizing",
-      "bifrost": "springboard/sdk/src/layout.rs, springboard/src/shell/desk.rs",
+      "bifrost": "springboard/sdk/src/layout.rs, springboard/src/shell/desk.rs, springboard/sdk/src/scene_session.rs (SceneSessions), springboard/src/shell/services/scene_services.rs",
       "status": "partial",
-      "note": "Manifest window = full-size, layout constants; no openWindow API for several windows of one app"
+      "note": "Several windows of one app work: SceneSessions opens (request), focuses, lists and closes each window with its own state, user info and a limit, and the shell serves those calls (sdk/tests/parity_sdk-complete-31.rs). Gap: a restored window's frame after a relaunch is checked only on Midget."
     },
     {
       "feature": "Immersive spaces",

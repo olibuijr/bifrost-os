@@ -10,9 +10,9 @@
     {
       "feature": "Image and context objects (CIImage, CIContext)",
       "apple": "CIImage, CIContext",
-      "bifrost": "springboard/render/src/lazy_image.rs",
+      "bifrost": "springboard/render/src/lazy_image.rs; springboard/sdk/src/lazy_image.rs (LazyImage, RenderContext, filter)",
       "status": "partial",
-      "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The renderer's Image is CPU pixels only; no SDK type wraps it as a lazily evaluated image with a render context"
+      "note": "The SDK exposes the lazy image and its render context with named filters, and the filter chain and render path are tested headless (sdk/tests/parity_sdk-complete-31.rs). Gap: no shell or app draws a lazy image in a window, and rendering is CPU only."
     },
     {
       "feature": "Filter objects and chaining (CIFilter)",

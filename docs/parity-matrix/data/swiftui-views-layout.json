@@ -87,9 +87,9 @@
   {
    "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
    "apple": "https://developer.apple.com/documentation/swiftui/layout-adjustments",
-   "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/geometry.rs (EdgeInsets), springboard/sdk/src/view/autolayout.rs",
+   "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/geometry.rs (EdgeInsets), springboard/sdk/src/view/autolayout.rs (Spec::priority, Constraints::guide)",
    "status": "partial",
-   "note": "insets, alignment, distribution, constraints; no alignment guides or layout priority modifiers"
+   "note": "Insets, alignment, distribution, constraints with priorities, layout guides and hugging and compression priorities are solved headless (sdk/tests/parity_sdk-complete-31.rs). Gap: there are no baseline alignment anchors."
   },
   {
    "feature": "Custom layout (Layout protocol)",

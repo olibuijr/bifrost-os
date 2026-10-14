@@ -24,23 +24,23 @@
     {
       "feature": "Media groups (MLMediaGroup)",
       "apple": "MLMediaGroup, root group, group type identifiers (folders, albums, moments)",
-      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Album, Artist, Library::build)",
+      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Album, Artist, Library::build); springboard/ui/src/media_group.rs (MediaGroup, GroupType)",
       "status": "partial",
-      "note": "the Music library builds albums and artists from tags; there is no generic group tree or group type identifier"
+      "note": "media_group.rs is a tested group tree with group type identifiers, unique group ids, nested groups, removal and the item listing of a subtree (ui/tests/parity_sdk-complete-31.rs). Gap: the Music library still builds its albums and artists from tags without the tree, and smart groups that compute their items are not modelled."
     },
     {
       "feature": "Media objects (MLMediaObject)",
       "apple": "MLMediaObject: name, media type, URL, attributes dictionary",
-      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Song, Scanned, scan_file); springboard/src/shell/photos/library.rs (Photo, from_path)",
+      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Song, Scanned, scan_file); springboard/src/shell/photos/library.rs (Photo, from_path); springboard/ui/src/media_attributes.rs (MediaAttributes, MediaObject)",
       "status": "partial",
-      "note": "songs and photos have typed structs with tags and times; there is no generic attribute dictionary (Media Object Attribute Keys)"
+      "note": "media_attributes.rs is a typed attribute dictionary with eleven keys, each accepting one value kind and range (ui/tests/parity_sdk-complete-31.rs). Gap: the Music and Photos structs do not read or write this dictionary yet, and custom attribute keys are not modelled."
     },
     {
       "feature": "Media types (MLMediaType)",
       "apple": "MLMediaType (image, audio, movie), type attributes on objects",
-      "bifrost": "springboard/src/shell/photos/library.rs (image extensions), springboard/apps/music-desktop/src/music/library.rs (audio files)",
+      "bifrost": "springboard/ui/src/media_kind.rs (kind_of_name); springboard/src/shell/photos/library.rs (image extensions), springboard/apps/music-desktop/src/music/library.rs (audio files)",
       "status": "partial",
-      "note": "type is decided per app by file extension; no shared media-type enum in the SDK. Headless test in springboard/tests/parity_sdk-tests-07.rs: headless_library_accepts_picture_names_in_any_case_and_skips_hidden_entries (photo library scan; the Music audio types are not covered by it)."
+      "note": "media_kind.rs decides picture, audio and movie kinds from the file name, case-insensitively, and skips hidden files (ui/tests/parity_sdk-complete-31.rs). Gap: the photo and music libraries still keep their own extension checks, and the kind is not sniffed from file bytes."
     },
     {
       "feature": "Background loading",

@@ -252,6 +252,8 @@ pub mod network_listener;
 pub mod network_browser;
 pub mod http_cookies;
 pub mod passkey_client_data;
+pub mod passkey_authenticator_data;
+pub mod lazy_image;
 pub mod credential_exchange;
 pub mod web_extension;
 pub mod web_auth;
