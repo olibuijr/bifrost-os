@@ -12,25 +12,21 @@
 
 pub mod attach;
 pub mod folders;
-mod grouping;
-pub mod import;
-mod fold;
-mod lists;
-mod lock;
-mod mathline;
-mod table;
 mod chrome;
 pub mod icon;
 pub mod rpc;
 pub mod sketch;
 pub mod smart;
+pub mod import;
+pub mod math;
+pub mod outline;
+pub mod table;
 
 mod parity;
 mod pdf;
 mod picker;
 pub mod store;
 pub mod system;
-mod tags;
 
 pub use icon::icon;
 
@@ -119,10 +115,42 @@ const TEXT_TOP_PT: f32 = 36.0;
 const BODY_PT: f32 = MAC_BODY_PT;
 const TITLE_PT: f32 = MAC_LARGE_TITLE_PT;
 const MENU_W_PT: f32 = 240.0;
+/// How many tags the list menu lists (the sidebar lists them all).
+const MENU_TAGS: usize = 12;
+/// How many notes the Recent Notes menu lists.
+pub const RECENT_MENU: usize = 5;
+/// evdev Up and Down arrows (the move-item chords) and Tab (Shift+Tab outdents).
+const KEY_UP: u32 = 103;
+const KEY_DOWN: u32 = 108;
+const KEY_TAB: u32 = 15;
+/// evdev K (Cmd+K adds a link).
+const KEY_K: u32 = 37;
 const MENU_ROW_PT: f32 = bifrost_app::widgets::MENU_ROW_PT;
 const MENU_PAD_PT: f32 = bifrost_app::widgets::MENU_PAD_PT;
 /// width of one formatting button in the shortcut row
 const FMT_W_PT: f32 = 52.0;
+/// The paragraph and list styles of the Format menu, in menu order.
+const PARAGRAPH_STYLES: [(&str, md::Block); 10] = [
+    ("Title", md::Block::Title),
+    ("Heading", md::Block::Heading),
+    ("Subheading", md::Block::Subheading),
+    ("Body", md::Block::Body),
+    ("Monostyled", md::Block::Mono),
+    ("Block Quote", md::Block::Quote),
+    ("Bulleted List", md::Block::Bullet),
+    ("Dashed List", md::Block::Dashed),
+    ("Numbered List", md::Block::Numbered(1)),
+    ("Checklist", md::Block::Check(false)),
+];
+/// The character styles of the Format menu, in menu order.
+const CHARACTER_STYLES: [(&str, Fmt); 6] = [
+    ("Bold", Fmt::Bold),
+    ("Italic", Fmt::Italic),
+    ("Underline", Fmt::Underline),
+    ("Strikethrough", Fmt::Strike),
+    ("Highlight", Fmt::Highlight),
+    ("Inline Code", Fmt::Code),
+];
 /// the formatting buttons in the shortcut row, left to right
 const FMT_BUTTONS: [(&str, Fmt); 6] = [("B", Fmt::Bold), ("I", Fmt::Italic), ("Code", Fmt::Code), ("List", Fmt::Bullet), ("1.", Fmt::Number), ("[ ]", Fmt::Check)];
 
@@ -134,6 +162,31 @@ pub enum View {
     Trash,
     /// A smart folder: the notes its predicate picks out (outside the bin).
     Smart(smart::Smart),
+    /// The notes that carry a `#tag` (lowercase, without the `#`), outside the bin.
+    Tag(String),
+}
+
+/// An editing command on the open note that the Format menu offers.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Format {
+    /// Bold, italic, underline, strikethrough, highlight or inline code on the selection.
+    Char(Fmt),
+    /// One more level on the list lines of the selection (Tab).
+    Indent,
+    /// One level less (Shift+Tab).
+    Outdent,
+    /// The list item with the items under it passes its neighbour (Ctrl+Cmd+Up).
+    MoveUp,
+    MoveDown,
+    /// Tick or untick every checklist item of the note.
+    CheckAll,
+    UncheckAll,
+    /// An operation on the table under the caret.
+    Table(table::Op),
+    /// Ask for a web address and make the selection a link (Cmd+K).
+    AddLink,
+    /// Answer every line that ends with `=` after a calculation.
+    CalculateMath,
 }
 
 /// A formatting button: inline emphasis or a list style for the paragraphs.
@@ -142,6 +195,9 @@ pub enum Fmt {
     Bold,
     Italic,
     Code,
+    Strike,
+    Underline,
+    Highlight,
     Bullet,
     Number,
     Check,
@@ -180,18 +236,18 @@ enum Act {
     CheckSpelling,
     /// Find > Replace: opens the replace card for the find text
     Replace,
-    /// Sort direction: false is the key's natural order (newest first, A to Z), true the reverse
-    SortReverse(bool),
-    /// Format > Checklist: tick or untick every item of the open note
-    CheckAll,
-    UncheckAll,
-    /// Format > Indentation and Move Item, on the caret's list line
-    Indent,
-    Outdent,
-    MoveLineUp,
-    MoveLineDown,
-    /// Format > Table commands at the caret
-    Table(table::Op),
+    /// Sort > Newest First (`false`) or Oldest First (`true`)
+    SortOrder(bool),
+    /// the Format menu from the editor menu
+    OpenFormat,
+    /// a Format menu command
+    Do(Format),
+    /// Math Results on or off
+    ToggleMath,
+    /// New Quick Note reopens the last quick note, or not
+    ToggleResumeQuick,
+    /// the list sections by date on or off
+    ToggleGroupDate,
 }
 
 /// Find > Replace: the replacement text being typed in the replace card over the editor.
@@ -215,10 +271,12 @@ struct Menu {
     y: f32,
 }
 
-/// The folder-name prompt: `old` is the folder being renamed.
+/// The one-line prompt over the list: a folder name (`old` is the folder being renamed) or, for Add Link, a web
+/// address (`link` is the editor range the link wraps).
 struct Naming {
     old: Option<String>,
     field: TextField,
+    link: Option<Range<usize>>,
 }
 
 /// Something a touch can land on.
@@ -338,9 +396,13 @@ pub struct Notes {
     /// Find > Match Whole Word: a search hit must not touch a letter or digit.
     whole_word: bool,
     rows: Vec<Row>,
+    /// every `#tag` of the notes outside the bin with the number of notes that carry it, by name
+    tag_list: Vec<(String, u32)>,
     /// indices into `notes` shown by the list (the search result)
     shown: Vec<usize>,
     shown_pinned: usize,
+    /// the list's section headers as `(label, index into shown of its first row)`: Pinned, Notes, or the date groups
+    sections: Vec<(String, usize)>,
     screen: Screen,
     list_scroll: Scroller,
     scroll: Scroller,
@@ -440,8 +502,10 @@ impl Notes {
             dir,
             wall,
             rows: vec![],
+            tag_list: vec![],
             shown: vec![],
             shown_pinned: 0,
+            sections: vec![],
             screen: Screen::List,
             list_scroll: Scroller::new(),
             scroll: Scroller::new(),
@@ -479,6 +543,47 @@ impl Notes {
     /// Re-anchors wall-clock time (see `Shell::set_wall`).
     pub fn set_wall(&mut self, wall: Wall) {
         self.wall = wall;
+    }
+
+    /// The list's section headers for the rows shown: Pinned first, then either date groups (Group by Date, a date
+    /// sort, no search, not in the bin) or a plain Notes header when something is pinned.
+    fn compute_sections(&self, now: i64, searching: bool) -> Vec<(String, usize)> {
+        let (n, pins) = (self.shown.len(), self.shown_pinned);
+        let mut out = vec![];
+        if pins > 0 {
+            out.push(("Pinned".to_string(), 0));
+        }
+        let by_date = self.prefs.group_by_date && self.prefs.sort != store::SortKey::Title && !searching && self.view != View::Trash;
+        if by_date {
+            let mut last: Option<String> = None;
+            for k in pins..n {
+                let note = &self.notes[self.shown[k]];
+                let stamp = if self.prefs.sort == store::SortKey::DateCreated { store::created(note) } else { note.modified };
+                let group = store::date_group(stamp, now, self.wall.offset);
+                if last.as_ref() != Some(&group) {
+                    out.push((group.clone(), k));
+                    last = Some(group);
+                }
+            }
+        } else if pins > 0 && pins < n {
+            out.push(("Notes".to_string(), pins));
+        }
+        out
+    }
+
+    /// Height in points of the section header number `k` (the first has no gap above it).
+    fn header_pt(k: usize) -> f32 {
+        if k == 0 { SECTION_PT } else { SECTION_PT + SECTION_GAP_PT }
+    }
+
+    /// Points of section headers above shown row `i`.
+    fn section_offset(&self, i: usize) -> f32 {
+        self.sections.iter().enumerate().filter(|(_, (_, start))| *start <= i).map(|(k, _)| Self::header_pt(k)).sum()
+    }
+
+    /// Points of all section headers.
+    fn sections_total(&self) -> f32 {
+        (0..self.sections.len()).map(Self::header_pt).sum()
     }
 
     /// Rows `[shown index]` as `(note id, title)`, for tests and inspection.
@@ -542,6 +647,7 @@ impl Notes {
             View::Folder(f) => format!("folder:{f}"),
             View::Trash => "trash".to_string(),
             View::Smart(s) => format!("smart:{}", s.key()),
+            View::Tag(t) => format!("tag:{t}"),
         };
         format!("notes_screen={screen}\nnotes_count={}\nnotes_shown={}\nnotes_keyboard={}\nnotes_pinned={}\nnotes_pin_error={}\nnotes_view={view}\nnotes_folders={}\nnotes_sort={}\n", self.notes.len(), self.shown.len(), self.keyboard.shown(), self.notes.iter().filter(|n| self.is_pinned(&n.id)).count(), self.pin_error.is_some(), self.folders.len(), self.prefs.sort.label())
     }
@@ -576,6 +682,7 @@ impl Notes {
             View::All => true,
             View::Folder(f) => searching || loc == f,
             View::Smart(s) => s.matches(&self.notes[i], self.is_pinned(&self.notes[i].id), cutoff),
+            View::Tag(t) => store::has_tag(&self.notes[i].text, t),
         }
     }
 
@@ -622,6 +729,7 @@ impl Notes {
             View::Folder(f) => f.clone(),
             View::Trash => "Recently Deleted".to_string(),
             View::Smart(s) => s.label().to_string(),
+            View::Tag(t) => format!("#{t}"),
         }
     }
 
@@ -632,7 +740,16 @@ impl Notes {
         self.now_t = t;
         // sorting moves notes: the open one is found again by id
         let open = self.editing().map(|n| n.id.clone());
-        store::sort_by_key_dir(&mut self.notes, self.prefs.sort, self.prefs.reverse, &self.pinned);
+        store::sort_ordered(&mut self.notes, self.prefs.sort, self.prefs.oldest_first, &self.pinned);
+        let mut tag_counts: HashMap<String, u32> = HashMap::new();
+        for n in self.notes.iter().filter(|n| self.loc_of(&n.id) != folders::TRASH) {
+            for tag in store::tags(&n.text) {
+                *tag_counts.entry(tag).or_insert(0) += 1;
+            }
+        }
+        let mut tag_list: Vec<(String, u32)> = tag_counts.into_iter().collect();
+        tag_list.sort();
+        self.tag_list = tag_list;
         if let Some(id) = open {
             if let Some(i) = self.notes.iter().position(|n| n.id == id) {
                 self.screen = Screen::Editor(i);
@@ -645,6 +762,7 @@ impl Notes {
         self.shown = ranked.into_iter().filter(|&i| self.visible(i, searching, cutoff)).collect();
         self.shown_pinned = self.shown.iter().filter(|&&i| self.is_pinned(&self.notes[i].id)).count();
         let now = self.wall.now(t);
+        self.sections = self.compute_sections(now, searching);
         let text_w = self.list_px(ui).1 - 2.0 * ui.pt(SPACE_S + SPACE_L);
         self.appearance = LABEL.now();
         self.rows = self
@@ -718,11 +836,11 @@ impl Notes {
     fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
         let (lx, lw) = self.list_px(ui);
         let m = ui.pt(SPACE_S);
-        let pins = self.shown_pins();
-        let section = if pins > 0 { SECTION_PT + if i >= pins { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
+        let section = self.section_offset(i);
         (lx + m, ui.pt(list_top_pt() + section + ROW_PT * i as f32) - self.list_scroll.offset(), lw - 2.0 * m, ui.pt(ROW_PT))
     }
 
+    #[cfg(test)]
     fn shown_pins(&self) -> usize {
         self.shown_pinned
     }
@@ -861,8 +979,7 @@ impl Notes {
     /// Keeps the scroll range in step with the content.
     fn fit_scroll(&mut self, ui: &Ui) {
         let bottom = self.content_bottom(ui);
-        let pins = self.shown_pins();
-        let section = if pins > 0 { SECTION_PT + if pins < self.shown.len() { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
+        let section = self.sections_total();
         let (list_h, text_h) = (ui.pt(list_top_pt() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L), ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0));
         self.list_scroll.set_max(list_h - bottom);
         self.scroll.set_max(text_h - bottom);
@@ -912,37 +1029,6 @@ impl Notes {
     pub fn show_note(&mut self, ui: &Ui, id: &str, t: f64) -> bool {
         let Some(i) = self.notes.iter().position(|n| n.id == id) else { return false };
         self.open_note(ui, i, false, t);
-        true
-    }
-
-    /// The newest `count` notes outside Recently Deleted as (id, title), newest first (File > Recent Notes).
-    pub fn recent(&self, count: usize) -> Vec<(String, String)> {
-        let mut all: Vec<&Note> = self.indexable().into_iter().map(|(n, _)| n).collect();
-        all.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
-        all.into_iter().take(count).map(|n| (n.id.clone(), n.title().to_string())).collect()
-    }
-
-    /// Whether the editor-bound menu commands apply (a note is open and not in Recently Deleted).
-    pub fn can_format(&self) -> bool {
-        self.editing().is_some_and(|n| self.loc_of(&n.id) != folders::TRASH)
-    }
-
-    /// A Format menu command by name: "check-all", "uncheck-all", "indent", "outdent", "move-up", "move-down".
-    /// False when the name is unknown or no editable note is open.
-    pub fn format_command(&mut self, ui: &Ui, name: &str, t: f64) -> bool {
-        if !self.can_format() {
-            return false;
-        }
-        let act = match name {
-            "check-all" => Act::CheckAll,
-            "uncheck-all" => Act::UncheckAll,
-            "indent" => Act::Indent,
-            "outdent" => Act::Outdent,
-            "move-up" => Act::MoveLineUp,
-            "move-down" => Act::MoveLineDown,
-            _ => return false,
-        };
-        self.run(ui, act, t);
         true
     }
 
@@ -1163,6 +1249,133 @@ impl Notes {
     /// True while a note is open in the editor (Edit > Undo and Redo apply).
     pub fn is_editing(&self) -> bool {
         matches!(self.screen, Screen::Editor(_))
+    }
+
+    /// Runs a Format menu command on the open note; false when no note is open.
+    pub fn format(&mut self, ui: &Ui, f: Format, t: f64) -> bool {
+        if !self.is_editing() {
+            return false;
+        }
+        self.do_format(ui, f, t);
+        self.dirty = true;
+        true
+    }
+
+    /// Gives the paragraphs of the selection (or the caret's) a paragraph style; false when no note is open.
+    pub fn style(&mut self, ui: &Ui, block: md::Block, t: f64) -> bool {
+        if !self.is_editing() {
+            return false;
+        }
+        let sel = self.editor.selection().unwrap_or(self.editor.caret()..self.editor.caret());
+        self.restyle(ui, sel, block, t);
+        true
+    }
+
+    /// The table commands that apply at the caret (empty when the caret is not in a table or no note is open).
+    pub fn table_ops(&self) -> Vec<table::Op> {
+        if self.is_editing() { table::available(self.editor.text(), self.editor.caret()) } else { vec![] }
+    }
+
+    /// Whether the open note has a checklist (Mark All and Unmark All apply).
+    pub fn has_checklist(&self) -> bool {
+        self.editing().is_some_and(|n| n.checklist().1 > 0)
+    }
+
+    /// Edit > Paste as Markdown: the pasteboard text goes in as it is, so Markdown marks become formatting.
+    pub fn paste_markdown(&mut self, ui: &Ui, t: f64) -> bool {
+        if !self.is_editing() {
+            return false;
+        }
+        let Some(text) = springboard::shell::clipboard::text() else { return false };
+        self.paste_text(ui, &text, t);
+        true
+    }
+
+    /// Edit > Paste and Match Style: the pasteboard text with its Markdown marks removed, so it takes the style of
+    /// the paragraph it lands in.
+    pub fn paste_match_style(&mut self, ui: &Ui, t: f64) -> bool {
+        if !self.is_editing() {
+            return false;
+        }
+        let Some(text) = springboard::shell::clipboard::text() else { return false };
+        self.paste_text(ui, &md::to_plain(&text), t);
+        true
+    }
+
+    fn paste_text(&mut self, ui: &Ui, text: &str, t: f64) {
+        self.editor.replace_selection(ui, text, t);
+        self.changed(ui, t);
+    }
+
+    /// Math Results on or off (the Note menu).
+    pub fn math_results(&self) -> bool {
+        self.prefs.math_results
+    }
+
+    pub fn toggle_math_results(&mut self) {
+        self.prefs.math_results = !self.prefs.math_results;
+        self.save_prefs();
+        self.dirty = true;
+    }
+
+    /// The newest notes outside Recently Deleted as `(id, title)`, for the Recent Notes menu.
+    pub fn recent_notes(&self) -> Vec<(String, String)> {
+        let mut live: Vec<&Note> = self.notes.iter().filter(|n| self.loc_of(&n.id) != folders::TRASH).collect();
+        live.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
+        live.into_iter().take(RECENT_MENU).map(|n| (n.id.clone(), n.title().to_string())).collect()
+    }
+
+    /// Opens the note that `query` names: its id, else the newest note with that title (any case), else the
+    /// newest whose title contains it. The note's title, or `None` when nothing matches.
+    pub fn open_named(&mut self, ui: &Ui, query: &str, t: f64) -> Option<String> {
+        let q = query.trim().to_lowercase();
+        if q.is_empty() {
+            return None;
+        }
+        let newest = |keep: &dyn Fn(&str) -> bool| {
+            self.notes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| self.loc_of(&n.id) != folders::TRASH && keep(&n.title().to_lowercase()))
+                .max_by_key(|(_, n)| n.modified)
+                .map(|(i, _)| i)
+        };
+        let by_id = self.notes.iter().position(|n| n.id == query.trim() && self.loc_of(&n.id) != folders::TRASH);
+        let i = by_id.or_else(|| newest(&|title| title == q)).or_else(|| newest(&|title| title.contains(&q)))?;
+        let title = self.notes[i].title().to_string();
+        self.open_note(ui, i, false, t);
+        Some(title)
+    }
+
+    /// Shows a folder in the list (the Open Folder intent); false when there is no such folder.
+    pub fn open_folder(&mut self, ui: &Ui, name: &str, t: f64) -> bool {
+        let Some(folder) = self.folders.iter().find(|f| f.eq_ignore_ascii_case(name.trim())).cloned() else { return false };
+        self.show_view(ui, View::Folder(folder), t);
+        self.dirty = true;
+        true
+    }
+
+    /// New Quick Note from the menu bar. With `resume` (or the "resumes last" setting) and a quick note still on
+    /// disk, that note opens again; otherwise a new note starts and is recorded as the quick note. `resume` alone
+    /// never starts a note.
+    pub fn quick_note(&mut self, ui: &Ui, resume: bool, t: f64) {
+        if resume || self.prefs.resume_quick {
+            if let Some(id) = store::load_quick(&self.dir) {
+                if self.notes.iter().any(|n| n.id == id && self.loc_of(&n.id) != folders::TRASH) {
+                    self.show_note(ui, &id, t);
+                    return;
+                }
+            }
+        }
+        if resume {
+            return;
+        }
+        self.compose(ui, t);
+        if let Some(id) = self.editing().map(|n| n.id.clone()) {
+            if let Err(error) = store::save_quick(&self.dir, &id) {
+                self.notice = Some(format!("Unable to record the quick note: {error}"));
+            }
+        }
     }
 
     /// The selected Markdown of the open note (Edit > Copy), or `None` when no note is open or nothing is selected.
@@ -1389,38 +1602,96 @@ impl Notes {
         self.rewrite(ui, &new, caret, t);
     }
 
-    /// Format > Checklist > Mark All Checked / Unmark All: one undo step.
-    fn set_all_checks(&mut self, ui: &Ui, done: bool, t: f64) {
-        let new = lists::set_all_checks(self.editor.text(), done);
+    /// Runs a Format menu command on the open note.
+    fn do_format(&mut self, ui: &Ui, f: Format, t: f64) {
+        if !matches!(self.screen, Screen::Editor(_)) {
+            return;
+        }
+        match f {
+            Format::Char(fmt) => self.apply_fmt(ui, fmt, t),
+            Format::Indent => self.shift_indent(ui, true, t),
+            Format::Outdent => self.shift_indent(ui, false, t),
+            Format::MoveUp => self.move_items(ui, true, t),
+            Format::MoveDown => self.move_items(ui, false, t),
+            Format::CheckAll => self.set_checks(ui, true, t),
+            Format::UncheckAll => self.set_checks(ui, false, t),
+            Format::Table(op) => self.edit_table(ui, op, t),
+            Format::CalculateMath => self.calculate(ui, t),
+            Format::AddLink => self.start_link(ui, t),
+        }
+    }
+
+    /// Ticks or unticks every checklist item of the open note, as one undo step.
+    fn set_checks(&mut self, ui: &Ui, done: bool, t: f64) {
+        let new = md::set_all_checks(self.editor.text(), done);
+        let caret = self.editor.caret().min(new.chars().count());
+        self.rewrite(ui, &new, caret, t);
+    }
+
+    /// Tab and Shift+Tab (and the Format menu): one level more or less on the list lines of the selection or
+    /// the caret's paragraph. Other lines are left alone.
+    fn shift_indent(&mut self, ui: &Ui, more: bool, t: f64) {
         let caret = self.editor.caret();
-        self.rewrite(ui, &new, caret, t);
+        let sel = self.editor.selection().unwrap_or(caret..caret);
+        let a = self.editor.paragraph_of(sel.start).start;
+        let b = self.editor.paragraph_of(sel.end).end;
+        let part: String = self.editor.text().chars().skip(a).take(b - a).collect();
+        let Some(new) = (if more { outline::indent(&part) } else { outline::outdent(&part) }) else { return };
+        let (old_len, new_len) = (part.chars().count(), new.chars().count());
+        self.editor.replace_range(ui, a..b, &new, t, false);
+        let target = if part.contains('\n') { a + new_len } else { (caret + new_len).saturating_sub(old_len).max(a) };
+        self.editor.set_caret(target);
+        self.changed(ui, t);
     }
 
-    /// Indent, outdent or move the caret's line (Format > Indentation, Move Item), as one undo step; the caret
-    /// stays on the same line content.
-    fn list_line_op(&mut self, ui: &Ui, op: Act, t: f64) {
+    /// Ctrl+Cmd+Up and Down (and the Format menu): the list item under the caret, with the items nested under
+    /// it, passes its neighbour.
+    fn move_items(&mut self, ui: &Ui, up: bool, t: f64) {
         let text = self.editor.text().to_string();
-        let (line, col) = lists::line_col(&text, self.editor.caret());
-        let (new, to_line, to_col) = match op {
-            Act::Indent => (lists::indent(&text, line), line, col + lists::INDENT),
-            Act::Outdent => (lists::outdent(&text, line), line, col.saturating_sub(lists::INDENT)),
-            Act::MoveLineUp => (lists::move_line(&text, line, true), line.saturating_sub(1), col),
-            Act::MoveLineDown => (lists::move_line(&text, line, false), line + 1, col),
-            _ => return,
-        };
-        let Some(new) = new else { return };
-        let len = new.split('\n').nth(to_line).map_or(0, |l| l.chars().count());
-        let caret = lists::line_start(&new, to_line) + to_col.min(len);
-        self.rewrite(ui, &new, caret, t);
+        let caret = self.editor.caret();
+        let sel = self.editor.selection().unwrap_or(caret..caret);
+        let line_of = |c: usize| text.chars().take(c).filter(|&ch| ch == '\n').count();
+        let (first, last) = (line_of(self.editor.paragraph_of(sel.start).start), line_of(self.editor.paragraph_of(sel.end).start));
+        let Some(moved) = outline::move_lines(&text, first, last, up) else { return };
+        let target = (caret as isize + moved.shift).max(0) as usize;
+        self.rewrite(ui, &moved.text, target, t);
     }
 
-    /// A table command at the caret (add or delete a row or column, convert to text), as one undo step.
-    fn table_op(&mut self, ui: &Ui, op: table::Op, t: f64) {
+    /// A table command from the Format menu, applied to the table under the caret.
+    fn edit_table(&mut self, ui: &Ui, op: table::Op, t: f64) {
         let text = self.editor.text().to_string();
-        let (line, col) = lists::line_col(&text, self.editor.caret());
-        let Some(new) = table::apply(&text, line, col, op) else { return };
-        let caret = lists::line_start(&new, line);
-        self.rewrite(ui, &new, caret, t);
+        let Some(edit) = table::apply(&text, self.editor.caret(), op) else { return };
+        self.editor.replace_range(ui, edit.range, &edit.with, t, false);
+        self.editor.set_caret(edit.caret);
+        self.changed(ui, t);
+    }
+
+    /// Calculate Math Results: every line that ends with `=` after a calculation gets its answer.
+    fn calculate(&mut self, ui: &Ui, t: f64) {
+        let old = self.editor.text().to_string();
+        let new = math::complete_text(&old);
+        if new == old {
+            return;
+        }
+        let caret = self.editor.caret();
+        let para_end = self.editor.paragraph_of(caret).end;
+        let head: String = old.chars().take(para_end).collect();
+        let grown = math::complete_text(&head).chars().count().saturating_sub(head.chars().count());
+        let target = (caret + grown).min(new.chars().count());
+        self.rewrite(ui, &new, target, t);
+    }
+
+    /// With Math Results on, typing `=` at the end of a calculation writes the answer after it.
+    fn answer_math(&mut self, ui: &Ui, t: f64) {
+        let caret = self.editor.caret();
+        let para = self.editor.paragraph_of(caret);
+        if caret != para.end {
+            return;
+        }
+        let line: String = self.editor.text().chars().skip(para.start).take(para.len()).collect();
+        if let Some(answer) = math::result_for_line(&line) {
+            self.editor.replace_range(ui, caret..caret, &format!(" {answer}"), t, false);
+        }
     }
 
     /// Cycles the current paragraph through body, heading ("## ") and
@@ -1473,10 +1744,13 @@ impl Notes {
         let text = self.editor.text().to_string();
         let sel = self.editor.selection().unwrap_or(self.editor.caret()..self.editor.caret());
         match f {
-            Fmt::Bold | Fmt::Italic | Fmt::Code => {
+            Fmt::Bold | Fmt::Italic | Fmt::Code | Fmt::Strike | Fmt::Underline | Fmt::Highlight => {
                 let marker = match f {
                     Fmt::Bold => "**",
                     Fmt::Italic => "*",
+                    Fmt::Strike => "~~",
+                    Fmt::Underline => "++",
+                    Fmt::Highlight => "==",
                     _ => "`",
                 };
                 let r = md::toggle_wrap(&text, sel, marker);
@@ -1538,6 +1812,11 @@ impl Notes {
             let current = self.view == view;
             items.push((format!("{}\t{}", s.label(), self.count_in(&view)), Act::View(view), current));
         }
+        for (tag, n) in self.tag_list.iter().take(MENU_TAGS) {
+            let view = View::Tag(tag.clone());
+            let current = self.view == view;
+            items.push((format!("#{tag}\t{n}"), Act::View(view), current));
+        }
         items.push(("New Folder".to_string(), Act::NewFolder, false));
         if matches!(self.view, View::Folder(_)) {
             items.push(("Rename Folder".to_string(), Act::RenameFolder, false));
@@ -1546,10 +1825,11 @@ impl Notes {
         for k in store::SortKey::ALL {
             items.push((format!("Sort by {}", k.label()), Act::Sort(k), self.prefs.sort == k));
         }
-        let (natural, reversed) = self.prefs.sort.directions();
-        items.push((natural.to_string(), Act::SortReverse(false), !self.prefs.reverse));
-        items.push((reversed.to_string(), Act::SortReverse(true), self.prefs.reverse));
+        items.push(("Group by Date".to_string(), Act::ToggleGroupDate, self.prefs.group_by_date));
+        items.push(("Newest First".to_string(), Act::SortOrder(false), !self.prefs.oldest_first));
+        items.push(("Oldest First".to_string(), Act::SortOrder(true), self.prefs.oldest_first));
         items.push(("Move Checked to Bottom".to_string(), Act::ToggleCheckedBottom, self.prefs.checked_to_bottom));
+        items.push(("New Quick Note Resumes Last".to_string(), Act::ToggleResumeQuick, self.prefs.resume_quick));
         let (mx, my, mw, mh) = self.title_rect(ui);
         self.show_menu(ui, items, mx + mw - ui.pt(MENU_W_PT), my + mh + ui.pt(SPACE_XS));
     }
@@ -1564,6 +1844,7 @@ impl Notes {
             ("Share as Markdown (.md)".to_string(), Act::ShareMd, false),
             ("Share as Text (.txt)".to_string(), Act::ShareText, false),
             ("Share as PDF (.pdf)".to_string(), Act::SharePdf, false),
+            ("Format...".to_string(), Act::OpenFormat, false),
             ("Title".to_string(), Act::Style(md::Block::Title), false),
             ("Heading".to_string(), Act::Style(md::Block::Heading), false),
             ("Subheading".to_string(), Act::Style(md::Block::Subheading), false),
@@ -1578,23 +1859,6 @@ impl Notes {
             ("Replace in Note".to_string(), Act::Replace, false),
         ];
         if here != folders::TRASH {
-            let (line, _) = lists::line_col(self.editor.text(), self.editor.caret());
-            let current = self.editor.text().split('\n').nth(line).unwrap_or("").to_string();
-            if lists::is_list_line(&current) {
-                items.push(("Increase Indent".to_string(), Act::Indent, false));
-                items.push(("Decrease Indent".to_string(), Act::Outdent, false));
-            }
-            items.push(("Move Line Up".to_string(), Act::MoveLineUp, false));
-            items.push(("Move Line Down".to_string(), Act::MoveLineDown, false));
-            if self.notes[i].checklist().1 > 0 {
-                items.push(("Mark All Checked".to_string(), Act::CheckAll, false));
-                items.push(("Unmark All".to_string(), Act::UncheckAll, false));
-            }
-            if table::in_table(self.editor.text(), line) {
-                for op in table::Op::ALL {
-                    items.push((op.label().to_string(), Act::Table(op), false));
-                }
-            }
             if !here.is_empty() {
                 items.push(("Move to All Notes".to_string(), Act::MoveTo(String::new()), false));
             }
@@ -1614,6 +1878,41 @@ impl Notes {
         self.show_menu(ui, items, mx, my + mh + ui.pt(SPACE_XS));
     }
 
+    /// The Format menu of the open note: paragraph and list styles (a check marks the caret's), character styles,
+    /// indentation, the checklist commands, the table commands when the caret is in a table, and Math Results.
+    fn open_format_menu(&mut self, ui: &Ui) {
+        let Screen::Editor(i) = self.screen else { return };
+        let text = self.editor.text().to_string();
+        let caret = self.editor.caret();
+        let para = self.editor.paragraph_of(caret);
+        let line: String = text.chars().skip(para.start).take(para.len()).collect();
+        let current = md::classify(&line).block;
+        let same = |b: md::Block| std::mem::discriminant(&b) == std::mem::discriminant(&current);
+        let mut items: Vec<(String, Act, bool)> = vec![];
+        for (label, block) in PARAGRAPH_STYLES {
+            items.push((label.to_string(), Act::Style(block), same(block)));
+        }
+        for (label, f) in CHARACTER_STYLES {
+            items.push((label.to_string(), Act::Do(Format::Char(f)), false));
+        }
+        items.push(("Increase Indent".to_string(), Act::Do(Format::Indent), false));
+        items.push(("Decrease Indent".to_string(), Act::Do(Format::Outdent), false));
+        items.push(("Move Item Up".to_string(), Act::Do(Format::MoveUp), false));
+        items.push(("Move Item Down".to_string(), Act::Do(Format::MoveDown), false));
+        if self.notes[i].checklist().1 > 0 {
+            items.push(("Mark All".to_string(), Act::Do(Format::CheckAll), false));
+            items.push(("Unmark All".to_string(), Act::Do(Format::UncheckAll), false));
+        }
+        for op in table::available(&text, caret) {
+            items.push((op.label().to_string(), Act::Do(Format::Table(op)), false));
+        }
+        items.push(("Add Link...".to_string(), Act::Do(Format::AddLink), false));
+        items.push(("Calculate Math Results".to_string(), Act::Do(Format::CalculateMath), false));
+        items.push(("Math Results".to_string(), Act::ToggleMath, self.prefs.math_results));
+        let (mx, my, _, mh) = self.editor_more_rect(ui);
+        self.show_menu(ui, items, mx, my + mh + ui.pt(SPACE_XS));
+    }
+
     fn menu_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Act> {
         let menu = self.menu.as_ref()?;
         let (mx, my, mw, mh) = self.menu_rect(ui, menu);
@@ -1628,10 +1927,43 @@ impl Notes {
         let mut field = TextField::new(ui, "Folder Name", MAC_BODY_PT, false, 40);
         field.set_text(ui, &old.clone().unwrap_or_else(|| folders::unique_name(&self.folders, "New Folder")));
         field.focused = true;
-        self.naming = Some(Naming { old, field });
+        self.naming = Some(Naming { old, field, link: None });
         self.searching = false;
         self.search.focused = false;
         self.keyboard.set_shown(!self.hw_kb, t);
+    }
+
+    /// Add Link (Cmd+K): asks for a web address and wraps the selection (or the caret) as `[text](address)`.
+    fn start_link(&mut self, ui: &Ui, t: f64) {
+        if !self.is_editing() {
+            return;
+        }
+        let caret = self.editor.caret();
+        let sel = self.editor.selection().unwrap_or(caret..caret);
+        let mut field = TextField::new(ui, "Web Address", MAC_BODY_PT, false, 400);
+        field.set_text(ui, "https://");
+        field.focused = true;
+        self.naming = Some(Naming { old: None, field, link: Some(sel) });
+        self.searching = false;
+        self.search.focused = false;
+        self.keyboard.set_shown(!self.hw_kb, t);
+    }
+
+    /// The address was entered: the link replaces the range, or the note says the address is empty.
+    fn finish_link(&mut self, ui: &Ui, sel: Range<usize>, url: &str, t: f64) {
+        if !self.is_editing() {
+            return;
+        }
+        let text = self.editor.text().to_string();
+        match md::link_markdown(&text, sel, url) {
+            Some(link) => {
+                self.notice = None;
+                self.editor.replace_range(ui, link.range, &link.with, t, false);
+                self.editor.select(link.select);
+                self.changed(ui, t);
+            }
+            None => self.notice = Some("Enter a web address for the link".to_string()),
+        }
     }
 
     fn cancel_naming(&mut self, t: f64) {
@@ -1644,6 +1976,10 @@ impl Notes {
         let Some(naming) = self.naming.take() else { return };
         self.keyboard.set_shown(false, t);
         let name = naming.field.text().to_string();
+        if let Some(range) = naming.link.clone() {
+            self.finish_link(ui, range, &name, t);
+            return;
+        }
         let result = match &naming.old {
             None => folders::create(&self.dir, &name),
             Some(old) => folders::rename(&self.dir, old, &name),
@@ -1790,15 +2126,6 @@ impl Notes {
                 self.save_prefs();
                 self.rebuild(ui, t);
             }
-            Act::SortReverse(r) => {
-                self.prefs.reverse = r;
-                self.save_prefs();
-                self.rebuild(ui, t);
-            }
-            Act::CheckAll => self.set_all_checks(ui, true, t),
-            Act::UncheckAll => self.set_all_checks(ui, false, t),
-            Act::Indent | Act::Outdent | Act::MoveLineUp | Act::MoveLineDown => self.list_line_op(ui, act.clone(), t),
-            Act::Table(op) => self.table_op(ui, op, t),
             Act::ToggleCheckedBottom => {
                 self.prefs.checked_to_bottom = !self.prefs.checked_to_bottom;
                 self.save_prefs();
@@ -1885,6 +2212,26 @@ impl Notes {
             }
             Act::CheckSpelling => self.check_note(ui),
             Act::Replace => self.start_replacing(ui, t),
+            Act::SortOrder(oldest) => {
+                self.prefs.oldest_first = oldest;
+                self.save_prefs();
+                self.rebuild(ui, t);
+            }
+            Act::OpenFormat => self.open_format_menu(ui),
+            Act::Do(f) => self.do_format(ui, f, t),
+            Act::ToggleMath => {
+                self.prefs.math_results = !self.prefs.math_results;
+                self.save_prefs();
+            }
+            Act::ToggleGroupDate => {
+                self.prefs.group_by_date = !self.prefs.group_by_date;
+                self.save_prefs();
+                self.rebuild(ui, t);
+            }
+            Act::ToggleResumeQuick => {
+                self.prefs.resume_quick = !self.prefs.resume_quick;
+                self.save_prefs();
+            }
             Act::ChoosePhoto => self.picker = Some(picker::Picker::open(ui.pt(PICK_THUMB_PT) as usize)),
         }
     }
@@ -2202,7 +2549,15 @@ impl Notes {
                     self.save(t, true);
                     return;
                 }
+                if out == Out::Named("Tab") {
+                    // Tab on a list line indents it; elsewhere it does nothing
+                    self.shift_indent(ui, true, t);
+                    return;
+                }
                 if self.editor.edit(ui, &out, t) {
+                    if self.prefs.math_results && matches!(&out, Out::Text(s) if s == "=") {
+                        self.answer_math(ui, t);
+                    }
                     self.changed(ui, t);
                 } else {
                     self.show_caret(ui);
@@ -2215,10 +2570,25 @@ impl Notes {
     /// Shift+Z redo in the editor. False when the chord has no meaning on this screen.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+        if key == KEY_TAB && mods == CHORD_SHIFT && matches!(self.screen, Screen::Editor(_)) {
+            // Shift+Tab takes a level off the list lines
+            self.shift_indent(ui, false, t);
+            return true;
+        }
         if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 {
             return false;
         }
         let shift = mods & CHORD_SHIFT != 0;
+        if matches!(self.screen, Screen::Editor(_)) && mods & CHORD_CTRL != 0 && mods & CHORD_META != 0 && (key == KEY_UP || key == KEY_DOWN) {
+            // Ctrl+Cmd+Up and Down move the list item
+            self.move_items(ui, key == KEY_UP, t);
+            return true;
+        }
+        if key == KEY_K && !shift && matches!(self.screen, Screen::Editor(_)) {
+            // Cmd+K asks for a web address
+            self.start_link(ui, t);
+            return true;
+        }
         if key == 14 && !shift && self.screen == Screen::List {
             // Cmd+Backspace deletes the arrow-selected note
             let Some(i) = self.selected_index() else { return false };
@@ -2232,6 +2602,9 @@ impl Notes {
             (Screen::Editor(_), 44, true) => Target::Redo,
             (Screen::Editor(_), 48, false) => Target::Fmt(Fmt::Bold),
             (Screen::Editor(_), 23, false) => Target::Fmt(Fmt::Italic),
+            (Screen::Editor(_), 22, false) => Target::Fmt(Fmt::Underline),
+            (Screen::Editor(_), 45, true) => Target::Fmt(Fmt::Strike),
+            (Screen::Editor(_), 35, true) => Target::Fmt(Fmt::Highlight),
             _ => return false,
         };
         self.activate(ui, target, 0.0, 0.0, t);
@@ -2578,20 +2951,18 @@ impl Notes {
         let bottom = self.content_bottom(ui);
         let rh = ui.pt(ROW_PT);
         let n = self.shown.len();
-        let pins = self.shown_pins();
+        let sections = self.sections.clone();
         let open = self.editing().map(|note| note.id.clone());
         let selected = self.selected_index();
         let rects: Vec<_> = (0..n).map(|i| self.row_rect(ui, i)).collect();
         let places: Vec<String> = (0..n).map(|i| self.loc_of(&self.notes[self.shown[i]].id).to_string()).collect();
         let pinned: Vec<bool> = (0..n).map(|i| self.is_pinned(&self.notes[self.shown[i]].id)).collect();
         let mut content = s.rows(ui.pt(nav_bottom_pt()) as usize, bottom as usize);
-        if pins > 0 {
-            for (label, row) in [("Pinned", 0), ("Notes", pins)] {
-                if row < n {
-                    let (rx, ry, ..) = rects[row];
-                    let img = self.labels.get(ui, label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
-                    content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
-                }
+        for (label, row) in &sections {
+            if *row < n {
+                let (rx, ry, ..) = rects[*row];
+                let img = self.labels.get(ui, label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
+                content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
             }
         }
         for i in 0..n {
@@ -2654,7 +3025,7 @@ impl Notes {
                 }
             }
             let next_open = i + 1 < n && open.as_deref() == Some(self.notes[self.shown[i + 1]].id.as_str());
-            if i + 1 < n && i + 1 != pins && !is_open && !next_open {
+            if i + 1 < n && !sections.iter().any(|(_, start)| *start == i + 1) && !is_open && !next_open {
                 content.fill_rrect(rx + ui.pt(SPACE_L), ry + rh - 1.0, rw - ui.pt(SPACE_L), 1.0, 0.0, SEPARATOR_C.now());
             }
         }
@@ -2739,13 +3110,17 @@ impl Notes {
         let (x, y, w, h) = (lx + pad, ui.pt(nav_bottom_pt()) + pad, lw - 2.0 * pad, ui.pt(56.0));
         s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
         s.stroke_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), 1.0, SEPARATOR_C.now());
-        let label = if naming.old.is_some() { "Rename Folder" } else { "New Folder" };
+        let (label, placeholder) = match (&naming.link, &naming.old) {
+            (Some(_), _) => ("Add Link", "Web Address"),
+            (None, Some(_)) => ("Rename Folder", "Folder Name"),
+            (None, None) => ("New Folder", "Folder Name"),
+        };
         let mut field = bifrost_app::controls::TextField::new();
         field.push_str(naming.field.text());
         let img = self.labels.get(ui, label, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now());
         s.blit(img, (x + ui.pt(SPACE_S)) as i32, (y + ui.pt(SPACE_XS)) as i32, 255, 255);
         let r = chrome::pt_rect(ui, (x + ui.pt(SPACE_S), y + ui.pt(SPACE_L + SPACE_XS), w - ui.pt(SPACE_L), ui.pt(SPACE_XXL)));
-        bifrost_app::widgets::text_field(s, ui, &field, r, "Folder Name", true);
+        bifrost_app::widgets::text_field(s, ui, &field, r, placeholder, true);
     }
 
     /// The open menu: the kit's `NativeMenu` drawing on the popover material.
@@ -3786,54 +4161,6 @@ mod tests {
     }
 
     #[test]
-    fn sort_direction_reverses_the_list_and_persists() {
-        let ui = ui();
-        let dir = scratch("sort-dir");
-        let mut n = seeded(&ui, &dir);
-        let ids = |n: &Notes| n.listed().iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
-        let natural = ids(&n);
-        n.run(&ui, Act::SortReverse(true), 1.0);
-        let mut flipped = natural.clone();
-        flipped.reverse();
-        assert_eq!(ids(&n), flipped);
-        n.open_list_menu(&ui);
-        assert!(n.menu.as_ref().unwrap().items.iter().any(|(l, a, on)| l == "Oldest First" && *a == Act::SortReverse(true) && *on));
-        draw(&mut n, &ui, 2.0);
-        assert!(app(&ui, &dir).prefs().reverse, "the direction survives a restart");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn checklist_mark_all_indent_move_and_table_commands_edit_the_open_note() {
-        let ui = ui();
-        let dir = scratch("format-cmds");
-        let mut n = seeded(&ui, &dir);
-        n.compose(&ui, 100.0);
-        n.editor.set_text(&ui, "Plan\n- [ ] a\n- [x] b\n| A | B |\n| --- | --- |\n| 1 | 2 |");
-        n.changed(&ui, 110.0);
-        n.run(&ui, Act::CheckAll, 120.0);
-        assert!(n.editor.text().contains("- [x] a") && n.editor.text().contains("- [x] b"));
-        n.run(&ui, Act::UncheckAll, 130.0);
-        assert!(n.editor.text().contains("- [ ] a") && n.editor.text().contains("- [ ] b"));
-
-        n.editor.set_caret(lists::line_start(n.editor.text(), 1) + 2);
-        n.run(&ui, Act::Indent, 140.0);
-        assert!(n.editor.text().contains("\n  - [ ] a\n"));
-        n.run(&ui, Act::Outdent, 150.0);
-        assert!(n.editor.text().contains("\n- [ ] a\n"));
-        n.run(&ui, Act::MoveLineDown, 160.0);
-        assert!(n.editor.text().starts_with("Plan\n- [ ] b\n- [ ] a\n"));
-        assert_eq!(lists::line_col(n.editor.text(), n.editor.caret()).0, 2, "the caret follows its line");
-
-        n.editor.set_caret(lists::line_start(n.editor.text(), 5) + 2);
-        n.run(&ui, Act::Table(table::Op::RowBelow), 170.0);
-        assert!(n.editor.text().ends_with("| 1 | 2 |\n|   |   |"));
-        n.run(&ui, Act::Table(table::Op::ToText), 180.0);
-        assert!(n.editor.text().ends_with("A\tB\n1\t2\n\t"), "got {:?}", n.editor.text());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn menus_are_modal_and_tapping_a_row_runs_it() {
         let ui = ui();
         let dir = scratch("menu");
@@ -4021,6 +4348,326 @@ mod tests {
         n.touch(&ui, Event::Up(w - 5.0, 10.0), 2320.0);
         assert!(n.sketch.is_none());
         assert_eq!(n.editing().unwrap().text, format!("Plan\n![image]({id}-1.png)\n"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    /// The text of the open note with the caret put after the first occurrence of `after`.
+    fn caret_after(n: &mut Notes, after: &str) {
+        let text = n.editor.text().to_string();
+        let at = text[..text.find(after).unwrap() + after.len()].chars().count();
+        n.editor.set_caret(at);
+    }
+
+    #[test]
+    fn dates_sort_oldest_first_on_request_and_the_choice_persists() {
+        let ui = ui();
+        let dir = scratch("sort-order");
+        let mut n = seeded(&ui, &dir);
+        let ids = |n: &Notes| n.listed().iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
+        assert_eq!(ids(&n), ["1", "2"], "newest first by default");
+        n.open_list_menu(&ui);
+        let items = n.menu.as_ref().unwrap().items.clone();
+        assert!(items.iter().any(|(l, a, on)| l == "Newest First" && *a == Act::SortOrder(false) && *on));
+        assert!(items.iter().any(|(l, a, on)| l == "Oldest First" && *a == Act::SortOrder(true) && !*on));
+        n.menu = None;
+        n.run(&ui, Act::SortOrder(true), 1.0);
+        assert_eq!(ids(&n), ["2", "1"]);
+        assert!(app(&ui, &dir).prefs().oldest_first, "the direction survives a restart");
+        n.run(&ui, Act::SortOrder(false), 2.0);
+        assert_eq!(ids(&n), ["1", "2"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mark_all_and_unmark_all_flip_the_whole_checklist_in_one_undo_step() {
+        let ui = ui();
+        let dir = scratch("check-all");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Plan\n- [ ] a\n- [x] b\n- [ ] c");
+        assert!(n.has_checklist());
+        n.run(&ui, Act::Do(Format::CheckAll), 2000.0);
+        assert_eq!(n.editor.text(), "Plan\n- [x] a\n- [x] b\n- [x] c");
+        n.run(&ui, Act::Do(Format::UncheckAll), 2100.0);
+        assert_eq!(n.editor.text(), "Plan\n- [ ] a\n- [ ] b\n- [ ] c");
+        assert!(n.editor.undo(&ui, 2200.0));
+        assert_eq!(n.editor.text(), "Plan\n- [x] a\n- [x] b\n- [x] c", "one undo step per command");
+        n.open_format_menu(&ui);
+        assert!(n.menu.as_ref().unwrap().items.iter().any(|(l, _, _)| l == "Mark All"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tags_are_listed_counted_and_filter_the_list() {
+        let ui = ui();
+        let dir = scratch("tags");
+        let mut n = seeded(&ui, &dir);
+        let now = wall().unix;
+        n.notes.push(Note { id: "3".into(), text: "Chores\n#home #errands".into(), modified: now - 30 });
+        n.notes.push(Note { id: "4".into(), text: "Garden\nplant #Home".into(), modified: now - 40 });
+        n.rebuild(&ui, 0.0);
+        assert_eq!(n.tag_list, vec![("errands".to_string(), 1), ("home".to_string(), 2)]);
+        assert_eq!(n.count_in(&View::Tag("home".into())), 2);
+        assert_eq!(listed_ids(&mut n, &ui, View::Tag("home".into())), ["3", "4"]);
+        assert_eq!(n.view_title(), "#home");
+        assert!(listed_ids(&mut n, &ui, View::Tag("nothing".into())).is_empty());
+        n.view = View::All;
+        n.rebuild(&ui, 11.0);
+        let rows: Vec<_> = n.sidebar().items.iter().filter_map(|i| match i {
+            bifrost_app::controls::sidebar::SidebarItem::Row { label, count, .. } => Some((label.clone(), *count)),
+            _ => None,
+        }).collect();
+        assert!(rows.contains(&("#home".to_string(), Some(2))) && rows.contains(&("#errands".to_string(), Some(1))), "{rows:?}");
+        n.open_list_menu(&ui);
+        assert!(n.menu.as_ref().unwrap().items.iter().any(|(l, a, _)| l == "#home\t2" && *a == Act::View(View::Tag("home".into()))));
+        // a note in Recently Deleted does not count
+        n.loc.insert("3".into(), folders::TRASH.into());
+        n.rebuild(&ui, 12.0);
+        assert_eq!(n.tag_list, vec![("home".to_string(), 1)]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tab_and_shift_tab_indent_list_lines_and_ctrl_cmd_arrows_move_them() {
+        use bifrost_app::proto::{CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+        let ui = ui();
+        let dir = scratch("indent");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Plan\n- a\n- b");
+        n.key(&ui, Out::Named("Tab"), 2000.0);
+        assert_eq!(n.editor.text(), "Plan\n- a\n  - b");
+        assert_eq!(n.editor.caret(), "Plan\n- a\n  - b".chars().count(), "the caret stays on its line");
+        assert!(n.chord(&ui, 15, CHORD_SHIFT, 2100.0), "Shift+Tab outdents");
+        assert_eq!(n.editor.text(), "Plan\n- a\n- b");
+        n.key(&ui, Out::Named("Tab"), 2200.0);
+        n.editor.set_caret(0);
+        n.key(&ui, Out::Named("Tab"), 2300.0);
+        assert_eq!(n.editor.text(), "Plan\n- a\n  - b", "Tab on the title line (not a list) does nothing");
+        caret_after(&mut n, "  - b");
+        n.chord(&ui, 15, CHORD_SHIFT, 2400.0);
+        assert_eq!(n.editor.text(), "Plan\n- a\n- b");
+        // moving: "b" goes above "a"
+        caret_after(&mut n, "- b");
+        assert!(n.chord(&ui, 103, CHORD_CTRL | CHORD_META, 2500.0));
+        assert_eq!(n.editor.text(), "Plan\n- b\n- a");
+        assert_eq!(n.editor.caret(), "Plan\n- b".chars().count(), "the caret follows the item");
+        assert!(n.chord(&ui, 108, CHORD_CTRL | CHORD_META, 2600.0));
+        assert_eq!(n.editor.text(), "Plan\n- a\n- b");
+        assert_eq!(n.notes[match n.screen { Screen::Editor(i) => i, Screen::List => panic!("closed") }].text, "Plan\n- a\n- b", "the note follows the editor");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_format_menu_edits_the_table_under_the_caret() {
+        let ui = ui();
+        let dir = scratch("table-menu");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "T\n| A | B |\n| --- | --- |\n| 1 | 2 |");
+        caret_after(&mut n, "| 1 | 2");
+        n.open_format_menu(&ui);
+        let labels: Vec<String> = n.menu.as_ref().unwrap().items.iter().map(|(l, _, _)| l.clone()).collect();
+        assert!(labels.contains(&"Add Row Below".to_string()) && labels.contains(&"Delete Column".to_string()), "{labels:?}");
+        n.menu = None;
+        n.run(&ui, Act::Do(Format::Table(table::Op::RowBelow)), 2000.0);
+        assert_eq!(n.editor.text(), "T\n| A | B |\n| --- | --- |\n| 1 | 2 |\n|  |  |");
+        caret_after(&mut n, "| 1 | 2");
+        n.run(&ui, Act::Do(Format::Table(table::Op::DeleteColumn)), 2100.0);
+        assert_eq!(n.editor.text(), "T\n| A |\n| --- |\n| 1 |\n|  |");
+        n.run(&ui, Act::Do(Format::Table(table::Op::ToText)), 2200.0);
+        assert_eq!(n.editor.text(), "T\nA\n1\n");
+        n.open_format_menu(&ui);
+        assert!(!n.menu.as_ref().unwrap().items.iter().any(|(l, _, _)| l == "Add Row Below"), "no table commands outside a table");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn paragraph_and_character_styles_add_their_marks() {
+        let ui = ui();
+        let dir = scratch("styles");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Title\nplain line");
+        caret_after(&mut n, "plain");
+        n.run(&ui, Act::Style(md::Block::Quote), 2000.0);
+        assert_eq!(n.editor.text(), "Title\n> plain line");
+        n.run(&ui, Act::Style(md::Block::Quote), 2100.0);
+        assert_eq!(n.editor.text(), "Title\nplain line", "choosing the style again returns to body text");
+        n.run(&ui, Act::Style(md::Block::Mono), 2200.0);
+        assert_eq!(n.editor.text(), "Title\n    plain line");
+        n.run(&ui, Act::Style(md::Block::Dashed), 2300.0);
+        assert_eq!(n.editor.text(), "Title\n\u{2013} plain line");
+        n.editor.select("Title\n\u{2013} ".chars().count().."Title\n\u{2013} plain".chars().count());
+        n.run(&ui, Act::Do(Format::Char(Fmt::Strike)), 2400.0);
+        assert_eq!(n.editor.text(), "Title\n\u{2013} ~~plain~~ line");
+        n.run(&ui, Act::Do(Format::Char(Fmt::Strike)), 2500.0);
+        assert_eq!(n.editor.text(), "Title\n\u{2013} plain line", "the same command takes the marks off");
+        n.editor.select("Title\n\u{2013} ".chars().count().."Title\n\u{2013} plain".chars().count());
+        n.run(&ui, Act::Do(Format::Char(Fmt::Underline)), 2600.0);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Highlight)), 2700.0);
+        assert!(n.editor.text().contains("==++plain++==") || n.editor.text().contains("++==plain==++"), "{:?}", n.editor.text());
+        n.open_format_menu(&ui);
+        let checked: Vec<String> = n.menu.as_ref().unwrap().items.iter().filter(|(_, _, on)| *on).map(|(l, _, _)| l.clone()).collect();
+        assert_eq!(checked, vec!["Dashed List".to_string()], "the caret's paragraph style is checked");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn math_results_answer_a_calculation_when_equals_is_typed_or_on_request() {
+        let ui = ui();
+        let dir = scratch("math");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Sum\n2+2");
+        n.editor.set_caret("Sum\n2+2".chars().count());
+        n.key(&ui, Out::Text("=".into()), 2000.0);
+        assert_eq!(n.editor.text(), "Sum\n2+2=", "Math Results is off until it is turned on");
+        n.run(&ui, Act::ToggleMath, 2100.0);
+        assert!(app(&ui, &dir).prefs().math_results, "the setting persists");
+        n.editor.set_text(&ui, "Sum\n6*7");
+        n.editor.set_caret("Sum\n6*7".chars().count());
+        n.key(&ui, Out::Text("=".into()), 2200.0);
+        assert_eq!(n.editor.text(), "Sum\n6*7= 42");
+        assert_eq!(n.notes[match n.screen { Screen::Editor(i) => i, Screen::List => panic!("closed") }].text, "Sum\n6*7= 42");
+        // typing = after plain text asks nothing
+        n.editor.set_text(&ui, "Sum\nhello");
+        n.editor.set_caret("Sum\nhello".chars().count());
+        n.key(&ui, Out::Text("=".into()), 2300.0);
+        assert_eq!(n.editor.text(), "Sum\nhello=");
+        // Calculate Math Results answers every line at once
+        n.editor.set_text(&ui, "Sum\n1+1=\nskip\n(2+3)*4=");
+        n.run(&ui, Act::Do(Format::CalculateMath), 2400.0);
+        assert_eq!(n.editor.text(), "Sum\n1+1= 2\nskip\n(2+3)*4= 20");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn paste_variants_keep_or_strip_markdown_and_copy_as_markdown_reads_the_selection() {
+        let ui = ui();
+        let dir = scratch("paste");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Note\n");
+        springboard::shell::clipboard::set_text("**bold** and ~~gone~~\n- item");
+        assert!(n.paste_markdown(&ui, 2000.0));
+        assert_eq!(n.editor.text(), "Note\n**bold** and ~~gone~~\n- item");
+        n.editor.set_text(&ui, "Note\n");
+        n.editor.set_caret(5);
+        assert!(n.paste_match_style(&ui, 2100.0));
+        assert_eq!(n.editor.text(), "Note\nbold and gone\n\u{2022} item", "the marks are stripped");
+        n.editor.select(5..9);
+        assert_eq!(n.selected_markdown().as_deref(), Some("bold"));
+        n.close_note(&ui, 2200.0);
+        assert!(!n.paste_markdown(&ui, 2300.0), "no note open, nothing to paste into");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn recent_notes_open_by_title_and_folders_open_by_name() {
+        let ui = ui();
+        let dir = scratch("recent");
+        let mut n = seeded(&ui, &dir);
+        assert_eq!(n.recent_notes(), vec![("1".to_string(), "Groceries".to_string()), ("2".to_string(), "Ideas".to_string())]);
+        assert_eq!(n.open_named(&ui, "ideas", 1.0).as_deref(), Some("Ideas"));
+        assert_eq!(n.editing().unwrap().id, "2");
+        assert_eq!(n.open_named(&ui, "groc", 2.0).as_deref(), Some("Groceries"), "a part of the title is enough");
+        assert_eq!(n.open_named(&ui, "1", 3.0).as_deref(), Some("Groceries"), "the id works too");
+        assert_eq!(n.open_named(&ui, "nothing like it", 4.0), None);
+        assert_eq!(n.open_named(&ui, "  ", 5.0), None);
+        n.close_note(&ui, 6.0);
+        folders::create(&dir, "Work").unwrap();
+        n.reload(&ui, 7.0);
+        assert!(!n.open_folder(&ui, "Play", 8.0));
+        assert!(n.open_folder(&ui, "work", 9.0));
+        assert_eq!(n.view(), &View::Folder("Work".into()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_quick_note_is_remembered_and_can_be_resumed() {
+        let ui = ui();
+        let dir = scratch("quick");
+        let mut n = app(&ui, &dir);
+        n.quick_note(&ui, true, 1.0);
+        assert!(n.editing().is_none(), "nothing to resume yet, and resuming never starts a note");
+        n.quick_note(&ui, false, 2.0);
+        let id = n.editing().unwrap().id.clone();
+        assert_eq!(store::load_quick(&dir), Some(id.clone()));
+        type_text(&mut n, &ui, "Idea\nsomething", 3.0);
+        n.close_note(&ui, 4.0);
+        assert!(n.editing().is_none());
+        n.quick_note(&ui, true, 5.0);
+        assert_eq!(n.editing().unwrap().id, id, "Resume Last Quick Note reopens it");
+        n.close_note(&ui, 6.0);
+        // by default New Quick Note starts another note; with the setting on it resumes
+        n.quick_note(&ui, false, 7.0);
+        let second = n.editing().unwrap().id.clone();
+        assert_ne!(second, id);
+        type_text(&mut n, &ui, "Second\nnote", 7.5);
+        n.close_note(&ui, 8.0);
+        n.prefs.resume_quick = true;
+        let before = n.notes.len();
+        n.quick_note(&ui, false, 9.0);
+        assert_eq!(n.notes.len(), before, "no new note while the last quick note exists");
+        assert_eq!(n.editing().unwrap().id, second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn group_by_date_cuts_the_list_into_sections_and_keeps_rows_clear_of_the_headers() {
+        let ui = ui();
+        let dir = scratch("group-date");
+        let mut n = seeded(&ui, &dir);
+        let now = wall().unix;
+        n.notes.push(Note { id: "3".into(), text: "Old plan".into(), modified: now - 86_400 * 20 });
+        n.notes.push(Note { id: "4".into(), text: "Ancient".into(), modified: now - 86_400 * 200 });
+        n.rebuild(&ui, 0.0);
+        assert!(n.sections.is_empty(), "no sections until Group by Date is on");
+        let flat = n.row_rect(&ui, 0).1;
+        n.run(&ui, Act::ToggleGroupDate, 1.0);
+        let labels: Vec<_> = n.sections.iter().map(|(l, _)| l.as_str()).collect();
+        assert_eq!(labels, ["Today", "Previous 7 Days", "Previous 30 Days", "March"], "{labels:?}");
+        assert_eq!(n.sections.iter().map(|(_, i)| *i).collect::<Vec<_>>(), [0, 1, 2, 3]);
+        assert_eq!(n.section_offset(0), SECTION_PT);
+        assert_eq!(n.section_offset(3), SECTION_PT + 3.0 * (SECTION_PT + SECTION_GAP_PT));
+        assert!(n.row_rect(&ui, 0).1 > flat, "the first row sits under its header");
+        let step = n.row_rect(&ui, 1).1 - n.row_rect(&ui, 0).1;
+        assert!((step - ui.pt(ROW_PT + SECTION_PT + SECTION_GAP_PT)).abs() < 0.01, "a row, then the next header");
+        draw(&mut n, &ui, 2.0);
+        // a pinned note gets its own section above the dates; a search or the title sort drops the date sections
+        assert!(n.set_pinned(&ui, "2", true, 3.0));
+        assert_eq!(n.sections.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(), ["Pinned", "Today", "Previous 30 Days", "March"]);
+        n.search.set_text(&ui, "plan");
+        n.rebuild(&ui, 4.0);
+        assert!(n.sections.is_empty(), "a search ranks by relevance, not by date");
+        n.search.set_text(&ui, "");
+        n.run(&ui, Act::Sort(store::SortKey::Title), 5.0);
+        assert_eq!(n.sections.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(), ["Pinned", "Notes"]);
+        assert!(app(&ui, &dir).prefs().group_by_date, "the setting persists");
+        n.run(&ui, Act::ToggleGroupDate, 6.0);
+        assert!(!n.prefs.group_by_date);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn add_link_asks_for_an_address_and_wraps_the_selection() {
+        use bifrost_app::proto::CHORD_META;
+        let ui = ui();
+        let dir = scratch("link");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Note\nSee docs here");
+        let start = "Note\nSee ".chars().count();
+        n.editor.select(start..start + 4);
+        assert!(n.chord(&ui, 37, CHORD_META, 2000.0), "Cmd+K");
+        assert_eq!(n.naming.as_ref().unwrap().field.text(), "https://");
+        n.naming.as_mut().unwrap().field.set_text(&ui, "example.com/a b");
+        n.key(&ui, Out::Enter, 2100.0);
+        assert!(n.naming.is_none());
+        assert_eq!(n.editor.text(), "Note\nSee [docs](https://example.com/a%20b) here");
+        assert_eq!(n.editing().unwrap().text, n.editor.text(), "the note follows the editor");
+        // an address with nothing after the scheme is refused and the text stays
+        n.run(&ui, Act::Do(Format::AddLink), 2200.0);
+        n.key(&ui, Out::Enter, 2300.0);
+        assert_eq!(n.notice.as_deref(), Some("Enter a web address for the link"));
+        assert_eq!(n.editor.text(), "Note\nSee [docs](https://example.com/a%20b) here");
+        // Escape cancels the prompt
+        n.run(&ui, Act::Do(Format::AddLink), 2400.0);
+        assert!(n.escape(&ui, 2500.0));
+        assert!(n.naming.is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -31,6 +31,20 @@ description = "Lists the notes that contain the query."
 shortcut = false
 params = ["query:string"]
 
+[[intent]]
+id = "open-note"
+title = "Open Note"
+description = "Opens the note with the given title."
+shortcut = false
+params = ["note:string"]
+
+[[intent]]
+id = "open-folder"
+title = "Open Folder"
+description = "Shows the notes of a folder."
+shortcut = false
+params = ["folder:string"]
+
 [[log.subsystem]]
 id = "is.olibuijr.notes"
 categories = ["save", "sync"]

@@ -48,7 +48,8 @@ struct Line {
 }
 
 /// A run of chars (line-relative) drawn in one weight and colour. `kind` 1
-/// is a bullet marker and 2 a checkbox, both drawn as shapes.
+/// is a bullet marker and 2 a checkbox, both drawn as shapes; 3, 4 and 5 are
+/// struck-through, underlined and highlighted text, and 6 the bar of a quote.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Seg {
     a: usize,
@@ -389,9 +390,15 @@ impl TextArea {
                 match block {
                     Block::Check(_) => st.2 = 2,
                     Block::Bullet if i == indent => st.2 = 1,
+                    Block::Quote if i == indent => st.2 = 6,
                     _ => {}
                 }
             }
+        }
+        match block {
+            Block::Quote => v.iter_mut().skip(prefix).for_each(|st| st.1 = SECONDARY),
+            Block::Mono => v.iter_mut().skip(prefix).for_each(|st| st.1 = CODE),
+            _ => {}
         }
         let done = block == Block::Check(true);
         for sp in md::spans(para, prefix) {
@@ -400,6 +407,9 @@ impl TextArea {
                     Style::Bold => st.0 = Weight::Bold,
                     Style::Italic if st.0 == Weight::Regular => st.0 = Weight::Medium,
                     Style::Code => st.1 = CODE,
+                    Style::Strike if !sp.marker => st.2 = 3,
+                    Style::Underline if !sp.marker => st.2 = 4,
+                    Style::Highlight if !sp.marker => st.2 = 5,
                     _ => {}
                 }
                 if sp.marker || done {
@@ -917,10 +927,22 @@ impl TextArea {
                             s.fill_rrect(bx + b, by + b, side - 2.0 * b, side - 2.0 * b, (r - b).max(0.0), BLACK);
                         }
                     }
+                    6 => s.fill_rrect(x0 + ui.pt(1.0), ly, ui.pt(3.0), lh, ui.pt(1.5), SECONDARY),
                     _ => {
+                        if seg.kind == 5 {
+                            s.fill_rrect(x0, ly, x1 - x0, lh, ui.pt(2.0), rgba(52, 199, 89, 100));
+                        }
                         let text: String = chars[seg.a..seg.b].iter().collect();
                         let img = l.simgs[k].get_or_insert_with(|| ui.text(&text, pt, seg.weight, seg.color));
                         blit_text(s, img, x0 as i32, (ly + (lh - img.h as f32) / 2.0).round() as i32, seg.color);
+                        // strike-through and underline are a rule in the text colour
+                        let rule = if seg.color == super::ui::WHITE { super::ui::LABEL.now() } else { seg.color };
+                        let thick = ui.pt(1.2).max(1.0);
+                        match seg.kind {
+                            3 => s.fill_rrect(x0, ly + lh / 2.0, x1 - x0, thick, 0.0, rule),
+                            4 => s.fill_rrect(x0, ly + lh * 0.82, x1 - x0, thick, 0.0, rule),
+                            _ => {}
+                        }
                     }
                 }
             }

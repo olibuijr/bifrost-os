@@ -23,6 +23,12 @@ pub enum Block {
     Numbered(u32),
     /// `- [ ] ` (false) or `- [x] ` (true)
     Check(bool),
+    /// an en dash and a space (`\u{2013} `)
+    Dashed,
+    /// four leading spaces (an indented code line)
+    Mono,
+    /// `> `
+    Quote,
 }
 
 impl Block {
@@ -56,6 +62,9 @@ pub fn classify(line: &str) -> LineInfo {
     if starts("# ") {
         return info(Block::Title, 2, 0);
     }
+    if starts("> ") && indent == 0 {
+        return info(Block::Quote, 2, 0);
+    }
     if starts("- [ ] ") {
         return info(Block::Check(false), 6, indent);
     }
@@ -65,13 +74,22 @@ pub fn classify(line: &str) -> LineInfo {
     if starts("- ") || starts("* ") {
         return info(Block::Bullet, 2, indent);
     }
+    if starts("\u{2013} ") {
+        return info(Block::Dashed, 2, indent);
+    }
     let digits = rest.iter().take_while(|c| c.is_ascii_digit()).count();
     if digits > 0 && digits <= 6 && rest.get(digits) == Some(&'.') && rest.get(digits + 1) == Some(&' ') {
         let n: u32 = rest[..digits].iter().collect::<String>().parse().unwrap_or(1);
         return info(Block::Numbered(n), digits + 2, indent);
     }
+    if indent >= MONO_INDENT && rest.iter().any(|c| !c.is_whitespace()) {
+        return LineInfo { block: Block::Mono, prefix: MONO_INDENT, indent: 0 };
+    }
     LineInfo { block: Block::Body, prefix: 0, indent: 0 }
 }
+
+/// Leading spaces that make a line monostyled.
+const MONO_INDENT: usize = 4;
 
 /// Inline emphasis of a span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +98,12 @@ pub enum Style {
     Bold,
     Italic,
     Code,
+    /// `~~text~~`
+    Strike,
+    /// `++text++`
+    Underline,
+    /// `==text==`
+    Highlight,
 }
 
 /// A run of chars (indices within the line) with one style. `marker` spans
@@ -111,13 +135,21 @@ pub fn spans(line: &str, start: usize) -> Vec<Span> {
             '`' => (1, Style::Code),
             '*' if chars.get(i + 1) == Some(&'*') => (2, Style::Bold),
             '*' if chars.get(i + 1).is_some_and(|c| *c != ' ' && *c != '*') => (1, Style::Italic),
+            '~' if chars.get(i + 1) == Some(&'~') => (2, Style::Strike),
+            '+' if chars.get(i + 1) == Some(&'+') => (2, Style::Underline),
+            '=' if chars.get(i + 1) == Some(&'=') => (2, Style::Highlight),
             _ => {
                 i += 1;
                 continue;
             }
         };
         let pat: Vec<char> = chars[i..i + open].to_vec();
-        let close = find(&chars, i + open + 1, &pat).filter(|&j| style != Style::Italic || chars[j - 1] != ' ');
+        let close = find(&chars, i + open + 1, &pat).filter(|&j| match style {
+            Style::Italic => chars[j - 1] != ' ',
+            // a pair of these marks must hug its text, so "i++ and j++" and "a == b" stay plain
+            Style::Strike | Style::Underline | Style::Highlight => !chars[i + 2].is_whitespace() && !chars[j - 1].is_whitespace(),
+            _ => true,
+        });
         let Some(j) = close else {
             i += open;
             continue;
@@ -151,7 +183,10 @@ pub fn continue_list(line: &str) -> Continue {
     let pad = " ".repeat(info.indent);
     match info.block {
         Block::Bullet | Block::Check(_) | Block::Numbered(_) if empty => Continue::End(chars.len()),
+        Block::Dashed | Block::Quote if empty => Continue::End(chars.len()),
         Block::Bullet => Continue::Marker(format!("{pad}{} ", chars[info.indent])),
+        Block::Dashed => Continue::Marker(format!("{pad}\u{2013} ")),
+        Block::Quote => Continue::Marker("> ".to_string()),
         Block::Check(_) => Continue::Marker(format!("{pad}- [ ] ")),
         Block::Numbered(n) => Continue::Marker(format!("{pad}{}. ", n + 1)),
         _ => Continue::None,
@@ -165,6 +200,20 @@ pub fn toggle_check(line: &str) -> Option<String> {
     let mut chars: Vec<char> = line.chars().collect();
     chars[info.indent + 3] = if done { ' ' } else { 'x' };
     Some(chars.into_iter().collect())
+}
+
+/// Ticks (`done`) or unticks every checklist item of `text`; other lines are untouched.
+pub fn set_all_checks(text: &str, done: bool) -> String {
+    text.split('\n')
+        .map(|line| {
+            let info = classify(line);
+            match info.block {
+                Block::Check(now) if now != done => toggle_check(line).unwrap_or_else(|| line.to_string()),
+                _ => line.to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Within every run of consecutive checklist lines, moves the checked ones
@@ -202,6 +251,9 @@ pub fn set_block(line: &str, block: Block) -> String {
         Block::Bullet => "- ".into(),
         Block::Numbered(_) => "1. ".into(),
         Block::Check(_) => "- [ ] ".into(),
+        Block::Dashed => "\u{2013} ".into(),
+        Block::Mono => " ".repeat(MONO_INDENT),
+        Block::Quote => "> ".into(),
     };
     format!("{prefix}{content}")
 }
@@ -261,6 +313,40 @@ pub fn toggle_wrap(text: &str, sel: Range<usize>, marker: &str) -> Replace {
     Replace { range: a..b, with: format!("{marker}{inner}{marker}"), select: a + ml..b + ml }
 }
 
+/// A web address as it goes into a link: a missing scheme becomes `https://`, spaces and brackets are escaped. `None`
+/// when nothing is left after the scheme.
+fn link_target(raw: &str) -> Option<String> {
+    let t = raw.trim();
+    let full = if t.contains("://") || t.starts_with("mailto:") { t.to_string() } else { format!("https://{t}") };
+    let after = full.split_once("://").map_or_else(|| full.strip_prefix("mailto:").unwrap_or(""), |(_, rest)| rest);
+    if after.trim().is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    for c in full.chars().filter(|c| !c.is_control()) {
+        match c {
+            ' ' => out.push_str("%20"),
+            '(' => out.push_str("%28"),
+            ')' => out.push_str("%29"),
+            c => out.push(c),
+        }
+    }
+    Some(out)
+}
+
+/// Add Link: wraps the selection as `[text](address)`. With nothing selected the address itself, without its scheme,
+/// is the text. `select` covers the whole link. `None` when the address is empty.
+pub fn link_markdown(text: &str, sel: Range<usize>, url: &str) -> Option<Replace> {
+    let url = link_target(url)?;
+    let chars: Vec<char> = text.chars().collect();
+    let (a, b) = (sel.start.min(chars.len()), sel.end.min(chars.len()).max(sel.start.min(chars.len())));
+    let inner: String = chars[a..b].iter().filter(|c| !matches!(**c, '[' | ']' | '\n')).collect();
+    let label = if inner.trim().is_empty() { url.split_once("://").map_or_else(|| url.clone(), |(_, rest)| rest.to_string()) } else { inner };
+    let with = format!("[{label}]({url})");
+    let len = with.chars().count();
+    Some(Replace { range: a..b, with, select: a..a + len })
+}
+
 /// Words in a note: runs of non-space chars holding a letter or digit
 /// (list markers and rules do not count).
 pub fn word_count(text: &str) -> usize {
@@ -297,6 +383,7 @@ pub fn to_plain(text: &str) -> String {
                 Block::Check(done) => format!("{} {body}", if done { "[x]" } else { "[ ]" }),
                 Block::Bullet => format!("\u{2022} {body}"),
                 Block::Numbered(n) => format!("{n}. {body}"),
+                Block::Dashed => format!("\u{2013} {body}"),
                 _ => body,
             }
         })
@@ -452,5 +539,81 @@ mod tests {
     #[test]
     fn plain_export_strips_markup() {
         assert_eq!(to_plain("# T\n- [x] **a** b\n- c\n2. d `e`"), "T\n[x] a b\n\u{2022} c\n2. d e");
+    }
+    #[test]
+    fn dashed_quote_and_mono_lines_classify_and_round_trip() {
+        assert_eq!(classify("\u{2013} item"), LineInfo { block: Block::Dashed, prefix: 2, indent: 0 });
+        assert_eq!(classify("  \u{2013} nested"), LineInfo { block: Block::Dashed, prefix: 4, indent: 2 });
+        assert_eq!(classify("> said"), LineInfo { block: Block::Quote, prefix: 2, indent: 0 });
+        assert_eq!(classify("    let x = 1;"), LineInfo { block: Block::Mono, prefix: 4, indent: 0 });
+        assert_eq!(classify("    ").block, Block::Body, "a blank indented line is not code");
+        assert_eq!(classify("   three spaces").block, Block::Body);
+        assert_eq!(classify("    - nested bullet").block, Block::Bullet, "a list marker wins over the code indent");
+        assert_eq!(set_block("plain", Block::Quote), "> plain");
+        assert_eq!(set_block("> plain", Block::Quote), "plain", "the same style again returns to body text");
+        assert_eq!(set_block("plain", Block::Mono), "    plain");
+        assert_eq!(set_block("    plain", Block::Mono), "plain");
+        assert_eq!(set_block("- a", Block::Dashed), "\u{2013} a");
+        assert_eq!(to_plain("\u{2013} a\n> q"), "\u{2013} a\nq");
+    }
+
+    #[test]
+    fn enter_continues_dashed_and_quote_lines_and_ends_them_when_empty() {
+        assert_eq!(continue_list("\u{2013} a"), Continue::Marker("\u{2013} ".into()));
+        assert_eq!(continue_list("  \u{2013} a"), Continue::Marker("  \u{2013} ".into()));
+        assert_eq!(continue_list("\u{2013} "), Continue::End(2));
+        assert_eq!(continue_list("> a"), Continue::Marker("> ".into()));
+        assert_eq!(continue_list("> "), Continue::End(2));
+        assert_eq!(continue_list("    code"), Continue::None);
+    }
+
+    #[test]
+    fn strike_underline_and_highlight_need_a_hugging_pair() {
+        let kinds = |line: &str| -> Vec<(Style, bool, String)> {
+            let chars: Vec<char> = line.chars().collect();
+            spans(line, 0).into_iter().map(|s| (s.style, s.marker, chars[s.range.clone()].iter().collect())).collect()
+        };
+        assert_eq!(kinds("a ~~b~~ c"), vec![
+            (Style::Plain, false, "a ".into()),
+            (Style::Strike, true, "~~".into()),
+            (Style::Strike, false, "b".into()),
+            (Style::Strike, true, "~~".into()),
+            (Style::Plain, false, " c".into()),
+        ]);
+        assert!(kinds("x ++u++").iter().any(|(s, m, t)| *s == Style::Underline && !*m && t == "u"));
+        assert!(kinds("==hi== there").iter().any(|(s, m, t)| *s == Style::Highlight && !*m && t == "hi"));
+        for plain in ["i++ and j++", "a == b == c", "~~ spaced ~~", "one ~~ two"] {
+            assert!(kinds(plain).iter().all(|(s, _, _)| *s == Style::Plain), "{plain} stays plain");
+        }
+        // the spans still tile the line exactly
+        let line = "x ~~s~~ ==h== ++u++ **b**";
+        let total: usize = spans(line, 0).iter().map(|s| s.range.len()).sum();
+        assert_eq!(total, line.chars().count());
+    }
+
+    #[test]
+    fn add_link_wraps_the_selection_or_the_address_itself() {
+        let r = link_markdown("See docs here", 4..8, "example.com/a b").unwrap();
+        assert_eq!(r.range, 4..8);
+        assert_eq!(r.with, "[docs](https://example.com/a%20b)");
+        assert_eq!(r.select, 4..4 + r.with.chars().count());
+        let r = link_markdown("x", 1..1, "https://rust-lang.org").unwrap();
+        assert_eq!((r.range, r.with.as_str()), (1..1, "[rust-lang.org](https://rust-lang.org)"));
+        assert_eq!(link_markdown("go", 0..2, "  http://a.b/(x)  ").unwrap().with, "[go](http://a.b/%28x%29)");
+        assert_eq!(link_markdown("[a]", 0..3, "a.b").unwrap().with, "[a](https://a.b)", "brackets in the text would break the link");
+        assert_eq!(link_markdown("m", 0..1, "mailto:me@x.y").unwrap().with, "[m](mailto:me@x.y)");
+        for empty in ["", "   ", "https://", "http://  "] {
+            assert!(link_markdown("t", 0..1, empty).is_none(), "{empty:?} is no address");
+        }
+        // a selection past the end is clamped
+        assert_eq!(link_markdown("ab", 1..9, "c.d").unwrap().range, 1..2);
+    }
+
+    #[test]
+    fn mark_all_and_unmark_all_flip_only_the_checklist_lines() {
+        let t = "T\n- [ ] a\n- [x] b\n  - [ ] c\n- plain\nbody";
+        assert_eq!(set_all_checks(t, true), "T\n- [x] a\n- [x] b\n  - [x] c\n- plain\nbody");
+        assert_eq!(set_all_checks(t, false), "T\n- [ ] a\n- [ ] b\n  - [ ] c\n- plain\nbody");
+        assert_eq!(set_all_checks("no list", true), "no list");
     }
 }

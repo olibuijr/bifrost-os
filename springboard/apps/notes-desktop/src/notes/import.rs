@@ -1,294 +1,461 @@
-//! Import to Notes: turns a chosen file (plain text, Markdown, HTML or RTF) into the Markdown a note holds, and
-//! summarises a batch with the files that were skipped. The converters are small and forgiving: they keep the text and
-//! the structure people notice (headings, emphasis, lists, paragraphs) and drop the rest.
+//! Import to Notes: turns an HTML or RTF document into the Markdown a note is written in. Both converters are text
+//! to text and keep headings, bold, italic, links, lists, quotes and code; everything else (images, tables as
+//! grids, colours, fonts) becomes plain text or is dropped. Plain text and Markdown files come in unchanged.
 
-/// What kind of file the bytes are, from the name's extension and a peek at the start.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind {
-    Text,
-    Html,
-    Rtf,
-}
-
-/// The uniform type identifiers the open panel offers.
-pub const TYPES: [&str; 3] = ["public.text", "public.html", "public.rtf"];
-
-/// The kind of file `name` with these `bytes` is.
-pub fn kind_of(name: &str, bytes: &[u8]) -> Kind {
+/// The Markdown of a file the open panel picked: HTML and RTF are converted by their extension or their first
+/// bytes, anything else is taken as text.
+pub fn convert(name: &str, bytes: &[u8]) -> String {
+    let text = String::from_utf8_lossy(bytes).into_owned();
     let lower = name.to_lowercase();
-    let head: String = String::from_utf8_lossy(&bytes[..bytes.len().min(256)]).trim_start().to_lowercase();
+    let head = text.trim_start().chars().take(16).collect::<String>().to_lowercase();
     if lower.ends_with(".rtf") || head.starts_with("{\\rtf") {
-        Kind::Rtf
+        rtf_to_markdown(&text)
     } else if lower.ends_with(".html") || lower.ends_with(".htm") || head.starts_with("<!doctype html") || head.starts_with("<html") {
-        Kind::Html
+        html_to_markdown(&text)
     } else {
-        Kind::Text
+        text
     }
 }
 
-/// The note text for an imported file.
-pub fn to_markdown(name: &str, bytes: &[u8]) -> String {
-    let text = String::from_utf8_lossy(bytes);
-    let md = match kind_of(name, bytes) {
-        Kind::Text => text.replace("\r\n", "\n"),
-        Kind::Html => from_html(&text),
-        Kind::Rtf => from_rtf(&text),
-    };
-    md.trim_matches('\n').to_string()
+// --- HTML ---
+
+/// The converter's state while it walks the document.
+#[derive(Default)]
+struct Html {
+    out: String,
+    /// open lists: `None` is a bulleted one, `Some(n)` a numbered one whose next item is `n`
+    lists: Vec<Option<u32>>,
+    /// the `href` of each open `<a>` (None when it has none)
+    links: Vec<Option<String>>,
+    pre: bool,
+    /// the element whose content is dropped (script, style, head) until it closes
+    skip: Option<String>,
 }
 
-fn entity(name: &str) -> Option<String> {
-    let c = match name {
-        "amp" => '&',
-        "lt" => '<',
-        "gt" => '>',
-        "quot" => '"',
-        "apos" => '\'',
-        "nbsp" => ' ',
-        _ => {
-            let num = name.strip_prefix('#')?;
-            let code = match num.strip_prefix(['x', 'X']) {
-                Some(hex) => u32::from_str_radix(hex, 16).ok()?,
-                None => num.parse().ok()?,
-            };
-            char::from_u32(code)?
+impl Html {
+    /// Ends the current line.
+    fn newline(&mut self) {
+        let kept = self.out.trim_end_matches(' ').len();
+        self.out.truncate(kept);
+        if !self.out.is_empty() && !self.out.ends_with('\n') {
+            self.out.push('\n');
         }
-    };
-    Some(c.to_string())
-}
+    }
 
-/// HTML to Markdown: headings, bold, italic, lists, line and paragraph breaks; scripts and styles are dropped.
-pub fn from_html(html: &str) -> String {
-    let chars: Vec<char> = html.chars().collect();
-    let mut out = String::new();
-    let mut lists: Vec<Option<usize>> = Vec::new();
-    let mut skip: Option<String> = None;
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        if c == '<' {
-            let end = chars[i..].iter().position(|&x| x == '>').map(|p| i + p);
-            let Some(end) = end else { break };
-            let tag: String = chars[i + 1..end].iter().collect();
-            i = end + 1;
-            let closing = tag.starts_with('/');
-            let name: String = tag.trim_start_matches('/').chars().take_while(|ch| ch.is_ascii_alphanumeric()).collect::<String>().to_lowercase();
-            if let Some(s) = &skip {
-                if closing && *s == name {
-                    skip = None;
-                }
-                continue;
+    /// Ends the current line and leaves an empty one after it.
+    fn blank(&mut self) {
+        self.newline();
+        if !self.out.is_empty() && !self.out.ends_with("\n\n") {
+            self.out.push('\n');
+        }
+    }
+
+    fn text(&mut self, c: char) {
+        if self.pre {
+            if c == '\n' {
+                self.out.push_str("\n    ");
+            } else if c != '\r' {
+                self.out.push(c);
             }
-            match (name.as_str(), closing) {
-                ("script" | "style" | "head", false) => skip = Some(name.clone()),
-                ("b" | "strong", _) => out.push_str("**"),
-                ("i" | "em", _) => out.push('*'),
-                ("code", _) => out.push('`'),
-                ("br", _) => out.push('\n'),
-                ("h1", false) => block_start(&mut out, "# "),
-                ("h2", false) => block_start(&mut out, "## "),
-                ("h3" | "h4" | "h5" | "h6", false) => block_start(&mut out, "### "),
-                ("h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "div" | "tr" | "ul" | "ol", true) => {
-                    if name == "ul" || name == "ol" {
-                        lists.pop();
-                    }
-                    block_end(&mut out);
-                }
-                ("p" | "div" | "tr", false) => block_start(&mut out, ""),
-                ("ul" | "ol", false) => {
-                    if lists.is_empty() {
-                        block_start(&mut out, "");
-                    }
-                    lists.push(if name == "ol" { Some(0) } else { None });
-                }
-                ("li", false) => {
-                    if !out.is_empty() && !out.ends_with('\n') {
-                        out.push('\n');
-                    }
-                    out.push_str(&"  ".repeat(lists.len().saturating_sub(1)));
-                    match lists.last_mut() {
-                        Some(Some(n)) => {
-                            *n += 1;
-                            out.push_str(&format!("{n}. "));
-                        }
-                        _ => out.push_str("- "),
-                    }
-                }
-                ("li", true) => block_end(&mut out),
-                ("td" | "th", true) => out.push('\t'),
-                _ => {}
+        } else if c.is_whitespace() {
+            if !self.out.is_empty() && !self.out.ends_with(' ') && !self.out.ends_with('\n') {
+                self.out.push(' ');
             }
-        } else if skip.is_some() {
-            i += 1;
-        } else if c == '&' {
-            let semi = chars[i..].iter().take(12).position(|&x| x == ';');
-            match semi.and_then(|p| entity(&chars[i + 1..i + p].iter().collect::<String>())) {
-                Some(s) => {
-                    out.push_str(&s);
-                    i += semi.unwrap() + 1;
-                }
-                None => {
-                    out.push('&');
-                    i += 1;
-                }
-            }
-        } else if c == '\n' || c == '\r' || c == '\t' {
-            // source whitespace collapses to one space
-            if !out.ends_with([' ', '\n']) && !out.is_empty() {
-                out.push(' ');
-            }
-            i += 1;
         } else {
-            if c == ' ' && out.ends_with([' ', '\n']) {
-                i += 1;
-                continue;
-            }
-            out.push(c);
-            i += 1;
+            self.out.push(c);
         }
     }
-    squeeze(&out)
+
+    fn tag(&mut self, raw: &str) {
+        let closing = raw.starts_with('/');
+        let body = raw.trim_start_matches('/');
+        let name: String = body.chars().take_while(|c| c.is_ascii_alphanumeric()).collect::<String>().to_lowercase();
+        if let Some(skipping) = &self.skip {
+            if closing && *skipping == name {
+                self.skip = None;
+            }
+            return;
+        }
+        match name.as_str() {
+            "script" | "style" | "head" if !closing => self.skip = Some(name.clone()),
+            "br" => self.newline(),
+            "p" | "table" | "figure" => self.blank(),
+            "div" | "section" | "article" | "tr" | "header" | "footer" => self.newline(),
+            "td" | "th" => {
+                if closing {
+                    self.text(' ');
+                }
+            }
+            "blockquote" => {
+                self.blank();
+                if !closing {
+                    self.out.push_str("> ");
+                }
+            }
+            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
+                self.blank();
+                if !closing {
+                    self.out.push_str(match name.as_str() {
+                        "h1" => "# ",
+                        "h2" => "## ",
+                        _ => "### ",
+                    });
+                }
+            }
+            "ul" | "ol" => {
+                if closing {
+                    self.lists.pop();
+                    if self.lists.is_empty() {
+                        self.blank();
+                    } else {
+                        self.newline();
+                    }
+                } else {
+                    self.newline();
+                    self.lists.push(if name == "ol" { Some(1) } else { None });
+                }
+            }
+            "li" => {
+                self.newline();
+                if !closing {
+                    self.out.push_str(&"  ".repeat(self.lists.len().saturating_sub(1)));
+                    match self.lists.last_mut() {
+                        Some(Some(n)) => {
+                            self.out.push_str(&format!("{n}. "));
+                            *n += 1;
+                        }
+                        _ => self.out.push_str("- "),
+                    }
+                }
+            }
+            "b" | "strong" => self.out.push_str("**"),
+            "i" | "em" => self.out.push('*'),
+            "s" | "strike" | "del" => self.out.push_str("~~"),
+            "u" | "ins" => self.out.push_str("++"),
+            "mark" => self.out.push_str("=="),
+            "code" if !self.pre => self.out.push('`'),
+            "pre" => {
+                self.blank();
+                if closing {
+                    self.pre = false;
+                } else {
+                    self.out.push_str("    ");
+                    self.pre = true;
+                }
+            }
+            "a" => {
+                if closing {
+                    if let Some(Some(href)) = self.links.pop() {
+                        self.out.push_str(&format!("]({href})"));
+                    }
+                } else {
+                    let href = attribute(body, "href").filter(|h| !h.is_empty() && !h.starts_with('#') && !h.to_lowercase().starts_with("javascript:"));
+                    if href.is_some() {
+                        self.out.push('[');
+                    }
+                    self.links.push(href);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
-fn block_start(out: &mut String, marker: &str) {
-    if !out.is_empty() && !out.ends_with("\n\n") {
-        out.push_str(if out.ends_with('\n') { "\n" } else { "\n\n" });
+/// The value of attribute `name` in the text of a start tag (quoted or bare), compared without case.
+fn attribute(tag: &str, name: &str) -> Option<String> {
+    // ASCII lowercase keeps every byte offset the same in both strings
+    let lower = tag.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(at) = lower[from..].find(name) {
+        let start = from + at;
+        let before_ok = start == 0 || lower[..start].ends_with(char::is_whitespace);
+        let rest = tag[start + name.len()..].trim_start();
+        if before_ok && rest.starts_with('=') {
+            let value = rest[1..].trim_start();
+            let end = match value.chars().next() {
+                Some(q @ ('"' | '\'')) => return value[1..].split(q).next().map(|v| decode_entities(v)),
+                _ => value.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(value.len()),
+            };
+            return Some(decode_entities(&value[..end]));
+        }
+        from = start + name.len();
     }
-    out.push_str(marker);
+    None
 }
 
-fn block_end(out: &mut String) {
-    while out.ends_with(' ') {
-        out.pop();
+/// Replaces the character references of `s` (`&amp;`, `&#39;`, `&#x1F600;`, `&nbsp;`); unknown ones stay as written.
+fn decode_entities(s: &str) -> String {
+    let mut out = String::new();
+    let mut rest = s;
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+        let Some(end) = rest.find(';').filter(|&e| e <= 10) else {
+            out.push('&');
+            rest = &rest[1..];
+            continue;
+        };
+        let name = &rest[1..end];
+        let decoded = match name {
+            "amp" => Some('&'),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            "nbsp" => Some(' '),
+            "ndash" => Some('\u{2013}'),
+            "mdash" => Some('\u{2014}'),
+            "hellip" => Some('\u{2026}'),
+            _ => name
+                .strip_prefix("#x")
+                .or_else(|| name.strip_prefix("#X"))
+                .and_then(|h| u32::from_str_radix(h, 16).ok())
+                .or_else(|| name.strip_prefix('#').and_then(|d| d.parse().ok()))
+                .and_then(char::from_u32),
+        };
+        match decoded {
+            Some(c) => {
+                out.push(c);
+                rest = &rest[end + 1..];
+            }
+            None => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
     }
-    if !out.is_empty() && !out.ends_with('\n') {
-        out.push('\n');
-    }
+    out.push_str(rest);
+    out
 }
 
-/// Trailing spaces off every line and no run of more than one blank line.
-fn squeeze(s: &str) -> String {
-    let mut out: Vec<&str> = Vec::new();
-    for l in s.split('\n') {
-        let l = l.trim_end();
-        if l.is_empty() && out.last().is_some_and(|p| p.is_empty()) {
+/// An HTML document as Markdown.
+pub fn html_to_markdown(html: &str) -> String {
+    let mut h = Html::default();
+    let mut rest = html;
+    while !rest.is_empty() {
+        if let Some(after) = rest.strip_prefix("<!--") {
+            rest = after.find("-->").map_or("", |e| &after[e + 3..]);
+        } else if rest.starts_with('<') && rest[1..].starts_with(|c: char| c.is_ascii_alphabetic() || c == '/') {
+            let Some(end) = rest.find('>') else { break };
+            let tag = rest[1..end].to_string();
+            h.tag(tag.trim_end_matches('/'));
+            rest = &rest[end + 1..];
+        } else if rest.starts_with("<!") || rest.starts_with("<?") {
+            rest = rest.find('>').map_or("", |e| &rest[e + 1..]);
+        } else {
+            let first = rest.chars().next().map_or(1, char::len_utf8);
+            let next = rest[first..].find(|c: char| c == '<' || c == '&').map_or(rest.len(), |e| e + first);
+            let chunk = &rest[..next];
+            let text = if chunk.starts_with('&') { decode_entities(chunk) } else { chunk.to_string() };
+            if h.skip.is_none() {
+                for c in text.chars() {
+                    h.text(c);
+                }
+            }
+            rest = &rest[next..];
+        }
+    }
+    h.newline();
+    // at most one empty line in a row, and none at the ends
+    let mut lines: Vec<&str> = vec![];
+    for line in h.out.split('\n') {
+        let line = line.trim_end();
+        if line.is_empty() && lines.last().is_none_or(|l| l.is_empty()) {
             continue;
         }
-        out.push(l);
+        lines.push(line);
     }
-    out.join("\n").trim_matches('\n').to_string()
+    while lines.last().is_some_and(|l| l.is_empty()) {
+        lines.pop();
+    }
+    lines.join("\n")
 }
 
-/// RTF to plain paragraphs: control words are dropped except paragraph and line breaks, tabs, `\'xx` bytes and `\uN`
-/// characters; font, colour, style and info tables and `{\*...}` destinations are skipped.
-pub fn from_rtf(rtf: &str) -> String {
+// --- RTF ---
+
+/// The formatting of one RTF group.
+#[derive(Clone, Copy, Default)]
+struct Group {
+    bold: bool,
+    italic: bool,
+    /// a destination whose content is not text (font table, colour table, pictures, ...)
+    skip: bool,
+}
+
+/// Writes RTF text with `**` and `*` marks opened and closed to follow the groups' formatting.
+#[derive(Default)]
+struct Rtf {
+    out: String,
+    bold_open: bool,
+    italic_open: bool,
+}
+
+impl Rtf {
+    fn text(&mut self, g: Group, c: char) {
+        if g.skip {
+            return;
+        }
+        if g.bold != self.bold_open {
+            self.out.push_str("**");
+            self.bold_open = g.bold;
+        }
+        if g.italic != self.italic_open {
+            self.out.push('*');
+            self.italic_open = g.italic;
+        }
+        self.out.push(c);
+    }
+
+    fn close(&mut self) {
+        if self.bold_open {
+            self.out.push_str("**");
+            self.bold_open = false;
+        }
+        if self.italic_open {
+            self.out.push('*');
+            self.italic_open = false;
+        }
+    }
+
+    fn newline(&mut self, g: Group) {
+        if !g.skip {
+            self.close();
+            self.out.push('\n');
+        }
+    }
+}
+
+/// The char of a Windows-1252 byte (the `\'hh` escape); the 0x80 to 0x9f block is the few that RTF writers use.
+fn cp1252(b: u8) -> char {
+    match b {
+        0x80 => '\u{20ac}',
+        0x85 => '\u{2026}',
+        0x91 => '\u{2018}',
+        0x92 => '\u{2019}',
+        0x93 => '\u{201c}',
+        0x94 => '\u{201d}',
+        0x95 => '\u{2022}',
+        0x96 => '\u{2013}',
+        0x97 => '\u{2014}',
+        b => char::from(b),
+    }
+}
+
+/// An RTF document as Markdown: paragraphs, bold and italic, the usual escapes and Unicode; font and colour
+/// tables, pictures and other destinations are dropped.
+pub fn rtf_to_markdown(rtf: &str) -> String {
     let chars: Vec<char> = rtf.chars().collect();
-    let mut out = String::new();
-    // per open group: whether its text is dropped
-    let mut stack: Vec<bool> = Vec::new();
-    let mut skipping = false;
+    let (mut stack, mut cur, mut w) = (Vec::<Group>::new(), Group::default(), Rtf::default());
     let mut i = 0;
     while i < chars.len() {
         match chars[i] {
             '{' => {
-                stack.push(skipping);
+                stack.push(cur);
                 i += 1;
-                // a destination group starts with \* or a table control word
-                if chars.get(i) == Some(&'\\') {
-                    let word: String = chars[i + 1..].iter().take_while(|c| c.is_ascii_alphabetic() || **c == '*').collect();
-                    if matches!(word.as_str(), "*" | "fonttbl" | "colortbl" | "stylesheet" | "info" | "pict" | "header" | "footer") {
-                        skipping = true;
-                    }
-                }
             }
             '}' => {
-                skipping = stack.pop().unwrap_or(false);
-                i += 1;
-            }
-            '\\' => {
-                i += 1;
-                let Some(&n) = chars.get(i) else { break };
-                if n == '\'' {
-                    let hex: String = chars[i + 1..].iter().take(2).collect();
-                    if let Ok(b) = u8::from_str_radix(&hex, 16) {
-                        if !skipping {
-                            // the single-byte code page is Latin-1 compatible for the common range
-                            out.push(b as char);
-                        }
-                    }
-                    i += 3;
-                } else if n.is_ascii_alphabetic() {
-                    let word: String = chars[i..].iter().take_while(|c| c.is_ascii_alphabetic()).collect();
-                    i += word.len();
-                    let sign = if chars.get(i) == Some(&'-') { i += 1; -1 } else { 1 };
-                    let digits: String = chars[i..].iter().take_while(|c| c.is_ascii_digit()).collect();
-                    i += digits.len();
-                    if chars.get(i) == Some(&' ') {
-                        i += 1;
-                    }
-                    if skipping {
-                        continue;
-                    }
-                    match word.as_str() {
-                        "par" | "line" => out.push('\n'),
-                        "tab" => out.push('\t'),
-                        "u" => {
-                            if let Ok(v) = digits.parse::<i32>() {
-                                let code = (if sign < 0 { 65536 - v } else { v }) as u32;
-                                if let Some(ch) = char::from_u32(code) {
-                                    out.push(ch);
-                                }
-                                // the ANSI fallback char that follows \uN is not text
-                                if chars.get(i) == Some(&'?') {
-                                    i += 1;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                } else {
-                    if !skipping && matches!(n, '\\' | '{' | '}') {
-                        out.push(n);
-                    }
-                    i += 1;
+                if let Some(g) = stack.pop() {
+                    cur = g;
                 }
+                i += 1;
             }
             '\r' | '\n' => i += 1,
-            c => {
-                if !skipping {
-                    out.push(c);
+            '\\' => {
+                i += 1;
+                let Some(&c) = chars.get(i) else { break };
+                match c {
+                    '\\' | '{' | '}' => {
+                        w.text(cur, c);
+                        i += 1;
+                    }
+                    '\'' => {
+                        let hex: String = chars.iter().skip(i + 1).take(2).collect();
+                        if let Ok(b) = u8::from_str_radix(&hex, 16) {
+                            w.text(cur, cp1252(b));
+                        }
+                        i += 3;
+                    }
+                    '*' => {
+                        cur.skip = true;
+                        i += 1;
+                    }
+                    '~' => {
+                        w.text(cur, ' ');
+                        i += 1;
+                    }
+                    '\n' | '\r' => {
+                        w.newline(cur);
+                        i += 1;
+                    }
+                    c if c.is_ascii_alphabetic() => {
+                        let start = i;
+                        while chars.get(i).is_some_and(|c| c.is_ascii_alphabetic()) {
+                            i += 1;
+                        }
+                        let word: String = chars[start..i].iter().collect();
+                        let sign = if chars.get(i) == Some(&'-') { i += 1; -1 } else { 1 };
+                        let digits = i;
+                        while chars.get(i).is_some_and(|c| c.is_ascii_digit()) {
+                            i += 1;
+                        }
+                        let param: Option<i32> = chars[digits..i].iter().collect::<String>().parse::<i32>().ok().map(|n| n * sign);
+                        // one space ends a control word
+                        if chars.get(i) == Some(&' ') {
+                            i += 1;
+                        }
+                        match word.as_str() {
+                            "par" | "line" | "sect" | "page" => w.newline(cur),
+                            "tab" => w.text(cur, '\t'),
+                            "b" => cur.bold = param != Some(0),
+                            "i" => cur.italic = param != Some(0),
+                            "plain" => {
+                                cur.bold = false;
+                                cur.italic = false;
+                            }
+                            "bullet" => w.text(cur, '\u{2022}'),
+                            "endash" => w.text(cur, '\u{2013}'),
+                            "emdash" => w.text(cur, '\u{2014}'),
+                            "lquote" => w.text(cur, '\u{2018}'),
+                            "rquote" => w.text(cur, '\u{2019}'),
+                            "ldblquote" => w.text(cur, '\u{201c}'),
+                            "rdblquote" => w.text(cur, '\u{201d}'),
+                            "u" => {
+                                if let Some(n) = param {
+                                    if let Some(ch) = char::from_u32(n as i16 as u16 as u32) {
+                                        w.text(cur, ch);
+                                    }
+                                }
+                                // the one-char fallback that follows is not text
+                                match chars.get(i) {
+                                    Some('\\') if chars.get(i + 1) == Some(&'\'') => i += 4,
+                                    Some(c) if !matches!(c, '\\' | '{' | '}') => i += 1,
+                                    _ => {}
+                                }
+                            }
+                            "fonttbl" | "colortbl" | "stylesheet" | "info" | "pict" | "header" | "footer" | "headerl" | "headerr" | "footerl" | "footerr" | "filetbl"
+                            | "listtable" | "listoverridetable" | "revtbl" | "generator" | "object" | "fldinst" | "themedata" | "colorschememapping" | "datastore" => cur.skip = true,
+                            _ => {}
+                        }
+                    }
+                    _ => i += 1,
                 }
+            }
+            c => {
+                w.text(cur, c);
                 i += 1;
             }
         }
     }
-    squeeze(&out)
-}
-
-/// The outcome of importing several files: how many became notes and which were skipped, with why.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Summary {
-    pub imported: usize,
-    pub skipped: Vec<(String, String)>,
-}
-
-impl Summary {
-    pub fn skip(&mut self, name: &str, why: &str) {
-        self.skipped.push((name.to_string(), why.to_string()));
+    w.close();
+    let lines: Vec<&str> = w.out.split('\n').map(str::trim_end).collect();
+    let (mut start, mut end) = (0, lines.len());
+    while start < end && lines[start].is_empty() {
+        start += 1;
     }
-
-    /// The sheet's text: "3 notes imported" and one line per skipped file.
-    pub fn message(&self) -> String {
-        let head = if self.imported == 1 { "1 note imported".to_string() } else { format!("{} notes imported", self.imported) };
-        if self.skipped.is_empty() {
-            return head;
-        }
-        let mut s = format!("{head}, {} skipped", self.skipped.len());
-        for (name, why) in &self.skipped {
-            s.push_str(&format!("\n{name}: {why}"));
-        }
-        s
+    while end > start && lines[end - 1].is_empty() {
+        end -= 1;
     }
+    lines[start..end].join("\n")
 }
 
 #[cfg(test)]
@@ -296,42 +463,81 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detects_the_kind_by_name_then_content() {
-        assert_eq!(kind_of("a.html", b""), Kind::Html);
-        assert_eq!(kind_of("a.RTF", b""), Kind::Rtf);
-        assert_eq!(kind_of("a", b"{\\rtf1 hi}"), Kind::Rtf);
-        assert_eq!(kind_of("a", b"<!DOCTYPE html><p>x"), Kind::Html);
-        assert_eq!(kind_of("a.md", b"# t"), Kind::Text);
+    fn html_keeps_headings_emphasis_links_and_paragraphs() {
+        let html = "<html><head><title>Ignored</title><style>p{color:red}</style></head><body>\
+            <h1>Trip &amp; Plans</h1><p>Pack <b>light</b> and <em>early</em>, see <a href=\"https://x.org/a?b=1&amp;c=2\">the guide</a>.</p>\
+            <h2>Gear</h2><p>Line one<br>line two</p><script>alert(1)</script></body></html>";
+        assert_eq!(
+            html_to_markdown(html),
+            "# Trip & Plans\n\nPack **light** and *early*, see [the guide](https://x.org/a?b=1&c=2).\n\n## Gear\n\nLine one\nline two"
+        );
     }
 
     #[test]
-    fn html_maps_structure_to_markdown() {
-        let html = "<html><head><style>p{}</style></head><body><h1>Trip</h1><p>Pack <b>warm</b> &amp; <i>dry</i> things.</p><ul><li>tent</li><li>stove</li></ul><ol><li>go</li><li>eat</li></ol></body></html>";
-        assert_eq!(from_html(html), "# Trip\n\nPack **warm** & *dry* things.\n\n- tent\n- stove\n\n1. go\n2. eat");
+    fn html_lists_nest_and_number() {
+        let html = "<ul><li>one</li><li>two<ul><li>inner</li></ul></li></ul><ol><li>first</li><li>second</li></ol>";
+        assert_eq!(html_to_markdown(html), "- one\n- two\n  - inner\n\n1. first\n2. second");
     }
 
     #[test]
-    fn html_entities_and_whitespace() {
-        assert_eq!(from_html("a\n   b&#65;&#x42;&nbsp;c&bogus;<br>d"), "a bAB c&bogus;\nd");
+    fn html_code_quotes_and_entities() {
+        let html = "<p>Use <code>cargo test</code> &lt;now&gt; &#169; &#x41; &nbsp;done &bogus; &</p>\
+            <blockquote>said so</blockquote><pre>let a = 1;\nlet b = 2;</pre><p>~~ <s>old</s> <u>new</u> <mark>key</mark></p>";
+        let md = html_to_markdown(html);
+        assert_eq!(
+            md,
+            "Use `cargo test` <now> \u{a9} A done &bogus; &\n\n> said so\n\n    let a = 1;\n    let b = 2;\n\n~~ ~~old~~ ++new++ ==key=="
+        );
     }
 
     #[test]
-    fn rtf_keeps_text_and_paragraphs() {
-        let rtf = "{\\rtf1\\ansi{\\fonttbl{\\f0 Helvetica;}}{\\colortbl;\\red0\\green0\\blue0;}\\f0\\fs24 Hello \\b world\\b0\\par Caf\\'e9 \\u8364?\\par}";
-        assert_eq!(from_rtf(rtf), "Hello world\nCaf\u{e9} \u{20ac}");
+    fn html_drops_comments_scripts_and_unsafe_links() {
+        let html = "<!-- note --><p>a<!-- hidden -->b</p><p><a href=\"javascript:x()\">bad</a> <a href=\"#top\">top</a> <a>plain</a></p><style>x</style>tail";
+        assert_eq!(html_to_markdown(html), "ab\n\nbad top plain\n\ntail");
+        assert_eq!(html_to_markdown("   "), "");
+        assert_eq!(html_to_markdown("1 < 2 and 3 > 2"), "1 < 2 and 3 > 2", "a lone < is text");
     }
 
     #[test]
-    fn to_markdown_dispatches_and_trims() {
-        assert_eq!(to_markdown("n.txt", b"\r\nline\r\n\r\n"), "line");
-        assert_eq!(to_markdown("n.html", b"<h2>Hi</h2>"), "## Hi");
+    fn attributes_are_found_by_name_with_any_quoting() {
+        assert_eq!(attribute("a href=\"x y\" class=z", "href").as_deref(), Some("x y"));
+        assert_eq!(attribute("a HREF='q&amp;r'", "href").as_deref(), Some("q&r"));
+        assert_eq!(attribute("a data-href=\"no\" href=bare>", "href").as_deref(), Some("bare"));
+        assert_eq!(attribute("a class=x", "href"), None);
     }
 
     #[test]
-    fn summary_lists_skipped_files() {
-        let mut s = Summary { imported: 2, ..Summary::default() };
-        assert_eq!(s.message(), "2 notes imported");
-        s.skip("big.txt", "too large");
-        assert_eq!(s.message(), "2 notes imported, 1 skipped\nbig.txt: too large");
+    fn rtf_keeps_paragraphs_bold_italic_and_unicode() {
+        let rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Helvetica;}}{\\colortbl;\\red0\\green0\\blue0;}\\f0\\fs24 \\b Hello\\b0  \\i world\\i0\\par Caf\\u233? \\'e9 {\\*\\generator Writer;}end\\par}";
+        assert_eq!(rtf_to_markdown(rtf), "**Hello** *world*\nCaf\u{e9} \u{e9} end");
+    }
+
+    #[test]
+    fn rtf_escapes_groups_and_destinations() {
+        assert_eq!(rtf_to_markdown("{\\rtf1 a \\{b\\} \\\\ c\\tab d\\line e}"), "a {b} \\ c\td\ne");
+        assert_eq!(rtf_to_markdown("{\\rtf1 {\\info {\\title Secret}}shown}"), "shown");
+        assert_eq!(rtf_to_markdown("{\\rtf1 {\\b bold in group} plain}"), "**bold in group** plain");
+        assert_eq!(rtf_to_markdown("{\\rtf1 \\b open at end"), "**open at end**", "marks are closed at the end");
+        assert_eq!(rtf_to_markdown("{\\rtf1 \\ldblquote q\\rdblquote \\endash \\bullet }"), "\u{201c}q\u{201d}\u{2013}\u{2022}");
+        assert_eq!(rtf_to_markdown(""), "");
+    }
+
+    #[test]
+    fn the_copy_made_by_notes_comes_back_as_the_same_markdown() {
+        let md = "**bold** and *it*\n# Head";
+        let back = rtf_to_markdown(&super::super::system::rtf(md));
+        assert!(back.contains("**bold** and *it*"), "{back:?}");
+        assert!(back.contains("Head"), "{back:?}");
+    }
+
+    #[test]
+    fn files_are_converted_by_extension_or_first_bytes_and_text_stays_as_it_is() {
+        assert_eq!(convert("a.html", b"<p>x</p>"), "x");
+        assert_eq!(convert("page", b"  <!DOCTYPE html><p>y</p>"), "y");
+        assert_eq!(convert("a.rtf", b"{\\rtf1 z}"), "z");
+        assert_eq!(convert("noext", b"{\\rtf1 w}"), "w");
+        assert_eq!(convert("a.md", b"# T\n- [ ] <b>"), "# T\n- [ ] <b>");
+        assert_eq!(convert("a.txt", "caf\u{e9}".as_bytes()), "caf\u{e9}");
+        assert_eq!(convert("a.txt", &[0x61, 0xff]), "a\u{fffd}", "bytes that are not text are replaced");
     }
 }
