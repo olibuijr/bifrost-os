@@ -921,11 +921,36 @@ impl Reminders {
         saved
     }
 
-    /// File > Print List: the list's name and its Markdown checklist, when a list is on screen.
+    /// Whether a list, or a smart list on screen (not a search), has something for File > Print List.
+    pub fn can_print(&self) -> bool {
+        self.open_list().is_some() || (self.screen == Screen::Items && !self.searching && matches!(self.view, View::Smart(_) | View::Custom(_)))
+    }
+
+    /// File > Print List: the list's name and its Markdown checklist, when a list or a smart list is on screen.
+    /// A smart list prints its rows as one flat checklist under its own name.
     pub fn printable_list(&self) -> Option<(String, String)> {
-        let list = self.open_list()?;
-        let name = self.data.lists.iter().find(|l| l.id == list)?.name.clone();
-        Some((name, model::export_markdown(&self.data, list)))
+        if let Some(list) = self.open_list() {
+            let name = self.data.lists.iter().find(|l| l.id == list)?.name.clone();
+            return Some((name, model::export_markdown(&self.data, list)));
+        }
+        if !self.can_print() {
+            return None;
+        }
+        let name = match self.view {
+            View::Smart(s) => s.label().to_string(),
+            View::Custom(id) => self.data.smarts.iter().find(|s| s.id == id)?.name.clone(),
+            _ => return None,
+        };
+        let items: Vec<&model::Reminder> = self
+            .rows
+            .iter()
+            .filter_map(|row| match row {
+                Row::Item { idx, .. } => self.data.items.get(*idx),
+                _ => None,
+            })
+            .collect();
+        let text = model::flat_markdown(&name, &items);
+        Some((name, text))
     }
 
     // ---- intents ---------------------------------------------------------
@@ -2042,10 +2067,15 @@ impl Reminders {
     }
 
     /// Writes the open list as `<name>.md` under ~/Documents/Reminders Export.
-    fn export_list(&mut self) {
-        let View::List(list) = self.view else { return };
+    /// The name and Markdown checklist of the list on screen, as Export List and Save List As write them.
+    pub fn list_export(&self) -> Option<(String, String)> {
+        let View::List(list) = self.view else { return None };
         let name = self.data.lists.iter().find(|l| l.id == list).map_or("Reminders".to_string(), |l| l.name.clone());
-        let text = model::export_markdown(&self.data, list);
+        Some((name, model::export_markdown(&self.data, list)))
+    }
+
+    fn export_list(&mut self) {
+        let Some((name, text)) = self.list_export() else { return };
         let dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Documents").join("Reminders Export");
         let written = std::fs::create_dir_all(&dir).and_then(|_| springboard::shell::fsutil::write_atomic(&dir.join(format!("{name}.md")), &text));
         self.notice = Some(match written {
