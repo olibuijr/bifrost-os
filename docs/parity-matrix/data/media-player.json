@@ -75,7 +75,7 @@
       "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent",
       "bifrost": "springboard/ui/src/remote_command.rs (CommandCenter), springboard/sdk/src/lib.rs (remote_command); wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped. Headless tests: ui/tests/parity_sdk-tests-01a.rs (remote_actions_are_dispatched_to_the_newest_handler, an_action_without_a_handler_or_switched_off_is_refused, rating_command_refuses_values_outside_its_range). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Track navigation and seeking",

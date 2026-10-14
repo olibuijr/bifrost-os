@@ -1,80 +1,80 @@
 {
-  "framework": "Screen Saver",
-  "doc": "https://developer.apple.com/documentation/screensaver",
-  "macos_since": "10.0",
-  "status": "partial",
-  "bifrost": "no screen saver module or SDK class. Idle display-off and auto-lock live in springboard/src/shell/mod.rs and springboard/wm/src/input.rs; app preferences in springboard/sdk/src/defaults.rs; SDK surface: springboard/sdk/src/screen_saver.rs (ScreenSaverView, SaverRunner, SS helpers), springboard/sdk/src/idle_watch.rs (IdleWatch)",
-  "summary": "Apple's framework is a plug-in interface: a .saver bundle subclasses ScreenSaverView, which the system animates in its own engine. BifrOSt has the view lifecycle, the SS helpers, the configuration options and the idle clock as pure models in springboard/ui and springboard/core, re-exported through the SDK (springboard/sdk/src/screen_saver.rs and idle_watch.rs). It still has no .saver bundle host, no screen saver engine, and no Settings preview or configuration sheet wired to a module. The shell's idle display-off and auto-lock sit underneath, and apps do not yet receive the shell's last-input time.",
-  "rea_evidence": "ev_cc2a3e312b2679aab08837530b31bc4264f252a6ac1417506af9f1d0610ddb94",
-  "features": [
-    {
-      "feature": "ScreenSaverView (plug-in view and animation lifecycle)",
-      "apple": "ScreenSaverView: init(frame:isPreview:), startAnimation(), animateOneFrame(), stopAnimation(), animationTimeInterval, isAnimating, draw(_:)",
-      "bifrost": "springboard/ui/src/screensaver.rs; SDK path springboard/sdk/src/screen_saver.rs (re-exports ScreenSaverView and SaverRunner, which drives a view from a caller's clock); wired: springboard/src/shell/screensaver.rs (drives bifrost_ui::screensaver::ScreenSaverView start/tick/stop/animate_one_frame); no .saver bundle host",
-      "status": "partial",
-      "note": "built on parity/team-n-screen-saver; not yet verified on Midget. Pure model with host unit tests in ui and sdk; no .saver bundle loader and no screen saver engine; the shell has no idle-animation host for app-supplied savers."
-    },
-    {
-      "feature": "Preview and configuration sheet",
-      "apple": "ScreenSaverView.isPreview, hasConfigureSheet, configureSheet",
-      "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/pages.rs (PageId::ScreenSaver, Preview row) and springboard/src/shell/settings.rs (Pick::ScreenSaverPreview); configuration sheet not wired",
-      "status": "partial",
-      "note": "built on parity/team-n-screen-saver; not yet verified on Midget. ConfigureSheet (bool, int and choice options with range checks) and preview_rect are re-exported in springboard/sdk/src/screen_saver.rs; no configuration sheet is shown in Settings and no module sets one."
-    },
-    {
-      "feature": "Preference storage for a screen saver module",
-      "apple": "ScreenSaverDefaults: init(forModuleWithName:)",
-      "bifrost": "springboard/sdk/src/defaults.rs (UserDefaults-style store for apps)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 13 tests. a general defaults store exists; no per-module screen saver domain"
-    },
-    {
-      "feature": "Window backing store and gamma fade for the saver window",
-      "apple": "ScreenSaverView.backingStoreType(), performGammaFade()",
-      "bifrost": "springboard/render/src/gamma_fade.rs, springboard/ui/src/screensaver.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it"
-    },
-    {
-      "feature": "Random value and rectangle helpers",
-      "apple": "SSRandomIntBetween, SSRandomFloatBetween, SSRandomPointForSizeWithinRect, SSCenteredRectInRect",
-      "bifrost": "springboard/ui/src/screensaver.rs; SDK path springboard/sdk/src/screen_saver.rs (re-exports ss_random_int_between, ss_random_float_between, ss_random_point_for_size_within_rect, ss_centered_rect_in_rect); wired: springboard/src/shell/screensaver.rs (ss_random_point_for_size_within_rect places the Clock saver)",
-      "status": "partial",
-      "note": "built on parity/team-n-screen-saver; not yet verified on Midget. Pure helpers with host unit tests; apps now reach them through the SDK. The random source is the caller's unit value, so the generator stays outside the SDK."
-    },
-    {
-      "feature": "Idle detection that starts the saver",
-      "apple": "The system starts the saver after user inactivity (screen saver engine)",
-      "bifrost": "springboard/core/src/idle_monitor.rs; wired: springboard/src/shell/screensaver.rs (IdleMonitor, fed by the shell's last-input time); SDK path springboard/sdk/src/idle_watch.rs (IdleWatch queues BecameIdle and BecameActive for an app)",
-      "status": "partial",
-      "note": "built on parity/team-n-screen-saver; not yet verified on Midget. The idle signal exists at the system layer and an app can read it through IdleWatch, but the shell does not yet send its last-input time to apps (no control message carries it), so an app sees idle changes only from the input and clock values it is given."
-    },
-    {
-      "feature": "Auto-lock after idle",
-      "apple": "Screen saver with password on wake (not a separate Apple API)",
-      "bifrost": "springboard/src/shell/options.rs:34 (auto_lock_ms); springboard/src/shell/low_battery.rs:52 (auto_lock_ms)",
-      "status": "os",
-      "note": "shell-level auto-lock; no SDK hook for an app to take part"
-    },
-    {
-      "feature": "System sleep after the screen is off",
-      "apple": "Energy settings (outside the framework)",
-      "bifrost": "springboard/src/bare/sleep.rs:SUSPEND_AFTER_MS and SYSTEM_SLEEP_PREF (system_sleep_minutes)",
-      "status": "os",
-      "note": "suspend is decided by the system layer; apps cannot change it"
-    },
-    {
-      "feature": "Sleep inhibitors held by apps",
-      "apple": "Power management assertions (outside the framework)",
-      "bifrost": "springboard/core/src/sleep_assertions.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"
-    }
-  ],
-  "gaps": [
-    "No screen saver plug-in host: no .saver bundle loading and no engine that calls the view lifecycle (start, animate, stop).",
-    "No preview or configuration sheet for screen savers in Settings wired to a module; ConfigureSheet is a model only.",
-    "Idle state reaches apps only through IdleWatch with caller-supplied times; the shell does not yet deliver its last-input time to apps.",
-    "Display-sleep hold (IDLE_DISPLAY_SLEEP_DISABLED) has no app option; the SDK activity tracker in springboard/sdk/src/process_info.rs covers system sleep only."
-  ]
+ "framework": "Screen Saver",
+ "doc": "https://developer.apple.com/documentation/screensaver",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "no screen saver module or SDK class. Idle display-off and auto-lock live in springboard/src/shell/mod.rs and springboard/wm/src/input.rs; app preferences in springboard/sdk/src/defaults.rs; SDK surface: springboard/sdk/src/screen_saver.rs (ScreenSaverView, SaverRunner, SS helpers), springboard/sdk/src/idle_watch.rs (IdleWatch)",
+ "summary": "Apple's framework is a plug-in interface: a .saver bundle subclasses ScreenSaverView, which the system animates in its own engine. BifrOSt has the view lifecycle, the SS helpers, the configuration options and the idle clock as pure models in springboard/ui and springboard/core, re-exported through the SDK (springboard/sdk/src/screen_saver.rs and idle_watch.rs). It still has no .saver bundle host, no screen saver engine, and no Settings preview or configuration sheet wired to a module. The shell's idle display-off and auto-lock sit underneath, and apps do not yet receive the shell's last-input time.",
+ "rea_evidence": "ev_cc2a3e312b2679aab08837530b31bc4264f252a6ac1417506af9f1d0610ddb94",
+ "features": [
+  {
+   "feature": "ScreenSaverView (plug-in view and animation lifecycle)",
+   "apple": "ScreenSaverView: init(frame:isPreview:), startAnimation(), animateOneFrame(), stopAnimation(), animationTimeInterval, isAnimating, draw(_:)",
+   "bifrost": "springboard/ui/src/screensaver.rs; SDK path springboard/sdk/src/screen_saver.rs (re-exports ScreenSaverView and SaverRunner, which drives a view from a caller's clock); wired: springboard/src/shell/screensaver.rs (drives bifrost_ui::screensaver::ScreenSaverView start/tick/stop/animate_one_frame); no .saver bundle host",
+   "status": "partial",
+   "note": "built on parity/team-n-screen-saver; not yet verified on Midget. Pure model with host unit tests in ui and sdk; no .saver bundle loader and no screen saver engine; the shell has no idle-animation host for app-supplied savers."
+  },
+  {
+   "feature": "Preview and configuration sheet",
+   "apple": "ScreenSaverView.isPreview, hasConfigureSheet, configureSheet",
+   "bifrost": "springboard/ui/src/screensaver.rs; wired: springboard/src/shell/pages.rs (PageId::ScreenSaver, Preview row) and springboard/src/shell/settings.rs (Pick::ScreenSaverPreview); configuration sheet not wired",
+   "status": "partial",
+   "note": "built on parity/team-n-screen-saver; not yet verified on Midget. ConfigureSheet (bool, int and choice options with range checks) and preview_rect are re-exported in springboard/sdk/src/screen_saver.rs; no configuration sheet is shown in Settings and no module sets one."
+  },
+  {
+   "feature": "Preference storage for a screen saver module",
+   "apple": "ScreenSaverDefaults: init(forModuleWithName:)",
+   "bifrost": "springboard/sdk/src/defaults.rs (UserDefaults-style store for apps)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 13 tests. a general defaults store exists; no per-module screen saver domain"
+  },
+  {
+   "feature": "Window backing store and gamma fade for the saver window",
+   "apple": "ScreenSaverView.backingStoreType(), performGammaFade()",
+   "bifrost": "springboard/render/src/gamma_fade.rs, springboard/ui/src/screensaver.rs",
+   "status": "partial",
+   "note": "Wave 4 (w4-screen-saver, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no saver window type; the compositor in springboard/wm/ has no gamma fade hook for it. Headless tests: render/tests/parity_sdk-tests-01a.rs (a_fade_in_rises_and_a_fade_out_falls_linearly, a_ramp_lists_evenly_spaced_levels_from_start_to_end, a_fade_without_a_length_is_already_at_its_end)"
+  },
+  {
+   "feature": "Random value and rectangle helpers",
+   "apple": "SSRandomIntBetween, SSRandomFloatBetween, SSRandomPointForSizeWithinRect, SSCenteredRectInRect",
+   "bifrost": "springboard/ui/src/screensaver.rs; SDK path springboard/sdk/src/screen_saver.rs (re-exports ss_random_int_between, ss_random_float_between, ss_random_point_for_size_within_rect, ss_centered_rect_in_rect); wired: springboard/src/shell/screensaver.rs (ss_random_point_for_size_within_rect places the Clock saver)",
+   "status": "partial",
+   "note": "built on parity/team-n-screen-saver; not yet verified on Midget. Pure helpers with host unit tests; apps now reach them through the SDK. The random source is the caller's unit value, so the generator stays outside the SDK."
+  },
+  {
+   "feature": "Idle detection that starts the saver",
+   "apple": "The system starts the saver after user inactivity (screen saver engine)",
+   "bifrost": "springboard/core/src/idle_monitor.rs; wired: springboard/src/shell/screensaver.rs (IdleMonitor, fed by the shell's last-input time); SDK path springboard/sdk/src/idle_watch.rs (IdleWatch queues BecameIdle and BecameActive for an app)",
+   "status": "partial",
+   "note": "built on parity/team-n-screen-saver; not yet verified on Midget. The idle signal exists at the system layer and an app can read it through IdleWatch, but the shell does not yet send its last-input time to apps (no control message carries it), so an app sees idle changes only from the input and clock values it is given."
+  },
+  {
+   "feature": "Auto-lock after idle",
+   "apple": "Screen saver with password on wake (not a separate Apple API)",
+   "bifrost": "springboard/src/shell/options.rs:34 (auto_lock_ms); springboard/src/shell/low_battery.rs:52 (auto_lock_ms)",
+   "status": "os",
+   "note": "shell-level auto-lock; no SDK hook for an app to take part"
+  },
+  {
+   "feature": "System sleep after the screen is off",
+   "apple": "Energy settings (outside the framework)",
+   "bifrost": "springboard/src/bare/sleep.rs:SUSPEND_AFTER_MS and SYSTEM_SLEEP_PREF (system_sleep_minutes)",
+   "status": "os",
+   "note": "suspend is decided by the system layer; apps cannot change it"
+  },
+  {
+   "feature": "Sleep inhibitors held by apps",
+   "apple": "Power management assertions (outside the framework)",
+   "bifrost": "springboard/core/src/sleep_assertions.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"
+  }
+ ],
+ "gaps": [
+  "No screen saver plug-in host: no .saver bundle loading and no engine that calls the view lifecycle (start, animate, stop).",
+  "No preview or configuration sheet for screen savers in Settings wired to a module; ConfigureSheet is a model only.",
+  "Idle state reaches apps only through IdleWatch with caller-supplied times; the shell does not yet deliver its last-input time to apps.",
+  "Display-sleep hold (IDLE_DISPLAY_SLEEP_DISABLED) has no app option; the SDK activity tracker in springboard/sdk/src/process_info.rs covers system sleep only."
+ ]
 }

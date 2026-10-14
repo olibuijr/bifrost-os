@@ -19,7 +19,7 @@
       "apple": "RelevantContext.date(_:), date(_:kind:), date(interval:kind:), date(range:kind:), date(from:to:), DateKind",
       "bifrost": "springboard/ui/src/relevance.rs; wired: springboard/src/shell/services/widgets_timeline.rs (reload with relevance hint: {score,duration} or {score,at}/{score,from,to,closed?} with kind) over springboard/ui/src/relevance.rs",
       "status": "partial",
-      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. A desktop widget could ask to be shown at a time. Apple's watch-only API is the reference; no BifrOSt counterpart exists. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. A desktop widget could ask to be shown at a time. Apple's watch-only API is the reference; no BifrOSt counterpart exists. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_time_clue_is_open_at_the_end_of_an_interval_and_closed_for_a_range, stack_order_puts_eligible_items_first_by_score). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Location clues",

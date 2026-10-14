@@ -12,7 +12,7 @@
       "apple": "SBApplication init(bundleIdentifier:), init(processIdentifier:), init(url:); isRunning",
       "bifrost": "springboard/sdk/src/workspace.rs (running_applications, frontmost_application, url_for_application), springboard/sdk/src/control.rs (per-app socket)",
       "status": "partial",
-      "note": "A running app can be listed and its socket found (tools/app-control.py list). There is no handle object for a target app; a caller addresses it by app id and gets the socket path."
+      "note": "A running app can be listed and its socket found (tools/app-control.py list). There is no handle object for a target app; a caller addresses it by app id and gets the socket path. The per-app socket is host-tested inline in springboard/sdk/src/control.rs (socket_is_owner_only_and_serves_one_request); attaching by app id is not tested, since it needs the shell's running-app list."
     },
     {
       "feature": "Launch and activate a target app",
