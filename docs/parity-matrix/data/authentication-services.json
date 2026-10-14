@@ -4,7 +4,7 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "bifrost_app::keychain (springboard/sdk/src/keychain.rs) for stored secrets; springboard/sdk/src/url.rs and springboard/sdk/src/webview.rs for network and web content; springboard/src/shell/login.rs for the desktop sign-in screen; springboard/src/shell/account.rs for the local account",
-  "summary": "Only secret storage has a counterpart: an app-facing keychain (generic passwords, per app) and a local account. There is no web authentication session, no passkey or FIDO2 API, no AutoFill or credential provider, no Sign in with Apple, and no credential import or export. Most of the framework is a gap for a desktop that has no account service of its own.",
+  "summary": "Secret storage, a web authentication session model, password generation, a credential exchange document, passkey client data and a callback route table have pure models. There is no passkey authenticator, no shared credential store or AutoFill, no Sign in with Apple, and no browser SSO broker. Most models are host-tested only and not yet wired into the shell.",
   "rea_evidence": "ev_eb4e8515f63dbb5347ffb186beb68ad982580d05bf3ac09772095c773e2d5156",
   "features": [
     {
@@ -45,9 +45,9 @@
     {
       "feature": "Single sign-on in a web browser app",
       "apple": "ASWebAuthenticationSession browser handoff and support capabilities",
-      "bifrost": "springboard/apps/browser (browser app)",
-      "status": "gap",
-      "note": "the browser does not act as an SSO broker for other apps"
+      "bifrost": "springboard/core/src/auth_callback_routes.rs (CallbackRoutes: one owner per callback scheme, delivery only to the requesting app); springboard/core/src/auth_session.rs (scheme_of)",
+      "status": "partial",
+      "note": "built on parity/team-n-authentication-services; not yet verified on Midget. Pure route table with host unit tests; the browser app does not yet act as a broker and the shell does not yet route redirects through it"
     },
     {
       "feature": "AutoFill credential provider",
@@ -66,9 +66,9 @@
     {
       "feature": "Credential import and export",
       "apple": "ASCredentialExportManager, ASCredentialImportManager, ASImportable* types (CXF)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no credential exchange format"
+      "bifrost": "springboard/ui/src/credential_exchange.rs (export/import of password records, versioned text document); springboard/sdk/src/credential_exchange.rs (bifrost_app re-export)",
+      "status": "partial",
+      "note": "BifrOSt's own text format, not CXF; no Apple-file interop, no passkeys, notes or cards, no UI. Pure model with host unit tests; see docs/parity/w9-authentication-services.md"
     },
     {
       "feature": "Account authentication upgrades",
@@ -114,11 +114,12 @@
     }
   ],
   "gaps": [
-    "Web authentication session: an API that opens a sign-in page in an isolated session and returns the callback URL to the app (ASWebAuthenticationSession), with a callback scheme that the shell routes to the requesting app.",
+    "Single sign-on: the browser app acting as a broker for other apps, with the shell routing callbacks through CallbackRoutes.",
+    "Web authentication session: a shell-run sign-in sheet that opens the page in an isolated session; the callback routing part is modelled by CallbackRoutes, but nothing presents the page yet.",
     "Passkeys and FIDO2: a platform authenticator, public-key credential registration and assertion, and WebAuthn support in the browser (springboard/apps/browser/README.md lists WebAuthn as broken).",
     "Shared credential store and AutoFill: keychain access groups (shared items between apps), a save-password prompt, and a credential provider for the browser and other apps.",
     "One-time passcodes: capture and suggestion of verification codes delivered to the device.",
-    "Credential import and export in the CXF format.",
+    "Credential import and export: Apple's CXF format for interop, passkeys and notes in the document, and a UI import or export action.",
     "Keychain access control: biometric or user-presence protection of items (already listed as a parity gap in docs/bifrost-ui.md, Keychain section)."
   ]
 }

@@ -77,6 +77,7 @@ pub mod backup_exclusion;
 pub mod biometry;
 pub mod auth_context;
 pub mod auth_session;
+pub mod auth_callback_routes;
 pub mod session_events;
 pub mod tunnel;
 pub mod vpn_manager;
