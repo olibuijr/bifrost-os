@@ -560,6 +560,7 @@ pub mod vector_ops;
 pub mod quadrature;
 pub mod lu;
 pub mod nav;
+pub mod toolbar_customization;
 pub mod responder;
 pub mod undo;
 pub mod text;

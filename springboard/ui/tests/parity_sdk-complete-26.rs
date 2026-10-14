@@ -12,6 +12,7 @@ use bifrost_ui::mapview::{MapCamera, UserTracking};
 use bifrost_ui::media_picker::{Error, Kind, MediaPicker, PickItem, Selection};
 use bifrost_ui::scene_phase::{SceneTracker, ScenePhase};
 use bifrost_ui::search_scope::{SearchBar, SearchScope, SearchToken};
+use bifrost_ui::toolbar_customization::{Error as ToolbarError, ToolbarCustomization};
 use bifrost_ui::weather_model::WeatherError;
 
 // ---- weather: typed errors an app can match on (bifrost_ui::weather_model) ----
@@ -337,4 +338,88 @@ fn headless_the_tracker_reports_each_change_once() {
     assert_eq!(tracker.update(true, false), Some(ScenePhase::Inactive));
     assert_eq!(tracker.update(false, false), Some(ScenePhase::Background));
     assert_eq!(tracker.phase(), ScenePhase::Background);
+}
+
+// ---- toolbars: customization (bifrost_ui::toolbar_customization) ----
+
+fn bar() -> ToolbarCustomization {
+    ToolbarCustomization::new(vec![1, 2, 3, 4], vec![1])
+}
+
+#[test]
+fn headless_a_new_toolbar_shows_every_item_in_the_default_order() {
+    let t = bar();
+    assert_eq!(t.visible(), vec![1, 2, 3, 4]);
+    assert_eq!(t.order(), &[1, 2, 3, 4]);
+}
+
+#[test]
+fn headless_hiding_an_item_removes_it_from_the_visible_list_only() {
+    let mut t = bar();
+    assert_eq!(t.hide(3), Ok(()));
+    assert_eq!(t.visible(), vec![1, 2, 4]);
+    assert_eq!(t.order(), &[1, 2, 3, 4], "a hidden item keeps its place in the order");
+    assert!(!t.is_shown(3));
+    assert_eq!(t.hide(3), Ok(()), "hiding twice changes nothing");
+    assert_eq!(t.visible(), vec![1, 2, 4]);
+}
+
+#[test]
+fn headless_a_required_item_cannot_be_hidden() {
+    let mut t = bar();
+    assert_eq!(t.hide(1), Err(ToolbarError::Required));
+    assert!(t.is_shown(1));
+}
+
+#[test]
+fn headless_showing_an_item_puts_it_back_in_its_place() {
+    let mut t = bar();
+    t.hide(2).unwrap();
+    t.move_item(2, 0).unwrap();
+    t.show(2).unwrap();
+    assert_eq!(t.visible(), vec![2, 1, 3, 4]);
+}
+
+#[test]
+fn headless_moving_an_item_reorders_the_visible_list() {
+    let mut t = bar();
+    assert_eq!(t.move_item(4, 1), Ok(()));
+    assert_eq!(t.visible(), vec![1, 4, 2, 3]);
+    assert_eq!(t.move_item(1, 99), Ok(()), "a position past the end moves the item to the end");
+    assert_eq!(t.order(), &[4, 2, 3, 1]);
+}
+
+#[test]
+fn headless_moving_counts_hidden_items_in_the_position() {
+    let mut t = bar();
+    t.hide(2).unwrap();
+    t.move_item(4, 2).unwrap();
+    assert_eq!(t.order(), &[1, 2, 4, 3]);
+    assert_eq!(t.visible(), vec![1, 4, 3]);
+}
+
+#[test]
+fn headless_an_unknown_item_is_refused_by_every_change() {
+    let mut t = bar();
+    assert_eq!(t.hide(9), Err(ToolbarError::UnknownItem));
+    assert_eq!(t.show(9), Err(ToolbarError::UnknownItem));
+    assert_eq!(t.move_item(9, 0), Err(ToolbarError::UnknownItem));
+    assert_eq!(t.order(), &[1, 2, 3, 4]);
+}
+
+#[test]
+fn headless_reset_restores_the_default_order_and_shows_everything() {
+    let mut t = bar();
+    t.hide(3).unwrap();
+    t.move_item(4, 0).unwrap();
+    t.reset();
+    assert_eq!(t.visible(), vec![1, 2, 3, 4]);
+    assert_eq!(t.order(), &[1, 2, 3, 4]);
+}
+
+#[test]
+fn headless_required_ids_the_app_does_not_offer_are_ignored() {
+    let t = ToolbarCustomization::new(vec![1, 2], vec![7]);
+    assert_eq!(t.hide(7), Err(ToolbarError::UnknownItem));
+    assert_eq!(t.visible(), vec![1, 2]);
 }
