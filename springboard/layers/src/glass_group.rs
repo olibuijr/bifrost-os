@@ -1,4 +1,4 @@
-//! Glass grouping for a glass effect container (`NSGlassEffectContainerView`): glass shapes that sit within a spacing of
+//! Glass grouping for a glass effect container: glass shapes that sit within a spacing of
 //! each other join one group, so the container draws them as one material and they blend where they meet. Two shapes
 //! are near when the larger of their horizontal and vertical gaps is at most the spacing; overlapping shapes have no
 //! gap, and joining is transitive. Pure geometry.

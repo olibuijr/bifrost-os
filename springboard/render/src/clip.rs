@@ -1,6 +1,6 @@
-//! Clipping for drawing code: a stack of pixel rectangles. Pushing a clip intersects it with the clip on top, so nested
-//! clips only ever shrink the drawable area, as `CGContextClipToRect` does. [`fill_clipped`] fills a rectangle inside the
-//! current clip and the surface bounds. Pure: no device and no display.
+//! Clipping for drawing code: a stack of pixel rectangles. Pushing a clip intersects it with the clip on top, so
+//! nested clips only ever shrink the drawable area, as a rectangular clip of a drawing context does.
+//! [`fill_clipped`] fills a rectangle inside the current clip and the surface bounds. Pure: no device and no display.
 
 use crate::gfx::Surface;
 

@@ -33,11 +33,11 @@ fn a_catalogue_refuses_an_unnamed_image_and_a_second_image_with_the_same_name() 
 fn a_catalogue_lists_names_in_registration_order_and_removes_one() {
     let mut catalog = ImageCatalog::new();
     catalog.register(named_image("Zoom"));
-    catalog.register(named_image("Apple"));
-    assert_eq!(catalog.names(), vec!["Zoom", "Apple"]);
+    catalog.register(named_image("Orchard"));
+    assert_eq!(catalog.names(), vec!["Zoom", "Orchard"]);
     assert!(catalog.remove("Zoom"));
     assert!(!catalog.remove("Zoom"));
-    assert_eq!(catalog.names(), vec!["Apple"]);
+    assert_eq!(catalog.names(), vec!["Orchard"]);
 }
 
 #[test]

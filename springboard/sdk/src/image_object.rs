@@ -253,7 +253,7 @@ impl ImageObject {
     }
 }
 
-/// The named images an app registers. `NSImage(named:)` looks images up here by name. A name is registered once.
+/// The named images an app registers. Lookup by name is served here. A name is registered once.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ImageCatalog {
     images: Vec<ImageObject>,

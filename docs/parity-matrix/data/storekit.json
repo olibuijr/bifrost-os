@@ -52,9 +52,9 @@
   {
    "feature": "Promoted purchases",
    "apple": "PurchaseIntent, Product.PromotionInfo",
-   "bifrost": "springboard/ui/src/promotion.rs",
+   "bifrost": "springboard/ui/src/promotion.rs (visible_in_display_order); springboard/ui/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "built on parity/team-a-08; not yet verified on Midget. App-side queue of purchase intents (first in, first out, no duplicates, bounded) and the store-side order of promoted products. The model has no caller yet: nothing shows a promotion and the store page does not send intents."
+   "note": "App-side queue of purchase intents (first in, first out, no duplicates, bounded), and the store-side order of promoted products that leaves out products the customer already owns, tested headless. Gap: nothing shows a promotion and the store page does not send intents yet, and the flow is not verified on Midget."
   },
   {
    "feature": "App Store product page and overlay",

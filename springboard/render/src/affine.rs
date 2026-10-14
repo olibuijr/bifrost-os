@@ -1,6 +1,5 @@
-//! Two-dimensional affine transforms for app drawing (`CGAffineTransform`) and the current transform stack of a drawing
-//! context (`CGContextSaveGState`, `CGContextConcatCTM`). Points map as x' = a*x + c*y + tx and y' = b*x + d*y + ty.
-//! Pure arithmetic: no device and no display.
+//! Two-dimensional affine transforms for app drawing and the current transform stack of a drawing context, with save
+//! and concatenate. Points map as x' = a*x + c*y + tx and y' = b*x + d*y + ty. Pure arithmetic: no device and no display.
 
 /// A 2x3 affine matrix.
 #[derive(Clone, Copy, Debug, PartialEq)]

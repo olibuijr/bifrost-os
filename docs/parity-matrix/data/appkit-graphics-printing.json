@@ -10,9 +10,9 @@
   {
    "feature": "Images and PDF: image objects and representations",
    "apple": "NSImage, NSImageRep, NSBitmapImageRep, NSPDFImageRep (https://developer.apple.com/documentation/appkit/images-and-pdf)",
-   "bifrost": "springboard/render/src/gfx.rs (Image), springboard/render/src/imgdec.rs, springboard/sdk/src/image_source.rs (representation), springboard/sdk/src/image_object.rs (ImageObject, ImageRep)",
+   "bifrost": "springboard/sdk/src/image_object.rs (ImageObject, ImageRep, ImageCatalog, tint_template); springboard/sdk/src/image_source.rs (representation); springboard/render/src/gfx.rs (Image); springboard/render/src/imgdec.rs; springboard/sdk/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "ImageObject (sdk/src/image_object.rs) holds bitmap and vector representations, picks the best one for a target size and scale, keeps a point size, a template flag and cap insets, computes nine-slice layouts and reads the size of encoded bytes; image_source::representation encodes a bitmap (JPEG compression factor, transparent pixels flattened for JPEG). Host tests only; not yet used by the kit's image widgets or the shell. No representation classes per codec (no TIFF/GIF/WebP/HEIC rep), no template tint when drawn, no named image catalogue; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
+   "note": "ImageObject holds bitmap and vector representations, picks the best one for a target size and scale, keeps a point size, a template flag and cap insets, and computes nine-slice layouts; ImageCatalog registers named images and tint_template draws a template in a tint, all tested headless in sdk/tests/parity_sdk-complete-09.rs. Gap: there are no representation classes per codec (no TIFF, GIF, WebP or HEIC rep), and the kit's image widgets do not yet use the tint; the drawn result needs Midget."
   },
   {
    "feature": "Images and PDF: symbol images",
@@ -31,16 +31,16 @@
   {
    "feature": "Images and PDF: file and app icons",
    "apple": "NSWorkspace icon(forFile:), NSImage named icons",
-   "bifrost": "springboard/sdk/src/workspace.rs, docs/bifrost-ui.md (widgets::folder_icon)",
+   "bifrost": "springboard/sdk/src/workspace.rs (icon_for_file, icon_for_content_type), docs/bifrost-ui.md (widgets::folder_icon)",
    "status": "partial",
-   "note": "procedural folder icon only; no per-file-type icon set"
+   "note": "Icon glyph names follow the content type of a file, tested headless in sdk/tests/parity_sdk-complete-09.rs; the folder icon is procedural. Gap: the glyphs are names that the kit draws, not a set of per-type drawn icons, and app icons are not loaded from bundles."
   },
   {
    "feature": "Drawing: 2D drawing context and basic shapes",
    "apple": "NSGraphicsContext, NSRectFill, NSBezierPath fill/stroke of rects and rounded rects",
-   "bifrost": "springboard/render/src/gfx.rs (Surface, fill_rrect, rrect_coverage, Damage)",
+   "bifrost": "springboard/render/src/gfx.rs (Surface, fill_rrect, rrect_coverage, Damage); springboard/render/src/clip.rs (ClipStack, fill_clipped); springboard/render/src/affine.rs (Affine, TransformStack); springboard/render/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; no general path object, no clipping paths, no affine transform stack for apps"
+   "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; nested clip rectangles (ClipStack) and affine transforms with a save and restore stack (TransformStack) are tested headless. Gap: Surface draws take no clip or transform itself, so apps apply them before drawing, and clipping paths other than rectangles are not modelled."
   },
   {
    "feature": "Drawing: Bezier paths, gradients, shadows",
@@ -87,9 +87,9 @@
   {
    "feature": "Color: colour spaces and lists",
    "apple": "NSColorSpace, NSColorList, NSColorPicker, colour sampler",
-   "bifrost": "springboard/sdk/src/graphics_color.rs, springboard/sdk/src/color_list.rs (ColorList, ColorLists)",
+   "bifrost": "springboard/sdk/src/color_list.rs (ColorList, ColorLists); springboard/sdk/src/graphics_color.rs; springboard/sdk/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "Colour spaces and conversions are in graphics_color (bifrost_render::cg::color, ICC profiles for apps). ColorList and ColorLists add NSColorList: ordered named colours with a registry by name. Host tests only; no colour well or picker that uses the lists, and no eyedropper; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
+   "note": "Colour spaces and conversions are in graphics_color (bifrost_render::cg::color, ICC profiles for apps). ColorList and ColorLists add NSColorList: ordered named colours with a registry by name, and a colour can be moved to a new position; tested headless. Gap: no colour well or picker uses the lists and there is no eyedropper, which need the Midget display."
   },
   {
    "feature": "Printing: print info and operation",
@@ -122,9 +122,9 @@
   {
    "feature": "Glass effect views (NSGlassEffectView, NSGlassEffectContainerView)",
    "apple": "NSGlassEffectView, NSGlassEffectContainerView",
-   "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs",
+   "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/layers/src/glass_group.rs (group_shapes); springboard/wm/src/render_server/material.rs; springboard/layers/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+   "note": "Glass shapes group by proximity for a glass container (group_shapes, joins transitively within a spacing), and the glass material compares every parameter, tested headless. Gap: the per-shader inventory comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md), and the container blend needs the Midget display to check."
   }
  ],
  "gaps": [

@@ -24,9 +24,9 @@
     {
       "feature": "MIDI Bluetooth (BLE MIDI peripherals)",
       "apple": "MIDIBluetoothDriverActivateAllConnections, MIDIBluetoothDriverDisconnect (https://developer.apple.com/documentation/coremidi/midi-bluetooth)",
-      "bifrost": "springboard/ui/src/midi_ble.rs, springboard/audio/midi/src/ble.rs (BLE MIDI packet framing), springboard/sdk/src/ble_midi.rs",
+      "bifrost": "springboard/ui/src/midi_ble.rs (SysExAssembler); springboard/audio/midi/src/ble.rs (BLE MIDI packet framing); springboard/sdk/src/ble_midi.rs; springboard/ui/tests/parity_sdk-complete-09.rs",
       "status": "partial",
-      "note": "BLE MIDI packet encode and decode with timestamps and MTU splitting (audio/midi/src/ble.rs), host unit tests. The system layer pairs and tracks Bluetooth devices and classifies audio-class devices. GATT service discovery on the live link is not verified. Built on parity/team-n-core-midi; not yet verified on Midget."
+      "note": "BLE MIDI packet encode and decode with timestamps and MTU splitting (audio/midi/src/ble.rs), and SysExAssembler joins system exclusive messages that span packets, both tested headless. The system layer pairs and tracks Bluetooth devices and classifies audio-class devices. Gap: GATT service discovery on the live link is not verified, and it needs a Bluetooth peripheral on the lab machine."
     },
     {
       "feature": "MIDI Messages (MIDI 1.0 and 2.0 / UMP construction)",
