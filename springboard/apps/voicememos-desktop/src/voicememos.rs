@@ -2113,7 +2113,7 @@ impl VoiceMemos {
                 s.fill_rrect(mx, my, fill.max(h), h, h / 2.0, BLUE);
             }
             let readout = meter_title(self.input_level);
-            self.centred(s, ui, &readout, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, my + h + ui.pt(SPACE_XS), pw, ui.pt(20.0)));
+            self.centred(s, ui, &readout, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, my + h + ui.pt(SPACE_XS), pw, ui.pt(SPACE_XL)));
         } else if let Some(memo) = memo {
             if self.peaks_for.as_deref() != Some(memo.path.as_path()) {
                 self.peaks = store::peaks(&memo.path, 256);

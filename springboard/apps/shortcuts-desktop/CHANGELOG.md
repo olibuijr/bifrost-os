@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.1 — 2026-10-14
+
+- Use the shared grouped-card radius token for the result panel.
+
 ## 1.11.0 — 2026-10-14
 
 - Automation row in the editor's Details group, under Menu Key. Each tap steps through Off, each app opening (When Notes Opens and so on) and the charge falling below 10, 20, 30 or 50 percent. The choice is saved in the list file.

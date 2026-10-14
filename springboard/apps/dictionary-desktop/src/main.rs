@@ -5,7 +5,7 @@
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON};
+use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SPACE_XS};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
@@ -647,7 +647,7 @@ fn button(canvas: &mut dyn Canvas, ui: &Ui, hot: &mut Vec<Hot>, x: f32, y: f32, 
     let r = RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h));
     canvas.fill_rrect(r, ui.pt(6.0), if strong { SEGMENT_ON.now() } else { FIELD_BG.now() });
     let colour = if act.is_some() { LABEL.now() } else { LABEL_3.now() };
-    let img = ui.text(&ui.fit(label, MAC_SUBHEAD_PT, r.w - ui.pt(4.0)), MAC_SUBHEAD_PT, Weight::Regular, colour);
+    let img = ui.text(&ui.fit(label, MAC_SUBHEAD_PT, r.w - ui.pt(SPACE_XS)), MAC_SUBHEAD_PT, Weight::Regular, colour);
     widgets::blit(canvas, &img, (r.x + (r.w - img.w as f32) / 2.0) as i32, (r.y + (r.h - img.h as f32) / 2.0) as i32);
     if let Some(act) = act {
         hot.push(Hot { x, y, w, h, act });

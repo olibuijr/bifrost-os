@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-10-14
+
+- Use the shared extra-small spacing token for suggestion label fitting.
+
 ## 0.5.0
 
 - The model is a library target (`src/lib.rs`), so its behaviour is tested through the public API in `tests/parity_app-dictionary.rs`: history, scope, preferences, text size, find, cross-reference words, settings drag order, the copy and print text, the folder URL and the dict: and x-dictionary: URLs.

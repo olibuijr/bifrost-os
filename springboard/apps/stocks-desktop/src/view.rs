@@ -10,7 +10,7 @@ use crate::state::{now_unix, Stocks};
 use bifrost_app::kit::appearance::Pair;
 use bifrost_app::kit::ui::{
     CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT,
-    MAC_TITLE3_PT, SEPARATOR_C, SPACE_L, SPACE_M, SPACE_XXL, SYSTEM_GREEN, SYSTEM_RED,
+    MAC_TITLE3_PT, SEPARATOR_C, SPACE_L, SPACE_M, SPACE_XL, SPACE_XXL, SYSTEM_GREEN, SYSTEM_RED,
 };
 use bifrost_app::kit::{pack, Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
@@ -209,7 +209,7 @@ impl Stocks {
         let (top, bottom) = (y as usize, (y + h) as usize);
         let symbols = self.list.symbols().to_vec();
         if symbols.is_empty() {
-            put(&mut self.labels, s, ui, "Your watchlist is empty. Type a symbol above to add one.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, x + w / 2.0, y + ui.pt(24.0));
+            put(&mut self.labels, s, ui, "Your watchlist is empty. Type a symbol above to add one.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, x + w / 2.0, y + ui.pt(SPACE_XXL));
             return;
         }
         let selected = self.list.selected();
@@ -291,8 +291,8 @@ impl Stocks {
         put(&mut self.labels, s, ui, &format!("{:.2}", vhi), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x0 - ui.pt(6.0), plot_y0);
         put(&mut self.labels, s, ui, &format!("{:.2}", vlo), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x0 - ui.pt(6.0), plot_y1);
         if let (Some(first), Some(last_bar)) = (bars.as_ref().and_then(|b| b.first()), bars.as_ref().and_then(|b| b.last())) {
-            put(&mut self.labels, s, ui, &first.date, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, plot_x0, plot_y1 + ui.pt(16.0));
-            put(&mut self.labels, s, ui, &last_bar.date, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x1, plot_y1 + ui.pt(16.0));
+            put(&mut self.labels, s, ui, &first.date, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, plot_x0, plot_y1 + ui.pt(SPACE_L));
+            put(&mut self.labels, s, ui, &last_bar.date, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x1, plot_y1 + ui.pt(SPACE_L));
         }
         let n = values.len();
         let points: Vec<(f32, f32)> = values

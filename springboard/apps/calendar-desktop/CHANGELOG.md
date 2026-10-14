@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.16.1 — 2026-10-14
+
+- Remove the unused keychain permission; Calendar accesses accounts through the shell's account service.
+
 ## 1.16.0 — 2026-10-14
 
 - Day and Week: grab the top or bottom edge of a timed event and drag it to resize the event. The start or the end snaps to

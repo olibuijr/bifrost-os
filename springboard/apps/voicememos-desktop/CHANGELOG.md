@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.1 — 2026-10-14
+
+- Use the shared spacing token for the level readout's vertical padding.
+
 ## 1.9.0 — 2026-10-14
 
 - The unused organize model is removed. Its features (favourites, Recently Deleted, folders, search, pause) run in
