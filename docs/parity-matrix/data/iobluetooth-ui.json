@@ -24,9 +24,9 @@
     {
       "feature": "Service browser (IOBluetoothServiceBrowserController)",
       "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef",
-      "bifrost": "springboard/core/src/bt_service_browser.rs; wired: springboard/core/src/bt_service_browser.rs via springboard/src/shell/services/bluetooth_service.rs (services method) and springboard/sdk/src/bluetooth_service.rs (services, services_from_reply); Settings row in springboard/src/shell/pages.rs BluetoothDetail",
+      "bifrost": "springboard/core/src/bt_service_browser.rs; springboard/core/tests/parity_sdk-complete-47.rs; wired: springboard/core/src/bt_service_browser.rs via springboard/src/shell/services/bluetooth_service.rs (services method) and springboard/sdk/src/bluetooth_service.rs (services, services_from_reply); Settings row in springboard/src/shell/pages.rs BluetoothDetail",
       "status": "partial",
-      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDP query, no service list, and no service selection. Audio routing is decided from device class (class_is_audio), not from a service browse. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-complete-47.rs cover the UUID allow list, the filtered choice, cancel, panel text and option bits. Gap: the service list comes from an SDP query on the radio, which needs the lab machine, and audio routing is still decided from device class (class_is_audio), not from a service browse. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Object push transfer UI (IOBluetoothObjectPushUIController)",
