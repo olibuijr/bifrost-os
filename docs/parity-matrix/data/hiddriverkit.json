@@ -45,9 +45,9 @@
     {
       "feature": "Stylus and pen input",
       "apple": "IOHIDDigitizerStylusData, Handling Stylus Input from a Human Interface Device",
-      "bifrost": "springboard/ui/src/stylus.rs (StylusReport::to_point",
+      "bifrost": "springboard/ui/src/stylus.rs (StylusReport::to_point)",
       "status": "partial",
-      "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pen tilt, pressure and eraser are not decoded"
+      "note": "Pure model in bifrost_ui::stylus: pressure maps to force, tilt maps to altitude and azimuth, and hover reports are skipped (in-file tests: an_upright_pen_has_full_altitude_and_no_azimuth, a_touching_report_becomes_a_stroke_point_with_mapped_force_and_angles, hover_reports_are_not_stroke_points). Not wired into apps or the shell and not tested on the VM or Midget. No device decoding; the eraser flag is carried on the report but to_point does not act on it."
     },
     {
       "feature": "Pointer and scrolling devices",
