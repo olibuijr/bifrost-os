@@ -87,9 +87,9 @@
   {
    "feature": "Constants, structures and enumerations",
    "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy",
-   "bifrost": "springboard/ui/src/strategist.rs, springboard/ui/src/rule_system.rs, springboard/ui/src/state_machine.rs",
+   "bifrost": "springboard/ui/src/gameplay_values.rs (score bounds, Box3, Quad, Triangle, TriangulationMode, SplitStrategy); springboard/ui/src/strategist.rs, springboard/ui/src/rule_system.rs, springboard/ui/src/state_machine.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (strategist.rs, rule_system.rs, state_machine.rs); not wired into the shell or apps, not tested on Midget. Value types depend on the spatial, graph and strategist rows, which are all missing."
+   "note": "The score bounds, box, quad and triangle value types and the option sets are in gameplay_values.rs and tested headless in ui/tests/parity_sdk-complete-35.rs; the strategist, rule and state models are pure with host unit tests. Gap: no spatial tree or mesh graph consumes these types yet, and nothing is wired into the shell or apps."
   }
  ],
  "gaps": [

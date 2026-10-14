@@ -1,4 +1,4 @@
-//! Result codes of the security services (the `OSStatus` values the keychain and the trust and key services return),
+//! Result codes of the security services (the numeric status values the keychain and the trust and key services return),
 //! with a short meaning and a broad category for each code this platform reports.
 //!
 //! A code of zero is success. Any other code that is not in [`KNOWN_CODES`] has no meaning here and falls in

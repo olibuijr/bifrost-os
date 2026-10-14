@@ -38,9 +38,9 @@
     {
       "feature": "Bluetooth picker and pairing UI",
       "apple": "EAAccessoryManager showBluetoothAccessoryPicker (Bluetooth MFi accessory selection sheet)",
-      "bifrost": "springboard/sdk/src/bluetooth_picker.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_picker.rs (PickerRequest, for_request, Outcome::address)",
       "status": "partial",
-      "note": "Wave 5 (w5-external-accessory, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Settings page pairs, connects and unpairs devices, and sets an audio route. No app can open a picker to choose an accessory for itself. The picker is a shell feature only."
+      "note": "An app's request (a name filter and device kinds) builds the picker, and the app receives only the chosen address; tested headless in sdk/tests/parity_sdk-complete-35.rs. Gap: the request does not cross the shell boundary yet, so no app can open the picker for itself, and the pairing sheet remains a shell feature."
     },
     {
       "feature": "Wi-Fi accessory configuration (unconfigured accessories)",

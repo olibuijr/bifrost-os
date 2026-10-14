@@ -59,9 +59,9 @@
     {
       "feature": "App Transport Security (secure network links)",
       "apple": "NSAppTransportSecurity, Preventing Insecure Network Connections",
-      "bifrost": "springboard/sdk/src/url.rs (parse_url, resolve)",
+      "bifrost": "springboard/sdk/src/url.rs (parse_url, resolve); springboard/sdk/src/transport_policy.rs (TransportPolicy, check_request, check_redirect)",
       "status": "partial",
-      "note": "Scheme and TLS choice, port defaults and redirect resolution are tested headless in url::transport_security_tests. The SDK URL client uses rustls by default, and the shell's update client (src/shell/update.rs) is HTTPS only. Gap: redirects may still move an https request to http, and there is no manifest-level exception list or policy for apps."
+      "note": "Scheme and TLS choice, port defaults and redirect resolution are tested headless in url::transport_security_tests. The URL client refuses an https request redirected to plain http, and transport_policy decides plain-http exceptions per host and subdomain, tested headless in sdk/tests/parity_sdk-complete-35.rs. Gap: the URL client does not read an exception list from the app manifest yet, so exceptions apply only where an app calls TransportPolicy itself. The shell's update client (src/shell/update.rs) is HTTPS only."
     },
     {
       "feature": "Software update integrity",
@@ -115,9 +115,9 @@
     {
       "feature": "Security framework result codes",
       "apple": "OSStatus values such as errSecDuplicateItem and errSecItemNotFound",
-      "bifrost": "springboard/sdk/src/keychain.rs (Error); Error::code() in docs/bifrost-ui.md",
+      "bifrost": "springboard/sdk/src/security_status.rs (KNOWN_CODES, category, meaning); springboard/sdk/src/keychain.rs (Error); Error::code() in docs/bifrost-ui.md",
       "status": "partial",
-      "note": "Only the keychain errors are mirrored. Other Security OSStatus values have no counterpart. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (osstatus_codes_match_the_security_framework_values)."
+      "note": "A table of the result codes the keychain and trust services return, each with a meaning and a category, is tested headless in sdk/tests/parity_sdk-complete-35.rs, and the keychain error codes are checked against it. Gap: the table covers only the codes this platform reports, and certificate, key and trust evaluation services have no counterpart yet. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (osstatus_codes_match_the_security_framework_values)."
     },
     {
       "feature": "Legacy Secure Transport, Secure Download, CSSM",
