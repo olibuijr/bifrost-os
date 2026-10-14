@@ -5,7 +5,7 @@
 //! the document's path.
 
 use crate::model::{self, fit_box, Adjust, Mark};
-use crate::pdfjob::{self, Inbox, Job, Key, Opened, Outline, Reply, PAGE_BOX};
+use crate::pdfjob::{self, Inbox, Job, Key, Opened, Outline, PdfInfo, Reply, PAGE_BOX};
 use bifrost_app::image_filter::{Filter, FilterChain};
 use bifrost_app::image_source::ImageSource;
 use bifrost_app::kit::Image;
@@ -41,12 +41,18 @@ pub struct Document {
     pub order: Vec<usize>,
     /// The quarter turns of each source page, set by the rotate actions and saved by Export PDF.
     pub turns: Vec<u8>,
+    /// The mirror bits of each source page (`model::FLIP_H`, `FLIP_V`).
+    pub flips: Vec<u8>,
     /// The markup, keyed by source page.
     pub marks: Vec<Mark>,
     /// The PDF outline, in reading order. Empty for a picture.
     pub outline: Vec<Outline>,
     /// The bookmarked source pages, kept beside the markup.
     pub bookmarks: Vec<usize>,
+    /// How many times a picture's pixels were replaced (crop, resize, mask); Undo compares it.
+    pub pic_rev: u32,
+    /// The facts about a PDF file that the worker reported; None for a picture.
+    pub pdf_info: Option<PdfInfo>,
     source: Source,
     /// The pictures and thumbnails drawn so far, by key.
     drawn: RefCell<HashMap<Key, Rc<Image>>>,
@@ -65,9 +71,12 @@ impl Document {
             sizes,
             order: (0..n).collect(),
             turns: vec![0; n],
+            flips: vec![0; n],
             marks: load_marks(data_dir, path),
             outline,
             bookmarks: load_bookmarks(data_dir, path),
+            pic_rev: 0,
+            pdf_info: None,
             source,
             drawn: RefCell::new(HashMap::new()),
             asked: RefCell::new(HashSet::new()),
@@ -103,6 +112,20 @@ impl Document {
     /// The quarter turns of shown page `page`.
     pub fn turn_of(&self, page: usize) -> u8 {
         self.source_of(page).and_then(|s| self.turns.get(s).copied()).unwrap_or(0)
+    }
+
+    /// The orientation of shown page `page`: its quarter turns plus the mirror bits, as `model::rot_point` takes it.
+    pub fn orient_of(&self, page: usize) -> u8 {
+        let flips = self.source_of(page).and_then(|s| self.flips.get(s).copied()).unwrap_or(0);
+        self.turn_of(page) | (flips & (model::FLIP_H | model::FLIP_V))
+    }
+
+    /// Mirrors shown page `page` left to right (`horizontal`) or top to bottom.
+    pub fn toggle_flip(&mut self, page: usize, horizontal: bool) {
+        let bit = if horizontal { model::FLIP_H } else { model::FLIP_V };
+        if let Some(f) = self.source_of(page).and_then(|s| self.flips.get_mut(s)) {
+            *f ^= bit;
+        }
     }
 
     /// Sets the quarter turns of shown page `page`.
@@ -223,6 +246,42 @@ impl Document {
     }
 }
 
+impl Document {
+    /// The picture's pixels now, for the undo history. No picture for a PDF.
+    pub fn pic_state(&self) -> model::PicState {
+        let image = match &self.source {
+            Source::Picture(img) => Some(img.clone()),
+            Source::Pdf { .. } => None,
+        };
+        model::PicState { rev: self.pic_rev, image }
+    }
+
+    /// Puts a picture back from the undo history. A state with no picture (a PDF) changes nothing.
+    pub fn restore_pic(&mut self, state: &model::PicState) {
+        let Some(img) = &state.image else { return };
+        self.set_picture(img.clone());
+        self.pic_rev = state.rev;
+    }
+
+    /// Replaces a picture's pixels with an edited copy (crop, resize, mask). A new revision is counted so the edit can
+    /// be undone. False for a PDF.
+    pub fn replace_picture(&mut self, img: Image) -> bool {
+        if !matches!(self.source, Source::Picture(_)) || img.w == 0 || img.h == 0 {
+            return false;
+        }
+        self.set_picture(Rc::new(img));
+        self.pic_rev += 1;
+        true
+    }
+
+    fn set_picture(&mut self, img: Rc<Image>) {
+        self.sizes = vec![(img.w, img.h)];
+        self.source = Source::Picture(img);
+        self.drawn.borrow_mut().clear();
+        self.asked.borrow_mut().clear();
+    }
+}
+
 /// Opens the picture at `path` (PNG or JPEG). `data_dir` is the app's private storage directory.
 pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
@@ -234,7 +293,28 @@ pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
 
 /// The document of a PDF whose worker has opened it. `jobs` and `inbox` are the worker's.
 pub fn from_pdf(path: &Path, data_dir: &Path, opened: Opened, jobs: Sender<Job>, inbox: Inbox) -> Document {
-    Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true)
+    let mut doc = Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true);
+    doc.pdf_info = Some(opened.info);
+    doc
+}
+
+/// The file that remembers the page `path` was left on.
+fn page_path(data_dir: &Path, path: &Path) -> PathBuf {
+    sidecar_path(data_dir, path).with_extension("page")
+}
+
+/// The shown page `path` was last left on, or None when it was never saved.
+pub fn load_last_page(data_dir: &Path, path: &Path) -> Option<usize> {
+    std::fs::read_to_string(page_path(data_dir, path)).ok()?.trim().parse().ok()
+}
+
+/// Remembers the shown page `path` is on.
+pub fn save_last_page(data_dir: &Path, path: &Path, page: usize) -> std::io::Result<()> {
+    let file = page_path(data_dir, path);
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(file, page.to_string())
 }
 
 /// The sidecar file for `path` under `data_dir`.
@@ -371,6 +451,50 @@ mod tests {
         save_bookmarks(&dir, path, &[]).expect("removed");
         assert!(load_bookmarks(&dir, path).is_empty());
         save_bookmarks(&dir, path, &[]).expect("removing nothing is fine");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn flips_follow_the_source_page_and_join_the_turns() {
+        let mut doc = picture_doc(4, 4);
+        doc.sizes = vec![(4, 4), (4, 4)];
+        doc.order = vec![0, 1];
+        doc.turns = vec![0, 0];
+        doc.flips = vec![0, 0];
+        doc.set_turn(0, 3);
+        doc.toggle_flip(0, true);
+        assert_eq!(doc.orient_of(0), 3 | model::FLIP_H);
+        doc.toggle_flip(0, false);
+        assert_eq!(doc.orient_of(0), 3 | model::FLIP_H | model::FLIP_V);
+        doc.toggle_flip(0, true);
+        doc.toggle_flip(0, false);
+        assert_eq!(doc.orient_of(0), 3);
+        doc.move_page(0, 1);
+        assert_eq!(doc.orient_of(1), 3);
+        assert_eq!(doc.orient_of(5), 0);
+    }
+
+    #[test]
+    fn replacing_a_picture_counts_a_revision_and_can_be_put_back() {
+        let mut doc = picture_doc(4, 4);
+        let before = doc.pic_state();
+        assert_eq!(before.rev, 0);
+        assert!(doc.replace_picture(Image { w: 2, h: 3, px: vec![1; 6] }));
+        assert_eq!((doc.pic_rev, doc.sizes.clone()), (1, vec![(2, 3)]));
+        assert_ne!(doc.pic_state(), before);
+        doc.restore_pic(&before);
+        assert_eq!((doc.pic_rev, doc.sizes.clone()), (0, vec![(4, 4)]));
+        assert!(!doc.replace_picture(Image { w: 0, h: 0, px: vec![] }));
+    }
+
+    #[test]
+    fn the_last_page_is_remembered_per_document() {
+        let dir = std::env::temp_dir().join(format!("viewer-lastpage-{}", std::process::id()));
+        let path = Path::new("/a/b.pdf");
+        assert_eq!(load_last_page(&dir, path), None);
+        save_last_page(&dir, path, 7).expect("saved");
+        assert_eq!(load_last_page(&dir, path), Some(7));
+        assert_eq!(load_last_page(&dir, Path::new("/a/c.pdf")), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

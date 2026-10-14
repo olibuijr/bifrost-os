@@ -3,7 +3,8 @@
 //! draw first; the sidebar and the toolbar draw last, so anything that runs under them is covered.
 
 use crate::document::{Document, THUMB_W};
-use crate::model::{self, Adjust, Mark, MarkKind, Norm, View, HIGHLIGHT, MARK_BLUE};
+use crate::find::Hit;
+use crate::model::{self, Adjust, Mark, MarkKind, Norm, View, ADJUST_ROWS, HIGHLIGHT, MARK_BLUE};
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{rgba, Image, Surface};
 
@@ -17,13 +18,35 @@ pub enum Tool {
     Rounded,
     /// A freehand stroke, for a signature.
     Sign,
+    /// Drags out a rectangular selection (for Copy, Crop and Zoom to Selection).
+    Select,
+    Oval,
+    Line,
+    Arrow,
+    Star,
+    Bubble,
+    Underline,
+    Strike,
+    Text,
+    Redact,
+    /// A click clears the connected region of one colour to transparent.
+    Mask,
 }
 
 impl Tool {
-    /// The mark a drag with this tool makes, or `None` for panning.
+    /// The mark a drag with this tool makes, or `None` for the tools that make none (panning, selecting, masking).
     pub fn mark_kind(self) -> Option<MarkKind> {
         match self {
-            Tool::Pan => None,
+            Tool::Pan | Tool::Select | Tool::Mask => None,
+            Tool::Oval => Some(MarkKind::Oval),
+            Tool::Line => Some(MarkKind::Line),
+            Tool::Arrow => Some(MarkKind::Arrow),
+            Tool::Star => Some(MarkKind::Star),
+            Tool::Bubble => Some(MarkKind::Bubble),
+            Tool::Underline => Some(MarkKind::Underline),
+            Tool::Strike => Some(MarkKind::Strike),
+            Tool::Text => Some(MarkKind::Text),
+            Tool::Redact => Some(MarkKind::Redact),
             Tool::Highlight => Some(MarkKind::Highlight),
             Tool::Note => Some(MarkKind::Note),
             Tool::Rect => Some(MarkKind::Rect),
@@ -33,11 +56,15 @@ impl Tool {
     }
 }
 
-/// What the sidebar lists: the page thumbnails, or the PDF outline.
+/// What the sidebar lists: the page thumbnails, the PDF outline, the search results, the marks (highlights and notes)
+/// or the bookmarks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
     Pages,
     Outline,
+    Search,
+    Notes,
+    Bookmarks,
 }
 
 /// Everything a toolbar button or a menu item does.
@@ -89,6 +116,55 @@ pub enum Action {
     PreviousBookmark,
     /// View > Hide Sidebar / Show Sidebar.
     ToggleSidebar,
+    /// File > Save writes the edits into the file, keeping a backup of the original.
+    Save,
+    /// File > New from Clipboard opens the picture on the clipboard.
+    NewFromClipboard,
+    /// Edit > Copy: the selection (a picture) or the page text (a PDF).
+    Copy,
+    /// Edit > Select All: the whole page becomes the selection.
+    SelectAll,
+    /// Edit > Find, Find Next, Find Previous.
+    Find,
+    FindNext,
+    FindPrevious,
+    /// View > Zoom to Selection.
+    ZoomToSelection,
+    /// Tools > Crop to the selection (pictures).
+    Crop,
+    FlipHorizontal,
+    FlipVertical,
+    /// Tools > Adjust Size: type a new width and height for a picture.
+    AdjustSize,
+    /// Tools > Adjust Color shows the sliders panel.
+    AdjustColor,
+    RemoveBackground,
+    /// Tools > Show Inspector.
+    ToggleInspector,
+    /// Tools > Show Location Info: the inspector with the picture's GPS position.
+    ShowLocation,
+    /// Tools > Show Magnifier.
+    ToggleMagnifier,
+    ShowSearch,
+    ShowNotes,
+    ShowBookmarks,
+    /// View > Hide Toolbar / Show Toolbar.
+    ToggleToolbar,
+    /// View > Contact Sheet: every page as a thumbnail grid.
+    ContactSheet,
+    /// View > Slideshow: the page alone on black, arrows or a click turn pages.
+    Slideshow,
+    /// Settings: the annotation author name is typed in the status line.
+    SetAuthor,
+    PrefRememberPage,
+    PrefActualSize,
+    PrefSidebarOnOpen,
+    /// Settings: JPEG export quality.
+    QualityHigh,
+    QualityMedium,
+    QualityLow,
+    /// Tools > Signatures > Clear Signatures empties the signature library.
+    ClearSignatures,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -137,6 +213,48 @@ pub const ACTIONS: &[Action] = &[
     Action::NextBookmark,
     Action::PreviousBookmark,
     Action::ToggleSidebar,
+    Action::Save,
+    Action::NewFromClipboard,
+    Action::Copy,
+    Action::SelectAll,
+    Action::Find,
+    Action::FindNext,
+    Action::FindPrevious,
+    Action::ZoomToSelection,
+    Action::Crop,
+    Action::FlipHorizontal,
+    Action::FlipVertical,
+    Action::AdjustSize,
+    Action::AdjustColor,
+    Action::RemoveBackground,
+    Action::ToggleInspector,
+    Action::ShowLocation,
+    Action::ToggleMagnifier,
+    Action::ShowSearch,
+    Action::ShowNotes,
+    Action::ShowBookmarks,
+    Action::ToggleToolbar,
+    Action::ContactSheet,
+    Action::Slideshow,
+    Action::SetAuthor,
+    Action::PrefRememberPage,
+    Action::PrefActualSize,
+    Action::PrefSidebarOnOpen,
+    Action::QualityHigh,
+    Action::QualityMedium,
+    Action::QualityLow,
+    Action::ClearSignatures,
+    Action::UseTool(Tool::Select),
+    Action::UseTool(Tool::Oval),
+    Action::UseTool(Tool::Line),
+    Action::UseTool(Tool::Arrow),
+    Action::UseTool(Tool::Star),
+    Action::UseTool(Tool::Bubble),
+    Action::UseTool(Tool::Underline),
+    Action::UseTool(Tool::Strike),
+    Action::UseTool(Tool::Text),
+    Action::UseTool(Tool::Redact),
+    Action::UseTool(Tool::Mask),
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -189,6 +307,17 @@ impl Action {
             Action::UseTool(Tool::Rect) => "Rectangle",
             Action::UseTool(Tool::Rounded) => "Rounded",
             Action::UseTool(Tool::Sign) => "Sign",
+            Action::UseTool(Tool::Select) => "Rectangular Selection",
+            Action::UseTool(Tool::Oval) => "Oval",
+            Action::UseTool(Tool::Line) => "Line",
+            Action::UseTool(Tool::Arrow) => "Arrow",
+            Action::UseTool(Tool::Star) => "Star",
+            Action::UseTool(Tool::Bubble) => "Speech Bubble",
+            Action::UseTool(Tool::Underline) => "Underline",
+            Action::UseTool(Tool::Strike) => "Strike Through",
+            Action::UseTool(Tool::Text) => "Text",
+            Action::UseTool(Tool::Redact) => "Redact",
+            Action::UseTool(Tool::Mask) => "Instant Alpha",
             Action::Brighter => "Brighter",
             Action::Darker => "Darker",
             Action::Saturate => "Saturate",
@@ -209,7 +338,7 @@ impl Action {
             Action::Print => "Print\u{2026}",
             Action::Undo => "Undo",
             Action::Redo => "Redo",
-            Action::RevertToOriginal => "Revert to Original",
+            Action::RevertToOriginal => "Revert to Saved",
             Action::GoBack => "Back",
             Action::GoForward => "Forward",
             Action::FirstPage => "First Page",
@@ -219,6 +348,37 @@ impl Action {
             Action::NextBookmark => "Next Bookmark",
             Action::PreviousBookmark => "Previous Bookmark",
             Action::ToggleSidebar => "Hide Sidebar",
+            Action::Save => "Save",
+            Action::NewFromClipboard => "New from Clipboard",
+            Action::Copy => "Copy",
+            Action::SelectAll => "Select All",
+            Action::Find => "Find\u{2026}",
+            Action::FindNext => "Find Next",
+            Action::FindPrevious => "Find Previous",
+            Action::ZoomToSelection => "Zoom to Selection",
+            Action::Crop => "Crop",
+            Action::FlipHorizontal => "Flip Horizontal",
+            Action::FlipVertical => "Flip Vertical",
+            Action::AdjustSize => "Adjust Size\u{2026}",
+            Action::AdjustColor => "Adjust Color",
+            Action::RemoveBackground => "Remove Background",
+            Action::ToggleInspector => "Show Inspector",
+            Action::ShowLocation => "Show Location Info",
+            Action::ToggleMagnifier => "Show Magnifier",
+            Action::ShowSearch => "Search Results",
+            Action::ShowNotes => "Highlights and Notes",
+            Action::ShowBookmarks => "Bookmarks",
+            Action::ToggleToolbar => "Hide Toolbar",
+            Action::ContactSheet => "Contact Sheet",
+            Action::Slideshow => "Slideshow",
+            Action::SetAuthor => "Annotation Author\u{2026}",
+            Action::PrefRememberPage => "Remember Last Page",
+            Action::PrefActualSize => "Open Pictures at Actual Size",
+            Action::PrefSidebarOnOpen => "Show Sidebar on Open",
+            Action::QualityHigh => "JPEG Quality: High",
+            Action::QualityMedium => "JPEG Quality: Medium",
+            Action::QualityLow => "JPEG Quality: Low",
+            Action::ClearSignatures => "Clear Signatures",
         }
     }
 
@@ -383,7 +543,7 @@ pub fn picture_for<'a>(cache: &'a mut Option<PictureCache>, src: usize, picture:
     let key = (src, *adjust, quarters, w, h);
     if cache.as_ref().map(|c| c.key) != Some(key) {
         let base = crate::document::adjusted(picture, adjust);
-        let turned = model::rotate(&base, quarters);
+        let turned = model::orient(&base, quarters);
         let img = if (turned.w, turned.h) == (w, h) { turned } else { turned.resized(w, h) };
         *cache = Some(PictureCache { key, img });
     }
@@ -404,15 +564,30 @@ pub struct Scene<'a> {
     pub editing: Option<usize>,
     /// A message to show in the middle of the canvas (an open error, an export result).
     pub status: &'a str,
+    /// The search results the Search list shows.
+    pub hits: &'a [Hit],
+    /// The rectangular selection on the shown page, in page coordinates.
+    pub selection: Option<Norm>,
+    /// Whether every page is shown as a thumbnail grid instead of the page.
+    pub contact: bool,
+    /// Whether the page is shown alone on black.
+    pub slideshow: bool,
+    /// The Adjust Color panel, shown or not.
+    pub adjust_panel: bool,
+    /// The Inspector lines (label and value), or `None` when it is hidden.
+    pub inspector: Option<&'a [(String, String)]>,
+    /// The magnifier: the pointer position while it is on.
+    pub magnifier: Option<(f32, f32)>,
 }
 
 /// Draws the window. `cache` keeps the scaled picture between frames.
 pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut Option<PictureCache>) -> Option<Placed> {
     let (cx, cy, cw, ch) = lay.canvas();
-    fill(s, cx, cy, cw, ch, ui::CONTENT_BG.now());
+    fill(s, cx, cy, cw, ch, if scene.slideshow { rgba(0, 0, 0, 255) } else { ui::CONTENT_BG.now() });
     let mut placed = None;
     let mut shown_src = None;
     match scene.doc {
+        Some(doc) if scene.contact => draw_contact(s, ui, lay, scene, doc),
         None => {
             let msg = if scene.status.is_empty() { "Open an image or a PDF to view it." } else { scene.status };
             centred_text(s, ui, msg, lay, ui::LABEL_2.now());
@@ -442,17 +617,34 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
             }
         }
     }
-    // a note's text sits beside its marker on picture pages
-    if let (Some(doc), Some(p), Some(src)) = (scene.doc, placed, shown_src) {
-        for (i, m) in doc.marks.iter().enumerate().filter(|(_, m)| m.page == src && m.kind == MarkKind::Note) {
+    // a note's text sits beside its marker; a text box's text sits inside its box
+    if let (Some(doc), Some(p), Some(src), false) = (scene.doc, placed, shown_src, scene.contact) {
+        for (i, m) in doc.marks.iter().enumerate().filter(|(_, m)| m.page == src && matches!(m.kind, MarkKind::Note | MarkKind::Text)) {
             if m.text.is_empty() && scene.editing != Some(i) {
                 continue;
             }
             let (x, y, _, _) = to_screen(&p, scene.view.quarters, m.rect);
             let shown = if scene.editing == Some(i) { format!("{}|", m.text) } else { m.text.clone() };
             let img = ui.text(&shown, ui::MAC_CALLOUT_PT, Weight::Regular, ui::WHITE);
-            s.blit_colored(&img, x as i32 + ui.pt(ui::SPACE_L) as i32, y as i32, ui::LABEL.now(), 255);
+            if m.kind == MarkKind::Text {
+                s.blit_colored(&img, x as i32 + 3, y as i32 + 2, m.color, 255);
+            } else {
+                s.blit_colored(&img, x as i32 + ui.pt(ui::SPACE_L) as i32, y as i32, ui::LABEL.now(), 255);
+            }
         }
+    }
+    if let (Some(p), Some(sel), false) = (placed, scene.selection, scene.contact) {
+        let (x, y, w, h) = to_screen(&p, scene.view.quarters, sel);
+        s.stroke_rrect(x, y, w.max(1.0), h.max(1.0), 0.0, 1.0, ui::TINT);
+    }
+    if let (Some(at), Some(p), false) = (scene.magnifier, placed, scene.contact) {
+        draw_magnifier(s, ui, &p, cache.as_ref(), at);
+    }
+    if scene.adjust_panel && !scene.slideshow {
+        draw_adjust_panel(s, ui, lay, &scene.adjust);
+    }
+    if let (Some(lines), false) = (scene.inspector, scene.slideshow) {
+        draw_inspector(s, ui, lay, lines);
     }
     if scene.doc.is_some() && !scene.status.is_empty() {
         let img = ui.text(scene.status, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
@@ -464,19 +656,29 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
     placed
 }
 
+/// Draws a polyline of page coordinates: a 2 pixel dot at every step along each segment.
+fn draw_polyline(s: &mut Surface, p: &Placed, quarters: u8, points: &[(f32, f32)], color: u32) {
+    for pair in points.windows(2) {
+        let (ax, ay) = screen_point(p, quarters, pair[0].0, pair[0].1);
+        let (bx, by) = screen_point(p, quarters, pair[1].0, pair[1].1);
+        let steps = (bx - ax).abs().max((by - ay).abs()).ceil().max(1.0) as usize;
+        for k in 0..=steps {
+            let t = k as f32 / steps as f32;
+            let x = (ax + (bx - ax) * t) as i32;
+            let y = (ay + (by - ay) * t) as i32;
+            fill(s, x - 1, y - 1, 2, 2, color);
+        }
+    }
+}
+
 fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
     if m.kind == MarkKind::Ink {
-        // a stroke: a 2 pixel dot at every step along each segment
-        for pair in m.ink.windows(2) {
-            let (ax, ay) = screen_point(p, quarters, pair[0].0, pair[0].1);
-            let (bx, by) = screen_point(p, quarters, pair[1].0, pair[1].1);
-            let steps = (bx - ax).abs().max((by - ay).abs()).ceil().max(1.0) as usize;
-            for k in 0..=steps {
-                let t = k as f32 / steps as f32;
-                let x = (ax + (bx - ax) * t) as i32;
-                let y = (ay + (by - ay) * t) as i32;
-                fill(s, x - 1, y - 1, 2, 2, m.color);
-            }
+        draw_polyline(s, p, quarters, &m.ink, m.color);
+        return;
+    }
+    if m.kind.is_outline() {
+        for line in model::outlines(m) {
+            draw_polyline(s, p, quarters, &line, m.color);
         }
         return;
     }
@@ -499,7 +701,10 @@ fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
         MarkKind::Note => {
             fill(s, x, y, 14, 14, MARK_BLUE);
         }
-        MarkKind::Ink => {}
+        MarkKind::Redact => fill(s, x, y, w, h, m.color),
+        // a text box shows its outline; its text is drawn with the notes
+        MarkKind::Text => s.stroke_rrect(x as f32, y as f32, w as f32, h as f32, 0.0, 1.0, m.color),
+        _ => {}
     }
 }
 
@@ -512,6 +717,7 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     match scene.side {
         Side::Pages => draw_pages(s, ui, lay, scene, doc),
         Side::Outline => draw_outline(s, ui, lay, scene, doc),
+        Side::Search | Side::Notes | Side::Bookmarks => draw_list(s, ui, lay, scene, doc),
     }
 }
 
@@ -583,6 +789,9 @@ fn fit_text(ui: &Ui, text: &str, pt: f32, max_w: f32) -> String {
 }
 
 fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
+    if lay.bar <= 0 {
+        return;
+    }
     fill(s, 0, 0, lay.w, lay.bar, ui::CONTENT_BG.now());
     fill(s, 0, lay.bar - 1, lay.w, 1, ui::SEPARATOR_C.now());
     let y = (lay.bar - ui.pt(ui::MAC_BODY_PT * 1.5) as i32) / 2;
@@ -601,6 +810,255 @@ fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
         let tx = x + (w - ui.measure(action.label(), ui::MAC_BODY_PT, Weight::Regular) as i32) / 2;
         s.blit_colored(&img, tx, y, color, 255);
     }
+}
+
+/// One row of the Search, Highlights and Notes, and Bookmarks lists: its text, and the shown page it goes to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Entry {
+    pub title: String,
+    pub page: Option<usize>,
+}
+
+/// The rows of the list `side` shows. Pages and Outline have their own rows, so they give none here.
+pub fn list_entries(doc: &Document, side: Side, hits: &[Hit]) -> Vec<Entry> {
+    match side {
+        Side::Search => hits
+            .iter()
+            .map(|h| {
+                let page = doc.display_of(h.page);
+                let title = match page {
+                    Some(p) => format!("{}  {}", p + 1, h.snippet),
+                    None => h.snippet.clone(),
+                };
+                Entry { title, page }
+            })
+            .collect(),
+        Side::Notes => {
+            let mut rows: Vec<(usize, Entry)> = doc
+                .marks
+                .iter()
+                .filter_map(|m| {
+                    let page = doc.display_of(m.page)?;
+                    let title = if m.text.is_empty() {
+                        format!("{}  {}", page + 1, m.kind.label())
+                    } else {
+                        format!("{}  {}: {}", page + 1, m.kind.label(), m.text.replace('\n', " "))
+                    };
+                    Some((page, Entry { title, page: Some(page) }))
+                })
+                .collect();
+            rows.sort_by_key(|(page, _)| *page);
+            rows.into_iter().map(|(_, e)| e).collect()
+        }
+        Side::Bookmarks => {
+            let mut places = doc.bookmark_places();
+            places.sort_unstable();
+            places.into_iter().map(|p| Entry { title: format!("Page {}", p + 1), page: Some(p) }).collect()
+        }
+        Side::Pages | Side::Outline => Vec::new(),
+    }
+}
+
+/// The rows of a text list in content coordinates: one line each.
+pub fn list_rows(ui: &Ui, count: usize) -> Vec<(i32, i32)> {
+    let row = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
+    (0..count).map(|i| (i as i32 * row, row)).collect()
+}
+
+fn draw_list(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
+    let entries = list_entries(doc, scene.side, scene.hits);
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    if entries.is_empty() {
+        let text = match scene.side {
+            Side::Search => "No results",
+            Side::Notes => "No highlights or notes",
+            _ => "No bookmarks",
+        };
+        let img = ui.text(text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&img, pad, lay.bar + pad, ui::LABEL_2.now(), 255);
+        return;
+    }
+    for (entry, &(top, h)) in entries.iter().zip(list_rows(ui, entries.len()).iter()) {
+        let y = lay.bar + top - scene.view.sidebar_scroll as i32;
+        if y + h < lay.bar || y > lay.h {
+            continue;
+        }
+        if entry.page == Some(scene.view.page) {
+            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+        }
+        let text = fit_text(ui, &entry.title, ui::MAC_BODY_PT, (lay.side - 2 * pad).max(0) as f32);
+        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&img, pad, y + (h - img.h as i32) / 2, ui::LABEL.now(), 255);
+    }
+}
+
+/// The cells of the contact sheet in canvas content coordinates (x from the canvas left, y from its top): a grid of
+/// `count` cells of the thumbnail width plus padding, centred across `canvas_w`. A cell is (x, y, w, h).
+pub fn contact_cells(canvas_w: i32, pad: i32, label: i32, count: usize) -> Vec<(i32, i32, i32, i32)> {
+    let cell_w = crate::document::THUMB_W as i32 + 2 * pad;
+    let cell_h = 2 * crate::document::THUMB_W as i32 + label + 2 * pad;
+    let cols = (canvas_w / cell_w.max(1)).max(1) as usize;
+    let left = ((canvas_w - cols as i32 * cell_w) / 2).max(0);
+    (0..count)
+        .map(|i| ((left + (i % cols) as i32 * cell_w), (i / cols) as i32 * cell_h, cell_w, cell_h))
+        .collect()
+}
+
+/// The contact sheet cell under a canvas point, given the scroll offset. None outside every cell.
+pub fn contact_hit(cells: &[(i32, i32, i32, i32)], lay: &Layout, scroll: f32, x: f32, y: f32) -> Option<usize> {
+    let (cx, cy, _, _) = lay.canvas();
+    let (px, py) = (x - cx as f32, y - cy as f32 + scroll);
+    if px < 0.0 || py < 0.0 {
+        return None;
+    }
+    cells.iter().position(|&(cell_x, cell_y, w, h)| px >= cell_x as f32 && px < (cell_x + w) as f32 && py >= cell_y as f32 && py < (cell_y + h) as f32)
+}
+
+/// The padding and label height the contact sheet uses at this scale.
+fn contact_metrics(ui: &Ui) -> (i32, i32) {
+    (ui.pt(ui::SPACE_S) as i32, ui.pt(ui::MAC_FOOTNOTE_PT * 1.6) as i32)
+}
+
+/// The cells of the contact sheet for `count` pages in a window of this layout.
+pub fn contact_layout(ui: &Ui, lay: &Layout, count: usize) -> Vec<(i32, i32, i32, i32)> {
+    let (pad, label) = contact_metrics(ui);
+    contact_cells(lay.canvas().2, pad, label, count)
+}
+
+/// The height of the whole contact sheet.
+pub fn contact_height(cells: &[(i32, i32, i32, i32)]) -> i32 {
+    cells.iter().map(|&(_, y, _, h)| y + h).max().unwrap_or(0)
+}
+
+fn draw_contact(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
+    let (cx, cy, _, ch) = lay.canvas();
+    let (pad, _) = contact_metrics(ui);
+    let cells = contact_layout(ui, lay, doc.count());
+    for (i, &(x, y, w, h)) in cells.iter().enumerate() {
+        let top = cy + y - scene.view.sidebar_scroll as i32;
+        if top + h < cy || top > cy + ch {
+            continue;
+        }
+        let left = cx + x;
+        if i == scene.view.page {
+            s.fill_rrect(left as f32, top as f32, w as f32, h as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+        }
+        let (bw, bh) = doc.thumb_box(i).unwrap_or((crate::document::THUMB_W, crate::document::THUMB_W));
+        match doc.thumb(i) {
+            Some(t) => s.blit(&t, left + (w - t.w as i32) / 2, top + pad, 255, 255),
+            None => fill(s, left + (w - bw as i32) / 2, top + pad, bw as i32, bh as i32, ui::FILL),
+        }
+        let text = format!("{}", i + 1);
+        let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let tw = ui.measure(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular) as i32;
+        s.blit_colored(&img, left + (w - tw) / 2, top + pad + 2 * crate::document::THUMB_W as i32 + pad / 2, ui::LABEL_2.now(), 255);
+    }
+}
+
+/// The Adjust Color panel rectangle (x, y, w, h) in the top right of the canvas, and the height of one row.
+fn adjust_geometry(ui: &Ui, lay: &Layout) -> ((i32, i32, i32, i32), i32) {
+    let (cx, cy, cw, _) = lay.canvas();
+    let pad = ui.pt(ui::SPACE_M) as i32;
+    let w = (ui.pt(ui::SPACE_XXXL * 5.0) as i32).min(cw - 2 * pad).max(1);
+    let row = ui.pt(ui::MAC_BODY_PT * 2.8) as i32;
+    let title = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
+    let h = title + row * ADJUST_ROWS.len() as i32 + pad;
+    ((cx + cw - w - pad, cy + pad, w, h), row)
+}
+
+/// The slider row under a canvas point and how far along its track the point is (0 to 1). None outside the rows.
+pub fn adjust_hit(ui: &Ui, lay: &Layout, x: f32, y: f32) -> Option<(usize, f32)> {
+    let ((px, py, pw, _), row) = adjust_geometry(ui, lay);
+    let pad = ui.pt(ui::SPACE_M) as i32;
+    let title = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
+    let first = py + title;
+    if y < first as f32 || x < px as f32 || x >= (px + pw) as f32 {
+        return None;
+    }
+    let i = ((y - first as f32) / row as f32) as usize;
+    if i >= ADJUST_ROWS.len() {
+        return None;
+    }
+    let (track_x, track_w) = (px + pad, (pw - 2 * pad).max(1));
+    Some((i, ((x - track_x as f32) / track_w as f32).clamp(0.0, 1.0)))
+}
+
+/// How far along the slider track a canvas x is (0 to 1), for a drag that has left its row.
+pub fn adjust_track(ui: &Ui, lay: &Layout, x: f32) -> f32 {
+    let ((px, _, pw, _), _) = adjust_geometry(ui, lay);
+    let pad = ui.pt(ui::SPACE_M) as i32;
+    let (track_x, track_w) = (px + pad, (pw - 2 * pad).max(1));
+    ((x - track_x as f32) / track_w as f32).clamp(0.0, 1.0)
+}
+
+/// Whether a canvas point is inside the Adjust Color panel (so a press there does not draw on the page).
+pub fn in_adjust_panel(ui: &Ui, lay: &Layout, x: f32, y: f32) -> bool {
+    let ((px, py, pw, ph), _) = adjust_geometry(ui, lay);
+    x >= px as f32 && x < (px + pw) as f32 && y >= py as f32 && y < (py + ph) as f32
+}
+
+fn draw_adjust_panel(s: &mut Surface, ui: &Ui, lay: &Layout, adjust: &Adjust) {
+    let ((px, py, pw, ph), row) = adjust_geometry(ui, lay);
+    let pad = ui.pt(ui::SPACE_M) as i32;
+    let title = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
+    fill(s, px, py, pw, ph, ui::CONTENT_BG.now());
+    s.stroke_rrect(px as f32, py as f32, pw as f32, ph as f32, 0.0, 1.0, ui::SEPARATOR_C.now());
+    let head = ui.text("Adjust Color", ui::MAC_BODY_PT, Weight::Semibold, ui::WHITE);
+    s.blit_colored(&head, px + pad, py + (title - head.h as i32) / 2, ui::LABEL.now(), 255);
+    for (i, &(label, lo, hi)) in ADJUST_ROWS.iter().enumerate() {
+        let top = py + title + i as i32 * row;
+        let value = adjust.get(i);
+        let text = format!("{label}  {value:.2}");
+        let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&img, px + pad, top, ui::LABEL_2.now(), 255);
+        let (track_x, track_w) = (px + pad, (pw - 2 * pad).max(1));
+        let track_y = top + row * 2 / 3;
+        fill(s, track_x, track_y, track_w, 2, ui::FILL);
+        let t = ((value - lo) / (hi - lo)).clamp(0.0, 1.0);
+        let knob = ui.pt(ui::SPACE_M) as i32;
+        fill(s, track_x + (t * track_w as f32) as i32 - knob / 2, track_y - knob / 2 + 1, knob, knob, ui::TINT);
+    }
+}
+
+fn draw_inspector(s: &mut Surface, ui: &Ui, lay: &Layout, lines: &[(String, String)]) {
+    let (cx, cy, cw, _) = lay.canvas();
+    let pad = ui.pt(ui::SPACE_M) as i32;
+    let row = ui.pt(ui::MAC_FOOTNOTE_PT * 1.8) as i32;
+    let w = (ui.pt(ui::SPACE_XXXL * 6.0) as i32).min(cw - 2 * pad).max(1);
+    let h = row * (lines.len() as i32 + 1) + pad;
+    let x = cx + pad;
+    let y = cy + pad;
+    fill(s, x, y, w, h, ui::CONTENT_BG.now());
+    s.stroke_rrect(x as f32, y as f32, w as f32, h as f32, 0.0, 1.0, ui::SEPARATOR_C.now());
+    let head = ui.text("Inspector", ui::MAC_BODY_PT, Weight::Semibold, ui::WHITE);
+    s.blit_colored(&head, x + pad, y + (row - head.h as i32) / 2 + 2, ui::LABEL.now(), 255);
+    let label_w = w / 3;
+    for (i, (label, value)) in lines.iter().enumerate() {
+        let top = y + row * (i as i32 + 1) + 2;
+        let l = ui.text(&fit_text(ui, label, ui::MAC_FOOTNOTE_PT, (label_w - pad) as f32), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&l, x + pad, top, ui::LABEL_2.now(), 255);
+        let v = ui.text(&fit_text(ui, value, ui::MAC_FOOTNOTE_PT, (w - label_w - pad) as f32), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&v, x + label_w, top, ui::LABEL.now(), 255);
+    }
+}
+
+/// A square lens of the picture at twice its size around the pointer. It reads the picture as drawn this frame.
+fn draw_magnifier(s: &mut Surface, ui: &Ui, p: &Placed, cache: Option<&PictureCache>, at: (f32, f32)) {
+    let Some(cache) = cache else { return };
+    let (ix, iy) = (at.0 - p.x as f32, at.1 - p.y as f32);
+    if ix < 0.0 || iy < 0.0 || ix >= cache.img.w as f32 || iy >= cache.img.h as f32 {
+        return;
+    }
+    let half = (ui.pt(ui::SPACE_XXXL) as i32).max(16);
+    let (x0, y0) = (ix as i32 - half / 2, iy as i32 - half / 2);
+    let (x0, y0) = (x0.clamp(0, (cache.img.w as i32 - half).max(0)), y0.clamp(0, (cache.img.h as i32 - half).max(0)));
+    let w = (half as usize).min(cache.img.w);
+    let h = (half as usize).min(cache.img.h);
+    let part = cache.img.crop(x0 as usize, y0 as usize, w, h);
+    let lens = part.resized(w * 2, h * 2);
+    let (lx, ly) = (at.0 as i32 + half / 2, at.1 as i32 + half / 2);
+    s.blit(&lens, lx, ly, 255, 255);
+    s.stroke_rrect(lx as f32, ly as f32, lens.w as f32, lens.h as f32, 0.0, 1.0, ui::SEPARATOR_C.now());
 }
 
 fn centred_text(s: &mut Surface, ui: &Ui, text: &str, lay: &Layout, color: u32) {
@@ -695,5 +1153,53 @@ mod tests {
         assert_eq!(Tool::Note.mark_kind(), Some(MarkKind::Note));
         assert_eq!(Tool::Rounded.mark_kind(), Some(MarkKind::Rounded));
         assert_eq!(Tool::Sign.mark_kind(), Some(MarkKind::Ink));
+    }
+
+    #[test]
+    fn the_new_actions_keep_ids_and_each_has_a_label() {
+        assert_eq!(Action::ToggleSidebar.id(), 43);
+        assert_eq!(Action::Save.id(), 44);
+        for a in ACTIONS {
+            assert!(!a.label().is_empty(), "{a:?}");
+        }
+        for t in [Tool::Select, Tool::Oval, Tool::Line, Tool::Arrow, Tool::Star, Tool::Bubble, Tool::Underline, Tool::Strike, Tool::Text, Tool::Redact, Tool::Mask] {
+            assert!(ACTIONS.contains(&Action::UseTool(t)), "{t:?}");
+        }
+    }
+
+    #[test]
+    fn tools_map_to_the_new_mark_kinds() {
+        assert_eq!(Tool::Select.mark_kind(), None);
+        assert_eq!(Tool::Mask.mark_kind(), None);
+        assert_eq!(Tool::Arrow.mark_kind(), Some(MarkKind::Arrow));
+        assert_eq!(Tool::Redact.mark_kind(), Some(MarkKind::Redact));
+        assert_eq!(Tool::Text.mark_kind(), Some(MarkKind::Text));
+    }
+
+    #[test]
+    fn the_contact_sheet_wraps_into_columns_and_is_centred() {
+        let cell = crate::document::THUMB_W as i32 + 2 * 4;
+        let cells = contact_cells(cell * 3 + 10, 4, 14, 7);
+        assert_eq!(cells.len(), 7);
+        assert_eq!((cells[0].0, cells[0].1), (5, 0));
+        assert_eq!(cells[3].0, 5);
+        assert!(cells[3].1 > 0);
+        assert_eq!(cells[1].0 - cells[0].0, cell);
+        // a window narrower than one cell still gets one column
+        assert_eq!(contact_cells(10, 4, 14, 2)[1].0, 0);
+        assert_eq!(contact_height(&cells), cells[6].1 + cells[6].3);
+        assert_eq!(contact_height(&[]), 0);
+    }
+
+    #[test]
+    fn a_contact_sheet_press_finds_its_cell_with_scrolling() {
+        let lay = Layout { w: 600, h: 400, bar: 40, side: 100 };
+        let cells = contact_cells(500, 4, 14, 20);
+        assert_eq!(contact_hit(&cells, &lay, 0.0, 100.0 + cells[0].0 as f32 + 2.0, 42.0), Some(0));
+        let second_row = cells.iter().position(|c| c.1 > 0).expect("a second row");
+        let y = 40.0 + cells[second_row].1 as f32 + 3.0;
+        assert_eq!(contact_hit(&cells, &lay, 0.0, 100.0 + cells[second_row].0 as f32 + 2.0, y), Some(second_row));
+        assert_eq!(contact_hit(&cells, &lay, cells[second_row].1 as f32, 100.0 + cells[0].0 as f32 + 2.0, 42.0), Some(second_row));
+        assert_eq!(contact_hit(&cells, &lay, 0.0, 10.0, 60.0), None);
     }
 }

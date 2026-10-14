@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.8.0
+
+- File > Save (Cmd+S) writes the edits into the file and keeps the original in a backups folder; the saved file is
+  opened again with no edits left. File > Revert to Saved replaces Revert to Original. File > New from Clipboard (Cmd+N)
+  opens the picture on the pasteboard.
+- File > JPEG Quality (High, Medium, Low) sets the quality of JPEG exports and saves.
+- Edit > Copy (Cmd+C) copies the selection of a picture, or the text of the shown PDF page. Select All (Cmd+A) selects
+  the whole page. Find (Cmd+F), Find Next (Cmd+G) and Find Previous (Cmd+Shift+G) search a PDF line by line; the hits
+  are listed in the new Search Results sidebar list and the view goes to each in turn.
+- Tools > Rectangular Selection drags out an area. Crop (Cmd+K) keeps the area of a picture, and View > Zoom to Selection
+  fills the window with it.
+- Tools > Flip Horizontal and Flip Vertical mirror the shown page. Tools > Adjust Size asks for a width, height or both
+  and resamples a picture. Tools > Adjust Color (Cmd+Option+C) shows sliders for exposure, contrast, saturation,
+  temperature and midtones. Tools > Instant Alpha clears the region of one colour around a click, and Remove Background
+  clears the regions that match the corners.
+- Tools > Annotate adds Text, Oval, Line, Arrow, Star, Speech Bubble, Underline and Strike Through next to the existing
+  shapes; Tools > Redact draws a solid box. All are saved into the PDF as annotations, and the annotation author name
+  (View > Settings > Annotation Author) is written on each.
+- Signatures drawn with the Sign tool are kept in a library; Tools > Signatures places one on the shown page.
+- Tools > Show Inspector (Cmd+I) lists the file's facts. Show Location Info reads the GPS position from a JPEG. Show
+  Magnifier shows a 2x lens at the pointer.
+- View > Highlights and Notes and Bookmarks sidebar lists, Contact Sheet (all pages as a grid), Slideshow (Cmd+Shift+F,
+  Escape to leave), Hide Toolbar.
+- View > Settings: remember the last page, open pictures at actual size, show the sidebar on open.
+
 ## 0.7.0
 
 - File > Open (Cmd+O) shows the open panel for PDFs and pictures. The chosen file is copied into the app's data folder and opened from there.

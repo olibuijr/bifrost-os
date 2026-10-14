@@ -51,7 +51,7 @@ fn prepare(pdf: &Pdf, source: &Path, target: &Path, order: &[usize], turns: &[u8
     if let Some(dir) = target.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    pdfmarks::write_edited(pdf, source, target, order, turns, marks)
+    pdfmarks::write_edited(pdf, source, target, order, turns, marks, "")
 }
 
 #[cfg(test)]

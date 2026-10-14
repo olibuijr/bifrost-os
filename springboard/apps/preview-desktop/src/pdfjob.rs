@@ -40,6 +40,15 @@ pub struct Outline {
 pub struct Opened {
     pub sizes: Vec<(usize, usize)>,
     pub outline: Vec<Outline>,
+    pub info: PdfInfo,
+}
+
+/// What the Inspector shows about a PDF file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PdfInfo {
+    /// The `%PDF-x.y` header version.
+    pub version: String,
+    pub encrypted: bool,
 }
 
 /// A result from the worker.
@@ -51,6 +60,10 @@ pub enum Reply {
     Written(Result<PathBuf, String>),
     /// A print: the status line to show, which says whether the job was sent.
     Printed(String),
+    /// The result of a search: the query and every line that holds it.
+    Found(String, Vec<crate::find::Hit>),
+    /// The text of a page, for Copy.
+    Text(String),
 }
 
 /// A job for the worker: it runs on the worker thread with the parsed file and returns its reply.
@@ -89,7 +102,7 @@ impl Pdf {
                 page: self.pages.iter().position(|p| p.num == Some(item.dest.page)),
             })
             .collect();
-        Ok(Opened { sizes, outline })
+        Ok(Opened { sizes, outline, info: PdfInfo { version: self.doc.version(), encrypted: self.doc.is_encrypted() } })
     }
 }
 

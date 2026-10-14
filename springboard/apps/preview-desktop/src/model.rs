@@ -106,24 +106,37 @@ impl Norm {
     }
 }
 
-/// Maps a point of the unrotated page to the same point after `quarters` clockwise turns.
+/// Orientation bits above the two quarter-turn bits: the picture is mirrored left to right, or top to bottom, after it
+/// is turned. The orientation of a page is its turns plus these.
+pub const FLIP_H: u8 = 4;
+pub const FLIP_V: u8 = 8;
+
+/// Maps a point of the unrotated page to the same point after the orientation `quarters` (turns, then flips).
 pub fn rot_point(u: f32, v: f32, quarters: u8) -> (f32, f32) {
-    match quarters % 4 {
+    let (a, b) = match quarters % 4 {
         1 => (1.0 - v, u),
         2 => (1.0 - u, 1.0 - v),
         3 => (v, 1.0 - u),
         _ => (u, v),
-    }
+    };
+    (if quarters & FLIP_H != 0 { 1.0 - a } else { a }, if quarters & FLIP_V != 0 { 1.0 - b } else { b })
 }
 
-/// The inverse of `rot_point`: a point of the turned picture back on the unrotated page.
+/// The inverse of `rot_point`: a point of the oriented picture back on the unrotated page.
 pub fn unrot_point(a: f32, b: f32, quarters: u8) -> (f32, f32) {
+    let a = if quarters & FLIP_H != 0 { 1.0 - a } else { a };
+    let b = if quarters & FLIP_V != 0 { 1.0 - b } else { b };
     match quarters % 4 {
         1 => (b, 1.0 - a),
         2 => (1.0 - a, 1.0 - b),
         3 => (1.0 - b, a),
         _ => (a, b),
     }
+}
+
+/// `img` turned and flipped to the orientation `quarters`.
+pub fn orient(img: &Image, quarters: u8) -> Image {
+    crate::picture::flip(&rotate(img, quarters), quarters & FLIP_H != 0, quarters & FLIP_V != 0)
 }
 
 /// A source-page rectangle as it sits on the turned picture (its corners mapped, then re-spanned).
@@ -170,7 +183,8 @@ impl View {
 
     /// Turns the picture by `delta` quarter turns (negative turns anticlockwise).
     pub fn turn(&mut self, delta: i32) {
-        self.quarters = (self.quarters as i32 + delta).rem_euclid(4) as u8;
+        let turns = (self.quarters as i32 + delta).rem_euclid(4) as u8;
+        self.quarters = (self.quarters & !3) | turns;
         self.pan = (0.0, 0.0);
     }
 }
@@ -184,13 +198,26 @@ pub struct Adjust {
     pub saturation: f32,
     /// Contrast, 1 is unchanged.
     pub contrast: f32,
+    /// Colour temperature, -100 (cooler) to 100 (warmer), 0 is unchanged.
+    pub temperature: f32,
+    /// Midtone brightness as a gamma power, 1 is unchanged.
+    pub midtones: f32,
 }
 
 impl Default for Adjust {
     fn default() -> Self {
-        Adjust { exposure: 0.0, saturation: 1.0, contrast: 1.0 }
+        Adjust { exposure: 0.0, saturation: 1.0, contrast: 1.0, temperature: 0.0, midtones: 1.0 }
     }
 }
+
+/// The rows of the Adjust Color panel: label, least, greatest. The order is the one `Adjust::get` and `with` use.
+pub const ADJUST_ROWS: [(&str, f32, f32); 5] = [
+    ("Exposure", -2.0, 2.0),
+    ("Contrast", 0.5, 2.0),
+    ("Saturation", 0.0, 2.0),
+    ("Temperature", -100.0, 100.0),
+    ("Midtones", 0.5, 2.0),
+];
 
 impl Adjust {
     pub fn is_identity(&self) -> bool {
@@ -209,7 +236,39 @@ impl Adjust {
         if self.contrast != 1.0 {
             out.push(("contrast", self.contrast));
         }
+        if self.temperature != 0.0 {
+            out.push(("temperatureTint", self.temperature));
+        }
+        if self.midtones != 1.0 {
+            out.push(("gamma", self.midtones));
+        }
         out
+    }
+
+    /// The value of panel row `row`, or 0 past the last row.
+    pub fn get(&self, row: usize) -> f32 {
+        match row {
+            0 => self.exposure,
+            1 => self.contrast,
+            2 => self.saturation,
+            3 => self.temperature,
+            4 => self.midtones,
+            _ => 0.0,
+        }
+    }
+
+    /// This adjustment with panel row `row` set to `value`, kept inside the row's range.
+    pub fn with(mut self, row: usize, value: f32) -> Adjust {
+        let Some(&(_, lo, hi)) = ADJUST_ROWS.get(row) else { return self };
+        let v = value.clamp(lo, hi);
+        match row {
+            0 => self.exposure = v,
+            1 => self.contrast = v,
+            2 => self.saturation = v,
+            3 => self.temperature = v,
+            _ => self.midtones = v,
+        }
+        self
     }
 }
 
@@ -222,6 +281,22 @@ pub enum MarkKind {
     Rounded,
     /// A freehand stroke: a signature or a drawing. Its points are in `Mark::ink`.
     Ink,
+    Oval,
+    /// A straight line from the first to the last of `Mark::ink`.
+    Line,
+    /// A line with an arrow head at its last point.
+    Arrow,
+    Star,
+    /// A speech bubble: a rounded box with a tail.
+    Bubble,
+    /// A line under the marked text.
+    Underline,
+    /// A line through the marked text.
+    Strike,
+    /// A text box; its text is `Mark::text`.
+    Text,
+    /// A black box that hides what is under it.
+    Redact,
 }
 
 impl MarkKind {
@@ -232,19 +307,143 @@ impl MarkKind {
             MarkKind::Rect => "rect",
             MarkKind::Rounded => "rounded",
             MarkKind::Ink => "ink",
+            MarkKind::Oval => "oval",
+            MarkKind::Line => "line",
+            MarkKind::Arrow => "arrow",
+            MarkKind::Star => "star",
+            MarkKind::Bubble => "bubble",
+            MarkKind::Underline => "underline",
+            MarkKind::Strike => "strike",
+            MarkKind::Text => "text",
+            MarkKind::Redact => "redact",
         }
     }
 
     fn parse(s: &str) -> Option<MarkKind> {
-        match s {
-            "highlight" => Some(MarkKind::Highlight),
-            "note" => Some(MarkKind::Note),
-            "rect" => Some(MarkKind::Rect),
-            "rounded" => Some(MarkKind::Rounded),
-            "ink" => Some(MarkKind::Ink),
-            _ => None,
+        const ALL: [MarkKind; 14] = [
+            MarkKind::Highlight,
+            MarkKind::Note,
+            MarkKind::Rect,
+            MarkKind::Rounded,
+            MarkKind::Ink,
+            MarkKind::Oval,
+            MarkKind::Line,
+            MarkKind::Arrow,
+            MarkKind::Star,
+            MarkKind::Bubble,
+            MarkKind::Underline,
+            MarkKind::Strike,
+            MarkKind::Text,
+            MarkKind::Redact,
+        ];
+        ALL.into_iter().find(|k| k.code() == s)
+    }
+
+    /// Whether the mark keeps its points in `Mark::ink` (a stroke, a line or an arrow) instead of text.
+    pub fn has_points(self) -> bool {
+        matches!(self, MarkKind::Ink | MarkKind::Line | MarkKind::Arrow)
+    }
+
+    /// Whether the mark is drawn as outlines from `outlines`.
+    pub fn is_outline(self) -> bool {
+        matches!(self, MarkKind::Oval | MarkKind::Line | MarkKind::Arrow | MarkKind::Star | MarkKind::Bubble | MarkKind::Underline | MarkKind::Strike)
+    }
+
+    /// The name shown in the notes list of the sidebar.
+    pub fn label(self) -> &'static str {
+        match self {
+            MarkKind::Highlight => "Highlight",
+            MarkKind::Note => "Note",
+            MarkKind::Rect => "Rectangle",
+            MarkKind::Rounded => "Rounded Rectangle",
+            MarkKind::Ink => "Drawing",
+            MarkKind::Oval => "Oval",
+            MarkKind::Line => "Line",
+            MarkKind::Arrow => "Arrow",
+            MarkKind::Star => "Star",
+            MarkKind::Bubble => "Speech Bubble",
+            MarkKind::Underline => "Underline",
+            MarkKind::Strike => "Strike Through",
+            MarkKind::Text => "Text",
+            MarkKind::Redact => "Redaction",
         }
     }
+}
+
+/// The colour of a redaction.
+pub const REDACT: u32 = pack(0, 0, 0, 255);
+
+/// The outlines a mark of an outline kind is drawn with, as polylines in the mark's page coordinates. A polyline that
+/// ends where it starts is closed. Other kinds have none.
+pub fn outlines(m: &Mark) -> Vec<Vec<(f32, f32)>> {
+    let r = m.rect;
+    let (x0, y0, x1, y1) = (r.x, r.y, r.x + r.w, r.y + r.h);
+    match m.kind {
+        MarkKind::Oval => {
+            let (cx, cy, rx, ry) = (r.x + r.w / 2.0, r.y + r.h / 2.0, r.w / 2.0, r.h / 2.0);
+            let n = 48;
+            let mut ring: Vec<(f32, f32)> = (0..n)
+                .map(|i| {
+                    let t = i as f32 / n as f32 * std::f32::consts::TAU;
+                    (cx + rx * t.cos(), cy + ry * t.sin())
+                })
+                .collect();
+            ring.push(ring[0]);
+            vec![ring]
+        }
+        MarkKind::Line | MarkKind::Arrow => {
+            let (a, b) = match (m.ink.first(), m.ink.last()) {
+                (Some(&a), Some(&b)) if m.ink.len() >= 2 => (a, b),
+                _ => ((x0, y0), (x1, y1)),
+            };
+            let mut out = vec![vec![a, b]];
+            if m.kind == MarkKind::Arrow {
+                out.push(arrow_head(a, b));
+            }
+            out
+        }
+        MarkKind::Star => {
+            let (cx, cy, rx, ry) = (r.x + r.w / 2.0, r.y + r.h / 2.0, r.w / 2.0, r.h / 2.0);
+            let mut pts: Vec<(f32, f32)> = (0..10)
+                .map(|i| {
+                    let radius = if i % 2 == 0 { 1.0 } else { 0.4 };
+                    let t = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
+                    (cx + rx * radius * t.cos(), cy + ry * radius * t.sin())
+                })
+                .collect();
+            pts.push(pts[0]);
+            vec![pts]
+        }
+        MarkKind::Bubble => {
+            // the box takes the upper four fifths; a tail hangs from its lower left
+            let by = y0 + r.h * 0.8;
+            vec![vec![(x0, y0), (x1, y0), (x1, by), (x0 + r.w * 0.45, by), (x0 + r.w * 0.2, y1), (x0 + r.w * 0.25, by), (x0, by), (x0, y0)]]
+        }
+        MarkKind::Underline => vec![vec![(x0, y1), (x1, y1)]],
+        MarkKind::Strike => {
+            let y = y0 + r.h / 2.0;
+            vec![vec![(x0, y), (x1, y)]]
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// The strokes of an arrow head at `b` for a line from `a`, as one polyline: wing, tip, wing.
+fn arrow_head(a: (f32, f32), b: (f32, f32)) -> Vec<(f32, f32)> {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= f32::EPSILON {
+        return vec![b, b];
+    }
+    let (ux, uy) = (dx / len, dy / len);
+    let head = (len * 0.3).min(0.04);
+    // the direction back from the tip, turned 30 degrees either way
+    let wing = |sign: f32| {
+        let (c, s) = (0.866_025_4_f32, 0.5 * sign);
+        let (bx, by) = (-ux, -uy);
+        (b.0 + head * (bx * c - by * s), b.1 + head * (bx * s + by * c))
+    };
+    vec![wing(1.0), b, wing(-1.0)]
 }
 
 /// One piece of markup. Its rectangle is in the unrotated page's normalised coordinates, so it
@@ -262,13 +461,32 @@ pub struct Mark {
     pub ink: Vec<(f32, f32)>,
 }
 
-/// Everything an edit can change in a document: markup, page order and deletions, turns and colour adjustments.
+/// Everything an edit can change in a document: markup, page order and deletions, turns, flips, colour adjustments and
+/// a picture's pixels.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Snapshot {
     pub marks: Vec<Mark>,
     pub order: Vec<usize>,
     pub turns: Vec<u8>,
+    /// The mirror bits of each source page (`FLIP_H`, `FLIP_V`).
+    pub flips: Vec<u8>,
     pub adjust: Adjust,
+    /// The picture of a picture document, for edits that change its pixels (crop, resize, mask).
+    pub pic: PicState,
+}
+
+/// The pixels of a picture document at one moment. Two states are equal when they have the same revision, so the
+/// history never compares pixels.
+#[derive(Clone, Debug)]
+pub struct PicState {
+    pub rev: u32,
+    pub image: Option<std::rc::Rc<Image>>,
+}
+
+impl PartialEq for PicState {
+    fn eq(&self, other: &PicState) -> bool {
+        self.rev == other.rev
+    }
 }
 
 /// The most edits Undo goes back through.
@@ -459,7 +677,7 @@ pub fn to_sidecar(marks: &[Mark]) -> String {
             m.rect.w,
             m.rect.h,
             m.color,
-            if m.kind == MarkKind::Ink { encode_ink(&m.ink) } else { escape(&m.text) }
+            if m.kind.has_points() { encode_ink(&m.ink) } else { escape(&m.text) }
         ));
     }
     out
@@ -485,7 +703,7 @@ fn parse_line(line: &str) -> Option<Mark> {
     let h = f.next()?.parse::<f32>().ok()?;
     let color = u32::from_str_radix(f.next()?, 16).ok()?;
     let field = f.next().unwrap_or("");
-    let (text, ink) = if kind == MarkKind::Ink { (String::new(), decode_ink(field)) } else { (unescape(field), Vec::new()) };
+    let (text, ink) = if kind.has_points() { (String::new(), decode_ink(field)) } else { (unescape(field), Vec::new()) };
     if ![x, y, w, h].iter().all(|v| v.is_finite()) {
         return None;
     }
@@ -541,7 +759,13 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
     let (w, h) = (img.w, img.h);
     for m in marks.iter().filter(|m| m.page == page) {
         if m.kind == MarkKind::Ink {
-            burn_ink(img, m, quarters);
+            burn_polyline(img, &m.ink, m.color, quarters);
+            continue;
+        }
+        if m.kind.is_outline() {
+            for line in outlines(m) {
+                burn_polyline(img, &line, m.color, quarters);
+            }
             continue;
         }
         let r = rot_rect(m.rect, quarters);
@@ -558,7 +782,7 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
             continue;
         }
         match m.kind {
-            MarkKind::Highlight => {
+            MarkKind::Highlight | MarkKind::Redact => {
                 for y in y0..y1 {
                     for x in x0..x1 {
                         let i = y * w + x;
@@ -579,16 +803,18 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
                     }
                 }
             }
-            MarkKind::Ink => {}
+            // strokes and outlines were drawn above, and a text box has no text drawn into a picture
+            MarkKind::Ink | MarkKind::Text => {}
+            _ => {}
         }
     }
 }
 
-/// Draws a stroke onto a turned picture: a 2 by 2 dot every pixel along each segment between its points.
-fn burn_ink(img: &mut Image, m: &Mark, quarters: u8) {
+/// Draws a polyline of page coordinates onto a picture oriented by `quarters`: a 2 by 2 dot every pixel along each
+/// segment between its points.
+fn burn_polyline(img: &mut Image, points: &[(f32, f32)], color: u32, quarters: u8) {
     let (w, h) = (img.w as f32, img.h as f32);
-    let pts: Vec<(f32, f32)> = m
-        .ink
+    let pts: Vec<(f32, f32)> = points
         .iter()
         .map(|&(u, v)| {
             let (a, b) = rot_point(u, v, quarters);
@@ -607,12 +833,123 @@ fn burn_ink(img: &mut Image, m: &Mark, quarters: u8) {
                     let (px, py) = (x + dx, y + dy);
                     if px >= 0 && py >= 0 && (px as usize) < img.w && (py as usize) < img.h {
                         let i = py as usize * img.w + px as usize;
-                        img.px[i] = over(img.px[i], m.color);
+                        img.px[i] = over(img.px[i], color);
                     }
                 }
             }
         }
     }
+}
+
+/// What the Inspector shows about the open document.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct InspectorInfo {
+    pub name: String,
+    pub kind: &'static str,
+    /// The file's size in bytes.
+    pub bytes: Option<u64>,
+    /// The shown page's size in pixels (pictures).
+    pub pixels: Option<(usize, usize)>,
+    pub pages: usize,
+    pub pdf_version: Option<String>,
+    pub encrypted: Option<bool>,
+    pub marks: usize,
+    pub bookmarks: usize,
+    /// The GPS position text, once it was asked for with Show Location Info.
+    pub location: Option<String>,
+}
+
+/// A file size as text: bytes under a kilobyte, then one decimal of KB, MB or GB (1000 based).
+pub fn format_bytes(n: u64) -> String {
+    const UNITS: [&str; 3] = ["KB", "MB", "GB"];
+    if n < 1000 {
+        return format!("{n} bytes");
+    }
+    let mut value = n as f64 / 1000.0;
+    let mut unit = 0;
+    while value >= 1000.0 && unit + 1 < UNITS.len() {
+        value /= 1000.0;
+        unit += 1;
+    }
+    format!("{value:.1} {}", UNITS[unit])
+}
+
+/// The label and value lines of the Inspector.
+pub fn inspector_lines(i: &InspectorInfo) -> Vec<(String, String)> {
+    let mut out = vec![("Name".to_string(), i.name.clone()), ("Kind".to_string(), i.kind.to_string())];
+    if let Some(bytes) = i.bytes {
+        out.push(("Size".into(), format_bytes(bytes)));
+    }
+    if let Some((w, h)) = i.pixels {
+        out.push(("Dimensions".into(), format!("{w} \u{d7} {h} pixels")));
+    }
+    out.push(("Pages".into(), i.pages.to_string()));
+    if let Some(version) = &i.pdf_version {
+        out.push(("PDF Version".into(), version.clone()));
+    }
+    if let Some(encrypted) = i.encrypted {
+        out.push(("Encryption".into(), if encrypted { "Encrypted" } else { "None" }.into()));
+    }
+    out.push(("Annotations".into(), i.marks.to_string()));
+    out.push(("Bookmarks".into(), i.bookmarks.to_string()));
+    if let Some(location) = &i.location {
+        out.push(("Location".into(), location.clone()));
+    }
+    out
+}
+
+/// The largest side Adjust Size writes.
+pub const SIZE_MAX: usize = 16000;
+
+/// The size typed for Adjust Size, for a `w` by `h` picture: `800` is a width (the height follows the ratio), `x600`
+/// a height, and `800x600` both. None for text that is not a size or is out of range.
+pub fn parse_size(text: &str, w: usize, h: usize) -> Option<(usize, usize)> {
+    let text = text.trim().to_lowercase();
+    let (a, b) = match text.split_once('x') {
+        Some((a, b)) => (a.trim(), b.trim()),
+        None => (text.as_str(), ""),
+    };
+    let width = if a.is_empty() { None } else { Some(a.parse::<usize>().ok()?) };
+    let height = if b.is_empty() { None } else { Some(b.parse::<usize>().ok()?) };
+    let (nw, nh) = match (width, height) {
+        (Some(nw), Some(nh)) => (nw, nh),
+        (Some(nw), None) => (nw, ((h as f64 * nw as f64 / w.max(1) as f64).round() as usize).max(1)),
+        (None, Some(nh)) => (((w as f64 * nh as f64 / h.max(1) as f64).round() as usize).max(1), nh),
+        (None, None) => return None,
+    };
+    ((1..=SIZE_MAX).contains(&nw) && (1..=SIZE_MAX).contains(&nh)).then_some((nw, nh))
+}
+
+/// `marks` of a picture after it is cropped to `crop`: each mark is moved into the new page and clamped to it, and a
+/// mark that falls wholly outside is dropped.
+pub fn crop_marks(marks: &[Mark], crop: Norm) -> Vec<Mark> {
+    if crop.w <= 0.0 || crop.h <= 0.0 {
+        return marks.to_vec();
+    }
+    let map = |(x, y): (f32, f32)| ((x - crop.x) / crop.w, (y - crop.y) / crop.h);
+    marks
+        .iter()
+        .filter(|m| m.rect.x + m.rect.w >= crop.x && m.rect.x <= crop.x + crop.w && m.rect.y + m.rect.h >= crop.y && m.rect.y <= crop.y + crop.h)
+        .map(|m| {
+            let (x0, y0) = map((m.rect.x, m.rect.y));
+            let (x1, y1) = map((m.rect.x + m.rect.w, m.rect.y + m.rect.h));
+            let rect = Norm::from_corners((x0.clamp(0.0, 1.0), y0.clamp(0.0, 1.0)), (x1.clamp(0.0, 1.0), y1.clamp(0.0, 1.0)));
+            let ink = m.ink.iter().map(|&p| map(p)).collect();
+            Mark { rect, ink, ..m.clone() }
+        })
+        .collect()
+}
+
+/// The zoom factor and pan that show the page rectangle `sel` (page coordinates) filling a `canvas_w` by `canvas_h`
+/// canvas. `page_w` and `page_h` are the oriented picture's size at actual size and `quarters` its orientation.
+pub fn zoom_to_rect(sel: Norm, quarters: u8, page_w: usize, page_h: usize, canvas_w: usize, canvas_h: usize) -> (f32, (f32, f32)) {
+    let r = rot_rect(sel, quarters);
+    let (rw, rh) = (page_w as f32, page_h as f32);
+    let sw = (r.w * rw).max(1.0);
+    let sh = (r.h * rh).max(1.0);
+    let scale = (canvas_w as f32 / sw).min(canvas_h as f32 / sh).clamp(ZOOM_MIN, ZOOM_MAX);
+    let pan = ((0.5 - (r.x + r.w / 2.0)) * rw * scale, (0.5 - (r.y + r.h / 2.0)) * rh * scale);
+    (scale, pan)
 }
 
 #[cfg(test)]
@@ -840,5 +1177,159 @@ mod tests {
         assert_eq!(neighbour(&[2, 5, 9], 5, false), Some(2));
         assert_eq!(neighbour(&[2, 5, 9], 9, true), None);
         assert_eq!(neighbour(&[], 0, false), None);
+    }
+
+    fn shape(kind: MarkKind, rect: Norm) -> Mark {
+        Mark { kind, page: 0, rect, color: MARK_BLUE, text: String::new(), ink: Vec::new() }
+    }
+
+    #[test]
+    fn flips_mirror_the_oriented_point_and_round_trip() {
+        assert_eq!(rot_point(0.25, 0.5, FLIP_H), (0.75, 0.5));
+        assert_eq!(rot_point(0.25, 0.5, FLIP_V), (0.25, 0.5));
+        assert_eq!(rot_point(0.25, 0.75, FLIP_V), (0.25, 0.25));
+        for q in 0..16u8 {
+            let (a, b) = rot_point(0.2, 0.7, q);
+            let (u, v) = unrot_point(a, b, q);
+            assert!((u - 0.2).abs() < 1e-5 && (v - 0.7).abs() < 1e-5, "orientation {q}");
+        }
+        // flip bits do not change whether the picture is turned sideways
+        assert_eq!(turn_size(4, 2, FLIP_H | 1), (2, 4));
+        assert_eq!(turn_size(4, 2, FLIP_V), (4, 2));
+    }
+
+    #[test]
+    fn orient_turns_then_mirrors() {
+        let i = img(3, 2);
+        let flipped = orient(&i, FLIP_H);
+        assert_eq!(flipped.px[0], i.px[2]);
+        assert_eq!(flipped.px[3], i.px[5]);
+        assert_eq!(orient(&i, 0), i);
+    }
+
+    #[test]
+    fn turning_keeps_the_flip_bits() {
+        let mut v = View { quarters: FLIP_H | 3, ..View::default() };
+        v.turn(1);
+        assert_eq!(v.quarters, FLIP_H);
+    }
+
+    #[test]
+    fn the_new_kinds_survive_the_sidecar() {
+        let mut line = shape(MarkKind::Arrow, Norm { x: 0.1, y: 0.2, w: 0.3, h: 0.1 });
+        line.ink = vec![(0.4, 0.3), (0.1, 0.2)];
+        let mut text = shape(MarkKind::Text, Norm { x: 0.1, y: 0.2, w: 0.3, h: 0.05 });
+        text.text = "hello\tthere".into();
+        let marks = vec![line, text, shape(MarkKind::Oval, Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }), shape(MarkKind::Redact, Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.1 })];
+        assert_eq!(parse_sidecar(&to_sidecar(&marks)), marks);
+    }
+
+    #[test]
+    fn outlines_follow_the_mark_kind() {
+        let r = Norm { x: 0.2, y: 0.2, w: 0.4, h: 0.2 };
+        assert!(outlines(&shape(MarkKind::Rect, r)).is_empty());
+        let oval = outlines(&shape(MarkKind::Oval, r));
+        assert_eq!(oval.len(), 1);
+        assert_eq!(oval[0].first(), oval[0].last());
+        let star = outlines(&shape(MarkKind::Star, r));
+        assert_eq!(star[0].len(), 11);
+        let mut arrow = shape(MarkKind::Arrow, r);
+        arrow.ink = vec![(0.0, 0.5), (0.5, 0.5)];
+        let lines = outlines(&arrow);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], vec![(0.0, 0.5), (0.5, 0.5)]);
+        // the head's wings sit behind the tip, on either side of the line
+        assert_eq!(lines[1].len(), 3);
+        assert_eq!(lines[1][1], (0.5, 0.5));
+        assert!(lines[1][0].0 < 0.5 && lines[1][2].0 < 0.5);
+        assert!(lines[1][0].1 != lines[1][2].1);
+        let under = outlines(&shape(MarkKind::Underline, r));
+        assert!((under[0][0].0 - 0.2).abs() < 1e-6 && (under[0][1].0 - 0.6).abs() < 1e-6);
+        assert!((under[0][0].1 - 0.4).abs() < 1e-6 && under[0][0].1 == under[0][1].1);
+        let strike = outlines(&shape(MarkKind::Strike, r));
+        assert!((strike[0][0].1 - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn burn_draws_outline_kinds_and_redactions() {
+        let mut i = Image { w: 20, h: 20, px: vec![pack(255, 255, 255, 255); 400] };
+        burn(&mut i, &[shape(MarkKind::Underline, Norm { x: 0.0, y: 0.0, w: 1.0, h: 0.5 })], 0, 0);
+        assert_ne!(i.px[10 * 20 + 5], pack(255, 255, 255, 255));
+        assert_eq!(i.px[0], pack(255, 255, 255, 255));
+        let mut j = Image { w: 10, h: 10, px: vec![pack(255, 255, 255, 255); 100] };
+        let mut red = shape(MarkKind::Redact, Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 });
+        red.color = REDACT;
+        burn(&mut j, &[red], 0, 0);
+        assert_eq!(j.px[0], pack(0, 0, 0, 255));
+        assert_eq!(j.px[9 * 10 + 9], pack(255, 255, 255, 255));
+    }
+
+    #[test]
+    fn adjust_rows_read_and_clamp() {
+        let a = Adjust::default().with(0, 5.0).with(3, -250.0).with(9, 1.0);
+        assert_eq!(a.exposure, 2.0);
+        assert_eq!(a.temperature, -100.0);
+        assert_eq!(a.get(0), 2.0);
+        assert_eq!(a.get(9), 0.0);
+        let names: Vec<_> = a.settings().into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, vec!["exposure", "temperatureTint"]);
+        assert!(Adjust::default().with(4, 1.0).is_identity());
+    }
+
+    #[test]
+    fn sizes_are_typed_as_width_height_or_both() {
+        assert_eq!(parse_size("800", 400, 200), Some((800, 400)));
+        assert_eq!(parse_size("x100", 400, 200), Some((200, 100)));
+        assert_eq!(parse_size("640 x 480", 400, 200), Some((640, 480)));
+        assert_eq!(parse_size("", 400, 200), None);
+        assert_eq!(parse_size("0", 400, 200), None);
+        assert_eq!(parse_size("99999", 400, 200), None);
+        assert_eq!(parse_size("wide", 400, 200), None);
+    }
+
+    #[test]
+    fn cropping_moves_marks_into_the_new_page() {
+        let crop = Norm { x: 0.5, y: 0.5, w: 0.5, h: 0.5 };
+        let mut inside = shape(MarkKind::Rect, Norm { x: 0.6, y: 0.6, w: 0.2, h: 0.2 });
+        inside.ink = vec![(0.75, 0.75)];
+        let outside = shape(MarkKind::Rect, Norm { x: 0.0, y: 0.0, w: 0.2, h: 0.2 });
+        let kept = crop_marks(&[inside, outside], crop);
+        assert_eq!(kept.len(), 1);
+        assert!((kept[0].rect.x - 0.2).abs() < 1e-5 && (kept[0].rect.w - 0.4).abs() < 1e-5);
+        assert_eq!(kept[0].ink, vec![(0.5, 0.5)]);
+    }
+
+    #[test]
+    fn zooming_to_a_rectangle_centres_it() {
+        let (scale, pan) = zoom_to_rect(Norm { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, 0, 1000, 800, 500, 400);
+        assert!((scale - 1.0).abs() < 1e-5);
+        assert!(pan.0.abs() < 1e-3 && pan.1.abs() < 1e-3);
+        // a rectangle in the top left pulls the page right and down to bring it to the middle
+        let (_, pan) = zoom_to_rect(Norm { x: 0.0, y: 0.0, w: 0.25, h: 0.25 }, 0, 1000, 800, 500, 400);
+        assert!(pan.0 > 0.0 && pan.1 > 0.0);
+    }
+
+    #[test]
+    fn file_sizes_use_decimal_units() {
+        assert_eq!(format_bytes(999), "999 bytes");
+        assert_eq!(format_bytes(1500), "1.5 KB");
+        assert_eq!(format_bytes(2_400_000), "2.4 MB");
+        assert_eq!(format_bytes(3_000_000_000), "3.0 GB");
+    }
+
+    #[test]
+    fn the_inspector_lists_only_what_it_knows() {
+        let mut info = InspectorInfo { name: "a.png".into(), kind: "PNG image", bytes: Some(2048), pixels: Some((640, 480)), pages: 1, marks: 2, ..InspectorInfo::default() };
+        let lines = inspector_lines(&info);
+        let labels: Vec<&str> = lines.iter().map(|(l, _)| l.as_str()).collect();
+        assert_eq!(labels, vec!["Name", "Kind", "Size", "Dimensions", "Pages", "Annotations", "Bookmarks"]);
+        assert_eq!(lines[3].1, "640 \u{d7} 480 pixels");
+        info.pdf_version = Some("1.7".into());
+        info.encrypted = Some(false);
+        info.location = Some("No location data".into());
+        let lines = inspector_lines(&info);
+        assert!(lines.iter().any(|(l, v)| l == "PDF Version" && v == "1.7"));
+        assert!(lines.iter().any(|(l, v)| l == "Encryption" && v == "None"));
+        assert_eq!(lines.last().map(|(l, _)| l.as_str()), Some("Location"));
     }
 }
