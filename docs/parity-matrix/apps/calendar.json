@@ -104,8 +104,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:615",
-   "note": "Copy Event / Paste Event in the Event menu (.ics on the pasteboard, calendar/clipboard.rs); not routed through the shell Edit menu, copies only the open saved event, cut not done",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:257",
+   "note": "Edit > Cut/Copy/Paste from the shell Edit menu now act on the saved event being edited (Cut = copy then delete with Undo; Paste adds the pasteboard event to the selected day); Event > Cut Event (Shift-Command-X). Copy/Cut work only from the open editor; the month and week grids have no selected-event state, and text selection copy inside the editor fields is not routed.",
    "wire": "Implement copy/paste of the selected event (ICS on the pasteboard via exchange.rs export_event_ics, import_ics on paste onto the selected day); route the shell Edit commands through App::commands in main.rs."
   },
   {
@@ -131,17 +131,17 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes ICS/vCal; File > Import; ImportProgress.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:151",
-   "note": "File > Import... open panel (.ics/.vcs) with a count notice; opening .ics files from Files and import progress UI not done",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:51",
+   "note": "File > Import... plus opening .ics files from Files (Input::Open, manifest handles public.calendar-event). Still no import progress UI.",
    "wire": "Add File > Import... (open panel filtered to .ics) calling Calendar::import_ics with a count toast, and handle opening .ics files from Files via the app open-file hook in main.rs."
   },
   {
    "feature": "Calendar archive backup / restore",
    "area": "document",
    "apple": "BackupRestore.nib; File > Export > Calendar Archive",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:232",
+   "note": "File > Export Calendar Archive writes Calendar Archive.bfcal (events.tsv and calendar.ics in one file, calendar/archive.rs); File > Import Calendar Archive... replaces the calendar and keeps events.tsv.bak. Export goes to Documents/Calendar Export, not a save panel.",
    "wire": "Add Export/Import Calendar Archive (one file holding events.tsv + calendar.ics) under File in main.rs."
   },
   {
@@ -176,8 +176,8 @@
    "area": "toolbar",
    "apple": "MainMenu.nib Edit > Search; toolbar search field",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs:131",
-   "note": "search() model exists and is tested; no search field or results list",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:108",
+   "note": "Go > Search Events... (Command-F) and a toolbar button open a search screen with a query field and scrolling result list; Return or a click opens the event. Uses its own list rather than the kit search_field; no search tokens or location/notes scoping.",
    "wire": "Add a toolbar search field in calendar/chrome.rs bars(); show exchange.rs search hits as a list replacing the grid; clicking a hit jumps to its day and opens the editor."
   },
   {
@@ -185,8 +185,8 @@
    "area": "view",
    "apple": "day/week view direct manipulation",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/layout.rs:91",
-   "note": "drag_create/drag_move geometry exists and is tested but timeview/touch handling never calls it",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:156",
+   "note": "Dragging empty hour-grid space sizes a new event (15 minute snap) and opens the editor; dragging a timed non-repeating event moves it across times and week days and saves. Drag handles to resize and moving recurring or all-day events are not done. The hour gutter scrolls.",
    "wire": "In Calendar::touch (calendar.rs) on Down+Move in a time column, use layout::drag_create for a new draft and layout::drag_move for a pressed event, save on Up; draw the live block in timeview.rs draw_time."
   },
   {
@@ -220,18 +220,18 @@
    "feature": "Settings: general (week start, day start/end, days per week, default duration, default calendar)",
    "area": "settings",
    "apple": "PreferencesPanel.nib General/Advanced panes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Only week numbers is persisted",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:74",
+   "note": "File > Settings... (Command-comma) sheet: week start, day start hour, default duration; persisted in calendar-prefs.txt (calendar/prefs.rs) and used by the month grid, week view, scroll position and new events. Missing: day end, days per week, default calendar, a separate Settings window (no shell Settings hook found).",
    "wire": "Add a Settings window (shell Settings hook) with these options persisted beside events.tsv; use them in timeview.rs week_start/scroll_to_morning and new drafts."
   },
   {
    "feature": "Settings: default alerts",
    "area": "settings",
    "apple": "PreferencesPanel.nib Alerts pane",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:63",
+   "note": "Default alert for timed and all-day events in the Settings sheet; applied to new drafts and swapped when All-day is toggled. Birthday default alert missing (no Birthdays calendar).",
    "wire": "Add default alert choices (timed events, all-day events, birthdays) to Settings, applied to new drafts in calendar.rs."
   },
   {
@@ -339,16 +339,16 @@
    "apple": "View > Zoom In / Zoom Out",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:104",
-   "note": "Go > Zoom In / Zoom Out (cmd+= / cmd+-) change the hour height 24-96 pt in Day and Week; zoom level is not persisted",
+   "note": "Zoom level is now saved with the settings and restored on start.",
    "wire": "Add Zoom In/Out commands (cmd+= / cmd+-) changing the hour height in timeview.rs."
   },
   {
    "feature": "User activities / intents (show date, show event, create event)",
    "area": "intent",
    "apple": "Info.plist NSUserActivityTypes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:385",
+   "note": "Intents create-event and show-date and control methods calendar.state, calendar.show_date, calendar.create_event. No show-event intent and no user-activity handoff.",
    "wire": "Expose open-date, open-event and create-event methods on the app control socket and the intent registry."
   }
  ]

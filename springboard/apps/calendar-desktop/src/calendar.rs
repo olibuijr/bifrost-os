@@ -1,17 +1,21 @@
 //! Golden Gate Golden Gate Calendar: a full-size window with the unified toolbar (`chrome.rs`), a Mac month grid with
 //! each day's events in its cell, Day/Week/Year views and an event form. Colours follow Light and Dark.
 pub mod alerts;
+pub mod archive;
 mod chrome;
 pub mod clipboard;
 pub mod connect;
 pub mod exchange;
 pub mod ics;
+pub mod intent;
 pub mod invitees;
 pub mod layout;
 pub mod notes;
+pub mod prefs;
 pub mod quick;
 pub mod recur;
 pub mod search;
+mod sheets;
 pub use springboard::shell::calendar::{store, Date};
 pub mod timeview;
 
@@ -80,15 +84,6 @@ fn iso_week(day: Date) -> u32 {
     ((thursday.days() - jan1.days()) / 7 + 1) as u32
 }
 
-/// The desktop's own settings, kept beside the events file.
-fn prefs_path(events: &Path) -> PathBuf {
-    events.with_file_name("calendar-prefs.txt")
-}
-
-fn load_week_numbers(events: &Path) -> bool {
-    std::fs::read_to_string(prefs_path(events)).is_ok_and(|text| text.lines().any(|l| l.trim() == "week_numbers=1"))
-}
-
 const WEEKDAYS: [&str; 7] = [
     "Sunday",
     "Monday",
@@ -142,7 +137,34 @@ enum Target {
     /// Go to Date sheet: show the chosen date
     GoConfirm,
     GoCancel,
+    /// Settings sheet: one step of a row
+    SetStep(SetRow, i32),
+    SetDone,
+    /// Search: a result row (index into the hits) and the query field
+    SearchHit(usize),
+    SearchField,
+    /// The toolbar's search button
+    SearchOpen,
 }
+
+/// The rows of the Settings sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SetRow {
+    WeekStart,
+    DayStart,
+    Duration,
+    Alert,
+    AlertAllDay,
+}
+
+/// The Settings sheet: its width, its top and the height of a row (points).
+const SET_W: f32 = 360.0;
+const SET_TOP: f32 = 130.0;
+const SET_ROW: f32 = 44.0;
+/// The search screen: the query field's top and the first result row's top, and a result row's height (points).
+const SEARCH_FIELD_TOP: f32 = 124.0;
+const SEARCH_LIST_TOP: f32 = 184.0;
+const SEARCH_ROW: f32 = 48.0;
 
 /// The rows of the Go to Date sheet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -164,6 +186,11 @@ enum Slot {
     End,
 }
 
+/// The open search: the hits for the query field's text.
+struct Search {
+    hits: Vec<search::Hit>,
+}
+
 struct Draft {
     event: CalendarEvent,
     existing: bool,
@@ -183,6 +210,15 @@ pub struct Calendar {
     goto: Option<Date>,
     /// The Day and Week views' hour row height in points (View > Zoom In / Zoom Out).
     hour_h: f32,
+    /// The settings (`prefs.rs`); `week_numbers` and `hour_h` live in their own fields and are merged on save.
+    prefs: prefs::Prefs,
+    /// The open Settings sheet.
+    settings: bool,
+    /// The open search screen and its query field.
+    search: Option<Search>,
+    query: TextField,
+    /// A drag in the Day or Week grid: a new event being sized or an event being moved (`timeview.rs`).
+    drag: Option<timeview::Drag>,
     h: i32,
     path: PathBuf,
     wall: Wall,
@@ -259,14 +295,23 @@ impl Calendar {
                 f.focused = false;
                 f
             });
-        let week_numbers = load_week_numbers(&path);
+        let prefs = prefs::load(&path);
+        let week_numbers = prefs.week_numbers;
+        let hour_h = prefs.hour_h;
+        let mut query = TextField::new(ui, "Search events", MAC_BODY_PT, false, 160);
+        query.focused = false;
         let mut c = Self {
             w,
             x0: 0.0,
             full_w: w,
             side_hidden: false,
             goto: None,
-            hour_h: timeview::HOUR_H,
+            hour_h,
+            prefs,
+            settings: false,
+            search: None,
+            query,
+            drag: None,
             h,
             path,
             wall,
@@ -331,7 +376,7 @@ impl Calendar {
     }
     /// Whether a text field in the event editor has focus (typing goes to it).
     pub fn keyboard_shown(&self) -> bool {
-        self.editor.is_some() && self.focused().is_some()
+        (self.editor.is_some() && self.focused().is_some()) || (self.search.is_some() && self.query.focused)
     }
 
     pub fn describe(&self) -> String {
@@ -432,6 +477,10 @@ impl Calendar {
         self.fields.iter().position(|f| f.focused)
     }
     fn fit_scroll(&mut self, ui: &Ui) {
+        if self.search.is_some() {
+            self.scroll.set_max(self.search_scroll_max(ui));
+            return;
+        }
         if self.time_view() {
             self.scroll.set_max(self.time_scroll_max(ui));
             return;
@@ -448,10 +497,20 @@ impl Calendar {
         ((left), (self.w as f32 - left) / 7.0, top, ((self.bottom(ui) - top) / 6.0).max(ui.pt(CELL_HEAD)))
     }
 
-    /// The first day shown in the month grid (the Sunday on or before the 1st).
+    /// The first day shown in the month grid (the week-start day on or before the 1st).
     fn grid_start(&self) -> Date {
         let first = Date { day: 1, ..self.selected };
-        first.shift_days(-(first.weekday() as i32))
+        first.shift_days(-self.lead_days(first))
+    }
+
+    /// The first day of the week (Settings > Week starts on), 0 = Sunday.
+    fn first_weekday(&self) -> usize {
+        self.prefs.week_start as usize % 7
+    }
+
+    /// Days from the start of `d`'s week back to `d`.
+    fn lead_days(&self, d: Date) -> i32 {
+        ((d.weekday() + 7 - self.first_weekday()) % 7) as i32
     }
 
     /// The events a day cell lists: up to as many lines as fit, the last one "n more" when some are left out.
@@ -471,6 +530,9 @@ impl Calendar {
         if self.goto.is_some() {
             return self.hit_goto(ui, x, y);
         }
+        if self.settings {
+            return self.hit_settings(ui, x, y);
+        }
         if let Some(t) = self.bar_target(ui, x + self.x0, y) {
             return Some(t);
         }
@@ -483,6 +545,9 @@ impl Calendar {
         let xp = x / ui.s;
         let yp = y / ui.s;
         let wp = self.w as f32 / ui.s;
+        if self.search.is_some() {
+            return self.hit_search(ui, x, y);
+        }
         if self.editor.is_some() {
             for (t, top, h) in self.rows() {
                 if (top..top + h).contains(&yp) {
@@ -537,20 +602,25 @@ impl Calendar {
             };
             e.clone()
         } else {
-            CalendarEvent {
-                id: store::next_id(&self.events),
-                date: self.selected,
-                minute: 9 * 60,
-                duration: 60,
-                all_day: false,
-                title: String::new(),
-                location: String::new(),
-                notes: String::new(),
-                repeat: 0,
-                alert: 0,
-            }
+            self.blank_event(self.selected, 9 * 60, self.prefs.duration)
         };
         self.open_draft(ui, event, id.is_some());
+    }
+
+    /// A new, unsaved event with the default alert from Settings.
+    fn blank_event(&self, date: Date, minute: u16, duration: u16) -> CalendarEvent {
+        CalendarEvent {
+            id: store::next_id(&self.events),
+            date,
+            minute,
+            duration,
+            all_day: false,
+            title: String::new(),
+            location: String::new(),
+            notes: String::new(),
+            repeat: 0,
+            alert: self.prefs.alert,
+        }
     }
 
     /// Shows the editor on `event`: an existing one, or a new one whose Title field takes the focus.
@@ -582,16 +652,9 @@ impl Calendar {
         }
         let q = quick::parse(text, today(self.wall, t));
         let event = CalendarEvent {
-            id: store::next_id(&self.events),
-            date: q.date.unwrap_or(self.selected),
-            minute: q.minute.unwrap_or(9 * 60),
-            duration: 60,
-            all_day: false,
             title: q.title,
             location: q.location.unwrap_or_default(),
-            notes: String::new(),
-            repeat: 0,
-            alert: 0,
+            ..self.blank_event(q.date.unwrap_or(self.selected), q.minute.unwrap_or(9 * 60), self.prefs.duration)
         };
         self.open_draft(ui, event, false);
         self.dirty = true;
@@ -835,9 +898,11 @@ impl Calendar {
         }
     }
 
-    fn save_week_numbers(&mut self) {
-        let text = format!("week_numbers={}\n", u8::from(self.week_numbers));
-        if let Err(e) = springboard::shell::fsutil::write_atomic(&prefs_path(&self.path), &text) {
+    /// Writes the settings, with the week-number and zoom state kept in their own fields.
+    fn save_prefs(&mut self) {
+        self.prefs.week_numbers = self.week_numbers;
+        self.prefs.hour_h = self.hour_h;
+        if let Err(e) = prefs::save(&self.path, &self.prefs) {
             eprintln!("springboard: calendar: {e}");
         }
     }
@@ -850,12 +915,17 @@ impl Calendar {
 
     /// Writes `text` as `<name>.ics` under ~/Documents/Calendar Export and says where it went.
     fn save_export(&mut self, name: &str, text: &str) {
+        self.save_export_as(name, "ics", text);
+    }
+
+    /// Writes `text` as `<name>.<ext>` under ~/Documents/Calendar Export and says where it went.
+    fn save_export_as(&mut self, name: &str, ext: &str, text: &str) {
         let dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Documents").join("Calendar Export");
-        let path = dir.join(format!("{name}.ics"));
+        let path = dir.join(format!("{name}.{ext}"));
         let written = std::fs::create_dir_all(&dir).and_then(|_| springboard::shell::fsutil::write_atomic(&path, text));
         self.error = None;
         self.notice = Some(match written {
-            Ok(()) => format!("Exported to Documents/Calendar Export/{name}.ics"),
+            Ok(()) => format!("Exported to Documents/Calendar Export/{name}.{ext}"),
             Err(e) => format!("Could not export: {e}"),
         });
     }
@@ -909,7 +979,7 @@ impl Calendar {
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.goto.is_some() {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.goto.is_some() || self.settings || self.search.is_some() {
             return false;
         }
         let target = match key {
@@ -933,6 +1003,14 @@ impl Calendar {
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
         if self.goto.is_some() {
             self.activate(ui, Target::GoCancel, t);
+            return true;
+        }
+        if self.settings {
+            self.activate(ui, Target::SetDone, t);
+            return true;
+        }
+        if self.search.is_some() {
+            self.activate(ui, Target::Cancel, t);
             return true;
         }
         if self.editor.is_none() {
@@ -977,6 +1055,7 @@ impl Calendar {
             }
             Target::Add => self.open(ui, None),
             Target::Row(id) => self.open(ui, Some(id)),
+            Target::Cancel if self.search.is_some() => self.close_search(),
             Target::Cancel => self.close(),
             Target::Save => self.commit(ui, false, t),
             Target::Delete => self.commit(ui, true, t),
@@ -985,7 +1064,7 @@ impl Calendar {
             Target::ExportCalendar => self.export_calendar(),
             Target::WeekNumbers => {
                 self.week_numbers = !self.week_numbers;
-                self.save_week_numbers();
+                self.save_prefs();
             }
             Target::UndoDelete => self.undo_delete(ui, t),
             Target::Title => self.focus(Some(0)),
@@ -1023,6 +1102,11 @@ impl Calendar {
                         }
                         Target::AllDay => {
                             e.all_day = !e.all_day;
+                            // an alert still at the other kind's default follows the switch
+                            let (from, to) = if e.all_day { (self.prefs.alert, self.prefs.alert_all_day) } else { (self.prefs.alert_all_day, self.prefs.alert) };
+                            if e.alert == from {
+                                e.alert = to;
+                            }
                             if e.all_day && end {
                                 draft.open = None;
                             }
@@ -1053,6 +1137,11 @@ impl Calendar {
                 }
             }
             Target::GoCancel => self.goto = None,
+            Target::SetStep(row, n) => self.step_setting(row, n),
+            Target::SetDone => self.settings = false,
+            Target::SearchField => self.query.focused = true,
+            Target::SearchOpen => self.open_search(ui),
+            Target::SearchHit(i) => self.open_hit(ui, i),
             Target::Sidebar => {
                 self.side_hidden = !self.side_hidden;
                 self.layout_columns(ui);
@@ -1062,6 +1151,16 @@ impl Calendar {
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        if self.settings {
+            // the sheet takes the keyboard: Return closes it
+            if out == Out::Enter {
+                self.activate(ui, Target::SetDone, t);
+            }
+            return;
+        }
+        if self.search.is_some() {
+            return self.search_key(ui, out, t);
+        }
         if let Some(d) = self.goto {
             // the sheet takes the keyboard: arrows move the date (Left/Right a day, Up/Down a week), Return shows it
             let step = match out {
@@ -1136,13 +1235,33 @@ impl Calendar {
                 }
             }
         }
+        if self.search.is_some() {
+            let frame = self.query_frame(ui);
+            if (self.query.focused || within(x, y, frame)) && self.query.touch(ui, ev, frame, self.w as f32, t) {
+                self.field_touch = !matches!(ev, Event::Up(..));
+                self.pressed = None;
+                self.start = None;
+                self.scrolling = false;
+                self.query.focused = true;
+                return;
+            }
+        }
         match ev {
             Event::Down(..) => {
                 self.pressed = self.hit(ui, x, y);
                 self.start = Some((x, y));
-                self.scrolling = matches!(self.pressed, Some(Target::Row(_) | Target::Agenda));
+                self.scrolling = matches!(self.pressed, Some(Target::Row(_) | Target::Agenda | Target::SearchHit(_)));
+                self.drag = self.drag_start(ui, x, y, self.pressed);
+                if self.drag.is_some() {
+                    self.scrolling = false;
+                }
                 if self.scrolling {
                     self.scroll.down(y, t);
+                }
+            }
+            Event::Move(..) if self.drag.is_some() => {
+                if self.drag_update(ui, x, y) {
+                    self.pressed = None;
                 }
             }
             Event::Move(..) => {
@@ -1158,7 +1277,13 @@ impl Calendar {
                     self.pressed = None;
                 }
             }
+            Event::Up(..) if self.drag.as_ref().is_some_and(|d| d.moved) => {
+                self.pressed = None;
+                self.start = None;
+                self.drag_finish(ui, x, y);
+            }
             Event::Up(..) => {
+                self.drag = None;
                 let pressed = self.pressed.take();
                 self.start = None;
                 let tap = if std::mem::take(&mut self.scrolling) {
@@ -1190,9 +1315,13 @@ impl Calendar {
         }
         self.dirty |= self.scroll.tick(t)
             || was_animating
-            || (self.editor.is_some() && self.focused().is_some());
+            || (self.editor.is_some() && self.focused().is_some())
+            || (self.search.is_some() && self.query.focused);
         if let Some(i) = self.focused() {
             self.dirty |= self.fields[i].tick(ui, t);
+        }
+        if self.search.is_some() && self.query.focused {
+            self.dirty |= self.query.tick(ui, t);
         }
         self.dirty
     }
@@ -1215,6 +1344,11 @@ impl Calendar {
         }
         if let (Some(i), true) = (self.focused(), self.editor.is_some()) {
             if let Some(blink) = self.fields[i].next_wake(t) {
+                due = due.min(blink);
+            }
+        }
+        if self.search.is_some() && self.query.focused {
+            if let Some(blink) = self.query.next_wake(t) {
                 due = due.min(blink);
             }
         }
@@ -1256,6 +1390,8 @@ impl Calendar {
             let mut c = self.column(s);
             if self.editor.is_some() {
                 self.draw_editor(&mut c, ui, t);
+            } else if self.search.is_some() {
+                self.draw_search(&mut c, ui);
             } else {
                 match self.view {
                     View::Month => self.draw_month(&mut c, ui),
@@ -1264,6 +1400,7 @@ impl Calendar {
                 }
                 self.draw_undo(&mut c, ui);
                 self.draw_goto(&mut c, ui);
+                self.draw_settings(&mut c, ui);
             }
         }
         self.draw_chrome(s, ui);
@@ -1276,14 +1413,15 @@ impl Calendar {
         self.draw_header(s, ui);
         let w = self.w as f32;
         let (left, cell, top, rh) = self.grid_geom(ui);
-        for (i, name) in WEEKDAYS.iter().enumerate() {
+        for i in 0..7 {
+            let name = WEEKDAYS[(i + self.first_weekday()) % 7];
             self.right(s, ui, &name[..3], LABEL_2.now(), left + cell * (i as f32 + 1.0) - ui.pt(SPACE_S), top - ui.pt(SPACE_M));
         }
         let start = self.grid_start();
         if self.week_numbers {
             for row in 0..6 {
                 // the row's Monday falls in the ISO week the row shows
-                let monday = start.shift_days(7 * row + 1);
+                let monday = start.shift_days(7 * row + ((8 - self.first_weekday()) % 7) as i32);
                 self.centre(s, ui, &iso_week(monday).to_string(), MAC_SUBHEAD_PT, Weight::Medium, LABEL_2.now(), left / 2.0, top + rh * row as f32 + ui.pt(SPACE_M));
             }
         }
@@ -1515,10 +1653,20 @@ pub enum Command {
     /// Go > Zoom In / Zoom Out: the hour height of the Day and Week views.
     ZoomIn,
     ZoomOut,
+    /// File > Settings...: the settings sheet.
+    Settings,
+    /// Go > Search Events...: the search screen.
+    Find,
+    /// Event > Cut Event: copy the saved event being edited, then delete it.
+    CutEvent,
+    /// File > Export Calendar Archive: events and rich data in one backup file.
+    ExportArchive,
+    /// File > Import Calendar Archive...: the app shows the open panel and gives the chosen file to `Calendar::restore_archive`.
+    ImportArchive,
 }
 
 impl Command {
-    pub const ALL: [Command; 22] = [
+    pub const ALL: [Command; 27] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1541,6 +1689,11 @@ impl Command {
         Command::GoToDate,
         Command::ZoomIn,
         Command::ZoomOut,
+        Command::Settings,
+        Command::Find,
+        Command::CutEvent,
+        Command::ExportArchive,
+        Command::ImportArchive,
     ];
 
     pub fn id(self) -> u32 {
@@ -1575,6 +1728,11 @@ impl Command {
             Command::GoToDate => "Go to Date...",
             Command::ZoomIn => "Zoom In",
             Command::ZoomOut => "Zoom Out",
+            Command::Settings => "Settings...",
+            Command::Find => "Search Events...",
+            Command::CutEvent => "Cut Event",
+            Command::ExportArchive => "Export Calendar Archive",
+            Command::ImportArchive => "Import Calendar Archive...",
         }
     }
 
@@ -1593,6 +1751,9 @@ impl Command {
             Command::GoToDate => "cmd+shift+t",
             Command::ZoomIn => "cmd+=",
             Command::ZoomOut => "cmd+-",
+            Command::Settings => "cmd+,",
+            Command::Find => "cmd+f",
+            Command::CutEvent => "cmd+shift+x",
             _ => "",
         }
     }
@@ -1603,11 +1764,17 @@ impl Calendar {
     pub fn enabled(&self, cmd: Command) -> bool {
         let editing = self.editor.is_some();
         let saved = self.editor.as_ref().is_some_and(|d| d.existing);
-        if self.goto.is_some() {
+        if self.goto.is_some() || self.settings {
+            return false;
+        }
+        if self.search.is_some() {
+            // the search screen is up: only leaving it (Today and the views close it through the toolbar) is meaningful
             return false;
         }
         match cmd {
-            Command::CopyEvent => editing && saved,
+            Command::CopyEvent | Command::CutEvent => editing && saved && self.focused().is_none(),
+            Command::ExportArchive => !editing && self.file_export,
+            Command::ImportArchive => !editing && !self.storage_blocked,
             Command::ZoomIn => !editing && self.can_zoom(1),
             Command::ZoomOut => !editing && self.can_zoom(-1),
             Command::Save | Command::Duplicate => editing,
@@ -1647,18 +1814,35 @@ impl Calendar {
         }
         match cmd {
             Command::CopyEvent => return self.copy_event(),
+            Command::CutEvent => return self.cut_event(ui, t),
             Command::GoToDate => {
                 self.goto = Some(self.selected);
                 self.dirty = true;
                 return true;
             }
+            Command::Settings => {
+                self.settings = true;
+                self.dirty = true;
+                return true;
+            }
+            Command::Find => {
+                self.open_search(ui);
+                self.fit_scroll(ui);
+                return true;
+            }
+            Command::ExportArchive => {
+                self.export_archive_file();
+                self.dirty = true;
+                return true;
+            }
             Command::ZoomIn | Command::ZoomOut => {
                 self.zoom(ui, if cmd == Command::ZoomIn { 1 } else { -1 });
+                self.save_prefs();
                 self.dirty = true;
                 return true;
             }
             // these need the open panel or the pasteboard, which the app owns: it calls `import_report` / `paste_event`
-            Command::ImportCalendar | Command::PasteEvent => return false,
+            Command::ImportCalendar | Command::ImportArchive | Command::PasteEvent => return false,
             _ => {}
         }
         let target = match cmd {
@@ -1679,7 +1863,17 @@ impl Calendar {
             Command::CalendarList => Target::Sidebar,
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
-            Command::ImportCalendar | Command::PasteEvent | Command::CopyEvent | Command::GoToDate | Command::ZoomIn | Command::ZoomOut => return false,
+            Command::ImportCalendar
+            | Command::ImportArchive
+            | Command::PasteEvent
+            | Command::CopyEvent
+            | Command::CutEvent
+            | Command::GoToDate
+            | Command::ZoomIn
+            | Command::ZoomOut
+            | Command::Settings
+            | Command::Find
+            | Command::ExportArchive => return false,
         };
         self.activate(ui, target, t);
         true

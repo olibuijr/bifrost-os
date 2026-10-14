@@ -40,8 +40,11 @@ const B_TITLE: u32 = 13;
 /// Accessibility ids of the cells, the events in them, the editor's rows and the Undo bar (clear of the toolbar's 1..14).
 const DAY_NODE: u64 = 100;
 const UNDO_NODE: u64 = 300;
+const SETTINGS_NODE: u64 = 320;
+const SEARCH_NODE: u64 = 400;
 const EVENT_NODE: u64 = 1 << 32;
 pub(super) const B_SAVE: u32 = 14;
+pub(super) const B_SEARCH: u32 = 15;
 
 /// The width the kit's `toolbar` gives each button (glyph buttons are a capsule, titled ones their label).
 fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
@@ -82,6 +85,18 @@ impl Calendar {
         }
         let start = if x0 > 0.0 { x0 + 12.0 } else { lead };
         let end = x0 + w - 12.0;
+        if self.search.is_some() {
+            bars.push((
+                Toolbar::new(vec![
+                    ToolbarItem::button(B_CANCEL, "Done"),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::custom(B_TITLE, "Search", (ui.measure("Search", MAC_BODY_PT, Weight::Bold) / k).ceil()),
+                    ToolbarItem::flexible_space(),
+                ]),
+                band(start, end - start),
+            ));
+            return bars;
+        }
         if let Some(draft) = &self.editor {
             let title = if draft.existing { "Edit Event" } else { "New Event" };
             bars.push((
@@ -110,6 +125,7 @@ impl Calendar {
             items.push(ToolbarItem::button(B_WEEKNO, "Week Numbers").selected(self.week_numbers));
             items.push(ToolbarItem::icon(B_EXPORT, "Export Calendar", "square.and.arrow.up"));
         }
+        items.push(ToolbarItem::icon(B_SEARCH, "Search Events", "magnifyingglass"));
         bars.push((Toolbar::new(items), band(start, end - start)));
         bars.push((
             Toolbar::new(vec![
@@ -153,6 +169,7 @@ impl Calendar {
             B_YEAR => Target::View(View::Year),
             B_WEEKNO => Target::WeekNumbers,
             B_EXPORT => Target::ExportCalendar,
+            B_SEARCH => Target::SearchOpen,
             B_PREV => Target::Prev,
             B_TODAY => Target::Today,
             B_NEXT => Target::Next,
@@ -172,12 +189,17 @@ impl Calendar {
         }
         if self.editor.is_some() {
             nodes.extend(self.editor_nodes(ui));
+        } else if self.search.is_some() {
+            nodes.extend(self.search_nodes(ui));
         } else {
             if self.view == View::Month {
                 nodes.extend(self.grid_nodes(ui));
             }
             if self.undo.is_some() {
                 nodes.push(self.undo_node(ui));
+            }
+            if self.settings {
+                nodes.extend(self.settings_nodes(ui));
             }
         }
         nodes
@@ -248,6 +270,54 @@ impl Calendar {
             out.push(Node { id, role, label: label.into(), value, bounds: Rect { x, y: top, w, h }, enabled });
         }
         out
+    }
+
+    /// The search screen's query field and result rows.
+    fn search_nodes(&self, ui: &Ui) -> Vec<Node> {
+        let k = Self::k(ui);
+        let x = self.x0 / k + 36.0;
+        let w = self.w as f32 / k - 72.0;
+        let mut out = vec![Node {
+            id: SEARCH_NODE,
+            role: Role::TextField,
+            label: "Search events".into(),
+            value: self.query.text().to_string(),
+            bounds: Rect { x, y: SEARCH_FIELD_TOP, w, h: 44.0 },
+            enabled: true,
+        }];
+        let off = self.scroll.offset() / ui.s;
+        for (i, hit) in self.search.iter().flat_map(|s| s.hits.iter()).enumerate() {
+            let y = SEARCH_LIST_TOP + SEARCH_ROW * i as f32 - off;
+            if y + SEARCH_ROW < SEARCH_LIST_TOP || y * ui.s > self.bottom(ui) {
+                continue;
+            }
+            out.push(Node {
+                id: SEARCH_NODE + 1 + i as u64,
+                role: Role::Button,
+                label: hit.title.clone(),
+                value: hit.date.iso(),
+                bounds: Rect { x, y, w, h: SEARCH_ROW },
+                enabled: true,
+            });
+        }
+        out
+    }
+
+    /// The Settings sheet's rows: each is a button that reads out its value; the arrows are pointer targets.
+    fn settings_nodes(&self, ui: &Ui) -> Vec<Node> {
+        let (left, w) = self.settings_card(ui);
+        let x0 = self.x0 / Self::k(ui);
+        Self::settings_rows()
+            .into_iter()
+            .enumerate()
+            .map(|(i, (target, top, h))| {
+                let (label, value) = match target {
+                    Target::SetStep(row, _) => (self.settings_label(row), String::new()),
+                    _ => ("Done".to_string(), String::new()),
+                };
+                Node { id: SETTINGS_NODE + i as u64, role: Role::Button, label, value, bounds: Rect { x: x0 + left, y: top, w, h }, enabled: true }
+            })
+            .collect()
     }
 
     /// The Undo bar: one button over its whole strip (a touch anywhere on it undoes the delete).
