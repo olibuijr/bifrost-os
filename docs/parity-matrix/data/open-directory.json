@@ -31,9 +31,9 @@
     {
       "feature": "User authentication and password verification",
       "apple": "ODRecordVerifyPassword, ODRecordChangePassword, ODRecordAuthenticationAllowed, ODNodeSetCredentials",
-      "bifrost": "springboard/sdk/src/keychain.rs; springboard/src/shell/login.rs (login screen)",
+      "bifrost": "springboard/core/src/password_verify.rs (PasswordRecord, Attempts); springboard/sdk/src/keychain.rs; springboard/src/shell/login.rs (login screen)",
       "status": "partial",
-      "note": "The installer account signs in locally; passwords are not checked against a directory and no SDK call verifies a password for another account."
+      "note": "A salted PBKDF2-HMAC-SHA256 password record with constant-time matching and a five-failure, sixty-second lock is tested headless in core/tests/parity_sdk-complete-10.rs. Gap: the login screen still checks only the installer account, no directory holds the records, and no SDK call verifies or changes another account's password; those need the account store and the lab machine."
     },
     {
       "feature": "Asynchronous query results",
