@@ -94,9 +94,9 @@
   {
    "feature": "Review prompts",
    "apple": "RequestReviewAction, SKStoreReviewController",
-   "bifrost": "springboard/sdk/src/review.rs (Policy, ReviewRequests)",
+   "bifrost": "springboard/sdk/src/review.rs (Policy, ReviewRequests); tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Pure ask policy: a minimum gap between asks and a maximum number of asks in a window, over the days the app saved. Tests: springboard/sdk/tests/parity_sdk-tests-08.rs (review_*) and the review unit tests. No SDK call shows the store rating prompt yet: request only records the decision; a simple SDK prompt helper would fit the usernotif and sheet patterns."
+   "note": "Pure ask policy: a minimum gap between asks and a maximum number of asks in a window, over the days the app saved. Headless tests in sdk/tests/parity_sdk-tests-09.rs and parity_sdk-tests-08.rs cover the gap, the window and restored days. Gap: no SDK call shows the store rating prompt yet; request only records the decision."
   },
   {
    "feature": "App Store messages",

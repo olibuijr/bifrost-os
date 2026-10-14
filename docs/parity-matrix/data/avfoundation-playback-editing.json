@@ -45,9 +45,9 @@
   {
    "feature": "Audio settings",
    "apple": "AVAudioSettings keys and constants",
-   "bifrost": "springboard/src/media/convert.rs",
+   "bifrost": "springboard/ui/src/audio_settings.rs (Settings, Format, Quality; to_map and from_map); tests ui/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Sample format conversion exists internally; no settings dictionary"
+   "note": "The settings dictionary, the format rules and the nearest supported configuration are tested headless in ui/tests/parity_sdk-tests-09.rs. Gap: nothing calls the model yet, and the recorder still picks its own PCM format."
   },
   {
    "feature": "Media playback (AVPlayer, AVPlayerItem, AVQueuePlayer)",

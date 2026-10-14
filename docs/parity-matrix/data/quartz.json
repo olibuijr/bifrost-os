@@ -80,16 +80,16 @@
   {
    "feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)",
    "apple": "PDFDocument, PDFPage, PDFOutline, PDFSelection",
-   "bifrost": "springboard/sdk/src/graphics_pdf.rs (Document), springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/obj.rs, springboard/render/src/cg/pdf/extract.rs",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs (Document), springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/obj.rs, springboard/render/src/cg/pdf/extract.rs; tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Apps can open a PDF, read the page count and sizes, and render a page to an image through graphics_pdf::Document. The PDF engine keeps outline, selection and text extraction private; Books uses extract.rs directly."
+   "note": "Apps can open a PDF, read the page count and sizes, and render a page through graphics_pdf::Document, tested headless in sdk/tests/parity_sdk-tests-09.rs. Gap: outline, selection and text extraction are not in the SDK; Books uses extract.rs directly."
   },
   {
    "feature": "PDF display view (PDFView, PDFThumbnailView)",
    "apple": "PDFView, PDFThumbnailView",
-   "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (reflow into the shared page model); wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages)",
+   "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (assemble, load, probe; reflow into the shared page model); wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages); tests springboard/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "PDF pages are reflowed into the Books page model rather than drawn at fixed layout. No fixed-layout page view, thumbnail view, zoom or selection for apps. PDFCraft is a third-party upstream binary (apps/pdfcraft-desktop/upstream.toml), not an SDK API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "PDF text is reflowed into paragraphs, headings and images in the Books page model; headless tests in springboard/tests/parity_sdk-tests-09.rs cover the reflow rules. Gap: no fixed-layout page view, thumbnail view, zoom or selection for apps; PDFCraft is a third-party upstream binary, not an SDK API, and needs a Midget check."
   },
   {
    "feature": "PDF annotations and form widgets (PDFAnnotation, PDFAppearanceCharacteristics, PDFBorder, widgets)",
@@ -101,9 +101,9 @@
   {
    "feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)",
    "apple": "QuartzFilter, QuartzFilterManager, QuartzFilterView, Quartz Filter Constants",
-   "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs, springboard/ui/src/print.rs (PrintOperation, Destination::Pdf), springboard/src/shell/print_sheet.rs (write_pdf)",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs, springboard/ui/src/print.rs (PrintOperation, Destination::Pdf), springboard/src/shell/print_sheet.rs (write_pdf); tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. PdfWriter creates files from pages of rectangles, lines and images. Preview saves edited PDFs with annotations through writer::save. No text, no print-to-PDF filter pipeline and no QuartzFilter manager; Save as PDF in the print sheet still copies the file."
+   "note": "PdfWriter creates files from pages of rectangles, lines and images, tested headless in sdk/tests/parity_sdk-tests-09.rs. Gap: no text, no print-to-PDF filter pipeline and no QuartzFilter manager; Save as PDF in the print sheet still copies the file."
   },
   {
    "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",

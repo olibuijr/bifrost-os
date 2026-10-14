@@ -17,9 +17,9 @@
   {
    "feature": "Accessibility tree (AXUIElement, roles, attributes, notifications)",
    "apple": "Carbon Accessibility: AXUIElement.h, AXRoleConstants.h, AXAttributeConstants.h, AXNotificationConstants.h, AXActionConstants.h",
-   "bifrost": "springboard/src/shell/atspi/mod.rs, springboard/src/shell/atspi/model.rs, docs/bifrost-ui.md (Accessibility bridge)",
+   "bifrost": "springboard/src/shell/atspi/model.rs (build_ax, states, chrome_snap, parse_path), springboard/src/shell/atspi/mod.rs, docs/bifrost-ui.md (Accessibility bridge); tests springboard/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "AT-SPI2 bridge maps app node trees to roles, states and actions (Press, SetValue, Focus). Apps that send no tree appear as a flat list; shell chrome is not in the tree; the bridge is untested with a live Orca."
+   "note": "The AT-SPI2 model maps app node trees and the shell chrome to roles, states, actions and object paths, with secure fields masked; headless tests in springboard/tests/parity_sdk-tests-09.rs. Gap: the D-Bus bridge (feature atspi) is not checked against a live screen reader."
   },
   {
    "feature": "Accessibility text (AXText, attributed strings, text markers)",

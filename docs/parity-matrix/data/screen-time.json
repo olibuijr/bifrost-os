@@ -17,9 +17,9 @@
     {
       "feature": "Configuration observer and configuration (STScreenTimeConfigurationObserver, STScreenTimeConfiguration)",
       "apple": "STScreenTimeConfigurationObserver(updateQueue:), startObserving(), stopObserving(), configuration; STScreenTimeConfiguration.enforcesChildRestrictions",
-      "bifrost": "springboard/sdk/src/screen_time.rs",
+      "bifrost": "springboard/sdk/src/screen_time.rs (Configuration, ConfigurationObserver); tests sdk/tests/parity_sdk-tests-09.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-screen-time, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell reads its own configuration. Apps get no observer and no child-restrictions query."
+      "note": "The restriction rule and the observer's change reports are tested headless in sdk/tests/parity_sdk-tests-09.rs. Gap: not wired into apps or the shell, not tested on the VM or Midget, and apps get no child-restrictions query."
     },
     {
       "feature": "Web-history deletion (STWebHistory)",
