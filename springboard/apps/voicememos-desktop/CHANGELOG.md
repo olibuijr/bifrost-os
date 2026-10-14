@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0 — 2026-10-14
+
+- The unused organize model is removed. Its features (favourites, Recently Deleted, folders, search, pause) run in
+  `store.rs` and the window model, which keep their tests; behaviour is unchanged.
+- Playback speed is not in this version: the audio service takes no playback rate. The parity matrix lists it as a gap.
+
 ## 1.8.0 — 2026-10-13
 
 - Search: a search field under the sidebar title narrows the list by title and notes (every word must match).

@@ -19,9 +19,9 @@
    "area": "toolbar",
    "apple": "pause while recording",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Hold a RecordClock in start_recording / finish_recording and append the resumed audio."
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:696 (pause_recording, resume_recording, toggle_pause); springboard/apps/voicememos-desktop/src/store.rs:351 (part_path, join_parts)",
+   "note": "Pause and Resume work on the Record row and in Recording > Pause Recording: each pause closes a part of the take and the parts join when it ends, tested headless in voicememos.rs and store.rs. Not verified on Midget.",
+   "wire": "Check on Midget: pause mid-take, resume, stop; the saved recording plays both parts in order."
   },
   {
    "feature": "Recordings list with dates and durations",
@@ -73,9 +73,9 @@
    "area": "view",
    "apple": "sidebar Recently Deleted",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Move deletes to organize::deleted_path, add the sidebar row with Recover and Delete Forever, purge with due_for_purge on launch."
+   "bifrost": "springboard/apps/voicememos-desktop/src/store.rs:235 (trash, recover, delete_forever, purge_expired); springboard/apps/voicememos-desktop/src/voicememos.rs:1138 (delete_selected, recover_selected)",
+   "note": "Delete moves a recording into the hidden .deleted folder with a record of when and from where; the Recently Deleted row offers Recover and Delete Forever, and recordings older than 30 days are purged at launch. Tested in store.rs and voicememos.rs; not verified on Midget.",
+   "wire": "Check on Midget: delete a recording, find it in Recently Deleted, recover it to its folder."
   },
   {
    "feature": "Trim",
@@ -91,8 +91,8 @@
    "area": "menu",
    "apple": "Edit > Replace",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1050",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1050 (begin_replace, replace_span); springboard/apps/voicememos-desktop/src/store.rs:397 (save_replaced)",
+   "note": "Recording > Replace picks a span with the trim handles and records over it; the result is saved as a new copy with the span swapped and the original kept. The splice and the copy are tested in store.rs; not verified on Midget.",
    "wire": "Check on Midget: pick a span, record over it; the result is saved as a new copy, not over the original"
   },
   {
@@ -126,10 +126,10 @@
    "feature": "Playback speed",
    "area": "settings",
    "apple": "playback options",
-   "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add a rate control in the transport stepping with organize::step_rate and pass it to the audio player."
+   "status": "gap",
+   "bifrost": "",
+   "note": "The audio service takes no playback rate, so playback runs at normal speed; the SDK audio_player_control model is not connected to playback.",
+   "wire": "Add a playback rate command to the audio service, then a rate control in the transport that sends it."
   },
   {
    "feature": "Notes per memo",
@@ -145,8 +145,8 @@
    "area": "menu",
    "apple": "File > Share",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/main.rs:209",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/main.rs:196 (menu_action); springboard/apps/voicememos-desktop/src/main.rs:210 (document, the save panel writes the file)",
+   "note": "Recording > Export opens the shell's save panel, writes the WAV through the document callback and then reports it saved. Not verified on Midget.",
    "wire": "Check on Midget: Recording > Export opens the save panel and the file is written"
   },
   {
@@ -154,27 +154,27 @@
    "area": "menu",
    "apple": "File > New Folder",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Show subfolders from organize::folder_of in the sidebar and add Move to Folder via move_target."
+   "bifrost": "springboard/apps/voicememos-desktop/src/store.rs:109 (create_folder, delete_folder, move_to_folder); springboard/apps/voicememos-desktop/src/voicememos.rs:1204 (delete_current_folder)",
+   "note": "Library > New Folder creates folders, Move to Folder files a recording into one, and the sidebar lists them; deleting a folder moves its recordings up. Tested in store.rs; not verified on Midget.",
+   "wire": "Check on Midget: New Folder, Move to Folder, then Delete Folder with recordings inside."
   },
   {
    "feature": "Favourites",
    "area": "menu",
    "apple": "Favorite",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Keep Favourites in a sidecar file, add the Favourites row and a toolbar toggle."
+   "bifrost": "springboard/apps/voicememos-desktop/src/store.rs:217 (is_favorite, set_favorite); springboard/apps/voicememos-desktop/src/voicememos.rs:1171 (toggle_favorite)",
+   "note": "Library > Favourite marks a recording with a hidden sidecar that follows renames and moves, and the Favourites row lists the marked ones. Tested in store.rs; not verified on Midget.",
+   "wire": "Check on Midget: mark a recording, rename it, find it under Favourites; unmarking removes it."
   },
   {
    "feature": "Search recordings",
    "area": "toolbar",
    "apple": "search field",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add a sidebar search field feeding organize::search."
+   "bifrost": "springboard/apps/voicememos-desktop/src/store.rs:152 (matches); springboard/apps/voicememos-desktop/src/voicememos.rs:560 (refilter)",
+   "note": "The search field under the sidebar title narrows the list by title and notes, and every word must match. Tested in store.rs and voicememos.rs; not verified on Midget.",
+   "wire": "Check on Midget: type a word from a title and from the notes; both narrow the list."
   },
   {
    "feature": "Transcription",
@@ -191,7 +191,7 @@
    "apple": "Settings",
    "status": "partial",
    "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:468",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "note": "Recording > Input lists the input devices and sets the default one. There is no quality or format option, because the audio service records one fixed format. Not verified on Midget.",
    "wire": "Sample rate and quality need a format option in the audio service; there is no settings window"
   },
   {
