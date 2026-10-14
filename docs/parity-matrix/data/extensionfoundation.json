@@ -12,7 +12,7 @@
    "apple": "Extension model: define extension points, talk to extensions at runtime",
    "bifrost": "springboard/sdk/src/extension.rs, springboard/ui/src/extensions.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (extension.rs, extensions.rs); not wired into the shell or apps, not tested on Midget. No extension model in SDK"
+   "note": "Extension points, identities, a registry that discovers the enabled extensions for a point, a per-extension process table and a manifest writer work and are tested in the host unit tests of sdk/src/extension.rs and ui/src/extension.rs. Gap: no shell or app host calls them yet, so no extension is launched on a device; Midget is needed to confirm the process lifecycle."
   },
   {
    "feature": "Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)",

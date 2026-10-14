@@ -82,7 +82,7 @@
       "apple": "WidgetBundle, Widget, widget configuration",
       "bifrost": "springboard/ui/src/extensions.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (extensions.rs); not wired into the shell or apps, not tested on Midget. App Intents exist; no desktop widgets or extension points"
+      "note": "A scene registry lists what a host may present, keeps the user's approval per app and scene, and round-trips that choice through prefs lines, tested in the host unit tests of ui/src/extensions.rs. Gap: the only consumer is the file sync model, the shell draws no approval list yet and no app declares a scene, so no desktop widget is shown; Midget is needed to check the list."
     },
     {
       "feature": "Model data",
