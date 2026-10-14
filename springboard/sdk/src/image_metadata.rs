@@ -41,6 +41,12 @@ pub struct PictureInfo {
     pub iso: Option<i64>,
     pub focal_length_mm: Option<f64>,
     pub location: Option<Location>,
+    /// Altitude in metres, negative below sea level, when the GPS block records one.
+    pub altitude_m: Option<f64>,
+    /// The software that wrote the file, when it records one.
+    pub software: Option<String>,
+    /// The lens model, when the EXIF block records one.
+    pub lens_model: Option<String>,
 }
 
 /// Reads the metadata of the first image in `bytes`. `None` when the data is not a picture in a supported format.
@@ -65,6 +71,9 @@ pub fn read(bytes: &[u8]) -> Option<PictureInfo> {
         iso: p.exif.get("ISOSpeedRatings").and_then(PropValue::as_i64),
         focal_length_mm: number(&p.exif, "FocalLength"),
         location: location(&p.gps),
+        altitude_m: altitude(&p.gps),
+        software: text(&p.tiff, "Software"),
+        lens_model: text(&p.exif, "LensModel"),
     })
 }
 
@@ -114,6 +123,13 @@ fn location(gps: &Dict) -> Option<Location> {
     let latitude = coordinate(gps, "Latitude", "LatitudeRef", 'S', 90.0)?;
     let longitude = coordinate(gps, "Longitude", "LongitudeRef", 'W', 180.0)?;
     Some(Location { latitude, longitude })
+}
+
+/// The altitude in metres. AltitudeRef 1 means below sea level; any other value (or none) means above.
+fn altitude(gps: &Dict) -> Option<f64> {
+    let metres = number(gps, "Altitude")?;
+    let below = gps.get("AltitudeRef").and_then(PropValue::as_i64) == Some(1);
+    Some(if below { -metres } else { metres })
 }
 
 fn coordinate(gps: &Dict, value_key: &str, ref_key: &str, negative_letter: char, max: f64) -> Option<f64> {

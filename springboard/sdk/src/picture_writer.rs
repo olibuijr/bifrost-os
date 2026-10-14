@@ -26,6 +26,10 @@ pub struct PictureWriter {
     orientation: Option<u8>,
     date_taken: Option<String>,
     location: Option<Location>,
+    altitude_m: Option<f64>,
+    make: Option<String>,
+    model: Option<String>,
+    software: Option<String>,
     loop_count: u32,
     frames: Vec<(CgImage, u32)>,
 }
@@ -33,7 +37,19 @@ pub struct PictureWriter {
 impl PictureWriter {
     /// A writer for `format`. Formats that cannot be written (WebP) make [`PictureWriter::finish`] return `None`.
     pub fn new(format: Format) -> Self {
-        PictureWriter { format, quality: None, orientation: None, date_taken: None, location: None, loop_count: 0, frames: Vec::new() }
+        PictureWriter {
+            format,
+            quality: None,
+            orientation: None,
+            date_taken: None,
+            location: None,
+            altitude_m: None,
+            make: None,
+            model: None,
+            software: None,
+            loop_count: 0,
+            frames: Vec::new(),
+        }
     }
 
     /// JPEG quality from 0.0 (smallest) to 1.0 (best). Values outside the range are clamped; NaN is ignored.
@@ -64,6 +80,27 @@ impl PictureWriter {
     /// Where the picture was taken.
     pub fn location(mut self, location: Location) -> Self {
         self.location = Some(location);
+        self
+    }
+
+    /// The camera maker and model, written as TIFF tags. An empty name is ignored.
+    pub fn camera(mut self, make: impl Into<String>, model: impl Into<String>) -> Self {
+        self.make = non_empty(make.into());
+        self.model = non_empty(model.into());
+        self
+    }
+
+    /// The software that wrote the picture, written as the TIFF Software tag. An empty name is ignored.
+    pub fn software(mut self, name: impl Into<String>) -> Self {
+        self.software = non_empty(name.into());
+        self
+    }
+
+    /// The altitude in metres, negative below sea level. A value that is not finite is ignored.
+    pub fn altitude(mut self, metres: f64) -> Self {
+        if metres.is_finite() {
+            self.altitude_m = Some(metres);
+        }
         self
     }
 
@@ -113,8 +150,24 @@ impl PictureWriter {
             gps.insert("LongitudeRef".into(), PropValue::Text(lon_ref.into()));
             gps.insert("Longitude".into(), PropValue::Floats(decimal_to_dms(loc.longitude).to_vec()));
         }
-        WriteOptions { quality: self.quality, orientation: self.orientation, exif, gps, delay_ms: Some(delay_ms), ..Default::default() }
+        if let Some(metres) = self.altitude_m {
+            let below = i64::from(metres < 0.0);
+            gps.insert("AltitudeRef".into(), PropValue::Int(below));
+            gps.insert("Altitude".into(), PropValue::Float(metres.abs()));
+        }
+        let mut tiff = Dict::new();
+        for (key, value) in [("Make", &self.make), ("Model", &self.model), ("Software", &self.software)] {
+            if let Some(text) = value {
+                tiff.insert(key.into(), PropValue::Text(text.clone()));
+            }
+        }
+        WriteOptions { quality: self.quality, orientation: self.orientation, tiff, exif, gps, delay_ms: Some(delay_ms), ..Default::default() }
     }
+}
+
+/// `Some` of the text when it is not empty.
+fn non_empty(text: String) -> Option<String> {
+    (!text.is_empty()).then_some(text)
 }
 
 /// Whether `text` has the EXIF date form `YYYY:MM:DD HH:MM:SS` (19 characters, digits and the fixed separators).

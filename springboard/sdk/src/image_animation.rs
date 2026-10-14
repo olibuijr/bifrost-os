@@ -19,6 +19,22 @@ pub struct AnimationFrame {
     pub delay_ms: u32,
 }
 
+/// Frames whose delay is this many milliseconds or less are shown for `FALLBACK_DELAY_MS` instead, the rule browsers
+/// apply to animated GIF.
+const SHORT_DELAY_MS: u32 = 10;
+const FALLBACK_DELAY_MS: u32 = 100;
+
+impl AnimationFrame {
+    /// How long the frame is on screen, in milliseconds.
+    pub fn shown_ms(&self) -> u32 {
+        if self.delay_ms <= SHORT_DELAY_MS {
+            FALLBACK_DELAY_MS
+        } else {
+            self.delay_ms
+        }
+    }
+}
+
 /// The frames of a picture file in display order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Animation {
@@ -33,9 +49,36 @@ impl Animation {
         self.frames.len() > 1
     }
 
-    /// The time for one pass through all the frames, in milliseconds.
+    /// The time for one pass through all the frames, in milliseconds, using each frame's `shown_ms`.
     pub fn duration_ms(&self) -> u64 {
-        self.frames.iter().map(|f| u64::from(f.delay_ms)).sum()
+        self.frames.iter().map(|f| u64::from(f.shown_ms())).sum()
+    }
+
+    /// The index of the frame on screen `elapsed_ms` after the animation starts. The frames play once, then repeat
+    /// `loop_count` more times (`Some(0)` or `None` repeats forever). `None` once the last pass has ended, when the
+    /// last frame stays on screen, or when there are no frames.
+    pub fn frame_at(&self, elapsed_ms: u64) -> Option<usize> {
+        let pass = self.duration_ms();
+        if pass == 0 {
+            return None;
+        }
+        let offset = match self.loop_count {
+            Some(repeats) if repeats > 0 => {
+                if elapsed_ms >= pass.saturating_mul(u64::from(repeats) + 1) {
+                    return None;
+                }
+                elapsed_ms % pass
+            }
+            _ => elapsed_ms % pass,
+        };
+        let mut end = 0u64;
+        for (index, frame) in self.frames.iter().enumerate() {
+            end += u64::from(frame.shown_ms());
+            if offset < end {
+                return Some(index);
+            }
+        }
+        None
     }
 }
 
