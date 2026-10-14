@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0
+
+- File > Export As (Cmd+Shift+S) shows an export panel on the right: PNG, JPEG or PDF, the JPEG quality, the export size
+  (25% to 200%) and an Export button. The quality applies to JPEG and the size to the formats that scale. A PDF's password
+  is not set from the panel yet.
+- Opening a password-protected PDF asks for its password in the status line. The typing shows as stars, Return opens the
+  file and Escape leaves it closed. A password is kept for the session, so Revert to Saved does not ask again. Owner
+  passwords are not tried, and a PDF with a password cannot be saved with its markup yet.
+- Adjust > Sharpen and Soften (and a Sharpness slider in Adjust Color) apply an unsharp mask after the colour adjustments.
+  Reset Colour clears it.
+- The Inspector lists a PDF's title, author, subject and keywords, and whether it is password protected.
+- Tools > Show Signatures puts the saved signatures on the right. A click places one on the shown page as one undo step.
+  The panels on the right now take turns: Export As, signatures, Adjust Color and the Inspector.
+
 ## 0.9.0
 
 - File > Save (Cmd+S) writes the markup, page order and turns into the document and opens it again. A PDF is written
