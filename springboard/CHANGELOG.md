@@ -15,6 +15,7 @@
 - Photos: Info > Edit Details sets a title, caption, keywords, place and a corrected date and time (kept beside the edit, the picture file is not changed), copies the location or a `photos://` link, and More > Keywords is a Keyword Manager (rename or delete a keyword everywhere, add one to the selection). The `photos:` URL scheme shows a picture, opens an album or searches.
 - Photos: Undo and Redo (More page and the Undo and Redo keys) for favourites, ratings, hiding, edits, album changes, details and deleting; keys 0 to 5 rate the open photo and Select All selects the grid. Albums can be renamed. Copy Edits and Paste Edits in the editor, and Paste Edits to Selection. A Duplicates album lists files that are the same bytes and Merge Duplicates keeps the best copy. Import from Folder copies a folder into Pictures. Share > Export Copy writes a JPEG or PNG at a chosen quality and size, with or without the details.
 - Photos: months with at least five pictures are offered as Memory albums (screenshots left out; More > Memories switches them off), and More > Play Slideshow plays the open album.
+- Photos: a Shift-held tap on a grid photo in selection mode selects every photo from the last one tapped. Image > Duplicate (cmd+d) copies every selected photo, not only the open one. The Adjust pane has an Auto Enhance button under its sliders.
 
 ## 0.7.25 — 2026-10-13
 
