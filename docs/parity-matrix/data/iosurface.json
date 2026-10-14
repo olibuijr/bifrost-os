@@ -73,9 +73,9 @@
     {
       "feature": "Purgeable buffer memory",
       "apple": "IOSurfaceSetPurgeable, IOSurfacePurgeabilityState",
-      "bifrost": "springboard/render/src/purgeable.rs (cache with memory-pressure eviction, docs/bifrost-ui.md NSCache section)",
+      "bifrost": "springboard/render/src/purgeable.rs (Cache, purge_all, MemoryPressure)",
       "status": "partial",
-      "note": "purgeability exists for caches, not for surface buffers"
+      "note": "Cost-bounded caches that drop the oldest entries are tested in render/tests/parity_sdk-tests-19.rs (purgeable::Cache: count and cost limits, purge, clones). Gap: no surface buffer is purgeable, and purge_all and the pressure watcher are covered only by in-module tests."
     },
     {
       "feature": "Surface attribute dictionary",

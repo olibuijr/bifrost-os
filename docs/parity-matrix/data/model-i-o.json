@@ -38,9 +38,9 @@
     {
       "feature": "Materials and shading models",
       "apple": "MDLMaterial, MDLMaterialProperty, MDLScatteringFunction, MDLPhysicallyPlausibleScatteringFunction",
-      "bifrost": "springboard/ui/src/scene_material.rs",
+      "bifrost": "springboard/ui/src/scene_material.rs (AssetMaterial, MaterialProperty); springboard/ui/src/shading.rs (Material, shade)",
       "status": "partial",
-      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. window vibrancy materials (docs/bifrost-ui.md 'Window vibrancy') are compositor effects, not surface materials"
+      "note": "Named material properties with base inheritance and the CPU shading model are tested in ui/tests/parity_sdk-tests-19.rs. Gap: the material and shading models are not joined, textures are stored as paths only, and window vibrancy stays a compositor effect."
     },
     {
       "feature": "Textures as 3D material inputs",

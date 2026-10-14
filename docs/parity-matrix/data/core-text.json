@@ -17,9 +17,9 @@
   {
    "feature": "Font collections and font manager (registration, enumeration, activation)",
    "apple": "CTFontCollection, CTFontManager*, CTFontManagerRegisterFontsForURL, CTFontManagerCopyAvailableFontFamilyNames",
-   "bifrost": "springboard/render/src/fontobj.rs (FontManager)",
+   "bifrost": "springboard/render/src/fontobj.rs (FontManager, FontSet)",
    "status": "partial",
-   "note": "Wave 3 (w3-core-text, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. fontprefs::installed lists one face per family from a directory, for Settings only. There is no runtime register/unregister, no collections, no auto-activation and no font-changed notification."
+   "note": "Registration from bytes or a file, removal, change events, named collections and matching are tested in render/tests/parity_sdk-tests-19.rs. Gap: auto-activation is stored but nothing reads it, so no missing font is activated on demand; fontprefs::installed lists faces for Settings only."
   },
   {
    "feature": "Character to glyph mapping",

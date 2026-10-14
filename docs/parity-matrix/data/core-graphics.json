@@ -122,9 +122,9 @@
   {
    "feature": "Window services (Quartz Window Services, CGWindowList)",
    "apple": "CGWindowListCopyWindowInfo, window levels, CGWindowLevelForKey",
-   "bifrost": "springboard/ui/src/window_list.rs",
+   "bifrost": "springboard/ui/src/window_list.rs (WindowInfo, window_list, WindowLevelKey)",
    "status": "partial",
-   "note": "Wave 5 (w5-core-graphics, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Windows are managed by the Wayland window server and the shell. No app can list other windows or read window levels through the SDK."
+   "note": "Window records, stacking-order scopes, desktop-element filtering, levels, title redaction and the wire form are tested in ui/tests/parity_sdk-tests-19.rs. The SDK re-exports the model and the shell fills records from its window state; a live window list has not been checked on Midget."
   },
   {
    "feature": "Event services (Quartz Event Services, CGEventTap, synthetic events)",

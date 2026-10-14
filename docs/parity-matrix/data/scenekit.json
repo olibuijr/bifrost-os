@@ -10,9 +10,9 @@
   {
    "feature": "Scene graph and nodes",
    "apple": "SCNScene, SCNNode, SCNReferenceNode",
-   "bifrost": "springboard/ui/src/scene3d.rs (Scene",
+   "bifrost": "springboard/ui/src/scene3d.rs (Scene, Pose)",
    "status": "partial",
-   "note": "Wave 3 (w3-scenekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D node hierarchy; the closest is the 2D window/view tree in springboard/sdk/src/view/"
+   "note": "The node tree, pose composition, world matrices and handle checks are tested in ui/tests/parity_sdk-tests-19.rs (scene3d). Gap: nodes carry no geometry, nothing is removed from a scene, and no renderer draws the tree."
   },
   {
    "feature": "Views for 3D content",
@@ -24,9 +24,9 @@
   {
    "feature": "Cameras, lights and materials",
    "apple": "SCNCamera, SCNLight, SCNMaterial, SCNMaterialProperty",
-   "bifrost": "springboard/ui/src/scene3d.rs (Camera",
+   "bifrost": "springboard/ui/src/scene3d.rs (Camera, Scene::set_camera, Scene::camera_view); springboard/ui/src/shading.rs (Light, shade, Fog)",
    "status": "partial",
-   "note": "Wave 3 (w3-scenekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D camera or lighting model; colours are 2D pairs in springboard/render/src/ui.rs"
+   "note": "Perspective cameras on nodes, their projection and view matrices, and the CPU ambient, Lambert and Blinn-Phong lights are tested in ui/tests/parity_sdk-tests-19.rs. Gap: lights are not attached to scene nodes, and there are no spot or area lights."
   },
   {
    "feature": "Geometry and built-in shapes",
@@ -45,9 +45,9 @@
   {
    "feature": "Constraints",
    "apple": "SCNConstraint, SCNLookAtConstraint, SCNBillboardConstraint, SCNIKConstraint",
-   "bifrost": "springboard/ui/src/scene3d.rs (Constraint::LookAt)",
+   "bifrost": "springboard/ui/src/scene3d.rs (Constraint::LookAt, look_at_orientation)",
    "status": "partial",
-   "note": "Wave 3 (w3-scenekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. 2D layout constraints only; no orientation or inverse-kinematics constraints"
+   "note": "Look-at constraints re-aim a node when its target moves, account for parent rotation and stop on cycles, as tested in ui/tests/parity_sdk-tests-19.rs. Gap: no billboard or inverse-kinematics constraint and no angle limits."
   },
   {
    "feature": "Skinning and morphing",
@@ -80,9 +80,9 @@
   {
    "feature": "Custom shaders and render passes",
    "apple": "SCNProgram, SCNShadable, SCNTechnique, SCNNodeRendererDelegate",
-   "bifrost": "springboard/ui/src/shader_library.rs, springboard/ui/src/scene_material.rs",
+   "bifrost": "springboard/ui/src/shader_library.rs (ShaderLibrary, RenderPipelineDescriptor)",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (shader_library.rs, scene_material.rs); not wired into the shell or apps, not tested on Midget. the GPU path has no app-facing shader or technique API"
+   "note": "Entry-point names, stage checks, source scanning and pipeline descriptors are tested in ui/tests/parity_sdk-tests-19.rs. Gap: the compositor's fixed shaders use this model, but apps have no shader, technique or render pass API."
   },
   {
    "feature": "Scene asset import",
