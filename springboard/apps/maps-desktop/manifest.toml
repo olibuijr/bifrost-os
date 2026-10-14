@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Maps with search, directions by car, foot, bike and transit, turn-by-turn guidance, saved places, offline areas, traffic and GPX files."
 category = "Travel"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "network", "documents"]
 window = "full-size"

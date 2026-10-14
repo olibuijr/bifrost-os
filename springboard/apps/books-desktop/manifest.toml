@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "PDF and EPUB reader with library, bookmarks and search."
 category = "Books"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 handles = ["com.adobe.pdf"]

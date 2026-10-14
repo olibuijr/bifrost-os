@@ -6,6 +6,7 @@ icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Month, week and day calendar with events, repeats, alerts, search, holidays and subscribed calendars."
 category = "Productivity"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents", "notifications", "keychain"]
 keychain_groups = ["is.bifrost.passwords"]
