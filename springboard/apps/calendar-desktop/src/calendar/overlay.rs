@@ -2,16 +2,20 @@
 //! (slots 1 and up, in the order they were added). Their events are worked out for the years around the shown one, get
 //! ids that cannot collide with a saved event's, and are never written to the event store.
 use super::exchange::occurrences;
+use super::extras;
 use super::holidays;
 use super::ics;
+use super::recur;
 use super::store::CalendarEvent;
 use super::{chrome, Calendar, Date};
 use bifrost_app::kit::colors;
 
-/// The calendar list's rows: the saved events, the holidays, and the subscriptions from `LAYER_SUBS` up.
+/// The calendar list's rows: the saved events, the holidays, and the subscriptions from `LAYER_SUBS` up. The calendars
+/// the user made take `LAYER_CAL` plus their id (`extras::MAX_CALENDARS` is the highest).
 pub const LAYER_LOCAL: u32 = 1;
 pub const LAYER_HOLIDAYS: u32 = 2;
 pub const LAYER_SUBS: u32 = 10;
+pub const LAYER_CAL: u32 = 40;
 
 /// Ids from here up belong to read-only events. A calendar's events take a block of `SLOT` ids.
 pub const BASE_ID: u64 = 1 << 40;
@@ -92,8 +96,34 @@ impl Calendar {
     /// The events the grids show: the saved ones (unless the Calendar row of the calendar list is off), then the
     /// read-only ones of the calendars that are on.
     pub(super) fn shown_events(&self) -> impl Iterator<Item = &CalendarEvent> + '_ {
-        let local = self.prefs.show_local;
-        self.events.iter().filter(move |_| local).chain(self.overlay.iter())
+        self.events.iter().filter(move |e| self.local_shown(e.id)).chain(self.overlay.iter())
+    }
+
+    /// Whether the saved event `id` is on a calendar that is shown. The built-in calendar follows the Calendar row; the
+    /// calendars the user made follow their own rows.
+    pub(super) fn local_shown(&self, id: u64) -> bool {
+        let cal = self.extras.calendar_of(id);
+        if cal == extras::DEFAULT_CALENDAR {
+            self.prefs.show_local
+        } else {
+            self.extras.calendars.iter().find(|c| c.id == cal).map_or(true, |c| c.shown)
+        }
+    }
+
+    /// The colour of a saved calendar: the accent for the built-in one, else the calendar's palette colour.
+    pub(super) fn calendar_colour(&self, cal: u32) -> u32 {
+        if cal == extras::DEFAULT_CALENDAR {
+            return chrome::cal_colour();
+        }
+        self.extras.calendars.iter().find(|c| c.id == cal).map_or_else(chrome::cal_colour, |c| colour(c.colour as usize))
+    }
+
+    /// Whether event `e` falls on `d`. A custom repeat rule is worked out here; the presets are `CalendarEvent::occurs_on`.
+    pub(super) fn occurs(&self, e: &CalendarEvent, d: Date) -> bool {
+        match self.extras.events.get(&e.id).and_then(|x| x.rrule.as_deref()).and_then(recur::parse_rrule) {
+            Some(rule) => !recur::expand(&rule, e.date, &[], d, d).is_empty(),
+            None => e.occurs_on(d),
+        }
     }
 
     /// Works the read-only events out again when the shown year or the set of calendars changed. They cover the shown
@@ -121,7 +151,7 @@ impl Calendar {
         if is_overlay(id) {
             colour(slot_of(id))
         } else {
-            chrome::cal_colour()
+            self.calendar_colour(self.extras.calendar_of(id))
         }
     }
 
@@ -144,7 +174,12 @@ impl Calendar {
                 self.prefs.show_holidays = !self.prefs.show_holidays;
                 self.save_prefs();
             }
-            n if n >= LAYER_SUBS => {
+            n if (LAYER_CAL..=LAYER_CAL + extras::MAX_CALENDARS).contains(&n) => {
+                let Some(c) = self.extras.calendars.iter_mut().find(|c| c.id == n - LAYER_CAL) else { return };
+                c.shown = !c.shown;
+                self.save_extras();
+            }
+            n if (LAYER_SUBS..LAYER_CAL).contains(&n) => {
                 let Some(s) = self.subs.get_mut((n - LAYER_SUBS) as usize) else { return };
                 s.shown = !s.shown;
                 self.save_subscriptions();

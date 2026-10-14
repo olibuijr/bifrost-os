@@ -84,7 +84,7 @@ impl Calendar {
         if let Some(draft) = self.editor.as_ref().filter(|d| d.existing) {
             return self.events.iter().find(|e| e.id == draft.event.id);
         }
-        let on_day = |e: &&CalendarEvent| e.occurs_on(self.selected);
+        let on_day = |e: &&CalendarEvent| self.occurs(e, self.selected);
         self.picked
             .and_then(|id| self.events.iter().find(|e| e.id == id))
             .filter(on_day)
@@ -106,7 +106,7 @@ impl Calendar {
                 .with(Edit::Paste, pasteboard.is_some())
                 .with(Edit::SelectAll, !field.is_empty());
         }
-        if self.search_focused || self.quick_line.is_some() {
+        if self.search_focused || self.quick_line.is_some() || self.line_sheet.is_some() {
             return Commands::default().with(Edit::Paste, pasteboard.is_some());
         }
         let have = !self.sheet_open() && self.copy_target().is_some();
@@ -124,6 +124,15 @@ impl Calendar {
             return match (cmd, pasteboard) {
                 (Edit::Paste, Some(text)) => {
                     self.quick_paste(text);
+                    true
+                }
+                _ => false,
+            };
+        }
+        if self.line_sheet.is_some() {
+            return match (cmd, pasteboard) {
+                (Edit::Paste, Some(text)) => {
+                    self.line_paste(text);
                     true
                 }
                 _ => false,
@@ -188,6 +197,9 @@ impl Calendar {
             Ok(()) => {
                 self.events = events;
                 self.changes.post();
+                // the cut event's extras wait with Undo, like a deleted event's
+                self.undo_extra = self.extras.events.remove(&id);
+                self.save_extras();
                 self.notice = Some(format!("Cut {}", removed.title));
                 self.undo = Some((removed, t + UNDO_MS));
                 self.picked = None;

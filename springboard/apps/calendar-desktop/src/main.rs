@@ -10,6 +10,7 @@ use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_calendar::calendar::archive;
+use bifrost_calendar::calendar::extras;
 use bifrost_calendar::calendar::subscribe::{self, Fetcher};
 use std::collections::HashMap;
 use std::io::Write;
@@ -35,6 +36,9 @@ struct CalendarApp {
 
 /// Menu ids of File > Unsubscribe from, one per subscription, clear of the commands and the settings.
 const UNSUBSCRIBE_BASE: u32 = 300;
+/// Menu ids of File > Rename Calendar and File > Delete Calendar: the calendar's id added to the base.
+const RENAME_BASE: u32 = 400;
+const DELETE_BASE: u32 = 500;
 
 /// What an open or save panel is for.
 enum Job {
@@ -77,6 +81,26 @@ fn settings_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
     items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::Alert(v))));
     items.push(AppMenuItem::submenu("Default All-Day Alert"));
     items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::AllDayAlert(v))));
+    // the calendar new events go to: one choice per calendar, the built-in one first
+    items.push(AppMenuItem::submenu("Default Calendar"));
+    let calendars = c.extras().choices();
+    items.extend(calendars.iter().map(|(id, name)| {
+        let s = Setting::DefaultCalendar(*id);
+        AppMenuItem::new(s.id(), name).checked(c.setting_checked(s)).enabled(c.settings_enabled()).depth(1)
+    }));
+    items
+}
+
+/// File > Rename Calendar and File > Delete Calendar, one choice per calendar the user made. Empty when there is none.
+fn calendar_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
+    let made = &c.extras().calendars;
+    if made.is_empty() {
+        return Vec::new();
+    }
+    let mut items = vec![AppMenuItem::separator(), AppMenuItem::submenu("Rename Calendar")];
+    items.extend(made.iter().map(|k| AppMenuItem::new(RENAME_BASE + k.id, &k.name).enabled(c.settings_enabled()).depth(1)));
+    items.push(AppMenuItem::submenu("Delete Calendar"));
+    items.extend(made.iter().map(|k| AppMenuItem::new(DELETE_BASE + k.id, &k.name).enabled(c.settings_enabled()).depth(1)));
     items
 }
 
@@ -122,14 +146,19 @@ impl App for CalendarApp {
                 items: vec![
                     item(Command::NewEventFromText),
                     AppMenuItem::separator(),
+                    item(Command::NewCalendar),
+                ]
+                .into_iter()
+                .chain(subscription_items(c, &item(Command::Subscribe)))
+                .chain(calendar_items(c))
+                .chain([
+                    AppMenuItem::separator(),
                     item(Command::Import),
                     item(Command::ImportArchive),
                     item(Command::ExportArchive),
                     AppMenuItem::separator(),
                     item(Command::Print),
-                ]
-                .into_iter()
-                .chain(subscription_items(c, &item(Command::Subscribe)))
+                ])
                 .collect(),
             },
             AppMenu {
@@ -185,16 +214,22 @@ impl App for CalendarApp {
         if let Some(i) = id.checked_sub(UNSUBSCRIBE_BASE).filter(|i| (*i as usize) < subscribe::MAX_SUBSCRIPTIONS) {
             return self.cal.as_mut().is_some_and(|c| c.unsubscribe(i as usize));
         }
+        if let Some(cal) = id.checked_sub(RENAME_BASE).filter(|i| (2..=extras::MAX_CALENDARS).contains(i)) {
+            return self.cal.as_mut().is_some_and(|c| c.open_rename(cal));
+        }
+        if let Some(cal) = id.checked_sub(DELETE_BASE).filter(|i| (2..=extras::MAX_CALENDARS).contains(i)) {
+            return self.cal.as_mut().is_some_and(|c| c.delete_calendar(cal));
+        }
         let Some(cmd) = Command::from_id(id) else { return false };
         let t = bifrost_app::proto::sys::now_ms();
         match &mut self.cal {
-            // the address is the pasteboard's text, read when the command runs
+            // the address on the pasteboard is where the sheet starts; Done subscribes to it
             Some(c) if cmd == Command::Subscribe => {
-                let text = ctx.pasteboard_string().unwrap_or_default();
-                match c.subscribe(&text) {
-                    Ok(name) => c.show_notice(&format!("Subscribed to {name}")),
-                    Err(e) => c.show_error(&e),
+                if !c.enabled(cmd) {
+                    return false;
                 }
+                let text = ctx.pasteboard_string().unwrap_or_default();
+                c.open_subscription(&text);
                 true
             }
             Some(c) if matches!(cmd, Command::Import | Command::ImportArchive) => {
@@ -333,7 +368,7 @@ impl App for CalendarApp {
         let gen = c.store_generation();
         if self.connect.is_stale(gen, day) {
             let rich = c.rich_events();
-            self.connect.sync(ctx, &Snap { events: c.events(), rich: &rich, now, offset: wall.offset }, gen, day);
+            self.connect.sync(ctx, &Snap { events: c.events(), rich: &rich, extras: c.extras(), now, offset: wall.offset }, gen, day);
         }
         // Without the alert service (an older shell), the app posts its own alerts as before.
         if self.connect.fallback() {
@@ -445,7 +480,7 @@ impl App for CalendarApp {
         let Some(c) = &self.cal else { return false };
         let wall = Wall::sample(0.0);
         let rich = c.rich_events();
-        let snap = Snap { events: c.events(), rich: &rich, now: wall.unix, offset: wall.offset };
+        let snap = Snap { events: c.events(), rich: &rich, extras: c.extras(), now: wall.unix, offset: wall.offset };
         self.connect.refresh_up_next(ctx, &snap);
         false
     }

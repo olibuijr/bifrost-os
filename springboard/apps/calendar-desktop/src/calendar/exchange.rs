@@ -1,6 +1,7 @@
 //! Import / export glue between the event store and ICS: whole-calendar and
 //! single-event files, recurring imports materialised into the store, and the
 //! rich-event sidecar (`calendar.ics`) that keeps rules, alerts and notes.
+use super::extras;
 use super::ics::{self, IcsCalendar, IcsEvent};
 use super::search::{self, Hit};
 use super::store::{self, CalendarEvent};
@@ -116,7 +117,8 @@ impl Calendar {
     /// The whole calendar as an .ics file.
     pub fn export_ics(&self) -> String {
         let rich = load_rich(&rich_path(&self.path));
-        let cal = build_export("SpringBoard", &self.events, &rich);
+        let mut cal = build_export("SpringBoard", &self.events, &rich);
+        extras::apply_zones(&mut cal, &self.extras);
         ics::write(&cal, &ics::stamp(self.wall.unix))
     }
 
@@ -125,7 +127,9 @@ impl Calendar {
         let e = self.events.iter().find(|e| e.id == id)?;
         let rich = load_rich(&rich_path(&self.path));
         let ev = ics::from_calendar_event(e);
-        Some(ics::write_single(&ev, &rich.timezones, &ics::stamp(self.wall.unix)))
+        let mut cal = IcsCalendar { name: String::new(), events: vec![ev], timezones: rich.timezones.clone() };
+        extras::apply_zones(&mut cal, &self.extras);
+        Some(ics::write(&cal, &ics::stamp(self.wall.unix)))
     }
 
     pub fn search(&self, query: &str) -> Vec<Hit> {

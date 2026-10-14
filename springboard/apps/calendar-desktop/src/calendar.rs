@@ -7,8 +7,11 @@ pub mod clip;
 pub mod connect;
 mod drag;
 pub mod exchange;
+pub mod extras;
+mod linesheet;
 mod lookup;
 mod goto;
+mod pickers;
 mod quickentry;
 pub mod holidays;
 pub mod ics;
@@ -155,6 +158,30 @@ enum Target {
     QuickAdd,
     /// A row of the calendar list: shows or hides that calendar (`overlay.rs`).
     Layer(u32),
+    /// The Repeat and Alert rows, which expand their pickers below (`pickers.rs`).
+    Repeat,
+    Alert,
+    /// The Repeat picker: frequency, the interval stepper, the weekday toggles (a row, and a column of it), the end
+    /// rule, and the stepper of its count or its end date.
+    RepeatFreq,
+    RepeatEvery(i32),
+    RepeatDays,
+    RepeatDay(u8),
+    RepeatEnds,
+    RepeatCount(i32),
+    RepeatUntil(i32),
+    /// The Alert picker: a preset (an index into `alerts::ALERT_MINUTES`; 0 clears the list), the custom alarm's
+    /// stepper, the row that adds it, and a row per custom alarm that removes it.
+    AlarmPreset(u8),
+    AlarmStep(i32),
+    AlarmAdd,
+    AlarmDrop(usize),
+    /// The calendar, time zone and travel time rows, each cycled in place.
+    Calendar,
+    Zone,
+    Travel,
+    /// The line sheet's Done button (`linesheet.rs`).
+    LineDone,
 }
 
 /// Which of the Starts / Ends rows has its picker expanded.
@@ -164,12 +191,23 @@ enum Slot {
     End,
 }
 
+#[derive(Clone)]
 struct Draft {
     event: CalendarEvent,
     existing: bool,
     open: Option<Slot>,
     /// Invitees read from the imported event this entry came from (read-only).
     invitees: Vec<Participant>,
+    /// The Repeat and Alert pickers are expanded below their rows.
+    repeat_open: bool,
+    alert_open: bool,
+    /// The working repeat rule (None: never) and alarms (minutes before the start). `commit` saves them.
+    rule: Option<recur::Rule>,
+    alarms: Vec<u32>,
+    /// The custom alarm the Alert picker's stepper is on, in minutes.
+    custom_alarm: u32,
+    /// What the saved event keeps beside the store: its calendar, zone and travel time (`extras.rs`).
+    extra: extras::Extra,
 }
 
 pub struct Calendar {
@@ -203,6 +241,16 @@ pub struct Calendar {
     search_hits: Vec<search::Hit>,
     /// The event last opened or saved: what Copy and Cut act on while it is on the shown day (`clip.rs`).
     picked: Option<u64>,
+    /// The calendars the user made and the extras of the events (`extras.rs`), and the extras of the last deleted
+    /// event, which Undo puts back with it.
+    extras: extras::Extras,
+    undo_extra: Option<extras::Extra>,
+    /// The line sheet (New Calendar, Rename Calendar, New Calendar Subscription), when it is open (`linesheet.rs`).
+    line_sheet: Option<linesheet::LineSheet>,
+    /// Pixels per point, as of the last layout: the editor's scroll is in pixels and its rows in points.
+    px_per_pt: f32,
+    /// The time view's scroll, kept while the event form is open and restored when it closes.
+    saved_scroll: f32,
     /// Read-only events of the holidays and the subscribed calendars for the years around the shown one
     /// (`overlay.rs`), the year and `overlay_version` they were worked out for, and the subscriptions themselves.
     overlay: Vec<CalendarEvent>,
@@ -277,6 +325,9 @@ impl Calendar {
             });
         let prefs = prefs::Prefs::load(&path);
         let subs = subscribe::load(&path);
+        let mut extras = extras::Extras::load(&path);
+        let live: Vec<u64> = events.iter().map(|e| e.id).collect();
+        extras.retain_events(&live);
         let mut c = Self {
             w,
             x0: 0.0,
@@ -308,6 +359,11 @@ impl Calendar {
             search_focused: false,
             search_hits: vec![],
             picked: None,
+            extras,
+            undo_extra: None,
+            line_sheet: None,
+            px_per_pt: 1.0,
+            saved_scroll: 0.0,
             overlay: vec![],
             overlay_for: None,
             overlay_version: 0,
@@ -367,7 +423,7 @@ impl Calendar {
     }
 
     fn agenda(&self) -> Vec<&CalendarEvent> {
-        self.shown_events().filter(|e| e.occurs_on(self.selected)).collect()
+        self.shown_events().filter(|e| self.occurs(e, self.selected)).collect()
     }
     fn bottom(&self, ui: &Ui) -> f32 {
         self.h as f32 - home_zone(ui)
@@ -386,8 +442,14 @@ impl Calendar {
             .map_or((0.0, 44.0), |r| (r.1, r.2));
         (ui.pt(36.0), ui.pt(top), self.w as f32 - ui.pt(72.0), ui.pt(h))
     }
-    /// Editor rows as (target, top pt, height pt), grouped like an bifrost form.
+    /// Editor rows as (target, top pt, height pt), grouped like an bifrost form, moved up by the form's scroll.
     fn rows(&self) -> Vec<(Target, f32, f32)> {
+        let scroll = self.scroll.offset() / self.px_per_pt.max(f32::EPSILON);
+        self.editor_rows(scroll)
+    }
+
+    /// The editor's rows with the form scrolled up by `scroll` points.
+    fn editor_rows(&self, scroll: f32) -> Vec<(Target, f32, f32)> {
         let Some(draft) = &self.editor else {
             return vec![];
         };
@@ -407,7 +469,11 @@ impl Calendar {
                 items.extend([Some(Target::DateStep(0)), Some(Target::TimeStep(0))]);
             }
         }
-        items.extend([None, Some(Target::Repeat), Some(Target::Alert), None, Some(Target::Notes)]);
+        items.extend([None, Some(Target::Repeat)]);
+        items.extend(pickers::repeat_targets(draft).into_iter().map(Some));
+        items.push(Some(Target::Alert));
+        items.extend(pickers::alarm_targets(draft).into_iter().map(Some));
+        items.extend([Some(Target::Calendar), Some(Target::Zone), Some(Target::Travel), None, Some(Target::Notes)]);
         if self.notes_address().is_some() {
             items.push(Some(Target::FillAddress));
         }
@@ -424,7 +490,7 @@ impl Calendar {
             }
             items.push(Some(Target::Delete));
         }
-        let mut y = 108.0;
+        let mut y = 108.0 - scroll;
         let mut out = vec![];
         for item in items {
             match item {
@@ -456,6 +522,13 @@ impl Calendar {
         self.fields.iter().position(|f| f.focused)
     }
     fn fit_scroll(&mut self, ui: &Ui) {
+        // the event form scrolls past the window's bottom when its pickers are open
+        if self.editor.is_some() {
+            let content = self.editor_rows(0.0).last().map_or(0.0, |r| r.1 + r.2) + 40.0;
+            let visible = self.bottom(ui) / ui.s;
+            self.scroll.set_max(ui.pt((content - visible).max(0.0)));
+            return;
+        }
         if self.searching() {
             self.scroll.set_max(self.results_scroll_max(ui));
             return;
@@ -485,7 +558,7 @@ impl Calendar {
     fn cell_events(&self, ui: &Ui, date: Date) -> (Vec<&CalendarEvent>, usize) {
         let (.., rh) = self.grid_geom(ui);
         let room = ((rh - ui.pt(CELL_HEAD)) / ui.pt(CELL_LINE)).floor().max(0.0) as usize;
-        let all: Vec<&CalendarEvent> = self.shown_events().filter(|e| e.occurs_on(date)).collect();
+        let all: Vec<&CalendarEvent> = self.shown_events().filter(|e| self.occurs(e, date)).collect();
         if all.len() <= room {
             return (all, 0);
         }
@@ -521,7 +594,7 @@ impl Calendar {
         if self.goto.is_some() {
             return self.hit_goto(ui, x, y);
         }
-        if self.quick_line.is_some() {
+        if self.quick_line.is_some() || self.line_sheet.is_some() {
             return None;
         }
         if self.searching() {
@@ -543,6 +616,11 @@ impl Calendar {
                         Target::DateStep(_) => side(1).map(Target::DateStep),
                         Target::MonthStep(_) => Some(Target::MonthStep(if xp < wp / 2.0 { -1 } else { 1 })),
                         Target::TimeStep(_) => side(15).map(Target::TimeStep),
+                        Target::RepeatEvery(_) => side(1).map(Target::RepeatEvery),
+                        Target::RepeatCount(_) => side(1).map(Target::RepeatCount),
+                        Target::RepeatUntil(_) => side(1).map(Target::RepeatUntil),
+                        Target::AlarmStep(_) => side(1).map(Target::AlarmStep),
+                        Target::RepeatDays => Some(Target::RepeatDay(pickers::weekday_column(xp, wp))),
                         t => Some(t),
                     };
                 }
@@ -611,13 +689,12 @@ impl Calendar {
         } else {
             vec![]
         };
-        self.editor = Some(Draft {
-            event,
-            existing,
-            open: None,
-            invitees: people,
-        });
+        // the time view's scroll comes back when the form closes; the form starts at its top
+        self.saved_scroll = self.scroll.offset();
+        self.scroll.jump_top();
+        self.editor = Some(self.new_draft(event, existing, people));
         self.error = None;
+        self.fit_scroll(ui);
     }
 
     /// File > New Event from Text: opens the editor on the event `text` describes (`quick::parse`). Empty text opens a
@@ -664,7 +741,10 @@ impl Calendar {
     }
 
     fn close(&mut self) {
-        self.editor = None;
+        if self.editor.take().is_some() {
+            let saved = self.saved_scroll;
+            self.scroll.jump_to(saved);
+        }
         self.focus(None);
     }
 
@@ -673,13 +753,16 @@ impl Calendar {
     /// Opens an unsaved copy of the event being edited, keeping its unsaved edits. Save adds it.
     fn duplicate(&mut self) {
         let Some(draft) = &self.editor else { return };
-        let mut copy = draft.event.clone();
-        copy.id = store::next_id(&self.events);
-        copy.title = self.fields[0].text().trim().to_string();
-        copy.location = self.fields[1].text().trim().to_string();
-        copy.notes = self.fields[2].text().trim().to_string();
+        let mut copy = draft.clone();
+        copy.event.id = store::next_id(&self.events);
+        copy.event.title = self.fields[0].text().trim().to_string();
+        copy.event.location = self.fields[1].text().trim().to_string();
+        copy.event.notes = self.fields[2].text().trim().to_string();
+        copy.existing = false;
+        copy.open = None;
+        copy.invitees = vec![];
         self.error = None;
-        self.editor = Some(Draft { event: copy, existing: false, open: None, invitees: vec![] });
+        self.editor = Some(copy);
     }
 
     /// Writes the saved event as an .ics file under ~/Documents/Calendar Export.
@@ -739,6 +822,10 @@ impl Calendar {
             Ok(()) => {
                 self.events = events;
                 self.changes.post();
+                if let Some(extra) = self.undo_extra.take() {
+                    self.extras.put(event.id, extra);
+                }
+                self.save_extras();
                 self.selected = event.date;
                 self.error = None;
                 self.fit_scroll(ui);
@@ -755,6 +842,21 @@ impl Calendar {
         if let Err(e) = self.prefs.save(&self.path) {
             eprintln!("springboard: calendar: {e}");
         }
+    }
+
+    /// Writes the extras beside the events. Entries of events that are gone are dropped first, so an id the store
+    /// hands out again starts with nothing attached.
+    pub(super) fn save_extras(&mut self) {
+        let live: Vec<u64> = self.events.iter().map(|e| e.id).collect();
+        self.extras.retain_events(&live);
+        if let Err(e) = self.extras.save(&self.path) {
+            eprintln!("springboard: calendar: {e}");
+        }
+    }
+
+    /// The calendars the user made, and the extras of the events (`extras.rs`). The app reads them for the alerts.
+    pub fn extras(&self) -> &extras::Extras {
+        &self.extras
     }
 
     fn export_calendar(&mut self) {
@@ -787,6 +889,14 @@ impl Calendar {
         event.title = self.fields[0].text().trim().to_string();
         event.location = self.fields[1].text().trim().to_string();
         event.notes = self.fields[2].text().trim().to_string();
+        // the pickers' working copies become the preset fields the store keeps, and the rest goes to the extras
+        let (repeat, rrule) = pickers::repeat_fields(draft.rule.as_ref());
+        let (alert, alarms) = pickers::alarm_fields(&draft.alarms);
+        event.repeat = repeat;
+        event.alert = alert;
+        let mut extra = draft.extra.clone();
+        extra.rrule = rrule;
+        extra.alarms = alarms;
         if !delete && !event.valid() {
             self.error = Some("Enter a title for this event".into());
             return;
@@ -806,6 +916,12 @@ impl Calendar {
             Ok(()) => {
                 self.events = events;
                 self.changes.post();
+                if delete {
+                    self.undo_extra = self.extras.events.remove(&event.id);
+                } else {
+                    self.extras.put(event.id, extra);
+                }
+                self.save_extras();
                 self.selected = event.date;
                 self.error = None;
                 self.picked = (!delete).then_some(event.id);
@@ -907,8 +1023,10 @@ impl Calendar {
             Target::Cancel => {
                 self.goto = None;
                 self.quick_line = None;
+                self.line_sheet = None;
                 self.close();
             }
+            Target::LineDone => self.line_done(ui, t),
             Target::QuickOpen => self.open_quick(),
             Target::QuickAdd => self.quick_add(ui, t),
             Target::GoOpen => self.open_goto(),
@@ -935,12 +1053,26 @@ impl Calendar {
             }
             Target::CopyPhone => self.copy_phone(),
             Target::Invitees => {}
+            Target::Repeat
+            | Target::Alert
+            | Target::RepeatFreq
+            | Target::RepeatEvery(_)
+            | Target::RepeatDays
+            | Target::RepeatDay(_)
+            | Target::RepeatEnds
+            | Target::RepeatCount(_)
+            | Target::RepeatUntil(_)
+            | Target::AlarmPreset(_)
+            | Target::AlarmStep(_)
+            | Target::AlarmAdd
+            | Target::AlarmDrop(_)
+            | Target::Calendar
+            | Target::Zone
+            | Target::Travel => self.picker_tap(target),
             Target::DateStep(_)
             | Target::MonthStep(_)
             | Target::TimeStep(_)
             | Target::AllDay
-            | Target::Repeat
-            | Target::Alert
             | Target::Toggle(_) => {
                 self.focus(None);
                 let prefs = self.prefs;
@@ -970,10 +1102,11 @@ impl Calendar {
                                 if e.alert == from {
                                     e.alert = to;
                                 }
+                                if draft.alarms == extras::preset_alarms(from) {
+                                    draft.alarms = extras::preset_alarms(to);
+                                }
                             }
                         }
-                        Target::Repeat => e.repeat = (e.repeat + 1) % store::REPEATS.len() as u8,
-                        Target::Alert => e.alert = (e.alert + 1) % store::ALERTS.len() as u8,
                         Target::Toggle(slot) => {
                             draft.open = if draft.open == Some(slot) { None } else { Some(slot) }
                         }
@@ -993,6 +1126,10 @@ impl Calendar {
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.sync_overlay();
+        if self.line_sheet.is_some() {
+            self.line_key(ui, out, t);
+            return;
+        }
         if self.quick_line.is_some() {
             self.quick_key(ui, out, t);
             return;
@@ -1082,7 +1219,9 @@ impl Calendar {
             Event::Down(..) => {
                 self.pressed = self.hit(ui, x, y);
                 self.start = Some((x, y));
-                self.scrolling = matches!(self.pressed, Some(Target::Row(_) | Target::Agenda | Target::SearchHit(_)));
+                // the event form scrolls too: a press that moves on drags it, a press that stays is a tap
+                self.scrolling = matches!(self.pressed, Some(Target::Row(_) | Target::Agenda | Target::SearchHit(_)))
+                    || (self.editor.is_some() && self.pressed.is_some());
                 if self.scrolling {
                     self.scroll.down(y, t);
                 }
@@ -1216,6 +1355,8 @@ impl Calendar {
                 self.draw_editor(&mut c, ui, t);
             } else if self.goto.is_some() {
                 self.draw_goto(&mut c, ui);
+            } else if self.line_sheet.is_some() {
+                self.draw_line(&mut c, ui);
             } else if self.quick_line.is_some() {
                 self.draw_quick(&mut c, ui);
             } else if self.searching() {
@@ -1302,6 +1443,7 @@ impl Calendar {
         let Some(draft) = &self.editor else {
             return;
         };
+        let draft = draft.clone();
         let event = draft.event.clone();
         let open = draft.open;
         let people = draft.invitees.clone();
@@ -1363,16 +1505,21 @@ impl Calendar {
                     let tint = if open == Some(slot) { colors::LINK.now() } else { LABEL_2.now() };
                     self.right(s, ui, &value, tint, w - ui.pt(36.0), mid);
                 }
-                Target::Repeat | Target::Alert => {
-                    let (name, value) = if target == Target::Repeat {
-                        ("Repeat", store::REPEATS[event.repeat as usize])
-                    } else {
-                        ("Alert", store::ALERTS[event.alert as usize])
-                    };
-                    self.text(s, ui, name, MAC_BODY_PT, LABEL.now(), ui.pt(36.0), mid);
-                    self.right(s, ui, "›", LABEL_2.now(), w - ui.pt(36.0), mid);
-                    self.right(s, ui, value, LABEL_2.now(), w - ui.pt(54.0), mid);
-                }
+                Target::Repeat
+                | Target::Alert
+                | Target::RepeatFreq
+                | Target::RepeatEvery(_)
+                | Target::RepeatDays
+                | Target::RepeatEnds
+                | Target::RepeatCount(_)
+                | Target::RepeatUntil(_)
+                | Target::AlarmPreset(_)
+                | Target::AlarmStep(_)
+                | Target::AlarmAdd
+                | Target::AlarmDrop(_)
+                | Target::Calendar
+                | Target::Zone
+                | Target::Travel => self.draw_picker(s, ui, target, &draft, top, h),
                 Target::DateStep(_) => {
                     let end = open == Some(Slot::End);
                     let d = if end { end_date } else { event.date };
@@ -1487,10 +1634,12 @@ pub enum Command {
     Subscribe,
     /// Event > Quick Event...: a sheet to type a sentence that becomes an event.
     QuickEvent,
+    /// File > New Calendar...: a line sheet names the calendar (the app shows nothing else; see `perform`).
+    NewCalendar,
 }
 
 impl Command {
-    pub const ALL: [Command; 26] = [
+    pub const ALL: [Command; 27] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1517,6 +1666,7 @@ impl Command {
         Command::Print,
         Command::Subscribe,
         Command::QuickEvent,
+        Command::NewCalendar,
     ];
 
     pub fn id(self) -> u32 {
@@ -1553,8 +1703,9 @@ impl Command {
             Command::ImportArchive => "Import Archive...",
             Command::Search => "Search Events",
             Command::Print => "Print...",
-            Command::Subscribe => "Subscribe to Calendar from Clipboard",
+            Command::Subscribe => "New Calendar Subscription...",
             Command::QuickEvent => "Quick Event...",
+            Command::NewCalendar => "New Calendar...",
         }
     }
 
@@ -1629,6 +1780,10 @@ impl Calendar {
             self.dirty = true;
             return true;
         }
+        if cmd == Command::NewCalendar {
+            self.open_line(linesheet::Purpose::NewCalendar, "");
+            return true;
+        }
         let target = match cmd {
             Command::NewEvent => Target::Add,
             Command::Save => Target::Save,
@@ -1651,7 +1806,7 @@ impl Calendar {
             Command::Search => Target::SearchField,
             Command::QuickEvent => Target::QuickOpen,
             // the app shows the panels and passes the file's text to `import_file` / reads `archive_text`
-            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print | Command::Subscribe => return false,
+            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print | Command::Subscribe | Command::NewCalendar => return false,
         };
         self.activate(ui, target, t);
         true
@@ -1664,7 +1819,10 @@ impl Calendar {
 
     /// Whether Settings menu choice `setting` is the current one (its check mark).
     pub fn setting_checked(&self, setting: prefs::Setting) -> bool {
-        self.prefs.is(setting)
+        match setting {
+            prefs::Setting::DefaultCalendar(id) => self.extras.default_id() == id,
+            other => self.prefs.is(other),
+        }
     }
 
     /// Settings menu: picks `setting`, saves the settings beside the events and redraws. The settings change the
@@ -1672,6 +1830,16 @@ impl Calendar {
     pub fn change_setting(&mut self, ui: &Ui, setting: prefs::Setting) -> bool {
         if !self.settings_enabled() {
             return false;
+        }
+        // the default calendar is kept with the calendars, not with the other settings
+        if let prefs::Setting::DefaultCalendar(id) = setting {
+            if !self.extras.exists(id) {
+                return false;
+            }
+            self.extras.default_calendar = id;
+            self.save_extras();
+            self.dirty = true;
+            return true;
         }
         self.prefs.apply(setting);
         self.save_prefs();

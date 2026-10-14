@@ -135,7 +135,7 @@ impl Calendar {
         for (i, d) in self.view_days().iter().enumerate() {
             let x0 = gut + col_w * i as f32;
             let (all, timed): (Vec<&CalendarEvent>, Vec<&CalendarEvent>) =
-                self.shown_events().filter(|e| e.occurs_on(*d)).partition(|e| e.all_day);
+                self.shown_events().filter(|e| self.occurs(e, *d)).partition(|e| e.all_day);
             let spans: Vec<(u32, u32)> = all.iter().map(|_| (0, 1)).collect();
             for (e, slot) in all.iter().zip(layout::layout(&spans, 1)) {
                 let (x, w) = layout::slot_x(slot, x0, col_w, ui.pt(SPACE_XXS));

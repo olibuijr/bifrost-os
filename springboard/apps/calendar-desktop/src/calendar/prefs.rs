@@ -1,5 +1,6 @@
 //! The desktop's own settings, kept beside the events file as `key=value` lines (`calendar-prefs.txt`).
 //! Pure: reading and writing the text is separate from touching the disk, so the rules are host-testable.
+use super::extras::MAX_CALENDARS;
 use std::path::{Path, PathBuf};
 
 /// The default height of one hour in the Day and Week grids (points), and the zoom range and step.
@@ -71,6 +72,8 @@ pub enum Setting {
     Alert(u8),
     /// A `CalendarEvent::alert` for new all-day events.
     AllDayAlert(u8),
+    /// The calendar new events go to (its id, `extras::MAX_CALENDARS` at most). The choice is kept with the calendars.
+    DefaultCalendar(u32),
 }
 
 /// Menu ids of the settings start here, clear of the app's `Command` ids.
@@ -85,6 +88,7 @@ impl Setting {
             Setting::DayStart(i) => ID_BASE + 2 * ID_SPAN + i as u32,
             Setting::Alert(v) => ID_BASE + 3 * ID_SPAN + v as u32,
             Setting::AllDayAlert(v) => ID_BASE + 4 * ID_SPAN + v as u32,
+            Setting::DefaultCalendar(c) => ID_BASE + 5 * ID_SPAN + c.saturating_sub(1),
         }
     }
 
@@ -97,6 +101,7 @@ impl Setting {
             2 if i < DAY_STARTS.len() => Some(Setting::DayStart(i)),
             3 if i < ALERT_CHOICES as usize => Some(Setting::Alert(i as u8)),
             4 if i < ALERT_CHOICES as usize => Some(Setting::AllDayAlert(i as u8)),
+            5 if (i as u32) < MAX_CALENDARS => Some(Setting::DefaultCalendar(i as u32 + 1)),
             _ => None,
         }
     }
@@ -112,6 +117,8 @@ impl Setting {
             },
             Setting::DayStart(i) => format!("{} AM", DAY_STARTS[i]),
             Setting::Alert(v) | Setting::AllDayAlert(v) => super::store::ALERTS[v as usize].to_string(),
+            // the app names the calendars itself (`settings_items`), so this is only a fallback
+            Setting::DefaultCalendar(_) => "Calendar".into(),
         }
     }
 }
@@ -198,6 +205,7 @@ impl Prefs {
             Setting::DayStart(i) => self.day_start == DAY_STARTS[i],
             Setting::Alert(v) => self.alert == v,
             Setting::AllDayAlert(v) => self.alert_all_day == v,
+            Setting::DefaultCalendar(_) => false,
         }
     }
 
@@ -209,6 +217,7 @@ impl Prefs {
             Setting::DayStart(i) => self.day_start = DAY_STARTS[i],
             Setting::Alert(v) => self.alert = v,
             Setting::AllDayAlert(v) => self.alert_all_day = v,
+            Setting::DefaultCalendar(_) => {}
         }
     }
 

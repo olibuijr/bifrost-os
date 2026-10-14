@@ -731,11 +731,13 @@ fn new_events_take_the_default_length_and_alerts() {
     assert_eq!(c.editor.as_ref().unwrap().event.alert, 6);
     c.activate(&ui, Target::AllDay, 0.0);
     assert_eq!(c.editor.as_ref().unwrap().event.alert, 3);
-    // a hand-picked alert is left alone
+    // a hand-picked alert is left alone: the picker clears the default and picks 30 minutes before
     c.activate(&ui, Target::Alert, 0.0);
-    assert_eq!(c.editor.as_ref().unwrap().event.alert, 4);
+    c.activate(&ui, Target::AlarmPreset(0), 0.0);
+    c.activate(&ui, Target::AlarmPreset(4), 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().alarms, vec![30]);
     c.activate(&ui, Target::AllDay, 0.0);
-    assert_eq!(c.editor.as_ref().unwrap().event.alert, 4);
+    assert_eq!(c.editor.as_ref().unwrap().alarms, vec![30]);
 }
 
 #[test]
@@ -1690,4 +1692,166 @@ fn quick_event_can_be_cancelled_and_blocks_the_window_behind_it() {
     // the app's intents close it
     intents::perform(&mut c, &ui, "show-date", &params(&[("date", "2027-01-15")])).unwrap();
     assert!(c.quick_text().is_none());
+}
+
+#[test]
+fn a_custom_repeat_is_saved_beside_the_store_and_its_days_are_worked_out() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Gym");
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::Repeat, 2.0);
+    c.activate(&ui, Target::RepeatFreq, 3.0);
+    c.activate(&ui, Target::RepeatFreq, 4.0);
+    c.activate(&ui, Target::RepeatDay(2), 5.0);
+    c.activate(&ui, Target::RepeatEnds, 6.0);
+    c.activate(&ui, Target::RepeatCount(-7), 7.0);
+    assert!(c.rows().iter().any(|r| r.0 == Target::RepeatCount(0)), "the count row shows");
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 8.0);
+    assert!(c.editor.is_none());
+    let id = c.events[0].id;
+    assert_eq!(c.events[0].repeat, 0, "a custom rule is not one of the presets");
+    let rule = c.extras().events.get(&id).and_then(|x| x.rrule.clone());
+    assert_eq!(rule.as_deref(), Some("FREQ=WEEKLY;BYDAY=SU,TU;COUNT=3"));
+    let e = c.events[0].clone();
+    assert!(c.occurs(&e, date(2026, 10, 6)), "a Tuesday");
+    assert!(c.occurs(&e, date(2026, 10, 11)), "the second Sunday");
+    assert!(!c.occurs(&e, date(2026, 10, 5)), "a Monday");
+    assert!(!c.occurs(&e, date(2026, 10, 13)), "the count is used up");
+    let reopened = new(&ui, temp.file());
+    assert_eq!(reopened.extras().events.get(&id).and_then(|x| x.rrule.clone()), rule, "the rule survives a reload");
+}
+
+#[test]
+fn the_alert_picker_saves_custom_alarms_for_the_alert_calendar() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Call");
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::Alert, 2.0);
+    c.activate(&ui, Target::AlarmPreset(0), 3.0);
+    c.activate(&ui, Target::AlarmPreset(5), 4.0);
+    c.activate(&ui, Target::AlarmStep(1), 5.0);
+    c.activate(&ui, Target::AlarmAdd, 6.0);
+    assert_eq!(c.editor.as_ref().unwrap().alarms, vec![35, 60]);
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 7.0);
+    let id = c.events[0].id;
+    assert_eq!(c.extras().events.get(&id).and_then(|x| x.alarms.clone()), Some(vec![35, 60]));
+    let cal = alerts::alert_calendar_with(&c.events, &ics::IcsCalendar::default(), c.extras());
+    assert_eq!(cal.events[0].alarms, vec![35, 60]);
+    // picking a single preset again stores it as the event's preset, with no list of its own
+    c.activate(&ui, Target::Row(id), 8.0);
+    c.activate(&ui, Target::Alert, 9.0);
+    c.activate(&ui, Target::AlarmPreset(0), 10.0);
+    c.activate(&ui, Target::AlarmPreset(3), 11.0);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 12.0);
+    assert_eq!(c.events[0].alert, 3);
+    assert_eq!(c.extras().events.get(&id).and_then(|x| x.alarms.clone()), None, "a preset needs no entry of its own");
+}
+
+#[test]
+fn calendars_are_made_shown_renamed_and_removed_only_when_empty() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.perform(&ui, Command::NewCalendar, 0.0));
+    assert_eq!(c.line_text().as_deref(), Some(""), "the sheet opens empty");
+    draw_once(&mut c, &ui);
+    type_text(&mut c, &ui, "Work");
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.line_sheet.is_none(), "Return makes the calendar and closes the sheet");
+    assert_eq!(c.extras().name_of(2), "Work");
+    // an event on the new calendar, shown until its row hides the calendar
+    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    type_text(&mut c, &ui, "Standup");
+    c.key(&ui, Out::Hide, 3.0);
+    c.activate(&ui, Target::Calendar, 4.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.calendar, 2);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 5.0);
+    let id = c.events[0].id;
+    assert_eq!(c.extras().calendar_of(id), 2);
+    assert_eq!(c.shown_events().count(), 1);
+    c.activate(&ui, Target::Layer(overlay::LAYER_CAL + 2), 6.0);
+    assert_eq!(c.shown_events().count(), 0, "the calendar row hides its events");
+    c.activate(&ui, Target::Layer(overlay::LAYER_CAL + 2), 7.0);
+    assert_eq!(c.shown_events().count(), 1);
+    // rename it, then refuse to delete it while it holds an event
+    assert!(c.open_rename(2));
+    assert_eq!(c.line_text().as_deref(), Some("Work"));
+    for _ in 0..4 {
+        c.key(&ui, Out::Backspace, 8.0);
+    }
+    type_text(&mut c, &ui, "Job");
+    c.key(&ui, Out::Enter, 9.0);
+    assert_eq!(c.extras().name_of(2), "Job");
+    assert!(c.delete_calendar(2));
+    assert!(c.extras().exists(2), "a calendar with an event is kept");
+    assert!(c.error.as_deref().is_some_and(|e| e.contains("Delete them first")));
+    c.activate(&ui, Target::Row(id), 10.0);
+    tap_row(&mut c, &ui, Target::Delete, 384.0, 11.0);
+    assert!(c.events.is_empty());
+    assert!(c.delete_calendar(2));
+    assert!(!c.extras().exists(2), "an empty calendar is removed");
+    assert!(!c.delete_calendar(1), "the built-in calendar cannot be removed");
+}
+
+#[test]
+fn the_default_calendar_setting_is_kept_with_the_calendars() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::NewCalendar, 0.0);
+    type_text(&mut c, &ui, "Home");
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.change_setting(&ui, Setting::DefaultCalendar(2)));
+    assert!(c.setting_checked(Setting::DefaultCalendar(2)) && !c.setting_checked(Setting::DefaultCalendar(1)));
+    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.calendar, 2, "new events go to the default");
+    c.activate(&ui, Target::Cancel, 3.0);
+    assert!(!c.change_setting(&ui, Setting::DefaultCalendar(7)), "a calendar that does not exist");
+    let reopened = new(&ui, temp.file());
+    assert_eq!(reopened.extras().default_id(), 2);
+}
+
+#[test]
+fn the_time_zone_and_travel_time_rows_cycle_and_are_saved() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Flight");
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::Zone, 2.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.tzid.as_deref(), Some("UTC"));
+    c.activate(&ui, Target::Zone, 3.0);
+    c.activate(&ui, Target::Travel, 4.0);
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 5.0);
+    let id = c.events[0].id;
+    let extra = c.extras().events.get(&id).cloned().unwrap();
+    assert_eq!(extra.tzid.as_deref(), Some("Atlantic/Reykjavik"));
+    assert_eq!(extra.travel, 15);
+    assert!(c.export_ics().contains("TZID=Atlantic/Reykjavik"), "the export names the zone");
+}
+
+#[test]
+fn an_empty_subscription_address_keeps_the_sheet_open() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.open_subscription("");
+    assert!(c.line_sheet.is_some());
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.line_sheet.is_some(), "the address is refused and the sheet stays open");
+    assert!(c.error.is_some());
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 2.0);
+    assert!(c.line_sheet.is_none());
 }

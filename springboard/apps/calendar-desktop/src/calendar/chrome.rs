@@ -47,6 +47,8 @@ const EVENT_NODE: u64 = 1 << 32;
 pub(super) const B_SAVE: u32 = 14;
 pub(super) const B_GO: u32 = 15;
 pub(super) const B_QUICK: u32 = 16;
+/// The line sheet's Done button (`linesheet.rs`).
+pub(super) const B_LINE: u32 = 17;
 
 /// The width the kit's `toolbar` gives each button (glyph buttons are a capsule, titled ones their label).
 fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
@@ -66,6 +68,7 @@ fn band(x: f32, w: f32) -> Rect {
 impl Calendar {
     /// Splits the window into the calendar list and the content column (`x0`, `w` in px).
     pub(super) fn layout_columns(&mut self, ui: &Ui) {
+        self.px_per_pt = ui.s;
         let full = self.full_w as f32;
         let side = if self.side_hidden || full / ui.pt(1.0) < SIDE_FOLD_PT { 0.0 } else { ui.pt(SIDE_PT).round() };
         self.x0 = side;
@@ -110,6 +113,20 @@ impl Calendar {
                     ToolbarItem::custom(B_TITLE, title, (ui.measure(title, MAC_BODY_PT, Weight::Bold) / k).ceil()),
                     ToolbarItem::flexible_space(),
                     ToolbarItem::button(B_QUICK, "Add"),
+                ]),
+                band(start, end - start),
+            ));
+            return bars;
+        }
+        if let Some(sheet) = &self.line_sheet {
+            let title = sheet.purpose.title();
+            bars.push((
+                Toolbar::new(vec![
+                    ToolbarItem::button(B_CANCEL, "Cancel"),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::custom(B_TITLE, title, (ui.measure(title, MAC_BODY_PT, Weight::Bold) / k).ceil()),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::button(B_LINE, "Done"),
                 ]),
                 band(start, end - start),
             ));
@@ -207,6 +224,7 @@ impl Calendar {
             B_CANCEL => Target::Cancel,
             B_GO => Target::GoConfirm,
             B_QUICK => Target::QuickAdd,
+            B_LINE => Target::LineDone,
             _ => Target::Save,
         })
     }
@@ -225,6 +243,8 @@ impl Calendar {
             nodes.extend(self.editor_nodes(ui));
         } else if self.goto.is_some() {
             nodes.extend(self.goto_nodes(ui));
+        } else if self.line_sheet.is_some() {
+            nodes.extend(self.line_nodes(ui));
         } else if self.quick_line.is_some() {
             nodes.extend(self.quick_nodes(ui));
         } else if self.searching() {
@@ -294,8 +314,14 @@ impl Calendar {
                 Target::AllDay => (203, Role::Toggle, "All-day", if draft.event.all_day { "on" } else { "off" }.to_string(), true),
                 Target::Toggle(Slot::Start) => (204, Role::Button, "Starts", String::new(), true),
                 Target::Toggle(Slot::End) => (205, Role::Button, "Ends", String::new(), true),
-                Target::Repeat => (206, Role::Button, "Repeat", store::REPEATS[draft.event.repeat as usize].to_string(), true),
-                Target::Alert => (207, Role::Button, "Alert", store::ALERTS[draft.event.alert as usize].to_string(), true),
+                Target::Repeat => (206, Role::Button, "Repeat", pickers::repeat_label(draft.rule.as_ref()), true),
+                Target::Alert => (207, Role::Button, "Alert", pickers::alarm_label(&draft.alarms), true),
+                Target::Calendar => {
+                    let cur = if self.extras.exists(draft.extra.calendar) { draft.extra.calendar } else { self.extras.default_id() };
+                    (212, Role::Button, "Calendar", self.extras.name_of(cur), true)
+                }
+                Target::Zone => (213, Role::Button, "Time Zone", extras::zone_title(draft.extra.tzid.as_deref()).to_string(), true),
+                Target::Travel => (214, Role::Button, "Travel Time", extras::travel_title(draft.extra.travel), true),
                 Target::Duplicate => (208, Role::Button, "Duplicate Event", String::new(), true),
                 Target::Export => (209, Role::Button, "Export Event", String::new(), true),
                 Target::Delete => (210, Role::Button, "Delete Event", String::new(), draft.existing),
@@ -332,6 +358,14 @@ impl Calendar {
             SidebarItem::header("Other"),
             SidebarItem::row(overlay::LAYER_HOLIDAYS, "Holidays").with_dot(dot(self.prefs.show_holidays, overlay::colour(0))),
         ];
+        // the calendars the user made sit under the built-in one, before the holidays and the subscriptions
+        let made: Vec<SidebarItem> = self
+            .extras
+            .calendars
+            .iter()
+            .map(|c| SidebarItem::row(overlay::LAYER_CAL + c.id, &c.name).with_dot(dot(c.shown, self.calendar_colour(c.id))))
+            .collect();
+        items.splice(2..2, made).for_each(drop);
         for (i, s) in self.subs.iter().enumerate() {
             items.push(SidebarItem::row(overlay::LAYER_SUBS + i as u32, &s.name).with_dot(dot(s.shown, overlay::colour(i + 1))));
         }

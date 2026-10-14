@@ -24,7 +24,7 @@ pub fn preview(q: &Quick, shown: Date) -> Vec<(&'static str, String)> {
 impl Calendar {
     /// Whether a sheet (Go to Date, Quick Event) is open: the window behind it takes no commands.
     pub(super) fn sheet_open(&self) -> bool {
-        self.goto.is_some() || self.quick_line.is_some()
+        self.goto.is_some() || self.quick_line.is_some() || self.line_sheet.is_some()
     }
 
     /// Opens the sheet with an empty line.
