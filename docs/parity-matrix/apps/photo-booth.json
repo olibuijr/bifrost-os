@@ -10,7 +10,7 @@
    "area": "toolbar",
    "apple": "shutter",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:194",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:320",
    "note": "",
    "wire": ""
   },
@@ -19,7 +19,7 @@
    "area": "toolbar",
    "apple": "mode switch",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:250",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:376",
    "note": "",
    "wire": ""
   },
@@ -28,7 +28,7 @@
    "area": "toolbar",
    "apple": "mode switch",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:205",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:331",
    "note": "",
    "wire": ""
   },
@@ -37,7 +37,7 @@
    "area": "settings",
    "apple": "countdown option",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:56",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:57",
    "note": "",
    "wire": ""
   },
@@ -55,7 +55,7 @@
    "area": "panel",
    "apple": "Effects browser",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:91",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:92",
    "note": "",
    "wire": ""
   },
@@ -72,17 +72,17 @@
    "feature": "Backdrops",
    "area": "panel",
    "apple": "Effects backdrops",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Skipped: needs a background segmentation model, none in the SDK",
-   "wire": "Background segmentation and replacement"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/backdrop.rs:194",
+   "note": "Four gradient backdrops over a picture of the empty scene (background subtraction, not a person-segmentation model; no photo or movie backdrops); built on parity/team-d-photo-booth; not yet verified on Midget",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Captures strip",
    "area": "view",
    "apple": "thumbnail strip",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:327",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:536",
    "note": "",
    "wire": ""
   },
@@ -91,7 +91,7 @@
    "area": "menu",
    "apple": "File > Export",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:314",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:440",
    "note": "",
    "wire": ""
   },
@@ -117,10 +117,10 @@
    "feature": "Full screen",
    "area": "menu",
    "apple": "View > Full Screen",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Skipped: no app-level full-screen API in the SDK; the shell Zoom action covers the window",
-   "wire": "Window full-screen toggle"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:492",
+   "note": "View > Full Screen Viewfinder hides the bars so the picture fills the window; the window itself goes full screen only through the shell's shortcut because an app cannot request it; built on parity/team-d-photo-booth; not yet verified on Midget",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Camera selection",
