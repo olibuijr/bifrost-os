@@ -18,12 +18,19 @@ drawing path yet, so they are models for apps and the renderer to call, not chan
   the platform's sign rules, tab stops in any order (`next_tab`, `tab_start`), line height with multiple and
   min/max limits (`line_height`), justification spacing (`extra_per_space`) and paragraph spacing fields.
 
+- **Ruby annotation layout** (`springboard/ui/src/ruby.rs`, `RubyAnnotation`, `layout`, `baseline_offset`,
+  `line_extra`). Places a reading aid beside its base run: the position before or after the base, the alignment
+  (center, start, distribute, line edge), the overhang into neighbouring text and the base widening when the
+  annotation is longer. The annotation size is a fraction of the base size. Already in the tree from an earlier
+  round; this round recorded it in the matrix as partial.
+
 ## Official API names mirrored
 
 - `CTFont` metric getters: `CTFontGetAscent`, `CTFontGetDescent`, `CTFontGetLeading`, `CTFontGetCapHeight`,
   `CTFontGetXHeight`, `CTFontGetUnderlinePosition`, `CTFontGetUnderlineThickness`. Source:
   https://developer.apple.com/documentation/coretext/ctfont
 - `CTFontCreateForString` (cascade): https://developer.apple.com/documentation/coretext/ctfontcreateforstring
+- `CTRubyAnnotation`, `kCTRubyAnnotationAttributeName`: https://developer.apple.com/documentation/coretext/ctrubyannotation
 - `CTParagraphStyle`, `CTParagraphStyleSpecifier`, `CTTextAlignment`, `CTTextTab`:
   https://developer.apple.com/documentation/coretext/ctparagraphstyle ,
   https://developer.apple.com/documentation/coretext/ctparagraphstylespecifier ,
@@ -46,13 +53,15 @@ drawing path yet, so they are models for apps and the renderer to call, not chan
 | Core Text | Font metrics | partial | springboard/render/src/font.rs (`line_metrics`, `LineMetrics`) |
 | Core Text | Character to glyph mapping | partial | springboard/render/src/font.rs (`face_for_char`, `cascade_runs`) |
 | Core Text | Paragraph styles and tab stops | partial | springboard/ui/src/paragraph.rs (`ParagraphStyle`, `TextTab`) |
+| Core Text | Ruby annotations | partial | springboard/ui/src/ruby.rs (`RubyAnnotation`, `layout`) |
 
-All three stay partial. Metrics and the cascade are functions on `Font` and on a slice of faces; apps still get
+All four stay partial. Metrics and the cascade are functions on `Font` and on a slice of faces; apps still get
 no font object or descriptor. The paragraph model is not yet read by the attributed string drawing in
 `springboard/sdk/src/attributed.rs`, and the spacing fields are stored but not applied.
 
 ## Not done
 
-- Kerning (no GPOS or kern reader), OpenType features, bidi, vertical text and ruby remain gaps.
+- Kerning (no GPOS or kern reader), OpenType features and bidi remain gaps. Ruby is a layout model with no caller
+  in the drawing path, so annotations are not drawn yet.
 - The cascade is not used by `Font::measure` or `Font::render`, so missing glyphs still draw as `.notdef`.
 - Nothing was built or run in this round (no cargo, by rule). Tests were written but not executed.

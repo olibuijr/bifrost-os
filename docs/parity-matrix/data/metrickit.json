@@ -94,9 +94,9 @@
     {
       "feature": "GPU and Metal frame metrics (GPUTimeMetric, MetalFrameRateMetric)",
       "apple": "GPUTimeMetric, MetalFrameRateMetric, PixelLuminanceMetric, AveragePixelLuminance",
-      "bifrost": "springboard/src/gpu/wl.rs (GPU presenter)",
-      "status": "gap",
-      "note": "The presenter does not measure GPU time or frame rate per layer for an app. docs/bifrost-ui.md states that per-process energy impact is missing."
+      "bifrost": "springboard/core/src/frame_metrics.rs",
+      "status": "partial",
+      "note": "Recorder keeps the last N presented frames of an app with GPU time per frame, mean and max GPU time, frame rate and dropped frames against the refresh period (frame_metrics::Recorder, Summary). The caller supplies the GPU time and presentation time; the presenter does not feed it yet, and no app reaches it, so per-layer measurement and pixel luminance remain missing. Built on parity/team-a-04; not yet verified on Midget."
     },
     {
       "feature": "Custom signpost intervals (SignpostIntervalMetric, mxSignpost)",
@@ -122,7 +122,7 @@
   ],
   "gaps": [
     "No app-facing report API: no MXMetricManager equivalent delivers daily metric reports or diagnostic reports to an app.",
-    "No per-app metric collection beyond ProcessInfo counters: time-in-use, launch and resume timing, network, disk and GPU totals are not kept per app.",
+    "No per-app metric collection beyond ProcessInfo counters: time-in-use, launch and resume timing, network, disk and GPU totals are not kept per app (frame_metrics has no caller yet).",
     "Crash and hang records are one-line log entries with no structured call-stack tree (CallStackTree, CallStackThread, CallStackFrame) available to apps.",
     "No exception diagnostics for memory or CPU limit kills, and no termination counts by category.",
     "No signposter (mxSignpost, SignpostIntervalMetric): signposts and spin reports remain planned in docs/milestone-unified-logging.md.",

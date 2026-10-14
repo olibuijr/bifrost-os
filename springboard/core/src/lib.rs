@@ -139,3 +139,4 @@ pub mod volume;
 pub mod identity;
 pub mod reachability;
 pub mod vlan_plan;
+pub mod frame_metrics;
