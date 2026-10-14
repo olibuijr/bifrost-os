@@ -211,6 +211,8 @@ pub struct Day {
     pub precip_sum: f64,
     /// highest chance of precipitation in the day, percent (0 when the answer has none)
     pub precip_prob: u8,
+    /// snowfall total of the day, centimetres (0 when the answer has none)
+    pub snow_sum: f64,
 }
 
 /// Air quality now, on the European index, with the concentrations the reading is made from.
@@ -446,6 +448,7 @@ pub fn parse_forecast(text: &str) -> Option<Forecast> {
                 sunset: clock("sunset"),
                 precip_sum: daily_at("precipitation_sum").unwrap_or(0.0).max(0.0),
                 precip_prob: daily_at("precipitation_probability_max").unwrap_or(0.0).clamp(0.0, 100.0) as u8,
+                snow_sum: daily_at("snowfall_sum").unwrap_or(0.0).max(0.0),
             })
         })
         .collect();
@@ -454,7 +457,7 @@ pub fn parse_forecast(text: &str) -> Option<Forecast> {
 
 pub fn forecast_url(loc: &Location) -> String {
     format!(
-        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,pressure_msl,is_day&hourly=temperature_2m,weather_code,is_day,precipitation_probability,precipitation,visibility,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_sum,precipitation_probability_max&minutely_15=precipitation&forecast_minutely_15=8&forecast_days=10&timezone=auto",
+        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,pressure_msl,is_day&hourly=temperature_2m,weather_code,is_day,precipitation_probability,precipitation,visibility,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_sum,snowfall_sum,precipitation_probability_max&minutely_15=precipitation&forecast_minutely_15=8&forecast_days=10&timezone=auto",
         loc.lat, loc.lon
     )
 }
@@ -780,7 +783,7 @@ mod tests {
 
     const FORECAST: &str = r#"{"current":{"time":"2026-10-04T13:20","temperature_2m":7.4,"apparent_temperature":4.1,"relative_humidity_2m":81,"weather_code":61,"wind_speed_10m":22.5,"wind_direction_10m":315,"wind_gusts_10m":41.0,"dew_point_2m":4.2,"pressure_msl":1008.4,"is_day":1},
         "hourly":{"time":["2026-10-04T12:00","2026-10-04T13:00","2026-10-04T18:00"],"temperature_2m":[6.0,7.0,8.0],"weather_code":[3,61,2],"is_day":[1,1,0],"precipitation_probability":[20,70,null],"precipitation":[0.1,1.4,0.0],"visibility":[24000,9000,15000],"pressure_msl":[1009.0,1008.4,1004.0]},
-        "daily":{"time":["2026-10-04","2026-10-05"],"weather_code":[61,0],"temperature_2m_max":[8.2,10.0],"temperature_2m_min":[3.0,2.5],"uv_index_max":[2.4,3.0],"sunrise":["2026-10-04T07:41","2026-10-05T07:44"],"sunset":["2026-10-04T18:20","2026-10-05T18:17"],"precipitation_sum":[6.5,0.0],"precipitation_probability_max":[85,null]},
+        "daily":{"time":["2026-10-04","2026-10-05"],"weather_code":[61,0],"temperature_2m_max":[8.2,10.0],"temperature_2m_min":[3.0,2.5],"uv_index_max":[2.4,3.0],"sunrise":["2026-10-04T07:41","2026-10-05T07:44"],"sunset":["2026-10-04T18:20","2026-10-05T18:17"],"precipitation_sum":[6.5,0.0],"snowfall_sum":[0.0,2.5],"precipitation_probability_max":[85,null]},
         "minutely_15":{"time":["2026-10-04T13:00","2026-10-04T13:15","2026-10-04T13:30","2026-10-04T13:45","2026-10-04T14:00","2026-10-04T14:15"],"precipitation":[0.0,0.4,0.6,0.0,0.0,0.0]}}"#;
 
     #[test]
@@ -806,6 +809,7 @@ mod tests {
         assert_eq!((now.precip_prob, now.precip_mm, now.visibility_m, now.pressure_hpa), (70, 1.4, Some(9000.0), Some(1008.4)));
         assert_eq!(f.hours[1].precip_prob, 0, "a null chance is zero");
         assert_eq!((f.days[0].precip_sum, f.days[0].precip_prob), (6.5, 85));
+        assert_eq!((f.days[0].snow_sum, f.days[1].snow_sum), (0.0, 2.5), "snowfall is kept per day");
         assert_eq!(f.days[1].precip_prob, 0);
     }
 
@@ -843,7 +847,7 @@ mod tests {
     #[test]
     fn the_forecast_url_asks_for_every_field_the_screen_shows() {
         let url = forecast_url(&Location { name: "A".into(), region: String::new(), lat: 64.1, lon: -21.9 });
-        for field in ["wind_direction_10m", "wind_gusts_10m", "dew_point_2m", "pressure_msl", "precipitation_probability", "visibility", "precipitation_sum", "precipitation_probability_max", "minutely_15=precipitation"] {
+        for field in ["wind_direction_10m", "wind_gusts_10m", "dew_point_2m", "pressure_msl", "precipitation_probability", "visibility", "precipitation_sum", "snowfall_sum", "precipitation_probability_max", "minutely_15=precipitation"] {
             assert!(url.contains(field), "{field} in {url}");
         }
     }

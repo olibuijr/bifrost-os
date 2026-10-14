@@ -1576,7 +1576,14 @@ impl Weather {
         let delta = f.current.feels.round() - f.current.temp.round();
         let feels_note = if delta.abs() < 1.0 { "Similar to the actual temperature" } else if delta < 0.0 { "Wind makes it feel colder" } else { "Humidity makes it feel warmer" };
         let next_24h_mm: f64 = f.hours.iter().map(|h| h.precip_mm).sum();
-        let precip_note = if next_24h_mm >= 0.05 { format!("{} in the next 24 hours", insights::precipitation_text(next_24h_mm, units)) } else { "None expected in the next 24 hours".to_string() };
+        let snow_today = today.map_or(0.0, |d| d.snow_sum);
+        let precip_note = if snow_today >= 0.05 {
+            format!("Snow: {} of it", insights::snow_text(snow_today, units))
+        } else if next_24h_mm >= 0.05 {
+            format!("{} in the next 24 hours", insights::precipitation_text(next_24h_mm, units))
+        } else {
+            "None expected in the next 24 hours".to_string()
+        };
         let visibility = f.hours.first().and_then(|h| h.visibility_m);
         let pressure = f.current.pressure_hpa.or_else(|| f.hours.first().and_then(|h| h.pressure_hpa));
         let (average_value, average_note) = insights::average_text(today.map_or(f.current.temp, |d| d.max), f.average_high, units);

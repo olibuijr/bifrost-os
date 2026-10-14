@@ -240,6 +240,14 @@ pub fn precipitation_text(mm: f64, units: Units) -> String {
     }
 }
 
+/// Snowfall, given in centimetres: "2.5 cm", or "1.0 in" with the imperial set.
+pub fn snow_text(cm: f64, units: Units) -> String {
+    match units {
+        Units::Celsius => format!("{cm:.1} cm"),
+        Units::Fahrenheit => format!("{:.1} in", cm / 2.54),
+    }
+}
+
 /// Visibility: "24 km" or "9.0 km", and "15 mi" with the imperial set.
 pub fn visibility_text(metres: f64, units: Units) -> String {
     let (value, unit) = match units {
@@ -689,6 +697,12 @@ mod tests {
         let steady = with_pressure(&[Some(1010.0), Some(1010.4)]);
         assert!(near(pressure_dial_angle(&steady), 6.0), "0.4 hPa is 6 degrees off straight up");
         assert_eq!(pressure_dial_angle(&with_pressure(&[Some(1010.0)])), None);
+    }
+
+    #[test]
+    fn snowfall_is_given_in_centimetres_or_inches() {
+        assert_eq!(snow_text(2.5, Units::Celsius), "2.5 cm");
+        assert_eq!(snow_text(2.54, Units::Fahrenheit), "1.0 in");
     }
 
     #[test]
