@@ -57,6 +57,7 @@ pub mod bluetooth_service;
 pub mod login_items_approval;
 pub mod network_path;
 pub mod dock_tile;
+pub mod quick_actions;
 pub mod now_playing;
 pub mod notification_schedule;
 pub mod screens;
@@ -112,6 +113,7 @@ pub struct Event {
 pub fn all() -> Vec<Box<dyn SystemService>> {
     vec![
         Box::new(dock_tile::DockService),
+        Box::new(quick_actions::QuickActionsService),
         Box::new(system::System),
         Box::new(pasteboard_types::Pasteboards::default()),
         Box::new(keychain_groups::KeychainGroups::default()),

@@ -25,6 +25,8 @@ pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
 pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 
 pub const MAX_PACKET: usize = 16 * 1024;
+/// The most user info pairs a quick action may carry on the wire.
+pub const MAX_QUICK_INFO: u32 = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecodeError {
@@ -375,6 +377,8 @@ pub enum ToApp {
     Activate(u64),
     Context {x:f32,y:f32},
     ContextAction(u32),
+    /// The user chose a Home Screen quick action: its type and the user info the app gave it.
+    QuickAction { kind: String, user_info: Vec<(String, String)> },
     Open { url: String },
     /// the shell clipboard text, sent on Resume and when it changes
     Clipboard { text: String },
@@ -816,6 +820,7 @@ mod tag {
     pub const ACCESSORY_ACTION: u32 = 63;
     pub const INPUT_SOURCE: u32 = 0x162;
     pub const ACCENT_HOLD: u32 = 0x163;
+    pub const QUICK_ACTION: u32 = 0x164;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1033,6 +1038,7 @@ impl ToApp {
             ToApp::Context{x,y}=>{u32_(&mut b,tag::CONTEXT);f32_(&mut b,*x);f32_(&mut b,*y);},
             ToApp::ContextAction(id)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);},
             ToApp::MenuAction(id)=>{u32_(&mut b,tag::MENU_ACTION);u32_(&mut b,*id);},
+            ToApp::QuickAction{kind,user_info}=>{u32_(&mut b,tag::QUICK_ACTION);str_(&mut b,kind);u32_(&mut b,user_info.len() as u32);for (k,v) in user_info {str_(&mut b,k);str_(&mut b,v);}},
             ToApp::Touch { kind, id, x, y, t_ms } => {
                 u32_(&mut b, tag::TOUCH);
                 b.push(*kind as u8);
@@ -1193,6 +1199,7 @@ impl ToApp {
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
             tag::CONTEXT_ACTION=>ToApp::ContextAction(r.u32()?),
             tag::MENU_ACTION=>ToApp::MenuAction(r.u32()?),
+            tag::QUICK_ACTION=>{let kind=r.str()?;let n=r.u32()?;if n>MAX_QUICK_INFO{return Err(DecodeError::BadValue);}let mut user_info=Vec::new();for _ in 0..n{user_info.push((r.str()?,r.str()?));}ToApp::QuickAction{kind,user_info}},
             tag::AX_SET => {
                 let low = r.u32()? as u64;
                 let id = low | ((r.u32()? as u64) << 32);
@@ -2391,5 +2398,25 @@ mod frame_damage_tests {
         let bytes = ToShell::Frame { buf: 0, damage: Vec::new() }.encode();
         assert_eq!(bytes.len(), 12, "tag, buffer and a zero count");
         assert_eq!(ToShell::decode(&bytes), Ok(ToShell::Frame { buf: 0, damage: Vec::new() }));
+    }
+}
+
+#[cfg(test)]
+mod quick_action_tests {
+    use super::*;
+
+    #[test]
+    fn a_chosen_quick_action_round_trips_with_its_user_info() {
+        let message = ToApp::QuickAction { kind: "compose".into(), user_info: vec![("account".into(), "work".into())] };
+        assert_eq!(ToApp::decode(&message.encode()), Ok(message));
+        let bare = ToApp::QuickAction { kind: "search".into(), user_info: Vec::new() };
+        assert_eq!(ToApp::decode(&bare.encode()), Ok(bare));
+    }
+
+    #[test]
+    fn a_quick_action_with_too_much_user_info_is_refused() {
+        let many: Vec<(String, String)> = (0..=MAX_QUICK_INFO).map(|n| (format!("k{n}"), "v".into())).collect();
+        let bytes = ToApp::QuickAction { kind: "x".into(), user_info: many }.encode();
+        assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
     }
 }

@@ -4,7 +4,7 @@
  "macos_since": "",
  "status": "partial",
  "bifrost": "springboard/ui/src/menu.rs, springboard/ui/src/keys.rs, springboard/ui/src/tracking.rs, springboard/ui/src/cursor.rs, springboard/ui/src/focus.rs, springboard/src/shell/editmenu.rs",
- "summary": "Menus, pop-up buttons, key equivalents, a context menu request from apps, tracking areas, a cursor stack, a key-view loop and an on-screen edit bubble exist. Context menu interactions with previews, edit menu interactions for SDK views, pointer effects, band selection, focus effects and pencil interactions are missing.",
+ "summary": "Menus, pop-up buttons, key equivalents, Home Screen quick actions in the Dock menu, a context menu request from apps, tracking areas, a cursor stack, a key-view loop and an on-screen edit bubble exist. Context menu interactions with previews, edit menu interactions for SDK views, pointer effects, band selection, focus effects and pencil interactions are missing.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -101,9 +101,9 @@
   {
    "feature": "Quick actions",
    "apple": "UIApplicationShortcutItem",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "see uikit-app-scene-lifecycle"
+   "bifrost": "springboard/ui/src/quick_actions.rs, springboard/sdk/src/quick_actions.rs, springboard/sdk/src/runtime.rs, springboard/proto/src/lib.rs, springboard/src/shell/quick_actions.rs, springboard/src/shell/services/quick_actions.rs, springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-quick-actions; not yet verified on the tablet. Static [[quick_action]] manifest items and dynamic items from the SDK are shown in the Dock's menu on the desktop form factor (secondary click) and delivered as Input::QuickAction; the tablet draws no Dock menu and its Home Screen icon long press still starts edit mode"
   }
  ],
  "gaps": [

@@ -29,6 +29,7 @@ mod folders;
 mod dock_stack;
 mod homeedit;
 mod jiggle;
+mod quick_actions;
 pub mod camera;
 pub mod magnifier;
 pub mod calendar;
