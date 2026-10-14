@@ -101,9 +101,9 @@
   {
    "feature": "Photos project extensions (macOS)",
    "apple": "PHProject, PHProjectExtensionController, PHProjectChangeRequest, PHProjectSection",
-   "bifrost": "none found",
-   "status": "gap",
-   "note": "Blocked: the shell's photo library has no project model and no extension point, so there is nothing for an extension to attach to. Needs a project model in springboard/src/shell/photos/ first, then an extension host."
+   "bifrost": "springboard/ui/src/photo_project.rs (Project, Project::apply, Change)",
+   "status": "partial",
+   "note": "The project model (sections in order, asset membership, and change lists that apply all or nothing) is tested headless in springboard/ui/tests/parity_sdk-rest-03.rs. Gap: there is no PHProjectExtensionController or extension host, and the photo library does not store projects yet."
   },
   {
    "feature": "Change observation of the library",
