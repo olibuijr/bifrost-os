@@ -134,6 +134,7 @@ pub mod today;
 pub mod video;
 pub mod ui;
 pub mod splitview;
+pub mod stage_strip;
 mod desk;
 mod desk_occlusion;
 pub mod window_fx;
