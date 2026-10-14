@@ -552,6 +552,9 @@ mod tests {
 /// Shared list scroll physics.
 pub mod scroll;
 pub mod geometry;
+pub mod drawable_setup;
+pub mod sprite_batch;
+pub mod video_decoder_plan;
 pub mod stack;
 pub mod layout_protocol;
 pub mod split;
