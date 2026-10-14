@@ -33,8 +33,8 @@
    "area": "view",
    "apple": "View menu process filters",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:126",
-   "note": "System, Active, Inactive added (sidebar + View menu). Windowed, GPU and Selected Processes remain.",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:194",
+   "note": "All, Mine, Others, System, Active, Inactive, Windowed (shell window list), GPU (DRM fdinfo) and Selected (pins the selection) in the sidebar and View > Filter Processes. Windowed depends on the shell reporting the owner process of each window; GPU covers own-user processes only.",
    "wire": "Add System, Active, Inactive, Windowed, GPU and Selected Processes filters to model::Filter (model.rs:135 keep) and as sidebar rows in window.rs:330 plus a View menu in main.rs main_menu; windowed needs the shell window list over the app SDK, active/inactive uses recent CPU ticks."
   },
   {
@@ -60,8 +60,8 @@
    "area": "menu",
    "apple": "View > Send Signal to Process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/main.rs:88",
-   "note": "Process > Send Signal submenu with eight signals; no signal sheet.",
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:436",
+   "note": "Process > Send Signal to Process... opens a sheet with the eight signals (TERM preselected, Send/Cancel, Return/Escape); the submenu with direct items stays. Own-user processes only.",
    "wire": "Add a Process > Send Signal... item in main.rs:72 that opens a sheet with a signal popup (HUP, INT, KILL, TERM, USR1, USR2, STOP, CONT) and calls window.rs signal_selected(sig)."
   },
   {
@@ -69,35 +69,35 @@
    "area": "panel",
    "apple": "ProcessInspector.nib: Memory, Statistics, Open Files and Ports tabs",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/inspect.rs:63",
-   "note": "Inspector card replaces the graph and lists command, exe, threads and open files/sockets; no separate window, no Memory/Statistics tabs, no parent process or reveal-in-file-manager link.",
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:519",
+   "note": "Inspector sheet (cmd+I) with Memory, Statistics and Open Files and Ports segments, parent process, faults, context switches, sockets with addresses, and Copy, Sample and Reveal in Files buttons. A modal sheet, not a separate window; Reveal needs the file under the home folder to get a grant.",
    "wire": "Turn the inspector into its own window with Memory / Statistics / Open Files and Ports segments (inspect.rs adds parent pid, faults, context switches from /proc/<pid>/status), plus a Reveal in Files button for exe."
   },
   {
    "feature": "Sample Process",
    "area": "menu",
    "apple": "View > Sample Process (Sample.nib)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs:68",
+   "note": "Process > Sample Process and the Sample toolbar button take 10 s of thread samples from /proc/<pid>/task/*/{stack,wchan}, show the aggregated report in a sheet with progress, Stop, Save... (save panel) and Copy. Reports kernel waits; user-space call graphs would need a debugger interface.",
    "wire": "Add Process > Sample Process: read /proc/<pid>/task/*/stack and wchan over N seconds in a new sample_proc.rs, show the text in a window with Save..."
   },
   {
    "feature": "Run Spindump / System Diagnostics",
    "area": "menu",
    "apple": "View > Run Spindump, Run System Diagnostics",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/diagnostics.rs:60",
+   "note": "View > Run System Diagnostics... collects /proc counters, process list, disks, sockets, inhibitors, kernel log, journal tail and failed units on a thread with a progress sheet, zips them and offers the save panel. No spindump equivalent.",
    "wire": "Add View > Run System Diagnostics that gathers /proc snapshots, journal tail and dmesg into a tarball on the Desktop via a thread, with a progress sheet."
   },
   {
    "feature": "Show Deltas for Process",
    "area": "menu",
    "apple": "View > Show Deltas for Process",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:478",
+   "note": "View > Show Deltas for Process stores a per-pid baseline; the CPU Time, Idle Wake Ups, Bytes Read and Bytes Written columns and their sort use the difference, and the footer says so.",
    "wire": "Store a per-pid baseline when toggled in window.rs and show counters relative to it in the table columns."
   },
   {
@@ -105,8 +105,8 @@
    "area": "menu",
    "apple": "View > Columns",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:visible_columns",
-   "note": "View > Columns toggles User, Threads, PID, persisted. Other reference columns (Ports, Kind, Real Mem, Purgeable, CPU Time, Idle Wake Ups) remain.",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:97",
+   "note": "View > Columns also adds Parent PID, State, Real Mem, Private Mem, Compressed Mem, CPU Time, Idle Wake Ups, Bytes Read, Bytes Written, % GPU and Preventing Sleep (hidden by default, persisted). Ports, Kind and Purgeable have no Linux source and remain.",
    "wire": "Add View > Columns with checkable items per tab (Threads, PID, User, Ports, Kind, Real Mem, Private Mem, Purgeable, Compressed, CPU Time, Idle Wake Ups, Bytes Read/Written...) persisted in app prefs; model::Tab::columns filters by the set."
   },
   {
@@ -123,26 +123,26 @@
    "area": "view",
    "apple": "CPU tab footer graph, Window > CPU History",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:144",
-   "note": "Graph card per tab with history; no per-core history and no floating CPU History window.",
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:502",
+   "note": "Window > CPU History (cmd+3) shows one history strip per core from /proc/stat cpuN lines; the CPU graph card lists system, user, idle, threads and processes. In a sheet, not a floating window.",
    "wire": "Record per-core shares in sample.rs from /proc/stat cpuN lines and add Window > CPU History opening a floating panel with one strip per core."
   },
   {
    "feature": "Floating CPU Usage window and Keep on Top",
    "area": "menu",
    "apple": "Window > CPU Usage, Keep CPU Windows on Top",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:473",
+   "note": "Window > CPU Usage (cmd+2) shows per-core bars in a sheet. The app SDK has no floating, always-on-top secondary window, so Keep CPU Windows on Top is not offered.",
    "wire": "Add a small always-on-top window via the SDK floating-panel level showing per-core bars."
   },
   {
    "feature": "Dock icon modes (CPU/Network/Disk/Memory graph)",
    "area": "settings",
    "apple": "View > Dock Icon",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:548",
+   "note": "View > Dock Icon: application icon, CPU, memory, disk or network reading shown as the Dock tile badge text plus a progress bar for CPU and memory (dock_tile service, persisted). The SDK cannot draw a live graph image into the tile.",
    "wire": "Expose a dock badge/icon-image API in the SDK and add View > Dock Icon radio menu that renders the chosen live graph into the dock tile."
   },
   {
@@ -150,8 +150,8 @@
    "area": "view",
    "apple": "Memory tab footer: pressure graph, app/wired/compressed, cached, swap",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:166",
-   "note": "Pressure from PSI; detail line shows cached, shared, buffers, compressed (zswap) and swap. No separate breakdown rows or pressure graph.",
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:131",
+   "note": "The Memory graph plots used memory and pressure (PSI) together and lists physical, used, cached, shared, buffers, compressed and swap as figures beside it. No wired/app-memory split exists on Linux.",
    "wire": "Extend sample.rs parse_meminfo to Shmem, Buffers, SwapCached and Zswap, and show the breakdown rows in the Memory graph card (draw.rs graph())."
   },
   {
@@ -159,8 +159,8 @@
    "area": "view",
    "apple": "Energy tab: Energy Impact, average, App Nap, Preventing Sleep",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:146",
-   "note": "Energy impact is an estimate from CPU; no preventing-sleep or 12-hour average.",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:367",
+   "note": "Energy tab adds 12 hr Power (running mean per process name over about twelve hours) and Preventing Sleep (systemd-inhibit sleep and idle locks, read every 10 s while the tab or column is shown). App Nap has no equivalent.",
    "wire": "Read inhibitors from logind (systemd-inhibit --list) for a Preventing Sleep column and keep a rolling 12-hour mean per process name."
   },
   {
@@ -177,17 +177,17 @@
    "area": "view",
    "apple": "Network tab: sent/received bytes and packets per process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:70",
-   "note": "Shows interfaces with totals, not per process; no packets.",
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:84",
+   "note": "Interface rows add packet totals and the card lists packets per second and data totals. Per-process traffic still needs socket accounting (sock_diag or eBPF) and is not done.",
    "wire": "Add per-process socket attribution (sock_diag) or at least packet counts from /proc/net/dev in model.rs:70 columns."
   },
   {
    "feature": "GPU tab / GPU History",
    "area": "view",
    "apple": "Window > GPU History, GPU columns",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:324",
+   "note": "GPU tab with % GPU per process from DRM fdinfo engine times (own-user processes), system busy from the driver or the sum, GPU filter and Window > GPU History (cmd+4). Needs a driver that publishes fdinfo.",
    "wire": "Read DRM fdinfo (drm-engine-*) per process for a GPU % column and a GPU History window."
   },
   {
@@ -204,8 +204,8 @@
    "area": "menu",
    "apple": "Edit > Copy",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/main.rs:130",
-   "note": "Edit > Copy (cmd+C) copies the row as tab-separated text.",
+   "bifrost": "springboard/apps/activity-desktop/src/main.rs:233",
+   "note": "Edit > Copy (cmd+C) copies the selected row as tab-separated text, following the tab.",
    "wire": "Handle Edit > Copy in main.rs menu_action to put the selected row's columns as tab-separated text on the pasteboard."
   },
   {

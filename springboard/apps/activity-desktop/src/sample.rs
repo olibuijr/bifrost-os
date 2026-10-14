@@ -69,12 +69,14 @@ impl Memory {
     }
 }
 
-/// One network interface from `/proc/net/dev`, with cumulative byte counters.
+/// One network interface from `/proc/net/dev`, with cumulative byte and packet counters.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Iface {
     pub name: String,
     pub rx: u64,
     pub tx: u64,
+    pub rx_packets: u64,
+    pub tx_packets: u64,
 }
 
 /// An interface with its rates over the last interval (bytes per second).
@@ -85,10 +87,15 @@ pub struct IfaceRate {
     pub tx_bps: f64,
     pub rx_total: u64,
     pub tx_total: u64,
+    /// Packets per second over the last interval, and the cumulative counts.
+    pub rx_pps: f64,
+    pub tx_pps: f64,
+    pub rx_packets: u64,
+    pub tx_packets: u64,
 }
 
 /// One process, as the table shows it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProcSample {
     pub pid: u32,
     pub name: String,
@@ -101,6 +108,26 @@ pub struct ProcSample {
     pub threads: u32,
     pub read_bps: f64,
     pub write_bps: f64,
+    pub ppid: u32,
+    /// Scheduler state letter from `stat` (R, S, D, T, Z ...).
+    pub state: char,
+    /// Anonymous resident memory (`RssAnon`), the closest reading to private memory.
+    pub private_mem: u64,
+    /// Memory this process has in swap (`VmSwap`).
+    pub swapped: u64,
+    /// User plus system CPU time so far, in ticks.
+    pub cpu_ticks: u64,
+    /// Voluntary context switches so far: how often the process woke up to run.
+    pub wakeups: u64,
+    /// Bytes read and written so far.
+    pub read_total: u64,
+    pub write_total: u64,
+    /// Share of the GPU's engines used over the last interval, in percent (0 when not sampled).
+    pub gpu: f32,
+    /// Holds a sleep or idle inhibitor lock.
+    pub prevents_sleep: bool,
+    /// Mean energy score of processes with this name over about twelve hours.
+    pub energy_avg: f32,
 }
 
 /// Everything read in one pass.
@@ -112,12 +139,20 @@ pub struct Snapshot {
     pub disk_write_bps: f64,
     pub ifaces: Vec<IfaceRate>,
     pub procs: Vec<ProcSample>,
+    /// Busy share of each core over the last interval, in percent.
+    pub cores: Vec<f32>,
+    /// Memory pressure (`some avg10`) in percent, when the kernel reports it.
+    pub pressure: Option<f32>,
+    /// Busy share of the GPU in percent, read from the driver or summed from the processes.
+    pub gpu_busy: f32,
 }
 
 /// The fields of `/proc/<pid>/stat` the monitor uses.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProcStat {
     pub name: String,
+    pub state: char,
+    pub ppid: u32,
     /// User plus system time, in ticks.
     pub ticks: u64,
     pub threads: u32,
@@ -134,6 +169,17 @@ pub fn parse_proc_stat(text: &str) -> Option<CpuTotals> {
     // user nice system idle iowait irq softirq steal
     let total: u64 = f.iter().take(8).sum();
     Some(CpuTotals { total, idle: get(3) + get(4), user: get(0) + get(1), system: get(2) + get(5) + get(6) })
+}
+
+/// Parses the per-core `cpuN` lines of `/proc/stat`, in core order.
+pub fn parse_proc_stat_cores(text: &str) -> Vec<CpuTotals> {
+    text.lines()
+        .filter(|l| l.starts_with("cpu") && l.as_bytes().get(3).is_some_and(|b| b.is_ascii_digit()))
+        .filter_map(|l| {
+            let rest = l.split_once(' ')?.1;
+            parse_proc_stat(&format!("cpu  {rest}"))
+        })
+        .collect()
 }
 
 /// The CPU shares between two readings of `/proc/stat`.
@@ -212,7 +258,7 @@ pub fn parse_netdev(text: &str) -> Vec<Iface> {
             if n.len() < 9 {
                 return None;
             }
-            Some(Iface { name: name.trim().to_string(), rx: n[0], tx: n[8] })
+            Some(Iface { name: name.trim().to_string(), rx: n[0], tx: n[8], rx_packets: n[1], tx_packets: n[9] })
         })
         .collect()
 }
@@ -227,13 +273,133 @@ pub fn parse_stat(text: &str) -> Option<ProcStat> {
     let utime: u64 = rest.get(11)?.parse().ok()?;
     let stime: u64 = rest.get(12)?.parse().ok()?;
     let threads: u32 = rest.get(17)?.parse().ok()?;
-    Some(ProcStat { name, ticks: utime + stime, threads })
+    let state = rest.first()?.chars().next()?;
+    let ppid: u32 = rest.get(1)?.parse().ok()?;
+    Some(ProcStat { name, state, ppid, ticks: utime + stime, threads })
 }
 
 /// The real user id: the first number of the `Uid:` line of `/proc/<pid>/status`.
 pub fn parse_uid(status: &str) -> Option<u32> {
     let line = status.lines().find(|l| l.starts_with("Uid:"))?;
     line.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// The fields of `/proc/<pid>/status` beyond the name that the table and the inspector use.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StatusExtras {
+    pub uid: Option<u32>,
+    pub ppid: u32,
+    pub rss_anon: u64,
+    pub rss_file: u64,
+    pub rss_shmem: u64,
+    pub swap: u64,
+    pub virt: u64,
+    pub voluntary: u64,
+    pub involuntary: u64,
+}
+
+/// Parses `/proc/<pid>/status`. Memory lines are in kB there, bytes here; missing lines stay zero.
+pub fn parse_status(text: &str) -> StatusExtras {
+    let mut s = StatusExtras { uid: parse_uid(text), ..StatusExtras::default() };
+    for line in text.lines() {
+        let Some((key, rest)) = line.split_once(':') else { continue };
+        let n: u64 = rest.split_whitespace().next().and_then(|v| v.parse().ok()).unwrap_or(0);
+        match key {
+            "PPid" => s.ppid = n as u32,
+            "RssAnon" => s.rss_anon = n * 1024,
+            "RssFile" => s.rss_file = n * 1024,
+            "RssShmem" => s.rss_shmem = n * 1024,
+            "VmSwap" => s.swap = n * 1024,
+            "VmSize" => s.virt = n * 1024,
+            "voluntary_ctxt_switches" => s.voluntary = n,
+            "nonvoluntary_ctxt_switches" => s.involuntary = n,
+            _ => {}
+        }
+    }
+    s
+}
+
+/// The engine time a DRM `fdinfo` file reports, in nanoseconds, with the client id it belongs to. A file that is not
+/// a DRM client gives `None`. Several descriptors can share one client, so the caller counts each client once.
+pub fn parse_drm_fdinfo(text: &str) -> Option<(String, u64)> {
+    let mut client = None;
+    let mut driver = false;
+    let mut ns = 0u64;
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once(':') else { continue };
+        let value = value.trim();
+        if key == "drm-driver" {
+            driver = true;
+        } else if key == "drm-client-id" {
+            client = Some(value.to_string());
+        } else if key.starts_with("drm-engine-") && !key.starts_with("drm-engine-capacity") {
+            ns += value.split_whitespace().next().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        }
+    }
+    driver.then(|| (client.unwrap_or_default(), ns))
+}
+
+/// The pids that hold a sleep or idle inhibitor lock, from `systemd-inhibit --list` output. The columns are WHO, UID,
+/// USER, PID, COMM, WHAT, WHY, MODE; WHO and WHY may hold spaces, so a line is searched for the numeric UID, the user
+/// name and the numeric PID in a row.
+pub fn parse_inhibitors(text: &str) -> Vec<u32> {
+    let mut pids = Vec::new();
+    for line in text.lines() {
+        let t: Vec<&str> = line.split_whitespace().collect();
+        let Some(i) = (0..t.len().saturating_sub(2)).find(|&i| t[i].parse::<u32>().is_ok() && t[i + 1].parse::<u32>().is_err() && t[i + 2].parse::<u32>().is_ok()) else { continue };
+        let what = t.get(i + 4).copied().unwrap_or("");
+        if what.split(':').any(|w| w == "sleep" || w == "idle") {
+            if let Ok(pid) = t[i + 2].parse() {
+                pids.push(pid);
+            }
+        }
+    }
+    pids.sort_unstable();
+    pids.dedup();
+    pids
+}
+
+/// Window of the running mean behind the Energy tab's 12 hour column, in seconds.
+pub const ENERGY_WINDOW_SECS: f64 = 12.0 * 3600.0;
+
+/// One step of a running mean: a plain average while few samples exist, then an exponential one that spans the
+/// window. `n` counts the samples including this one.
+pub fn blend_average(avg: f64, n: u64, sample: f64, dt_secs: f64) -> f64 {
+    let alpha = (1.0 / n.max(1) as f64).max(dt_secs / ENERGY_WINDOW_SECS).min(1.0);
+    avg + (sample - avg) * alpha
+}
+
+/// How often the inhibitor list is read, in milliseconds (it starts a process).
+const INHIBIT_EVERY_MS: f64 = 10_000.0;
+
+/// The busy percentage a graphics driver publishes, from the first `gpu_busy_percent` file under the DRM cards.
+fn read_gpu_busy_percent() -> Option<f32> {
+    let cards = fs::read_dir("/sys/class/drm").ok()?;
+    for card in cards.flatten() {
+        if let Some(v) = read_file(&format!("{}/device/gpu_busy_percent", card.path().display())).and_then(|t| t.trim().parse::<f32>().ok()) {
+            return Some(v);
+        }
+    }
+    None
+}
+
+/// The engine time of the DRM clients of one process, in nanoseconds. Only descriptors that point at a render node
+/// are read, and each client counts once.
+fn read_gpu_ns(pid: u32) -> u64 {
+    let base = format!("/proc/{pid}");
+    let Ok(fds) = fs::read_dir(format!("{base}/fd")) else { return 0 };
+    let mut clients: HashMap<String, u64> = HashMap::new();
+    for fd in fds.flatten() {
+        let Ok(target) = fs::read_link(fd.path()) else { continue };
+        if !target.to_string_lossy().starts_with("/dev/dri/") {
+            continue;
+        }
+        let name = fd.file_name().to_string_lossy().into_owned();
+        if let Some((client, ns)) = read_file(&format!("{base}/fdinfo/{name}")).and_then(|t| parse_drm_fdinfo(&t)) {
+            clients.insert(client, ns);
+        }
+    }
+    clients.values().sum()
 }
 
 /// Resident pages: the second field of `/proc/<pid>/statm`.
@@ -280,6 +446,16 @@ pub struct Sampler {
     net: HashMap<String, (u64, u64)>,
     procs: HashMap<u32, (u64, u64, u64)>,
     users: HashMap<u32, String>,
+    cores: Vec<CpuTotals>,
+    packets: HashMap<String, (u64, u64)>,
+    gpu_ns: HashMap<u32, u64>,
+    energy_avg: HashMap<String, (f64, u64)>,
+    sleep_blockers: Vec<u32>,
+    inhibit_ms: Option<f64>,
+    /// Read the DRM clients of every process (costs a scan of the descriptor tables); on while a GPU view is shown.
+    pub gpu_enabled: bool,
+    /// Read the sleep inhibitors (starts a process every few seconds); on while the Energy tab is shown.
+    pub energy_enabled: bool,
     /// The user id of this process; its processes are the ones the monitor may quit.
     pub own_uid: u32,
 }
@@ -310,6 +486,9 @@ impl Sampler {
             }
             _ => CpuShare::default(),
         };
+        let core_totals = read_file("/proc/stat").map(|t| parse_proc_stat_cores(&t)).unwrap_or_default();
+        let cores: Vec<f32> = core_totals.iter().enumerate().map(|(i, now)| self.cores.get(i).map_or(0.0, |prev| cpu_share(*prev, *now).busy)).collect();
+        self.cores = core_totals;
         let memory = read_file("/proc/meminfo").map(|t| parse_meminfo(&t)).unwrap_or_default();
 
         let (read, written) = read_file("/proc/diskstats").map(|t| parse_diskstats(&t)).unwrap_or((0, 0));
@@ -326,23 +505,40 @@ impl Sampler {
             }
             let (prx, ptx) = self.net.get(&iface.name).copied().unwrap_or((iface.rx, iface.tx));
             self.net.insert(iface.name.clone(), (iface.rx, iface.tx));
+            let (prp, ptp) = self.packets.get(&iface.name).copied().unwrap_or((iface.rx_packets, iface.tx_packets));
+            self.packets.insert(iface.name.clone(), (iface.rx_packets, iface.tx_packets));
             ifaces.push(IfaceRate {
                 rx_bps: rate(iface.rx.saturating_sub(prx)),
                 tx_bps: rate(iface.tx.saturating_sub(ptx)),
                 rx_total: iface.rx,
                 tx_total: iface.tx,
+                rx_pps: rate(iface.rx_packets.saturating_sub(prp)),
+                tx_pps: rate(iface.tx_packets.saturating_sub(ptp)),
+                rx_packets: iface.rx_packets,
+                tx_packets: iface.tx_packets,
                 name: iface.name,
             });
         }
 
+        if self.energy_enabled && self.inhibit_ms.map_or(true, |t| now_ms - t >= INHIBIT_EVERY_MS) {
+            self.inhibit_ms = Some(now_ms);
+            self.sleep_blockers = std::process::Command::new("systemd-inhibit")
+                .args(["--list", "--no-pager"])
+                .output()
+                .ok()
+                .map(|o| parse_inhibitors(&String::from_utf8_lossy(&o.stdout)))
+                .unwrap_or_default();
+        }
         let mut procs = Vec::new();
         let mut seen = HashMap::new();
+        let mut seen_gpu = HashMap::new();
         if let Ok(entries) = fs::read_dir("/proc") {
             for entry in entries.flatten() {
                 let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
                 let base = format!("/proc/{pid}");
                 let Some(stat) = read_file(&format!("{base}/stat")).and_then(|t| parse_stat(&t)) else { continue };
-                let uid = read_file(&format!("{base}/status")).and_then(|t| parse_uid(&t)).unwrap_or(u32::MAX);
+                let status = read_file(&format!("{base}/status")).map(|t| parse_status(&t)).unwrap_or_default();
+                let uid = status.uid.unwrap_or(u32::MAX);
                 let rss = read_file(&format!("{base}/statm")).and_then(|t| parse_rss_pages(&t)).unwrap_or(0) * PAGE_BYTES;
                 let (read, written) = read_file(&format!("{base}/io")).map(|t| parse_io(&t)).unwrap_or((0, 0));
                 let (cpu, read_bps, write_bps) = match self.procs.get(&pid).copied() {
@@ -355,8 +551,18 @@ impl Sampler {
                     None => (0.0, 0.0, 0.0),
                 };
                 seen.insert(pid, (stat.ticks, read, written));
+                let gpu = if self.gpu_enabled && uid == self.own_uid {
+                    let ns = read_gpu_ns(pid);
+                    seen_gpu.insert(pid, ns);
+                    match (self.gpu_ns.get(&pid), dt) {
+                        (Some(prev), Some(d)) => (ns.saturating_sub(*prev) as f64 / (d * 1e9) * 100.0).min(100.0) as f32,
+                        _ => 0.0,
+                    }
+                } else {
+                    0.0
+                };
                 let user = self.users.get(&uid).cloned().unwrap_or_else(|| uid.to_string());
-                procs.push(ProcSample {
+                let mut p = ProcSample {
                     pid,
                     name: stat.name,
                     user,
@@ -366,13 +572,33 @@ impl Sampler {
                     threads: stat.threads,
                     read_bps,
                     write_bps,
-                });
+                    ppid: stat.ppid,
+                    state: stat.state,
+                    private_mem: status.rss_anon,
+                    swapped: status.swap,
+                    cpu_ticks: stat.ticks,
+                    wakeups: status.voluntary,
+                    read_total: read,
+                    write_total: written,
+                    gpu,
+                    prevents_sleep: self.sleep_blockers.binary_search(&pid).is_ok(),
+                    energy_avg: 0.0,
+                };
+                let e = crate::model::energy(&p);
+                let entry = self.energy_avg.entry(p.name.clone()).or_insert((e, 0));
+                entry.1 += 1;
+                entry.0 = blend_average(entry.0, entry.1, e, dt.unwrap_or(1.0));
+                p.energy_avg = entry.0 as f32;
+                procs.push(p);
             }
         }
         // processes that ended drop out of the previous readings
         self.procs = seen;
+        self.gpu_ns = seen_gpu;
+        let gpu_busy = read_gpu_busy_percent().unwrap_or_else(|| procs.iter().map(|p| p.gpu).sum::<f32>().min(100.0));
+        let pressure = crate::inspect::read_pressure();
 
-        Snapshot { cpu, memory, disk_read_bps, disk_write_bps, ifaces, procs }
+        Snapshot { cpu, memory, disk_read_bps, disk_write_bps, ifaces, procs, cores, pressure, gpu_busy }
     }
 }
 
@@ -443,7 +669,54 @@ mod tests {
         let text = "Inter-|   Receive\n face |bytes packets\n    lo: 1 1 0 0 0 0 0 0 2 2 0 0 0 0 0 0\n  eth0: 1000 3 0 0 0 0 0 0 500 4 0 0 0 0 0 0\n";
         let ifaces = parse_netdev(text);
         assert_eq!(ifaces.len(), 2);
-        assert_eq!(ifaces[1], Iface { name: "eth0".into(), rx: 1000, tx: 500 });
+        assert_eq!(ifaces[1], Iface { name: "eth0".into(), rx: 1000, tx: 500, rx_packets: 3, tx_packets: 4 });
+    }
+
+    #[test]
+    fn per_core_lines_are_read_in_order_and_the_total_line_is_skipped() {
+        let text = "cpu  10 0 10 80 0 0 0 0\ncpu0 1 0 1 8 0 0 0 0\ncpu1 2 0 2 6 0 0 0 0\nintr 5\n";
+        let cores = parse_proc_stat_cores(text);
+        assert_eq!(cores.len(), 2);
+        assert_eq!((cores[0].total, cores[0].idle), (10, 8));
+        assert_eq!((cores[1].total, cores[1].idle), (10, 6));
+    }
+
+    #[test]
+    fn status_gives_memory_split_swap_parent_and_switches() {
+        let text = "Name:\tx\nVmSize:\t 2000 kB\nRssAnon:\t 300 kB\nRssFile:\t 100 kB\nRssShmem:\t 5 kB\nVmSwap:\t 7 kB\nPPid:\t 42\nUid:\t1000\t1000\t1000\t1000\nvoluntary_ctxt_switches:\t 9\nnonvoluntary_ctxt_switches:\t 3\n";
+        let s = parse_status(text);
+        assert_eq!((s.uid, s.ppid, s.rss_anon, s.rss_file, s.rss_shmem, s.swap, s.virt), (Some(1000), 42, 300 * 1024, 100 * 1024, 5 * 1024, 7 * 1024, 2000 * 1024));
+        assert_eq!((s.voluntary, s.involuntary), (9, 3));
+        assert_eq!(parse_status("").uid, None);
+    }
+
+    #[test]
+    fn stat_reports_state_and_parent() {
+        let line = "1234 (x) S 77 1234 1234 0 -1 4194304 1 0 0 0 42 8 0 0 20 0 7 0 99 1 1 1";
+        let s = parse_stat(line).unwrap();
+        assert_eq!((s.state, s.ppid), ('S', 77));
+    }
+
+    #[test]
+    fn drm_fdinfo_sums_engines_and_names_the_client() {
+        let text = "pos:\t0\ndrm-driver:\ti915\ndrm-client-id:\t12\ndrm-engine-render:\t1000 ns\ndrm-engine-copy:\t500 ns\ndrm-engine-capacity-render:\t1\n";
+        assert_eq!(parse_drm_fdinfo(text), Some(("12".into(), 1500)));
+        assert_eq!(parse_drm_fdinfo("pos:\t0\nflags:\t02\n"), None);
+    }
+
+    #[test]
+    fn inhibitors_name_the_pids_that_block_sleep_or_idle() {
+        let text = "WHO            UID USER     PID COMM            WHAT                     WHY                      MODE\nNetworkManager   0 root    1234 NetworkManager  sleep                    NetworkManager needs to turn off networks delay\nmpv Player    1000 olibuijr 99 mpv           idle:sleep               Playing video            block\nGNOME Shell   1000 olibuijr 55 gnome-shell   handle-power-key         Handle keys              block\n\n3 inhibitors listed.\n";
+        assert_eq!(parse_inhibitors(text), vec![99, 1234]);
+        assert!(parse_inhibitors("").is_empty());
+    }
+
+    #[test]
+    fn the_running_mean_is_plain_at_first_and_slow_later() {
+        assert_eq!(blend_average(0.0, 1, 10.0, 1.0), 10.0);
+        assert_eq!(blend_average(10.0, 2, 20.0, 1.0), 15.0);
+        let slow = blend_average(10.0, 100_000, 20.0, 1.0);
+        assert!(slow > 10.0 && slow < 10.001);
     }
 
     #[test]
