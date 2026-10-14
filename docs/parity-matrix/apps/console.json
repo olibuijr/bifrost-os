@@ -97,9 +97,9 @@
    "area": "menu",
    "apple": "View > Show Activities, Show Sources",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/console.rs:806 (MENU_SIDEBAR); springboard/apps/console-desktop/src/console.rs:511 (sidebar width)",
-   "note": "View > Show Sidebar (Ctrl+Cmd+S) hides and shows the sources sidebar; the table and the toolbar move to the window's edge, clear of the traffic lights. Show Activities, the view that groups messages by systemd unit invocation, is not built. Not yet verified on Midget.",
-   "wire": "Still missing: an activities view that groups messages by systemd unit invocation."
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:806 (MENU_SIDEBAR); springboard/apps/console-desktop/src/console.rs:511 (sidebar width); springboard/apps/console-desktop/src/activity.rs (shows, filter_for)",
+   "note": "View > Show Sidebar (Ctrl+Cmd+S) hides and shows the sources sidebar; the table and the toolbar move to the window's edge, clear of the traffic lights. View > Show Only This Activity narrows the table to the selected message's systemd unit invocation and again shows every activity (activity.rs, tested headless). The grouped Activities outline is not built. Not yet verified on Midget.",
+   "wire": "Still missing: the grouped activities outline that shows messages by systemd unit invocation."
   },
   {
    "feature": "Expand / Collapse selected rows",
@@ -142,9 +142,9 @@
    "area": "document",
    "apple": "File > Open, Open Recent; Info.plist document types",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/main.rs:116 (begin_open); springboard/apps/console-desktop/src/opened.rs (decode)",
-   "note": "File > Open uses the open panel; gzip files are unpacked and journal exports, JSON lines and plain text are read (opened.rs); Opened Files in the sidebar and File > Open Recent keep the logs opened in this session. Not built: opening from the command line or by a document event, document types in the manifest, bzip2 and xz. Not yet verified on Midget.",
-   "wire": "Still missing: opening from argv or an open-document event, log and text types in the manifest, bzip2 and xz decompression, and Open Recent across sessions."
+   "bifrost": "springboard/apps/console-desktop/src/main.rs:116 (begin_open); springboard/apps/console-desktop/src/opened.rs (decode); springboard/apps/console-desktop/manifest.toml (handles)",
+   "note": "File > Open uses the open panel; gzip files are unpacked and journal exports, JSON lines and plain text are read (opened.rs); Opened Files in the sidebar and File > Open Recent keep the logs opened in this session. Files the shell hands over (inbound documents) open the same way, and the manifest declares plain text and gzip as alternate handlers. Not built: opening from the command line, bzip2 and xz, and Open Recent across sessions. Not yet verified on Midget.",
+   "wire": "Still missing: opening from argv, bzip2 and xz decompression, and Open Recent across sessions."
   },
   {
    "feature": "Reveal in file manager / Move to Trash for reports",
@@ -186,10 +186,10 @@
    "feature": "Customize Toolbar / Show Toolbar",
    "area": "menu",
    "apple": "View > Customize Toolbar",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Needs SDK toolbar customization sheet; wire View > Customize Toolbar."
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs (toggle_toolbar, controls); springboard/apps/console-desktop/src/draw.rs (draw_chrome)",
+   "note": "View > Hide Toolbar and Show Toolbar remove and restore the toolbar's items and search field (toolbar_tests.rs, tested headless); the table keeps its place under the empty band. Customize Toolbar, the sheet that rearranges the items, is not built.",
+   "wire": "Still missing: the Customize Toolbar sheet, which needs SDK toolbar customization."
   },
   {
    "feature": "Find Next / Previous / Use Selection for Find",
