@@ -73,9 +73,9 @@
     {
       "feature": "Subsystem ownership on read",
       "apple": "Subsystem tied to the writing process (kernel-set identity)",
-      "bifrost": "springboard/core/src/log.rs (may_log_as, app_of_exe, attributed)",
-      "status": "os",
-      "note": "security rule in the system layer; the app cannot claim another app's subsystem, but apps still write the datagram themselves so the check is on read only; not an SDK API"
+      "bifrost": "springboard/core/src/log.rs (may_log_as, app_of_exe, attributed); springboard/sdk/src/log_ownership.rs (check_claim, owner_of, ClaimError)",
+      "status": "partial",
+      "note": "check_claim gives log tools the store app's claim decision from the registry, tested headless: a subsystem belongs to the app that declared it, and the shell subsystem is reserved. Gap: the writer identity is the journal's executable path, checked on read only, and the log store still removes a refused claim itself."
     },
     {
       "feature": "Activity entries (OSLogEntryActivity)",

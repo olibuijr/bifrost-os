@@ -212,6 +212,8 @@ pub mod hid_virtual;
 pub mod input_grab;
 pub mod video_decode;
 pub mod video_frame;
+pub mod video_decompression;
+pub mod log_ownership;
 pub mod media_extension;
 pub mod audio_application;
 pub mod audio_player_control;
