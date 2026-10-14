@@ -145,7 +145,7 @@
    "area": "menu",
    "apple": "File > Share",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/main.rs:196 (menu_action); springboard/apps/voicememos-desktop/src/main.rs:210 (document, the save panel writes the file)",
+   "bifrost": "springboard/apps/voicememos-desktop/src/main.rs:196 (menu_action); springboard/apps/voicememos-desktop/src/main.rs:209 (document, the save panel writes the file)",
    "note": "Recording > Export opens the shell's save panel, writes the WAV through the document callback and then reports it saved. Not verified on Midget.",
    "wire": "Check on Midget: Recording > Export opens the save panel and the file is written"
   },
@@ -190,7 +190,7 @@
    "area": "settings",
    "apple": "Settings",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:468",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:455 (set_input); springboard/apps/voicememos-desktop/src/voicememos.rs:468 (choose_input); springboard/apps/voicememos-desktop/src/services.rs (Want::SetInput)",
    "note": "Recording > Input lists the input devices and sets the default one. There is no quality or format option, because the audio service records one fixed format. Not verified on Midget.",
    "wire": "Sample rate and quality need a format option in the audio service; there is no settings window"
   },
