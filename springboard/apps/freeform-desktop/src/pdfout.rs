@@ -3,7 +3,7 @@
 //! as large as the board in points. A drop shadow is not drawn; opacity is blended towards the paper.
 use crate::style::{Fill, Style};
 use bifrost_app::controls::drawing::{InkKind, Stroke};
-use bifrost_app::print::PdfPage;
+use bifrost_app::print::{PageImage, PdfPage};
 
 /// Dash on and off lengths, in points (the same as the board's dashed outline).
 const DASH_PT: [f32; 2] = [6.0, 4.0];
@@ -68,6 +68,16 @@ pub fn board_page(strokes: &[Stroke], styles: &[Style], w_px: usize, h_px: usize
     PdfPage { width: w as f64, height: h as f64, content: content.into_bytes(), images: Vec::new() }
 }
 
+/// `page` with a picture of `w_px` by `h_px` pixels (`rgb`, three bytes a pixel) drawn under its ink, filling the page.
+/// The board's items are painted this way, as one picture.
+pub fn with_backdrop(mut page: PdfPage, w_px: usize, h_px: usize, rgb: Vec<u8>) -> PdfPage {
+    let mut content = format!("q {:.2} 0 0 {:.2} 0 0 cm /Im0 Do Q\n", page.width, page.height).into_bytes();
+    content.extend_from_slice(&page.content);
+    page.content = content;
+    page.images.insert(0, PageImage { width: w_px, height: h_px, rgb });
+    page
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,6 +140,20 @@ mod tests {
         let t = text(&board_page(&[dot, seg(0xFF00_0000, InkKind::Pen, &[])], &[], 20, 20, 1.0));
         assert!(t.contains("5.00 15.00 m 5.00 15.00 l S"), "{t}");
         assert_eq!(t.matches(" Q").count(), 1);
+    }
+
+    #[test]
+    fn a_backdrop_is_drawn_first_and_fills_the_page() {
+        let s = seg(0xFF00_0000, InkKind::Pen, &[(0.0, 0.0), (10.0, 0.0)]);
+        let page = with_backdrop(board_page(&[s], &[], 20, 10, 1.0), 20, 10, vec![255; 20 * 10 * 3]);
+        let t = text(&page);
+        assert!(t.starts_with("q 20.00 0 0 10.00 0 0 cm /Im0 Do Q\n"), "{t}");
+        assert!(t.contains(" S Q"), "the ink follows the picture");
+        assert_eq!(page.images.len(), 1);
+        assert_eq!((page.images[0].width, page.images[0].height, page.images[0].rgb.len()), (20, 10, 600));
+        let op = bifrost_app::print::PrintOperation::pages("Board", vec![page], Vec::new());
+        let (_, bytes) = op.document().expect("the page with a picture writes");
+        assert!(bytes.starts_with(b"%PDF"));
     }
 
     #[test]
