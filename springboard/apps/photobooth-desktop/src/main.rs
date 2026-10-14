@@ -193,6 +193,11 @@ impl PhotoBooth {
             return;
         }
         self.cameras = v4l2::probe();
+        self.open_camera();
+    }
+
+    /// Opens the camera at the remembered device node, or the first listed one when that node is no longer listed.
+    fn open_camera(&mut self) {
         let wanted = self.camera_path.as_ref().and_then(|path| self.cameras.iter().position(|c| &c.path == path));
         let Some(info) = self.cameras.get(wanted.unwrap_or(0)) else {
             self.camera_note = "No camera found".to_string();
@@ -208,16 +213,23 @@ impl PhotoBooth {
         }
     }
 
-    /// Camera menu: switches to the `index`-th camera in the list and remembers the choice.
+    /// Camera menu: switches to the `index`-th camera of the list the menu showed and remembers the choice. The list is
+    /// read again first, so a camera unplugged since the menu was opened is reported instead of opened.
     fn select_camera(&mut self, ctx: &Ctx, index: usize) -> bool {
         let Some(path) = self.cameras.get(index).map(|c| c.path.clone()) else { return false };
         if self.device.is_some() && self.camera_path.as_deref() == Some(path.as_str()) {
             return false;
         }
+        self.cameras = v4l2::probe();
+        let listed: Vec<&str> = self.cameras.iter().map(|c| c.path.as_str()).collect();
+        if model::position_of_camera(&path, &listed).is_none() {
+            self.status = "That camera is no longer connected".to_string();
+            return true;
+        }
         ctx.defaults_mut().set_string(PREF_CAMERA, &path);
         self.camera_path = Some(path);
         self.stop();
-        self.start();
+        self.open_camera();
         // another camera sees another scene, so the empty scene has to be taken again
         self.reference = None;
         if self.backdrop != Backdrop::None {
