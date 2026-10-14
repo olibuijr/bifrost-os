@@ -395,7 +395,7 @@ fn a_pop_up_menu_checks_and_highlights_its_selected_row() {
 
 #[test]
 fn typing_selects_the_next_row_whose_title_starts_with_the_typed_text() {
-    let mut m = Menu::new(vec![MenuItem::new(1, "Apple"), MenuItem::new(2, "Apricot"), MenuItem::new(3, "Banana"), MenuItem::new(4, "Blueberry")]);
+    let mut m = Menu::new(vec![MenuItem::new(1, "Almond"), MenuItem::new(2, "Apricot"), MenuItem::new(3, "Banana"), MenuItem::new(4, "Blueberry")]);
     assert_eq!(m.type_select('b', 0.0), Some(2));
     assert_eq!(m.type_select('l', 0.5), Some(3), "the typed prefix is kept within one second");
     assert_eq!(m.type_select('z', 5.0), None, "a pause starts a new prefix; nothing starts with z");
@@ -404,7 +404,7 @@ fn typing_selects_the_next_row_whose_title_starts_with_the_typed_text() {
 
 #[test]
 fn repeating_one_letter_cycles_through_the_rows_that_start_with_it() {
-    let mut m = Menu::new(vec![MenuItem::new(1, "Apple"), MenuItem::new(2, "Apricot"), MenuItem::new(3, "Avocado")]);
+    let mut m = Menu::new(vec![MenuItem::new(1, "Almond"), MenuItem::new(2, "Apricot"), MenuItem::new(3, "Avocado")]);
     assert_eq!(m.type_select('a', 0.0), Some(0));
     assert_eq!(m.type_select('a', 0.2), Some(1));
     assert_eq!(m.type_select('a', 0.4), Some(2));
