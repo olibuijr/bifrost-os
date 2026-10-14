@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/ui/src/recognition_task.rs, springboard/ui/src/recognition.rs",
+   "status": "partial",
+   "note": "existing speech task and result models; no recognizer engine and no insertion into text fields",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/EmojiFunctionRowIM.app",
@@ -40,10 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "status": "n/a",
+   "note": "Touch Bar function row is Apple-only hardware; BifrOSt has no function-row display",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   }
  ]
 }

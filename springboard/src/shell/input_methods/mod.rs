@@ -3,13 +3,21 @@
 //! The controller mirrors the reference input-method kit: `InputController` carries the server-input calls
 //! (`input_text`, `handle`, `commit_composition`, `composed_string`, `cancel_composition`) and talks to the
 //! app's text field through `TextClient` (`set_marked_text`, `insert_text`). A `Composer` is the small state
-//! machine behind one method: `hangul` (Korean 2-set) and `telex` (Vietnamese Telex and VNI).
+//! machine behind one method: `hangul` (Korean 2-set), `telex` (Vietnamese Telex and VNI), `kana_typing` (JIS kana
+//! board), `han` (pinyin), `zhuyin` (bopomofo) and `indic` (Tamil and Devanagari phonetic). `gojuon` is the 50-on palette
+//! grid and `plugins` reads plugin descriptors that name a built-in engine.
 //!
 //! Ranges count characters, not UTF-16 units. Not wired into `kb_input.rs` yet: that is a follow-up, the
 //! shell would look a controller up with `new_controller(source_id)` and route keys to it.
 
+pub mod gojuon;
+pub mod han;
 pub mod hangul;
+pub mod indic;
+pub mod kana_typing;
+pub mod plugins;
 pub mod telex;
+pub mod zhuyin;
 
 /// A range in the text the client holds (`location`, `length`), in characters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,11 +168,21 @@ pub struct InputSource {
 pub const KOREAN_2SET: &str = "bifrost.inputmethod.Korean.2SetKorean";
 pub const VIETNAMESE_TELEX: &str = "bifrost.inputmethod.VietnameseIM.VietnameseTelex";
 pub const VIETNAMESE_VNI: &str = "bifrost.inputmethod.VietnameseIM.VietnameseVNI";
+pub const KANA_TYPING: &str = "bifrost.inputmethod.JapaneseIM.KanaTyping";
+pub const PINYIN: &str = "bifrost.inputmethod.SCIM.Pinyin";
+pub const ZHUYIN: &str = "bifrost.inputmethod.TCIM.Zhuyin";
+pub const TAMIL_PHONETIC: &str = "bifrost.inputmethod.TamilIM.Phonetic";
+pub const DEVANAGARI_PHONETIC: &str = "bifrost.inputmethod.TransliterationIM.Devanagari";
 
-const SOURCES: [InputSource; 3] = [
+const SOURCES: [InputSource; 8] = [
     InputSource { id: KOREAN_2SET, localized_name: "2-Set Korean", language: "ko" },
     InputSource { id: VIETNAMESE_TELEX, localized_name: "Vietnamese Telex", language: "vi" },
     InputSource { id: VIETNAMESE_VNI, localized_name: "Vietnamese VNI", language: "vi" },
+    InputSource { id: KANA_TYPING, localized_name: "Japanese Kana", language: "ja" },
+    InputSource { id: PINYIN, localized_name: "Pinyin", language: "zh-Hans" },
+    InputSource { id: ZHUYIN, localized_name: "Zhuyin", language: "zh-Hant" },
+    InputSource { id: TAMIL_PHONETIC, localized_name: "Tamil Phonetic", language: "ta" },
+    InputSource { id: DEVANAGARI_PHONETIC, localized_name: "Devanagari Phonetic", language: "hi" },
 ];
 
 /// The composing sources this module provides.
@@ -178,6 +196,11 @@ pub fn new_controller(id: &str) -> Option<Box<dyn InputController>> {
         KOREAN_2SET => Some(Box::new(ComposingController::new(hangul::HangulComposer::default()))),
         VIETNAMESE_TELEX => Some(Box::new(ComposingController::new(telex::VietnameseComposer::new(telex::Scheme::Telex)))),
         VIETNAMESE_VNI => Some(Box::new(ComposingController::new(telex::VietnameseComposer::new(telex::Scheme::Vni)))),
+        KANA_TYPING => Some(Box::new(ComposingController::new(kana_typing::KanaTypingComposer::default()))),
+        PINYIN => Some(Box::new(ComposingController::new(han::PinyinComposer::default()))),
+        ZHUYIN => Some(Box::new(ComposingController::new(zhuyin::ZhuyinComposer::default()))),
+        TAMIL_PHONETIC => Some(Box::new(ComposingController::new(indic::IndicComposer::new(&indic::TAMIL)))),
+        DEVANAGARI_PHONETIC => Some(Box::new(ComposingController::new(indic::IndicComposer::new(&indic::DEVANAGARI)))),
         _ => None,
     }
 }
@@ -227,7 +250,7 @@ mod tests {
 
     #[test]
     fn sources_are_listed_and_buildable() {
-        assert_eq!(sources().len(), 3);
+        assert_eq!(sources().len(), 8);
         for s in sources() {
             assert!(new_controller(s.id).is_some(), "{}", s.id);
         }
