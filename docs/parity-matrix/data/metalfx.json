@@ -26,14 +26,14 @@
       "apple": "MTLFXSpatialScaler, MTLFXSpatialScalerDescriptor, encode(commandBuffer:)",
       "bifrost": "springboard/render/src/upscale.rs",
       "status": "partial",
-      "note": "Wave 3 (metalfx, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only CPU bilinear resampling exists (asset density, box draws, control-centre preview). No edge-aware spatial scaler and no GPU path; these are resamplers, not upscalers."
+      "note": "A CPU Catmull-Rom bicubic upscaler with clamped edges is tested headless in springboard/render/tests/parity_sdk-complete-39.rs (flat rasters stay flat, bad sizes and sample counts are refused). Gap: there is no edge-aware scaler, no temporal input and no GPU path, so it is a resampler rather than a spatial upscaler, and it is not wired into apps or the shell."
     },
     {
       "feature": "Spatial colour processing modes",
       "apple": "MTLFXSpatialScalerColorProcessingMode (linear, perceptual, hdr)",
       "bifrost": "springboard/render/src/upscale.rs",
       "status": "partial",
-      "note": "Wave 3 (metalfx, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The bilinear helpers take no colour-space argument, so input and output space are implicit."
+      "note": "Linear, perceptual sRGB and HDR modes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs, including overshoot clamped in linear and kept in HDR. Gap: the mode is passed per call rather than read from a colour-space tag on the raster, and nothing is wired into apps or the shell."
     },
     {
       "feature": "Frame interpolation (MTLFXFrameInterpolator)",

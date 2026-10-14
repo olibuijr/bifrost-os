@@ -24,9 +24,9 @@
     {
       "feature": "Convolution and morphology",
       "apple": "vImage convolution kernels, dilation and erosion (Convolution, Morphology collections)",
-      "bifrost": "springboard/render/src/gfx.rs:476 (blur), springboard/render/src/gfx.rs:423 (blur_material)",
+      "bifrost": "springboard/render/src/gfx.rs:476 (blur), springboard/render/src/gfx.rs:423 (blur_material); springboard/render/src/morphology.rs (convolve, dilate, erode, open, close)",
       "status": "partial",
-      "note": "Blur exists for materials. No general kernel convolution, dilation or erosion."
+      "note": "Kernel convolution, dilation, erosion, opening and closing on 8-bit planes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: no float or multi-channel planes, no separable fast path, and no GPU filter path."
     },
     {
       "feature": "Image buffer geometry",
@@ -47,14 +47,14 @@
       "apple": "vImage convert-any-to-any (CMYK, planar and interleaved formats, YUV and RGB)",
       "bifrost": "springboard/render/src/pixel_layout.rs, springboard/sdk/src/lib.rs (kit::pixel_layout)",
       "status": "partial",
-      "note": "Wave 5 (w5-accelerate, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. NV12 and RGBA to premultiplied RGBA for the video thread. No CMYK, no grayscale conversion, and no public conversion API."
+      "note": "Pure model with host unit tests in pixel_layout::tests: CMYK to RGB, grey to RGB, luma, and plane split and join are also tested headless in springboard/render/tests/parity_sdk-complete-39.rs, and the SDK re-exports the module as kit::pixel_layout. Gap: float buffers are written but not read back, and the converter is not wired into apps or the shell and not yet tested on the VM or Midget."
     },
     {
       "feature": "Tone and brightness adjustment, histogram",
       "apple": "vImage gamma, tone curves, histogram calculation, specification and equalization",
-      "bifrost": "springboard/src/shell/photos/edit.rs:287 (per-channel lookup table: contrast then brightness)",
+      "bifrost": "springboard/src/shell/photos/edit.rs:287 (per-channel lookup table: contrast then brightness); springboard/render/src/histogram.rs (histogram, equalization_lut, levels_lut, curve_lut)",
       "status": "partial",
-      "note": "A brightness and contrast lookup table inside the Photos app. No histogram, equalization or tone-curve API."
+      "note": "Histogram, equalization, level stretch and piecewise tone curves are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: the Photos app does not use these yet, and there is no gamma or histogram specification API."
     },
     {
       "feature": "Compression and decompression",
