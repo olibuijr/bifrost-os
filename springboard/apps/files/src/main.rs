@@ -784,6 +784,12 @@ mod tests {
     }
 
     #[test]
+    fn idle_files_sleeps_without_a_polling_deadline() {
+        let files = fixture(vec![]);
+        assert_eq!(files.next_wake(1.0), None, "an idle Files window has no timer");
+    }
+
+    #[test]
     fn expanded_folder_children_are_read_again_only_after_the_folder_changes() {
         let dir = temp("kids");
         std::fs::create_dir_all(dir.join("sub")).unwrap();

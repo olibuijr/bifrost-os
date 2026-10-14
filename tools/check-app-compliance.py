@@ -411,7 +411,11 @@ def check_app(app):
                     add(p, i, rule, f'{RULES[rule][2]} ({rx.search(code).group(0)})', raw)
     for p, i, raw in spawn_sites:
         add(p, i, 'RES-01', 'thread::spawn', raw)
-    if next_wake_site and (spawn_sites or re.search(r'\b(try_recv|mpsc::)', code_all)):
+    # A receiver and a timed next_wake are not evidence of polling by themselves: workers may notify the SDK main
+    # queue (whose eventfd the runtime already waits on), or expose their own wake_fd. Keep RES-02 for apps that
+    # combine worker channels with timed wakeups but provide no event-driven notification path.
+    event_wakeup = re.search(r'\bDispatchQueue::main\(\)\.async_|\bfn\s+wake_fd\b', code_all)
+    if next_wake_site and (spawn_sites or re.search(r'\b(try_recv|mpsc::)', code_all)) and not event_wakeup:
         add(*next_wake_site[:2], 'RES-02', 'next_wake returns Some(..) while a worker thread feeds the app', next_wake_site[2])
     if executable and not re.search(r'enable_sudden_termination', code_all) and not UNSAVED.search(code_all) and 'documents' not in perms:
         findings.append(('RES-03', f'{rel(app / "src")}:1', 'no unsaved state found and enable_sudden_termination() is never called'))
