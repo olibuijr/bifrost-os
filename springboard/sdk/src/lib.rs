@@ -283,6 +283,10 @@ pub mod disk_arbitration;
 pub mod audio_aggregate;
 /// Process objects and process taps (`CATapDescription`), as pure models with their wire shapes.
 pub mod audio_process;
+/// Audio boxes (`AudioHardwareBox`) as a pure model: enclosures, their devices, enable and acquire state.
+pub mod audio_box;
+/// Virtual audio devices a driver plug-in would publish, as a pure model, and the driver status (no loader here).
+pub mod audio_virtual;
 pub mod speech_recognizer;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;

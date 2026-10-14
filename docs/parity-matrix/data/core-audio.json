@@ -4,7 +4,7 @@
  "macos_since": "10.0",
  "status": "partial",
  "bifrost": "springboard/audiod (audio service), springboard/sdk/src/lib.rs (audio::Client re-export), springboard/src/svc.rs, springboard/src/media/speaker.rs, springboard/src/media/capture.rs, springboard/audio/alsa/src/ctl.rs, springboard/src/media/volume.rs, springboard/src/media/route.rs",
- "summary": "BifrOSt covers speaker playback, microphone capture and volume through an ALSA and libasound layer owned by one audio service, and apps reach it over a socket client for playback transport and recording. The HAL object model, virtual audio drivers, aggregate devices, hardware clocks and per-process audio taps have no counterpart; no SDK exposes device objects.",
+ "summary": "BifrOSt covers speaker playback, microphone capture and volume through an ALSA and libasound layer owned by one audio service, and apps reach it over a socket client for playback transport and recording. The HAL object model, aggregate devices, hardware clocks and per-process audio taps have only SDK models; virtual devices and audio boxes have pure models too, but no loader or hardware path publishes them. No SDK exposes device objects.",
  "rea_evidence": "ev_bd10e360fb1e915d03b738fad1e0a829b4d87a74e798502bbe22e6d509ce6332",
  "features": [
   {
@@ -17,9 +17,9 @@
   {
    "feature": "Audio server driver plug-ins (virtual devices)",
    "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
-   "bifrost": "none; kernel ALSA drivers only (springboard/audio/alsa/src/lib.rs)",
-   "status": "gap",
-   "note": "No user-space HAL plug-in loader. A virtual device would need an ALSA loopback or PipeWire node, neither of which is exposed to apps."
+   "bifrost": "springboard/sdk/src/audio_virtual.rs",
+   "status": "partial",
+   "note": "built on parity/team-k-core-audio; not yet verified on Midget. Pure model: VirtualDevice (uid, name, channels, sample rate) validated like a published HAL device, VirtualDeviceSet with unique uids, and DriverStatus, which reports that no user-space loader exists. Nothing publishes a device to the sound server."
   },
   {
    "feature": "Aggregate devices",
@@ -101,9 +101,9 @@
   {
    "feature": "Boxes and device containers",
    "apple": "AudioHardwareBox",
-   "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-   "status": "gap",
-   "note": "The pure model had no caller and was removed. No enable or disable of audio containers. Hardware is handled by the kernel and the sound server."
+   "bifrost": "springboard/sdk/src/audio_box.rs",
+   "status": "partial",
+   "note": "built on parity/team-k-core-audio; not yet verified on Midget. Pure model: AudioBox with its devices, BoxRegistry with enable, disable, acquire and release rules (an acquired box cannot be disabled). Enable state is not applied to hardware; the sound server owns the containers."
   },
   {
    "feature": "Remote and streaming device transports",
@@ -114,8 +114,9 @@
   }
  ],
  "gaps": [
-  "Virtual audio device and driver plug-in (Audio Server Plug-in, AudioHardwarePlugin) or an app-facing loopback device.",
+  "Virtual audio device publication: no user-space plug-in loader, and no ALSA loopback or PipeWire node reaches apps (AudioHardwarePlugin, Audio Server Plug-in). The SDK model in audio_virtual.rs is not connected to the sound server.",
   "App-facing device and stream API: enumerate devices, open input and output streams and choose a device (AudioHardwareDevice, AudioHardwareStream).",
-  "Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener)."
+  "Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener).",
+  "Audio box enable and acquire state is not applied to hardware (AudioHardwareBox); audio_box.rs is a model only."
  ]
 }
