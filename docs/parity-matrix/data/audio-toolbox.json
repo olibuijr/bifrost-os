@@ -31,9 +31,9 @@
     {
       "feature": "Audio Unit v3 plug-ins and AUAudioUnit host (parameters, presets, buses)",
       "apple": "AUAudioUnit, AUAudioUnitBus, AUParameterTree, AUAudioUnitPreset, AUv3 app extensions",
-      "bifrost": "springboard/ui/src/plugin_host.rs (ParameterTree",
+      "bifrost": "springboard/ui/src/plugin_host.rs (ParameterTree, PresetStore, Bus, Instance); springboard/ui/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No plug-in host, extension point or parameter tree. Searched for audio unit, plugin and parameter terms in springboard/."
+      "note": "The parameter tree with groups, clamped writes and change records, factory and user presets, and enabled buses with channel lists are tested headless in parity_sdk-complete-43.rs. Gap: no plug-in binary or app extension is loaded, which needs a plug-in service this system does not have, and the model is not wired into apps or the shell."
     },
     {
       "feature": "Audio components (registration, lookup, instantiation)",

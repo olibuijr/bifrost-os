@@ -94,9 +94,9 @@
     {
       "feature": "User notifications on device events",
       "apple": "IOBluetoothUserNotification, IOBluetoothUserNotificationCallback",
-      "bifrost": "springboard/sdk/src/bluetooth_events.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_events.rs (DeviceEvents, notice_for, notices_for_registration); springboard/sdk/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Connect and disconnect events go to the shell's own state. No app subscription API."
+      "note": "Registrations with filters, bounded queues and device notices (title and name or address) gated on the app's authorization are tested headless in parity_sdk-complete-43.rs. Gap: the model is not wired into apps or the shell, which keep their own connect and disconnect state, so the notices need Midget to be verified."
     },
     {
       "feature": "Address and utility helpers",

@@ -24,6 +24,13 @@ pub enum Subtype {
     Widget,
 }
 
+impl Subtype {
+    /// Whether the kind is markup a reader makes on the page. Links, form widgets and popup windows are not markup.
+    pub fn is_markup(self) -> bool {
+        !matches!(self, Subtype::Link | Subtype::Popup | Subtype::Widget)
+    }
+}
+
 /// One annotation on a page. `drawing` is set for ink annotations only. `color` is passed through as the caller packed it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Annotation {
@@ -89,6 +96,35 @@ impl PageAnnotations {
 
     pub fn get(&self, id: u32) -> Option<&Annotation> {
         self.entries.iter().find(|e| e.id == id).map(|e| &e.annotation)
+    }
+
+    fn get_mut(&mut self, id: u32) -> Option<&mut Annotation> {
+        self.entries.iter_mut().find(|e| e.id == id).map(|e| &mut e.annotation)
+    }
+
+    /// Replaces the text contents of annotation `id`. Returns false for an unknown id.
+    pub fn set_contents(&mut self, id: u32, contents: &str) -> bool {
+        self.get_mut(id).map(|a| a.contents = contents.to_string()).is_some()
+    }
+
+    /// Moves annotation `id` so that its top-left corner is at `(x, y)`, keeping its size. Returns false for an unknown id.
+    pub fn move_to(&mut self, id: u32, x: f32, y: f32) -> bool {
+        self.get_mut(id)
+            .map(|a| {
+                a.bounds.x = x;
+                a.bounds.y = y;
+            })
+            .is_some()
+    }
+
+    /// Sets the colour of annotation `id`, packed as the caller packs colours. Returns false for an unknown id.
+    pub fn set_color(&mut self, id: u32, color: u32) -> bool {
+        self.get_mut(id).map(|a| a.color = color).is_some()
+    }
+
+    /// The ids of the annotations of one kind, in stacking order, bottom first.
+    pub fn ids_of(&self, subtype: Subtype) -> Vec<u32> {
+        self.entries.iter().filter(|e| e.annotation.subtype == subtype).map(|e| e.id).collect()
     }
 
     /// The ids in stacking order, bottom first.

@@ -17,9 +17,9 @@
     {
       "feature": "JavaScript values",
       "apple": "JSValue, JSManagedValue",
-      "bifrost": "springboard/sdk/src/webview.rs (WebViewEvent::EvalResult, a String); springboard/sdk/src/webview_dev.rs (EvalValue { ty, json })",
+      "bifrost": "springboard/sdk/src/js_value.rs (JsValue::from_eval, JsValue::to_literal); springboard/sdk/src/webview.rs (WebViewEvent::EvalResult, a String); springboard/sdk/src/webview_dev.rs (EvalValue { ty, json })",
       "status": "partial",
-      "note": "results come back as text or typed JSON from a web view only; no value type for passing objects, numbers or functions between app and script"
+      "note": "Script results read into JsValue (undefined, null, booleans, numbers, strings, arrays, objects), and values write back as script literals; both are tested headless in parity_sdk-complete-43.rs. Gap: functions have no value form, DOM elements are refused, and the conversion needs a live web view to run the script."
     },
     {
       "feature": "Native object export to JavaScript",
@@ -33,7 +33,7 @@
       "apple": "JSContext evaluateScript:, C JSEvaluateScript",
       "bifrost": "springboard/sdk/src/webview.rs:320 (WebView eval, one line of JS, answer as EvalResult); springboard/sdk/src/webview_dev.rs (dev_eval with token)",
       "status": "partial",
-      "note": "only inside a web view page; no standalone evaluation without a view; Servo 0.7.0 evaluate_javascript does not await promises (docs/bifrost-ui.md)"
+      "note": "Only inside a web view page: the answer is read with JsValue::from_eval (springboard/sdk/src/js_value.rs) and the script text is built with JsValue::to_literal, both tested headless in parity_sdk-complete-43.rs. Gap: no standalone evaluation without a view, which needs the engine, and Servo 0.7.0 evaluate_javascript does not await promises (docs/bifrost-ui.md)."
     },
     {
       "feature": "Script dialogs from scripts",

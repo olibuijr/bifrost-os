@@ -246,19 +246,19 @@ impl ParameterTree {
         self.values.iter().map(|(address, value)| (*address, *value)).collect()
     }
 
-    /// Writes a list of values. The whole list is checked first, so a bad entry changes nothing.
+    /// Writes a list of values. The whole list is checked first, so a bad entry changes nothing. A read-only parameter
+    /// is set by the plugin, so a saved state that holds one still restores: its entry is skipped.
     pub fn restore(&mut self, state: &[(u64, f32)]) -> Result<(), HostError> {
         for (address, value) in state {
             let spec = self.specs.get(address).ok_or(HostError::UnknownParameter)?;
-            if !spec.writable {
-                return Err(HostError::ReadOnly);
-            }
-            if !value.is_finite() {
+            if spec.writable && !value.is_finite() {
                 return Err(HostError::InvalidValue);
             }
         }
         for (address, value) in state {
-            self.set_value(*address, *value)?;
+            if self.specs.get(address).is_some_and(|spec| spec.writable) {
+                self.set_value(*address, *value)?;
+            }
         }
         Ok(())
     }
