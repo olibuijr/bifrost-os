@@ -407,7 +407,7 @@ impl App for BooksApp {
                 Err(e) => books.show_error(e),
             }
         }
-        if let [(path, true)] = added.as_slice() {
+        if let Some(path) = books::share::book_to_open(&added) {
             books.open_path(path);
         }
         true

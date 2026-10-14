@@ -11,6 +11,7 @@ pub mod layout;
 pub mod narrate;
 pub mod quote;
 pub mod search_index;
+pub mod share;
 pub mod store;
 
 mod draw;
@@ -52,6 +53,8 @@ mod narrate_tests;
 mod library_tests;
 #[cfg(test)]
 mod parity_app_books_tests;
+#[cfg(test)]
+mod share_tests;
 
 
 /// The unified toolbar band of the full-size window (Golden Gate: no title row).

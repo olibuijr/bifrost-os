@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.0
+
+- The rule that opens a book after an import now lives in `books::share`: a lone PDF shared to Books opens at once,
+  and a batch or a book chosen in File > Add to Library only joins the shelf. Headless tests cover the rule in
+  `books::share_tests`.
+- Parity: the Save PDF to Books share target is recorded against that rule and its tests. Font family choice,
+  audiobooks and the Settings window are not built yet.
+
 ## 1.8.0 — 2026-10-14
 
 - View > Sort By gains Progress: the books furthest along the reader come first, and books with the same progress are
