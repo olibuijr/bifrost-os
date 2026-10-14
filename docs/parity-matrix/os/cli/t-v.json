@@ -774,9 +774,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "checked on Midget 0.7.25: traptoemail not installed",
+   "bifrost": "packaging/arch/runtime-packages.txt (net-snmp, which tools/parity/os_cli_packages.txt lists with traptoemail)",
+   "status": "partial",
+   "note": "The package list names traptoemail under net-snmp, and net-snmp is in the runtime package list. Installation has not been checked on Midget, and no BifrOSt code forwards SNMP traps by mail.",
    "rea": [],
    "method": "assessed"
   },
