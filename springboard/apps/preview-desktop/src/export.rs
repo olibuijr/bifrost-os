@@ -5,26 +5,29 @@
 use crate::document::adjusted;
 use crate::model::{self, Adjust, Mark};
 use crate::pdfjob::{self, Job, Pdf, Reply, PAGE_BOX};
+use crate::pixels;
 use bifrost_app::kit::Image;
+use springboard::cg::imageio::encode::{encode_png, PngOptions};
 use springboard::cg::pdf::draw;
 use springboard::shell::camera::jpeg;
 use std::path::{Path, PathBuf};
 
-/// The quality of an exported JPEG.
-const JPEG_QUALITY: u8 = 90;
+/// The quality of an exported JPEG unless File > JPEG Quality says otherwise.
+pub const JPEG_QUALITY: u8 = 90;
 
 /// The picture formats an export writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Raster {
     Png,
-    Jpeg,
+    /// A JPEG at this quality, 1 to 100.
+    Jpeg(u8),
 }
 
 impl Raster {
     pub fn ext(self) -> &'static str {
         match self {
             Raster::Png => "png",
-            Raster::Jpeg => "jpg",
+            Raster::Jpeg(_) => "jpg",
         }
     }
 }
@@ -50,14 +53,28 @@ pub fn finish(img: &Image, marks: &[Mark], src: usize, turns: u8, adjust: &Adjus
     out
 }
 
-/// Encodes `img` and writes it to `target`.
+/// The picture as PNG bytes, transparency kept. None when it cannot be encoded.
+pub fn png_bytes(img: &Image) -> Option<Vec<u8>> {
+    encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default())
+}
+
+/// Encodes `img` and writes it to `target`. A PNG keeps transparency; a JPEG has none, so a transparent picture is laid
+/// over white first.
 pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), String> {
+    let unencoded = || "The picture could not be encoded.".to_string();
     let bytes = match raster {
-        Raster::Png => springboard::pngenc::encode_rgb(img.w, img.h, &img.px),
-        Raster::Jpeg => {
-            let encoded = jpeg::encode_pixels(img.w, img.h, &img.px, JPEG_QUALITY, None);
+        Raster::Png => png_bytes(img).ok_or_else(unencoded)?,
+        Raster::Jpeg(quality) => {
+            let flat;
+            let opaque = if pixels::has_alpha(img) {
+                flat = pixels::flatten_on_white(img);
+                &flat
+            } else {
+                img
+            };
+            let encoded = jpeg::encode_pixels(opaque.w, opaque.h, &opaque.px, quality.clamp(1, 100), None);
             if encoded.is_empty() {
-                return Err("The picture could not be encoded.".into());
+                return Err(unencoded());
             }
             encoded
         }
@@ -89,7 +106,7 @@ mod tests {
     #[test]
     fn exports_are_named_beside_the_document() {
         assert_eq!(target(Path::new("/a/b.pdf"), "pdf"), PathBuf::from("/a/b-markup.pdf"));
-        assert_eq!(target(Path::new("/a/b.png"), Raster::Jpeg.ext()), PathBuf::from("/a/b-markup.jpg"));
+        assert_eq!(target(Path::new("/a/b.png"), Raster::Jpeg(JPEG_QUALITY).ext()), PathBuf::from("/a/b-markup.jpg"));
         assert_eq!(target(Path::new("/a/b.png"), Raster::Png.ext()), PathBuf::from("/a/b-markup.png"));
     }
 
@@ -101,6 +118,45 @@ mod tests {
         // half size is 2 by 1, and a quarter turn makes it 1 by 2
         assert_eq!((out.w, out.h), (1, 2));
         assert_ne!(out.px[0], 0xff00_0000);
+    }
+
+    #[test]
+    fn a_png_keeps_transparency_and_a_jpeg_is_written_flattened() {
+        let dir = std::env::temp_dir().join(format!("viewer-export-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a folder");
+        let img = Image { w: 2, h: 1, px: vec![0, 0xff00_00ff] };
+        let png = dir.join("a.png");
+        write_image(&img, Raster::Png, &png).expect("a png");
+        let bytes = std::fs::read(&png).expect("the file");
+        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+        // IHDR colour type 6 is RGBA
+        assert_eq!(bytes[25], 6);
+        let jpg = dir.join("a.jpg");
+        write_image(&img, Raster::Jpeg(JPEG_QUALITY), &jpg).expect("a jpeg");
+        assert_eq!(&std::fs::read(&jpg).expect("the file")[..2], &[0xff, 0xd8]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_lower_jpeg_quality_writes_a_smaller_file() {
+        let dir = std::env::temp_dir().join(format!("viewer-quality-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a folder");
+        // a deterministic noisy picture, which a JPEG cannot squeeze without losing quality
+        let mut seed = 12345u32;
+        let px = (0..48 * 48)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                0xff00_0000 | (seed >> 8)
+            })
+            .collect();
+        let img = Image { w: 48, h: 48, px };
+        let size = |quality: u8| {
+            let path = dir.join(format!("q{quality}.jpg"));
+            write_image(&img, Raster::Jpeg(quality), &path).expect("a jpeg");
+            std::fs::metadata(&path).expect("the file").len()
+        };
+        assert!(size(30) < size(95));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
