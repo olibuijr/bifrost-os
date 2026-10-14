@@ -1,11 +1,8 @@
-//! Visible columns and expanded rows of the log table: which columns show (and in which order), their stored form,
-//! and the set of rows whose multi-line message is shown in full. Pure std.
-#![allow(dead_code)] // View > Visible Columns and Expand/Collapse wire these into console.rs next
+//! The table's columns and which of them the View > Visible Columns submenu shows. Pure layout: no drawing and no kit.
 
-use std::collections::BTreeSet;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Column {
+/// The table's columns, left to right.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Col {
     Type,
     Time,
     Process,
@@ -15,179 +12,160 @@ pub enum Column {
     Message,
 }
 
-impl Column {
-    pub const ALL: [Column; 7] =
-        [Self::Type, Self::Time, Self::Process, Self::Pid, Self::Subsystem, Self::Category, Self::Message];
+/// Below this table width (points) Subsystem and Category give way.
+const NARROW_PT: f32 = 620.0;
 
-    pub fn label(self) -> &'static str {
+impl Col {
+    /// Every column in table order, which is also the order of the Visible Columns submenu.
+    pub const ALL: [Col; 7] = [Col::Type, Col::Time, Col::Process, Col::Pid, Col::Subsystem, Col::Category, Col::Message];
+
+    /// The header text and the menu item.
+    pub fn title(self) -> &'static str {
         match self {
-            Self::Type => "Type",
-            Self::Time => "Time",
-            Self::Process => "Process",
-            Self::Pid => "PID",
-            Self::Subsystem => "Subsystem",
-            Self::Category => "Category",
-            Self::Message => "Message",
+            Col::Type => "Type",
+            Col::Time => "Time",
+            Col::Process => "Process",
+            Col::Pid => "PID",
+            Col::Subsystem => "Subsystem",
+            Col::Category => "Category",
+            Col::Message => "Message",
         }
     }
 
-    fn key(self) -> &'static str {
+    /// The column's width in points. Message has none of its own: it takes what the others leave.
+    pub fn width(self) -> f32 {
         match self {
-            Self::Type => "type",
-            Self::Time => "time",
-            Self::Process => "process",
-            Self::Pid => "pid",
-            Self::Subsystem => "subsystem",
-            Self::Category => "category",
-            Self::Message => "message",
+            Col::Type => 84.0,
+            Col::Time => 96.0,
+            Col::Process => 128.0,
+            Col::Pid => 56.0,
+            Col::Subsystem => 150.0,
+            Col::Category => 96.0,
+            Col::Message => 0.0,
         }
     }
 
-    fn from_key(k: &str) -> Option<Column> {
-        Self::ALL.into_iter().find(|c| c.key() == k)
+    fn bit(self) -> u8 {
+        1 << Col::ALL.iter().position(|c| *c == self).unwrap_or(0)
+    }
+
+    /// Whether the column is dropped on a narrow table.
+    fn gives_way(self) -> bool {
+        matches!(self, Col::Subsystem | Col::Category)
     }
 }
 
-/// The columns shown, in table order. The Message column cannot be hidden, as the table would be empty.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Visible {
-    shown: BTreeSet<Column>,
+/// The columns the user has switched off. PID starts off, so the table opens as it always has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ColumnSet {
+    hidden: u8,
 }
 
-impl Default for Visible {
+impl Default for ColumnSet {
     fn default() -> Self {
-        Visible { shown: [Column::Type, Column::Time, Column::Process, Column::Message].into_iter().collect() }
+        ColumnSet { hidden: Col::Pid.bit() }
     }
 }
 
-impl Visible {
-    pub fn is_shown(&self, c: Column) -> bool {
-        self.shown.contains(&c)
+impl ColumnSet {
+    pub fn shows(self, col: Col) -> bool {
+        self.hidden & col.bit() == 0
     }
 
-    /// Flips a column; the Message column stays. Returns the new state.
-    pub fn toggle(&mut self, c: Column) -> bool {
-        if c == Column::Message {
-            return true;
+    /// Shows or hides a column. The last visible column stays: a table without columns is nothing. True when it changed.
+    pub fn toggle(&mut self, col: Col) -> bool {
+        if self.shows(col) && Col::ALL.iter().filter(|c| self.shows(**c)).count() == 1 {
+            return false;
         }
-        if !self.shown.remove(&c) {
-            self.shown.insert(c);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// The shown columns in table order.
-    pub fn columns(&self) -> Vec<Column> {
-        Column::ALL.into_iter().filter(|c| self.shown.contains(c)).collect()
-    }
-
-    /// Comma-separated keys.
-    pub fn to_text(&self) -> String {
-        self.columns().iter().map(|c| c.key()).collect::<Vec<_>>().join(",")
-    }
-
-    pub fn from_text(text: &str) -> Visible {
-        let mut shown: BTreeSet<Column> = text.split(',').filter_map(|k| Column::from_key(k.trim())).collect();
-        shown.insert(Column::Message);
-        Visible { shown }
-    }
-
-    /// Widths of the shown columns for a table `total` points wide: fixed widths for the narrow columns, the rest
-    /// to Message. Returns `(column, width)`.
-    pub fn widths(&self, total: f32) -> Vec<(Column, f32)> {
-        let fixed = |c: Column| match c {
-            Column::Type => 72.0,
-            Column::Time => 150.0,
-            Column::Process => 130.0,
-            Column::Pid => 56.0,
-            Column::Subsystem => 160.0,
-            Column::Category => 110.0,
-            Column::Message => 0.0,
-        };
-        let used: f32 = self.columns().iter().map(|c| fixed(*c)).sum();
-        let rest = (total - used).max(120.0);
-        self.columns().into_iter().map(|c| (c, if c == Column::Message { rest } else { fixed(c) })).collect()
+        self.hidden ^= col.bit();
+        true
     }
 }
 
-/// Rows (by index in the current view) shown with their whole message.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Expanded {
-    rows: BTreeSet<usize>,
-}
-
-impl Expanded {
-    pub fn is_expanded(&self, row: usize) -> bool {
-        self.rows.contains(&row)
+/// The columns across the table, from `x0` over `table_w` points: each shown column at its width, Subsystem and
+/// Category left out on a narrow table, and the last column taking the rest. A narrow table whose only shown
+/// columns would give way shows Message instead.
+pub fn layout(x0: f32, table_w: f32, set: ColumnSet) -> Vec<(Col, f32, f32)> {
+    let narrow = table_w < NARROW_PT;
+    let mut cols: Vec<Col> = Col::ALL.iter().copied().filter(|c| set.shows(*c) && !(narrow && c.gives_way())).collect();
+    if cols.is_empty() {
+        cols.push(Col::Message);
     }
-
-    pub fn toggle(&mut self, row: usize) {
-        if !self.rows.remove(&row) {
-            self.rows.insert(row);
-        }
+    let end = x0 + table_w;
+    let mut x = x0;
+    let mut out = Vec::with_capacity(cols.len());
+    for (i, col) in cols.iter().enumerate() {
+        let w = if i + 1 == cols.len() { (end - x).max(0.0) } else { col.width() };
+        out.push((*col, x, w));
+        x += w;
     }
-
-    pub fn expand(&mut self, rows: impl IntoIterator<Item = usize>) {
-        self.rows.extend(rows);
-    }
-
-    pub fn collapse_all(&mut self) {
-        self.rows.clear();
-    }
-
-    /// The row height: one line collapsed, one line per message line (capped) expanded.
-    pub fn row_lines(&self, row: usize, message: &str, cap: usize) -> usize {
-        if self.is_expanded(row) { message.lines().count().clamp(1, cap.max(1)) } else { 1 }
-    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn default_columns_and_toggle() {
-        let mut v = Visible::default();
-        assert_eq!(v.columns(), vec![Column::Type, Column::Time, Column::Process, Column::Message]);
-        assert!(v.toggle(Column::Pid));
-        assert!(!v.toggle(Column::Time));
-        assert_eq!(v.columns(), vec![Column::Type, Column::Process, Column::Pid, Column::Message]);
-        assert!(v.toggle(Column::Message));
-        assert!(v.is_shown(Column::Message));
+    fn kinds(l: &[(Col, f32, f32)]) -> Vec<Col> {
+        l.iter().map(|c| c.0).collect()
     }
 
     #[test]
-    fn text_round_trip_always_keeps_message() {
-        let mut v = Visible::default();
-        v.toggle(Column::Subsystem);
-        assert_eq!(Visible::from_text(&v.to_text()), v);
-        assert_eq!(Visible::from_text("junk,pid").columns(), vec![Column::Pid, Column::Message]);
-        assert_eq!(Visible::from_text("").columns(), vec![Column::Message]);
+    fn the_default_set_is_the_table_as_it_always_was() {
+        let wide = layout(190.0, 900.0, ColumnSet::default());
+        assert_eq!(kinds(&wide), vec![Col::Type, Col::Time, Col::Process, Col::Subsystem, Col::Category, Col::Message]);
     }
 
     #[test]
-    fn message_gets_the_rest_of_the_width() {
-        let v = Visible::default();
-        let w = v.widths(800.0);
-        assert_eq!(w.iter().map(|(_, x)| *x).sum::<f32>(), 800.0);
-        assert_eq!(w.last().map(|(c, _)| *c), Some(Column::Message));
-        let narrow = v.widths(100.0);
-        assert_eq!(narrow.last().map(|(_, x)| *x), Some(120.0));
+    fn narrow_tables_drop_subsystem_and_category() {
+        let narrow = layout(190.0, 500.0, ColumnSet::default());
+        assert_eq!(kinds(&narrow), vec![Col::Type, Col::Time, Col::Process, Col::Message]);
+        let last = narrow.last().unwrap();
+        assert!((last.1 - (190.0 + 84.0 + 96.0 + 128.0)).abs() < 0.01 && last.2 > 0.0);
     }
 
     #[test]
-    fn expansion() {
-        let mut e = Expanded::default();
-        assert_eq!(e.row_lines(3, "a\nb\nc", 10), 1);
-        e.toggle(3);
-        assert_eq!(e.row_lines(3, "a\nb\nc", 10), 3);
-        assert_eq!(e.row_lines(3, "a\nb\nc", 2), 2);
-        e.toggle(3);
-        assert!(!e.is_expanded(3));
-        e.expand([1, 2]);
-        e.collapse_all();
-        assert!(!e.is_expanded(1));
+    fn a_shown_pid_column_sits_after_process() {
+        let mut set = ColumnSet::default();
+        assert!(set.toggle(Col::Pid));
+        let wide = layout(0.0, 900.0, set);
+        assert_eq!(kinds(&wide)[2..4], [Col::Process, Col::Pid]);
+        assert_eq!(wide[3].1, 84.0 + 96.0 + 128.0);
+    }
+
+    #[test]
+    fn a_hidden_column_leaves_no_gap_and_the_last_column_takes_the_rest() {
+        let mut set = ColumnSet::default();
+        set.toggle(Col::Time);
+        set.toggle(Col::Message);
+        let l = layout(10.0, 900.0, set);
+        assert_eq!(kinds(&l), vec![Col::Type, Col::Process, Col::Subsystem, Col::Category]);
+        assert_eq!(l[1].1, 10.0 + 84.0);
+        let last = l.last().unwrap();
+        assert!((last.1 + last.2 - 910.0).abs() < 0.01, "the table is filled to its right edge");
+    }
+
+    #[test]
+    fn the_last_visible_column_cannot_be_hidden() {
+        let mut set = ColumnSet::default();
+        for col in Col::ALL {
+            if col != Col::Message && set.shows(col) {
+                assert!(set.toggle(col));
+            }
+        }
+        assert!(!set.toggle(Col::Message), "Message is the only column left");
+        assert!(set.shows(Col::Message));
+        assert!(set.toggle(Col::Pid), "showing a column always works");
+        assert!(set.toggle(Col::Message), "and then Message is no longer the last one");
+    }
+
+    #[test]
+    fn a_narrow_table_with_only_giving_way_columns_shows_message() {
+        let mut set = ColumnSet::default();
+        for col in [Col::Type, Col::Time, Col::Process, Col::Message] {
+            set.toggle(col);
+        }
+        assert_eq!(kinds(&layout(0.0, 500.0, set)), vec![Col::Message]);
+        assert_eq!(kinds(&layout(0.0, 900.0, set)), vec![Col::Subsystem, Col::Category]);
     }
 }

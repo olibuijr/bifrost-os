@@ -193,6 +193,18 @@ impl Source for LogFile {
     }
 }
 
+/// A log read earlier, such as a file the user opened or an archive just captured: its entries are held in memory.
+pub struct Loaded {
+    pub entries: Vec<LogEntry>,
+}
+
+impl Source for Loaded {
+    fn load(&mut self, limit: usize) -> Result<Vec<LogEntry>, String> {
+        let skip = self.entries.len().saturating_sub(limit);
+        Ok(self.entries[skip..].to_vec())
+    }
+}
+
 /// The readable regular files directly in `/var/log`, by name.
 pub fn log_files() -> Vec<PathBuf> {
     if bifrost_app::testing::pinned() {
