@@ -87,9 +87,9 @@
     {
       "feature": "Weather errors",
       "apple": "WeatherError",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs (\"Can't reach Open-Meteo\"); springboard/src/shell/weather/data.rs (fetch_forecast returns io::Error)",
+      "bifrost": "springboard/ui/src/weather_model.rs (WeatherError::from_io, is_retryable); springboard/src/shell/weather/data.rs (fetch_forecast returns io::Error); springboard/apps/weather-desktop/src/weather.rs; tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "Failures are reported as plain strings or io errors. No typed error enum that apps can match on."
+      "note": "A typed WeatherError maps permission refusals, network failures and unreadable answers to their own kinds, each with its own message and retry rule, and is tested headless. Gap: the weather service's own error codes are not parsed, so a server-side refusal still reads as an unreachable service or an unknown error; the mapping needs a live check on Midget."
     },
     {
       "feature": "Data attribution",

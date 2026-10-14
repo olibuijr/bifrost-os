@@ -24,9 +24,9 @@
     {
       "feature": "Scenes",
       "apple": "Scene, WindowGroup, scenePhase",
-      "bifrost": "springboard/sdk/src/view/app.rs",
+      "bifrost": "springboard/ui/src/scene_phase.rs (ScenePhase, SceneTracker); springboard/sdk/src/view/app.rs; tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "One window per app declared in the manifest; no multi-scene composition or scenePhase value"
+      "note": "The active, inactive and background phases and the once-per-change tracker are tested headless. Gap: the shell does not yet send window visibility and focus to apps, and there is one window per app with no multi-scene composition."
     },
     {
       "feature": "Windows",
@@ -66,16 +66,16 @@
     {
       "feature": "Toolbars",
       "apple": "toolbar, ToolbarItem, ToolbarItemGroup, toolbar customization",
-      "bifrost": "springboard/ui/src/nav.rs (Toolbar, ToolbarLayout); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/sdk/src/widgets.rs (toolbar)",
+      "bifrost": "springboard/ui/src/nav.rs (Toolbar, ToolbarLayout); springboard/ui/src/toolbar_customization.rs (ToolbarCustomization); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/ui/tests/parity_sdk-complete-26.rs; springboard/sdk/src/widgets.rs (toolbar)",
       "status": "partial",
-      "note": "Groups, overflow, validation and menu anchors are tested headless (headless_toolbar_* in ui/tests). No user toolbar customization."
+      "note": "Groups, overflow, validation and menu anchors are tested headless (headless_toolbar_* in ui/tests). Hiding, showing, moving and resetting items, with required items kept, are tested headless in parity_sdk-complete-26.rs. Gap: no customization sheet draws the choice, and the toolbar does not yet save the order between launches."
     },
     {
       "feature": "Search",
       "apple": "searchable, search suggestions, search scopes",
-      "bifrost": "springboard/ui/src/search.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/sdk/src/widgets.rs; wired: springboard/apps/news-desktop/src/news.rs (BAR_SEARCH, key, search_focused), springboard/apps/news-desktop/src/wire.rs (search_rows), springboard/ui/src/textfind.rs, springboard/sdk/src/widgets.rs (search_field)",
+      "bifrost": "springboard/ui/src/search.rs; springboard/ui/src/search_scope.rs (SearchBar); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/ui/tests/parity_sdk-complete-26.rs; springboard/sdk/src/widgets.rs; wired: springboard/apps/news-desktop/src/news.rs (BAR_SEARCH, key, search_focused), springboard/apps/news-desktop/src/wire.rs (search_rows), springboard/ui/src/textfind.rs, springboard/sdk/src/widgets.rs (search_field)",
       "status": "partial",
-      "note": "Field geometry, the clear button and its hit area are tested headless (headless_search_field_* in ui/tests). search_field control; no scopes, tokens or suggestions modifier Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Field geometry, the clear button and its hit area are tested headless (headless_search_field_* in ui/tests). The scope choice, the tokens and the prefix suggestions are tested headless in parity_sdk-complete-26.rs. Gap: the scopes, tokens and suggestions are not yet drawn by the search_field widget. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "App extensions",

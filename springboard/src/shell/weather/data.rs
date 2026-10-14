@@ -739,7 +739,7 @@ impl Store {
     pub fn fetch_forecast(&self, loc: &Location, net: &dyn Fetch) -> io::Result<Forecast> {
         let body = net.get(&forecast_url(loc), BODY_LIMIT)?;
         let text = String::from_utf8_lossy(&body);
-        let mut f = parse_forecast(&text).ok_or_else(|| io::Error::other("unexpected forecast answer"))?;
+        let mut f = parse_forecast(&text).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "unexpected forecast answer"))?;
         self.write(&Self::forecast_file(loc), &text);
         if let Ok(body) = net.get(&air_url(loc), BODY_LIMIT) {
             let text = String::from_utf8_lossy(&body);
