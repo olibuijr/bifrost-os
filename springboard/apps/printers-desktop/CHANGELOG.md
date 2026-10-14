@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- New: the info pane has a Share Printer or Stop Sharing button beside Save, for a queue that can be shared. A pool and a queue that sends its jobs to another computer are not offered.
+- New: the Status column reads sentences for more job reasons from the scheduler: waiting for a password, wrong document password, not allowed to print, queued in the printer, service off line and others.
+- The printer problem sentences are tested for paper jams, empty trays, toner, doors and offline reports.
+
 ## 0.4.0
 
 - New: Add Printer lists the printers on the network that announce themselves; click one to add it under its own name with its model and location. The clipboard address stays as "Use Address from Clipboard" in the pane and the Printer menu.

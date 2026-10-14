@@ -102,8 +102,8 @@
    "area": "job",
    "apple": "Pause Selected Jobs, Resume Selected Jobs (plural menu items); jobs list selects many",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:559",
-   "note": "Drag over rows or Select All Jobs (Cmd+A) choose many; Hold, Release and Cancel run over every chosen job (model.rs:68). Pointer clicks carry no Shift or Cmd state in the SDK, so no click-modifier selection.",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:735 (select_job_range)",
+   "note": "Drag over rows or Select All Jobs (Cmd+A) choose many; Hold, Release and Cancel run over every chosen job (selected_jobs in model.rs). Pointer clicks carry no Shift or Cmd state in the SDK, so no click-modifier selection.",
    "wire": "Change Model.selected_job to a BTreeSet<i32> (model.rs:49), extend Target::Job with shift and cmd modifiers in window.rs:295 and run the job action over every selected id in worker.rs Request::Act."
   },
   {
@@ -111,8 +111,8 @@
    "area": "job",
    "apple": "Contextual menu on a job: pause, resume, remove",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:827",
-   "note": "Hold, Release, Cancel and Select All Jobs on a secondary click (context_items, window.rs:827), wired in main.rs through Input::Context. Hold and Release stand for pause and resume; a job has no separate remove item, Cancel removes it.",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:847 (context_items)",
+   "note": "Hold, Release, Cancel and Select All Jobs on a secondary click (context_items, window.rs:847), wired in main.rs through Input::Context. Hold and Release stand for pause and resume; a job has no separate remove item, Cancel removes it.",
    "wire": "Add a secondary-click Target::Job handler in window.rs:295 that opens the shell context menu (bifrost_app::controls menu kit) with Hold, Release and Cancel mapped to toolbar_action (window.rs:339)."
   },
   {
@@ -120,8 +120,8 @@
    "area": "printer",
    "apple": "Contextual menu on a printer: Get Info, Pause, Remove, Forget",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:827",
-   "note": "Pause or Resume, Set as Default, Printer Info, Share or Stop Sharing (not for a remote queue), Remove Printer on a secondary click (context_items, window.rs:827). The scheduler has no Forget.",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:847 (context_items)",
+   "note": "Pause or Resume, Set as Default, Printer Info, Share or Stop Sharing (not for a remote queue or a pool), Remove Printer on a secondary click (context_items, window.rs:847). The scheduler has no Forget.",
    "wire": "Add a secondary-click Target::Printer menu in window.rs:295 with Pause or Resume, Set Default, Delete Printer, Printer Info."
   },
   {
@@ -138,8 +138,8 @@
    "area": "job",
    "apple": "Job cell progress indicator and Canceling page N status (jobProgress)",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/draw.rs:158",
-   "note": "Progress bar under a printing job's status and Printing N of M text (model.rs:458); depends on the scheduler reporting job-media-progress or impressions.",
+   "bifrost": "springboard/apps/printers-desktop/src/draw.rs:158; springboard/apps/printers-desktop/src/model.rs:612 (job_progress)",
+   "note": "Progress bar under a printing job's status and Printing N of M text; the percent is the scheduler's job-media-progress, else the pages done (job_progress), so it needs the scheduler to report one of them.",
    "wire": "Read job-media-progress and job-impressions-completed in worker.rs Request::List and draw a progress bar under the state cell in draw.rs:79."
   },
   {
@@ -147,8 +147,8 @@
    "area": "job",
    "apple": "Waiting, Held, Printing, Stopped, Canceled, Failed, Completed plus reasons (Paused on server, Canceled on server)",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/model.rs:569",
-   "note": "Status column appends reasons such as Canceled on server and Held for authentication (job_reason_text), and reads Canceling page N of M while a cancel of a printing job is on its way (job_status_text, model.rs:569).",
+   "bifrost": "springboard/apps/printers-desktop/src/model.rs:565 (job_reason_text); springboard/apps/printers-desktop/src/model.rs:598 (job_status_text)",
+   "note": "Status column appends reasons such as Canceled on server, Held for authentication, Waiting for a password and Queued in the printer (job_reason_text), and reads Canceling page N of M while a cancel of a printing job is on its way (job_status_text). Tested in model.rs. Not yet verified on Midget.",
    "wire": "Add each newly reported job-state-reasons keyword to job_reason_text (model.rs:550) when the scheduler sends one the table does not name yet."
   },
   {
@@ -156,8 +156,8 @@
    "area": "view",
    "apple": "Job cell: title, owner, size, state, date",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:434",
-   "note": "Pages and Created columns added (draw.rs:15).",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:600 (columns)",
+   "note": "Pages and Created columns sit between the owner, size and status columns (columns, window.rs:600; created_text, model.rs:626). Not yet verified on Midget.",
    "wire": "Add Created and Pages columns to HEADINGS and columns() (window.rs:212) from time-at-creation and job-media-sheets."
   },
   {
@@ -165,8 +165,8 @@
    "area": "printer",
    "apple": "Plain messages for state reasons: paper jam, out of paper, tray missing, door open, offline, may be out of toner",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/model.rs:262",
-   "note": "Plain sentences with a warning mark under the printer name (draw.rs:98) and in the info pane.",
+   "bifrost": "springboard/apps/printers-desktop/src/model.rs:334 (reason_problem); springboard/apps/printers-desktop/src/draw.rs:107 (warning_mark)",
+   "note": "Plain sentences for each state reason with a level (reason_problem), tested for jams, empty trays, toner, doors and offline reports. A warning mark is drawn under the printer name and the info pane lists the sentence. Not yet verified on Midget.",
    "wire": "Map printer-state-reasons to sentences in model.rs (printer_detail, model.rs:187) for media-jam, media-empty, media-needed, toner-low, marker-supply-empty, offline-report, door-open and show them under the printer name with a warning glyph."
   },
   {
@@ -174,8 +174,8 @@
    "area": "printer",
    "apple": "Ink and toner levels from marker-supply-low and marker-supply-empty",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/draw.rs:169",
-   "note": "Level bars in the info pane from marker-names, levels and colors (springboard/ui/src/cups.rs:294).",
+   "bifrost": "springboard/apps/printers-desktop/src/draw.rs:255 (paint_info); springboard/apps/printers-desktop/src/model.rs:486 (supply_text)",
+   "note": "Level bars in the info pane's Supplies section from marker-names, levels and colors (springboard/ui/src/cups.rs:294). Not yet verified on Midget.",
    "wire": "Read marker-names, marker-levels, marker-colors in worker.rs, add Printer.supplies in model.rs and draw level bars in a Supplies section of draw.rs:79."
   },
   {
@@ -183,7 +183,7 @@
    "area": "printer",
    "apple": "PCPrinterOfflineStateChangedNotification greys out an unreachable printer",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/worker.rs:143",
+   "bifrost": "springboard/apps/printers-desktop/src/worker.rs:175 (offline_names); springboard/apps/printers-desktop/src/model.rs:520 (probe_target)",
    "note": "TCP probe with a 1 s timeout on a thread per device; the row is dimmed and marked Offline. USB and local devices are not probed.",
    "wire": "Probe reachability of the device URI in worker.rs (TCP connect with 1 s timeout) every POLL_MS, store Printer.offline and dim the row in draw.rs:56 with an Offline summary word."
   },
@@ -210,8 +210,8 @@
    "area": "printer",
    "apple": "Shared printer rows with their own pause, resume and remove items",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/model.rs:390",
-   "note": "Shared flag shown in rows and the info pane; Share Printer or Stop Sharing in the menu and context menu. A queue that sends its jobs to a print queue on another computer shows as Remote and is not offered for sharing (forwards_to_queue, model.rs:390).",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:584 (share_rect, share_shown); springboard/apps/printers-desktop/src/model.rs:402 (share_offered)",
+   "note": "Shared flag shown in rows and the info pane. Share Printer or Stop Sharing is a button in the info pane beside Save, and a menu and context-menu item. A pool and a queue that sends its jobs to a print queue on another computer are not offered (share_offered; tests in window.rs and model.rs). Not yet verified on Midget.",
    "wire": "Offer Stop Sharing as a button in the info pane, next to Save, as well as in the menu."
   },
   {
@@ -264,8 +264,8 @@
    "area": "shell",
    "apple": "Notification when a printer needs attention (out of paper, jam)",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:240",
-   "note": "An error-level printer reason posts one notification until it clears (model.rs:128); only while the app runs.",
+   "bifrost": "springboard/apps/printers-desktop/src/model.rs (collect_alerts, take_alerts)",
+   "note": "An error-level printer reason posts one notification until it clears (collect_alerts, tested in model.rs); only while the app runs.",
    "wire": "Post a shell notification from worker.rs when printer-state-reasons gains an error-level reason, using the notification centre API."
   },
   {
@@ -282,8 +282,8 @@
    "area": "shell",
    "apple": "Metadata.appintents actions (print documents, cancel job)",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/app_intents.rs:21",
-   "note": "Shortcuts actions List Printers, Pause Printer, Resume Printer, Set Default Printer, Cancel Print Job and Print File with a Printer entity, declared in manifest.toml, besides the printers.* control methods. built on parity/team-d-print-center; not yet verified on Midget.",
+   "bifrost": "springboard/apps/printers-desktop/src/app_intents.rs:39",
+   "note": "Shortcuts actions List Printers, Pause Printer, Resume Printer, Set Default Printer, Cancel Print Job, Print File, Hold Job and Release Job with Printer and Job entities, declared in manifest.toml, besides the printers.* control methods. built on parity/team-d-print-center; not yet verified on Midget.",
    "wire": "Add Hold Job and Release Job intents and a Job entity so Shortcuts can pick a job from the queue."
   },
   {
@@ -309,7 +309,7 @@
    "area": "menu",
    "apple": "Print Center Help",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:883",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:888 (menus)",
    "note": "Help menu with Print Center Help, which shows the topics (model.rs HELP) in the window. built on parity/team-d-print-center; not yet verified on Midget.",
    "wire": "Publish a Print Center page in the website documentation and open it from the Help item as System Information does; the in-window topics stay as the offline copy."
   }

@@ -4,7 +4,7 @@
 
 use crate::discover::{detail_line, is_added};
 use crate::model::{
-    created_text, document_tag, info_lines, job_progress, option_lines, pages_text, printer_detail, problem_line, row_summary, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
+    created_text, document_tag, info_lines, job_progress, option_lines, pages_text, printer_detail, problem_line, row_summary, share_label, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
 };
 use crate::window::{Field, PrintCenter, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT};
 use bifrost_app::controls::{Node, Rect, Role};
@@ -265,6 +265,12 @@ fn paint_info(p: &mut PrintCenter, s: &mut Surface, ui: &Ui, printer: &bifrost_a
         let save = p.save_rect();
         fill(s, ui, save, 6.0, TINT);
         text_mid(&mut p.labels, s, ui, "Save", MAC_BODY_PT, Weight::Semibold, WHITE, save.x + 26.0, save.y + save.h / 2.0, save.w - 30.0);
+        if p.share_shown() {
+            let share = p.share_rect();
+            fill(s, ui, share, 6.0, SEPARATOR_C.now());
+            let label = share_label(printer.shared);
+            text_mid(&mut p.labels, s, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), share.x + 14.0, share.y + share.h / 2.0, share.w - 28.0);
+        }
     }
     let mut y = p.info_lines_top();
     let offline = p.model.is_offline(&printer.name);
