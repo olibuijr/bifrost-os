@@ -54,6 +54,8 @@ pub struct Manifest {
     pub schemes: Vec<String>,
     /// App Intents declared as `[[intent]]` tables (`shell::intents`); Search lists the shortcuts.
     pub intents: Vec<super::intents::ManifestIntent>,
+    /// `[[quick_action]]` tables: the static Home Screen quick actions (`shell::quick_actions`).
+    pub quick_actions: Vec<bifrost_ui::quick_actions::ShortcutItem>,
 }
 
 impl Manifest {
@@ -136,6 +138,7 @@ impl Manifest {
                 _ => {}
             }
         }
+        m.quick_actions = super::quick_actions::parse_static(text);
         // ids become directory names: keep them to a safe alphabet
         let safe = !m.id.is_empty() && m.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
         if super::kinds::Kind::parse(&m.kind).is_none() {
@@ -163,7 +166,7 @@ fn parse_size(s: &str) -> Option<(f32, f32)> {
     (w > 0.0 && h > 0.0 && w.is_finite() && h.is_finite()).then_some((w, h))
 }
 
-fn unquote(s: &str) -> String {
+pub(super) fn unquote(s: &str) -> String {
     s.trim().trim_matches('"').trim_matches('\'').to_string()
 }
 
@@ -386,6 +389,8 @@ pub struct AppHost {
     pub tile: super::desktop_dock::TileState,
     /// The items the app set on its Dock menu (the `dock` service's `menu`), shown under the app's own rows.
     pub dock_menu: Vec<super::services::dock_tile::MenuEntry>,
+    /// The dynamic Home Screen quick actions the app set (the `quick_actions` service's `set`).
+    pub quick_actions: Vec<bifrost_ui::quick_actions::ShortcutItem>,
     /// `ToShell::DocumentState`: the document's title, unsaved-changes flag and file name (cleaned by `clean_badge`-style trimming).
     pub doc_title: String,
     pub doc_edited: bool,
@@ -488,6 +493,7 @@ impl AppHost {
             badge: String::new(),
             tile: Default::default(),
             dock_menu: Vec::new(),
+            quick_actions: Vec::new(),
             sudden: false,
             activity: 0,
             quit_at: None,
