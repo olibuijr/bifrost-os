@@ -382,15 +382,120 @@ fn secure_keyboard_entry_keeps_shell_shortcuts_out_of_the_terminal() {
 }
 
 #[test]
-fn window_group_saves_tab_folders_and_opens_them_as_tabs() {
+fn window_groups_are_named_saved_and_opened_as_tabs() {
     let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
     sh.terminal_menu_action(23, 2000.0);
     assert_eq!(sh.terminal_ui.message, "No window group saved");
     sh.terminal_menu_action(22, 2100.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::GroupName);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "Work");
+    sh.terminal_apply_entry(2200.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
     assert!(sh.terminal_ui.message.starts_with("Saved "), "{}", sh.terminal_ui.message);
     let saved = groups::decode(sh.prefs.get(groups::KEY).unwrap_or(""));
-    sh.terminal_menu_action(23, 2200.0);
-    assert_eq!(sh.term.len(), 1 + saved.len(), "one new tab per saved folder");
+    assert_eq!(saved.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Work"]);
+    sh.terminal_menu_action(23, 2300.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Groups);
+    sh.terminal_group_tapped(0, false, 2400.0);
+    assert_eq!(sh.term.len(), 1 + saved[0].tabs.len(), "one new tab per saved folder");
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
+}
+
+#[test]
+fn a_window_group_cross_asks_once_and_then_deletes() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(22, 2000.0);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "One");
+    sh.terminal_apply_entry(2100.0);
+    sh.terminal_menu_action(22, 2200.0);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "Two");
+    sh.terminal_apply_entry(2300.0);
+    sh.terminal_menu_action(23, 2400.0);
+    sh.terminal_group_tapped(1, true, 2500.0);
+    assert_eq!(sh.terminal_groups().len(), 2, "the first tap only asks");
+    sh.terminal_group_tapped(1, true, 2600.0);
+    assert_eq!(sh.terminal_groups().iter().map(|g| g.name.clone()).collect::<Vec<_>>(), ["Two"]);
+    assert_eq!(sh.terminal_ui.message, "Deleted One");
+}
+
+#[test]
+fn the_find_bar_matches_case_and_stops_at_the_ends_when_asked() {
+    let mut sh = terminal(&["/bin/sh", "-c", "echo Alpha alpha; read x"]);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("alpha"));
+    sh.terminal_action(1, 2000.0);
+    sh.terminal_ui.query.as_mut().unwrap().set_text(&sh.ui, "Alpha");
+    sh.terminal_ui.find_ignore_case = true;
+    sh.terminal_find(Direction::Newer, true);
+    assert!(sh.terminal_ui.message.ends_with(" of 2"), "{}", sh.terminal_ui.message);
+    sh.terminal_ui.find_ignore_case = false;
+    sh.terminal_find(Direction::Newer, true);
+    assert_eq!(sh.terminal_ui.message, "1 of 1", "only the exact case matches");
+    sh.terminal_ui.find_wrap = false;
+    sh.terminal_find(Direction::Newer, false);
+    assert_eq!(sh.terminal_ui.message, "No matches", "without wrap the search stops at the last match");
+    sh.terminal_ui.find_wrap = true;
+    sh.terminal_find(Direction::Newer, false);
+    assert_eq!(sh.terminal_ui.message, "1 of 1", "with wrap it goes round again");
+}
+
+#[test]
+fn the_profiles_panel_applies_a_theme_or_profile_and_the_default_is_saved() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(item::PROFILES, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Profiles);
+    sh.terminal_apply_choice(profiles::Choice::Profile(2));
+    assert_eq!(sh.terminal_ui.profile, Some(2));
+    sh.terminal_set_default_profile();
+    assert_eq!(sh.prefs.get(profiles::DEFAULT_KEY), Some("2"));
+    sh.terminal_apply_choice(profiles::Choice::Theme(1));
+    assert_eq!((sh.terminal_ui.settings.theme, sh.terminal_ui.profile), (1, None));
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.profile, Some(2), "the default wins over the theme in use at launch");
+}
+
+#[test]
+fn the_all_tabs_panel_shows_a_tab_and_closes() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.new_terminal_tab(None);
+    sh.terminal_menu_action(item::ALL_TABS, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Tabs);
+    sh.terminal_show_tab(0, 2100.0);
+    assert_eq!(sh.term.active_index(), 0);
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
+}
+
+#[test]
+fn the_startup_command_and_the_export_name_are_kept() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(item::STARTUP, 2000.0);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "  ls -la \n");
+    sh.terminal_apply_entry(2100.0);
+    assert_eq!(sh.terminal_ui.startup_command.as_deref(), Some("ls -la"));
+    assert_eq!(sh.prefs.get(startup::COMMAND_KEY), Some("ls -la"));
+    sh.terminal_menu_action(item::EXPORT_SELECTION, 2200.0);
+    assert_eq!(sh.terminal_ui.message, "Select terminal text first");
+    sh.terminal_menu_action(item::EXPORT, 2300.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Export);
+    assert_eq!(sh.terminal_ui.entry.as_ref().unwrap().text(), "terminal-scrollback");
+}
+
+#[test]
+fn a_tab_dragged_along_the_bar_moves_and_is_not_selected() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.new_terminal_tab(None);
+    sh.new_terminal_tab(None);
+    let width = sh.w as f32;
+    let g = layout::Header::new(width, sh.ui.s, sh.term.len());
+    let y = sh.ui.pt(scene::STATUS_PT + 20.0);
+    let from = g.tab_w * 0.3;
+    let to = g.tab_w * 2.5;
+    sh.term.select(0);
+    sh.terminal_touch(Event::Down(from, y), 2000.0);
+    sh.terminal_touch(Event::Move(to, y), 2010.0);
+    sh.terminal_touch(Event::Up(to, y), 2020.0);
+    assert_eq!(sh.term.active_index(), 2, "the tab moved to the last place and is still the one picked up");
+    assert_eq!(sh.terminal_ui.panel, Panel::None, "a drag does not open anything");
 }
 
 #[test]
@@ -432,62 +537,256 @@ fn cursor_style_and_blink_persist_and_reload() {
 }
 
 #[test]
-fn close_other_tabs_keeps_only_the_active_tab() {
-    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
-    sh.terminal_menu_action(6, 2000.0);
-    sh.terminal_menu_action(6, 2100.0);
-    assert_eq!(sh.term.len(), 3);
-    sh.term.select(1);
-    assert_eq!(MENU[24], "Close other tabs");
-    sh.terminal_menu_action(24, 2200.0);
-    assert_eq!(sh.term.len(), 1);
-    assert_eq!(sh.term.active_index(), 0);
-}
-
-#[test]
-fn paste_selection_and_help_report_through_the_menu() {
-    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
-    assert_eq!(MENU[26], "Paste selection");
-    sh.terminal_menu_action(26, 2000.0);
-    assert_eq!(sh.terminal_ui.message, "Select terminal text first");
-    assert_eq!(MENU[27], "Terminal help");
-    sh.terminal_menu_action(27, 2100.0);
-    assert_eq!(sh.terminal_ui.message, extras::HELP);
-}
-
-#[test]
-fn edit_title_renames_the_front_tab_and_empty_restores_it() {
-    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
-    assert_eq!(MENU[28], "Edit title");
-    sh.terminal_menu_action(28, 2000.0);
-    assert!(matches!(sh.terminal_ui.panel, Panel::Command));
-    sh.terminal_ui.command.as_mut().unwrap().set_text(&sh.ui, "deploy");
-    sh.terminal_run_command(2100.0);
-    assert!(matches!(sh.terminal_ui.panel, Panel::None));
-    assert_eq!(sh.term.as_ref().unwrap().title(0), "deploy");
-    sh.terminal_menu_action(28, 2200.0);
-    sh.terminal_ui.command.as_mut().unwrap().set_text(&sh.ui, "");
-    sh.terminal_run_command(2300.0);
-    assert!(!sh.term.as_ref().unwrap().has_custom_title());
-}
-
-#[test]
-fn mouse_reporting_toggle_applies_to_new_tabs() {
-    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
-    assert_eq!(MENU[29], "Allow mouse reporting");
-    assert!(sh.terminal_ui.mouse_reporting);
-    sh.terminal_menu_action(29, 2000.0);
-    assert!(!sh.terminal_ui.mouse_reporting);
-    assert_eq!(sh.terminal_ui.message, "Mouse reports to programs are off");
-}
-
-#[test]
-fn selection_rows_ask_for_a_selection_first() {
-    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
-    for (i, label) in [(30, "Search the web for selection"), (31, "Open man page for selection"), (32, "Save selected text to Files"), (33, "Use selection for find")] {
-        assert_eq!(MENU[i], label);
-        sh.terminal_ui.message.clear();
-        sh.terminal_menu_action(i, 2000.0);
-        assert!(sh.terminal_ui.message.contains("elect"), "row {i}: {}", sh.terminal_ui.message);
+fn the_added_menu_rows_sit_where_the_actions_expect_them() {
+    for (index, label) in [
+        (item::TITLE, "Edit tab title"),
+        (item::CLOSE_OTHERS, "Close other tabs"),
+        (item::MOVE_LEFT, "Move tab left"),
+        (item::MOVE_RIGHT, "Move tab right"),
+        (item::MARK, "Mark line"),
+        (item::PREVIOUS_MARK, "Previous mark"),
+        (item::NEXT_MARK, "Next mark"),
+        (item::FIND_SELECTION, "Use selection for find"),
+        (item::PASTE_ESCAPED, "Paste escaped text"),
+        (item::PASTE_SELECTION, "Paste selection"),
+        (item::SEARCH_WEB, "Search the web for selection"),
+        (item::MAN_PAGE, "Open man page for selection"),
+        (item::SAVE_SELECTION, "Save selection to Files"),
+        (item::MOUSE, "Allow mouse reporting"),
+        (item::LOGIN_SHELL, "Login shell"),
+        (item::GROUP_LAUNCH, "Open window group at launch"),
+        (item::HELP, "Terminal help"),
+        (item::COLORS, "Text and background colors"),
+        (item::IGNORE_CASE, "Ignore case when finding"),
+        (item::WRAP, "Wrap around when finding"),
+        (item::LOOK_UP, "Look up selection"),
+        (item::MAN_SEARCH, "Search man pages for selection"),
+        (item::PROFILES, "Profiles"),
+        (item::STARTUP, "Startup command"),
+        (item::ALL_TABS, "Show all tabs"),
+        (item::EXPORT, "Export scrollback as"),
+        (item::EXPORT_SELECTION, "Save selection as"),
+    ] {
+        assert_eq!(MENU[index], label);
     }
+    assert_eq!(item::EXPORT_SELECTION, MENU.len() - 1, "the last row is the export of the selection");
+    assert_eq!(menu_key(item::MARK), Some("\u{2318}U"));
+}
+
+#[test]
+fn edit_title_names_the_tab_and_an_empty_title_gives_the_automatic_one_back() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(item::TITLE, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Title);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "deploy");
+    assert!(sh.terminal_panel_input(&Out::Enter, 2100.0));
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
+    assert_eq!(sh.terminal_ui.message, "Tab title set");
+    assert_eq!(sh.term.as_ref().unwrap().title(0), "deploy");
+    sh.terminal_menu_action(item::TITLE, 2200.0);
+    assert_eq!(sh.terminal_ui.entry.as_ref().unwrap().text(), "deploy", "the typed title is offered for editing");
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "");
+    sh.terminal_panel_input(&Out::Enter, 2300.0);
+    assert_eq!(sh.term.as_ref().unwrap().custom_title(), None);
+    assert_eq!(sh.terminal_ui.message, "Tab title is automatic");
+}
+
+#[test]
+fn tabs_move_along_the_bar_and_close_others_keeps_the_active_one() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.new_terminal_tab(None);
+    sh.new_terminal_tab(None);
+    for (i, name) in ["a", "b", "c"].iter().enumerate() {
+        sh.term.get_mut(i).unwrap().set_custom_title(name);
+    }
+    let order = |sh: &Shell| sh.term.iter().enumerate().map(|(i, tab)| tab.title(i)).collect::<String>();
+    assert_eq!(order(&sh), "abc");
+    assert_eq!(sh.term.active_index(), 2);
+    sh.terminal_menu_action(item::MOVE_LEFT, 2000.0);
+    assert_eq!((order(&sh).as_str(), sh.term.active_index()), ("acb", 1));
+    sh.terminal_menu_action(item::MOVE_LEFT, 2100.0);
+    sh.terminal_menu_action(item::MOVE_LEFT, 2200.0);
+    assert_eq!(order(&sh), "cab");
+    assert_eq!(sh.terminal_ui.message, "The tab is already the first");
+    sh.terminal_menu_action(item::MOVE_RIGHT, 2300.0);
+    assert_eq!((order(&sh).as_str(), sh.term.active_index()), ("acb", 1));
+    sh.terminal_menu_action(item::CLOSE_OTHERS, 2400.0);
+    assert_eq!(sh.term.len(), 1);
+    assert_eq!(sh.term.as_ref().unwrap().custom_title(), Some("c"));
+    assert_eq!(sh.terminal_ui.message, "Closed 2 tabs");
+    sh.terminal_menu_action(item::CLOSE_OTHERS, 2500.0);
+    assert_eq!(sh.terminal_ui.message, "There are no other tabs");
+}
+
+#[test]
+fn marks_are_set_removed_and_jumped_to_from_the_keyboard() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.term.as_mut().unwrap().feed(b"abc");
+    sh.terminal_hw_key(TermKey::Mark, 2000.0);
+    assert_eq!(sh.terminal_ui.message, "Marked this line");
+    sh.terminal_hw_key(TermKey::PreviousMark, 2100.0);
+    assert_eq!(sh.terminal_ui.message, "No earlier mark");
+    sh.terminal_hw_key(TermKey::Mark, 2200.0);
+    assert_eq!(sh.terminal_ui.message, "Mark removed");
+    sh.terminal_hw_key(TermKey::NextMark, 2300.0);
+    assert!(sh.terminal_ui.message.starts_with("No marks yet"), "{}", sh.terminal_ui.message);
+}
+
+#[test]
+fn use_selection_for_find_opens_find_with_the_selected_word() {
+    let mut sh = terminal(&["/bin/sh", "-c", "echo alpha beta; echo alpha; read x"]);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("beta"));
+    sh.terminal_hw_key(TermKey::UseSelectionForFind, 2000.0);
+    assert_eq!(sh.terminal_ui.message, "Select terminal text first");
+    sh.term.as_mut().unwrap().select_word((1, 0));
+    sh.terminal_hw_key(TermKey::UseSelectionForFind, 2100.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Find);
+    assert_eq!(sh.terminal_ui.query.as_ref().unwrap().text(), "alpha");
+    assert!(find_count(&sh.terminal_ui.message), "{}", sh.terminal_ui.message);
+}
+
+#[test]
+fn paste_escaped_and_paste_selection_type_into_the_shell() {
+    let _g = clipboard::tests::exclusive();
+    let mut sh = terminal(&["/bin/sh", "-c", "echo wordy; read -r x; echo got:$x; read -r y; echo again:$y; read z"]);
+    clipboard::set_text("a b");
+    sh.terminal_menu_action(item::PASTE_ESCAPED, 2000.0);
+    sh.term.as_mut().unwrap().key("Enter");
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("got:a\\ b"));
+    sh.terminal_menu_action(item::PASTE_SELECTION, 2100.0);
+    assert_eq!(sh.terminal_ui.message, "Select terminal text first");
+    sh.term.as_mut().unwrap().select_word((1, 0));
+    let word = sh.term.as_ref().unwrap().selected_text().unwrap();
+    sh.terminal_menu_action(item::PASTE_SELECTION, 2200.0);
+    sh.term.as_mut().unwrap().key("Enter");
+    let want = format!("again:{word}");
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains(&want));
+    assert!(sh.term.as_ref().unwrap().viewport_text().contains(&want));
+}
+
+#[test]
+fn ssh_links_open_a_tab_with_the_command_typed_in() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read -r x; echo got:$x; read y"]);
+    assert!(sh.terminal_open_link("ssh://me@host:2222/", 2000.0));
+    assert_eq!(sh.term.len(), 2);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("got:ssh -p 2222 me@host"));
+    assert!(sh.term.as_ref().unwrap().viewport_text().contains("got:ssh -p 2222 me@host"));
+    assert!(!sh.terminal_open_link("ssh://-oProxyCommand=x", 2100.0));
+    assert!(!sh.terminal_open_link("https://example.org", 2200.0));
+    assert_eq!(sh.term.len(), 2, "a link that is not ours opens nothing");
+}
+
+#[test]
+fn the_man_page_of_the_selected_word_opens_in_a_tab() {
+    let mut sh = terminal(&["/bin/sh", "-c", "echo printf; read -r x; echo got:$x; read y"]);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("printf"));
+    sh.terminal_menu_action(item::MAN_PAGE, 2000.0);
+    assert_eq!(sh.terminal_ui.message, "Select a command name first");
+    sh.term.as_mut().unwrap().select_word((1, 0));
+    sh.terminal_menu_action(item::MAN_PAGE, 2100.0);
+    assert_eq!(sh.term.len(), 2);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("got:man printf"));
+    assert!(sh.term.as_ref().unwrap().viewport_text().contains("got:man printf"));
+}
+
+#[test]
+fn mouse_reporting_toggle_reaches_every_tab_and_reloads() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.new_terminal_tab(None);
+    sh.terminal_menu_action(item::MOUSE, 2000.0);
+    assert!(!sh.terminal_ui.mouse_reporting);
+    let mut reloaded = TerminalUi::default();
+    assert!(reloaded.mouse_reporting, "on by default");
+    reloaded.load(&sh.prefs);
+    assert!(!reloaded.mouse_reporting);
+    sh.terminal_menu_action(item::MOUSE, 2100.0);
+    assert!(sh.terminal_ui.mouse_reporting);
+}
+
+#[test]
+fn login_shell_and_launch_group_are_chosen_in_the_menu_and_reload() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(item::LOGIN_SHELL, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Shell);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "bash");
+    sh.terminal_panel_input(&Out::Enter, 2100.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Shell, "a path that is not a full path stays open");
+    assert!(sh.terminal_ui.message.starts_with("Type the full path"));
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "/bin/sh");
+    sh.terminal_panel_input(&Out::Enter, 2200.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
+    assert_eq!(sh.terminal_ui.login_shell.as_deref(), Some("/bin/sh"));
+    assert_eq!(sh.terminal_login_shell(), None, "a Terminal started on another command keeps it");
+    sh.terminal_menu_action(item::GROUP_LAUNCH, 2300.0);
+    assert!(sh.terminal_ui.group_launch);
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.login_shell.as_deref(), Some("/bin/sh"));
+    assert!(reloaded.group_launch);
+}
+
+#[test]
+fn the_colour_theme_cycles_into_the_profiles_and_persists() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    for step in 0..3 {
+        sh.terminal_action(4, 2000.0 + step as f64);
+    }
+    assert_eq!((sh.terminal_ui.settings.theme, sh.terminal_ui.profile), (2, Some(1)));
+    assert_eq!(sh.term.as_ref().unwrap().background(), pack(0, 0, 0, 255), "Pro is white on black");
+    assert_eq!(sh.terminal_background(), pack(0, 0, 0, 255), "and so is the strip around the grid");
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.profile, Some(1));
+    sh.new_terminal_tab(None);
+    assert_eq!(sh.term.as_ref().unwrap().background(), pack(0, 0, 0, 255), "a new tab starts in the profile");
+    for step in 0..7 {
+        sh.terminal_action(4, 2100.0 + step as f64);
+    }
+    assert_eq!(sh.terminal_ui.profile, Some(8));
+    assert!(sh.term.iter().all(|tab| tab.background() == pack(122, 37, 30, 255)), "every tab follows");
+    sh.terminal_action(4, 2200.0);
+    assert_eq!((sh.terminal_ui.settings.theme, sh.terminal_ui.profile), (0, None));
+    let mut again = TerminalUi::default();
+    again.load(&sh.prefs);
+    assert_eq!(again.profile, None);
+}
+
+#[test]
+fn custom_colors_become_the_last_entry_of_the_theme_cycle() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(item::COLORS, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Colors);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "zzz");
+    sh.terminal_panel_input(&Out::Enter, 2100.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Colors, "colors that do not parse keep the panel open");
+    assert!(sh.terminal_ui.message.starts_with("Type the text color"), "{}", sh.terminal_ui.message);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "ffffff 102030");
+    sh.terminal_panel_input(&Out::Enter, 2200.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
+    assert_eq!(sh.terminal_ui.profile, Some(profile_table::PROFILES.len()), "the custom colors are in use");
+    assert_eq!(sh.term.as_ref().unwrap().background(), pack(16, 32, 48, 255));
+    assert_eq!(sh.terminal_background(), pack(16, 32, 48, 255));
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.custom_colors, Some(((255, 255, 255), (16, 32, 48))));
+    assert_eq!(reloaded.profile, sh.terminal_ui.profile);
+    sh.terminal_action(4, 2300.0);
+    assert_eq!((sh.terminal_ui.settings.theme, sh.terminal_ui.profile), (0, None), "Custom is the last stop of the cycle");
+    assert!(sh.terminal_ui.custom_colors.is_some(), "and the colors wait for the next time round");
+    sh.terminal_menu_action(item::COLORS, 2400.0);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "");
+    sh.terminal_panel_input(&Out::Enter, 2500.0);
+    assert_eq!(sh.terminal_ui.custom_colors, None, "an empty line gives them up");
+    assert_eq!(sh.terminal_ui.message, "Custom colors removed");
+}
+
+#[test]
+fn terminal_help_opens_draws_and_closes() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(item::HELP, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Help);
+    let mut img = crate::gfx::Image::new(sh.w as usize, sh.h as usize);
+    sh.draw_terminal(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, 2100.0);
+    assert!(sh.terminal_panel_input(&Out::Named("Escape"), 2200.0), "the help takes the key");
+    assert_eq!(sh.terminal_ui.panel, Panel::None, "Escape closes it");
 }

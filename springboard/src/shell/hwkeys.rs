@@ -65,6 +65,16 @@ pub enum TermKey {
     PrevTab,
     /// Cmd+1 .. Cmd+9, zero based
     Tab(u8),
+    /// Cmd+E: the selected text becomes the Find query
+    UseSelectionForFind,
+    /// Cmd+U: mark (or unmark) the current line
+    Mark,
+    /// Cmd+Up
+    PreviousMark,
+    /// Cmd+Down
+    NextMark,
+    /// Cmd+Shift+V: paste the clipboard with the shell's special characters escaped
+    PasteEscaped,
 }
 
 impl TermKey {
@@ -87,6 +97,11 @@ impl TermKey {
             (27, true) => TermKey::NextTab,
             (26, true) => TermKey::PrevTab,
             (2..=10, false) => TermKey::Tab((code - 2) as u8),
+            (18, false) => TermKey::UseSelectionForFind,
+            (22, false) => TermKey::Mark,
+            (103, false) => TermKey::PreviousMark,
+            (108, false) => TermKey::NextMark,
+            (47, true) => TermKey::PasteEscaped,
             _ => return None,
         })
     }
@@ -736,8 +751,13 @@ mod tests {
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 26), Some(Shortcut::Term(TermKey::PrevTab)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 2), Some(Shortcut::Term(TermKey::Tab(0))));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 10), Some(Shortcut::Term(TermKey::Tab(8))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 18), Some(Shortcut::Term(TermKey::UseSelectionForFind)));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 22), Some(Shortcut::Term(TermKey::Mark)));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 103), Some(Shortcut::Term(TermKey::PreviousMark)));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 108), Some(Shortcut::Term(TermKey::NextMark)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_C), Some(Shortcut::Term(TermKey::Copy)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_A), Some(Shortcut::Term(TermKey::SelectAll)));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 47), Some(Shortcut::Term(TermKey::PasteEscaped)));
         // Ctrl chords are never Term's: Ctrl+F, Ctrl+K and Ctrl+T stay control characters for the pty
         for key in [33, 37, 20, 34] {
             assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], key), None);

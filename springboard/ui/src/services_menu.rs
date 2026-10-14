@@ -23,11 +23,20 @@ pub enum Service {
     OpenUrl,
     SearchWith,
     ShowInFiles,
+    NewTerminalAtFolder,
 }
 
 impl Service {
     /// Every service, in menu order. The App menu's Services rows index this list.
-    pub const ALL: [Service; 6] = [Service::LookUp, Service::NewNoteWithSelection, Service::MakeStickyNote, Service::OpenUrl, Service::SearchWith, Service::ShowInFiles];
+    pub const ALL: [Service; 7] = [
+        Service::LookUp,
+        Service::NewNoteWithSelection,
+        Service::MakeStickyNote,
+        Service::OpenUrl,
+        Service::SearchWith,
+        Service::ShowInFiles,
+        Service::NewTerminalAtFolder,
+    ];
 
     /// The menu title.
     pub fn title(self) -> &'static str {
@@ -38,6 +47,7 @@ impl Service {
             Service::OpenUrl => "Open URL",
             Service::SearchWith => "Search With Quick Search",
             Service::ShowInFiles => "Show in Files",
+            Service::NewTerminalAtFolder => "New Terminal at Folder",
         }
     }
 
@@ -48,7 +58,7 @@ impl Service {
             (Service::LookUp, Selection::Text(t)) => crate::look_up::term_of(t).is_some(),
             (Service::NewNoteWithSelection | Service::MakeStickyNote | Service::SearchWith, Selection::Text(t)) => !t.trim().is_empty(),
             (Service::OpenUrl, Selection::Text(t)) => web_url(t).is_some(),
-            (Service::ShowInFiles, Selection::Files(files)) => !files.is_empty(),
+            (Service::ShowInFiles | Service::NewTerminalAtFolder, Selection::Files(files)) => !files.is_empty(),
             _ => false,
         }
     }
@@ -67,6 +77,8 @@ pub enum Route {
     OpenUrl(String),
     /// Shows the path in Files: the folder itself, or the folder that holds a file (the shell checks which).
     Reveal(String),
+    /// Opens a Terminal in the folder of the path: the folder itself, or the folder that holds a file (the shell checks).
+    Terminal(String),
 }
 
 /// The services that take `selection`, in menu order.
@@ -86,6 +98,7 @@ pub fn route(service: Service, selection: &Selection) -> Option<Route> {
         (Service::OpenUrl, Selection::Text(t)) => Route::OpenUrl(web_url(t)?),
         (Service::SearchWith, Selection::Text(t)) => Route::Search(t.trim().to_string()),
         (Service::ShowInFiles, Selection::Files(files)) => Route::Reveal(files.first()?.clone()),
+        (Service::NewTerminalAtFolder, Selection::Files(files)) => Route::Terminal(files.first()?.clone()),
         _ => return None,
     })
 }
@@ -148,7 +161,10 @@ mod tests {
 
     #[test]
     fn files_get_only_show_in_files() {
-        assert_eq!(menu_for(&Selection::Files(vec!["/home/me/a.txt".into()])), vec![Service::ShowInFiles]);
+        assert_eq!(
+            menu_for(&Selection::Files(vec!["/home/me/a.txt".into()])),
+            vec![Service::ShowInFiles, Service::NewTerminalAtFolder]
+        );
         assert!(menu_for(&Selection::Files(Vec::new())).is_empty());
     }
 
@@ -178,6 +194,11 @@ mod tests {
     fn a_service_that_does_not_take_the_selection_has_no_route() {
         assert_eq!(route(Service::OpenUrl, &text("ftp://x")), None);
         assert_eq!(route(Service::ShowInFiles, &text("hello")), None);
+        assert_eq!(route(Service::NewTerminalAtFolder, &text("hello")), None);
+        assert_eq!(
+            route(Service::NewTerminalAtFolder, &Selection::Files(vec!["/a/b c".into()])),
+            Some(Route::Terminal("/a/b c".into()))
+        );
     }
 
     #[test]
@@ -198,6 +219,7 @@ mod tests {
     fn titles_match_the_menu_names() {
         assert_eq!(Service::LookUp.title(), "Look Up in Dictionary");
         assert_eq!(Service::ShowInFiles.title(), "Show in Files");
-        assert_eq!(Service::ALL.len(), 6);
+        assert_eq!(Service::ALL.len(), 7);
+        assert_eq!(Service::NewTerminalAtFolder.title(), "New Terminal at Folder");
     }
 }

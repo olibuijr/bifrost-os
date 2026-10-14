@@ -69,6 +69,7 @@ impl Shell {
                     eprintln!("services: {e}");
                 }
             }
+            Route::Terminal(path) => self.terminal_open_in_folder(&reveal_folder(&path), t),
             Route::Reveal(path) => {
                 let folder = reveal_folder(&path);
                 if let Err(e) = self.desktop_open_folder(FILES_APP, &folder, t) {

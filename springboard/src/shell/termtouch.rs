@@ -12,6 +12,7 @@ use super::ui::Ui;
 use crate::gfx::Surface;
 use crate::scene::STATUS_PT;
 use crate::term::{Selection, Terminal};
+use termcore::mouse::MouseEvent;
 
 /// Finger travel that turns a press into a drag.
 const SLOP_PT: f32 = 10.0;
@@ -30,6 +31,10 @@ struct Press {
     long: bool,
     /// the cell under the finger when it landed
     cell: (usize, usize),
+    /// a program that asked for drags got the press (sent once the finger moved), so the release is its too
+    reported: bool,
+    /// the cell the last drag report was sent for
+    last_cell: (usize, usize),
 }
 
 #[derive(Default)]
@@ -65,7 +70,8 @@ impl TermTouch {
         self.menu = None;
         self.link = None;
         term.select(None);
-        self.press = Some(Press { x, y, t, last_y: y, carry: 0.0, moved: false, long: false, cell: term.cell_at(x, y) });
+        let cell = term.cell_at(x, y);
+        self.press = Some(Press { x, y, t, last_y: y, carry: 0.0, moved: false, long: false, cell, reported: false, last_cell: cell });
     }
 
     /// Before a long press the finger scrolls (down reveals older lines);
@@ -81,6 +87,19 @@ impl TermTouch {
         }
         if !p.moved && (x - p.x).hypot(y - p.y) > ui.pt(SLOP_PT) {
             p.moved = true;
+        }
+        // A program that asked for drags gets the press where the finger landed, then each cell the finger enters.
+        if p.moved && term.reports_drag() {
+            if !p.reported {
+                p.reported = true;
+                term.report_mouse(MouseEvent::Press, p.cell);
+            }
+            let cell = term.cell_at(x, y);
+            if cell != p.last_cell {
+                p.last_cell = cell;
+                term.report_mouse(MouseEvent::Drag, cell);
+            }
+            return;
         }
         let px = p.carry + y - p.last_y;
         let lines = (px / term.line_px()).trunc();
@@ -102,6 +121,10 @@ impl TermTouch {
             return false;
         }
         let Some(p) = self.press.take() else { return false };
+        if p.reported {
+            term.report_mouse(MouseEvent::Release, p.last_cell);
+            return false;
+        }
         if p.long {
             self.show_menu(ui, term, p.cell, screen_w);
             return false;
@@ -115,6 +138,12 @@ impl TermTouch {
     /// Counts taps on one cell: a second one selects its word, a third its line (as Terminal does).
     /// A tap on another cell, or after the window, starts again at one.
     fn tap(&mut self, term: &mut Terminal, cell: (usize, usize), t: f64) {
+        // A program that asked for the mouse (and is allowed it) gets the click; the tap then selects and opens nothing.
+        if term.report_mouse(MouseEvent::Press, cell) {
+            term.report_mouse(MouseEvent::Release, cell);
+            self.last_tap = None;
+            return;
+        }
         let count = match self.last_tap {
             Some((last, at, n)) if last == cell && t - at < MULTI_TAP_MS => n % 3 + 1,
             _ => 1,
@@ -196,12 +225,18 @@ impl TermTouch {
     }
 }
 
-/// The http(s) link under `cell`, if its row has one there.
+/// The link under `cell`, if its row has one there that the Terminal or the browser opens: web links, ssh and telnet
+/// connections, and manual pages.
 fn link_at(term: &Terminal, (col, row): (usize, usize)) -> Option<String> {
     detect_urls(&term.row_text(row))
         .into_iter()
-        .find(|(start, end, url)| (*start..*end).contains(&col) && (url.starts_with("http://") || url.starts_with("https://")))
+        .find(|(start, end, url)| (*start..*end).contains(&col) && opens_on_tap(url))
         .map(|(_, _, url)| url)
+}
+
+/// Whether a tap on link `url` opens it: the web, or one of the schemes the Terminal runs in a tab.
+pub fn opens_on_tap(url: &str) -> bool {
+    ["http://", "https://", "ssh://", "telnet://", "x-man-page://"].iter().any(|scheme| url.starts_with(scheme))
 }
 
 #[cfg(test)]
@@ -336,6 +371,41 @@ mod tests {
         assert!(!tt.up(&ui, &mut term, 600.0, 700.0, 1200.0));
         tt.dismiss();
         assert!(tt.menu().is_none());
+    }
+
+    #[test]
+    fn a_tap_is_a_click_for_a_program_that_asked_for_the_mouse() {
+        let ui = ui();
+        let mut term = terminal(&[
+            "/bin/sh",
+            "-c",
+            "/bin/stty raw -echo; printf '\\033[?1000h\\033[?1006h'; echo ready; /bin/head -c 18 | /bin/od -An -c; read x",
+        ]);
+        pump_until(&mut term, "ready");
+        let mut tt = TermTouch::default();
+        let (x, y) = centre(&term, 6, 0);
+        tt.down(&ui, &mut term, x, y, 1000.0);
+        assert!(tt.up(&ui, &mut term, x, y, 1100.0));
+        tt.down(&ui, &mut term, x, y, 1150.0);
+        tt.up(&ui, &mut term, x, y, 1200.0);
+        assert_eq!(term.selection(), None, "a double tap selects nothing while the program has the mouse");
+        let screen = pump_until(&mut term, "1   m");
+        assert!(screen.contains("1   M") && screen.contains("1   m"), "press and release reached the program: {screen:?}");
+    }
+
+    #[test]
+    fn with_mouse_reporting_off_a_tap_stays_with_the_terminal() {
+        let ui = ui();
+        let mut term = terminal(&["/bin/sh", "-c", "printf '\\033[?1000h\\033[?1006hhello world\\n'; read x"]);
+        pump_until(&mut term, "hello world");
+        term.set_mouse_reporting(false);
+        let mut tt = TermTouch::default();
+        let (x, y) = centre(&term, 1, 0);
+        tt.down(&ui, &mut term, x, y, 1000.0);
+        tt.up(&ui, &mut term, x, y, 1100.0);
+        tt.down(&ui, &mut term, x, y, 1150.0);
+        tt.up(&ui, &mut term, x, y, 1200.0);
+        assert_eq!(term.selected_text().as_deref(), Some("hello"), "the double tap selects the word");
     }
 
     #[test]

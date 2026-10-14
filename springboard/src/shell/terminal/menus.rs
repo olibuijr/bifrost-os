@@ -42,6 +42,29 @@ impl Shell {
                 }
                 true
             }
+            Panel::Profiles | Panel::Groups | Panel::Tabs => {
+                if matches!(out, Out::Named("Escape")) {
+                    self.terminal_close_panel(t);
+                }
+                true
+            }
+            Panel::Title | Panel::Shell | Panel::Colors | Panel::Startup | Panel::GroupName | Panel::Export => {
+                if matches!(out, Out::Enter) {
+                    self.terminal_apply_entry(t);
+                } else if matches!(out, Out::Named("Escape")) {
+                    self.terminal_ui.entry = None;
+                    self.terminal_close_panel(t);
+                } else if let Some(field) = &mut self.terminal_ui.entry {
+                    field.edit(&self.ui, out, t);
+                }
+                true
+            }
+            Panel::Help => {
+                if matches!(out, Out::Named("Escape")) {
+                    self.terminal_close_panel(t);
+                }
+                true
+            }
             Panel::None => false,
             _ => true,
         }
@@ -58,13 +81,14 @@ impl Shell {
             self.ui.s,
             bottom,
             self.terminal_ui.panel == Panel::Form,
-            self.terminal_ui.panel == Panel::More,
+            matches!(self.terminal_ui.panel, Panel::More | Panel::Help | Panel::Profiles | Panel::Groups | Panel::Tabs),
         )
     }
 
     pub(super) fn terminal_close_panel(&mut self, t: f64) {
         self.terminal_ui.panel = Panel::None;
         self.terminal_ui.pending_signal = None;
+        self.terminal_ui.confirm_others = false;
         self.terminal_ui.down = None;
         self.set_keyboard(self.terminal_ui.restore_keyboard, t);
         self.resize_terminals();
@@ -120,8 +144,14 @@ impl Shell {
                 self.terminal_appearance();
             }
             4 => {
-                self.terminal_ui.settings.theme =
-                    termcore::palette::next_theme(self.terminal_ui.settings.theme);
+                let (theme, profile) = profiles::next_scheme(
+                    self.terminal_ui.settings.theme,
+                    self.terminal_ui.profile,
+                    THEMES.len(),
+                    profile_table::PROFILES.len() + usize::from(self.terminal_ui.custom_colors.is_some()),
+                );
+                self.terminal_ui.settings.theme = theme;
+                self.terminal_ui.profile = profile;
                 self.terminal_appearance();
             }
             5 => {
@@ -142,6 +172,13 @@ impl Shell {
         self.resize_terminals();
         self.dirty = true;
     }
+    /// A row of the menu bar's File, Edit, View, Window or Help menu while the Terminal is in front: runs the More row
+    /// it names.
+    pub(crate) fn terminal_menu_command(&mut self, i: usize, t: f64) {
+        self.terminal_menu_action(i, t);
+        self.dirty = true;
+    }
+
     pub(super) fn terminal_menu_action(&mut self, i: usize, t: f64) {
         match i {
             0 => self.terminal_action(1, t),
@@ -182,14 +219,8 @@ impl Shell {
                 self.type_out(Out::Named("Paste"), t);
             }
             10 => {
-                if let Some(term) = self.term.as_ref() {
-                    let path = self.data_dir.join("Files/terminal-scrollback.txt");
-                    self.terminal_ui.message = match fs::create_dir_all(path.parent().unwrap())
-                        .and_then(|_| fs::write(&path, term.transcript()))
-                    {
-                        Ok(()) => "Saved to Files/terminal-scrollback.txt".into(),
-                        Err(e) => format!("Could not save: {e}"),
-                    };
+                if let Some(text) = self.term.as_ref().map(|term| term.transcript()) {
+                    self.terminal_ui.message = self.terminal_save_text("terminal-scrollback", &text);
                 }
             }
             11 => {
@@ -224,8 +255,46 @@ impl Shell {
             19 => self.terminal_open_command(t),
             20 => self.terminal_split(t),
             21 => self.terminal_close_split(t),
-            22 => self.terminal_save_group(),
-            23 => self.terminal_open_group(t),
+            22 => self.terminal_open_group_name(t),
+            23 => self.terminal_open_groups(t),
+            item::TITLE => self.terminal_open_title(t),
+            item::CLOSE_OTHERS => self.terminal_close_others(t),
+            item::MOVE_LEFT => self.terminal_move_tab(true),
+            item::MOVE_RIGHT => self.terminal_move_tab(false),
+            item::MARK => {
+                self.terminal_close_panel(t);
+                self.terminal_toggle_mark();
+            }
+            item::PREVIOUS_MARK | item::NEXT_MARK => {
+                self.terminal_close_panel(t);
+                self.terminal_jump_mark(i == item::NEXT_MARK);
+            }
+            item::FIND_SELECTION => self.terminal_use_selection_for_find(t),
+            item::PASTE_ESCAPED => self.terminal_paste_escaped(t),
+            item::PASTE_SELECTION => self.terminal_paste_selection(t),
+            item::SEARCH_WEB => self.terminal_search_web(t),
+            item::MAN_PAGE => self.terminal_man_page(t),
+            item::SAVE_SELECTION => {
+                let text = self.term.as_ref().and_then(|term| term.selected_text()).filter(|text| !text.is_empty());
+                self.terminal_ui.message = match text {
+                    Some(text) => self.terminal_save_text("terminal-selection", &text),
+                    None => "Select terminal text first".into(),
+                };
+            }
+            item::MOUSE => self.terminal_toggle_mouse(),
+            item::LOGIN_SHELL => self.terminal_open_shell_panel(t),
+            item::GROUP_LAUNCH => self.terminal_toggle_group_launch(),
+            item::HELP => self.terminal_open_help(t),
+            item::COLORS => self.terminal_open_colors(t),
+            item::IGNORE_CASE => self.terminal_toggle_ignore_case(),
+            item::WRAP => self.terminal_toggle_wrap(),
+            item::LOOK_UP => self.terminal_look_up(t),
+            item::MAN_SEARCH => self.terminal_man_search(t),
+            item::PROFILES => self.terminal_open_profiles(t),
+            item::STARTUP => self.terminal_open_startup(t),
+            item::ALL_TABS => self.terminal_open_tabs(t),
+            item::EXPORT => self.terminal_open_export(false, t),
+            item::EXPORT_SELECTION => self.terminal_open_export(true, t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self
