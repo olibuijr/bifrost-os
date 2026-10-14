@@ -40,8 +40,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Wi-Fi Aware peer discovery needs NAN-capable hardware and a service path that BifrOSt does not implement.",
    "rea": [],
    "method": "heuristic"
   },

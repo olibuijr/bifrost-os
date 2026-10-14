@@ -291,8 +291,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "The push-to-talk channel service is tied to Apple's push infrastructure and has no BifrOSt counterpart.",
    "rea": [],
    "method": "heuristic"
   },
@@ -438,8 +438,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "The augmented reality scene framework needs AR hardware and a spatial renderer that BifrOSt does not have.",
    "rea": [],
    "method": "heuristic"
   },
