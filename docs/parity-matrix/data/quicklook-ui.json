@@ -40,7 +40,7 @@
       "apple": "Quick Look generates previews for common file types (text, images, audio, video, PDF, documents)",
       "bifrost": "springboard/src/files/preview.rs (preview_for, line 28: text, image, audio card, video, PDF, folder summary, info card); springboard/src/files/mod.rs (spawn_preview: PDF text via the Books engine)",
       "status": "partial",
-      "note": "Only the Files app uses these. The SDK offers no built-in renderer, so other apps get nothing unless they render thumbnails themselves."
+      "note": "The preview choice by file type, text wrapping and picture size checks are tested headless in springboard/tests/parity_sdk-tests-16.rs. Only the Files app uses these. The SDK offers no built-in renderer, so other apps get nothing unless they render thumbnails themselves."
     },
     {
       "feature": "Thumbnails (QLThumbnailGenerator)",

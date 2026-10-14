@@ -31,9 +31,9 @@
   {
    "feature": "In-app preview of common file types",
    "apple": "Quick Look previews for common file types (https://developer.apple.com/documentation/quicklook)",
-   "bifrost": "springboard/apps/files/src/peek.rs (Files::peek), springboard/src/files/preview.rs (preview_for, is_pdf, zoom and pan limits), springboard/src/files/mod.rs (spawn_preview; previous and next at :435); wired: springboard/src/shell/preview_panel.rs (kind_for via bifrost_ui preview Registry; PDF and audio bodies)",
+   "bifrost": "springboard/src/files/preview.rs (preview_for, is_pdf, wrap_lines, Zoom, decode_allowed, image_size); springboard/src/files/mod.rs (spawn_preview at :411; step_preview, previous and next, at :449); springboard/apps/files/src/peek.rs (Files::peek); wired: springboard/src/shell/preview_panel.rs (kind_for via bifrost_ui preview Registry; PDF and audio bodies)",
    "status": "partial",
-   "note": "Covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. It is inside Files, not an SDK API, and it does not use the SDK PreviewPanel. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+   "note": "The preview choice, text wrapping, zoom and pan limits, decode bounds and header sizes are tested headless in springboard/tests/parity_sdk-tests-16.rs. Covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. It is inside Files, not an SDK API, and it does not use the SDK PreviewPanel. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
   },
   {
    "feature": "Markup on picture previews",

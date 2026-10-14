@@ -12,7 +12,7 @@
       "apple": "CLLocationManager, CLLocationUpdate, CLBackgroundActivitySession, CLServiceSession (Getting the current location of a device; Handling location updates in the background)",
       "bifrost": "springboard/sdk/src/core_location.rs (LocationManager, Delegate, Location, accuracy levels, distance filter); springboard/src/shell/services/location.rs (shell location service: manual location from Settings prefs, IP lookup off by default)",
       "status": "partial",
-      "note": "Host-tested only; not yet checked on Midget. Authorization state machine runs through the privacy grants (notDetermined to authorizedWhenInUse or denied); requestLocation, start/stopUpdatingLocation, didUpdateLocations and didFailWithError are delivered to a delegate. No GPS hardware and no Wi-Fi positioning: a fix is a manual location (100 m) or an opt-in IP lookup (about 25 km, city level). No altitude, no background updates, no CLLocationUpdate/CLServiceSession."
+      "note": "Tested headless in springboard/sdk/tests/parity_sdk-tests-16.rs (authorization replies, update and failure delivery, distance filter, decoding, error codes, usage texts); not yet checked on Midget. Authorization state machine runs through the privacy grants (notDetermined to authorizedWhenInUse or denied); requestLocation, start/stopUpdatingLocation, didUpdateLocations and didFailWithError are delivered to a delegate. No GPS hardware and no Wi-Fi positioning: a fix is a manual location (100 m) or an opt-in IP lookup (about 25 km, city level). No altitude, no background updates, no CLLocationUpdate/CLServiceSession."
     },
     {
       "feature": "Authorization and usage descriptions",
