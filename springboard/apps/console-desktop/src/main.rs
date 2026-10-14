@@ -487,7 +487,7 @@ fn menus(c: &Console, can_reveal: bool, can_trash: bool) -> Vec<AppMenu> {
     ];
     vec![
         AppMenu { title: "File".into(), items: file },
-        AppMenu { title: "Edit".into(), items: edit },
+        AppMenu { title: "Find".into(), items: edit },
         AppMenu { title: "View".into(), items: view },
         AppMenu { title: "Log".into(), items: log },
     ]
@@ -835,10 +835,10 @@ mod glue_tests {
     }
 
     #[test]
-    fn the_menus_merge_into_the_shells_file_edit_and_view_and_keep_the_log_menu() {
+    fn the_menus_merge_into_the_shells_file_and_view_and_keep_find_and_log_menus() {
         let a = app_with_opened(true);
         let menus = menus(a.console.as_ref().unwrap(), true, true);
-        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), vec!["File", "Edit", "View", "Log"]);
+        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), vec!["File", "Find", "View", "Log"]);
         let items = all_items(&menus);
         let ids: Vec<u32> = items.iter().filter(|i| !i.separator && !i.submenu).map(|i| i.id).collect();
         let mut unique = ids.clone();

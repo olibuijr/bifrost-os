@@ -715,7 +715,7 @@ impl MessagesWindow {
         true
     }
 
-    /// The File, Edit and Conversation menus with their key equivalents. Recomputed after every event.
+    /// The File, Message and Conversation menus with their key equivalents. Recomputed after every event.
     pub fn main_menu(&self) -> Vec<AppMenu> {
         let signed_in = self.model.signed_in() && self.model.sign_in.is_none();
         let room = self.model.selected.as_deref();
@@ -734,7 +734,7 @@ impl MessagesWindow {
                 ],
             },
             AppMenu {
-                title: "Edit".into(),
+                title: "Message".into(),
                 items: vec![
                     AppMenuItem::new(MENU_FIND, "Find").key("cmd+f").enabled(signed_in),
                     AppMenuItem::new(MENU_EMOJI, "Emoji & Symbols").key("ctrl+cmd+space").enabled(has_room),

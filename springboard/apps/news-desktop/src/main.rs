@@ -105,7 +105,7 @@ impl App for NewsApp {
         let shareable = news.is_some_and(|n| n.share_link().is_some());
         vec![
             AppMenu {
-                title: "Edit".into(),
+                title: "Article".into(),
                 items: vec![
                     AppMenuItem::new(MENU_TRANSLATE, "Translate Article").enabled(open),
                     AppMenuItem::new(MENU_SHARE, "Share Article").enabled(shareable),
