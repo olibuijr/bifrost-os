@@ -28,6 +28,10 @@ impl Eap {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Security {
     Open,
+    /// WEP with one shared key (open system authentication); legacy and insecure
+    Wep,
+    /// WPA Personal (PSK) without RSN: WPA1 with TKIP only
+    Wpa,
     /// WPA2 Personal (PSK)
     Wpa2,
     /// WPA3 Personal (SAE), protected management frames required
@@ -44,6 +48,8 @@ impl Security {
     pub fn label(self) -> &'static str {
         match self {
             Security::Open => "None",
+            Security::Wep => "WEP",
+            Security::Wpa => "WPA Personal",
             Security::Wpa2 => "WPA2 Personal",
             Security::Wpa3 => "WPA3 Personal",
             Security::Wpa2Wpa3 => "WPA2/WPA3 Personal",
@@ -57,15 +63,16 @@ impl Security {
 
     /// Personal security takes one shared password.
     pub fn is_personal(self) -> bool {
-        matches!(self, Security::Wpa2 | Security::Wpa3 | Security::Wpa2Wpa3)
+        matches!(self, Security::Wep | Security::Wpa | Security::Wpa2 | Security::Wpa3 | Security::Wpa2Wpa3)
     }
 
-    /// Shortest and longest password in chars; WPA2 passphrases are 8..=63,
-    /// SAE takes anything.
+    /// Shortest and longest password in chars; WPA passphrases are 8..=63,
+    /// SAE takes anything, and a WEP key is 5, 10, 13 or 26 chars (see `wep_key_ok`).
     pub fn password_len(self) -> (usize, usize) {
         match self {
+            Security::Wep => (5, 26),
             Security::Wpa3 => (1, 128),
-            Security::Wpa2 | Security::Wpa2Wpa3 => (8, 63),
+            Security::Wpa | Security::Wpa2 | Security::Wpa2Wpa3 => (8, 63),
             _ => (0, 128),
         }
     }
@@ -123,7 +130,11 @@ impl NetworkConfig {
         }
         let n = self.password.chars().count();
         let (min, max) = self.security.password_len();
-        if self.security.is_personal() && !(min..=max).contains(&n) {
+        let key_ok = match self.security {
+            Security::Wep => wep_key_ok(&self.password),
+            _ => (min..=max).contains(&n),
+        };
+        if self.security.is_personal() && !key_ok {
             return Some("Enter the password");
         }
         if self.security.is_enterprise() && (self.identity.is_empty() || self.password.is_empty()) {
@@ -143,6 +154,19 @@ impl NetworkConfig {
         }
         match self.security {
             Security::Open => f.push(("key_mgmt", "NONE".into())),
+            Security::Wep => {
+                f.push(("key_mgmt", "NONE".into()));
+                f.push(("wep_tx_keyidx", "0".into()));
+                f.push(("wep_key0", wep_key_value(&self.password)));
+                f.push(("auth_alg", "OPEN".into()));
+            }
+            Security::Wpa => {
+                f.push(("key_mgmt", "WPA-PSK".into()));
+                f.push(("proto", "WPA".into()));
+                f.push(("pairwise", "TKIP".into()));
+                f.push(("group", "TKIP".into()));
+                f.push(("psk", psk_value(&self.password)));
+            }
             Security::Wpa2 => {
                 f.push(("key_mgmt", "WPA-PSK".into()));
                 f.push(("psk", psk_value(&self.password)));
@@ -196,6 +220,26 @@ fn psk_value(p: &str) -> String {
     }
 }
 
+/// A WEP key is 5 or 13 printable ASCII characters, or 10 or 26 hexadecimal digits.
+fn wep_key_ok(k: &str) -> bool {
+    let ascii = k.bytes().all(|b| (b' '..=b'~').contains(&b));
+    let hex = k.bytes().all(|b| b.is_ascii_hexdigit());
+    match k.len() {
+        5 | 13 => ascii,
+        10 | 26 => hex,
+        _ => false,
+    }
+}
+
+/// A hexadecimal WEP key is written unquoted, as wpa_supplicant saves it; an ASCII key is quoted.
+fn wep_key_value(k: &str) -> String {
+    if matches!(k.len(), 10 | 26) && k.bytes().all(|b| b.is_ascii_hexdigit()) {
+        k.to_string()
+    } else {
+        wpa::quoted(k)
+    }
+}
+
 /// Priorities for a list in joining order: the first gets the highest.
 pub fn priority_of(index: usize, len: usize) -> i32 {
     (len - index) as i32
@@ -235,12 +279,18 @@ fn from_fields(f: &[(String, String)]) -> Option<(i32, NetworkConfig)> {
     let mgmt = get("key_mgmt").unwrap_or("");
     let has = |m: &str| mgmt.split_whitespace().any(|t| t == m);
     let eap = if get("eap").is_some_and(|e| e.to_uppercase().contains("TTLS")) { Eap::Ttls } else { Eap::Peap };
+    let proto = get("proto").unwrap_or("");
+    let wpa1_only = proto.split_whitespace().any(|t| t == "WPA") && !proto.split_whitespace().any(|t| t == "RSN");
     let (security, password) = if has("WPA-EAP") {
         (Security::Enterprise(eap), get("password").map(decode).unwrap_or_default())
     } else if has("SAE") && has("WPA-PSK") {
         (Security::Wpa2Wpa3, get("psk").or(get("sae_password")).map(psk_text).unwrap_or_default())
     } else if has("SAE") {
         (Security::Wpa3, get("sae_password").or(get("psk")).map(psk_text).unwrap_or_default())
+    } else if has("NONE") && get("wep_key0").is_some() {
+        (Security::Wep, get("wep_key0").map(psk_text).unwrap_or_default())
+    } else if has("WPA-PSK") && wpa1_only {
+        (Security::Wpa, get("psk").map(psk_text).unwrap_or_default())
     } else if has("WPA-PSK") || (mgmt.is_empty() && get("psk").is_some()) {
         (Security::Wpa2, get("psk").map(psk_text).unwrap_or_default())
     } else {

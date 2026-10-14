@@ -72,7 +72,7 @@ pub enum Row {
 pub fn rows_for(security: Security) -> &'static [Row] {
     match security {
         Security::Open => &[Row::Name, Row::Security],
-        Security::Wpa2 | Security::Wpa3 | Security::Wpa2Wpa3 => &[Row::Name, Row::Security, Row::Password],
+        Security::Wep | Security::Wpa | Security::Wpa2 | Security::Wpa3 | Security::Wpa2Wpa3 => &[Row::Name, Row::Security, Row::Password],
         Security::Enterprise(_) => &[Row::Name, Row::Security, Row::Eap, Row::Username, Row::Anonymous, Row::Password, Row::Validate],
     }
 }
