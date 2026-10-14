@@ -32,6 +32,8 @@ const BUBBLE_GAP_PT: f32 = 8.0;
 const FOOT_LINE_PT: f32 = 15.0;
 /// Widest a bubble gets, as a share of the main pane.
 const BUBBLE_SHARE: f32 = 0.62;
+/// Width of the outline around the message a quoted line jumped to.
+const HIGHLIGHT_PT: f32 = 2.0;
 const RADIUS_PT: f32 = 12.0;
 const BADGE_PT: f32 = 16.0;
 const SHEET_W_PT: f32 = 420.0;
@@ -678,6 +680,9 @@ impl MessagesWindow {
             let (fill, ink) = if row.own { (colors::SYSTEM_BLUE.now(), WHITE) } else { (FIELD_BG.now(), LABEL.now()) };
             let faint = if row.own { WHITE } else { LABEL_2.now() };
             s.fill_rrect(x, by, bw, row.bubble_h, lay.radius, fill);
+            if self.model.is_highlighted(&row.id) {
+                s.stroke_rrect(x, by, bw, row.bubble_h, lay.radius, ui.pt(HIGHLIGHT_PT), colors::SYSTEM_YELLOW.now());
+            }
             self.bubbles.push(([x, by, bw, row.bubble_h], row.id.clone()));
             let mut ly = by + lay.bubble_pad;
             if let Some(quote) = &row.quote {
