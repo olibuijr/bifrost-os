@@ -160,6 +160,8 @@ pub enum Action {
     ShowEncodings,
     EncodingsDone,
     EncodingToggle(u8),
+    /// Format > Text > Writing Direction: right to left (true) or left to right (false)
+    Direction(bool),
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -267,6 +269,7 @@ impl Action {
             Action::ShowSettings => MENU_BASE + 0xc7,
             Action::SettingsDone => MENU_BASE + 0xc8,
             Action::Setting(i) => MENU_BASE + 0xd0 + i as u32,
+            Action::Direction(rtl) => MENU_BASE + if rtl { 0xe8 } else { 0xe7 },
             Action::ShowSpacing => MENU_BASE + 0xc9,
             Action::SpacingDone => MENU_BASE + 0xca,
             Action::SpacingCancel => MENU_BASE + 0xcb,
@@ -383,6 +386,8 @@ impl Action {
             0xcc => Action::ShowEncodings,
             0xcd => Action::EncodingsDone,
             0xe0..=0xe6 => Action::EncodingToggle((offset - 0xe0) as u8),
+            0xe7 => Action::Direction(false),
+            0xe8 => Action::Direction(true),
             _ => return None,
         })
     }
@@ -1222,6 +1227,8 @@ mod tests {
             Action::DefaultEncoding(6),
             Action::CopyRuler,
             Action::PasteRuler,
+            Action::Direction(false),
+            Action::Direction(true),
             Action::Rewrap,
             Action::DarkBackground,
             Action::TextReplacement,

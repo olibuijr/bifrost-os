@@ -114,6 +114,9 @@ pub struct Style {
     /// on every cell of the paragraph like `align`.
     pub space_before: u8,
     pub space_after: u8,
+    /// Writing direction of the paragraph (Format > Text > Writing Direction): right to left when true. A paragraph
+    /// property, stored on every cell of the paragraph like `align`.
+    pub rtl: bool,
 }
 
 /// The largest space a paragraph takes before or after, in points.
@@ -137,6 +140,7 @@ impl Default for Style {
             link: 0,
             space_before: 0,
             space_after: 0,
+            rtl: false,
         }
     }
 }
@@ -559,6 +563,11 @@ impl Text {
             s.space_before = before;
             s.space_after = after;
         });
+    }
+
+    /// Format > Text > Writing Direction: right to left or left to right, on every paragraph the selection touches.
+    pub fn set_writing_direction(&mut self, rtl: bool) {
+        self.restyle_paragraphs(move |s| s.rtl = rtl);
     }
 
     /// The paragraph spacing (before, after) of the paragraph that holds the selection start.
@@ -1191,6 +1200,22 @@ mod tests {
         let t = plain("two words\nthree more  words");
         assert_eq!(t.word_count(), 5);
         assert_eq!(t.char_count(), 26);
+    }
+
+    #[test]
+    fn writing_direction_applies_to_every_paragraph_the_selection_touches() {
+        let mut t = plain("one\ntwo\nthree");
+        t.select(0, 7);
+        t.set_writing_direction(true);
+        assert!(t.cells()[0].style.rtl && t.cells()[4].style.rtl, "both selected paragraphs turn right to left");
+        assert!(!t.cells()[9].style.rtl, "the third paragraph is outside the selection");
+        assert_eq!(t.undo_name(), Some("Formatting"));
+        t.select(9, 9);
+        t.set_writing_direction(true);
+        t.select(0, 0);
+        t.set_writing_direction(false);
+        assert!(!t.cells()[0].style.rtl, "a caret in the first paragraph clears that paragraph");
+        assert!(t.cells()[4].style.rtl && t.cells()[9].style.rtl, "the other paragraphs keep their direction");
     }
 
     #[test]

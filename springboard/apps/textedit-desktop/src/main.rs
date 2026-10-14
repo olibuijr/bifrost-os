@@ -184,6 +184,7 @@ fn edits_text(action: Action) -> bool {
                 | Action::MakePlain
                 | Action::MakeRich
                 | Action::PasteRuler
+                | Action::Direction(_)
         )
 }
 
@@ -744,6 +745,10 @@ impl TextEditApp {
                 }
             }
             Action::Transform(how) => doc.text.transform(how),
+            Action::Direction(rtl) => {
+                doc.text.set_writing_direction(rtl);
+                true
+            }
             Action::Strike => {
                 doc.text.toggle_strike();
                 true
@@ -1761,6 +1766,9 @@ impl TextEditApp {
         for (title, a) in [("Align Left", Align::Left), ("Center", Align::Center), ("Align Right", Align::Right), ("Justify", Align::Justified)] {
             items.push(menu_item(Action::Align(a), title, "", rich).checked(align == a).depth(1));
         }
+        items.push(AppMenuItem::separator().depth(1));
+        items.push(menu_item(Action::Direction(false), "Left to Right", "", rich).checked(!style.rtl).depth(1));
+        items.push(menu_item(Action::Direction(true), "Right to Left", "", rich).checked(style.rtl).depth(1));
         items.push(AppMenuItem::separator().depth(1));
         for index in 0..text::SPACINGS.len() as u8 {
             let title = format!("Spacing {}", view::spacing_label(index));
