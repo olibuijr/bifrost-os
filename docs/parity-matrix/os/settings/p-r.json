@@ -18,9 +18,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/sdk/src/passwords.rs; springboard/src/shell/passwords_page.rs",
+   "status": "partial",
+   "note": "Passwords SDK and Settings page exist; App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/passwords_page.rs",
+   "status": "partial",
+   "note": "Settings Passwords page exists; App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -58,9 +58,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_search.rs",
+   "status": "partial",
+   "note": "Settings search exists; the Apple search-terms intents are not exposed.",
    "rea": []
   },
   {
@@ -139,8 +139,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no configuration profiles page",
+   "status": "n/a",
+   "note": "Configuration profiles (MDM enrolment) are an Apple device-management feature with no BifrOSt counterpart.",
    "rea": []
   },
   {
@@ -159,8 +159,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Configuration profiles (MDM enrolment) are an Apple device-management feature with no BifrOSt counterpart.",
    "rea": []
   },
   {
@@ -239,8 +239,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no configuration profiles page",
+   "status": "n/a",
+   "note": "Configuration profiles (MDM enrolment) are an Apple device-management feature with no BifrOSt counterpart.",
    "rea": []
   }
  ]
