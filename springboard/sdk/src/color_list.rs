@@ -58,7 +58,21 @@ impl ColorList {
         self.entries.len() != before
     }
 
-    /// Keys in the order they were first set.
+    /// Moves `key` to position `index` (0 is the first), shifting the colours in between. Returns `false` and changes
+    /// nothing when the key is absent or `index` is not a position of the list.
+    pub fn move_color(&mut self, key: &str, index: usize) -> bool {
+        let Some(from) = self.entries.iter().position(|(k, _)| k == key) else {
+            return false;
+        };
+        if index >= self.entries.len() {
+            return false;
+        }
+        let entry = self.entries.remove(from);
+        self.entries.insert(index, entry);
+        true
+    }
+
+    /// Keys in the order they were first set, or moved to.
     pub fn keys(&self) -> Vec<&str> {
         self.entries.iter().map(|(k, _)| k.as_str()).collect()
     }

@@ -59,16 +59,16 @@
     {
       "feature": "Pixel transfer (format conversion and scaling)",
       "apple": "VTPixelTransferSessionCreate, VTPixelTransferSessionTransferImage",
-      "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12",
+      "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12, transfer_i420, transfer_rgba); springboard/render/tests/parity_sdk-complete-09.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-video-toolbox, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. conversion exists for the shell's own video path only; no app-facing pixel transfer session"
+      "note": "Pure model with headless tests: NV12 and I420 pictures convert to RGBA and scale by nearest neighbour, and RGBA scales too. Gap: not wired into apps or the shell, no app-facing pixel transfer session, and no test on the VM or Midget."
     },
     {
       "feature": "Pixel rotation (VTPixelRotationSession)",
       "apple": "VTPixelRotationSessionCreate, VTPixelRotationSessionRotateImage",
-      "bifrost": "springboard/render/src/video_transfer.rs (rotate_picture",
+      "bifrost": "springboard/render/src/video_transfer.rs (rotate_picture, turn_for_degrees, transfer_rgba); springboard/render/tests/parity_sdk-complete-09.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-video-toolbox, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. display rotation only; not exposed as a video-buffer rotation API"
+      "note": "Quarter turns with mirrors, and clockwise angles that map to a turn (turn_for_degrees), are tested headless. Gap: not wired into apps or the shell, and the rotation is not exposed as a video-buffer rotation session, nor tested on the VM or Midget."
     },
     {
       "feature": "RAW processing",

@@ -45,9 +45,9 @@
     {
       "feature": "Entitlements queries",
       "apple": "EntitlementsQuery",
-      "bifrost": "springboard/src/bare/app_policy.rs (manifest capabilities such as documents)",
+      "bifrost": "springboard/src/bare/app_policy.rs (Policy::holds, Policy::held, ENTITLEMENT_NAMES); springboard/tests/parity_sdk-complete-09.rs",
       "status": "partial",
-      "note": "Declared manifest capabilities gate file and resource access. They are not signed entitlements and are not exposed as a query API to apps."
+      "note": "Declared manifest capabilities gate file and resource access, and Policy::holds and Policy::held answer which permissions and entitlements a policy grants, tested headless. Gap: the answers are not signed entitlements, and apps cannot yet ask the SDK for them."
     },
     {
       "feature": "Platform, SIP and init-process tests",
