@@ -6,6 +6,7 @@
 //! RTC wake) whether or not this app is running, and the app reloads what
 //! the service changed (a one-shot alarm switched off, a finished timer).
 
+pub mod intent;
 pub mod stopwatch;
 pub mod world;
 

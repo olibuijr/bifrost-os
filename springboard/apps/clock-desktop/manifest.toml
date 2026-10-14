@@ -9,3 +9,10 @@ category = "Utilities"
 architecture = "x86_64-linux"
 permissions = ["storage"]
 window = "full-size"
+
+[[intent]]
+id = "world-clock-time"
+title = "World Clock Time"
+description = "Reports the time in a World Clock city, or on this device when no city is named."
+shortcut = true
+params = ["city:string?"]
