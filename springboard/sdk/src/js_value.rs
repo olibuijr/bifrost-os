@@ -86,7 +86,7 @@ impl JsValue {
             JsValue::Object(fields) => {
                 let parts = fields
                     .iter()
-                    .map(|(k, v)| Ok(format!("{}:{}", quote(k), v.to_literal()?)))
+                    .map(|(k, v)| -> Result<String, String> { Ok(format!("{}:{}", quote(k), v.to_literal()?)) })
                     .collect::<Result<Vec<_>, String>>()?;
                 format!("{{{}}}", parts.join(","))
             }
