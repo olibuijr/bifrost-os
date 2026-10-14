@@ -2,19 +2,23 @@
 //!
 //! This is the app-facing counterpart of the reference compression API (`compression_encode_buffer`,
 //! `compression_decode_buffer`, `compression_stream_*`, `InputFilter`, `OutputFilter`, `FilterError`).
-//! The encoder and decoder are the ones the system layer already has: DEFLATE (RFC 1951) and the zlib
-//! wrapper (RFC 1950). The encoder is greedy LZ77 with one fixed-Huffman block, so it compresses
-//! less than a full encoder would. Algorithm cases this build has no codec for (Brotli, LZ4, LZBITMAP,
-//! LZFSE, LZMA) are named so that app code keeps the reference shape, and they fail with
-//! `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a BifrOSt addition.
+//! The codecs are DEFLATE (RFC 1951) and the zlib wrapper (RFC 1950). The encoder is greedy LZ77 with
+//! dynamic Huffman blocks, chosen by a [`Level`] (the chain depth of the match finder). It can also
+//! split large inputs over several threads (`encode_buffer_threaded`). Algorithm cases this build has
+//! no codec for (Brotli, LZ4, LZBITMAP, LZFSE, LZMA) are named so that app code keeps the reference
+//! shape, and they fail with `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a
+//! BifrOSt addition.
 //!
 //! Streams and filters buffer their input and run the one-shot codec when they are finalized, so no
 //! output appears before `finalize`. Output is still delivered in chunks of the requested size.
 
-use springboard::files::zip::deflate as raw_deflate;
+mod dynamic;
+
 use springboard::pngenc::adler32;
 use bifrost_render::cg::pdf::inflate;
 use std::fmt;
+
+pub use dynamic::Level;
 
 /// The compression algorithms, named after the reference API's cases.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -99,17 +103,33 @@ impl fmt::Display for FilterError {
     }
 }
 
-/// Compresses `src` in one call. `Zlib` output is a zlib stream with an Adler-32 trailer.
+/// Compresses `src` in one call at the default level. `Zlib` output is a zlib stream with an Adler-32 trailer.
 pub fn encode_buffer(algorithm: Algorithm, src: &[u8]) -> Result<Vec<u8>, Error> {
+    encode_buffer_threaded(algorithm, src, Level::Default, 1)
+}
+
+/// Compresses `src` in one call at `level`, using up to `threads` threads for large inputs. The
+/// result decodes to `src` with `decode_buffer`; threads change the bytes, not the decoded data.
+pub fn encode_buffer_threaded(algorithm: Algorithm, src: &[u8], level: Level, threads: usize) -> Result<Vec<u8>, Error> {
     match algorithm {
         Algorithm::Zlib => {
-            let mut out = vec![0x78, 0x9c]; // deflate, 32K window, default level
-            out.extend(raw_deflate(src));
+            let mut out = vec![0x78, zlib_level_flags(level)]; // 32K window; FLEVEL from the level
+            out.extend(dynamic::encode_threaded(src, level, threads));
             out.extend(adler32(src).to_be_bytes());
             Ok(out)
         }
-        Algorithm::Deflate => Ok(raw_deflate(src)),
+        Algorithm::Deflate => Ok(dynamic::encode_threaded(src, level, threads)),
         other => Err(Error::Unsupported(other)),
+    }
+}
+
+/// The second zlib header byte for `level`: FLEVEL in the top two bits, then the check bits that make
+/// the header a multiple of 31 (0x5e, 0x9c and 0xda for the fast, default and best levels).
+fn zlib_level_flags(level: Level) -> u8 {
+    match level {
+        Level::Fast => 0x5e,
+        Level::Default => 0x9c,
+        Level::Best => 0xda,
     }
 }
 
@@ -290,11 +310,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_zlib_stream_is_the_known_eight_bytes() {
-        // fixed block with only end-of-block (bits 1,1,0x0000000 -> 03 00), adler32 of nothing is 1
+    fn empty_zlib_stream_has_the_default_header_and_the_empty_adler32() {
+        // The block is a dynamic one holding only end-of-block, so its bytes are not fixed;
+        // the header and the trailer are.
         let enc = encode_buffer(Algorithm::Zlib, b"").unwrap();
-        assert_eq!(enc, vec![0x78, 0x9c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01]);
+        assert_eq!(&enc[..2], &[0x78, 0x9c]);
+        assert_eq!(&enc[enc.len() - 4..], &[0x00, 0x00, 0x00, 0x01]);
         assert_eq!(decode_buffer(Algorithm::Zlib, &enc).unwrap(), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn zlib_header_check_bits_are_a_multiple_of_31_for_every_level() {
+        for level in [Level::Fast, Level::Default, Level::Best] {
+            let enc = encode_buffer_threaded(Algorithm::Zlib, b"header", level, 1).unwrap();
+            let check = ((enc[0] as u16) << 8) | enc[1] as u16;
+            assert_eq!(check % 31, 0);
+            assert_eq!(decode_buffer(Algorithm::Zlib, &enc).unwrap(), b"header".to_vec());
+        }
+    }
+
+    #[test]
+    fn every_level_round_trips_through_the_codec() {
+        let text: Vec<u8> = (0..4000u32).map(|i| (i * i % 251) as u8).collect();
+        for level in [Level::Fast, Level::Default, Level::Best] {
+            let enc = encode_buffer_threaded(Algorithm::Deflate, &text, level, 1).unwrap();
+            assert_eq!(decode_buffer(Algorithm::Deflate, &enc).unwrap(), text);
+        }
     }
 
     #[test]
@@ -312,9 +353,10 @@ mod tests {
             let enc = encode_buffer(alg, text).unwrap();
             assert_eq!(decode_buffer(alg, &enc).unwrap(), text.to_vec());
         }
-        // a repeated run of 100 bytes shrinks to a literal plus one long match
+        // a repeated run of 100 bytes shrinks to a literal plus one long match; the dynamic
+        // block header is most of the output at this size
         let run = vec![7u8; 100];
-        assert!(encode_buffer(Algorithm::Deflate, &run).unwrap().len() < 20);
+        assert!(encode_buffer(Algorithm::Deflate, &run).unwrap().len() < 40);
     }
 
     #[test]
