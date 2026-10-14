@@ -75,7 +75,7 @@
       "apple": "CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel, CISampler, Core Image Kernel Language and Metal kernels",
       "bifrost": "springboard/render/src/kernel.rs; springboard/sdk/src/lib.rs (kit::kernel)",
       "status": "partial",
-      "note": "Colour, warp, blend and chained unary kernels run on packed pixels; an app reaches them as bifrost_app::kit::kernel with its own closures, and the behaviour is tested headless in springboard/render/tests/parity_sdk-complete-32.rs. Gap: there is no kernel language and no GPU path for app kernels, so Apple's Metal-backed kernels and CISampler's GPU filters remain out of reach; the lab machine is needed only to time a kernel on Midget."
+      "note": "Colour, warp, blend and chained unary kernels run on packed pixels; an app reaches them as bifrost_app::kit::kernel with its own closures, and the behaviour is tested headless in springboard/render/tests/parity_sdk-complete-32.rs. Gap: there is no kernel language and no GPU path for app kernels, so the GPU-backed kernels and sampler filters of the reference system remain out of reach; the lab machine is needed only to time a kernel on Midget."
     },
     {
       "feature": "Feature detection (CIDetector: faces, rectangles, text, QR and barcodes)",

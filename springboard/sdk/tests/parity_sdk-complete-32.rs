@@ -1,5 +1,4 @@
-//! Parity sdk-complete-32: headless tests for the app random sources (`bifrost_app::random`, the GameplayKit random
-//! family). Pure host tests: no clock, no device and no network. Each test drives the public API.
+//! Parity sdk-complete-32: headless tests for the app random sources (`bifrost_app::random`). Pure host tests: no clock, no device and no network. Each test drives the public API.
 
 use bifrost_app::random::{shuffle, Algorithm, Mt19937, RandomDistribution, RandomSource, Source};
 

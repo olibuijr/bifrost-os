@@ -1,6 +1,6 @@
-//! Random sources for apps (the GameplayKit `GKRandomSource` family). The generators and distributions are in
-//! `bifrost_core::random`, re-exported here, so an app takes one import. This module adds the Mersenne Twister
-//! (MT19937, the reference generator behind GameplayKit's Mersenne source) and [`Algorithm`], a choice an app makes
+//! Random sources for apps: generators and distributions an app seeds and draws from. The generators and distributions
+//! are in `bifrost_core::random`, re-exported here, so an app takes one import. This module adds the Mersenne Twister
+//! (MT19937, the reference generator for sequences that must match another system) and [`Algorithm`], a choice an app makes
 //! once and seeds from `testing::seed()` so a test kit run deals the same sequence.
 //!
 //! A source is deterministic: one algorithm and one seed give one sequence on every machine. Nothing here reads the
