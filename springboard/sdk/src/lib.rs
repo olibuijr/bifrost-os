@@ -92,6 +92,7 @@ pub mod password_gen;
 pub mod digest;
 pub mod crypto_key;
 pub mod keychain_protection;
+pub mod system;
 pub mod autofill;
 pub mod trust;
 pub mod gss_status;

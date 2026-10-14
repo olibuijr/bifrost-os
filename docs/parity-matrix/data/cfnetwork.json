@@ -59,9 +59,9 @@
     {
       "feature": "Network configuration, link state and DHCP",
       "apple": "Network configuration and reachability through SystemConfiguration and CFHostGetReachability (https://developer.apple.com/documentation/cfnetwork/hosts)",
-      "bifrost": "springboard/netd (Wi-Fi, DHCP, routes behind a socket); springboard/src/net/wifi.rs (Status, sysfs link state); springboard/src/net/ntp.rs (online() check); springboard/proto/src/svc.rs (is.olibuijr.net service protocol)",
-      "status": "os",
-      "note": "The system owns Wi-Fi, DHCP and connectivity state and uses it for NTP and the Wi-Fi widget. Apps get no reachability API in the SDK."
+      "bifrost": "springboard/sdk/src/reachability.rs (has_default_route, probe, classify); springboard/sdk/src/network_path.rs (Path, Status); springboard/netd (Wi-Fi, DHCP, routes behind a socket); springboard/src/net/wifi.rs (Status, sysfs link state); springboard/proto/src/svc.rs (is.olibuijr.net service protocol)",
+      "status": "partial",
+      "note": "Apps get a default-route check, a TCP reachability probe and the connectivity path, with tests for the route check and the error decoding. The system still owns Wi-Fi, DHCP and routes, and apps cannot configure them."
     },
     {
       "feature": "Connection cost and service type",

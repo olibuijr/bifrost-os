@@ -10,9 +10,9 @@
     {
       "feature": "Authorization lock view and plug-in views",
       "apple": "SFAuthorizationView, SFAuthorizationPluginView, SFAuthorizationViewState, SFButtonType, SFViewType",
-      "bifrost": "docs/privd-protocol.md (password gate with wrong_password and locked_out errors)",
-      "status": "os",
-      "note": "The privileged-action password check exists in the privd daemon. No app-facing lock icon, authorization dialog or plug-in view exists in the SDK or the shell."
+      "bifrost": "springboard/sdk/src/system/authorization_lock.rs (AuthorizationLock, ButtonType, PasswordError, from_code, message); docs/privd-protocol.md (password gate with wrong_password and locked_out errors)",
+      "status": "partial",
+      "note": "The lock state, the privileged password replies (wrong_password, locked_out, no_password) and their messages are tested. The shell draws the lock view, and app-facing plug-in views do not exist."
     },
     {
       "feature": "Certificate panel",

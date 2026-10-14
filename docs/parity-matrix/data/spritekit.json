@@ -87,16 +87,16 @@
   {
    "feature": "Custom shaders and uniforms",
    "apple": "SKShader, SKAttribute, SKAttributeValue, SKUniform",
-   "bifrost": "docs/gpu-first.md (system presenter); springboard/render/src/glass.rs (system blur)",
-   "status": "os",
-   "note": "the GPU presenter and glass pass run in the system layer; apps cannot supply a fragment shader or per-node attributes"
+   "bifrost": "springboard/sdk/src/system/sprite_shader.rs (Shader, Value, Uniform, validate)",
+   "status": "partial",
+   "note": "Shader sources, attributes and uniform values are validated with tests. The system presenter runs no application shader, so validated descriptions are not yet drawn by any presenter."
   },
   {
    "feature": "Effect, crop and transform nodes",
    "apple": "SKEffectNode, SKCropNode, SKTransformNode",
-   "bifrost": "springboard/src/shell/window_fx.rs (window effects), springboard/render/src/glass.rs",
-   "status": "os",
-   "note": "window transitions and blur run in the shell; no app-facing node that renders children into an offscreen buffer with a filter"
+   "bifrost": "springboard/sdk/src/system/effect_nodes.rs (CropNode, TransformNode, EffectNode, Affine, Rect)",
+   "status": "partial",
+   "note": "Crop visibility, affine composition and filter validation are tested. Window transitions and blur still run in the shell, and nodes do not yet render their children into an offscreen filtered buffer."
   },
   {
    "feature": "Warp geometry",
