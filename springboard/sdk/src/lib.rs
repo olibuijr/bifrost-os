@@ -639,7 +639,6 @@ pub mod image_object;
 pub mod gpu_device;
 pub mod drawable_pool;
 pub mod gpu_pass;
-pub mod pixel_buffer;
 pub mod biquad;
 pub mod extent_map;
 pub mod os_services;

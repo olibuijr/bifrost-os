@@ -9,7 +9,6 @@
 mod docx;
 mod encoding;
 mod document;
-mod encoding;
 mod html;
 mod layout;
 mod links;
