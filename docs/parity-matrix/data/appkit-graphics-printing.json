@@ -1,139 +1,139 @@
 {
-  "framework": "AppKit (Graphics, Drawing, Color, and Printing)",
-  "doc": "https://developer.apple.com/documentation/appkit",
-  "macos_since": "10.0",
-  "status": "partial",
-  "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs, springboard/sdk/src/image_object.rs, springboard/sdk/src/color_list.rs",
-  "summary": "Semantic colours, a colour panel, colour spaces and conversions, colour lists, PNG/JPEG decoding, an NSImage-style object with representations, template flag and resizable caps, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. There is no NSImage drawing in the kit, no colour picker that uses colour lists, and no print sheet.",
-  "rea_evidence": "ev_c13e34ac0a796f139c7afc1ac6d88343b2a61a27ec40e0a76c53e92c372eebaf",
-  "features": [
-    {
-      "feature": "Images and PDF: image objects and representations",
-      "apple": "NSImage, NSImageRep, NSBitmapImageRep, NSPDFImageRep (https://developer.apple.com/documentation/appkit/images-and-pdf)",
-      "bifrost": "springboard/render/src/gfx.rs (Image), springboard/render/src/imgdec.rs, springboard/sdk/src/image_source.rs (representation), springboard/sdk/src/image_object.rs (ImageObject, ImageRep)",
-      "status": "partial",
-      "note": "ImageObject (sdk/src/image_object.rs) holds bitmap and vector representations, picks the best one for a target size and scale, keeps a point size, a template flag and cap insets, computes nine-slice layouts and reads the size of encoded bytes; image_source::representation encodes a bitmap (JPEG compression factor, transparent pixels flattened for JPEG). Host tests only; not yet used by the kit's image widgets or the shell. No representation classes per codec (no TIFF/GIF/WebP/HEIC rep), no template tint when drawn, no named image catalogue; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
-    },
-    {
-      "feature": "Images and PDF: symbol images",
-      "apple": "NSImage(systemSymbolName:), NSImage.SymbolConfiguration",
-      "bifrost": "springboard/sdk/src/glyphs.rs, springboard/render/src/symbols.rs",
-      "status": "partial",
-      "note": "fixed set of procedural line glyphs (59), one weight, no hierarchical or palette rendering (docs/bifrost-ui.md)"
-    },
-    {
-      "feature": "Images and PDF: PDF rendering",
-      "apple": "NSPDFImageRep, PDF content in NSImage",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs",
-      "status": "os",
-      "note": "PDF parser and page renderer lives inside the Books shell engine; apps get no SDK API"
-    },
-    {
-      "feature": "Images and PDF: file and app icons",
-      "apple": "NSWorkspace icon(forFile:), NSImage named icons",
-      "bifrost": "springboard/sdk/src/workspace.rs, docs/bifrost-ui.md (widgets::folder_icon)",
-      "status": "partial",
-      "note": "procedural folder icon only; no per-file-type icon set"
-    },
-    {
-      "feature": "Drawing: 2D drawing context and basic shapes",
-      "apple": "NSGraphicsContext, NSRectFill, NSBezierPath fill/stroke of rects and rounded rects",
-      "bifrost": "springboard/render/src/gfx.rs (Surface, fill_rrect, rrect_coverage, Damage)",
-      "status": "partial",
-      "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; no general path object, no clipping paths, no affine transform stack for apps"
-    },
-    {
-      "feature": "Drawing: Bezier paths, gradients, shadows",
-      "apple": "NSBezierPath, NSGradient, NSShadow",
-      "bifrost": "springboard/sdk/src/drawing_model.rs (BezierPath, Gradient, ShadowStyle, PageLayout), springboard/render/src/bezier.rs, springboard/render/src/gradient.rs; wired: springboard/ui/src/layer_style.rs (Shadow, used by style.rs); wired: springboard/ui/src/layer_style.rs (Shadow::radius) via springboard/apps/freeform-desktop/src/style.rs (blur_taps, paint_with_blur)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); public BezierPath (append rect/oval/rounded rect/arc, bounds, contains with winding rules, dash, fill/stroke/addClip), Gradient (stops, linear/radial position) and ShadowStyle objects now exist in the SDK (host tests only; dash and cap/join styles are stored but not yet rendered; NSImage reps, NSColorSpace/NSColorList and NSPrintOperation.runModal remain gaps). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Drawing: materials and vibrancy",
-      "apple": "NSVisualEffectView, Liquid Glass",
-      "bifrost": "springboard/render/src/glass.rs, springboard/render/src/appearance.rs",
-      "status": "partial",
-      "note": "glass hook and light/dark cross-fade exist; Spotlight blur still missing per CLAUDE.md"
-    },
-    {
-      "feature": "Drawing: view-level drawing and redraw",
-      "apple": "NSView draw(_:), needsDisplay, NSCell drawing",
-      "bifrost": "springboard/sdk/src/view/",
-      "status": "partial",
-      "note": "retained views with damage rects; not the NSView draw cycle or NSCell model"
-    },
-    {
-      "feature": "Drawing: GPU/Metal-style compositing",
-      "apple": "CALayer-backed drawing, Metal presentation",
-      "bifrost": "springboard/src/gpu/wl.rs, docs/gpu-first.md",
-      "status": "os",
-      "note": "GPU Wayland presenter in the shell; apps do not get a GPU drawing API"
-    },
-    {
-      "feature": "Color: semantic system colours",
-      "apple": "NSColor named colours, systemRed..systemGray, labelColor, controlAccentColor",
-      "bifrost": "springboard/render/src/ui.rs (mod system), docs/bifrost-ui.md section NSColor semantic colours",
-      "status": "partial",
-      "note": "most named colours as light/dark Pairs; windowFrameColor, findHighlightColor and shadowColor added (WINDOW_FRAME, FIND_HIGHLIGHT, SHADOW; findHighlight values are an approximation to confirm on Midget); user accent colour not wired; remaining NSColor names missing built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
-    },
-    {
-      "feature": "Color: colour panel",
-      "apple": "NSColorPanel, NSColorWell",
-      "bifrost": "springboard/ui/src/panels.rs (ColorPanel)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons)"
-    },
-    {
-      "feature": "Color: colour spaces and lists",
-      "apple": "NSColorSpace, NSColorList, NSColorPicker, colour sampler",
-      "bifrost": "springboard/sdk/src/graphics_color.rs, springboard/sdk/src/color_list.rs (ColorList, ColorLists)",
-      "status": "partial",
-      "note": "Colour spaces and conversions are in graphics_color (bifrost_render::cg::color, ICC profiles for apps). ColorList and ColorLists add NSColorList: ordered named colours with a registry by name. Host tests only; no colour well or picker that uses the lists, and no eyedropper; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
-    },
-    {
-      "feature": "Printing: print info and operation",
-      "apple": "NSPrintInfo, NSPrintOperation",
-      "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (Job, Layout, paper and scale) over springboard/ui/src/print.rs, springboard/ui/src/print_pages.rs (PdfContext, PrintableView, paginate)",
-      "status": "partial",
-      "note": "paper, orientation, margins, copies, page range, scaling_factor and job_disposition (spool, save, preview); PrintOperation::print_operation(view) paginates a PrintableView (knows_page_range, rect_for_page, or tiles) and draws it into a PDF through PdfContext (fills, paths, text, images); pdf_operation(view, rect, path); run_modal with shows_print_panel and did_run; submits via IPP or saves the PDF. Host tests only: pages are drawn when the operation is made, no rich text or font embedding (Helvetica only), no clipping or transforms beyond the page tile; verify on Midget for parity."
-    },
-    {
-      "feature": "Printing: print panel, page layout, accessory views",
-      "apple": "NSPrintPanel, NSPageLayout, accessory view controllers",
-      "bifrost": "springboard/sdk/src/print_panel.rs; wired: springboard/src/shell/print_sheet.rs (sheet rows: printer, paper, orientation, scale, copies); accessory views not done, springboard/ui/src/print_pages.rs",
-      "status": "partial",
-      "note": "print_panel.rs adds PanelOptions (showsCopies, page range, paper size, orientation, scaling, preview, print selection) whose apply() writes a PanelRequest into the print info and refuses hidden controls, and PageSetup (paper, orientation, margins, scale) that round-trips with the print info; plug-in panels (accessory controllers) are keyed models. The shell sheet builds its PrintInfo through the defaults; the scale row and a shell-drawn page layout panel are not wired; verify on Midget for parity."
-    },
-    {
-      "feature": "Printing: printer discovery",
-      "apple": "NSPrinter",
-      "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/printer_caps.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs, springboard/ui/src/printer_caps.rs (imageable_rect)",
-      "status": "partial",
-      "note": "cups::Client::printers() lists queues; get_printer_attributes() reads capabilities (printer_caps.rs: PWG paper list with PPD names, duplex, colour modes, default media, status and reasons, Letter/A4 fallback, hardware margins from media-*-margin-supported); paper_size_in_points and imageable_rect(name) give paperSize(forPaperName:) and the printable rect; print panel not yet using them; deviceDescription and languageLevel missing; verify on Midget for parity."
-    },
-    {
-      "feature": "Visual effect material catalogue and blending (sidebar, titlebar, menu, popover, HUD, sheet, header, window and content backgrounds; behind- and within-window)",
-      "apple": "NSVisualEffectView.Material, NSVisualEffectView.BlendingMode, NSVisualEffectView.State",
-      "bifrost": "springboard/sdk/src/widgets.rs (visual_effect, Material, Blending, State)",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    },
-    {
-      "feature": "Glass effect views (NSGlassEffectView, NSGlassEffectContainerView)",
-      "apple": "NSGlassEffectView, NSGlassEffectContainerView",
-      "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    }
-  ],
-  "gaps": [
-    "Shell-drawn print sheet and page layout panel (print.rs has no run_modal)",
-    "Public Bezier path, gradient and shadow drawing API",
-    "NSImage drawing in the kit, per-codec representation classes and template tinting",
-    "SDK access to PDF rendering (currently inside the Books shell engine)",
-    "Colour well and picker modes that use colour lists",
-    "User accent colour feeding controlAccentColor; remaining NSColor names",
-    "Symbol catalogue beyond the 59 procedural glyphs"
-  ]
+ "framework": "AppKit (Graphics, Drawing, Color, and Printing)",
+ "doc": "https://developer.apple.com/documentation/appkit",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs, springboard/sdk/src/image_object.rs, springboard/sdk/src/color_list.rs",
+ "summary": "Semantic colours, a colour panel, colour spaces and conversions, colour lists, PNG/JPEG decoding, an NSImage-style object with representations, template flag and resizable caps, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. There is no NSImage drawing in the kit, no colour picker that uses colour lists, and no print sheet.",
+ "rea_evidence": "ev_c13e34ac0a796f139c7afc1ac6d88343b2a61a27ec40e0a76c53e92c372eebaf",
+ "features": [
+  {
+   "feature": "Images and PDF: image objects and representations",
+   "apple": "NSImage, NSImageRep, NSBitmapImageRep, NSPDFImageRep (https://developer.apple.com/documentation/appkit/images-and-pdf)",
+   "bifrost": "springboard/render/src/gfx.rs (Image), springboard/render/src/imgdec.rs, springboard/sdk/src/image_source.rs (representation), springboard/sdk/src/image_object.rs (ImageObject, ImageRep)",
+   "status": "partial",
+   "note": "ImageObject (sdk/src/image_object.rs) holds bitmap and vector representations, picks the best one for a target size and scale, keeps a point size, a template flag and cap insets, computes nine-slice layouts and reads the size of encoded bytes; image_source::representation encodes a bitmap (JPEG compression factor, transparent pixels flattened for JPEG). Host tests only; not yet used by the kit's image widgets or the shell. No representation classes per codec (no TIFF/GIF/WebP/HEIC rep), no template tint when drawn, no named image catalogue; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
+  },
+  {
+   "feature": "Images and PDF: symbol images",
+   "apple": "NSImage(systemSymbolName:), NSImage.SymbolConfiguration",
+   "bifrost": "springboard/sdk/src/glyphs.rs, springboard/render/src/symbols.rs",
+   "status": "partial",
+   "note": "fixed set of procedural line glyphs (59), one weight, no hierarchical or palette rendering (docs/bifrost-ui.md)"
+  },
+  {
+   "feature": "Images and PDF: PDF rendering",
+   "apple": "NSPDFImageRep, PDF content in NSImage",
+   "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs",
+   "status": "os",
+   "note": "PDF parser and page renderer lives inside the Books shell engine; apps get no SDK API"
+  },
+  {
+   "feature": "Images and PDF: file and app icons",
+   "apple": "NSWorkspace icon(forFile:), NSImage named icons",
+   "bifrost": "springboard/sdk/src/workspace.rs, docs/bifrost-ui.md (widgets::folder_icon)",
+   "status": "partial",
+   "note": "procedural folder icon only; no per-file-type icon set"
+  },
+  {
+   "feature": "Drawing: 2D drawing context and basic shapes",
+   "apple": "NSGraphicsContext, NSRectFill, NSBezierPath fill/stroke of rects and rounded rects",
+   "bifrost": "springboard/render/src/gfx.rs (Surface, fill_rrect, rrect_coverage, Damage)",
+   "status": "partial",
+   "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; no general path object, no clipping paths, no affine transform stack for apps"
+  },
+  {
+   "feature": "Drawing: Bezier paths, gradients, shadows",
+   "apple": "NSBezierPath, NSGradient, NSShadow",
+   "bifrost": "springboard/sdk/src/drawing_model.rs (BezierPath, Gradient, ShadowStyle, PageLayout), springboard/render/src/bezier.rs, springboard/render/src/gradient.rs; wired: springboard/ui/src/layer_style.rs (Shadow, used by style.rs); wired: springboard/ui/src/layer_style.rs (Shadow::radius) via springboard/apps/freeform-desktop/src/style.rs (blur_taps, paint_with_blur)",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); public BezierPath (append rect/oval/rounded rect/arc, bounds, contains with winding rules, dash, fill/stroke/addClip), Gradient (stops, linear/radial position) and ShadowStyle objects now exist in the SDK (host tests only; dash and cap/join styles are stored but not yet rendered; NSImage reps, NSColorSpace/NSColorList and NSPrintOperation.runModal remain gaps). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Drawing: materials and vibrancy",
+   "apple": "NSVisualEffectView, Liquid Glass",
+   "bifrost": "springboard/render/src/glass.rs, springboard/render/src/appearance.rs",
+   "status": "partial",
+   "note": "glass hook and light/dark cross-fade exist; Spotlight blur still missing per CLAUDE.md"
+  },
+  {
+   "feature": "Drawing: view-level drawing and redraw",
+   "apple": "NSView draw(_:), needsDisplay, NSCell drawing",
+   "bifrost": "springboard/sdk/src/view/",
+   "status": "partial",
+   "note": "retained views with damage rects; not the NSView draw cycle or NSCell model"
+  },
+  {
+   "feature": "Drawing: GPU/Metal-style compositing",
+   "apple": "CALayer-backed drawing, Metal presentation",
+   "bifrost": "springboard/src/gpu/wl.rs, docs/gpu-first.md",
+   "status": "os",
+   "note": "GPU Wayland presenter in the shell; apps do not get a GPU drawing API"
+  },
+  {
+   "feature": "Color: semantic system colours",
+   "apple": "NSColor named colours, systemRed..systemGray, labelColor, controlAccentColor",
+   "bifrost": "springboard/render/src/ui.rs (mod system), docs/bifrost-ui.md section NSColor semantic colours",
+   "status": "partial",
+   "note": "most named colours as light/dark Pairs; windowFrameColor, findHighlightColor and shadowColor added (WINDOW_FRAME, FIND_HIGHLIGHT, SHADOW; findHighlight values are an approximation to confirm on Midget); user accent colour not wired; remaining NSColor names missing built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
+  },
+  {
+   "feature": "Color: colour panel",
+   "apple": "NSColorPanel, NSColorWell",
+   "bifrost": "springboard/ui/src/panels.rs (ColorPanel)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 5 tests. RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons)"
+  },
+  {
+   "feature": "Color: colour spaces and lists",
+   "apple": "NSColorSpace, NSColorList, NSColorPicker, colour sampler",
+   "bifrost": "springboard/sdk/src/graphics_color.rs, springboard/sdk/src/color_list.rs (ColorList, ColorLists)",
+   "status": "partial",
+   "note": "Colour spaces and conversions are in graphics_color (bifrost_render::cg::color, ICC profiles for apps). ColorList and ColorLists add NSColorList: ordered named colours with a registry by name. Host tests only; no colour well or picker that uses the lists, and no eyedropper; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
+  },
+  {
+   "feature": "Printing: print info and operation",
+   "apple": "NSPrintInfo, NSPrintOperation",
+   "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (Job, Layout, paper and scale) over springboard/ui/src/print.rs, springboard/ui/src/print_pages.rs (PdfContext, PrintableView, paginate)",
+   "status": "partial",
+   "note": "paper, orientation, margins, copies, page range, scaling_factor and job_disposition (spool, save, preview); PrintOperation::print_operation(view) paginates a PrintableView (knows_page_range, rect_for_page, or tiles) and draws it into a PDF through PdfContext (fills, paths, text, images); pdf_operation(view, rect, path); run_modal with shows_print_panel and did_run; submits via IPP or saves the PDF. Host tests only: pages are drawn when the operation is made, no rich text or font embedding (Helvetica only), no clipping or transforms beyond the page tile; verify on Midget for parity."
+  },
+  {
+   "feature": "Printing: print panel, page layout, accessory views",
+   "apple": "NSPrintPanel, NSPageLayout, accessory view controllers",
+   "bifrost": "springboard/sdk/src/print_panel.rs; wired: springboard/src/shell/print_sheet.rs (sheet rows: printer, paper, orientation, scale, copies); accessory views not done, springboard/ui/src/print_pages.rs",
+   "status": "partial",
+   "note": "print_panel.rs adds PanelOptions (showsCopies, page range, paper size, orientation, scaling, preview, print selection) whose apply() writes a PanelRequest into the print info and refuses hidden controls, and PageSetup (paper, orientation, margins, scale) that round-trips with the print info; plug-in panels (accessory controllers) are keyed models. The shell sheet builds its PrintInfo through the defaults; the scale row and a shell-drawn page layout panel are not wired; verify on Midget for parity."
+  },
+  {
+   "feature": "Printing: printer discovery",
+   "apple": "NSPrinter",
+   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/printer_caps.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs, springboard/ui/src/printer_caps.rs (imageable_rect)",
+   "status": "partial",
+   "note": "cups::Client::printers() lists queues; get_printer_attributes() reads capabilities (printer_caps.rs: PWG paper list with PPD names, duplex, colour modes, default media, status and reasons, Letter/A4 fallback, hardware margins from media-*-margin-supported); paper_size_in_points and imageable_rect(name) give paperSize(forPaperName:) and the printable rect; print panel not yet using them; deviceDescription and languageLevel missing; verify on Midget for parity."
+  },
+  {
+   "feature": "Visual effect material catalogue and blending (sidebar, titlebar, menu, popover, HUD, sheet, header, window and content backgrounds; behind- and within-window)",
+   "apple": "NSVisualEffectView.Material, NSVisualEffectView.BlendingMode, NSVisualEffectView.State",
+   "bifrost": "springboard/sdk/src/widgets.rs (visual_effect, Material, Blending, State)",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+  },
+  {
+   "feature": "Glass effect views (NSGlassEffectView, NSGlassEffectContainerView)",
+   "apple": "NSGlassEffectView, NSGlassEffectContainerView",
+   "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+  }
+ ],
+ "gaps": [
+  "Shell-drawn print sheet and page layout panel (print.rs has no run_modal)",
+  "Public Bezier path, gradient and shadow drawing API",
+  "NSImage drawing in the kit, per-codec representation classes and template tinting",
+  "SDK access to PDF rendering (currently inside the Books shell engine)",
+  "Colour well and picker modes that use colour lists",
+  "User accent colour feeding controlAccentColor; remaining NSColor names",
+  "Symbol catalogue beyond the 59 procedural glyphs"
+ ]
 }
