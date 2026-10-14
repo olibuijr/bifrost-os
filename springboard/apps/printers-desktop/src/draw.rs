@@ -4,7 +4,7 @@
 
 use crate::discover::{detail_line, is_added};
 use crate::model::{
-    created_text, document_tag, info_lines, job_progress, job_status_text, pages_text, printer_detail, problem_line, row_summary, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
+    created_text, document_tag, info_lines, job_progress, option_lines, pages_text, printer_detail, problem_line, row_summary, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
 };
 use crate::window::{Field, PrintCenter, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT};
 use bifrost_app::controls::{Node, Rect, Role};
@@ -161,7 +161,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
             pages_text(job),
             size_text(job.size_kb),
             created_text(job.created, p.tz_offset, p.now_secs),
-            job_status_text(job),
+            p.model.job_status(job),
         ];
         let mid = r.y + JOB_ROW_PT / 2.0;
         let tile = Rect { x: cols[1], y: mid - TILE_H / 2.0, w: TILE_W, h: TILE_H };
@@ -268,7 +268,11 @@ fn paint_info(p: &mut PrintCenter, s: &mut Surface, ui: &Ui, printer: &bifrost_a
     }
     let mut y = p.info_lines_top();
     let offline = p.model.is_offline(&printer.name);
-    for (label, value) in info_lines(printer, offline) {
+    let mut lines = info_lines(printer, offline);
+    if let Some(options) = p.model.options_for(&printer.name) {
+        lines.extend(option_lines(options));
+    }
+    for (label, value) in lines {
         text_mid(&mut p.labels, s, ui, &label, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x0, y + 11.0, 100.0);
         text_mid(&mut p.labels, s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), x0 + 110.0, y + 11.0, w - 110.0);
         y += 22.0;

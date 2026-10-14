@@ -111,8 +111,8 @@
    "area": "job",
    "apple": "Contextual menu on a job: pause, resume, remove",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:656",
-   "note": "Hold, Release, Cancel and Select All Jobs on a secondary click, wired in main.rs through Input::Context.",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:827",
+   "note": "Hold, Release, Cancel and Select All Jobs on a secondary click (context_items, window.rs:827), wired in main.rs through Input::Context. Hold and Release stand for pause and resume; a job has no separate remove item, Cancel removes it.",
    "wire": "Add a secondary-click Target::Job handler in window.rs:295 that opens the shell context menu (bifrost_app::controls menu kit) with Hold, Release and Cancel mapped to toolbar_action (window.rs:339)."
   },
   {
@@ -120,8 +120,8 @@
    "area": "printer",
    "apple": "Contextual menu on a printer: Get Info, Pause, Remove, Forget",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:656",
-   "note": "Pause or Resume, Set as Default, Printer Info, Share or Stop Sharing, Remove Printer on a secondary click.",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:827",
+   "note": "Pause or Resume, Set as Default, Printer Info, Share or Stop Sharing (not for a remote queue), Remove Printer on a secondary click (context_items, window.rs:827). The scheduler has no Forget.",
    "wire": "Add a secondary-click Target::Printer menu in window.rs:295 with Pause or Resume, Set Default, Delete Printer, Printer Info."
   },
   {
@@ -147,9 +147,9 @@
    "area": "job",
    "apple": "Waiting, Held, Printing, Stopped, Canceled, Failed, Completed plus reasons (Paused on server, Canceled on server)",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/model.rs:458",
-   "note": "Status column appends reasons such as Canceled on server and Held for authentication (model.rs:440).",
-   "wire": "Add job-state-reasons to the Job model and append the reason to job_state_name (model.rs:161): cups-remote-canceled, cups-remote-stopped, job-hold-until-specified, Hold for Authentication."
+   "bifrost": "springboard/apps/printers-desktop/src/model.rs:569",
+   "note": "Status column appends reasons such as Canceled on server and Held for authentication (job_reason_text), and reads Canceling page N of M while a cancel of a printing job is on its way (job_status_text, model.rs:569).",
+   "wire": "Add each newly reported job-state-reasons keyword to job_reason_text (model.rs:550) when the scheduler sends one the table does not name yet."
   },
   {
    "feature": "Job columns",
@@ -192,9 +192,9 @@
    "area": "printer",
    "apple": "Get Info and PrintCenterOptionsView: name, location, driver, supplies, sharing",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:176",
-   "note": "Info pane (Cmd+I) edits description and location and saves through cups set_printer_details; lists model, address, supplies and sharing. No driver or option editing.",
-   "wire": "Add an Info sheet reached from the toolbar (new B_INFO id in window.rs:33) editing printer-info and printer-location via cups::Client set-printer-attributes, with the supply list."
+   "bifrost": "springboard/apps/printers-desktop/src/draw.rs:255",
+   "note": "Info pane (Cmd+I) edits description and location and saves through cups set_printer_details; lists model, address, supplies, sharing, and the device's default paper, two-sided and colour options (Request::Options in worker.rs, option_lines in model.rs). No driver choice and no editing of the options.",
+   "wire": "Make the default paper, two-sided and colour options editable in the info pane and save them through cups::Client set-printer-attributes (worker.rs); show the driver name beside the model."
   },
   {
    "feature": "Printer pools",
@@ -210,9 +210,9 @@
    "area": "printer",
    "apple": "Shared printer rows with their own pause, resume and remove items",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:176",
-   "note": "Shared flag shown in rows and the info pane; Share Printer or Stop Sharing in the menu and context menu. Remote queues from other hosts are not told apart.",
-   "wire": "Flag printers with printer-is-shared or a remote URI in model.rs and offer Stop Sharing in the Info sheet."
+   "bifrost": "springboard/apps/printers-desktop/src/model.rs:390",
+   "note": "Shared flag shown in rows and the info pane; Share Printer or Stop Sharing in the menu and context menu. A queue that sends its jobs to a print queue on another computer shows as Remote and is not offered for sharing (forwards_to_queue, model.rs:390).",
+   "wire": "Offer Stop Sharing as a button in the info pane, next to Save, as well as in the menu."
   },
   {
    "feature": "Fax devices",

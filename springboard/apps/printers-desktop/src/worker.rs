@@ -24,6 +24,8 @@ pub enum Request {
     Add { device: String, label: String, info: String, location: String },
     /// Print a document on `printer`: `name` is the job name, `mime` the document type.
     Print { printer: String, name: String, mime: String, data: Vec<u8> },
+    /// Ask the device of `printer` for its options (paper, sides, colour) for the info pane.
+    Options { printer: String },
 }
 
 /// The window's end of the channels. Dropping it ends the worker thread.
@@ -114,6 +116,15 @@ pub fn handle<T: Transport>(client: &mut Client<T>, request: Request) -> Reply {
                 Ok(_) => Reply::Printed(name),
                 Err(e) => Reply::Failed(e.to_string()),
             }
+        }
+        // a device that does not answer its attributes has no options to show, which is not an error to report
+        Request::Options { printer } => {
+            let options = client.get_printer_attributes(&printer).ok().map(|caps| model::Options {
+                paper: caps.default_paper.ppd_name(),
+                two_sided: caps.supports_duplex(),
+                color: caps.supports_color(),
+            });
+            Reply::Options { printer, options }
         }
     }
 }
