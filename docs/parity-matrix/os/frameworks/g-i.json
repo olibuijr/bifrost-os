@@ -6277,7 +6277,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Media browser UI library (transport buttons, people-frame artwork, clipboard drag images) for the reference iLife apps. The owning app and its calls are not identified: the extract has the bundle resources only, and the binary is in the shared cache. Left as os.",
    "rea": [],
    "method": "assessed"
   },
@@ -6297,8 +6297,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Device sync for the reference iPod music player hardware. BifrOSt targets generic PC hardware and runs no iPod device support.",
    "rea": [],
    "method": "assessed"
   },
@@ -6318,8 +6318,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Firmware updater for iPod hardware (UpdaterBackEnd and PodBootHeader in the bundle). BifrOSt has no iPod devices to update.",
    "rea": [],
    "method": "assessed"
   },
@@ -6339,8 +6339,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Spoken artist-name pronunciation models for the iPod voice interface (identifier com.apple.PodSpeechLib). It serves only the iPod device UI, which BifrOSt does not have.",
    "rea": [],
    "method": "assessed"
   },
@@ -6360,8 +6360,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Shared listening XPC service for the reference music subscription cloud. A vendor cloud service that BifrOSt does not run.",
    "rea": [],
    "method": "assessed"
   },
@@ -6381,8 +6381,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "XPC file format service for the reference office suite's own document formats (iWorkFileFormat.xpc). BifrOSt ships no iWork apps, so the service has no caller here.",
    "rea": [],
    "method": "assessed"
   },
