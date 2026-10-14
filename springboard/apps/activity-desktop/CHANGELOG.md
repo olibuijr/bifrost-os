@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+- Removed an unused model module. Show Deltas for Process and Sample Process already run in model.rs and sample_proc.rs; behaviour is unchanged.
+- The parity matrix rows for Show Deltas, Sample Process and the Columns submenu now cite the code that does the work.
+
 ## 0.4.0
 
 - View > Columns shows or hides the User, Threads and PID columns, and remembers the choice.
