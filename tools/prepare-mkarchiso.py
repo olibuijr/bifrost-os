@@ -49,10 +49,11 @@ _make_bootmode_uefi.bifrost() {
 
 _validate_requirements_bootmode_uefi.bifrost() {
     local repo="${BIFROST_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-    # the loader is built from source here, never taken from a leftover binary; a failed build or a stale file fails the ISO
-    if ! "${repo}/tools/build-efi-boot.sh" release || ! "${repo}/tools/verify-efi-loader.sh" "${repo}/packaging/archiso/bootweave.efi"; then
+    # Compilation is a build-iso.sh prerequisite and must run as the invoking user (sudo may not have Cargo in PATH).
+    # Keep mkarchiso's root validation fail-closed: it verifies the artifact's presence and freshness, never skips it.
+    if ! "${repo}/tools/verify-efi-loader.sh" "${repo}/packaging/archiso/bootweave.efi"; then
         (( validation_error=validation_error+1 ))
-        _msg_error "the EFI loader did not build from source or is older than springboard/bootweave/{efi,frame}/src" 0
+        _msg_error "the EFI loader is missing or stale; run tools/build-efi-boot.sh release as the build user before mkarchiso" 0
     fi
     _validate_common_requirements_bootmode_uefi
 }
