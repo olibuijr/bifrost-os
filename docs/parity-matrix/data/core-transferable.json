@@ -38,16 +38,16 @@
   {
    "feature": "Drag and drop of typed items",
    "apple": "draggable and dropDestination (Transferable-based), NSDraggingSource and NSDraggingDestination",
-   "bifrost": "springboard/sdk/src/dnd.rs (register_types, begin, reply, performed); springboard/proto/src/rich.rs (DragItem, DragPreview); wired: springboard/sdk/src/transfer.rs (begin_drag, drop_values); springboard/sdk/src/dnd.rs",
+   "bifrost": "springboard/sdk/src/dnd.rs (register_types, begin, reply, performed); springboard/sdk/src/transfer_drag.rs (draggable, DropTarget, deliver); springboard/proto/src/rich.rs (DragItem, DragPreview); wired: springboard/sdk/src/transfer.rs (begin_drag, drop_values); springboard/sdk/src/dnd.rs",
    "status": "partial",
-   "note": "typed source and destination exist; no declarative per-model drag or drop modifier Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+   "note": "draggable(_:) and DropTarget give a model a declarative drag source and drop destination with isTargeted and the negotiated operation (in-file tests in transfer_drag.rs drive a drag session end to end). Needs the lab machine: the shell's cross-process wire still carries the items flat, and the drop has not been checked on Midget."
   },
   {
    "feature": "Share sheet for transferable items",
    "apple": "ShareLink, sharing of Transferable items",
-   "bifrost": "springboard/sdk/src/share.rs (show_picker, is_inbound); springboard/src/shell/sharing.rs (handles, targets, copy_text)",
+   "bifrost": "springboard/sdk/src/share.rs (show_picker, is_inbound, show_transferable, SharingService::sharing_services_for_transferable); springboard/src/shell/sharing.rs (handles, targets, copy_text)",
    "status": "partial",
-   "note": "shares text, URLs and granted files; the share menu is not driven by Transferable representations"
+   "note": "The share menu is built from a Transferable's exported representations (sharing_services_for_transferable and show_transferable, in-file tests in share.rs), and it shares text, URLs and granted files. Needs the lab machine: the shell's share sheet has not been checked on Midget."
   },
   {
    "feature": "Uniform type conformance used by transfers",

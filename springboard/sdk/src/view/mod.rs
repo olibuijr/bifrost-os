@@ -40,6 +40,7 @@ macro_rules! view_base {
     };
 }
 
+pub mod action;
 mod animation;
 mod app;
 mod autolayout;
