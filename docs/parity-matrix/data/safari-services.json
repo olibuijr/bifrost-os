@@ -66,9 +66,9 @@
   {
    "feature": "Browser app features (history, bookmarks, tabs, private windows)",
    "apple": "Safari app (not in the framework; the framework exposes only the extension-side proxies)",
-   "bifrost": "springboard/apps/browser/README.md (round 55: private window via --private); springboard/src/shell/browser/nav.rs; docs/bifrost-ui.md 'Browser history, bookmarks and address suggestions'",
+   "bifrost": "springboard/apps/browser/src/store.rs (Store::visit, MAX_HISTORY, bookmarks), springboard/apps/browser/src/suggest.rs (frecency, suggestions)",
    "status": "partial",
-   "note": "A working Browser app with history capped at 5000 and frecency ranking, bookmarks, session restore and reader mode. Those are app-level, not SDK API, and there is no History or Bookmarks menu API."
+   "note": "History capped at 5000 with private windows kept out, frecency-ranked address suggestions and bookmarks are tested in suggest::tests (bookmarks_first_then_frecent_history_then_search, history_dedupes_caps_and_skips_non_web, serialization_round_trips) and store::bookmark_tests and store::import_tests. Session restore and reader mode exist in the app but are not covered by these tests. Those are app-level, not SDK API, and there is no History or Bookmarks menu API."
   },
   {
    "feature": "Web Inspector developer tools",

@@ -59,9 +59,9 @@
     {
       "feature": "App Transport Security (secure network links)",
       "apple": "NSAppTransportSecurity, Preventing Insecure Network Connections",
-      "bifrost": "springboard/sdk/src/url.rs; springboard/src/shell/update.rs (HTTPS only)",
+      "bifrost": "springboard/sdk/src/url.rs (parse_url, resolve)",
       "status": "partial",
-      "note": "The shell's update client is HTTPS only. The SDK URL client uses rustls by default. No manifest-level ATS-style exception list or policy for apps."
+      "note": "Scheme and TLS choice, port defaults and redirect resolution are tested headless in url::transport_security_tests. The SDK URL client uses rustls by default, and the shell's update client (src/shell/update.rs) is HTTPS only. Gap: redirects may still move an https request to http, and there is no manifest-level exception list or policy for apps."
     },
     {
       "feature": "Software update integrity",
