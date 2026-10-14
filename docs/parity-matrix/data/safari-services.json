@@ -75,7 +75,7 @@
    "apple": "Adding a web development tool to Safari Web Inspector; Creating Safari Web Inspector extensions",
    "bifrost": "springboard/sdk/src/webview_dev.rs (dev_eval, dev_screenshot, dev_collector, synthesized input)",
    "status": "partial",
-   "note": "Script evaluation, screenshots and input exist for the Browser's own inspector. There is no public extension point for adding a tool to it."
+   "note": "The answer protocol for script evaluation and screenshots, its escapes and the screenshot modes are tested in springboard/sdk/tests/parity_sdk-tests-16.rs; sending a request needs a running engine and is not tested headless. There is no public extension point for adding a tool to the Browser's inspector."
   },
   {
    "feature": "Importing data exported from Safari",

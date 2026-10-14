@@ -40,7 +40,7 @@
       "apple": "WKUserContentController, WKUserScript, WKContentWorld, WKJSHandle, WKContentRuleListStore, WKFrameInfo",
       "bifrost": "springboard/sdk/src/webview_dev.rs (dev_eval, dev_collector as document-start script); springboard/sdk/src/web_config.rs (UserContentController, UserScript, ScriptMessageHandler, ScriptMessage)",
       "status": "partial",
-      "note": "add(_:name:) routes a page message to its handler by name and a bootstrap script defines the page-side poster, host-tested; the engine does not forward page posts yet; no content rule lists, no per-world isolation."
+      "note": "add(_:name:), name validation, routing by name, removal, the bootstrap poster and the script order are tested headless in springboard/sdk/tests/parity_sdk-tests-16.rs; the engine does not forward page posts yet; no content rule lists, no per-world isolation."
     },
     {
       "feature": "Page-level search",
@@ -54,7 +54,7 @@
       "apple": "WKSnapshotConfiguration, WKPDFConfiguration, takeSnapshot, createPDF",
       "bifrost": "springboard/sdk/src/webview_dev.rs (dev_screenshot to PNG, ShotMode View/Rect/Full)",
       "status": "partial",
-      "note": "PNG only; no PDF output; no snapshot scale; Full resizes the rendering context briefly"
+      "note": "The screenshot modes (view, rect, full) and their answer protocol are tested headless in springboard/sdk/tests/parity_sdk-tests-16.rs; capturing needs a running engine. PNG only; no PDF output; no snapshot scale; Full resizes the rendering context briefly"
     },
     {
       "feature": "DOM node snapshot",
