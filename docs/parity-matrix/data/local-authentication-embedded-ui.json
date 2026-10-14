@@ -17,9 +17,9 @@
     {
       "feature": "Creating the view from an authentication context",
       "apple": "LAAuthenticationView.init(context:), context",
-      "bifrost": "springboard/core/src/auth_context.rs (AuthContext), springboard/ui/src/auth_view.rs (AuthView::send)",
+      "bifrost": "springboard/core/src/auth_context.rs (AuthContext, Phase)",
       "status": "partial",
-      "note": "Wave 3 (w3-local-authentication-embedded-ui, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no LAContext-style object exists in the SDK; springboard/sdk/src/ has no biometric module"
+      "note": "Pure model: an authentication context runs one evaluation for a policy on a device, records the biometric failure count, and refuses calls after invalidation. Tests: springboard/core/tests/parity_sdk-tests-08.rs (context_*) and the auth_context unit tests. The icon view that the context's events drive is springboard/ui/src/auth_view.rs (AuthView); its own tests are not counted here. No LAContext-style object is exposed to apps, springboard/sdk/src/ has no biometric module, and nothing is verified on Midget."
     },
     {
       "feature": "Sizing the view with a control size",

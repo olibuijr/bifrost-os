@@ -12,7 +12,7 @@
       "apple": "ExtensionKit: Including extension-based UI in your interface (article)",
       "bifrost": "springboard/ui/src/remote_view.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-01, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No out-of-process view hosting between apps. Views are built and drawn inside the app that owns them."
+      "note": "Pure host-side state for a remote view: connect, connected, loss with a retry limit, stop, and the size fitted and reported within bounds. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (remote_view_*) and the remote_view unit tests. Not wired into apps or the shell and not verified on Midget. No out-of-process view hosting between apps; views are built and drawn inside the app that owns them."
     },
     {
       "feature": "Extension scenes (AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder)",

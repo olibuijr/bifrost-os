@@ -26,7 +26,7 @@
    "apple": "AVPictureInPictureController, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate, AVPlayerViewPictureInPictureDelegate, AVPictureInPictureVideoCallViewController",
    "bifrost": "springboard/ui/src/pip_window.rs",
    "status": "partial",
-   "note": "Wave 3 (w3-avkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only the Start PiP Automatically preference exists; no floating video window, no start/stop API, no delegate events. Nothing reads pip_auto when the Home button is pressed."
+   "note": "Pure controller and placement: start, finish, stop and suspend in order, the delegate events, automatic start in the background, window size, corner placement and snapping. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (pip_*) and the pip_window unit tests. Not wired into apps or the shell and not verified on Midget. Only the Start PiP Automatically preference exists; no floating video window is drawn, no app-facing start/stop API, and nothing reads pip_auto when the Home button is pressed."
   },
   {
    "feature": "Playback of immersive, multiview and interstitial media",
