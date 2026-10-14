@@ -145,3 +145,4 @@ pub mod identity;
 pub mod reachability;
 pub mod vlan_plan;
 pub mod frame_metrics;
+pub mod csv;
