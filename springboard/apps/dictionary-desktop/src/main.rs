@@ -370,8 +370,7 @@ impl DictionaryApp {
         if self.shown.is_none() {
             return;
         }
-        let text = self.visible_hits().iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n");
-        ctx.set_pasteboard_string(&text);
+        ctx.set_pasteboard_string(&model::definition_text(&self.visible_hits()));
     }
 
     /// Sends the definitions on screen to the default printer on its own thread, so the window keeps drawing.
@@ -381,7 +380,7 @@ impl DictionaryApp {
         if hits.is_empty() {
             return false;
         }
-        let body = hits.iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n");
+        let body = model::definition_text(&hits);
         let job = bifrost_app::print::PrintOperation::text(shown.word.clone(), format!("{}\n\n{body}", shown.word));
         std::thread::spawn(move || {
             if let Err(e) = job.run() {
@@ -786,7 +785,7 @@ impl App for DictionaryApp {
             MENU_PRINT => self.print_definition(),
             MENU_OPEN_FOLDER => {
                 let _ = std::fs::create_dir_all(&self.folder);
-                ctx.open_url(&format!("file://{}", self.folder));
+                ctx.open_url(&model::folder_url(&self.folder));
                 false
             }
             MENU_CLEAR => {

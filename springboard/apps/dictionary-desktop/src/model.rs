@@ -88,6 +88,24 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// The text that copy and print send out: each dictionary's name, then its definition, one block per dictionary.
+pub fn definition_text(hits: &[Hit]) -> String {
+    hits.iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n")
+}
+
+/// The `file:` URL of a folder. Spaces and other unsafe bytes are percent-encoded; slashes stay.
+pub fn folder_url(folder: &str) -> String {
+    let mut out = String::from("file://");
+    for b in folder.bytes() {
+        if b.is_ascii_alphanumeric() || b"-._~/".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 /// The word in a `dict:` or `x-dictionary:` URL: `dict://serendipity`, `dict:caf%C3%A9`, `x-dictionary:r:word`.
 pub fn word_from_url(url: &str) -> Option<String> {
     let url = url.trim();
@@ -453,6 +471,19 @@ mod tests {
         assert_eq!(h.back().as_deref(), Some("b"));
         h.clear();
         assert!(h.is_empty() && h.current().is_none());
+    }
+
+    #[test]
+    fn definition_text_names_each_dictionary_above_its_definition() {
+        assert_eq!(definition_text(&[hit("A", "one"), hit("B", "two")]), "A\none\n\nB\ntwo");
+        assert_eq!(definition_text(&[]), "");
+    }
+
+    #[test]
+    fn folder_urls_encode_spaces_and_keep_the_slashes() {
+        assert_eq!(folder_url("/home/olibuijr/.local/share/bifrost/dictionaries"), "file:///home/olibuijr/.local/share/bifrost/dictionaries");
+        assert_eq!(folder_url("/home/a b/dict"), "file:///home/a%20b/dict");
+        assert_eq!(folder_url("/x/\u{e9}"), "file:///x/%C3%A9");
     }
 
     #[test]
