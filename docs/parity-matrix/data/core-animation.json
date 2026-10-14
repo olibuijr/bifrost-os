@@ -38,9 +38,9 @@
   {
    "feature": "Spring animation (CASpringAnimation)",
    "apple": "CASpringAnimation",
-   "bifrost": "springboard/sdk/src/view/animation.rs:51 (Timing::spring), springboard/ui/src/anim.rs (Animation::velocity, Curve::Spring), springboard/render/src/motion.rs (Curve::Spring), springboard/ui/src/keypath_anim.rs (mass, stiffness, damping, initial velocity)",
+   "bifrost": "springboard/sdk/src/view/animation.rs (Timing::spring, Timing::spring_with_velocity), springboard/ui/src/anim.rs (Animation::velocity, Curve::Spring), springboard/render/src/motion.rs (Curve::Spring), springboard/ui/src/keypath_anim.rs (mass, stiffness, damping, initial velocity)",
    "status": "partial",
-   "note": "damping ratio and response are supported; a retarget carries the interrupted spring's velocity (sdk animation.rs velocity_of). Initial velocity and mass are not exposed through Timing::spring to apps; they exist only in keypath_anim.rs."
+   "note": "Damping ratio, response and initial velocity reach apps through Timing::spring_with_velocity, and a retarget carries the interrupted spring's velocity (sdk animation.rs velocity_of); a headless test in animation.rs checks that a fling starts ahead of a spring from rest. Mass is not exposed to apps; it exists only in keypath_anim.rs."
   },
   {
    "feature": "Transaction completion and actions (CATransaction completion, actions, disableActions)",
@@ -87,9 +87,9 @@
   {
    "feature": "Gradient layer (CAGradientLayer)",
    "apple": "CAGradientLayer, CAGradientLayerType",
-   "bifrost": "springboard/render/src/gradient.rs, springboard/sdk/src/layer_kinds/gradient.rs, springboard/sdk/src/view/layer_views.rs (GradientView)",
+   "bifrost": "springboard/render/src/gradient.rs, springboard/sdk/src/layer_kinds/gradient.rs, springboard/sdk/tests/parity_sdk-complete-06.rs, springboard/sdk/src/view/layer_views.rs (GradientView)",
    "status": "partial",
-   "note": "GradientView renders gradient content from the layer kinds. Axial and radial type coverage and the start and end points are the parity checks left; verify on Midget."
+   "note": "GradientView renders axial, radial and conic gradient content; headless tests in parity_sdk-complete-06.rs cover axial start and end points, holding beyond them, a three-stop ramp and the radial half-radius point. Gap: the view is not checked on Midget."
   },
   {
    "feature": "Corner radius, shadow and masks (CALayer cornerRadius, shadowPath, mask)",
