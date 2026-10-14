@@ -3484,7 +3484,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3505,7 +3505,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3526,7 +3526,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3547,7 +3547,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3568,7 +3568,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3589,7 +3589,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3610,7 +3610,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3631,7 +3631,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3652,7 +3652,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3672,8 +3672,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Server-pushed experiment assignments for the reference vendor's on-device prediction features, served by the vendor's experiment service; BifrOSt runs no vendor experiment service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3693,8 +3693,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Internal variant of the server-pushed experiment assignments for the reference vendor's prediction features, served by the vendor's experiment service; BifrOSt runs no vendor experiment service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3715,7 +3715,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3736,7 +3736,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3757,7 +3757,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3778,7 +3778,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3799,7 +3799,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3820,7 +3820,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3841,7 +3841,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3862,7 +3862,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3883,7 +3883,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3904,7 +3904,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3925,7 +3925,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3946,7 +3946,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -3966,8 +3966,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Store product page and purchase product model served by the reference vendor's store; BifrOSt has no vendor store (the SDK StoreKit matrix row covers app purchase APIs).",
    "rea": [],
    "method": "assessed"
   },
@@ -3987,8 +3987,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Core store product model served by the reference vendor's store; BifrOSt has no vendor store (the SDK StoreKit matrix row covers app purchase APIs).",
    "rea": [],
    "method": "assessed"
   },
@@ -4009,7 +4009,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -4029,8 +4029,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Client for the reference vendor's promoted (advertising) store results; BifrOSt has no store or advertising service.",
    "rea": [],
    "method": "assessed"
   },
@@ -4050,8 +4050,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Support code for the reference vendor's promoted (advertising) store results; BifrOSt has no store or advertising service.",
    "rea": [],
    "method": "assessed"
   },
@@ -4071,8 +4071,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Prediction of promoted (advertising) store results for the reference vendor's store; BifrOSt has no store or advertising service.",
    "rea": [],
    "method": "assessed"
   },
@@ -4092,8 +4092,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Shared support for the reference vendor's promoted (advertising) store results; BifrOSt has no store or advertising service.",
    "rea": [],
    "method": "assessed"
   },
@@ -4114,7 +4114,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -4135,7 +4135,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -4155,8 +4155,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "End-to-end encrypted storage for the reference vendor's cloud accounts; BifrOSt Cloud is a separate account service with its own sync and does not mirror this.",
    "rea": [],
    "method": "assessed"
   },
@@ -4177,7 +4177,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -4198,7 +4198,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
@@ -4219,7 +4219,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
    "rea": [],
    "method": "assessed"
   },
