@@ -103,6 +103,7 @@ pub mod passkey;
 pub mod password_gen;
 pub mod digest;
 pub mod crypto_key;
+pub mod chacha_poly;
 pub mod keychain_protection;
 pub mod keychain_keys;
 pub mod security_status;

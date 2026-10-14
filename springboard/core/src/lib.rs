@@ -141,6 +141,7 @@ pub mod device_registry;
 pub mod console_user;
 pub mod natpmp;
 pub mod aes_gcm;
+pub mod chacha_poly;
 pub mod spellcheck;
 pub mod text_replacements;
 pub mod volume;
