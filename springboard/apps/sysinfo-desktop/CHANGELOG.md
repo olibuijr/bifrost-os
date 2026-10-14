@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+- Help > System Information Help shows a short help card in the window: what each part of the window does and which keys and menu items reach it. Choosing a category or starting a find brings the facts back. Help > System Information Online Help opens the web page, as before.
+
 ## 0.7.0
 
 - Edit > Speak Serial Number reads the serial through the system speech engine (`espeak-ng`, else `espeak`), whether or not the screen reader is on. With no engine installed the announcement shows as the banner, as before.

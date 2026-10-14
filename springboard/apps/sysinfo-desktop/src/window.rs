@@ -75,6 +75,7 @@ pub const MENU_SAVE_RTF: u32 = 17;
 pub const MENU_SAVE_JSON: u32 = 18;
 pub const MENU_USE_SELECTION: u32 = 19;
 pub const MENU_JUMP_SELECTION: u32 = 20;
+pub const MENU_ONLINE_HELP: u32 = 21;
 /// Open Recent entry `i` is `MENU_RECENT + i`.
 pub const MENU_RECENT: u32 = 200;
 
@@ -221,6 +222,8 @@ pub struct SysInfo {
     pub extras: Extras,
     /// Show Less Information: only the Overview.
     pub mini: bool,
+    /// Help > System Information Help: the help card replaces the facts until a category is chosen.
+    pub help: bool,
     /// The find field, while the find bar is open.
     pub find: Option<TextField>,
     pub selection: Selection,
@@ -271,6 +274,7 @@ impl SysInfo {
             press: Target::Nothing,
             extras: Extras::default(),
             mini: false,
+            help: false,
             find: None,
             selection: Selection::None,
             focus: Focus::Sidebar,
@@ -402,6 +406,9 @@ impl SysInfo {
 
     /// What the window shows now: the selected category's content after the find.
     pub fn view(&self) -> View {
+        if self.help {
+            return View { content: Content::card(crate::help::rows()), item: 0 };
+        }
         let mut content = self.base_content(self.selected).filtered(self.query());
         if let Some((column, descending)) = self.sort {
             if content.list && self.selected != Category::Usb {
@@ -468,6 +475,8 @@ impl SysInfo {
     // ------------------------------------------------------------ find
 
     pub fn begin_find(&mut self) -> bool {
+        // the find filters the facts, so the help card gives way to them
+        self.help = false;
         if self.find.is_none() {
             self.find = Some(TextField::new());
         }
@@ -675,9 +684,10 @@ impl SysInfo {
     // ------------------------------------------------------------ navigation
 
     pub fn select(&mut self, category: Category) -> bool {
-        if category == self.selected {
+        if category == self.selected && !self.help {
             return false;
         }
+        self.help = false;
         self.selected = category;
         self.item = 0;
         self.selection = Selection::None;
@@ -1040,6 +1050,9 @@ impl SysInfo {
     pub fn subtitle(&self) -> String {
         if let Some(n) = &self.notice {
             return n.clone();
+        }
+        if self.help {
+            return crate::help::SUBTITLE.to_string();
         }
         if let Some(q) = &self.find {
             return format!("Find: {q}|  (Return finds the next category, Escape closes)");

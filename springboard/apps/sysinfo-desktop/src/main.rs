@@ -8,6 +8,7 @@
 mod draw;
 mod export;
 mod extras;
+mod help;
 mod model;
 mod probe;
 mod recents;
@@ -24,7 +25,7 @@ use export::Format;
 use std::io::{Read, Write};
 use window::{
     Focus, PendingExport, SysInfo, Target, COLLAPSED_KEY, MENU_CLEAR_RECENTS, MENU_COPY, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREVIOUS, MENU_HELP, MENU_JUMP_SELECTION, MENU_LESS, MENU_NEXT_CATEGORY, MENU_OPEN,
-    MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, MENU_USE_SELECTION, STEP_PT,
+    MENU_ONLINE_HELP, MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, MENU_USE_SELECTION, STEP_PT,
 };
 
 /// The help page the Help menu opens.
@@ -105,7 +106,14 @@ impl App for SysInfo {
                     AppMenuItem::new(MENU_NEXT_CATEGORY, "Next Category").key("cmd+]").enabled(!self.mini),
                 ],
             },
-            AppMenu { title: "Help".into(), items: vec![AppMenuItem::new(MENU_HELP, "System Information Help")] },
+            AppMenu {
+                title: "Help".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_HELP, "System Information Help").checked(self.help),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_ONLINE_HELP, "System Information Online Help"),
+                ],
+            },
         ]
     }
 
@@ -358,7 +366,8 @@ impl SysInfo {
             MENU_OVERVIEW => self.select(model::Category::Overview),
             MENU_PREVIOUS_CATEGORY => self.step_category(-1),
             MENU_NEXT_CATEGORY => self.step_category(1),
-            MENU_HELP => {
+            MENU_HELP => self.toggle_help(),
+            MENU_ONLINE_HELP => {
                 ctx.open_url(HELP_URL);
                 false
             }
