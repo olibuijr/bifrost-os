@@ -3141,7 +3141,7 @@ const ART_RADIUS: f32 = nowplaying::ART_RADIUS_PT;
 /// The height of one line of lyrics on the Now Playing sheet.
 const LYRIC_LINE_PT: f32 = 32.0;
 
-/// The output route glyph (AirPlay-like): a triangle under a bar, centred on `c`.
+/// The output route glyph: a triangle under a bar, centred on `c`.
 fn draw_route(s: &mut Surface, ui: &Ui, c: (f32, f32), color: u32) {
     let k = ui.pt(SPACE_S);
     icons::fill_poly(s, &[(c.0 - k * 0.7, c.1 + k), (c.0 + k * 0.7, c.1 + k), (c.0, c.1 + k * 0.1)], color);
