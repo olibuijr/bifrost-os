@@ -10436,7 +10436,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index lists only its metadata and a shader precompile file, and extracting the bundle wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10457,7 +10457,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10476,9 +10476,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/net/captive.rs (Assistant); springboard/src/bin/shell.rs (probe thread, sign-in offer)",
+   "status": "partial",
+   "note": "The captive network assistant probes each joined network once and offers Sign In when a portal answers. The portal's own sign-in page and the per-network trust store of the reference framework are not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -10499,7 +10499,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10520,7 +10520,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10562,7 +10562,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10583,7 +10583,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10604,7 +10604,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10625,7 +10625,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10646,7 +10646,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10667,7 +10667,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10688,7 +10688,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10709,7 +10709,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10730,7 +10730,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10751,7 +10751,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10772,7 +10772,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10791,9 +10791,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/character_viewer.rs (Emoji & Symbols panel)",
+   "status": "partial",
+   "note": "The Emoji & Symbols panel browses the emoji catalogue in tabs and pages and types or copies a pick. The reference picker's wider Unicode character search and its script and category browser are not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -10814,7 +10814,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10835,7 +10835,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10856,7 +10856,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries and one localisation table for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10877,7 +10877,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle and its iOS-support copy, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10898,7 +10898,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10919,7 +10919,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle and its iOS-support copy, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10940,7 +10940,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -10961,7 +10961,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11045,7 +11045,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11087,7 +11087,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11129,7 +11129,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11150,7 +11150,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11171,7 +11171,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11192,7 +11192,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11213,7 +11213,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11234,7 +11234,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11255,7 +11255,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11276,7 +11276,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -11297,7 +11297,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
    "rea": [],
    "method": "assessed"
   },
