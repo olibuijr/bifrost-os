@@ -125,6 +125,7 @@ pub const MENU_ACTS: &[Act] = &[
     Act::Share,
     Act::MapType(MapType::Standard),
     Act::MapType(MapType::Satellite),
+    Act::MapType(MapType::Hybrid),
     Act::ZoomIn,
     Act::ZoomOut,
     Act::Units(UnitsSetting::Automatic),
@@ -147,7 +148,18 @@ pub const MENU_ACTS: &[Act] = &[
     Act::Locate,
     Act::StartNavigation,
     Act::EndNavigation,
+    Act::AddToCollection(0),
+    Act::AddToCollection(1),
+    Act::AddToCollection(2),
+    Act::AddToCollection(3),
+    Act::AddToCollection(4),
+    Act::AddToCollection(5),
+    Act::AddToCollection(6),
+    Act::AddToCollection(7),
 ];
+
+/// Collections the Go menu can add a place to: one menu slot each.
+pub const MENU_COLLECTIONS: usize = 8;
 
 impl Act {
     pub fn menu_id(self) -> Option<u32> {
@@ -1400,6 +1412,27 @@ mod tests {
         assert_eq!(m.act(Act::MapType(MapType::Satellite), 0), vec![Effect::ReloadTiles]);
         assert!(m.act(Act::MapType(MapType::Satellite), 0).is_empty());
         assert!(m.checked(Act::MapType(MapType::Satellite)));
+    }
+
+    #[test]
+    fn hybrid_is_a_map_type_in_the_menu() {
+        let mut m = maps("hybrid-menu");
+        assert!(Act::MapType(MapType::Hybrid).menu_id().is_some());
+        assert_eq!(m.act(Act::MapType(MapType::Hybrid), 0), vec![Effect::ReloadTiles]);
+        assert!(m.checked(Act::MapType(MapType::Hybrid)));
+        assert!(!m.checked(Act::MapType(MapType::Satellite)));
+    }
+
+    #[test]
+    fn a_collection_slot_needs_a_place_and_a_collection_and_keeps_a_place_once() {
+        let mut m = maps("collection-slot");
+        m.choose(Place::new("Perlan", 64.1295, -21.9186));
+        assert!(!m.can(Act::AddToCollection(0)), "no collection yet");
+        m.act(Act::NewCollection, 0);
+        assert!(m.can(Act::AddToCollection(0)));
+        m.act(Act::AddToCollection(0), 0);
+        assert_eq!(m.library.collections[0].places.len(), 1, "a place is kept once");
+        assert!(Act::AddToCollection(MENU_COLLECTIONS - 1).menu_id().is_some());
     }
 
     #[test]

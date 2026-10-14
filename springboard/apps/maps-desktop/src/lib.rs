@@ -23,6 +23,7 @@ pub mod links;
 pub mod loader;
 pub mod measure;
 pub mod net;
+pub mod printmap;
 pub mod route;
 pub mod rpc;
 pub mod source;
