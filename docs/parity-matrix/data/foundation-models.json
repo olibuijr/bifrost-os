@@ -31,9 +31,9 @@
     {
       "feature": "Guided generation (Generable, Guide, GenerationSchema)",
       "apple": "Generable, Guide(description:), GenerationSchema, DynamicGenerationSchema, GeneratedContent",
-      "bifrost": "springboard/ui/src/generation_schema.rs (Kind, Property, validate, parse)",
+      "bifrost": "springboard/ui/src/generation_schema.rs (Kind, Property, validate, parse, instructions, read_reply)",
       "status": "partial",
-      "note": "Schema checks and JSON reading are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_value_that_matches_the_schema_has_no_issues, validate_reports_every_problem_with_its_path_in_schema_order, describe_lists_each_member_with_its_type_range_and_description, parse_reads_json_values_and_refuses_text_after_the_value). Nothing constrains a model while it writes, so output is only checked after the reply."
+      "note": "The schema becomes the instruction a model gets (instructions), and a reply is read back against it (read_reply), which accepts a Markdown code fence and reports either a parse failure or each member that does not fit; tested headless in springboard/ui/tests/parity_sdk-tests-09.rs and springboard/ui/tests/parity_sdk-complete-06.rs. Nothing constrains a model while it writes, so output is only checked after the reply, and the model call needs the lab machine."
     },
     {
       "feature": "Tool calling (Tool)",

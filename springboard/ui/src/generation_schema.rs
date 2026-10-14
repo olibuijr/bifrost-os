@@ -224,6 +224,39 @@ pub fn parse(text: &str) -> Result<Value, ParseError> {
     Ok(value)
 }
 
+/// The instruction an app puts in front of a model so that its reply has the shape of `schema`.
+pub fn instructions(schema: &Kind) -> String {
+    format!("Reply with only one JSON value of this shape: {}. Put no text before or after the JSON.", schema.describe())
+}
+
+/// Why a reply cannot be used: it is not JSON at all, or it is JSON that does not fit the schema.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReplyError {
+    NotJson(ParseError),
+    DoesNotFit(Vec<Issue>),
+}
+
+/// Reads a model's reply against `schema`. Models often wrap JSON in a Markdown code fence, so a fence around the
+/// reply is removed first. The value is returned only when `validate` finds no issue.
+pub fn read_reply(schema: &Kind, reply: &str) -> Result<Value, ReplyError> {
+    let value = parse(unfence(reply)).map_err(ReplyError::NotJson)?;
+    let issues = validate(schema, &value);
+    if issues.is_empty() {
+        Ok(value)
+    } else {
+        Err(ReplyError::DoesNotFit(issues))
+    }
+}
+
+/// The text inside a Markdown code fence, or the trimmed reply when it has no fence.
+fn unfence(reply: &str) -> &str {
+    let trimmed = reply.trim();
+    let Some(rest) = trimmed.strip_prefix("```") else { return trimmed };
+    let Some(newline) = rest.find('\n') else { return trimmed };
+    let body = rest[newline + 1..].trim_end();
+    body.strip_suffix("```").unwrap_or(body).trim()
+}
+
 struct Parser<'a> {
     src: &'a str,
     bytes: &'a [u8],

@@ -190,6 +190,26 @@ pub struct GraphicsDevice {
     pub scanouts: Vec<Scanout>,
 }
 
+/// Bytes per pixel of a scanout framebuffer: 32-bit colour.
+const FRAMEBUFFER_BYTES_PER_PIXEL: u64 = 4;
+
+impl GraphicsDevice {
+    /// Bytes of the framebuffer behind scanout `index`, or `None` when there is no such scanout.
+    pub fn framebuffer_bytes(&self, index: usize) -> Option<u64> {
+        self.scanouts
+            .get(index)
+            .map(|s| u64::from(s.width) * u64::from(s.height) * FRAMEBUFFER_BYTES_PER_PIXEL)
+    }
+
+    /// Bytes of the framebuffers of every scanout together.
+    pub fn total_framebuffer_bytes(&self) -> u64 {
+        self.scanouts
+            .iter()
+            .map(|s| u64::from(s.width) * u64::from(s.height) * FRAMEBUFFER_BYTES_PER_PIXEL)
+            .sum()
+    }
+}
+
 /// One device in a guest configuration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Device {
@@ -242,6 +262,14 @@ fn share_tag_ok(tag: &str) -> bool {
 }
 
 impl GuestConfig {
+    /// The graphics device, if the configuration has one.
+    pub fn graphics(&self) -> Option<&GraphicsDevice> {
+        self.devices.iter().find_map(|d| match d {
+            Device::Graphics(g) => Some(g),
+            _ => None,
+        })
+    }
+
     /// Checks the configuration against the host's CPU count. Returns the first problem found.
     pub fn validate(&self, host_cpus: u32) -> Result<(), ConfigError> {
         if self.cpu_count == 0 || self.cpu_count > host_cpus {

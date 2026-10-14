@@ -96,7 +96,7 @@
    "apple": "AVInputPickerInteraction",
    "bifrost": "springboard/ui/src/input_picker.rs",
    "status": "partial",
-   "note": "Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service records (Recorder, level, elapsed) but no input-device picker UI or SDK API is offered to apps."
+   "note": "The picker model gives each offered input with a flag for the chosen one, clears the choice back to the system default, and drops a choice whose microphone has gone; headless tests in springboard/ui/tests/parity_sdk-complete-06.rs. Not wired into apps or the shell, and no SDK API or picker sheet exists yet; the audio service needs the lab machine to check the device list."
   },
   {
    "feature": "Camera access while multitasking",
