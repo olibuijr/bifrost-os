@@ -24,8 +24,8 @@
    "area": "integration",
    "apple": "Info.plist NSServices",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:295",
-   "note": "look-up intent and Look Up Clipboard exist; no services-menu API in the SDK yet",
+   "bifrost": "springboard/ui/src/services_menu.rs:95 (Service::LookUp route); springboard/apps/dictionary-desktop/src/main.rs:827 (look-up intent)",
+   "note": "The shell's Services menu lists Look Up in Dictionary for a text selection and shows the answer in the look-up popover; the look-up intent serves other callers. The entry does not open this app's window yet.",
    "wire": "Register a services-menu entry that opens the app with the selected word"
   },
   {
@@ -33,8 +33,8 @@
    "area": "integration",
    "apple": "Info.plist CFBundleURLTypes",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/manifest.toml:12",
-   "note": "Manifest registers dict and x-dictionary; Input::Open handles the URLs; built on parity/team-d-dictionary; not yet verified on Midget",
+   "bifrost": "springboard/apps/dictionary-desktop/manifest.toml:13; springboard/apps/dictionary-desktop/src/main.rs:753 (Input::Open); springboard/apps/dictionary-desktop/src/model.rs:110 (word_from_url)",
+   "note": "The manifest registers dict and x-dictionary; Input::Open looks the word up, and word_from_url is tested headless in model::tests. Not yet checked on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -42,8 +42,8 @@
    "area": "view",
    "apple": "ScopeBarView.nib; Go > Select Next/Previous Dictionary",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:897",
-   "note": "Scope bar and Go > Select Next/Previous Dictionary (cmd+alt+arrows); needs lab check",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:889 (scope bar); springboard/apps/dictionary-desktop/src/model.rs:277 (cycle_scope)",
+   "note": "The scope bar and Go > Select Next/Previous Dictionary (cmd+alt+arrows) work; cycle_scope is tested headless in model::tests. Lab check pending.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -51,8 +51,8 @@
    "area": "menu",
    "apple": "MainMenu.nib History > Back, Forward",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:186",
-   "note": "Toolbar buttons, Go menu, cmd+[ / cmd+]; Clear History",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:228 (go_back); springboard/apps/dictionary-desktop/src/model.rs:20 (History::visit)",
+   "note": "Toolbar buttons, the Go menu, cmd+[ and cmd+], and Clear History work; History is tested headless in model::tests.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -60,8 +60,8 @@
    "area": "view",
    "apple": "definition view links",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:976",
-   "note": "Words with a definition in an enabled dictionary are drawn in the link colour; tapping looks them up; built on parity/team-d-dictionary; not yet verified on Midget",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:975 (link runs drawn); springboard/apps/dictionary-desktop/src/main.rs:500 (tap_definition); springboard/apps/dictionary-desktop/src/model.rs:385 (link_runs)",
+   "note": "Words with a definition in an enabled dictionary are drawn in the link colour and a tap looks them up; link_runs is tested headless in model::tests. Lab check pending.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -78,8 +78,8 @@
    "area": "menu",
    "apple": "MainMenu.nib File > Print",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:335",
-   "note": "File menu Print (cmd+p) sends text to the default printer",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:377 (print_definition); springboard/apps/dictionary-desktop/src/model.rs:92 (definition_text)",
+   "note": "File menu Print (cmd+p) sends the definition text to the default printer on its own thread; the text comes from definition_text, tested headless in model::tests. Lab print check pending.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -96,8 +96,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Find, Find Next/Previous",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:937",
-   "note": "Found words are highlighted and Find Next/Previous step through every occurrence; a match split across a wrapped line is not found; built on parity/team-d-dictionary; not yet verified on Midget",
+   "bifrost": "springboard/apps/dictionary-desktop/src/model.rs:343 (find_matches); springboard/apps/dictionary-desktop/src/model.rs:432 (step_match); springboard/apps/dictionary-desktop/src/main.rs:252 (step_find)",
+   "note": "Found words are highlighted and Find Next/Previous step through every occurrence, with find_matches and step_match tested headless in model::tests. A match split across a wrapped line is not found. Lab check pending.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -105,8 +105,8 @@
    "area": "toolbar",
    "apple": "DictionaryWindow.nib text-size control",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:885",
-   "note": "A-/A+ toolbar buttons and View menu cmd+= / cmd+- / cmd+0; persisted in prefs.txt",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:273 (Act::Smaller, Act::Bigger); springboard/apps/dictionary-desktop/src/model.rs:200 (bigger)",
+   "note": "A-/A+ toolbar buttons and View menu cmd+= / cmd+- / cmd+0 work and persist in prefs.txt; the clamped step is tested headless in model::tests.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -123,8 +123,8 @@
    "area": "menu",
    "apple": "MainMenu.nib File > Open Dictionaries Folder",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:796",
-   "note": "Opens a file:// URL through the shell; depends on the shell routing it to Files",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:786 (MENU_OPEN_FOLDER); springboard/apps/dictionary-desktop/src/model.rs:97 (folder_url)",
+   "note": "Opens the dictionaries folder as a percent-encoded file:// URL, which folder_url tests headless; the shell must route it to Files. Lab check pending.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -132,8 +132,8 @@
    "area": "settings",
    "apple": "Preferences.nib dictionary list with checkboxes and drag order",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:449",
-   "note": "Settings page with On/Off, Up/Down and drag reorder of rows; built on parity/team-d-dictionary; not yet verified on Midget",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:667 (draw_settings); springboard/apps/dictionary-desktop/src/model.rs:233 (move_to); springboard/apps/dictionary-desktop/src/model.rs:218 (move_dict)",
+   "note": "The settings page has On/Off, Up/Down and drag reorder of rows; move_to and move_dict are tested headless in model::tests. Lab check pending.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -141,8 +141,8 @@
    "area": "settings",
    "apple": "Preferences.nib font size",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:658",
-   "note": "Size buttons in the settings page",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:722 (settings A+ and A- buttons)",
+   "note": "The settings page has A-/A+ buttons and a Text size readout that change the same stored step as the toolbar; the step clamp is tested headless in model::tests.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -150,8 +150,8 @@
    "area": "panel",
    "apple": "DictionaryWindow.nib label sheet",
    "status": "partial",
-   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:650",
-   "note": "Rename inline in the settings page; stored in prefs.txt",
+   "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:303 (Act::Rename); springboard/apps/dictionary-desktop/src/model.rs:243 (set_label)",
+   "note": "Rename works inline in the settings page and the label is stored in prefs.txt; arrange applies it, tested headless in model::tests. Lab check pending.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {

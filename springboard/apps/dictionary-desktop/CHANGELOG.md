@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Copy Definition and Print send the same text: each dictionary's name above its definition, from one tested routine.
+- Open Dictionaries Folder percent-encodes the folder path, so folders with spaces open correctly.
+- Headless tests cover the definition text and the folder URL in model.rs.
+
 ## 0.3.0
 
 - The manifest registers the dict: and x-dictionary: URL schemes, so the shell offers Dictionary for those links.

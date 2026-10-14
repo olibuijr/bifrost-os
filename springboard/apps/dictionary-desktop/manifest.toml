@@ -1,6 +1,6 @@
 id = "is.olibuijr.dictionary.desktop"
 name = "Dictionary"
-version = "0.3.0"
+version = "0.4.0"
 exec = "bifrost-dictionary"
 icon = "icon.png"
 min_shell = "0.4.84"
