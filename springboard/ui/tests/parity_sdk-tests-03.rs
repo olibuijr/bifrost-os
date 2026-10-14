@@ -617,3 +617,15 @@ fn document_formats_follow_the_file_extension_case_insensitively() {
     assert_eq!(document_format(Path::new("archive.bin")), "application/octet-stream");
     assert_eq!(document_format(Path::new("no-extension")), "application/octet-stream");
 }
+
+#[test]
+fn a_pdf_file_job_sends_the_file_bytes_unchanged() {
+    // cargo's per-target scratch directory keeps the fixture out of the source tree
+    let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("parity_sdk-tests-03-print.pdf");
+    let bytes = b"%PDF-1.4\n% print fixture\n%%EOF\n".to_vec();
+    std::fs::write(&path, &bytes).unwrap();
+    let (format, data) = PrintOperation::new(path.clone()).document().unwrap();
+    assert_eq!(format, "application/pdf");
+    assert_eq!(data, bytes);
+    assert_eq!(PrintOperation::new(path).job_name, "parity_sdk-tests-03-print.pdf");
+}
