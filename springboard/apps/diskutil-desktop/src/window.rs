@@ -160,7 +160,8 @@ impl DiskUtility {
             labels: TextCache::default(),
             show_all: true,
             erase_fs: Personality::Fat32,
-            size: (1200.0, 780.0),
+            // The app host configures the actual client size before the first frame.
+            size: (0.0, 0.0),
             last_refresh: f64::NEG_INFINITY,
             last_usage: f64::NEG_INFINITY,
             press: Target::Nothing,

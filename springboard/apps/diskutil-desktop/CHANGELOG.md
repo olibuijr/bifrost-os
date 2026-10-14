@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.5 — 2026-10-14
+
+- Derive the initial content geometry from the host-provided window size instead of assuming a default resolution.
+
 ## 0.7.4 — 2026-10-14
 
 - Use the shared large-title widget on the empty root screen and an inline title for selected-disk details.

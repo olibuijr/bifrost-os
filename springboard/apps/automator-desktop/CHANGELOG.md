@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 — 2026-10-14
+
+- Derive the initial content geometry from the host-provided window size instead of assuming a default resolution.
+
 ## 0.1.2 — 2026-10-14
 
 - Add the generated app compliance harness.
