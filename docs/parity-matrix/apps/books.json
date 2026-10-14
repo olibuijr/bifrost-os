@@ -299,8 +299,8 @@
    "area": "integration",
    "apple": "SharingExtension.appex (accepts one PDF; BKShareViewController.nib)",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:395 (document: a shared PDF is copied in and opens); springboard/apps/books-desktop/manifest.toml (handles com.adobe.pdf, documents permission)",
-   "note": "A PDF shared to Books is copied into the Books folder and opens. The manifest declares the PDF handle and the documents permission. Gap: no headless test covers the share request, and it is not verified on Midget from Files or Preview."
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:395 (document: copies each shared PDF into the Books folder); springboard/apps/books-desktop/src/main.rs:410 (opens the lone shared book); springboard/apps/books-desktop/src/books/share.rs:8 (book_to_open); springboard/apps/books-desktop/manifest.toml (handles com.adobe.pdf, documents permission)",
+   "note": "A PDF shared to Books is copied into the Books folder and a lone shared book opens; the open rule is tested headless in books/share_tests.rs (a_lone_shared_book_opens_at_once, several_shared_books_stay_on_the_shelf). Gap: the share request itself is not covered by a test, and it is not verified on Midget from Files or Preview."
   },
   {
    "feature": "Settings window",
