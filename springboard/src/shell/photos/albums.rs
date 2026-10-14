@@ -219,6 +219,11 @@ impl Selection {
         self.paths.iter().cloned().collect()
     }
 
+    /// Deselect All: clears the set and keeps the selection mode on.
+    pub fn deselect_all(&mut self) {
+        self.paths.clear();
+    }
+
     /// Selects every photo of `photos`.
     pub fn select_all(&mut self, photos: &[Photo]) {
         self.paths = photos.iter().map(|p| p.path.clone()).collect();
