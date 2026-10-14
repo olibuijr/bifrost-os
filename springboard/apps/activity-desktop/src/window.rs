@@ -39,6 +39,10 @@ pub const SIDE_SCROLL: f32 = -(UNIFIED_BAR_PT + 4.0);
 pub const SEARCH_PT: f32 = 220.0;
 /// Readings are taken once a second unless View > Update Frequency says otherwise.
 pub const SAMPLE_MS: f64 = 1000.0;
+/// The energy means are written to the app's storage this often (milliseconds), and at the first reading.
+const AVERAGES_EVERY_MS: f64 = 60_000.0;
+/// The file in the app's storage that keeps the energy means across launches.
+const AVERAGES_FILE: &str = "energy-averages.txt";
 
 /// Toolbar item ids (also the published control ids).
 pub const B_QUIT: u32 = 1;
@@ -289,6 +293,8 @@ pub struct Monitor {
     pub scope: Option<u32>,
     /// Running energy means by process name, for the 12 hr Average column.
     pub averages: EnergyAverages,
+    /// When the energy means were last written to the app's storage, in the sampler's milliseconds.
+    pub averages_saved_at: Option<f64>,
     /// The CPU graph shows one strip per core (View > CPU History) instead of the total.
     pub cpu_history: bool,
     /// How long Sample Process looks, in seconds (one of `sample_proc::DURATIONS`).
@@ -345,6 +351,7 @@ impl Monitor {
             baseline_at: HashMap::new(),
             scope: None,
             averages: EnergyAverages::default(),
+            averages_saved_at: None,
             cpu_history: false,
             sample_seconds: sample_proc::DURATION_SECS,
             job: None,
@@ -383,6 +390,10 @@ impl Monitor {
         self.averages.record(&snap.procs, dt);
         for p in &mut snap.procs {
             p.energy_avg = self.averages.mean(&p.name);
+        }
+        if self.averages_saved_at.map_or(true, |at| t - at >= AVERAGES_EVERY_MS) {
+            self.save_averages();
+            self.averages_saved_at = Some(t);
         }
         self.history.record(&snap);
         if let Some(pressure) = inspect::read_pressure() {
@@ -657,6 +668,24 @@ impl Monitor {
     pub fn set_columns(&mut self, columns: ColumnSet) {
         self.columns = columns;
         self.sync_scans();
+    }
+
+    /// Reads the energy means kept from earlier launches, from the app's storage. Nothing is read without a folder.
+    pub fn load_averages(&mut self) {
+        if self.data_dir.as_os_str().is_empty() {
+            return;
+        }
+        if let Ok(text) = std::fs::read_to_string(self.data_dir.join(AVERAGES_FILE)) {
+            self.averages = EnergyAverages::from_text(&text);
+        }
+    }
+
+    /// Writes the energy means to the app's storage. A write that fails leaves the old file, and the next one tries again.
+    pub fn save_averages(&self) {
+        if self.data_dir.as_os_str().is_empty() {
+            return;
+        }
+        let _ = std::fs::write(self.data_dir.join(AVERAGES_FILE), self.averages.to_text());
     }
 
     /// View > CPU History: one strip per core in place of the total.
@@ -1844,6 +1873,27 @@ mod tests {
         // nothing selected: no sample starts, and the length is kept for the next one
         m.start_sample();
         assert!(!m.job_running());
+    }
+
+    #[test]
+    fn the_energy_means_are_kept_in_the_app_storage() {
+        let dir = std::env::current_dir().unwrap().join("target").join("activity-averages-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut busy = proc(1, 0, "build");
+        busy.cpu = 40.0;
+        let mut m = Monitor::new(800.0, 600.0);
+        m.data_dir = dir.clone();
+        m.averages.record(&[busy], 1.0);
+        m.save_averages();
+        let mut again = Monitor::new(800.0, 600.0);
+        again.data_dir = dir.clone();
+        again.load_averages();
+        assert!((again.averages.mean("build") - 40.0).abs() < 1e-9);
+        // without a storage folder nothing is written or read
+        let mut bare = Monitor::new(800.0, 600.0);
+        bare.load_averages();
+        assert_eq!(bare.averages.mean("build"), 0.0);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

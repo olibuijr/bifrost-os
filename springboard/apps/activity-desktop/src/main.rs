@@ -221,6 +221,7 @@ impl App for ActivityApp {
             None => {
                 let mut m = Monitor::new(w, h);
                 m.data_dir = ctx.data_dir.clone();
+                m.load_averages();
                 m.set_frequency(UpdateFrequency::from_seconds(ctx.defaults().int(PREF_FREQUENCY)));
                 m.set_columns(ColumnSet::from_pref(&ctx.defaults().string(PREF_COLUMNS).unwrap_or_default()));
                 m.set_cpu_history(ctx.defaults().bool(PREF_CPU_HISTORY));

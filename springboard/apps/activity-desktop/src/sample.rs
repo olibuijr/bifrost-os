@@ -470,6 +470,25 @@ fn read_voluntary(pid: u32) -> Option<u64> {
     Some(total)
 }
 
+/// The per-process engine share from `nvidia-smi pmon` (the `sm` column, percent), by pid. The header lines start with
+/// `#`; a process with no figure shows `-`. A process on several GPUs adds up.
+pub fn parse_pmon(text: &str) -> HashMap<u32, f32> {
+    let mut shares = HashMap::new();
+    for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let (Some(pid), Some(sm)) = (f.get(1).and_then(|p| p.parse::<u32>().ok()), f.get(3)) else { continue };
+        let share: f32 = sm.parse().unwrap_or(0.0);
+        *shares.entry(pid).or_insert(0.0) += share;
+    }
+    shares
+}
+
+/// Reads the NVIDIA per-process engine shares once. None when `nvidia-smi` cannot be run (no NVIDIA driver here).
+fn read_nvidia() -> Option<HashMap<u32, f32>> {
+    let out = Command::new("nvidia-smi").args(["pmon", "-c", "1", "-s", "u"]).output().ok()?;
+    out.status.success().then(|| parse_pmon(&String::from_utf8_lossy(&out.stdout)))
+}
+
 /// Engine time of the DRM clients a process holds open, in nanoseconds. Descriptors of other users are unreadable
 /// and count as nothing.
 fn read_gpu_ns(pid: u32) -> u64 {
@@ -546,6 +565,10 @@ pub struct Sampler {
     pub scan_wakeups: bool,
     /// The boot time in seconds since the epoch (zero when unknown), to age the processes.
     boot: u64,
+    /// The NVIDIA engine share of each process, read while the GPU is scanned (see `parse_pmon`).
+    nvidia: HashMap<u32, f32>,
+    /// No `nvidia-smi` on this machine: it is not asked again.
+    no_nvidia: bool,
 }
 
 /// How long the list of sleep blockers is trusted before logind is asked again (milliseconds).
@@ -633,6 +656,18 @@ impl Sampler {
             self.sleep_blockers.clear();
             self.blockers_read_at = None;
         }
+        // NVIDIA's proprietary driver publishes no DRM counters, so its per-process shares come from nvidia-smi
+        if !self.scan_gpu {
+            self.nvidia.clear();
+        } else if !self.no_nvidia {
+            match read_nvidia() {
+                Some(shares) => self.nvidia = shares,
+                None => {
+                    self.no_nvidia = true;
+                    self.nvidia.clear();
+                }
+            }
+        }
         let mut procs = Vec::new();
         let mut seen = HashMap::new();
         if let Ok(entries) = fs::read_dir("/proc") {
@@ -664,6 +699,7 @@ impl Sampler {
                     (Some(prev), Some(now), Some(d)) => (now.saturating_sub(prev) as f64 / 1e9 / d * 100.0) as f32,
                     _ => 0.0,
                 };
+                let gpu = if gpu == 0.0 { self.nvidia.get(&pid).copied().unwrap_or(0.0) } else { gpu };
                 // wake-ups per second, from the switches counted at the last reading
                 let wakeups = match (before.and_then(|b| b.voluntary), voluntary, dt) {
                     (Some(prev), Some(now), Some(d)) => now.saturating_sub(prev) as f64 / d,
@@ -831,6 +867,21 @@ mod tests {
         assert!(parse_inhibitors("a(ssssuu) 2 \"sleep\" \"x\"").is_empty());
         assert!(parse_inhibitors("").is_empty());
         assert!(parse_inhibitors("garbage").is_empty());
+    }
+
+    #[test]
+    fn nvidia_pmon_lines_give_each_process_its_engine_share() {
+        let text = "# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command\n\
+                    # Idx           #    C/G     %      %      %      %      %      %    name\n\
+                    \x20   0       1234     G     12      3      0      0      0      0    Xorg\n\
+                    \x20   0       1234     G      8      1      0      0      0      0    Xorg\n\
+                    \x20   1       4321     C      -      -      -      -      -      -    python\n\
+                    \x20   0          -     -      -      -      -      -      -      -    -\n";
+        let shares = parse_pmon(text);
+        assert_eq!(shares.get(&1234).copied(), Some(20.0), "several GPUs and lines add up");
+        assert_eq!(shares.get(&4321).copied(), Some(0.0), "a dash reads as nothing");
+        assert_eq!(shares.len(), 2);
+        assert!(parse_pmon("# header only\n").is_empty());
     }
 
     #[test]

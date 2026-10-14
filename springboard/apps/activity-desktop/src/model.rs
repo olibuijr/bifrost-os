@@ -529,6 +529,28 @@ impl EnergyAverages {
     pub fn mean(&self, name: &str) -> f64 {
         self.by_name.get(name).map_or(0.0, |e| e.0)
     }
+
+    /// The averages as text, one name per line: its count, its mean, then the name. Line breaks and tabs in a name
+    /// become spaces, so every line reads back.
+    pub fn to_text(&self) -> String {
+        let mut names: Vec<(&String, &(f64, u64))> = self.by_name.iter().collect();
+        names.sort_by(|a, b| a.0.cmp(b.0));
+        names.iter().map(|(name, (mean, count))| format!("{count}\t{mean}\t{}\n", name.replace(|c: char| c == '\n' || c == '\t', " "))).collect()
+    }
+
+    /// The averages written by `to_text`. Lines that do not read are left out.
+    pub fn from_text(text: &str) -> EnergyAverages {
+        let mut by_name = HashMap::new();
+        for line in text.lines() {
+            let mut f = line.splitn(3, '\t');
+            let (Some(count), Some(mean), Some(name)) = (f.next(), f.next(), f.next()) else { continue };
+            let (Ok(count), Ok(mean)) = (count.parse::<u64>(), mean.parse::<f64>()) else { continue };
+            if !name.is_empty() && mean.is_finite() {
+                by_name.insert(name.to_string(), (mean, count));
+            }
+        }
+        EnergyAverages { by_name }
+    }
 }
 
 /// An energy score for one process: its CPU share plus its disk traffic. Activity Monitor's Energy column is
@@ -1173,6 +1195,17 @@ mod tests {
         assert_eq!(h.cores[0].len(), 2);
         assert_eq!(h.gpu.len(), 1);
         assert_eq!(h.gpu.last(), 55.0);
+    }
+
+    #[test]
+    fn energy_averages_survive_a_restart() {
+        let mut a = EnergyAverages::default();
+        a.record(&[proc(1, "build", 1000, 40.0, 0), proc(2, "tab\tname", 1000, 5.0, 0)], 60.0);
+        let text = a.to_text();
+        let b = EnergyAverages::from_text(&text);
+        assert!((b.mean("build") - a.mean("build")).abs() < 1e-12);
+        assert_eq!(b.to_text(), text, "every line reads back to the same line");
+        assert_eq!(EnergyAverages::from_text("garbage\n\n1\tx\ty\n").to_text(), "");
     }
 
     #[test]
