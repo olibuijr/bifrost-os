@@ -40,21 +40,21 @@
       "apple": "MLMediaType (image, audio, movie), type attributes on objects",
       "bifrost": "springboard/src/shell/photos/library.rs (image extensions), springboard/apps/music-desktop/src/music/library.rs (audio files)",
       "status": "partial",
-      "note": "type is decided per app by file extension; no shared media-type enum in the SDK"
+      "note": "type is decided per app by file extension; no shared media-type enum in the SDK. Headless test in springboard/tests/parity_sdk-tests-07.rs: headless_library_accepts_picture_names_in_any_case_and_skips_hidden_entries (photo library scan; the Music audio types are not covered by it)."
     },
     {
       "feature": "Background loading",
       "apple": "Library load runs off the main thread with media-object change notifications",
       "bifrost": "springboard/apps/music-desktop/src/music/jobs.rs (library scan on the dispatch pool); springboard/src/shell/photos/mod.rs (rescan)",
       "status": "partial",
-      "note": "both scans run on worker threads; there is no change notification for other apps to observe"
+      "note": "both scans run on worker threads; there is no change notification for other apps to observe. Headless tests in apps/music-desktop/tests/parity_sdk-tests-07.rs: headless_job_result_reaches_the_window_after_the_main_queue_runs, headless_results_come_back_oldest_first (the job queue; the scan itself is not called by these tests)."
     },
     {
       "feature": "Live changes to the collection",
       "apple": "read-only snapshot per library instance; reloading is explicit",
-      "bifrost": "springboard/src/shell/photos/mod.rs (rescan); wired: springboard/apps/music-desktop/src/music.rs (watch, tick, apply: Done::Stamps) with MediaLibrary::observe",
+      "bifrost": "springboard/ui/src/media_changes.rs (MediaLibrary::observe); springboard/src/shell/photos/mod.rs (rescan); wired: springboard/apps/music-desktop/src/music.rs (watch, tick, apply: Done::Stamps) with MediaLibrary::observe",
       "status": "partial",
-      "note": "the shell Photos code rescans; the Music app builds once from its roots and has no file-watch update path in this module Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "the shell Photos code rescans; the Music app compares the file stamps of its roots with the last scan on each tick and scans again when one changed, so no change notification reaches other apps. Headless tests in springboard/ui/tests/parity_sdk-tests-07.rs: headless_media_changes_are_reported_sorted_while_notifications_are_on, headless_an_unchanged_listing_reports_nothing_and_keeps_the_time, headless_changes_while_notifications_are_off_are_recorded_but_not_reported, headless_switching_notifications_on_later_does_not_replay_old_changes, headless_unload_makes_the_next_listing_count_every_item_as_inserted, headless_a_repeated_identifier_takes_the_later_stamp. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Source-specific identifiers and group types (iTunes, iPhoto, Aperture, Final Cut, GarageBand, Logic, Photos)",
