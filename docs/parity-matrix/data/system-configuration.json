@@ -87,9 +87,9 @@
     {
       "feature": "Ethernet bond and VLAN interfaces",
       "apple": "SCBondInterfaceCreate, SCVLANInterfaceCreate and related functions",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "Not part of the desktop network model. Would matter only for a server-class target."
+      "bifrost": "springboard/core/src/vlan_plan.rs (add_bond, add_vlan, remove_interface)",
+      "status": "partial",
+      "note": "Bond and VLAN command plans with checked names, ids, modes and members are tested headless in springboard/core/tests/parity_sdk-gaps-01.rs. Gap: the privileged network service does not run these plans yet, and no SDK call reaches them."
     },
     {
       "feature": "Console user and session information",

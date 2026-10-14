@@ -94,9 +94,9 @@
     {
       "feature": "Privacy attribution and local network identity",
       "apple": "nw_parameters_set_attribution, App Privacy Report, Creating an Identity for Local Network TLS",
-      "bifrost": "springboard/src/bare/app_policy.rs (native-app sandbox)",
-      "status": "gap",
-      "note": "The sandbox limits app access, but there is no per-connection attribution and no local-network permission prompt"
+      "bifrost": "springboard/ui/src/network_attribution.rs (is_local_destination, LocalNetwork, Attribution); springboard/src/bare/app_policy.rs (native-app sandbox)",
+      "status": "partial",
+      "note": "Local destination detection, the per-app local-network answer and the per-app connection record are tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: the network service does not call these models yet, so no permission prompt appears and connections are not attributed to apps."
     },
     {
       "feature": "Web content loading in a view",

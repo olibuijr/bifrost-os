@@ -59,16 +59,16 @@
     {
       "feature": "Live broadcast controller and handlers",
       "apple": "RPBroadcastController, RPBroadcastHandler, RPBroadcastSampleHandler, RPBroadcastMP4ClipHandler, RPBroadcastConfiguration",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no broadcast extension point and no streaming of app frames"
+      "bifrost": "springboard/ui/src/broadcast.rs (BroadcastController, BroadcastHandler, BroadcastConfiguration)",
+      "status": "partial",
+      "note": "The controller, its configuration checks and the start, pause, resume and finish order are tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: the shell has no broadcast extension point, no sample or clip handler, and no app frame is captured or streamed."
     },
     {
       "feature": "Broadcast picker UI",
       "apple": "RPBroadcastActivityViewController, RPSystemBroadcastPickerView, RPBroadcastActivityController, RPBroadcastActivityControllerDelegate",
-      "bifrost": "springboard/sdk/src/share.rs (show_picker, share sheet)",
-      "status": "gap",
-      "note": "the share picker covers sharing items, not choosing a broadcast service"
+      "bifrost": "springboard/ui/src/broadcast.rs (BroadcastPicker); springboard/sdk/src/share.rs (show_picker, share sheet)",
+      "status": "partial",
+      "note": "The picker lists services, selects one by index and confirms a checked configuration, tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: the shell draws no broadcast picker, so the list is never shown to the person; the share sheet covers sharing items only."
     },
     {
       "feature": "Error domain",

@@ -1190,6 +1190,8 @@ pub mod frame_metrics;
 pub mod haptics;
 pub mod push_registration;
 pub mod network_attribution;
+pub mod broadcast;
+pub mod content_items;
 pub mod mp4_info;
 pub mod map_snapshot;
 pub mod audio_settings;
