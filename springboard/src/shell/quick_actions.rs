@@ -76,7 +76,7 @@ title = "Dropped: no type"
 type = "search"
 title = "Search"
 subtitle = "Find a message"
-symbol = "magnifyingglass"
+symbol = "find"
 [[intent]]
 id = "not.a.quick.action"
 "#;
@@ -86,7 +86,7 @@ id = "not.a.quick.action"
         assert_eq!(items[0].title, "New Message");
         assert_eq!(items[0].user_info, vec![("account".to_string(), "work".to_string())]);
         assert_eq!(items[1].subtitle, "Find a message");
-        assert_eq!(items[1].symbol, "magnifyingglass");
+        assert_eq!(items[1].symbol, "find");
     }
 
     #[test]

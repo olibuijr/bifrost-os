@@ -1,4 +1,4 @@
-//! Home Screen quick actions (`UIApplicationShortcutItem`) from the app. Static items are declared in the app's manifest
+//! Home screen quick actions from the app. Static items are declared in the app's manifest
 //! as `[[quick_action]]` tables (see `springboard/src/shell/quick_actions.rs`); this module sets the dynamic ones, which
 //! replace the app's previous dynamic list. The shell shows the list on a long press of the app's icon in the Home
 //! Screen and the Dock. A choice arrives as `Input::QuickAction` with the item's type and user info.
@@ -68,11 +68,11 @@ mod tests {
         assert!(plain.get("userInfo").is_none());
         let mut full = ShortcutItem::new("compose", "New Message");
         full.subtitle = "Work".into();
-        full.symbol = "square.and.pencil".into();
+        full.symbol = "pencil".into();
         full.user_info = vec![("account".into(), "work".into())];
         let json = item_json(&full);
         assert_eq!(json.get("subtitle"), Some(&Json::Str("Work".into())));
-        assert_eq!(json.get("symbol"), Some(&Json::Str("square.and.pencil".into())));
+        assert_eq!(json.get("symbol"), Some(&Json::Str("pencil".into())));
         assert_eq!(json.get("userInfo").and_then(|u| u.get("account")), Some(&Json::Str("work".into())));
     }
 

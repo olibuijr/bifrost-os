@@ -1,4 +1,4 @@
-//! Home Screen quick actions (`UIApplicationShortcutItem`): the short list an app offers when its icon is long pressed.
+//! Home screen quick actions: the short list an app offers when its icon is long pressed.
 //! An item has a type the app reads back, a title, an optional subtitle and symbol, and user info. Static items come
 //! from the app's manifest; dynamic items are set at runtime through the SDK. The list shows dynamic items first, then
 //! static ones, without repeating a type and with at most [`MAX_ITEMS`] in all.

@@ -4,7 +4,7 @@
  "macos_since": "",
  "status": "partial",
  "bifrost": "springboard/sdk/src/lib.rs, springboard/sdk/src/runtime.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/layout.rs, springboard/src/shell/apphost.rs",
- "summary": "Apps have configure, suspend and resume callbacks, state restoration, launch URLs and documents, and a size-derived layout model with a top safe inset. There is no scene concept (several UI instances per app), no trait collection, no device idiom query, no orientation API and no status bar control for apps.",
+ "summary": "Apps have configure, suspend and resume callbacks, state restoration, launch URLs and documents, quick actions (static manifest items and dynamic items from the SDK, shown in the Dock menu), and a size-derived layout model with a top safe inset. There is no scene concept (several UI instances per app), no trait collection, no device idiom query, no orientation API and no status bar control for apps.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -115,9 +115,9 @@
   {
    "feature": "Application shortcut items",
    "apple": "UIApplicationShortcutItem, Home Screen quick actions",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "no way for an app to publish quick actions that the shell shows on long press of its icon; the shell has icon edit mode only (springboard/src/shell/jiggle.rs)"
+   "bifrost": "springboard/ui/src/quick_actions.rs, springboard/sdk/src/quick_actions.rs, springboard/sdk/src/runtime.rs, springboard/proto/src/lib.rs, springboard/src/shell/quick_actions.rs, springboard/src/shell/services/quick_actions.rs, springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-quick-actions; not yet verified on the tablet. Static [[quick_action]] manifest items and dynamic items from the SDK are shown in the Dock's menu (touch and secondary click) and delivered as Input::QuickAction; the Home Screen icon long press still starts edit mode on the tablet"
   }
  ],
  "gaps": [
@@ -125,7 +125,7 @@
   "Trait collection object with size class pair and change callback",
   "Form-factor idiom query for apps (B3 owns the definition)",
   "Supported orientations declared by apps (B7)",
-  "Home icon quick actions",
+  "Home Screen long-press menu for quick actions on the tablet (the Dock menu shows them today; the icon long press still enters edit mode)",
   "Status bar and home indicator hiding"
  ]
 }
