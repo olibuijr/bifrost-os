@@ -45,9 +45,9 @@
     {
       "feature": "Audio playback service shared by apps",
       "apple": "Not part of CoreAudioKit (AVFoundation and Core Audio); listed because CoreAudioKit device views depend on it",
-      "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs",
-      "status": "os",
-      "note": "Service owns the speaker and microphone; apps reach it over the service socket. The SDK has no audio API of its own (springboard/sdk/src/lib.rs has no audio module)."
+      "bifrost": "springboard/src/svc.rs (audio::Client); springboard/sdk/src/lib.rs (audio re-export, bifrost_app::audio); springboard/audiod/src/main.rs",
+      "status": "partial",
+      "note": "Apps share the audio service through bifrost_app::audio::Client, used by the music, podcasts, video player and voice memos apps. Headless tests in sdk/tests/parity_sdk-rest-12.rs drive it over a Unix socket with a fake service: handshake, state, transport and queue commands, volume clamping and reconnect. Gap: the service itself owns the speaker and plays sound only on the lab machine."
     },
     {
       "feature": "Inter-device audio picker",
