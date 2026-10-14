@@ -11,7 +11,9 @@
 //! and export as `.md` or text.
 
 pub mod attach;
+pub mod attachments;
 pub mod folders;
+pub mod settings;
 mod chrome;
 pub mod icon;
 pub mod rpc;

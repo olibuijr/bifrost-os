@@ -166,18 +166,18 @@
    "feature": "Attachment browser",
    "area": "view",
    "apple": "MainMenu: View > Show Attachment Browser; ICMAttachmentBrowserController",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/attachments.rs (browse, Entry::label)",
+   "note": "The browse model lists every attachment of every note, newest note first, with its folder and caption; tested headless in tests/parity_app-notes.rs. Gap: the View::Attachments grid, the click to the owning note and the View menu entry are not drawn yet.",
    "wire": "New View::Attachments grid listing every file from folders::attachments (notes/folders.rs:71) across notes; click opens the owning note; reach it from the View menu and sidebar."
   },
   {
    "feature": "Rename attachment, attachment view size (small/large)",
    "area": "menu",
    "apple": "MainMenu: Edit > Rename Attachment; View > Attachment View",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/attachments.rs (set_caption); springboard/apps/notes-desktop/src/notes/settings.rs (AttachmentSize)",
+   "note": "Renaming stores a caption per file in a sidecar file, which leaves the file name on disk alone, and the view size maps to tile widths; both are tested headless in tests/parity_app-notes.rs. Gap: the browser does not draw captions or the Small and Large sizes yet, and the editor has no rename context menu.",
    "wire": "Context menu on an image in the editor: Rename (rewrites the markdown reference and file) and Small/Large toggle stored per note."
   },
   {
@@ -301,9 +301,9 @@
    "feature": "Settings window: default text size, dark note background, new notes start with, group by date",
    "area": "settings",
    "apple": "Settings.loctable General pane",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Sort and checked-to-bottom live in menus only",
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/settings.rs (TextSize, NewNoteStart, AttachmentSize, load, save)",
+   "note": "The settings model holds text size, dark background, new note start and attachment size, saved beside the notes and tested headless in tests/parity_app-notes.rs. Gap: there is no Settings pane yet and the values do not change the editor or new notes; sort and checked-to-bottom live in menus only.",
    "wire": "Add a Settings pane (app settings hook) with text size, start style (Title/Heading/Body), dark background toggle, sort and group options, writing Prefs."
   },
   {
