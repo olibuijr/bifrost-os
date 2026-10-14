@@ -330,8 +330,8 @@
    "area": "panel",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Merge Duplicates; IPXBurstSecondaryToolbarViewController.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/library.rs:140 (duplicate_groups); springboard/src/shell/photos/commands.rs:277 (MergeDuplicates)",
-   "note": "Image > Merge Duplicates runs the merge from the menu while the Duplicates album is open. Bursts are not grouped. Not yet verified on Midget.",
+   "bifrost": "springboard/src/shell/photos/library.rs:140 (duplicate_groups); springboard/src/shell/photos/commands.rs:277 (MergeDuplicates); springboard/src/shell/photos/bursts.rs (burst_groups)",
+   "note": "Image > Merge Duplicates runs the merge from the menu while the Duplicates album is open. The burst model in bursts.rs groups same-camera pictures a second apart, tested headless; the library does not feed it the camera yet and there is no burst collection or merge. Not yet verified on Midget.",
    "wire": "Group bursts (pictures taken a second or less apart by one camera) into a collection with its own merge"
   },
   {

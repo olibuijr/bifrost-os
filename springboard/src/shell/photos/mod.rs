@@ -8,6 +8,7 @@
 //! whose results arrive through a pipe the shell polls, like Deildu.
 
 pub mod albums;
+pub mod bursts;
 pub mod commands;
 pub mod dupes;
 pub mod edit;
