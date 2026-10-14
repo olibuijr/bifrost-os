@@ -12,6 +12,7 @@
 pub mod animation;
 pub mod codec;
 pub mod geometry;
+pub mod glass_group;
 pub mod layer;
 pub mod timing;
 pub mod transaction;
