@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.0
+
+- The Inspector lists each piece of markup on its own row, with its kind, its page and the text of a note or text box,
+  under the annotation counts. The rows come from `inspector::annotation_rows`, which is tested.
+
 ## 0.9.0
 
 - File > Save (Cmd+S) writes the markup, page order and turns into the document and opens it again. A PDF is written
