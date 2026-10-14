@@ -22,8 +22,8 @@ const BIN: &str = env!("CARGO_BIN_EXE_bifrost-mail");
 const BIN_NAME: &str = "bifrost-mail";
 const APP_ID: &str = "is.olibuijr.mail.desktop";
 const SNAP_NAME: &str = "mail-desktop";
-const EXPECT_SIDEBAR: bool = false;  // source_list in the source
-const EXPECT_TOOLBAR: bool = false;  // widgets::toolbar in the source
+const EXPECT_SIDEBAR: bool = true;  // source_list in the source
+const EXPECT_TOOLBAR: bool = true;  // widgets::toolbar in the source
 const EXPECT_SEARCH: bool = false;  // search_field in the source
 /// An app must draw a frame on start.
 const FRAME_REQUIRED: bool = true;
