@@ -142,7 +142,7 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 | `192.168.20.140:22` | Midget sshd (lab key on lab installs only) | installed system |
 | `192.168.20.140:8651` | `bifrost-lab` API (lab ISO only) | live medium |
 | `192.168.20.140:7777` | shell control socket | `springboard` |
-| `https://bifrost.olibuijr.com/arch/$arch` | release pacman repo | release publish |
+| `https://bifrost.olibuijr.com/arch/$arch` | release pacman repo; live static files under `bifrost-site/site/arch/$arch` | `tools/pc-publish.py` |
 | `192.168.1.12` | Titan (lab host, Midget control scripts run here) | titan |
 
 ## 7. CLI tools (`tools/`)

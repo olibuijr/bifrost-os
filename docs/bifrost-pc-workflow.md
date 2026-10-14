@@ -433,6 +433,10 @@ Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
    fonts that had no file). Upstream: `BIFROST_UPSTREAM_MIRROR` or the first Server in `/etc/pacman.d/mirrorlist`;
    `--skip-mirror-sync` only checks. Run it alone with `python3 tools/pc_mirror.py [--sync|--check]`; tests:
    `python3 -I tools/test_pc_mirror.py`. Midget's mirrorlist must point at that URL (not written by the installer). It refuses a version that is not newer than the published one.
+   The same publish exports the retained `springboard-shell` packages and pacman database to
+   `~/Projects/bifrost-site/site/arch/x86_64`, the live static path for `https://bifrost.olibuijr.com/arch/$arch`.
+   Package names are immutable; the database is atomically replaced last so it never refers to a package that is still
+   uploading. `BIFROST_PUBLIC_SITE` changes the site root when publishing from another host.
 4. Apps: bump manifest and Cargo versions with the CHANGELOG entry, commit, then
    `python3 tools/pc-app.py publish <app dir>`.
 5. Midget: `bifrost pc midget ota` drives Settings > Software Update by element name (check, download, Install Now,

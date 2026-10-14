@@ -75,6 +75,12 @@ on Midget never meets a 404. It is incremental: only missing files are fetched, 
 file it lists is present. `pc_mirror.py --sync|--check` run it by hand; `--skip-mirror-sync` on publish only checks.
 The upstream is `BIFROST_UPSTREAM_MIRROR` (default `https://geo.mirror.pkgbuild.com`).
 
+The publisher also exports the retained shell packages and pacman database to
+`~/Projects/bifrost-site/site/arch/x86_64`, which the live site serves at
+`https://bifrost.olibuijr.com/arch/$arch` for installed-system updates and new non-lab installs. Set
+`BIFROST_PUBLIC_SITE` to the static site root on another publishing host. Package files are immutable by version; both
+database filenames are replaced atomically after the package files, with `bifrost.db` last.
+
 ## Faster iteration
 
 - **Installer changes without an ISO rebuild (lab/debug images):** `tools/lab-push.sh` builds the installer and publishes it,

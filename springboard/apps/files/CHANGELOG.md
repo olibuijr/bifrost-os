@@ -1,3 +1,7 @@
+## 1.28.3 — 2026-10-14
+
+- Keep idle wake scheduling event-driven: folder listing and search results use the dispatch-backed `Feed`, and an idle window has no polling deadline. Add regression coverage for the idle deadline and dispatch completion.
+
 ## 1.28.2 — 2026-10-14
 
 - Use the shared destructive-action color token for Empty Trash.
