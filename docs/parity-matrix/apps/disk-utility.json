@@ -56,7 +56,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:MENU_MOUNT",
    "note": "File menu items with cmd+M, cmd+U, cmd+E mirror the toolbar.",
-   "wire": "Mirror Mount/Unmount/Eject into a File menu in main.rs main_menu."
+   "wire": "Verify on the lab machine that the File menu Mount, Unmount and Eject items match the toolbar state."
   },
   {
    "feature": "Erase with name, format and scheme",
@@ -99,18 +99,18 @@
    "area": "menu",
    "apple": "Disk > Rename",
    "status": "partial",
-   "bifrost": "springboard/core/src/disk_commands.rs",
-   "note": "Audit 2026-10-13: kit model core/src/disk_commands.rs (host tests) already provides this; the app does not use it yet.",
-   "wire": "Add an inline rename sheet; send disk_commands::rename's plan through the privd request."
+   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:72 (open_rename_form); springboard/core/src/disk_commands.rs (rename)",
+   "note": "Disk > Rename opens a form sheet with the current name and sends DiskRequest::RenameVolume; mounted volumes and volumes without a file system are refused. Tested in forms.rs. Not yet verified on the lab machine.",
+   "wire": "Verify the rename on a scratch volume on the lab machine."
   },
   {
    "feature": "Create image (blank, from folder, from device)",
    "area": "menu",
    "apple": "File > New Image",
    "status": "partial",
-   "bifrost": "springboard/core/src/disk_image.rs",
-   "note": "Audit 2026-10-13: kit model core/src/disk_image.rs (host tests) already provides this; the app does not use it yet.",
-   "wire": "Add File > New Image: blank via disk_image::create_raw then mkfs, with a save panel."
+   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:180 (open_new_blank_form); springboard/apps/diskutil-desktop/src/images.rs (write_blank, write_folder_image); springboard/core/src/disk_image.rs",
+   "note": "File > New Image makes a blank image (a sparse raw file of a chosen size, with an optional file system and label, saved through a save panel) and an image from a folder (an ISO through the image tool). Tested in forms.rs and images.rs. Gap: there is no image from a device, which would copy a whole disk into a file.",
+   "wire": "Add File > New Image > Image from Device: a raw copy of a disk into a file chosen in the save panel, through the disk helper."
   },
   {
    "feature": "Open / attach disk image",
@@ -126,9 +126,9 @@
    "area": "menu",
    "apple": "Images > Convert, Resize, Scan Image For Restore; File > Change Password",
    "status": "partial",
-   "bifrost": "springboard/core/src/disk_image.rs",
-   "note": "Audit 2026-10-13: kit model core/src/disk_image.rs (host tests) already provides this; the app does not use it yet.",
-   "wire": "Images menu with Resize (ImageProperties::truncate plus resize2fs) and Convert; LUKS change password via privd."
+   "bifrost": "springboard/apps/diskutil-desktop/src/images.rs (convert_command, resize_plan); springboard/apps/diskutil-desktop/src/forms.rs:196 (open_convert_form); springboard/core/src/disk_image.rs",
+   "note": "Image > Convert Image writes raw, QCOW2, VMDK, VHDX or VDI, and Image > Resize Image grows an image or shrinks an ext image; both are tested in images.rs and forms.rs. Gap: Change Password for an encrypted image is not in the app, and Scan Image For Restore is missing.",
+   "wire": "Add Change Password for LUKS images through a privd request, and Scan Image For Restore in the Image menu."
   },
   {
    "feature": "Container volume add/delete",
