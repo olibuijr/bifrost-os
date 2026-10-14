@@ -1,7 +1,9 @@
-//! Parity sdk-complete-06: guided generation. The schema becomes the instruction a model gets, and a model's reply is
-//! read back against it. Headless: no model is called, and the replies are fixed text.
+//! Parity sdk-complete-06: guided generation (the schema becomes the instruction a model gets, and a model's reply is
+//! read back against it) and the audio input picker's rows and choice. Headless: no model is called, no device is
+//! opened, and the replies and inputs are fixed data.
 
 use bifrost_ui::generation_schema::{instructions, read_reply, Kind, Property, ReplyError, Value};
+use bifrost_ui::input_picker::{Input, Picker};
 
 fn recipe() -> Kind {
     Kind::Object(vec![
@@ -81,4 +83,53 @@ fn json_that_breaks_a_range_is_refused_with_the_issue() {
 fn a_reply_missing_a_required_member_does_not_fit() {
     let reply = r#"{"title": "Soup", "minutes": 25}"#;
     assert!(matches!(read_reply(&recipe(), reply), Err(ReplyError::DoesNotFit(issues)) if !issues.is_empty()));
+}
+
+fn microphone(id: &str, name: &str) -> Input {
+    Input { id: id.to_string(), name: name.to_string() }
+}
+
+fn two_microphones() -> Vec<Input> {
+    vec![microphone("builtin", "Built-in Microphone"), microphone("usb", "USB Headset")]
+}
+
+#[test]
+fn the_rows_check_only_the_chosen_input() {
+    let offered = two_microphones();
+    let mut picker = Picker::new();
+    picker.select(&offered, "usb").unwrap();
+    let rows = picker.rows(&offered);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].0.name, "Built-in Microphone");
+    assert!(!rows[0].1);
+    assert_eq!(rows[1].0.name, "USB Headset");
+    assert!(rows[1].1);
+}
+
+#[test]
+fn no_row_is_checked_while_the_system_default_is_in_use() {
+    let offered = two_microphones();
+    let picker = Picker::new();
+    assert!(picker.rows(&offered).iter().all(|(_, checked)| !checked));
+}
+
+#[test]
+fn using_the_system_default_again_clears_the_choice() {
+    let offered = two_microphones();
+    let mut picker = Picker::new();
+    picker.select(&offered, "builtin").unwrap();
+    picker.use_system_default();
+    assert_eq!(picker.selected_in(&offered), None);
+    assert!(picker.rows(&offered).iter().all(|(_, checked)| !checked));
+}
+
+#[test]
+fn a_choice_whose_microphone_disappeared_checks_no_row() {
+    let offered = two_microphones();
+    let mut picker = Picker::new();
+    picker.select(&offered, "usb").unwrap();
+    let remaining = vec![microphone("builtin", "Built-in Microphone")];
+    let rows = picker.rows(&remaining);
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].1, "the built-in input is not the chosen one");
 }

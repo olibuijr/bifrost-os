@@ -96,6 +96,18 @@ impl Picker {
         let id = self.selected.as_deref()?;
         offered.iter().find(|i| i.id == id)
     }
+
+    /// Clears the choice, so the system default input is used again.
+    pub fn use_system_default(&mut self) {
+        self.selected = None;
+    }
+
+    /// Each offered input in list order, with whether it is the chosen one. A menu or a picker sheet shows a check
+    /// mark next to the row whose flag is true; no row is checked when the system default is in use.
+    pub fn rows<'a>(&self, offered: &'a [Input]) -> Vec<(&'a Input, bool)> {
+        let chosen = self.selected_in(offered).map(|i| i.id.as_str());
+        offered.iter().map(|i| (i, Some(i.id.as_str()) == chosen)).collect()
+    }
 }
 
 #[cfg(test)]
