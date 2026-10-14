@@ -10,9 +10,9 @@
     {
       "feature": "Adopting Liquid Glass",
       "apple": "Article on the new material",
-      "bifrost": "springboard/render/src/glass.rs (vibrancy hook); docs/gpu-first.md",
+      "bifrost": "springboard/render/src/glass.rs (Kind, Look, Style: vibrancy hook); springboard/render/tests/parity_sdk-complete-17.rs; docs/gpu-first.md",
       "status": "partial",
-      "note": "Glass backdrop exists in the shell; no app-facing material API guaranteed"
+      "note": "The look of each material kind, its dark and light mix, the filter arithmetic and the rim and vibrancy rules are tested headless. Gap: the SDK exposes no material type, so an app cannot request glass, and the live blur runs only on the GPU presenter, which needs the lab machine."
     },
     {
       "feature": "AppKit updates",
@@ -24,9 +24,9 @@
     {
       "feature": "Protecting the user's privacy",
       "apple": "Permission prompts for personal data",
-      "bifrost": "springboard/src/bare/app_policy.rs; docs/app-isolation.md; springboard/src/bare/docbroker.rs",
+      "bifrost": "springboard/src/bare/app_policy.rs; springboard/tests/parity_sdk-complete-17.rs; docs/app-isolation.md; springboard/src/bare/docbroker.rs",
       "status": "partial",
-      "note": "Bubblewrap sandbox and file grants; per-app permissions like documents; no TCC-style prompt for every data class"
+      "note": "Manifest permissions map to launch flags, unknown ones are refused, and remote sharing and the journal entitlement are restricted; tested headless. Bubblewrap sandbox and file grants remain. Gap: there is no TCC-style prompt for each data class."
     },
     {
       "feature": "Porting to Apple silicon",
@@ -38,9 +38,9 @@
     {
       "feature": "App and Environment",
       "apple": "NSApplication, NSWorkspace, NSRunningApplication, app delegate, process info",
-      "bifrost": "springboard/sdk/src/runtime.rs (App trait, Ctx); springboard/sdk/src/workspace.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/service_management.rs",
+      "bifrost": "springboard/sdk/src/runtime.rs (App trait, Ctx); springboard/sdk/src/workspace.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/service_management.rs; springboard/sdk/tests/parity_sdk-complete-17.rs",
       "status": "partial",
-      "note": "Lifecycle, open/reveal/recycle, launch events present; memory-warning callbacks and occlusion suspension still planned (task/008-lifecycle-recovery.md)"
+      "note": "Sudden termination, activity unions, thermal states, low power and workspace notification names are tested headless; memory-pressure callbacks exist through dispatch. Gap: occlusion-driven suspension is still planned (task/008-lifecycle-recovery.md) and needs the lab machine."
     },
     {
       "feature": "Documents (NSDocument, NSDocumentController)",

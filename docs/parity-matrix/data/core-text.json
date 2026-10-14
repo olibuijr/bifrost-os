@@ -10,9 +10,9 @@
   {
    "feature": "Font objects and descriptors",
    "apple": "CTFont, CTFontDescriptor",
-   "bifrost": "springboard/render/src/font.rs (Font::parse), springboard/render/src/fontprefs.rs (installed, map_font)",
+   "bifrost": "springboard/render/src/fontobj.rs (FontObject, FontSpec, FontManager); springboard/render/src/font.rs (Font::parse); springboard/render/src/fontprefs.rs (installed, map_font); springboard/sdk/src/font_substitution.rs; springboard/render/tests/parity_sdk-complete-17.rs; springboard/sdk/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "The renderer parses a font file into a Font; apps get no font object or descriptor type. Faces are chosen by settings (font_system, font_mono), not by app request."
+   "note": "Apps get a FontObject, a FontSpec descriptor and a FontManager through bifrost_app::fontobj; the manager registers, unregisters and matches faces, and descriptors fill in names, traits and size, all tested headless. Gap: there is no Font Book style install and validation UI, and the system roles still take their face from settings."
   },
   {
    "feature": "Font collections and font manager (registration, enumeration, activation)",
@@ -24,30 +24,30 @@
   {
    "feature": "Character to glyph mapping",
    "apple": "CTFont glyph lookup, CTGlyphInfo",
-   "bifrost": "springboard/render/src/font.rs (Font::glyph, Font::glyph_named, lookup)",
+   "bifrost": "springboard/render/src/font.rs (Font::glyph, Font::glyph_named, lookup); springboard/render/src/fontobj.rs (glyph_for_char, with_glyph_override, fallback_runs); springboard/render/src/fontfallback.rs (split); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names. Misses return .notdef (glyph 0). No CTGlyphInfo-style mapping override and no font fallback cascade."
+   "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names, with misses at glyph 0, per-font glyph overrides and cascade runs through script faces, all tested headless. Gap: the lab machine has not compared the fallback choices with the reference system."
   },
   {
    "feature": "Font metrics",
    "apple": "CTFontGetAscent, CTFontGetDescent, CTFontGetLeading, CTFontGetCapHeight, CTFontGetXHeight, CTFontGetUnderlinePosition",
-   "bifrost": "springboard/render/src/font.rs (ascent, descent from hhea; advance from hmtx; measure)",
+   "bifrost": "springboard/render/src/font.rs (line_metrics, ascent, descent from hhea; advance from hmtx; measure); springboard/render/src/fontobj.rs (FontObject metrics); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "Ascent, descent and advance widths only. Leading, cap height, x-height and underline metrics are not read."
+   "note": "Ascent, descent, leading, cap height, x-height and underline position and thickness are read from hhea, OS/2 and post, and tested on the packed face. Gap: the values are not compared with the reference system on the lab machine."
   },
   {
    "feature": "Glyph outlines and rasterising",
    "apple": "CTFontCreatePathForGlyph, CTFontDrawGlyphs",
-   "bifrost": "springboard/render/src/font.rs (render, render_glyph), springboard/render/src/cff.rs (Sink trait)",
+   "bifrost": "springboard/render/src/font.rs (render, render_glyph, glyph_segments), springboard/render/src/cff.rs (Sink trait); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "TrueType glyf and CFF Type 2 outlines are rasterised into images. No path object is exposed to apps and no direct glyph drawing API."
+   "note": "TrueType glyf and CFF Type 2 outlines are flattened to segments and rasterised; the outline of a letter is non-empty and the space has none, tested headless. Gap: no path object is exposed to apps and there is no direct glyph drawing API outside the UI text path."
   },
   {
    "feature": "Variable fonts",
    "apple": "CTFontCreateCopyWithAttributes with variation axes, kCTFontVariationAxesAttribute",
-   "bifrost": "springboard/render/src/gvar.rs, springboard/render/src/font.rs (axes, measure_var, render_var)",
+   "bifrost": "springboard/render/src/gvar.rs, springboard/render/src/font.rs (axes, measure_var, advance_var, render_var); springboard/render/src/fontobj.rs (variation_axes, with_variations); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "fvar, avar and gvar are applied in the renderer. The SDK does not expose axis values to apps; weights come from the Weight enum."
+   "note": "fvar, avar and gvar are applied; axis tags and ranges reach apps through FontObject, a later value replaces an earlier one, and a heavier weight widens glyph advances, all tested headless. Gap: rendered instances are not compared with the reference on the lab machine."
   },
   {
    "feature": "OpenType layout (kerning, ligatures, contextual forms)",
