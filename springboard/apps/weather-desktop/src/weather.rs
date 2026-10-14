@@ -712,7 +712,12 @@ impl Weather {
                     match result {
                         Ok(f) => {
                             if let Some(place) = self.places.iter().find(|p| p.key() == key) {
-                                if let Some(notice) = self.rain.check(&key, &place.name, &f.minutes, self.notify_on.contains(&key)) {
+                                let enabled = self.notify_on.contains(&key);
+                                if let Some(notice) = self.rain.check(&key, &place.name, &f.minutes, enabled) {
+                                    self.notices.push(notice);
+                                }
+                                let tomorrow = f.days.get(1).map_or(0, |d| d.precip_prob);
+                                if let Some(notice) = self.rain.check_tomorrow(&key, &place.name, &f.date, tomorrow, enabled) {
                                     self.notices.push(notice);
                                 }
                             }
