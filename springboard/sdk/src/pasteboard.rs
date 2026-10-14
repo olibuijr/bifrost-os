@@ -269,6 +269,43 @@ impl NativePasteboard {
     }
 }
 
+/// The standard edit commands a text control offers in its menu and on its key equivalents: cut, copy, paste, select all
+/// and delete. Each is enabled or disabled from the facts in [`EditState`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditCommand {
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
+    Delete,
+}
+
+/// The facts an edit command depends on: whether the text holds any text, whether something is selected, and whether the
+/// general board holds text that paste can take.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EditState {
+    pub has_text: bool,
+    pub has_selection: bool,
+    pub board_has_text: bool,
+}
+
+impl EditCommand {
+    /// Whether the command can run now. Cut, copy and delete need a selection, paste needs text on the board, and
+    /// select all needs text to select.
+    pub fn enabled(self, state: EditState) -> bool {
+        match self {
+            EditCommand::Cut | EditCommand::Copy | EditCommand::Delete => state.has_selection,
+            EditCommand::Paste => state.board_has_text,
+            EditCommand::SelectAll => state.has_text,
+        }
+    }
+}
+
+/// Whether a board's types include plain text, which is what a text control pastes.
+pub fn offers_text(types: &[String]) -> bool {
+    types.iter().any(|t| t == STRING)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

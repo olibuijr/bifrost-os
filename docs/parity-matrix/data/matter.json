@@ -24,9 +24,9 @@
     {
       "feature": "Accessory commissioning (network credentials, Thread dataset)",
       "apple": "MTRCommissioningParameters, MTRThreadOperationalDataset, MTRDeviceAttestationInfo",
-      "bifrost": "springboard/src/net/wifi.rs, springboard/src/net/wifi_config.rs (Wi-Fi only)",
+      "bifrost": "springboard/src/net/wifi.rs, springboard/src/net/wifi_config.rs (Wi-Fi only); springboard/src/net/thread_dataset.rs (Thread operational dataset); tests: springboard/tests/parity_sdk-complete-27.rs",
       "status": "partial",
-      "note": "Wi-Fi join and saved network configuration exist. There is no Thread network, no Thread border router and no device attestation."
+      "note": "Wi-Fi join, saved network configuration and the Thread operational dataset (hex and TLV parsing, record checks, attach checklist) are tested headless in tests/parity_sdk-complete-27.rs. Gap: there is no Thread border router, no network on the radio and no device attestation; those need hardware and a commissioner service."
     },
     {
       "feature": "Accessory control (attribute read/write, command invoke, subscriptions)",

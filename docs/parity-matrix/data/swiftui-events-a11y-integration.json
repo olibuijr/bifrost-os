@@ -24,9 +24,9 @@
     {
       "feature": "Clipboard",
       "apple": "copyable, cuttable, pasteDestination, Transferable",
-      "bifrost": "springboard/sdk/src/pasteboard.rs; tests: springboard/sdk/tests/parity_sdk-tests-01b.rs",
+      "bifrost": "springboard/sdk/src/pasteboard.rs (EditCommand, EditState, offers_text); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs; springboard/sdk/tests/parity_sdk-complete-27.rs",
       "status": "partial",
-      "note": "Named boards, types, change counts and per-type data are tested headless (headless_clipboard_* in sdk/tests). No Transferable-style protocol or edit-command modifiers."
+      "note": "Named boards, types, change counts and per-type data are tested headless (headless_clipboard_* in sdk/tests), and a Transferable value is written as all its representations in one step. The enablement rules of the edit commands (cut, copy, paste, select all, delete) are tested in parity_sdk-complete-27.rs. Gap: text controls do not yet route their menu items through EditCommand, which needs the shell's menus and a text field on Midget."
     },
     {
       "feature": "Drag and drop",
@@ -45,9 +45,9 @@
     {
       "feature": "System events (open URL, user activity)",
       "apple": "onOpenURL, onContinueUserActivity, handlesExternalEvents",
-      "bifrost": "springboard/sdk/src/workspace.rs; tests: springboard/sdk/tests/parity_sdk-tests-01b.rs",
+      "bifrost": "springboard/sdk/src/workspace.rs (Activity); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs; springboard/sdk/tests/parity_sdk-complete-27.rs",
       "status": "partial",
-      "note": "Workspace event names and content-type icons are tested headless (headless_system_events_* in sdk/tests). Open and launch/activation events; no handoff or user activity."
+      "note": "Workspace event names and content-type icons are tested headless (headless_system_events_* in sdk/tests). The Activity record (a dotted type, carried state, current or resigned, continuation and search eligibility) is tested in parity_sdk-complete-27.rs. Gap: the shell does not yet carry an Activity to another window or device, and no handoff from a URL is wired."
     },
     {
       "feature": "Accessibility fundamentals",
@@ -103,7 +103,7 @@
       "apple": "MapKit, QuickLook, WebKit, ShareLink views",
       "bifrost": "springboard/sdk/src/share.rs, springboard/sdk/src/webview.rs, springboard/sdk/src/peek.rs",
       "status": "partial",
-      "note": "share, web view and Quick Look exist; no map view"
+      "note": "share, web view and Quick Look exist. The map camera, zoom and coordinate model is in springboard/ui/src/mapview.rs and geo.rs, but no SDK map view wraps it yet; tile fetching lives in the maps app (apps/maps-desktop/src/tiles.rs), not in the SDK."
     },
     {
       "feature": "Previews in Xcode",

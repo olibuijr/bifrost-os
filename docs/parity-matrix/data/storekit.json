@@ -17,9 +17,9 @@
   {
    "feature": "Purchase flow",
    "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
-   "bifrost": "springboard/ui/src/purchase.rs (Price, Purchase, Outcome)",
+   "bifrost": "springboard/ui/src/purchase.rs (Price, Purchase, Outcome, Failure); tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Pure model: price text, one purchase attempt from the confirmation sheet to a final result, and the install gate that allows a paid package only after success. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (purchase_*) and the purchase unit tests. The shell wiring (press_button refuses paid apps, open_sheet, finish_purchase in springboard/src/shell/store) is not covered by these tests and is not verified on Midget. No store payment sheet yet."
+   "note": "Pure model: price text, one purchase attempt from the confirmation sheet to a final result, store failures (network, store, unknown, restriction, unsold product) with retry for the transient ones, and the install gate that allows a paid package only after success. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (purchase_*), parity_sdk-complete-27.rs and the purchase unit tests. The shell wiring (press_button refuses paid apps, open_sheet, finish_purchase in springboard/src/shell/store) is not verified on Midget. Gap: no store payment sheet yet, which needs the shell and a store service."
   },
   {
    "feature": "Transactions and entitlements",
@@ -38,9 +38,9 @@
   {
    "feature": "Subscription status and renewal",
    "apple": "SubscriptionStatus, SubscriptionRenewalInfo, SubscriptionPeriod, Product.SubscriptionInfo.RenewalState",
-   "bifrost": "springboard/ui/src/subscription.rs (Period, Renewal, State)",
+   "bifrost": "springboard/ui/src/subscription.rs (Period, Renewal, State, Group, Change); tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Period arithmetic with month and year clamping, the paid, grace, billing-retry and expired states, and the next expiration. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (subscription_*) and the subscription unit tests. No subscription groups or billing backend; the store supplies the dates."
+   "note": "Period arithmetic with month and year clamping, the paid, grace, billing-retry and expired states, the next expiration, and subscription groups (tier levels, an upgrade that takes effect now, a downgrade at renewal). Tests: springboard/ui/tests/parity_sdk-tests-08.rs (subscription_*), parity_sdk-complete-27.rs and the subscription unit tests. Gap: no billing backend, so the store supplies the dates and the group membership."
   },
   {
    "feature": "Offers, offer codes and win-back offers",
@@ -80,9 +80,9 @@
   {
    "feature": "App Store interactions",
    "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
-   "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/subscription.rs, springboard/ui/src/product.rs",
+   "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/subscription.rs, springboard/ui/src/product.rs; tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (purchase.rs, subscription.rs, product.rs); not wired into the shell or apps, not tested on Midget. no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (purchase.rs, subscription.rs, product.rs) and headless tests of store failures, retries and subscription tier changes in parity_sdk-complete-27.rs; not wired into the shell or apps, not tested on Midget. no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
   },
   {
    "feature": "Storefront information",
