@@ -56,6 +56,12 @@ pub fn layout(events: &[(u32, u32)], min_len: u32) -> Vec<Slot> {
     out
 }
 
+/// The minutes a timed event fills in a Day or Week column: its travel time before it starts, then its length. The
+/// block starts no earlier than midnight and ends no later than midnight.
+pub fn travel_span(start: u32, duration: u32, travel: u32) -> (u32, u32) {
+    (start.saturating_sub(travel), (start + duration).min(1440))
+}
+
 /// Pixel box `(x, width)` of a slot inside a column starting at `x0`.
 pub fn slot_x(slot: Slot, x0: f32, width: f32, gap: f32) -> (f32, f32) {
     let w = width / slot.cols as f32;
