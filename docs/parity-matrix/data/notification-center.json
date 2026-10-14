@@ -24,16 +24,16 @@
     {
       "feature": "Widget editing and ordering",
       "apple": "NCWidgetProviding: widgetAllowsEditing, widgetDidBeginEditing()",
-      "bifrost": "springboard/src/shell/today.rs (Edit button: switch widgets off and drag them into order, saved in today.ini); springboard/src/shell/widgetgallery.rs (Add Widget sheet, Small and Medium sizes); wired: springboard/src/shell/notify/center.rs (Edit Widgets gallery); springboard/src/shell/services/widgets_timeline.rs (place, resize)",
+      "bifrost": "springboard/src/shell/today.rs (Edit button: switch widgets off and drag them into order, saved in today.ini); tests: springboard/tests/parity_sdk-tests-01b.rs (today layout, widget gallery store); springboard/src/shell/widgetgallery.rs (Add Widget sheet, Small and Medium sizes); wired: springboard/src/shell/notify/center.rs (Edit Widgets gallery); springboard/src/shell/services/widgets_timeline.rs (place, resize)",
       "status": "partial",
       "note": "The shell edits its own widget list. Per-widget editing hooks for apps are missing; the widget gallery is also not exposed to apps. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Search view (NCWidgetSearchViewController)",
       "apple": "NCWidgetSearchViewController: delegate, searchDescription, searchResultsPlaceholderString, searchResultKeyPath, searchResults; NCWidgetSearchViewDelegate",
-      "bifrost": "springboard/ui/src/widget_search.rs; wired: springboard/ui/src/widget_search.rs via services/widgets_timeline.rs search and search_rows methods (no shell UI yet); wired: springboard/src/shell/notify/center.rs (gallery row shows the search view description); springboard/src/shell/services/widgets_timeline.rs (listing)",
+      "bifrost": "springboard/ui/src/widget_search.rs; tests: springboard/ui/tests/parity_sdk-tests-01b.rs, springboard/tests/parity_sdk-tests-01b.rs; wired: springboard/ui/src/widget_search.rs via services/widgets_timeline.rs search and search_rows methods (no shell UI yet); wired: springboard/src/shell/notify/center.rs (gallery row shows the search view description); springboard/src/shell/services/widgets_timeline.rs (listing)",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The Today View has a search bar for the shell's own use (springboard/src/shell/today.rs header). No app-facing search results view exists. Spotlight-style search is a separate surface (see the quicksearch SDK module in springboard/sdk/src/). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "The placeholder, results order, description and clearing are tested headless (headless_widget_search_* in ui/tests; the store's search views in springboard/tests). Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The Today View has a search bar for the shell's own use (springboard/src/shell/today.rs header). No app-facing search results view exists. Spotlight-style search is a separate surface (see the quicksearch SDK module in springboard/sdk/src/). Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "List view (NCWidgetListViewController)",

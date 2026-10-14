@@ -38,9 +38,9 @@
     {
       "feature": "XPC events (on-demand IOKit and notification events)",
       "apple": "XPC events (IOKit matching, system notifications delivered to a service)",
-      "bifrost": "springboard/sdk/src/notification.rs (NotificationCenter, DistributedNotificationCenter add_observer, post); springboard/sdk/src/workspace.rs (NSWorkspace-style calls)",
+      "bifrost": "springboard/sdk/src/notification.rs (NotificationCenter, DistributedNotificationCenter add_observer, post, post_with); tests: springboard/sdk/tests/parity_sdk-tests-01b.rs; springboard/sdk/src/workspace.rs (NSWorkspace-style calls)",
       "status": "partial",
-      "note": "Named notifications work inside the app process, with a distributed variant that posts through the shell. Nothing wakes a service from a device or IOKit event. Cross-process delivery of the distributed variant was not verified in code."
+      "note": "Named notifications work inside the app process, with a distributed variant that posts through the shell. Nothing wakes a service from a device or IOKit event. Headless tests (headless_notification_center_* in sdk/tests) cover observer filtering, removal, the distributed namespace, and that post_with asks the shell to relay the post while the sender's observers hear it. Delivery to other running apps depends on the shell and was not verified on Midget."
     },
     {
       "feature": "XPC objects (typed values for messages)",
