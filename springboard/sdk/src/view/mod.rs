@@ -825,9 +825,6 @@ impl<S: Responder> Window<S> {
         }
     }
 
-    /// Delivers `ev`; true when a new frame is needed. Pointer: the deepest view under the pointer (which becomes first
-    /// responder if it accepts), bubbling to ancestors; Move and Up go to the view that took the Down. Keys: first
-    /// responder and outwards, then Tab and Shift-Tab move the focus. Queued control actions are sent afterwards.
     /// Offers a pointer event to the views on its path that observe pointers, outermost first (see `observes_pointer`).
     fn observe(&mut self, ev: &ViewEvent) {
         let mut p = Vec::new();
@@ -847,6 +844,9 @@ impl<S: Responder> Window<S> {
         }
     }
 
+    /// Delivers `ev`; true when a new frame is needed. Pointer: the deepest view under the pointer (which becomes first
+    /// responder if it accepts), bubbling to ancestors; Move and Up go to the view that took the Down. Keys: first
+    /// responder and outwards, then Tab and Shift-Tab move the focus. Queued control actions are sent afterwards.
     pub fn event(&mut self, ev: &ViewEvent, state: &mut S) -> bool {
         if matches!(ev, ViewEvent::Pointer(_) | ViewEvent::Cancel) {
             self.observe(ev);
