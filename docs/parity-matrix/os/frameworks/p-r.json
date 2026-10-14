@@ -5163,8 +5163,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Model of the vendor's MDM enrollment and managed settings, which only that vendor's enterprise server can issue (the same reason data/device-management.json is n/a). BifrOSt has no MDM client.",
    "rea": [],
    "method": "assessed"
   },
@@ -5184,8 +5184,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Command and check-in protocol between a managed device and the vendor's enterprise push service and MDM server; BifrOSt runs no such server and has no client for it.",
    "rea": [],
    "method": "assessed"
   },
@@ -5205,8 +5205,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Local store of enrollment state and managed profiles that exist only after enrolling in the vendor's device-management service, which BifrOSt does not offer.",
    "rea": [],
    "method": "assessed"
   },
@@ -5226,8 +5226,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Enrollment and management prompts for the vendor's MDM service; the reference index lists localized resources for it, and BifrOSt has no enrollment flow to show them in.",
    "rea": [],
    "method": "assessed"
   },
@@ -5248,7 +5248,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index lists resource files for this bundle and no binary (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5269,7 +5269,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary or header is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5288,9 +5288,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/updated/src/main.rs; packaging/arch/recovery/guard.rs",
+   "status": "partial",
+   "note": "The local update path is covered: the update agent checks, downloads and installs system packages, and the recovery guard gates base-system upgrades. Updates pushed by a managed-device server are not built, and the framework's exact role is inferred from its name.",
    "rea": [],
    "method": "assessed"
   },
@@ -5311,7 +5311,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5332,7 +5332,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index lists only localized resources for this bundle, the binary is not extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5353,7 +5353,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5374,7 +5374,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5416,7 +5416,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders and one support folder, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5437,7 +5437,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5458,7 +5458,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5479,7 +5479,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5499,8 +5499,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Bridges that route the vendor's telephony request dialogs; the reference index names its templates ActivePhoneCall and UnsupportedDuringActiveCall, and BifrOSt has no cellular telephony to dispatch to.",
    "rea": [],
    "method": "assessed"
   },
@@ -5521,7 +5521,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index lists per-locale language model resources (RK_Bundle .lm files), so it is a text response model, but no binary or header is extracted and its feature set is unknown; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5542,7 +5542,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5563,7 +5563,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index lists resource files and no binary, and the name points at device restore but the job is not confirmed; BifrOSt's own rollback is packaging/arch/recovery/guard.rs. Left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5584,7 +5584,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5605,7 +5605,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index lists resource files and no binary, and the name alone does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5626,7 +5626,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5646,8 +5646,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Core of the vendor's room-scanning capture (RoomPlan), which depends on depth-sensor hardware that no BifrOSt target exposes; the name is the only evidence, as the reference index has no binary for it.",
    "rea": [],
    "method": "assessed"
   },
@@ -5668,7 +5668,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5687,9 +5687,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/core/src/occlusion.rs",
+   "status": "partial",
+   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions.",
    "rea": [],
    "method": "assessed"
   },
@@ -5708,9 +5708,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/core/src/occlusion.rs",
+   "status": "partial",
+   "note": "The same occlusion model supplies the app run state that this service reports. Process assertions and the service's launch-time limits are not provided, and the reference index holds only the sandbox profile (framework.sb) for it.",
    "rea": [],
    "method": "assessed"
   },
@@ -5731,7 +5731,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -5752,7 +5752,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted, and the name suggests performance data collection, but the reference's capture tooling is not reproduced here; the process table in springboard/apps/activity-desktop is the nearest counterpart. Left os.",
    "rea": [],
    "method": "assessed"
   }

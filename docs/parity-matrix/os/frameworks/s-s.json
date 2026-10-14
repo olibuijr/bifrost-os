@@ -60,9 +60,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screencapturekit.json",
-   "status": "os",
-   "note": "from SDK matrix screencapturekit.json",
+   "bifrost": "springboard/src/shell/screenshot.rs; springboard/ui/src/capture_content.rs; springboard/ui/src/capture_picker.rs; springboard/ui/src/capture_access.rs; springboard/ui/src/capture_shot.rs",
+   "status": "partial",
+   "note": "Pure models exist for shareable content, the content-sharing picker, capture permission and single-frame screenshots, and the shell's screenshot chord saves frames. Stream, content filter and recording are not reachable from apps, so the stream half of the framework is missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -186,9 +186,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/security-foundation.json",
-   "status": "os",
-   "note": "from SDK matrix security-foundation.json",
+   "bifrost": "springboard/src/bare/app_policy.rs",
+   "status": "partial",
+   "note": "The shell enforces per-app manifest permissions in Policy::from_permissions, but apps cannot check or request an authorization right through the SDK, which is the missing part.",
    "rea": [],
    "method": "assessed"
   },
@@ -229,7 +229,7 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login.rs",
-   "status": "os",
+   "status": "partial",
    "note": "Password entry for the session runs in the login window, which checks it through the root helper; apps get no secure entry API.",
    "rea": [],
    "method": "assessed"
@@ -755,7 +755,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name only suggests SAML single sign-on; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -776,7 +776,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted, and the name suggests the assistant's request objects, which are not mapped to any BifrOSt interface; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -796,8 +796,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Certificate enrollment client for the Simple Certificate Enrollment Protocol, used by the vendor's device-management profiles, which BifrOSt does not have; the name is the only evidence, as the reference index has no binary for it.",
    "rea": [],
    "method": "assessed"
   },
@@ -818,7 +818,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted, and the abbreviation alone does not show its job; left os.",
    "rea": [],
    "method": "assessed"
   },
@@ -838,8 +838,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "UI helper for the vendor's secure element service, which fronts that vendor's secure hardware for payments and credentials; BifrOSt keeps credentials in springboard/src/keychain.rs and has no secure element.",
    "rea": [],
    "method": "assessed"
   },
