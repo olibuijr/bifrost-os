@@ -59,9 +59,9 @@
   {
    "feature": "Attributed string styling",
    "apple": "Styling Attributed Strings: kCTFontAttributeName, kCTForegroundColorAttributeName, kCTUnderlineStyleAttributeName, kCTBackgroundColorAttributeName",
-   "bifrost": "springboard/sdk/src/attributed.rs (Attribute, AttributeKey, AttributedString)",
+   "bifrost": "springboard/sdk/src/attributed.rs (Attribute, AttributeKey, AttributedString); springboard/sdk/tests/parity_sdk-tests-11.rs",
    "status": "partial",
-   "note": "Bold, italic (stored, drawn upright), size class, colour token, underline, strikethrough and link. No arbitrary font, colour, background colour or baseline attributes. Ranges count characters, not UTF-16 units."
+   "note": "Bold, italic, size class, colour token, underline, strikethrough and link are tested headless in parity_sdk-tests-11.rs, including set, get, enumerate and remove for each key. Font family, foreground and background colour, baseline and kerning values are stored and round-trip through set and get, but drawing them is not tested. Gap: the classic range methods count characters, not UTF-16 units (only the accessibility runs count UTF-16)."
   },
   {
    "feature": "Paragraph styles and tab stops",

@@ -10,9 +10,9 @@
   {
    "feature": "Text Display: attributed strings and rich text",
    "apple": "NSAttributedString, NSTextView rich mode",
-   "bifrost": "springboard/sdk/src/attributed.rs (AttributedString, RichTextView, RTF and HTML)",
+   "bifrost": "springboard/sdk/src/attributed.rs (AttributedString, RichTextView, RTF and HTML); springboard/sdk/tests/parity_sdk-tests-11.rs",
    "status": "partial",
-   "note": "bold, italic, size class, colour token, underline, strikethrough, link only; no paragraph styles, text attachments, lists or tables; the ui layer now has paragraph styles, lists and attachments per paragraph (text_layout_manager.rs), not yet carried by bifrost_app::attributed"
+   "note": "Runs, RTF and HTML round trips, accessibility runs in UTF-16 units and rich text typing and undo are tested headless in parity_sdk-tests-11.rs and attributed::tests. Gap: no paragraph styles, text attachments, lists or tables in this model (the ui layer has them per paragraph in text_layout_manager.rs, not yet carried by bifrost_app::attributed), and rich text drawing has no pixel test."
   },
   {
    "feature": "Text Display: single-line text field and editing model",
