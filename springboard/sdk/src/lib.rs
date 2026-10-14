@@ -394,6 +394,8 @@ pub use process_info::{Activity, ActivityOptions, ProcessInfo, ThermalState};
 pub use bifrost_core::host;
 /// Raw accelerometer and gyroscope updates (the motion manager model) and the kernel sensor reader; see `docs/core-motion.md`.
 pub use bifrost_core::{inertial_sensors, motion_manager};
+/// CSV reading for apps: `parse_rows`, `try_parse_rows` and `parse_table` with its `Table` and `CsvError`; see `bifrost_core::csv`.
+pub use bifrost_core::csv;
 mod runtime;
 pub use kit::{Damage, Surface, Ui};
 pub use runtime::{run, run_on, Ctx, Document, DocumentEvent, Input, OpenOptions};
