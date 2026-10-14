@@ -66,9 +66,9 @@
     {
       "feature": "App Shortcuts (AppShortcutsProvider)",
       "apple": "AppShortcutsProvider, AppShortcutsBuilder, shortcutTileColor, phrases",
-      "bifrost": "springboard/sdk/src/intents.rs:127 (shortcut flag), manifest [[intent]] tables read by springboard/src/shell/intents.rs",
+      "bifrost": "springboard/sdk/src/intents.rs (Intent::shortcut, Intent::manifest_toml, Intent::to_json)",
       "status": "partial",
-      "note": "shortcut = true marks an intent as a Spotlight shortcut; no phrase list, tile colour or parameter-bearing shortcuts"
+      "note": "shortcut = true marks an intent as a Spotlight shortcut; no phrase list, tile colour or parameter-bearing shortcuts. Host tests a_shortcut_intent_is_written_to_the_manifest_with_its_flag and a_shortcut_flag_is_listed_in_the_intent_json (sdk/tests/parity_sdk-tests-01e.rs). The shell reads the [[intent]] tables in springboard/src/shell/intents.rs, which is not part of this evidence."
     },
     {
       "feature": "Spotlight shortcut search and launch",
