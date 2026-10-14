@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 - 2026-10-14
+
+- Hybrid map type (View > Hybrid, Cmd+3): the imagery with the place names drawn over it from a labels layer in its own
+  cache folder. The map credit names the labels.
+- Pinch to zoom: two fingers on the map zoom it, anchored at their midpoint. The mouse wheel is not wired yet (the
+  shell does not send scroll events to apps).
+- Share is a submenu of File: Copy Link, Copy Coordinates and the share sheet.
+- Go > Add Place to Collection: one slot per collection (up to eight), so a place can be added from the keyboard
+  without dragging it from the card.
+- Print sends the map as it is on screen (the loaded tiles, without the route and pin overlays) as the first page,
+  with the place or the directions text on the pages after it.
+- The `map:` link scheme opens the app like `maps:` and `geo:`.
+
 ## 0.3.0 - 2026-10-13
 
 - Current Location: a toolbar button and Go > Current Location (Cmd+L) ask the shell's location service for a position

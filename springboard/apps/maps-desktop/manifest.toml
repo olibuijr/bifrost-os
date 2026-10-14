@@ -1,6 +1,6 @@
 id = "is.olibuijr.maps.desktop"
 name = "Maps"
-version = "0.3.0"
+version = "0.4.0"
 exec = "bifrost-maps"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,6 +9,6 @@ category = "Travel"
 architecture = "x86_64-linux"
 permissions = ["storage", "network", "documents"]
 window = "full-size"
-schemes = ["maps", "geo"]
+schemes = ["maps", "map", "geo"]
 handles = ["com.topografix.gpx:default"]
 
