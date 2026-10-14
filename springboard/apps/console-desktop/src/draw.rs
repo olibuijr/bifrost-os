@@ -258,11 +258,14 @@ impl Console {
     /// The toolbar band, the table header, the footer and the toolbar's items and search field.
     fn draw_chrome(&mut self, ui: &Ui, s: &mut Surface, g: &Geo) {
         let x0 = self.side_w();
-        widgets::toolbar_band(s, ui, Rect { x: x0, y: 0.0, w: g.w - x0, h: UNIFIED_BAR_PT });
-        let (bar, layout) = self.bar_layout(ui);
-        widgets::toolbar(s, ui, self.band(ui), &bar, None);
-        if let Some(r) = layout.rect_of(B_SEARCH) {
-            widgets::search_field(s, ui, &self.search, Rect { x: r.x, y: r.y + 4.0, w: r.w, h: r.h - 8.0 }, "Search", self.search_focused);
+        // View > Hide Toolbar leaves the band empty: the items and the search field are not drawn
+        if self.show_toolbar {
+            widgets::toolbar_band(s, ui, Rect { x: x0, y: 0.0, w: g.w - x0, h: UNIFIED_BAR_PT });
+            let (bar, layout) = self.bar_layout(ui);
+            widgets::toolbar(s, ui, self.band(ui), &bar, None);
+            if let Some(r) = layout.rect_of(B_SEARCH) {
+                widgets::search_field(s, ui, &self.search, Rect { x: r.x, y: r.y + 4.0, w: r.w, h: r.h - 8.0 }, "Search", self.search_focused);
+            }
         }
 
         let table_w = g.table_right - g.table_x;

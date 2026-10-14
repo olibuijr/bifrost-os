@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.0 — 2026-10-14
+
+- View menu: Show Only This Activity narrows the table to the systemd unit invocation of the selected message, and
+  Show All Activities undoes it. Messages without an invocation leave the item disabled. The grouped Activities
+  outline is not built yet.
+- View menu: Hide Toolbar removes the toolbar's items and search field, and Show Toolbar brings them back. Customize
+  Toolbar is not built yet.
+- Files the shell hands over, such as a log dropped on Console or opened with it, open under Opened Files. Plain text
+  (which covers .log) and gzip archives are declared as types Console can open.
+- Not in this version: bzip2 and xz files, opening from the command line, Open Recent across sessions, and Reveal or
+  Trash for the files in /var/log and for crash reports.
+
 ## 1.6.0 — 2026-10-13
 
 - View menu: Reload (Cmd+R) reads the current view again. Show Sidebar and Show Details hide and show those panes.

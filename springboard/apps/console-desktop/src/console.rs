@@ -1,6 +1,7 @@
 //! The Console window's state and behaviour: the views, the streaming, the search and the table selection, and the
 //! geometry that drawing and hit tests share. Points for the kit (`Rect`, `ui.pt`), pixels only where drawing.
 
+use crate::activity;
 use crate::columns::{self, ColumnSet};
 use crate::cursor;
 use crate::draw;
@@ -159,6 +160,8 @@ pub struct Console {
     /// View > Show Sidebar and View > Show Details.
     pub show_sidebar: bool,
     pub show_details: bool,
+    /// View > Hide Toolbar: the toolbar's items and search field are neither drawn nor reachable.
+    pub show_toolbar: bool,
     /// Sequence numbers of the rows whose whole message is shown (View > Expand Message).
     expanded: BTreeSet<u64>,
     /// The text Find Next and Find Previous step to; empty means the search field's.
@@ -167,6 +170,8 @@ pub struct Console {
     reveal: Option<u64>,
     /// Files opened and archives captured, shown under Opened Files in the sidebar.
     pub opened: Vec<OpenedLog>,
+    /// The systemd unit invocation the table is narrowed to (View > Show Only This Activity), if any.
+    pub activity: Option<String>,
 }
 
 impl Console {
@@ -201,10 +206,12 @@ impl Console {
             columns: ColumnSet::default(),
             show_sidebar: true,
             show_details: true,
+            show_toolbar: true,
             expanded: BTreeSet::new(),
             find_text: String::new(),
             reveal: None,
             opened: Vec::new(),
+            activity: None,
         }
     }
 
@@ -319,7 +326,7 @@ impl Console {
         };
         let mut changed = !batch.is_empty();
         for e in batch {
-            let shown = self.levels.shows(e.level) && self.query.matches(&e);
+            let shown = self.levels.shows(e.level) && self.query.matches(&e) && activity::shows(self.activity.as_deref(), &e);
             let seq = self.buffer.push(e);
             if shown {
                 self.visible.push(seq);
@@ -356,8 +363,14 @@ impl Console {
     pub fn rebuild(&mut self) {
         let levels = self.levels;
         let query = &self.query;
+        let activity = self.activity.as_deref();
         let signposts_only = self.view == View::Signposts;
-        let mut visible: Vec<u64> = self.buffer.iter().filter(|(_, e)| levels.shows(e.level) && query.matches(e) && (!signposts_only || signposts::parse(&e.message).is_some())).map(|(s, _)| s).collect();
+        let mut visible: Vec<u64> = self
+            .buffer
+            .iter()
+            .filter(|(_, e)| levels.shows(e.level) && query.matches(e) && activity::shows(activity, e) && (!signposts_only || signposts::parse(&e.message).is_some()))
+            .map(|(s, _)| s)
+            .collect();
         if let Some(from) = self.after {
             let newer = cursor::after(&self.positions(), from);
             visible.retain(|s| newer.contains(s));
@@ -569,7 +582,7 @@ impl Console {
 
     /// The enabled toolbar item under a point.
     fn toolbar_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<u32> {
-        if y >= UNIFIED_BAR_PT {
+        if !self.show_toolbar || y >= UNIFIED_BAR_PT {
             return None;
         }
         let (bar, layout) = self.bar_layout(ui);
@@ -765,6 +778,9 @@ impl Console {
 
     /// Accessibility nodes for the toolbar items and the search field, in points.
     pub fn controls(&self, ui: &Ui) -> Vec<Node> {
+        if !self.show_toolbar {
+            return Vec::new();
+        }
         let (bar, layout) = self.bar_layout(ui);
         let mut nodes = Vec::new();
         for (id, r) in layout.visible {
@@ -805,6 +821,8 @@ impl Console {
             MENU_RELOAD => self.reload(),
             MENU_SIDEBAR => self.show_sidebar = !self.show_sidebar,
             MENU_DETAILS => self.show_details = !self.show_details,
+            MENU_TOOLBAR => self.toggle_toolbar(),
+            MENU_ACTIVITY => self.toggle_activity(),
             MENU_EXPAND => self.toggle_expanded(),
             MENU_COLLAPSE_ALL => self.expanded.clear(),
             MENU_FIND_NEXT => self.find_step(true),
@@ -926,6 +944,24 @@ impl Console {
             Ok(path) => format!("Saved {}", path.display()),
             Err(e) => format!("Could not save: {e}"),
         };
+    }
+
+    /// View > Hide Toolbar and Show Toolbar. Hiding also gives up the search field's focus, which it no longer shows.
+    pub fn toggle_toolbar(&mut self) {
+        self.show_toolbar = !self.show_toolbar;
+        if !self.show_toolbar {
+            self.search_focused = false;
+        }
+    }
+
+    /// View > Show Only This Activity: narrows the table to the selected message's invocation. Again shows every activity.
+    pub fn toggle_activity(&mut self) {
+        if self.activity.is_some() {
+            self.activity = None;
+        } else {
+            self.activity = self.selected_entry().and_then(activity::filter_for);
+        }
+        self.rebuild();
     }
 
     /// Log menu: walk mode. Shows the messages after the selected one, or back to every message.
@@ -1055,6 +1091,10 @@ pub const MENU_SIDEBAR: u32 = 13;
 pub const MENU_DETAILS: u32 = 14;
 pub const MENU_EXPAND: u32 = 15;
 pub const MENU_COLLAPSE_ALL: u32 = 16;
+/// View menu: Show Only This Activity, which again shows every activity when one is narrowed.
+pub const MENU_ACTIVITY: u32 = 24;
+/// View menu: Hide Toolbar or Show Toolbar.
+pub const MENU_TOOLBAR: u32 = 25;
 /// Edit menu: Find Next, Find Previous, Use Selection for Find.
 pub const MENU_FIND_NEXT: u32 = 17;
 pub const MENU_FIND_PREVIOUS: u32 = 18;

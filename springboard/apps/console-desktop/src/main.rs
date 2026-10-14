@@ -3,6 +3,7 @@
 //! are `model.rs`. Files opened and archives captured are `opened.rs` and `capture.rs`; the kernel's crash records are
 //! `kernel.rs`. This file is the glue to the shell: the menus and the document, workspace and power services.
 
+mod activity;
 mod capture;
 mod columns;
 mod console;
@@ -23,12 +24,15 @@ mod source;
 #[cfg(test)]
 mod filter_tests;
 #[cfg(test)]
+mod toolbar_tests;
+#[cfg(test)]
 mod wire_tests;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::power_service;
 use bifrost_app::proto::{DocErrorCode, DocMode, GrantId};
+use bifrost_app::share::INBOUND;
 use bifrost_app::workspace::{self, Status};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_core::json::Json;
@@ -379,6 +383,9 @@ impl App for ConsoleApp {
             DocumentEvent::SaveTo(doc) => self.save_to(ctx, doc),
             DocumentEvent::Saved(doc) => self.saved(ctx, doc),
             DocumentEvent::Failed { request, code } => self.document_failed(request, code, &home_dir()),
+            // files the shell hands over (opened with Console or dropped on it) carry the inbound bit; they open as logs
+            DocumentEvent::Opened(doc) if doc.request & INBOUND != 0 => self.opened_document(ctx, doc),
+            DocumentEvent::OpenedMany { request, docs } if request & INBOUND != 0 => docs.into_iter().for_each(|doc| self.opened_document(ctx, doc)),
             // a grant this window did not ask for: nothing holds it
             DocumentEvent::Opened(doc) => ctx.release_document(doc.grant),
             DocumentEvent::OpenedMany { docs, .. } => docs.iter().for_each(|d| ctx.release_document(d.grant)),
@@ -446,6 +453,9 @@ fn menus(c: &Console, can_reveal: bool, can_trash: bool) -> Vec<AppMenu> {
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_SIDEBAR, "Show Sidebar").key("ctrl+cmd+s").checked(c.show_sidebar),
         AppMenuItem::new(MENU_DETAILS, "Show Details").checked(c.show_details),
+        AppMenuItem::new(MENU_TOOLBAR, if c.show_toolbar { "Hide Toolbar" } else { "Show Toolbar" }),
+        AppMenuItem::new(MENU_ACTIVITY, if c.activity.is_some() { "Show All Activities" } else { "Show Only This Activity" })
+            .enabled(c.activity.is_some() || c.selected_entry().is_some_and(|e| !e.invocation.is_empty())),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Visible Columns"),
     ];
@@ -711,6 +721,20 @@ mod glue_tests {
         a.document(&ctx, DocumentEvent::Opened(doc(77, "x.log", DocMode::Read, std::fs::File::open(&path).unwrap())));
         assert_eq!(ctx.take_sent(), vec![ToShell::DocRelease { grant: [9; 16] }]);
         assert!(a.console.as_ref().unwrap().opened.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_log_the_shell_hands_over_opens_in_the_sidebar() {
+        let ctx = services::test_ctx();
+        let mut a = app_with_message();
+        let dir = scratch("inbound");
+        let path = dir.join("system.log");
+        std::fs::write(&path, "one line\n").unwrap();
+        a.document(&ctx, DocumentEvent::Opened(doc(INBOUND | 5, "system.log", DocMode::Read, std::fs::File::open(&path).unwrap())));
+        assert_eq!(a.console.as_ref().unwrap().opened.len(), 1);
+        assert_eq!(a.console.as_ref().unwrap().opened[0].name, "system.log");
+        assert!(ctx.take_sent().is_empty(), "the grant is kept while the log is open");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
