@@ -187,8 +187,8 @@
    "area": "menu",
    "apple": "Message > Remind Me; View > Sort by Send Later",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs (remind_time, due_reminders, due_sends); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "organize::remind_time gives the Remind Me times and due_reminders and due_sends pick what is due, all tested headless in tests/parity_app-mail.rs. No Remind Me or Send Later menu calls them yet.",
    "wire": "Keep Remind and Scheduled queues in the data dir; check due_reminders / due_sends in tick(); add the Remind Me and Send Later menus using remind_time."
   },
   {
@@ -277,8 +277,8 @@
    "area": "menu",
    "apple": "Edit > Find > Find, Find Next/Previous",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs (find_in_body); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "organize::find_in_body returns the case-insensitive matches of a needle as byte ranges, Icelandic capitals included, and the tests in tests/parity_app-mail.rs cover it headless. The view pane does not draw the matches yet.",
    "wire": "Add a find bar in the view pane that draws organize::find_in_body matches over the body."
   },
   {
@@ -349,9 +349,9 @@
    "area": "menu",
    "apple": "File > Import Mailboxes; Mailbox > Export",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/mbox.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add File > Import Mailboxes and Export Mailbox with the open and save panels; read via mbox::read and APPEND each entry over imap.rs, write the selected mailbox with mbox::write."
+   "bifrost": "springboard/apps/mail-desktop/src/mbox.rs; springboard/apps/mail-desktop/src/window.rs:1285 (export); springboard/apps/mail-desktop/src/window.rs:1640 (import); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "Export writes the selected mailbox with mbox::write (window.rs:1285) and import reads a file with mbox::read into a new mailbox (window.rs:1640). The mboxrd escaping, file names and round trips are tested headless in tests/parity_app-mail.rs. Not yet verified on Midget.",
+   "wire": "Check on Midget that an import of a large file appends every message over imap.rs and that the exported file opens in another client."
   },
   {
    "feature": "Add account",
@@ -385,8 +385,8 @@
    "area": "settings",
    "apple": "SignaturePreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/signature.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/mail-desktop/src/signature.rs; springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "signature.rs appends, strips and places the signature after the -- delimiter, and the tests in tests/parity_app-mail.rs cover it headless. Not yet wired into accounts, the compose sheet or a Signatures pane.",
    "wire": "Store a signature per account in accounts.rs, call signature::append / reply_body in open_compose, add a Signatures settings pane."
   },
   {
@@ -475,8 +475,8 @@
    "area": "view",
    "apple": "View > Categories",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/mail-desktop/src/organize.rs (categorize); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "organize::categorize sorts a header block into Primary, Transactions, Updates or Promotions, and the tests in tests/parity_app-mail.rs cover the rules headless. Not yet wired into the list or the sidebar.",
    "wire": "Run organize::categorize on the header block when a listing is applied and add a category filter in the sidebar."
   },
   {
