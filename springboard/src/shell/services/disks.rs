@@ -47,7 +47,7 @@ impl Disks {
     }
 
     /// Reads the devices now and returns the events since the last read (none the first time).
-    fn rescan(&mut self) -> Vec<Event> {
+    pub fn rescan(&mut self) -> Vec<Event> {
         let text = std::fs::read_to_string(&self.mounts).unwrap_or_default();
         let snapshot = disk_scan::scan(&self.sys_block, &text).into_iter().map(|e| e.disk).collect();
         let events = self.session.observe(snapshot);
@@ -64,7 +64,7 @@ impl Disks {
     }
 
     /// Answers one call from `app`.
-    fn handle(&mut self, app: &str, method: &str, params: &Json) -> Result<Json, String> {
+    pub fn handle(&mut self, app: &str, method: &str, params: &Json) -> Result<Json, String> {
         match method {
             "list" => {
                 let disks = self.session.disks().iter().map(disk_wire::encode_disk).collect();

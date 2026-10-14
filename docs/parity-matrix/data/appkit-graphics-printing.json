@@ -47,7 +47,7 @@
    "apple": "NSBezierPath, NSGradient, NSShadow",
    "bifrost": "springboard/sdk/src/drawing_model.rs (BezierPath, Gradient, ShadowStyle, PageLayout), springboard/render/src/bezier.rs, springboard/render/src/gradient.rs; wired: springboard/ui/src/layer_style.rs (Shadow, used by style.rs); wired: springboard/ui/src/layer_style.rs (Shadow::radius) via springboard/apps/freeform-desktop/src/style.rs (blur_taps, paint_with_blur)",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only inside specific widgets (folder icon); public BezierPath (append rect/oval/rounded rect/arc, bounds, contains with winding rules, dash, fill/stroke/addClip), Gradient (stops, linear/radial position) and ShadowStyle objects now exist in the SDK (host tests only; dash and cap/join styles are stored but not yet rendered; NSImage reps, NSColorSpace/NSColorList and NSPrintOperation.runModal remain gaps). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "BezierPath construction, bounds, winding-rule containment, fills, strokes and clipping (pixel-exact on the graphics context), Gradient stops and offsets, ShadowStyle extent and PageLayout pagination are tested headless in sdk/tests/parity_sdk-tests-02.rs (drawing module). Gaps: dash and cap/join styles are stored but not rendered; image representations, colour space lists and the modal print run remain missing; wired into the UI in waves 5 and 6, not yet verified on Midget."
   },
   {
    "feature": "Drawing: materials and vibrancy",

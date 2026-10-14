@@ -45,9 +45,9 @@
     {
       "feature": "Spelling-aware word lookup (companion, not Apple NL)",
       "apple": "NSSpellChecker is in AppKit, not Natural Language; listed here because Apple's NL word units feed it",
-      "bifrost": "springboard/sdk/src/spellcheck.rs:46 (Dictionary trait), :54 (WordList), :166 (check_spelling); wired: springboard/core/src/spellcheck.rs (words, WordList, check_spelling); springboard/src/shell/services/text_services.rs",
+      "bifrost": "springboard/sdk/src/spellcheck.rs (SDK re-export of the model); springboard/core/src/spellcheck.rs (Dictionary trait, WordList, words, SpellChecker::check_spelling); springboard/src/shell/services/text_services.rs",
       "status": "partial",
-      "note": "edit-distance-1 suggestions over a word list; no grammar, no bundled dictionary, no app adopts it yet (docs/bifrost-ui.md:1426-1429) Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Dictionary lookup, edit-distance-1 suggestions and check_spelling are tested headless in sdk/tests/parity_sdk-tests-02.rs (spelling module). Gaps: no grammar, no bundled dictionary, and no app adopts it yet (docs/bifrost-ui.md:1426-1429); wired in wiring wave 3 (0.5.39), not yet verified on Midget."
     },
     {
       "feature": "Text embedding and similarity (NLEmbedding)",

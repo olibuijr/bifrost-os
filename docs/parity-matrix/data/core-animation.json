@@ -96,7 +96,7 @@
    "apple": "CALayer cornerRadius, cornerCurve, shadowOpacity, mask, CALayerCornerCurve",
    "bifrost": "springboard/ui/src/layer_style.rs (CornerMask, corner radius, shadow footprint, content mask), springboard/sdk/src/view/style_props.rs (set_corner_radius, border, shadow, mask)",
    "status": "partial",
-   "note": "per-view corner radius, border, shadow and mask setters exist in style_props.rs (set_corner_radius, set_masked_corners, set_border, set_shadow, set_mask); the shell's own rounded rects and shadows are still drawn by shell code. Not yet verified on Midget."
+   "note": "Corner radius capping, corner masks, the shadow footprint and repaint area and the content mask are tested headless in ui/tests/parity_sdk-tests-02.rs. The per-view setters in style_props.rs (set_corner_radius, set_masked_corners, set_border, set_shadow, set_mask) have no test yet; the shell's own rounded rects and shadows are still drawn by shell code, and nothing is verified on Midget."
   },
   {
    "feature": "Transforms (CATransform3D, CATransformLayer, transform matrices)",

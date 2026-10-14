@@ -10,9 +10,9 @@
     {
       "feature": "Built-in music playback",
       "apple": "MPMusicPlayerController, MPMediaPlayback, MPSystemMusicPlayerController",
-      "bifrost": "springboard/sdk/src/lib.rs:88 (audio::Client), springboard/src/svc.rs (audio module, PlayQueue/Play/Pause/Toggle/Next/Prev/SeekMs commands), springboard/apps/music-desktop/src/music/engine.rs",
+      "bifrost": "springboard/proto/src/svc.rs (audio module: Cmd and Evt wire for PlayQueue, Play, Pause, Toggle, Next, Prev, JumpTo, SeekMs and the State event); springboard/sdk/src/lib.rs (audio::Client); springboard/apps/music-desktop/src/music/engine.rs",
       "status": "partial",
-      "note": "app-facing playback over the audio service; no controller object with playback state notifications for media items, and no system music app handoff"
+      "note": "The transport command wire, play queue order and state event are tested headless in proto/tests/parity_sdk-tests-02.rs; the audio client and the music engine have no test yet. No controller object with playback state notifications for media items, and no system music app handoff."
     },
     {
       "feature": "Player queues",
@@ -45,9 +45,9 @@
     {
       "feature": "Item artwork and animated artwork",
       "apple": "MPMediaItemArtwork, MPMediaItemAnimatedArtwork",
-      "bifrost": "springboard/sdk/src/widgets.rs:842 (Player artwork slot, app draws into it), springboard/src/shell/music/nowplaying.rs",
+      "bifrost": "springboard/sdk/src/widgets.rs (PlayerLayout, player: the square artwork slot the app draws into), springboard/src/shell/music/nowplaying.rs",
       "status": "partial",
-      "note": "static artwork is drawn into the player slot by the app; no artwork object for the lock screen and no animated artwork"
+      "note": "The artwork slot geometry and the drawn capsule are tested headless in sdk/tests/parity_sdk-tests-02.rs (artwork module). Static artwork is drawn into the slot by the app; there is no artwork object for the lock screen and no animated artwork."
     },
     {
       "feature": "Media picker",

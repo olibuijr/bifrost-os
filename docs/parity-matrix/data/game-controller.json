@@ -73,9 +73,9 @@
     {
       "feature": "Gamepad input in web content",
       "apple": "Not part of Game Controller (web Gamepad API)",
-      "bifrost": "springboard/apps/browser/engine/Cargo.toml (Servo built with the gamepad feature)",
-      "status": "partial",
-      "note": "The browser engine is compiled with Servo's gamepad feature. Whether that feature receives evdev controller events is not verified in this pass, so this row is not confirmed for web pages."
+      "bifrost": "springboard/apps/browser/engine/Cargo.toml (Servo gamepad feature flag; no BifrOSt code routes controller events into web content)",
+      "status": "gap",
+      "note": "Downgraded from partial: the browser engine is built with Servo's gamepad feature, but the manifest flag is the only evidence, no BifrOSt code routes controller events into web content, and nothing is tested. Confirm on Midget with a controller before the row counts as built."
     }
   ],
   "gaps": [
