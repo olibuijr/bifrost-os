@@ -1,6 +1,6 @@
 id = "is.olibuijr.activity.desktop"
 name = "Activity Monitor"
-version = "0.6.0"
+version = "0.7.0"
 exec = "bifrost-activity"
 icon = "icon.png"
 min_shell = "0.5.4"
