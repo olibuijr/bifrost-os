@@ -24,9 +24,9 @@
   {
    "feature": "Safari web extensions and Safari app extensions",
    "apple": "SFSafariExtension, SFSafariExtensionHandler, SFSafariExtensionManager, SFSafariPage, SFSafariTab, SFSafariWindow, SFExtensionMessageKey, Web Inspector extensions",
-   "bifrost": "springboard/ui/src/web_extension.rs, springboard/sdk/src/web_extension.rs",
+   "bifrost": "springboard/ui/src/web_extension.rs (Exchange, ExchangeError); springboard/sdk/src/web_extension.rs; springboard/ui/tests/parity_sdk-complete-47.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (web_extension.rs, web_extension.rs); not wired into the shell or apps, not tested on Midget. No extension host, page or tab proxies, or extension messaging. The browser has no plug-in API."
+   "note": "Pure model: permissions, enable state, and a request and reply exchange between a page and an extension that is refused unless the extension is enabled for that page URL and only the extension that got a request can answer it (parity_sdk-complete-47.rs). Gap: no extension host, no page or tab proxies, and no transport between the browser and an extension process; not wired into the shell or apps, not tested on Midget. The browser has no plug-in API."
   },
   {
    "feature": "Content blockers",

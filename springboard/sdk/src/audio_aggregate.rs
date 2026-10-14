@@ -1,7 +1,8 @@
 //! Aggregate devices (`AudioHardwareCreateAggregateDevice`) and the hardware clock domain
 //! (`kAudioDevicePropertyClockDomain`), as a pure model. The description serialises with the same keys as the reference platform's
-//! `kAudioAggregateDevice*Key` dictionary. Not implemented: drift compensation resampling (the flag is carried and
-//! reported, nothing corrects drift) and the audiod command that would create the device.
+//! `kAudioAggregateDevice*Key` dictionary. The model also computes the drift correction of each flagged sub-device
+//! (`drift_corrections`) and the sample position of a clock at a host time (`SampleClock`). Not implemented: the audio
+//! path does not yet resample by those ratios, and the audiod command that would create the device does not exist.
 use bifrost_core::json::Json;
 
 /// `kAudioDevicePropertyClockDomain` ('clkd').
@@ -141,6 +142,99 @@ pub fn drift_compensation_needed(desc: &AggregateDescription, domains: &[(String
         .filter(|s| s.uid != source && !domain_of(&s.uid).is_synchronized_with(base))
         .map(|s| s.uid.clone())
         .collect()
+}
+
+/// The clock facts of one sub-device: its hardware domain and the nominal sample rate it runs at.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubDeviceClock {
+    pub uid: String,
+    pub domain: ClockDomain,
+    pub sample_rate: f64,
+}
+
+/// A sample-rate conversion that brings a flagged sub-device onto the clock source's timeline.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DriftCorrection {
+    pub uid: String,
+    /// Source rate over sub-device rate: the factor a stream from this sub-device is resampled by.
+    pub ratio: f64,
+}
+
+/// The sample-rate conversion factor from `sub_rate` to `source_rate`. Both rates must be positive and finite.
+pub fn resample_ratio(source_rate: f64, sub_rate: f64) -> Result<f64, String> {
+    if !is_positive_rate(source_rate) {
+        return Err(format!("source rate {source_rate} is not a positive rate"));
+    }
+    if !is_positive_rate(sub_rate) {
+        return Err(format!("sub-device rate {sub_rate} is not a positive rate"));
+    }
+    Ok(source_rate / sub_rate)
+}
+
+/// The drift corrections an aggregate needs: each sub-device flagged for drift compensation whose clock is in another
+/// domain than the clock source. The clock source never gets one. A flagged sub-device without a known clock is an error,
+/// because its ratio cannot be computed.
+pub fn drift_corrections(desc: &AggregateDescription, clocks: &[SubDeviceClock]) -> Result<Vec<DriftCorrection>, String> {
+    desc.validate()?;
+    let Some(source_uid) = desc.clock_source() else { return Ok(Vec::new()) };
+    let domains: Vec<(String, ClockDomain)> = clocks.iter().map(|c| (c.uid.clone(), c.domain)).collect();
+    let flagged = |uid: &str| desc.sub_devices.iter().any(|s| s.uid == uid && s.drift_compensation);
+    let clock_of = |uid: &str| {
+        clocks.iter().find(|c| c.uid == uid).ok_or_else(|| format!("no clock is known for sub-device {uid}"))
+    };
+    let mut out = Vec::new();
+    for uid in drift_compensation_needed(desc, &domains).iter().filter(|uid| flagged(uid)) {
+        let source = clock_of(source_uid)?;
+        let sub = clock_of(uid)?;
+        out.push(DriftCorrection { uid: uid.clone(), ratio: resample_ratio(source.sample_rate, sub.sample_rate)? });
+    }
+    Ok(out)
+}
+
+fn is_positive_rate(rate: f64) -> bool {
+    rate.is_finite() && rate > 0.0
+}
+
+/// A sample-time anchor: at `host_ticks` on the host time base, the clock was at sample frame `sample`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClockAnchor {
+    pub host_ticks: u64,
+    pub sample: u64,
+}
+
+/// A hardware sample clock: an anchor and the nominal rate it runs at. Two clocks that run at different rates drift apart;
+/// `skew` measures by how many frames.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SampleClock {
+    pub anchor: ClockAnchor,
+    pub sample_rate: f64,
+}
+
+impl SampleClock {
+    /// A clock anchored at `anchor` and running at `sample_rate` frames per second.
+    pub fn new(anchor: ClockAnchor, sample_rate: f64) -> Result<Self, String> {
+        if !is_positive_rate(sample_rate) {
+            return Err(format!("sample rate {sample_rate} is not a positive rate"));
+        }
+        Ok(SampleClock { anchor, sample_rate })
+    }
+
+    /// The (fractional) sample frame reached at `host_ticks`; `ticks_per_second` is the host time base frequency.
+    pub fn sample_at(&self, host_ticks: u64, ticks_per_second: f64) -> f64 {
+        let elapsed = host_ticks as f64 - self.anchor.host_ticks as f64;
+        self.anchor.sample as f64 + elapsed * self.sample_rate / ticks_per_second
+    }
+
+    /// The host time at which this clock reaches `sample`, clamped at host time zero.
+    pub fn host_at(&self, sample: u64, ticks_per_second: f64) -> u64 {
+        let elapsed = (sample as f64 - self.anchor.sample as f64) * ticks_per_second / self.sample_rate;
+        (self.anchor.host_ticks as f64 + elapsed).max(0.0).round() as u64
+    }
+
+    /// Frames by which `other` is ahead of this clock at `host_ticks`. A positive value means `other` runs fast.
+    pub fn skew(&self, other: &SampleClock, host_ticks: u64, ticks_per_second: f64) -> f64 {
+        other.sample_at(host_ticks, ticks_per_second) - self.sample_at(host_ticks, ticks_per_second)
+    }
 }
 
 fn obj(pairs: Vec<(&str, Json)>) -> Json {

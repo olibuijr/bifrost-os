@@ -24,9 +24,9 @@
   {
    "feature": "Aggregate devices",
    "apple": "AudioHardwareAggregateDevice",
-   "bifrost": "springboard/sdk/src/audio_aggregate.rs",
+   "bifrost": "springboard/sdk/src/audio_aggregate.rs (AggregateDescription, drift_corrections, resample_ratio); springboard/sdk/tests/parity_sdk-complete-47.rs",
    "status": "partial",
-   "note": "SDK model: description with Apple's dictionary keys, validation, clock source. Not implemented: audiod creation command, drift compensation resampling. Needs a Midget check."
+   "note": "Headless tests cover the description keys, validation, clock source, and drift corrections (flagged sub-devices in another clock domain, with the source-over-sub-device ratio). Gap: the audio path does not resample by those ratios and there is no audiod creation command; needs a Midget check."
   },
   {
    "feature": "Process taps (capture a process's output)",
@@ -87,9 +87,9 @@
   {
    "feature": "Hardware clocks and sample-accurate sync",
    "apple": "AudioHardwareClock, kAudioDevicePropertySuggestedReferenceDevice",
-   "bifrost": "springboard/sdk/src/audio_aggregate.rs",
+   "bifrost": "springboard/sdk/src/audio_aggregate.rs (ClockDomain, SampleClock, ClockAnchor); springboard/sdk/tests/parity_sdk-complete-47.rs",
    "status": "partial",
-   "note": "SDK model: ClockDomain (kAudioDevicePropertyClockDomain) and which sub-devices need drift compensation. Not implemented: real hardware clocks, timestamps and sample-accurate sync. Needs a Midget check."
+   "note": "Headless tests cover ClockDomain, the sample position of a clock at a host time and back, and the frame skew between two clocks of different rates. Gap: no real hardware clock or timestamps are read, so sample-accurate sync between devices needs a Midget check."
   },
   {
    "feature": "Channel layouts and data types",
