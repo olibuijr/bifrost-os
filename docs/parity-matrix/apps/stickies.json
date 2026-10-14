@@ -40,9 +40,9 @@
    "area": "menu",
    "apple": "MainMenu: File > Import Text…",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:747",
-   "note": "Plain text, and RTF files (public.rtf) become one note whose bold, italic, underline, strikethrough and text colour runs are kept (model.rs:726 runs_from_rtf, model.rs:747 ink_of_colour: red and orange become Red, blue, green keep their colour, other colours become Black). Lists are not imported yet and RTFD images are not imported. Not yet verified on Midget.",
-   "wire": "Keep list markers (AttributedString list_markers in the SDK) as typed bullets; RTFD images need the rich note model (see the rich text row)."
+   "bifrost": "springboard/apps/stickies-desktop/src/model.rs (runs_from_rtf, ink_of_colour); springboard/apps/stickies-desktop/src/rtf.rs (with_list_markers)",
+   "note": "Plain text, and RTF files (public.rtf) become one note whose bold, italic, underline, strikethrough and text colour runs are kept (model.rs runs_from_rtf, model.rs ink_of_colour: red and orange become Red, blue, green keep their colour, other colours become Black). List items keep their markers as typed text (rtf.rs, headless tests in the module). RTFD images are not imported. Not yet verified on Midget.",
+   "wire": "RTFD images need the rich note model (see the rich text row)."
   },
   {
    "feature": "Export Text (current note)",

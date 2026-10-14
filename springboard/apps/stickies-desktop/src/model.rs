@@ -4,6 +4,7 @@
 //! data directory. No drawing here.
 
 use crate::swatch::{self, Rgb};
+use crate::rtf;
 use crate::words;
 use bifrost_app::attributed::{AttributedString, ColorToken};
 use bifrost_app::controls::text::TextBuffer;
@@ -740,7 +741,7 @@ pub fn runs_from_rtf(rtf: &str) -> Vec<(String, Style)> {
             (text.to_string(), style)
         })
         .collect();
-    runs
+    rtf::with_list_markers(runs, &attributed.list_markers())
 }
 
 /// The Font > Text Colour an RTF colour becomes: the nearest of the five inks. Yellow and the default label colours
