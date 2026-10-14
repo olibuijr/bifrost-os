@@ -100,6 +100,22 @@ impl MidiPicker {
         true
     }
 
+    /// Applies the scan response of a listed peripheral. The response carries the complete name when the
+    /// advertisement only had a shortened one. Returns true when it renamed the peripheral. A response for an
+    /// unknown peripheral is ignored, and so is one without a name.
+    pub fn observe_scan_response(&mut self, id: u32, payload: &[u8]) -> bool {
+        let Some(entry) = self.candidates.get_mut(&id) else {
+            return false;
+        };
+        match advertising::local_name(payload).filter(|n| !n.is_empty()) {
+            Some(name) => {
+                entry.name = name;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn get(&self, id: u32) -> Option<&Candidate> {
         self.candidates.get(&id)
     }
@@ -224,6 +240,17 @@ impl MidiAdvertiser {
                 cut -= 1;
             }
             ad.push(ad_type::SHORTENED_NAME, &self.name.as_bytes()[..cut])?;
+        }
+        Ok(ad)
+    }
+
+    /// The scan response: the complete name, sent when it fits one legacy payload on its own. A name the
+    /// advertisement had to shorten is then sent whole here. A longer name has no room in a legacy payload, so the
+    /// response is empty and the advertisement's shortened name stands.
+    pub fn scan_response(&self) -> Result<AdvertisingData, AdvertisingError> {
+        let mut ad = AdvertisingData::new();
+        if !self.name.is_empty() && self.name.len() <= LEGACY_PAYLOAD_MAX - 2 {
+            ad.push(ad_type::COMPLETE_NAME, self.name.as_bytes())?;
         }
         Ok(ad)
     }
