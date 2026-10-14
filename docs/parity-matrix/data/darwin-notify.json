@@ -10,21 +10,21 @@
     {
       "feature": "Posting a named notification (notify_post)",
       "apple": "notify_post(_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::post_with); springboard/sdk/src/notify_bus.rs (post); springboard/sdk/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/services/notify_bus.rs (post)",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::post_with, distributed_user_info); springboard/sdk/src/notify_bus.rs (post); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-24.rs; wired: springboard/src/shell/services/notify_bus.rs (post)",
       "status": "partial",
-      "note": "Cross-app broadcast relayed by the shell (ToShell::DistPost). Headless tests: a_distributed_post_reaches_local_observers_and_is_queued_for_the_shell_sorted, a_process_local_distributed_post_sends_nothing_to_the_shell, notify_bus_calls_go_to_the_notify_bus_service_with_their_method. Only between BifrOSt apps, string names, string user_info capped at 32 entries; no system-wide Darwin names. Verify on Midget for parity."
+      "note": "Cross-app broadcast relayed by the shell (ToShell::DistPost). The SDK sorts the user info, keeps at most 32 entries with values cut to 1024 characters, and gives the sender's own observers the same payload (distributed_user_info, tested in parity_sdk-complete-24). Headless tests: a_distributed_post_reaches_local_observers_and_is_queued_for_the_shell_sorted, a_process_local_distributed_post_sends_nothing_to_the_shell, notify_bus_calls_go_to_the_notify_bus_service_with_their_method. Only between BifrOSt apps with string names; no system-wide notification bus exists here, so posting across processes outside BifrOSt needs the lab machine. Verify on Midget for parity."
     },
     {
       "feature": "Registering a handler for a name (notify_register_dispatch)",
       "apple": "notify_register_dispatch(_:_:_:_:)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::add_observer, NotificationCenter::add_observer); springboard/sdk/src/notify_bus.rs (register, Mode); springboard/sdk/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/services/notify_bus.rs (notified event)",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter::add_observer, NotificationCenter::add_observer, ObserverToken::suspend, ObserverToken::resume); springboard/sdk/src/notify_bus.rs (register, Mode); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-24.rs; wired: springboard/src/shell/services/notify_bus.rs (notified event)",
       "status": "partial",
-      "note": "Observers run on the main thread and take an optional object filter. Headless tests: an_observer_hears_its_name_and_its_object_only, an_observer_without_an_object_hears_every_object_and_gets_the_user_info. Observer closures are tied to the main thread; there is no queue argument. Verify on Midget for parity."
+      "note": "Observers run on the main thread, take an optional object filter, and can be suspended and resumed through their token (tested in parity_sdk-complete-24). Headless tests: an_observer_hears_its_name_and_its_object_only, an_observer_without_an_object_hears_every_object_and_gets_the_user_info. Gap: observer closures are tied to the main thread and there is no queue argument, since the runtime has no second queue to bind an observer to. Verify on Midget for parity."
     },
     {
       "feature": "Polling a registration token (notify_check)",
       "apple": "notify_check(_:_:)",
-      "bifrost": "springboard/core/src/notify_center.rs (NotifyCenter::register, check, post); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/notify_bus.rs (check); wired: springboard/src/shell/services/notify_bus.rs (register mode poll, check)",
+      "bifrost": "springboard/core/src/notify_center.rs (NotifyCenter::register, check, post); springboard/core/tests/parity_sdk-complete-24.rs; springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/notify_bus.rs (check); wired: springboard/src/shell/services/notify_bus.rs (register mode poll, check)",
       "status": "partial",
       "note": "A poll token is marked on each post and the mark is cleared by check. Headless tests: post_marks_every_live_token_on_the_name_and_counts_them, check_clears_the_pending_mark, a_poll_token_does_not_queue_signals. The shell offers poll mode through the notify bus check call. Verify on Midget for parity."
     },
@@ -52,16 +52,16 @@
     {
       "feature": "Token lifecycle (notify_cancel, notify_suspend, notify_resume, notify_is_valid_token)",
       "apple": "notify_cancel(_:), notify_suspend(_:), notify_resume(_:), notify_is_valid_token(_:)",
-      "bifrost": "springboard/core/src/notify_center.rs (cancel, suspend, resume, is_valid); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/notification.rs (ObserverToken drop removes observer); springboard/sdk/src/notify_bus.rs (suspend, resume, cancel, valid); wired: springboard/src/shell/services/notify_bus.rs (cancel, suspend, resume, valid)",
+      "bifrost": "springboard/core/src/notify_center.rs (cancel, suspend, resume, is_valid); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/core/tests/parity_sdk-complete-24.rs; springboard/sdk/src/notification.rs (ObserverToken drop removes observer, ObserverToken::suspend, ObserverToken::resume); springboard/sdk/src/notify_bus.rs (suspend, resume, cancel, valid); springboard/sdk/tests/parity_sdk-complete-24.rs; wired: springboard/src/shell/services/notify_bus.rs (cancel, suspend, resume, valid)",
       "status": "partial",
-      "note": "Cancelling removes a token, suspending skips posts while resume restarts delivery, and is_valid answers for a live token. Headless tests: cancelled_tokens_stop_receiving_posts, suspended_tokens_miss_posts_and_resume_restarts_delivery, an_observer_hears_its_name_and_its_object_only (dropping the token removes the observer). The in-process observer token has drop only, not suspend or resume. Verify on Midget for parity."
+      "note": "Cancelling removes a token, suspending skips posts while resume restarts delivery, and is_valid answers for a live token. The in-process observer token now suspends and resumes too, and a suspended observer leaves the others on its name running (parity_sdk-complete-24). Headless tests: cancelled_tokens_stop_receiving_posts, suspended_tokens_miss_posts_and_resume_restarts_delivery, an_observer_hears_its_name_and_its_object_only (dropping the token removes the observer). Verify on Midget for parity."
     },
     {
       "feature": "Per-name state values (notify_set_state, notify_get_state)",
       "apple": "notify_set_state(_:_:), notify_get_state(_:_:)",
-      "bifrost": "springboard/core/src/notify_center.rs (NotifyCenter::set_state, state); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/notify_bus.rs (set_state, state); wired: springboard/src/shell/services/notify_bus.rs (set_state, state)",
+      "bifrost": "springboard/core/src/notify_center.rs (NotifyCenter::set_state, state); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/core/tests/parity_sdk-complete-24.rs; springboard/sdk/src/notify_bus.rs (set_state, state); wired: springboard/src/shell/services/notify_bus.rs (set_state, state)",
       "status": "partial",
-      "note": "A 64-bit state value per name, shared by every token on it, defaults to zero. Headless test: name_state_defaults_to_zero_and_keeps_the_last_value_set. The SDK refuses set_state for system names. Verify on Midget for parity."
+      "note": "A 64-bit state value per name, shared by every token on it, defaults to zero and keeps the full 64-bit range (parity_sdk-complete-24). Headless test: name_state_defaults_to_zero_and_keeps_the_last_value_set. The shell refuses set_state for system names. Verify on Midget for parity."
     },
     {
       "feature": "Posting to a non-running app (suspensionBehavior)",
@@ -73,9 +73,9 @@
     {
       "feature": "System event names (kNotifyTimeZoneChange, kNotifyClockSet, kNotifyVFSMount, kNotifyVFSUnmount, kNotifyVFSLowDiskSpace, kNotifySCNetworkChange, kNotifySCHostNameChange, kNotifyDSCacheInvalidation*, kNotifyASLDBUpdate)",
       "apple": "Notify Macros constants",
-      "bifrost": "springboard/core/src/notify_center.rs (SYSTEM_EVENTS); springboard/core/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/services/notify_bus.rs (system.appearance.change, system.screen.locked, system.screen.unlocked, system.network.change)",
+      "bifrost": "springboard/core/src/notify_center.rs (SYSTEM_EVENTS, volume_change); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/core/tests/parity_sdk-complete-24.rs; wired: springboard/src/shell/services/notify_bus.rs (system.appearance.change, system.screen.locked, system.screen.unlocked, system.network.change, system.contacts.change, system.calendar.change, system.timezone.change, system.hostname.change, system.volume.mount, system.volume.unmount)",
       "status": "partial",
-      "note": "The eleven system names are defined in the core model under the system namespace (system_event_names_are_the_system_namespace_and_include_the_clock_and_volume_events). Only the appearance, screen lock and network changes are posted by the shell; there is no broadcast for time zone, clock, mount, disk-space, host-name or cache changes under these names. Verify on Midget for parity."
+      "note": "The eleven system names are constants in the core model under the system namespace. The shell posts appearance, screen lock, network, contacts, calendar, time zone, host name and volume mount or unmount changes, polling the time zone and host name files and the mount table once a second. Gap: clock set, low disk space, disk-cache and log database names have no source in the shell (they need a wall-clock jump monitor, a free-space probe and the cache and log stores), so they are not posted; the lab machine must confirm the file-based names. Verify on Midget for parity."
     },
     {
       "feature": "Status codes and macros (NOTIFY_STATUS_*, NOTIFY_TOKEN_INVALID)",

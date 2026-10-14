@@ -63,7 +63,7 @@ fn zone_offset(zone: &str) -> Option<i64> {
     if zone == "Z" {
         return Some(0);
     }
-    let sign = match zone.as_bytes().first()? {
+    let sign = match *zone.as_bytes().first()? {
         b'+' => 1,
         b'-' => -1,
         _ => return None,
