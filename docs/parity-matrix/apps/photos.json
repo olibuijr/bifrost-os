@@ -77,10 +77,10 @@
    "feature": "New Folder for albums",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > New Folder",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a folder level to albums.rs (folder name + child album ids, persisted beside albums) and a New Folder row next to New Album in the album menu (mod.rs:1894)"
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/folders.rs (new_folder, move_album, album_deleted, decode, writes); springboard/tests/parity_app-photos.rs",
+   "note": "The folder model is tested headless: names, the one-folder rule, slot moves on album delete, and the uf.<n> preference round trip. Gap: the picker has no New Folder row and no folder list yet, so folders cannot be made from the UI.",
+   "wire": "Add a New Folder row next to New Album in the album menu (mod.rs extra_rows) and list the folders in the picker"
   },
   {
    "feature": "Smart Albums with rule conditions",

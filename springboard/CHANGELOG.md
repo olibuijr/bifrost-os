@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Photos: album folders have a tested model (names, one folder per album, slots kept in step when an album is deleted, stored under uf.<n> in photos.ini). The picker does not show folders yet.
 - Terminal: Edit Title for a tab, Allow Mouse Reporting, Search the Web and Open man Page for the selection, Save Selected Text, and Use Selection for Find (Cmd+E).
 - Terminal: the More menu has Close Other Tabs, Paste Escaped Text, Paste Selection and a Terminal Help line.
 - Terminal: a Profiles panel lists every colour theme and profile, and Use at Launch makes one the default. Window groups are named: Save window group asks for a name, Open window group lists the groups (a second tap on the cross deletes one), and each tab keeps its folder and profile. Startup command runs in the first tab at launch. Show All Tabs lists the open tabs. Ignore Case and Wrap Around change how the Find bar matches. Look Up Selection and Search Man Pages for Selection run from the menus. ssh, telnet and man-page links in the output open in a tab when tapped. A touch drag reports to programs that asked for drags. Drag a tab name along the bar to move it. Export scrollback as and Save selection as name the file. The menu bar has the rest of More: File (New Command, Close Other Tabs, window groups), Edit (Paste Escaped Text, Paste Selection, Look Up, Find options), View (Show All Tabs, Allow Mouse Reporting), Window (a row per tab) and Help (Terminal Help). Services has New Terminal at Folder.

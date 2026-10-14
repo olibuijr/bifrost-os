@@ -16,6 +16,7 @@ pub mod entry;
 pub mod exif;
 mod extras;
 pub mod export;
+pub mod folders;
 pub mod grid;
 pub mod import;
 pub mod library;
@@ -869,7 +870,11 @@ impl Photos {
     /// Deletes user album `slot`; later albums move down so the slots stay contiguous.
     fn delete_album(&mut self, slot: usize) {
         let entries: Vec<(String, String)> = self.prefs.entries().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-        let writes = albums::delete_album_writes(&entries, slot);
+        let mut writes = albums::delete_album_writes(&entries, slot);
+        let mut album_folders = folders::decode(|k| self.prefs.get(k));
+        let stored = album_folders.len();
+        folders::album_deleted(&mut album_folders, slot);
+        writes.extend(folders::writes(&album_folders, stored));
         let pairs: Vec<(&str, &str)> = writes.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
         let mut next = self.prefs.clone();
         match next.set_many(&pairs) {
