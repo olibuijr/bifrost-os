@@ -45,9 +45,9 @@
     {
       "feature": "On-device model updates",
       "apple": "MLUpdateTask, MLTask, personalization sample",
-      "bifrost": "springboard/ui/src/ml_update.rs",
+      "bifrost": "springboard/ui/src/ml_update.rs (update, Parameters, Report); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-core-ml, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no training or fine-tuning path in the SDK"
+      "note": "Headless tests in parity_sdk-tests-18 cover one gradient step on the last dense layer, the loss before and after, frozen earlier layers, input checks and deterministic reports. Gap: the update runs on the caller's thread, is not wired into any app, and trains only the last dense layer."
     },
     {
       "feature": "Downloading and compiling a model at runtime",
