@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- Fixed appearance-aware progress tracks and document tiles, removed a fixed initial window size, and moved network probes onto the utility dispatch queue.
+
 ## 0.7.0
 
 - New: a job waiting or held on another computer says so in the Status column ("Waiting on the other computer", "Held on the other computer").

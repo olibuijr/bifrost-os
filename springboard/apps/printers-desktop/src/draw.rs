@@ -176,7 +176,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
         if let Some(done) = job_progress(job) {
             let width = column_width(&cols, 6, x0 + w).min(110.0);
             let bar = Rect { x: cols[6], y: r.y + JOB_ROW_PT - 7.0, w: width, h: 3.0 };
-            let (track, fill_color) = if on { (pack(255, 255, 255, 90), WHITE) } else { (SEPARATOR_C.now(), TINT) };
+            let (track, fill_color) = if on { (CARD_BG.now(), WHITE) } else { (SEPARATOR_C.now(), TINT) };
             fill(s, ui, bar, 0.0, track);
             fill(s, ui, Rect { w: bar.w * done, ..bar }, 0.0, fill_color);
         }
@@ -185,7 +185,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
 
 /// A small page-shaped tile with the document's type in capitals, drawn in place of a first-page preview.
 fn document_tile(labels: &mut TextCache, s: &mut Surface, ui: &Ui, r: Rect, tag: &str, on_plate: bool) {
-    let (plate, ink) = if on_plate { (pack(255, 255, 255, 70), WHITE) } else { (SEPARATOR_C.now(), LABEL_2.now()) };
+    let (plate, ink) = if on_plate { (SELECTION.now(), WHITE) } else { (SEPARATOR_C.now(), LABEL_2.now()) };
     fill(s, ui, r, 3.0, plate);
     let img = labels.get(ui, tag, MAC_FOOTNOTE_PT, Weight::Semibold, ink);
     s.blit(img, (ui.pt(r.x + r.w / 2.0) - img.w as f32 / 2.0) as i32, (ui.pt(r.y + r.h / 2.0) - img.h as f32 / 2.0) as i32, 255, 255);

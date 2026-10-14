@@ -1,6 +1,6 @@
 //! Print Center as an installed BifrOSt app: the printers the scheduler knows, the queue of the selected printer, and the
 //! actions that pause and resume a printer, set the default, and hold, release or cancel a job. `model.rs` holds the
-//! state and the rules, `worker.rs` talks to the scheduler on its own thread, `window.rs` lays the window out and
+//! state and the rules, `worker.rs` talks to the scheduler on a serial dispatch queue, `window.rs` lays the window out and
 //! `draw.rs` paints it. `discover.rs` finds printers on the network, `widget.rs` feeds the printers widget and
 //! `app_intents.rs` serves the Shortcuts actions.
 
