@@ -398,12 +398,13 @@ pub fn from_value(v: &Value) -> BValue {
         Value::Num(n) => BValue::Real(*n),
         Value::Str(s) => BValue::Str(s.clone()),
         Value::Date(d) => BValue::date_from_unix(*d),
+        Value::Data(d) => BValue::Data(d.clone()),
         Value::Arr(a) => BValue::Array(a.iter().map(from_value).collect()),
         Value::Dict(d) => BValue::Dict(d.iter().map(|(k, v)| (k.clone(), from_value(v))).collect()),
     }
 }
 
-/// The reverse of [`from_value`]. Data and `Uid` have no Codable counterpart and are refused.
+/// The reverse of [`from_value`]. A `Uid` has no Codable counterpart and is refused.
 pub fn to_value(v: &BValue) -> Result<Value, BplistError> {
     Ok(match v {
         BValue::Null => Value::Null,
@@ -416,6 +417,7 @@ pub fn to_value(v: &BValue) -> Result<Value, BplistError> {
         BValue::Dict(d) => {
             Value::Dict(d.iter().map(|(k, v)| to_value(v).map(|v| (k.clone(), v))).collect::<Result<Vec<_>, _>>()?)
         }
-        BValue::Data(_) | BValue::Uid(_) => return bad("data and uid values have no Codable form"),
+        BValue::Data(d) => Value::Data(d.clone()),
+        BValue::Uid(_) => return bad("uid values have no Codable form"),
     })
 }

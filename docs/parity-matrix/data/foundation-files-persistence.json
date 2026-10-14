@@ -38,9 +38,9 @@
     {
       "feature": "Archives and Serialization: JSON and property lists",
       "apple": "JSONEncoder/Decoder, PropertyListEncoder/Decoder, JSONSerialization",
-      "bifrost": "springboard/sdk/src/coding.rs, springboard/sdk/src/binary_plist.rs",
+      "bifrost": "springboard/sdk/src/coding.rs (Data, Value::Data), springboard/sdk/src/binary_plist.rs; springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Added later, host tests only: JSON, XML plist and binary plist (bplist00 read and write: all int widths, real, date, data, ascii/utf-16 strings, uid, arrays, dicts; PropertyListEncoder.encode_binary and decode_binary). Data has no Codable form yet, few strategies. Host tests only."
+      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Added later, host tests only: JSON, XML plist and binary plist (bplist00 read and write: all int widths, real, date, data, ascii/utf-16 strings, uid, arrays, dicts; PropertyListEncoder.encode_binary and decode_binary). The Data type is Codable: base64 in JSON and XML, a data object in binary, tested headless in parity_sdk-complete-19.rs. Gap: only the ISO 8601 and seconds date strategies exist, and no data encoding strategies. Host tests only."
     },
     {
       "feature": "Archives and Serialization: keyed archiving",
