@@ -19,7 +19,7 @@
    "apple": "NSImage(systemSymbolName:), NSImage.SymbolConfiguration",
    "bifrost": "springboard/sdk/src/glyphs.rs, springboard/render/src/symbols.rs",
    "status": "partial",
-   "note": "fixed set of procedural line glyphs (59), one weight, no hierarchical or palette rendering (docs/bifrost-ui.md)"
+   "note": "Fixed set of 60 procedural line glyphs (glyphs::NAMES), one weight, no hierarchical or palette rendering (docs/bifrost-ui.md). Every name is drawn headless into an offscreen surface in springboard/sdk/tests/parity_sdk-tests-10-w7.rs; the symbol set's names and code points are tested in springboard/render/tests/parity_sdk-tests-10-w7.rs."
   },
   {
    "feature": "Images and PDF: PDF rendering",

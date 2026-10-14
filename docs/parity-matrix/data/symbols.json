@@ -10,9 +10,9 @@
     {
       "feature": "Symbol-based images (SF Symbols catalogue)",
       "apple": "Symbols collection; NSImage(systemSymbolName:) is the entry point in the official overview",
-      "bifrost": "springboard/sdk/src/glyphs.rs (glyph, NAMES: 59 names); springboard/render/src/symbols.rs (Symbol enum, font lookup by glyph name then Unicode)",
+      "bifrost": "springboard/sdk/src/glyphs.rs (glyph, NAMES: 60 names); springboard/render/src/symbols.rs (Symbol enum, font lookup by glyph name then Unicode)",
       "status": "partial",
-      "note": "59 named line drawings; unknown names draw nothing. Not the SF Symbols catalogue. The renderer's symbol font path finds no real symbol font on the device, so the drawings are what ships"
+      "note": "60 named line drawings, tested headless in springboard/sdk/tests/parity_sdk-tests-10-w7.rs; unknown names draw nothing. Not the SF Symbols catalogue. The 22-symbol set maps names and code points (springboard/render/tests/parity_sdk-tests-10-w7.rs). The renderer's symbol font path finds no real symbol font on the device, so the drawings are what ships"
     },
     {
       "feature": "Symbol drawing: shape painters and named icons",

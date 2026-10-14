@@ -89,7 +89,7 @@
    "apple": "SCNSceneSource",
    "bifrost": "springboard/ui/src/scene_source.rs",
    "status": "partial",
-   "note": "Wave 5 (w5-scenekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D file importer (DAE, USDZ, glTF); the image decoder springboard/render/src/imgdec.rs handles 2D only"
+   "note": "OBJ text import (objects, faces, normals, texture coordinates, import errors) is tested headless in springboard/ui/tests/parity_sdk-tests-10-w7.rs. Not wired into apps or the shell, and not yet tested on Midget. No other 3D file importer (DAE, USDZ, glTF); the image decoder springboard/render/src/imgdec.rs handles 2D only"
   },
   {
    "feature": "3D data types",

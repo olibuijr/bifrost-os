@@ -52,9 +52,9 @@
     {
       "feature": "Discovering intents without launching the app",
       "apple": "Intents surfaced to the system for Siri and Shortcuts",
-      "bifrost": "springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs (Intent::manifest_toml)",
+      "bifrost": "springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs (Intent::manifest_toml), springboard/src/shell/media_intents.rs (manifest_intents)",
       "status": "partial",
-      "note": "Spotlight lists manifest [[intent]] entries with shortcut = true and no required parameter; no Siri or Shortcuts-app listing"
+      "note": "Spotlight lists manifest [[intent]] entries with shortcut = true and no required parameter, and the transport intents are listed the same way. The listing rules and the manifest reader are tested headless in springboard/tests/parity_sdk-tests-10-w7.rs. No Siri or Shortcuts-app listing."
     },
     {
       "feature": "Voice and spoken dialog",

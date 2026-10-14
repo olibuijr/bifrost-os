@@ -47,7 +47,7 @@
    "apple": "https://developer.apple.com/documentation/swiftui/images",
    "bifrost": "springboard/sdk/src/glyphs.rs",
    "status": "partial",
-   "note": "symbol glyphs; no AsyncImage or Image resizing modifiers"
+   "note": "Symbol glyphs draw headless into an offscreen surface (springboard/sdk/tests/parity_sdk-tests-10-w7.rs); no AsyncImage or Image resizing modifiers"
   },
   {
    "feature": "Controls and indicators",

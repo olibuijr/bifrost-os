@@ -12,7 +12,7 @@
    "apple": "Widget, WidgetBundle, StaticConfiguration, WidgetCenter",
    "bifrost": "springboard/ui/src/widget_kind.rs",
    "status": "partial",
-   "note": "Wave 4 (w4-widgetkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Widgets are compiled into the shell. No app can register a widget kind, and there is no bundle or extension process."
+   "note": "The widget kind registry (identifiers, sizes, bundles, lookups by size) is tested headless in springboard/ui/tests/parity_sdk-tests-10-w7.rs. Not wired into apps or the shell, and not yet tested on the VM or Midget. Widgets are compiled into the shell. No app can register a widget kind, and there is no bundle or extension process."
   },
   {
    "feature": "Configurable widgets (AppIntentConfiguration, WidgetInfo)",

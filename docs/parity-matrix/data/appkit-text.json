@@ -82,7 +82,7 @@
    "apple": "System font settings",
    "bifrost": "springboard/sdk/src/font_descriptor.rs (UserFonts)",
    "status": "partial",
-   "note": "Wave 5 (w5-appkit-text, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Settings > Fonts replaces UI fonts from BifrOSt's font library"
+   "note": "Settings > Fonts replaces the system and mono fonts with a face from BifrOSt's font library. The choice, the library listing and resolution are tested headless in springboard/sdk/tests/parity_sdk-tests-10-fonts-w7.rs (font_descriptor tests). Not yet wired into apps or the shell, and not yet tested on the VM or Midget."
   },
   {
    "feature": "Writing Tools",
