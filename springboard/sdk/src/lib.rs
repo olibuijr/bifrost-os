@@ -199,6 +199,7 @@ pub mod script_value;
 pub mod script_syntax;
 pub mod script_export;
 pub mod view;
+pub mod tabs;
 pub mod wl;
 pub mod layers;
 /// The retained layer tree (`Layer`, delegates, layout managers, constraints); see `ViewBase::layer`.
