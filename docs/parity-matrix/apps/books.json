@@ -29,18 +29,17 @@
    "area": "menu",
    "apple": "File > New Collection; Add to Collection",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add a My Collections sidebar header from Shelf::collections and add/remove menu actions."
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:513 (Store::create_collection, rename_collection, delete_collection, toggle_in_collection); springboard/apps/books-desktop/src/main.rs:216 (Library menu: New, Rename and Delete Collection, Add to Collection)",
+   "note": "Library menu and right-click make, rename and delete collections and add or remove books; the sidebar lists them and they persist across restarts. Tested headless in books/library_tests.rs (collections_are_made_renamed_filled_and_deleted). Gap: the sidebar has no My Collections header yet and nothing is verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Want to Read / Finished, mark as finished",
    "area": "menu",
    "apple": "book context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add Finished and Want to Read filters beside Filter::Reading using Shelf::marked."
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:488 (set_status); springboard/apps/books-desktop/src/books/store.rs:493 (toggle_status); springboard/apps/books-desktop/src/books/mod.rs:1156 (toggle_open_status); springboard/apps/books-desktop/src/main.rs:214 (Library menu)",
+   "note": "The Library menu and a cover's context menu mark a book Want to Read or Finished, the sidebar lists both, and reaching the last page marks a book Finished. Tested headless in books/library_tests.rs (want_to_read_and_finished_hold_the_books_with_that_status, reaching_the_last_page_marks_the_book_finished). Gap: not verified on Midget."
   },
   {
    "feature": "Library search",
@@ -56,27 +55,24 @@
    "area": "menu",
    "apple": "View > Sort By",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1263",
-   "note": "built on parity/team-d-books; not yet verified on Midget",
-   "wire": "Verify on Midget: View > Sort By (Recent, Title, Author) and that the choice is kept. Apple also sorts by progress and series."
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:103 (SortBy, sort_key); springboard/apps/books-desktop/src/books/mod.rs:1265 (set_sort); springboard/apps/books-desktop/src/main.rs:154 (View > Sort By)",
+   "note": "View > Sort By orders the library by recent use, title, author or reading progress, and the choice is kept across restarts. Tested headless in books/store.rs (sort_keys_order_by_title_and_author) and books/library_tests.rs (sort_by_orders_the_shelf_and_leaves_the_reading_now_row_to_recent). Gap: no series order and nothing is verified on Midget."
   },
   {
    "feature": "Grid / list library view",
    "area": "menu",
    "apple": "View > As Grid / As List",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/draw.rs:238",
-   "note": "built on parity/team-d-books; not yet verified on Midget",
-   "wire": "Verify on Midget: View > as Grid / as List, row layout, scrolling and taps on rows."
+   "bifrost": "springboard/apps/books-desktop/src/books/draw.rs:238 (draw_list_row); springboard/apps/books-desktop/src/books/draw.rs:117 (draw_library); springboard/apps/books-desktop/src/books/mod.rs:1280 (set_view_mode)",
+   "note": "View > as Grid and as List show the library as covers or as rows with title, author and status, and the choice is kept. Tested headless in books/library_tests.rs (the_list_view_has_a_row_per_book_that_a_tap_reaches, the_list_scrolls_to_its_last_row). Gap: not verified on Midget."
   },
   {
    "feature": "Add to Library",
    "area": "menu",
    "apple": "File > Add to Library",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:395",
-   "note": "built on parity/team-d-books; not yet verified on Midget",
-   "wire": "Verify on Midget: File > Add to Library with the open panel (documents permission), copies into ~/Books and the shelf rescan."
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:194 (library_action opens the panel); springboard/apps/books-desktop/src/main.rs:395 (document copies each book); springboard/apps/books-desktop/src/books/mod.rs:1314 (import_book)",
+   "note": "File > Add to Library opens the panel for .epub and .pdf files (documents permission) and copies the chosen books into the Books folder, onto the shelf. Tested headless in books/library_tests.rs (adding_books_copies_them_into_the_books_folder_and_the_shelf). Gap: not verified on Midget."
   },
   {
    "feature": "Remove book",
@@ -119,9 +115,8 @@
    "area": "menu",
    "apple": "View > scrolling view",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Honour Display::continuous in layout.rs and add a View menu item."
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1701 (set_continuous); springboard/apps/books-desktop/src/books/mod.rs:185 (page_at, the page in view); springboard/apps/books-desktop/src/main.rs:227 (View > Continuous Scroll)",
+   "note": "View > Continuous Scroll lays the pages out one below the other and scrolls them by drag or fling, with the middle page as the current one. Tested headless in books/library_tests.rs (continuous_scrolling_follows_the_scroll_and_scrolls_to_a_page, a_drag_scrolls_the_pages_and_a_tap_still_works, the_pages_are_drawn_one_below_the_other_at_the_scroll_position). Gap: not verified on Midget."
   },
   {
    "feature": "Table of contents",
@@ -155,9 +150,8 @@
    "area": "menu",
    "apple": "highlight colour submenu",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add a colour index (HighlightColour::index) to highlights in store.rs and a Highlight Color submenu."
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:191 (HIGHLIGHT_STYLES); springboard/apps/books-desktop/src/books/store.rs:460 (highlight_style, set_highlight_style); springboard/apps/books-desktop/src/books/mod.rs:1303 (set_match_style); springboard/apps/books-desktop/src/books/draw.rs:82 (highlight_colour)",
+   "note": "Find > Highlight Color gives the match yellow, green, blue, pink or purple, or underlines it, and the style is kept with the highlight, in PDF books too. Tested headless in books/highlight_tests.rs and books/library_tests.rs (highlight_colours_and_the_underline_draw_differently, the_highlight_color_menu_styles_the_text_the_last_find_went_to, pdf_highlight_annotations_carry_their_style). Gap: not verified on Midget."
   },
   {
    "feature": "Find in book with next/previous and whole words",
@@ -208,19 +202,18 @@
    "feature": "Font family choice",
    "area": "panel",
    "apple": "Aa font list",
-   "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add Display to store::Settings and a font row in the Display panel; repaginate in layout.rs."
+   "status": "gap",
+   "bifrost": "",
+   "note": "Not built: the reader draws every page in the system face and the Display panel has no family row. The unwired font model was removed; a serif or sans face and a family setting in store::Settings are still needed, then the page layout measures with that face.",
+   "wire": ""
   },
   {
    "feature": "Line spacing / margins / justification",
    "area": "panel",
    "apple": "Aa customise",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Add Display spacing, margin and justify to layout metrics."
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:42 (SPACINGS); springboard/apps/books-desktop/src/books/store.rs:45 (MARGINS); springboard/apps/books-desktop/src/books/mod.rs:873 (set_line_spacing); springboard/apps/books-desktop/src/books/mod.rs:879 (set_margins); springboard/apps/books-desktop/src/books/mod.rs:885 (set_justified); springboard/apps/books-desktop/src/books/draw.rs:610 (draw_display); springboard/apps/books-desktop/src/books/layout.rs:17 (line height)",
+   "note": "The Display panel and View menu set line spacing (tight, normal, loose), margins (narrow, normal, wide) and Justify Text; the pages are laid out again and the reader keeps its place. Tested headless in books/library_tests.rs (line_spacing_margins_and_justification_lay_the_pages_out_again_and_persist, only_lines_inside_a_paragraph_are_stretched_when_justified) and books/layout.rs (line_spacing_changes_how_many_lines_fit_a_page). Gap: not verified on Midget."
   },
   {
    "feature": "Page scrubber",
@@ -245,9 +238,8 @@
    "area": "menu",
    "apple": "File > Print",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:333",
-   "note": "built on parity/team-d-books; not yet verified on Midget",
-   "wire": "Verify on Midget with a CUPS queue. An EPUB prints as plain text in the printer font, without pictures or the reading theme; print the reflowed pages from layout.rs to match the screen."
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:330 (File > Print); springboard/apps/books-desktop/src/books/mod.rs:744 (print_text)",
+   "note": "File > Print sends a PDF as it is, and an EPUB as its headings and paragraphs through the print service. Tested headless in books/library_tests.rs (a_book_prints_as_its_text_without_pictures) and main.rs (print_needs_a_book_and_a_print_service). Gap: the EPUB printout uses the printer face without pictures or the reading theme, and no CUPS queue has been tried on Midget."
   },
   {
    "feature": "Show/hide sidebar",
@@ -273,7 +265,7 @@
    "apple": "Audiobooks section",
    "status": "gap",
    "bifrost": "",
-   "note": "",
+   "note": "Not started: there is no audiobook collection, chapter reader or playback through the shell media service yet.",
    "wire": "Add an audiobook (m4b/mp3) collection played through the shell media service with chapters"
   },
   {
@@ -299,18 +291,16 @@
    "area": "settings",
    "apple": "Settings > Reading Goals",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/shelf.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Record minutes per day into Goal and show the goal card in Reading Now."
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:558 (add_reading); springboard/apps/books-desktop/src/books/store.rs:581 (goal_streak); springboard/apps/books-desktop/src/books/store.rs:612 (goal_label); springboard/apps/books-desktop/src/books/mod.rs:1133 (set_reading_goal); springboard/apps/books-desktop/src/books/mod.rs:1141 (goal_text, the Reading Now line)",
+   "note": "Library > Reading Goal sets 10 to 120 minutes a day; the time a book is open counts, and Reading Now shows today's minutes against the goal and the streak. Tested headless in books/library_tests.rs (the_reading_goal_counts_the_time_a_book_is_open, the_goal_shows_in_the_reading_now_section). Gap: the goal sits in the Library menu rather than a Settings page, and it is a text line, not a card."
   },
   {
    "feature": "Save PDF to Books share target",
    "area": "integration",
    "apple": "SharingExtension.appex (accepts one PDF; BKShareViewController.nib)",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:395",
-   "note": "built on parity/team-d-books; not yet verified on Midget",
-   "wire": "Verify on Midget: share a PDF from Files or Preview and choose Books; the manifest declares handles com.adobe.pdf and the documents permission."
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:395 (document: a shared PDF is copied in and opens); springboard/apps/books-desktop/manifest.toml (handles com.adobe.pdf, documents permission)",
+   "note": "A PDF shared to Books is copied into the Books folder and opens. The manifest declares the PDF handle and the documents permission. Gap: no headless test covers the share request, and it is not verified on Midget from Files or Preview."
   },
   {
    "feature": "Settings window",
