@@ -17,9 +17,9 @@
   {
    "feature": "Hotspot helper",
    "apple": "Hotspot helper collection group",
-   "bifrost": "springboard/sdk/src/hotspot_configuration.rs, springboard/sdk/src/accessory_hotspot.rs",
+   "bifrost": "springboard/sdk/src/hotspot_configuration.rs, springboard/sdk/src/accessory_hotspot.rs, springboard/sdk/src/hotspot_helper.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (hotspot_configuration.rs, accessory_hotspot.rs); not wired into the shell or apps, not tested on Midget. No hotspot subsystem and no API for apps to hook into one."
+   "note": "Network name and passphrase checks, the consent rule, the accessory join state and the sign-in helper's command queue and responses are tested headless in tests/parity_sdk-complete-01.rs. Gap: the system radio and supplicant that would deliver commands and join networks do not exist here, the shell does not use these models, and nothing is tested on Midget."
   },
   {
    "feature": "Configuring a Wi-Fi accessory to join a network",
