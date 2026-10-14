@@ -66,9 +66,9 @@
   {
    "feature": "Patterns (CGPattern)",
    "apple": "CGPattern, CGContextSetFillPattern",
-   "bifrost": "springboard/render/src/cg/paint.rs (Pattern, Tiling, PatternPaint, invert_matrix)",
+   "bifrost": "springboard/render/src/cg/paint.rs (Pattern, Tiling, PatternPaint, invert_matrix); springboard/sdk/src/graphics_pattern.rs (CgPattern, PatternTiling)",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Tiled pattern model with a cell and tiling settings and a pattern matrix. No pattern fill is connected to the Surface or to the SDK."
+   "note": "The SDK CgPattern wraps the cell model: it samples the cell in user space with the pattern matrix, repeats it every step, and fits the step to device pixels for each tiling mode; headless tests are in sdk/tests/parity_sdk-complete-02.rs. Gap: no pattern fill is connected to the Surface or to a context's fill call, and coloured-cell callbacks and uncoloured tinting are not in the SDK; verify the fill on Midget."
   },
   {
    "feature": "Images and bitmaps (CGImage, image masks, cropping)",
