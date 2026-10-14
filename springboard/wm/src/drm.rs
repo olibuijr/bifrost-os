@@ -124,7 +124,12 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let vblank_time: Rc<Cell<Option<Duration>>> = Rc::new(Cell::new(None));
     let mut drm = open_gpu(&mut session, &gpu, &mut state, event_loop.handle(), vblank_time.clone())?;
     // the Vulkan scanout on the same GPU; any failure keeps the GLES scanout that open_gpu just set up
-    if crate::render_server::selected() {
+    // the Vulkan scanout draws unrotated; a rotated output stays on GLES scanout, which follows the output transform
+    let rotated = drm.output.current_transform() != Transform::Normal;
+    if rotated && crate::render_server::selected() {
+        eprintln!("bifrost-wm: vulkan scanout does not rotate, GLES");
+    }
+    if !rotated && crate::render_server::selected() {
         let size = drm.output.current_mode().map(|m| (m.size.w, m.size.h)).unwrap_or((0, 0));
         let refresh = drm.output.current_mode().map(|m| m.refresh).unwrap_or(0);
         match crate::drm_vulkan::start(&gpu, drm.compositor.surface(), size, refresh) {
@@ -147,9 +152,17 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
         match event {
             // a new device takes the shell's pointer and trackpad settings (input.rs)
             InputEvent::DeviceAdded { mut device } => {
-                crate::input::configure_device(&mut device, &crate::input::InputPrefs::load(&crate::input::prefs_path()))
+                crate::input::configure_device(&mut device, &crate::input::InputPrefs::load(&crate::input::prefs_path()));
+                // the seat advertises touch while a touchscreen is present (touch.rs)
+                if device.has_capability(smithay::reexports::input::DeviceCapability::Touch) {
+                    state.touch_device_added();
+                }
             }
-            InputEvent::DeviceRemoved { .. } => {}
+            InputEvent::DeviceRemoved { device } => {
+                if device.has_capability(smithay::reexports::input::DeviceCapability::Touch) {
+                    state.touch_device_removed();
+                }
+            }
             event => state.process_input_event(event),
         }
     })?;
@@ -268,7 +281,14 @@ fn open_gpu(
     );
     let wl_mode = WlMode::from(mode);
     let _global = output.create_global::<WmState>(&state.dh);
-    output.change_current_state(Some(wl_mode), Some(Transform::Normal), None, Some((0, 0).into()));
+    // the panel's rotation (`transform::load`): the output's logical size, the DRM compositor's render transform, the
+    // layer map and the clients' wl_output all follow it
+    let transform = crate::transform::load();
+    if transform != Transform::Normal {
+        let (lw, lh) = crate::transform::logical_size((w as i32, h as i32), transform);
+        eprintln!("bifrost-wm: rotation {transform:?}: {w}x{h} panel shows a {lw}x{lh} desktop");
+    }
+    output.change_current_state(Some(wl_mode), Some(transform), None, Some((0, 0).into()));
     // every mode the connector lists is announced, so a mode request can name any of them
     let modes = conn.modes().to_vec();
     for m in &modes {
@@ -307,7 +327,9 @@ fn open_gpu(
     std::mem::forget(device);
 
     let pointer = MemoryRenderBuffer::from_slice(&arrow(), Fourcc::Abgr8888, (ARROW, ARROW), 1, Transform::Normal, None);
-    let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(w as i32, h as i32));
+    // the boot frame is drawn in desktop coordinates, so it takes the rotated size
+    let (lw, lh) = crate::transform::logical_size((w as i32, h as i32), transform);
+    let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(lw, lh));
     let mut renderer = renderer;
     let glass = crate::glass::Glass::new(&mut renderer)?;
     Ok(Drm { renderer, compositor, output, modes, pointer, pending: false, boot, glass, vulkan: None, shutdown: Shutdown::default(), paused: false })
@@ -362,8 +384,8 @@ impl Drm {
         sd.since?;
         let since = sd.since.map(|t| t.elapsed().as_secs_f64() * 1000.0);
         if sd.splash.is_none() {
-            let mode = self.output.current_mode()?;
-            sd.splash = Some(boot_frame_buffer(mode.size.w, mode.size.h));
+            let (w, h) = crate::transform::output_size(&self.output)?;
+            sd.splash = Some(boot_frame_buffer(w, h));
         }
         if crate::boot::shutdown_faded(since) && !sd.faded_marked {
             sd.faded_marked = true;

@@ -23,7 +23,7 @@ use smithay::{
         Seat,
     },
     reexports::wayland_server::{protocol::wl_surface::WlSurface, DisplayHandle},
-    utils::{Logical, Point, SERIAL_COUNTER},
+    utils::{Logical, Point, Serial, SERIAL_COUNTER},
     wayland::{
         pointer_constraints::{
             with_pointer_constraint, PointerConstraint, PointerConstraintsHandler, PointerConstraintsState,
@@ -392,6 +392,12 @@ impl WmState {
             InputEvent::GesturePinchEnd { event } => self.gesture_end(Gesture::Pinch, event.cancelled(), event.time_msec()),
             InputEvent::GestureHoldBegin { event } => self.gesture_begin(Gesture::Hold, event.fingers(), event.time_msec()),
             InputEvent::GestureHoldEnd { event } => self.gesture_end(Gesture::Hold, event.cancelled(), event.time_msec()),
+            // the touchscreen: wl_touch to the surface under each finger, a pointer for clients without it (touch.rs)
+            event @ (InputEvent::TouchDown { .. }
+            | InputEvent::TouchMotion { .. }
+            | InputEvent::TouchUp { .. }
+            | InputEvent::TouchCancel { .. }
+            | InputEvent::TouchFrame { .. }) => self.process_touch_event(event),
             _ => {}
         }
     }
@@ -434,14 +440,26 @@ impl WmState {
         let pointer = self.seat.get_pointer().expect("pointer");
         let serial = SERIAL_COUNTER.next_serial();
         if pressed && !pointer.is_grabbed() {
-            let pos = pointer.current_location();
-            let hit = self.wm.at(pos.x as i32, pos.y as i32);
-            if hit.is_some() || self.surface_under(pos).is_none() {
-                self.focus(hit, serial);
-            }
+            self.focus_at(pointer.current_location(), serial);
         }
         let state = if pressed { ButtonState::Pressed } else { ButtonState::Released };
         pointer.button(self, &ButtonEvent { button, state, serial, time });
+        pointer.frame(self);
+    }
+
+    /// A press or touch at `pos` raises and focuses the window there; on the desktop it clears focus.
+    pub fn focus_at(&mut self, pos: Point<f64, Logical>, serial: Serial) {
+        let hit = self.wm.at(pos.x as i32, pos.y as i32);
+        if hit.is_some() || self.surface_under(pos).is_none() {
+            self.focus(hit, serial);
+        }
+    }
+
+    /// The pointer leaves its surface at `pos` (the end of an emulated touch pointer).
+    pub fn pointer_leave(&mut self, pos: Point<f64, Logical>, time: u32) {
+        let pointer = self.seat.get_pointer().expect("pointer");
+        update_constraint_focus(&pointer, None);
+        pointer.motion(self, None, &MotionEvent { location: pos, serial: SERIAL_COUNTER.next_serial(), time });
         pointer.frame(self);
     }
 

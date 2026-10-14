@@ -10,6 +10,15 @@ pub struct Output {
     pub h: i32,
 }
 
+impl Output {
+    /// An output for a panel of `mode` pixels shown with `transform`: it takes the desktop size clients see, so a
+    /// portrait panel turned by 90 degrees is arranged as a landscape output.
+    pub fn oriented(name: &str, mode: (i32, i32), transform: smithay::utils::Transform) -> Self {
+        let (w, h) = crate::transform::logical_size(mode, transform);
+        Output { name: name.to_string(), w, h }
+    }
+}
+
 /// Where one output sits in the desktop, in global pixels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Placement {
@@ -88,6 +97,17 @@ mod tests {
         assert!(check(&[a.clone(), touching]).is_ok(), "edges that touch do not overlap");
         assert_eq!(check(&[a.clone(), Placement { name: "A".into(), x: 500, ..a.clone() }]), Err("A: listed twice".to_string()));
         assert_eq!(check(&[Placement { w: 0, ..a }]), Err("A: no size".to_string()));
+    }
+
+    #[test]
+    fn a_rotated_panel_is_arranged_by_its_desktop_size() {
+        use smithay::utils::Transform;
+        let tablet = Output::oriented("DSI-1", (1200, 1920), Transform::_90);
+        assert_eq!((tablet.w, tablet.h), (1920, 1200));
+        let upright = Output::oriented("DSI-1", (1200, 1920), Transform::Normal);
+        assert_eq!((upright.w, upright.h), (1200, 1920));
+        let row = extend_row(&[tablet, out("B", 1280, 800)]);
+        assert_eq!(row[1].x, 1920);
     }
 
     #[test]

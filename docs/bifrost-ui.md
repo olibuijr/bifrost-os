@@ -3136,6 +3136,49 @@ plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds
   they will call `resolve` and keep their current art as the fallback. The assets folder was empty when this landed,
   so the os/assets sound, wallpaper and font rows are `partial` (loader and fallback only, no Midget check).
 
+## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
+
+One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
+the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+app runs on a touch tablet.
+
+Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
+desktop UI; a tablet raises it for text fields with or without that UI, and keeps it down while a hardware keyboard is
+attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
+`keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
+desktop.
+
+Not wired yet: nothing calls `Shell::set_hardware_keyboard` (the evdev discovery must), and the windowed desktop UI
+(`draw_desk`, `desk_event`) neither draws the keyboard nor routes touches to it, so on a tablet in that UI the policy
+allows a keyboard that is not yet visible. The Bifrost presentation draws and routes it as before.
+
+## Touch gesture recognizers (`bifrost_ui::recognizer`)
+
+One set of recognizers for the shell and apps, on a touchscreen and with a pointer. Input is a `TouchSample`
+(touch id, phase, position, time in seconds); `PointerAdapter` turns button and motion events into samples of one
+touch, so a mouse drives the same state machines. The recognizers never read a clock: callers pass sample times and
+call `tick` (or `GestureArbiter::tick`) from a timer; `deadline()` and `GestureArbiter::next_deadline()` say when a
+tick matters.
+
+- States: `Possible`, `Began`, `Changed`, `Ended`, `Cancelled`, `Failed`, `Recognized`. Discrete gestures end in
+  `Recognized` or `Failed`; continuous ones go `Began`, `Changed*`, `Ended` or `Cancelled`.
+- `Tap` (taps and touches required, movement, hold and gap limits), `LongPress` (duration, allowable movement,
+  touches), `Pan` (min and max touches, translation that does not jump when a finger is added or lifted, mean
+  velocity), `Pinch` (scale, scale velocity, focal point), `Rotation` (accumulated radians, angular velocity),
+  `Swipe` (direction mask, touches, distance, speed, off-axis ratio) and `ScreenEdgePan` (a `Pan` that must start
+  within a margin of an allowed edge and move away from it).
+- Velocity uses the smoothing of `shell/gestures.rs` (0.6 new, 0.4 old, zero after a 120 ms pause), per second.
+- `GestureArbiter` runs a set: `require_failure(a, b)` holds back what `a` publishes until `b` fails (and fails `a` if
+  `b` is recognized); `allow_simultaneous(a, b)` lets two run together; otherwise the first to begin fails or cancels
+  the others. It returns `GestureEvent`s in the order the observer must see them.
+
+`ui::gesture` (single pointer `Tap`, `LongPress`, `Pan`, `Magnify`, `Rotate`) stays for the existing callers; new code that
+takes touch input uses `recognizer`, which tracks several fingers by id.
+
+Not done yet: the shell's own system gestures still use `src/shell/gestures.rs` directly; moving them onto
+recognizers is a separate step.
+
 ## Module index: modules without their own section
 
 Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the

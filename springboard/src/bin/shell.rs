@@ -310,8 +310,9 @@ fn run() -> std::io::Result<()> {
     };
     springboard::bare::timezone::persist_to_system(true);
     springboard::shell::keyboard::set_predictive_default(true);
-    // the PC has a hardware keyboard: no on-screen keyboard in the shell or in apps
-    springboard::shell::keyboard::set_disabled(true);
+    // a desktop has a hardware keyboard: no on-screen keyboard in the shell or in apps. A tablet keeps it; the shell
+    // then raises it for text fields unless a hardware keyboard is attached (`Shell::set_hardware_keyboard`)
+    springboard::shell::keyboard::set_disabled(bifrost_ui::form_factor::FormFactor::current().keyboard_disabled_globally());
     // the first frame's wallpaper is the cache's cover-fitted copy when it was built for this panel and this still (boot-08)
     let wallpaper_file = springboard::first_frame_cache::wallpaper_path(&dir, &current_wallpaper).unwrap_or_default();
     springboard::first_frame_cache::activate((w as u32, h as u32), &dir, &wallpaper_file);
@@ -376,6 +377,10 @@ fn run() -> std::io::Result<()> {
     let mut key_repeat = springboard::shell::hwkeys::KeyRepeat::default();
     // the word typed since the last break, for Settings > Keyboard > Text Replacements
     let mut words = springboard::shell::kb_input::WordBuffer::default();
+    // touchscreen contacts run on the gesture recognizers (a Contact only comes from a touchscreen, on any form);
+    // the home swipe is cancelled when the system takes a touch away or the screen goes off
+    let mut system_gestures = springboard::shell::touch_gestures::SystemGestures::new(springboard::shell::touch_gestures::HOME_STRIP_PT);
+    let mut screen_was_on = shell.screen_on();
     // desktop pointer: the cursor stamped over presented CPU frames, when the pointer last moved or
     // clicked (it hides after a while), and the damage of a frame with the cursor's rectangles added
     let mut cursor = springboard::gfx::cursor::Cursor::default();
@@ -488,7 +493,7 @@ fn run() -> std::io::Result<()> {
         timeout = timeout.min(inputs.next_scan().map_or(i32::MAX, |at| (at - now).ceil().max(0.0) as i32));
         // the pointer's wheel ease and right-click hold, key auto-repeat, and the cursor hiding
         let hide_cursor = (inputs.has_pointer() && (cursor.is_shown() || plane.is_shown())).then_some(last_motion + springboard::gfx::cursor::HIDE_MS).filter(|at| *at > now);
-        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
+        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(system_gestures.next_deadline_ms()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
             timeout = timeout.min((due - now).ceil().max(0.0) as i32);
         }
         // fixed slots first: touch, keys, display, control; then the shell's
@@ -572,6 +577,14 @@ fn run() -> std::io::Result<()> {
                 None => {}
             }
         }
+        // the system gestures keep their clock (every frame; `next_deadline_ms` schedules the wake-up)
+        system_gestures.tick(t);
+        // the screen going off ends any touch the system gestures still hold
+        if screen_was_on && !shell.screen_on() {
+            system_gestures.cancel_all();
+            shell.cancel_home_gesture(t);
+        }
+        screen_was_on = shell.screen_on();
         if !events.is_empty() {
             // the first frames of the response to a touch already need full clocks
             boost.update(true, t);
@@ -740,6 +753,22 @@ fn run() -> std::io::Result<()> {
                 input::Event::Hover{x,y,..}=>{let (x,y)=map(x,y);let Some((x,y))=shell.tap_hover(x,y) else {continue};shell.desktop_pointer(x,y,false,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
+                // per-finger contacts run on the gesture recognizers; the first finger also arrives as Down/Move/Up,
+                // which keep driving the pointer-style handling (and the home swipe's shape) as before
+                input::Event::Contact { id, phase, x, y, t: at } => {
+                    let (x, y) = map(x, y);
+                    let (lw, lh) = shell.size();
+                    let frame = springboard::shell::touch_gestures::Frame { size_px: (lw as f32, lh as f32), points_px: shell.points_px() };
+                    let states = system_gestures.feed(phase, id, (x, y), at, frame);
+                    // a touch the system took away ends the home swipe without its action; nothing else follows a cancel
+                    if phase == input::TouchPhase::Cancel {
+                        system_gestures.cancel_all();
+                        shell.cancel_home_gesture(t);
+                    } else if states.contains(&bifrost_ui::recognizer::GestureState::Cancelled) {
+                        shell.cancel_home_gesture(t);
+                    }
+                    continue;
+                }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
                 input::Event::Key { code, down } => {
                     // session event taps see the key first and may drop or replace it
