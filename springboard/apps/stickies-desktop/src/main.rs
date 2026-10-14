@@ -10,6 +10,7 @@ mod layout;
 mod model;
 mod page;
 mod prefs;
+mod rtf;
 mod speech;
 mod spell;
 mod store;

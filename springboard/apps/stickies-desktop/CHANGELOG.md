@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+- File > Import Text keeps the list items of a rich text file: each item starts with its marker (a bullet or a number), typed in the default style, so the list reads the same in the note.
+
 ## 0.7.0
 
 - Edit > Whole Word (off by default, kept across launches) makes Find, Find Next, Replace and Replace All match only whole words, so "cat" does not match inside "category".
