@@ -107,12 +107,14 @@ pub fn blank_plan(spec: &BlankSpec, path: &str) -> Result<Vec<Command>, String> 
     Ok(spec.fs.map(|fs| fs.make_command(path, &spec.label)).into_iter().collect())
 }
 
-/// The plan that attaches an image file: `hdiutil attach` binds it to a loop device and mounts it read-only.
-pub fn attach_plan(path: &str) -> Result<Vec<Command>, String> {
+/// The plan that attaches an image file: `hdiutil attach` binds it to a loop device and mounts it, read-only unless
+/// `writable` asks for read and write access (File > Open Disk Image for Writing).
+pub fn attach_plan(path: &str, writable: bool) -> Result<Vec<Command>, String> {
     if !path.starts_with('/') {
         return Err("The image's location cannot be used.".to_string());
     }
-    Ok(vec![Command { program: "hdiutil", args: vec!["attach".to_string(), path.to_string()] }])
+    let access = if writable { "-readwrite" } else { "-readonly" };
+    Ok(vec![Command { program: "hdiutil", args: vec!["attach".to_string(), access.to_string(), path.to_string()] }])
 }
 
 /// The command that turns `folder` into an ISO image at `scratch`.
@@ -317,8 +319,14 @@ mod tests {
 
     #[test]
     fn attach_runs_the_image_tool_on_an_absolute_path_only() {
-        assert_eq!(words(&attach_plan("/home/me/disc.iso").unwrap()), vec![("hdiutil", s(&["attach", "/home/me/disc.iso"]))]);
-        assert!(attach_plan("disc.iso").is_err());
+        assert_eq!(words(&attach_plan("/home/me/disc.iso", false).unwrap()), vec![("hdiutil", s(&["attach", "-readonly", "/home/me/disc.iso"]))]);
+        assert!(attach_plan("disc.iso", false).is_err());
+    }
+
+    #[test]
+    fn an_image_opened_for_writing_is_attached_read_and_write() {
+        assert_eq!(words(&attach_plan("/home/me/disc.img", true).unwrap()), vec![("hdiutil", s(&["attach", "-readwrite", "/home/me/disc.img"]))]);
+        assert!(attach_plan("disc.img", true).is_err());
     }
 
     #[test]
