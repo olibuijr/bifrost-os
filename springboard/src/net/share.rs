@@ -23,7 +23,7 @@
 
 use crate::shell::sha256::{self, Sha256};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -100,6 +100,113 @@ fn truncate_utf8(s: &str, max: usize) -> &str {
     &s[..n]
 }
 
+// ---- errors ----
+
+/// Why a share failed. Every failure in this module is one of these, so the shell and apps can
+/// branch on the cause and show a stable message, and the code list is the same on both devices.
+/// It travels inside `io::Error` (`into_io`) and is recovered with `from_io`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ShareError {
+    /// the receiver said no, or did not answer in time
+    Declined,
+    /// the header's checksum does not match the shared secret
+    WrongSecret,
+    /// the bytes are not a share header, or a field is out of range
+    Malformed,
+    /// the file is larger than `MAX_FILE_SIZE`
+    TooLarge,
+    /// the target volume lacks room for the file
+    NoSpace,
+    /// the connection closed or failed before the file was complete
+    ConnectionLost,
+    /// the transfer ran past its deadline
+    TimedOut,
+    /// the received bytes do not hash to the header's checksum
+    ChecksumMismatch,
+    /// the receiver checked the file and refused it
+    Rejected,
+    /// no free file name could be claimed in the receive folder
+    NameTaken,
+    /// any other local failure, with the system's message
+    Io(String),
+}
+
+impl ShareError {
+    /// The error domain: a fixed name that every release reports.
+    pub const DOMAIN: &'static str = "net.share";
+
+    /// The stable number of this error within `DOMAIN`. Numbers are never reused.
+    pub fn code(&self) -> i32 {
+        match self {
+            ShareError::Declined => 1,
+            ShareError::WrongSecret => 2,
+            ShareError::Malformed => 3,
+            ShareError::TooLarge => 4,
+            ShareError::NoSpace => 5,
+            ShareError::ConnectionLost => 6,
+            ShareError::TimedOut => 7,
+            ShareError::ChecksumMismatch => 8,
+            ShareError::Rejected => 9,
+            ShareError::NameTaken => 10,
+            ShareError::Io(_) => 99,
+        }
+    }
+
+    /// The `io::ErrorKind` this error travels under, so callers that match on kinds keep working.
+    pub fn kind(&self) -> io::ErrorKind {
+        match self {
+            ShareError::Declined => io::ErrorKind::PermissionDenied,
+            ShareError::WrongSecret | ShareError::Malformed | ShareError::ChecksumMismatch | ShareError::Rejected => io::ErrorKind::InvalidData,
+            ShareError::TooLarge => io::ErrorKind::InvalidInput,
+            ShareError::NoSpace => io::ErrorKind::StorageFull,
+            ShareError::ConnectionLost => io::ErrorKind::ConnectionAborted,
+            ShareError::TimedOut => io::ErrorKind::TimedOut,
+            ShareError::NameTaken => io::ErrorKind::AlreadyExists,
+            ShareError::Io(_) => io::ErrorKind::Other,
+        }
+    }
+
+    pub fn into_io(self) -> io::Error {
+        io::Error::new(self.kind(), self)
+    }
+
+    /// The share error an `io::Error` stands for: the one carried inside it, else the closest match by kind.
+    pub fn from_io(e: &io::Error) -> ShareError {
+        if let Some(s) = e.get_ref().and_then(|inner| inner.downcast_ref::<ShareError>()) {
+            return s.clone();
+        }
+        match e.kind() {
+            io::ErrorKind::TimedOut => ShareError::TimedOut,
+            io::ErrorKind::StorageFull => ShareError::NoSpace,
+            io::ErrorKind::AlreadyExists => ShareError::NameTaken,
+            io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionAborted | io::ErrorKind::BrokenPipe => {
+                ShareError::ConnectionLost
+            }
+            _ => ShareError::Io(e.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for ShareError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShareError::Declined => f.write_str("declined"),
+            ShareError::WrongSecret => f.write_str("wrong secret"),
+            ShareError::Malformed => f.write_str("not a share header"),
+            ShareError::TooLarge => f.write_str("file is too large"),
+            ShareError::NoSpace => f.write_str("not enough free space"),
+            ShareError::ConnectionLost => f.write_str("connection lost"),
+            ShareError::TimedOut => f.write_str("transfer took too long"),
+            ShareError::ChecksumMismatch => f.write_str("checksum mismatch"),
+            ShareError::Rejected => f.write_str("receiver rejected the file"),
+            ShareError::NameTaken => f.write_str("too many files with that name"),
+            ShareError::Io(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for ShareError {}
+
 // ---- transfer header ----
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -132,25 +239,24 @@ impl Header {
 
     /// Reads one header; fails on a bad magic, an oversize name or a wrong mac.
     pub fn read(r: &mut impl Read, secret: &str) -> io::Result<Header> {
-        let bad = |m: &str| io::Error::new(io::ErrorKind::InvalidData, m.to_string());
         let mut raw = Vec::new();
         let mut fixed = [0u8; 6];
         r.read_exact(&mut fixed)?;
         if &fixed[..4] != XFER_MAGIC {
-            return Err(bad("not a share header"));
+            return Err(ShareError::Malformed.into_io());
         }
         let n = u16::from_be_bytes([fixed[4], fixed[5]]) as usize;
         if n == 0 || n > MAX_FILE_NAME {
-            return Err(bad("bad name length"));
+            return Err(ShareError::Malformed.into_io());
         }
         raw.extend_from_slice(&fixed);
         let mut rest = vec![0u8; n + 8 + 32 + 32];
         r.read_exact(&mut rest)?;
         raw.extend_from_slice(&rest[..n + 40]);
         if mac(secret, &raw)[..] != rest[n + 40..] {
-            return Err(bad("wrong secret"));
+            return Err(ShareError::WrongSecret.into_io());
         }
-        let name = String::from_utf8(rest[..n].to_vec()).map_err(|_| bad("name is not utf-8"))?;
+        let name = String::from_utf8(rest[..n].to_vec()).map_err(|_| ShareError::Malformed.into_io())?;
         let size = u64::from_be_bytes(rest[n..n + 8].try_into().unwrap());
         let sha256 = rest[n + 8..n + 40].try_into().unwrap();
         Ok(Header { name, size, sha256 })
@@ -186,16 +292,16 @@ pub fn create_unique(dir: &Path, name: &str) -> io::Result<(PathBuf, std::fs::Fi
             Err(e) => return Err(e),
         }
     }
-    Err(io::Error::new(io::ErrorKind::AlreadyExists, "too many files with that name"))
+    Err(ShareError::NameTaken.into_io())
 }
 
 /// Whether a `size` byte file may be received given the free bytes on the target volume (if known).
 pub fn check_incoming(size: u64, free: Option<u64>) -> io::Result<()> {
     if size > MAX_FILE_SIZE {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "file is too large"));
+        return Err(ShareError::TooLarge.into_io());
     }
     match free {
-        Some(free) if free < size.saturating_add(FREE_SPACE_RESERVE) => Err(io::Error::new(io::ErrorKind::StorageFull, "not enough free space")),
+        Some(free) if free < size.saturating_add(FREE_SPACE_RESERVE) => Err(ShareError::NoSpace.into_io()),
         _ => Ok(()),
     }
 }
@@ -231,13 +337,13 @@ pub fn send<R: Read + Seek>(addr: SocketAddr, secret: &str, name: &str, src: &mu
     let mut ack = [0u8; 1];
     s.read_exact(&mut ack)?;
     if ack[0] != 1 {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "declined"));
+        return Err(ShareError::Declined.into_io());
     }
     let mut sent = 0u64;
     while sent < size {
         let n = src.read(&mut buf)?;
         if n == 0 {
-            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "file shrank"));
+            return Err(ShareError::Io("file shrank while sending".into()).into_io());
         }
         s.write_all(&buf[..n])?;
         sent += n as u64;
@@ -247,7 +353,7 @@ pub fn send<R: Read + Seek>(addr: SocketAddr, secret: &str, name: &str, src: &mu
     if ack[0] == 1 {
         Ok(())
     } else {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "receiver rejected the file"))
+        Err(ShareError::Rejected.into_io())
     }
 }
 
@@ -278,7 +384,7 @@ pub enum Event {
     Offer(Offer),
     /// saved to this path
     Received(PathBuf),
-    Failed(String),
+    Failed(ShareError),
 }
 
 /// "12 B", "820.0 KB", "1.4 MB": binary (1024) units with one decimal.
@@ -322,13 +428,13 @@ fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>, tr
         while left > 0 {
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
-                return Err(io::Error::new(io::ErrorKind::TimedOut, "transfer took too long"));
+                return Err(ShareError::TimedOut.into_io());
             }
             s.set_read_timeout(Some(remaining.min(Duration::from_secs(15))))?;
             let want = left.min(buf.len() as u64) as usize;
             let n = s.read(&mut buf[..want])?;
             if n == 0 {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "connection closed early"));
+                return Err(ShareError::ConnectionLost.into_io());
             }
             hash.update(&buf[..n]);
             f.write_all(&buf[..n])?;
@@ -337,7 +443,7 @@ fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>, tr
         }
         f.sync_all()?;
         if hash.finish() != h.sha256 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "checksum mismatch"));
+            return Err(ShareError::ChecksumMismatch.into_io());
         }
         // Claim the final name atomically, then replace our own empty claim with the data.
         let (dest, claim) = create_unique(dir, &name)?;
@@ -356,7 +462,7 @@ fn handle(mut s: TcpStream, secret: &str, dir: &Path, events: &Sender<Event>, tr
             Ok(())
         }
         Err(e) => {
-            tracker.finish(id, Some(e.to_string()));
+            tracker.finish(id, Some(ShareError::from_io(&e).to_string()));
             let _ = std::fs::remove_file(&part);
             let _ = s.write_all(&[0]);
             Err(e)
@@ -458,6 +564,24 @@ pub struct Peers {
     seen: Vec<(Peer, Instant)>,
 }
 
+/// The peer a beacon datagram announces: the beacon must carry this secret's fingerprint and must not be
+/// this device's own announcement (`own_port`). `from` is the datagram's source address.
+pub fn peer_from_datagram(datagram: &[u8], from: IpAddr, fingerprint: [u8; 8], own_port: u16) -> Option<Peer> {
+    let beacon = Beacon::decode(datagram)?;
+    if beacon.fingerprint != fingerprint || beacon.port == own_port {
+        return None;
+    }
+    Some(Peer { name: beacon.name, addr: SocketAddr::new(from, beacon.port) })
+}
+
+/// The beacon this device announces. Refuses a blank name, which a peer could not decode, and port 0.
+pub fn advertised_beacon(name: &str, port: u16, secret: &str) -> Result<Beacon, ShareError> {
+    if name.trim().is_empty() || port == 0 {
+        return Err(ShareError::Io("the device name or the port is not valid".into()));
+    }
+    Ok(Beacon { name: name.to_string(), port, fingerprint: fingerprint(secret) })
+}
+
 impl Peers {
     pub fn heard(&mut self, p: Peer, now: Instant) {
         match self.seen.iter_mut().find(|(q, _)| q.addr == p.addr) {
@@ -486,6 +610,7 @@ impl Service {
     pub fn start(name: &str, secret: &str, dir: PathBuf) -> io::Result<Service> {
         let listener = TcpListener::bind(("0.0.0.0", 0))?;
         let port = listener.local_addr()?.port();
+        let beacon = advertised_beacon(name, port, secret).map_err(ShareError::into_io)?;
         let stop = Arc::new(AtomicBool::new(false));
         let peers = Arc::new(Mutex::new(Peers::default()));
         let (tx, rx) = mpsc::channel();
@@ -505,7 +630,7 @@ impl Service {
                         crate::bare::sys::spawn_named("share-recv", move || {
                             s.set_nonblocking(false).ok();
                             if let Err(e) = handle(s, &sec, &dir, &tx3, &trk) {
-                                let _ = tx3.send(Event::Failed(e.to_string()));
+                                let _ = tx3.send(Event::Failed(ShareError::from_io(&e)));
                             }
                         });
                     }
@@ -514,7 +639,6 @@ impl Service {
             }
         });
 
-        let beacon = Beacon { name: name.to_string(), port, fingerprint: fingerprint(secret) };
         let sock = UdpSocket::bind(("0.0.0.0", BEACON_PORT)).or_else(|_| UdpSocket::bind(("0.0.0.0", 0)))?;
         sock.join_multicast_v4(&GROUP, &Ipv4Addr::UNSPECIFIED).ok();
         sock.set_multicast_loop_v4(false).ok();
@@ -532,11 +656,8 @@ impl Service {
                     last = Some(Instant::now());
                 }
                 if let Ok((n, from)) = sock.recv_from(&mut buf) {
-                    if let Some(b) = Beacon::decode(&buf[..n]) {
-                        if b.fingerprint == fp && b.port != beacon.port {
-                            let addr = SocketAddr::new(from.ip(), b.port);
-                            pr.lock().unwrap_or_else(|p| p.into_inner()).heard(Peer { name: b.name, addr }, Instant::now());
-                        }
+                    if let Some(peer) = peer_from_datagram(&buf[..n], from.ip(), fp, beacon.port) {
+                        pr.lock().unwrap_or_else(|p| p.into_inner()).heard(peer, Instant::now());
                     }
                 }
             }
