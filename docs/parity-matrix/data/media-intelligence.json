@@ -40,7 +40,7 @@
       "apple": "MediaIntelligenceError",
       "bifrost": "none",
       "status": "gap",
-      "note": "No error type for media analysis, since no analysis operation exists. Non-applicable until the analysis APIs exist."
+      "note": "Blocked: no analysis request exists in springboard/sdk/src/ or springboard/ui/src/, so no analysis can fail and no error type is needed yet. The error type comes with the first analysis API. The face grouping and highlight rows above are marked parity but cite no analysis code; they need checking."
     }
   ],
   "gaps": [

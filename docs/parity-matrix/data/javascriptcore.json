@@ -61,7 +61,7 @@
       "apple": "JSContextRef, JSGlobalContextRef, JSStringRef, JSClassRef, JSValueRef, JSObjectRef, JSValueCompare, JSBigInt* functions",
       "bifrost": "none",
       "status": "gap",
-      "note": "no C-level JavaScript interface; the SDK is Rust (springboard/sdk/src/lib.rs)"
+      "note": "Blocked: BifrOSt has no C ABI and the SDK is Rust-only (springboard/sdk/src/lib.rs). The JavaScript engine the browser uses is not exposed to apps as a context, value or string type, so there is no engine surface for a C interface to wrap."
     },
     {
       "feature": "Engine used for web content",

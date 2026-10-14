@@ -66,9 +66,9 @@
   {
    "feature": "Photo editing extensions",
    "apple": "PHContentEditingController, Creating Photo Editing Extensions",
-   "bifrost": "none found in springboard/sdk/src/ or springboard/src/shell/photos/",
-   "status": "gap",
-   "note": "No extension host for third-party editors inside the Photos app."
+   "bifrost": "springboard/ui/src/photo_adjustment.rs (AdjustmentData, EditSession, EditError)",
+   "status": "partial",
+   "note": "An edit is kept as an adjustment record (editor format, version, payload) that an editing session reads, commits from the same format and reverts to the original; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: no extension host loads third-party editors inside the Photos app, and the built-in editor (springboard/src/shell/photos/edit.rs) does not write these records yet."
   },
   {
    "feature": "System photo picker (UIKit, AppKit, SwiftUI)",
@@ -103,7 +103,7 @@
    "apple": "PHProject, PHProjectExtensionController, PHProjectChangeRequest, PHProjectSection",
    "bifrost": "none found",
    "status": "gap",
-   "note": "No project extension point. The Photos app is not extensible by apps."
+   "note": "Blocked: the shell's photo library has no project model and no extension point, so there is nothing for an extension to attach to. Needs a project model in springboard/src/shell/photos/ first, then an extension host."
   },
   {
    "feature": "Change observation of the library",

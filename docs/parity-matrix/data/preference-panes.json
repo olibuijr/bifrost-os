@@ -45,9 +45,9 @@
   {
    "feature": "Help menu entries from a pane",
    "apple": "updateHelpMenu(with:), NSPrefPaneHelpMenuInfoPListKey, NSPrefPaneHelpMenuTitleKey, NSPrefPaneHelpMenuAnchorKey",
-   "bifrost": "springboard/src/shell/desktop_bar.rs:193 (Help menu rows), springboard/proto/src/lib.rs:646 (AppMenu)",
-   "status": "gap",
-   "note": "The shell Help menu has fixed rows (BifrOSt Information, Search, App Switcher, Back, Home); app menus cannot use the Help title (desktop_bar.rs:338 keeps Help shell-supplied), and there is no anchor or help-book lookup."
+   "bifrost": "springboard/ui/src/help_menu.rs (PaneHelpMenu, HelpEntry); springboard/src/shell/desktop_bar.rs:193 (Help menu rows, fixed)",
+   "status": "partial",
+   "note": "PaneHelpMenu holds the entries of each selected pane (title and anchor), replaces them on update and removes them on unselect, tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: the shell does not draw pane entries yet (its Help menu rows are fixed at desktop_bar.rs:193), no pane selection calls the model, and there is no help-book lookup for the anchor."
   },
   {
    "feature": "Settings pages for system preferences",

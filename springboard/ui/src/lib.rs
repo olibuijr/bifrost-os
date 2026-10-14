@@ -1208,4 +1208,7 @@ pub mod dictation_entry;
 pub mod route_address;
 pub mod model_seal;
 pub mod remote_session;
+pub mod help_menu;
+pub mod scene_handoff;
+pub mod photo_adjustment;
 
