@@ -91,8 +91,8 @@
    "area": "view",
    "apple": "View > Sort By, column headers",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/browse.rs:9",
-   "note": "built on parity/team-d-music; not yet verified on Midget. Sort orders now include Rating, Plays and Recently Played besides Title, Artist, Album and Recently Added",
+   "bifrost": "springboard/apps/music-desktop/src/music/browse.rs (view_in_order, SortKey)",
+   "note": "Sort orders include Rating, Plays and Recently Played besides Title, Artist, Album and Recently Added, and View > Sort Songs By > Descending reverses any of them. The order is tested headless in tests/parity_app-music_w10.rs. Not yet: column headers that sort, and a column browser.",
    "wire": "Still one sort key cycled by the toolbar button (View > Sort Songs By picks one); no column table with header-click sort"
   },
   {
@@ -209,7 +209,7 @@
    "apple": "MainMenu Song/Controls/View",
    "status": "partial",
    "bifrost": "springboard/apps/music-desktop/src/music/menus.rs::build",
-   "note": "File (Import, New Playlist Folder), Song (Play Next, Play Last, Add to Playlist, Rating, Favourite, Get Info), Controls and View menus, with shortcuts. Not yet checked on Midget.",
+   "note": "File (Import, New Playlist Folder), Song (Play Next, Play Last, Add to Playlist, Rating, Favourite, Get Info), Controls and View menus, with shortcuts; View > Sort Songs By > Descending is in the View menu, and the menu's commands and ids are tested headless in music/menus.rs. Not yet checked on Midget.",
    "wire": "Window menu (MiniPlayer, Equalizer, Visualizer) once those exist"
   },
   {
