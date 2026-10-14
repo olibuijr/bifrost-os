@@ -101,9 +101,9 @@
     {
       "feature": "CGImage from pixel buffer",
       "apple": "VTCreateCGImageFromCVPixelBuffer",
-      "bifrost": "springboard/src/media/convert.rs (nv12_to_rgba to gfx::Image)",
+      "bifrost": "springboard/src/media/convert.rs (nv12_to_rgba to gfx::Image); tests springboard/tests/parity_sdk-tests-09.rs",
       "status": "partial",
-      "note": "same conversion to the shell's own image type, not to CGImage"
+      "note": "NV12 pictures convert and scale to the shell's own gfx::Image pixels, tested headless in springboard/tests/parity_sdk-tests-09.rs. Gap: the output is not a CGImage."
     },
     {
       "feature": "Media extensions and codec registration",

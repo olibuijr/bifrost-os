@@ -94,16 +94,16 @@
   {
    "feature": "PDF documents (CGPDFDocument, PDF reading)",
    "apple": "CGPDFDocument, CGPDFPage, CGContextDrawPDFPage",
-   "bifrost": "springboard/sdk/src/graphics_pdf.rs (Document), springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/draw.rs (render_page), springboard/apps/preview-desktop/src/pdfjob.rs",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs (Document), springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/draw.rs (render_page), springboard/apps/preview-desktop/src/pdfjob.rs; tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Apps can open a PDF, read the page count and page size, and render a page to an image. Preview reads pages through kit::cg::pdf. Vector drawing from the reader is reached through draw.rs, not through a public document type."
+   "note": "Document opens a PDF, reports the page count and crop size, and renders a page into a pixel buffer; headless tests in sdk/tests/parity_sdk-tests-09.rs read writer output back and assert pixels. Gap: vector drawing from the reader is reached through draw.rs, not through a public document type, and the Team-k refresh is not verified on Midget."
   },
   {
    "feature": "PDF creation and printing (CGPDFContext, print to PDF)",
    "apple": "CGPDFContextCreate, CGPDFContextBeginPage, print operations to PDF",
-   "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs (write, save, Annotation, Edits), springboard/ui/src/print.rs, springboard/apps/preview-desktop/src/export.rs",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs (write, save, Annotation, Edits), springboard/ui/src/print.rs, springboard/apps/preview-desktop/src/export.rs; tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. PdfWriter builds new files from pages with filled and stroked rectangles, lines and raster images. Preview saves edited PDFs with annotations through writer::save. No pagination and no print-to-PDF filter pipeline; the print sheet's Save as PDF still copies the file."
+   "note": "PdfWriter builds files from pages of filled and stroked rectangles, lines and raster images; headless tests in sdk/tests/parity_sdk-tests-09.rs read the output back and check its pages and pixels. Gap: no pagination, no text and no print-to-PDF filter pipeline; the print sheet's Save as PDF still copies the file."
   },
   {
    "feature": "Layers and offscreen reusable content (CGLayer)",
