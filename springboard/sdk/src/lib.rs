@@ -330,6 +330,7 @@ pub mod wifi_status;
 pub mod system_prefs;
 pub mod wifi_secrets;
 pub mod net_totals;
+pub mod net_interfaces;
 pub mod notification;
 pub mod notification_queue;
 pub mod post_delivery;
