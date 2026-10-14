@@ -52,9 +52,9 @@
     {
       "feature": "PDF multi-page preview context",
       "apple": "QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
-      "bifrost": "springboard/src/files/preview.rs (is_pdf) and springboard/src/files/mod.rs (PDF text through springboard/src/shell/books/engine)",
+      "bifrost": "springboard/ui/src/pdfview.rs (PdfView, DisplayMode, page frames, scroll, navigation)",
       "status": "gap",
-      "note": "PDFs show extracted text, not a rendered page view with a PDF style option."
+      "note": "The multi-page model lays out pages in single, two-up and continuous modes, with scale limits, autoscaling, scroll clamping and page navigation. Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs: two_up_continuous_pairs_pages_and_centres_each_row, autoscale_fits_the_widest_row_to_the_viewport_width, next_and_previous_page_step_through_the_document_and_stop_at_the_ends, single_page_modes_lay_out_only_the_current_row. Not wired into the Preview or Quick Look apps or the shell and not tested on Midget; PDFs show extracted text in Books, not a rendered page view."
     },
     {
       "feature": "Preview of USDZ in augmented reality",

@@ -45,9 +45,9 @@
     {
       "feature": "Core Printing (PMPageFormat, PMPrintSettings, PMSession)",
       "apple": "Core Printing: PMCreatePageFormat, PMCreatePrintSettings, PMCreateSession, PMGetAdjustedPageRect",
-      "bifrost": "springboard/ui/src/print.rs (PrintInfo, PrintOperation, printers, available); wired: springboard/src/shell/print_sheet.rs (PrintSheet, Setup, Job) over springboard/ui/src/print.rs",
+      "bifrost": "springboard/ui/src/print.rs (PrintInfo, PaperSize, PrintOperation, Destination)",
       "status": "partial",
-      "note": "Paper size, orientation, margins, copies and page range, submitted with lp; Save as PDF copies the file. No shell-drawn print sheet, no view pagination, and CUPS presence on the Midget image is unchecked. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs cover paper size, margins and the imageable rect, the job attributes for copies, media, orientation and page range, and the PDF a job builds from text or pages (paper_sizes_report_their_points_and_pwg_keywords, job_attributes_carry_copies_media_orientation_and_the_page_range, a_text_job_builds_a_pdf_document). CUPS submission, printers() and available() are not covered. The shell print sheet is wired in springboard/src/shell/print_sheet.rs (wiring wave 5, 0.5.43); CUPS presence on the Midget image is unchecked; verify on Midget for parity."
     },
     {
       "feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)",
