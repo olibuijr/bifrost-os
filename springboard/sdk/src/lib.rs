@@ -31,6 +31,9 @@ pub mod kit {
     pub use bifrost_render::cg;
     /// The drawing vocabulary `draw_canvas` takes (`Canvas`, `RectF`, `ImageRef`, ...).
     pub use bifrost_render::canvas;
+    /// Per-pixel kernels an app runs on its own packed pixels: colour maps, warps, separable blends and chains of
+    /// unary image kernels (`ColorMap`, `run_chain`). The closure is the kernel; there is no kernel language.
+    pub use bifrost_render::kernel;
     /// Pixel buffer layouts and the 8-bit CMYK, grey and RGB conversions, plane splitting and interleaving.
     pub use bifrost_render::pixel_layout;
     pub use springboard::shell::list;
