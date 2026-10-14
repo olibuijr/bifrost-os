@@ -568,7 +568,7 @@ pub struct Contacts {
     screen: Screen,
     sidebar_shown: bool,
     filter: Filter,
-    /// Edits made this session, for the Recently Changed list.
+    /// The edits of this session, which are added to `prefs.recent` as they are saved.
     history: History,
     /// Contact groups, saved beside the contacts file.
     groups: Groups,
@@ -1322,7 +1322,7 @@ impl Contacts {
         match self.filter {
             Filter::All => None,
             Filter::Favorites => Some(self.contacts.iter().filter(|c| c.favorite).map(|c| c.id).collect()),
-            Filter::Recent => Some(self.history.changed_this_session()),
+            Filter::Recent => Some(self.recent_ids()),
             Filter::Duplicates => Some(dupes::duplicate_ids(&self.contacts)),
             Filter::LastImport => Some(self.last_import_ids()),
             Filter::UserList(n) => Some(self.lists.get(n).map(|list| list.ids(&self.contacts, &self.extras)).unwrap_or_default()),
@@ -1576,7 +1576,14 @@ impl Contacts {
         self.prefs.last_import.iter().copied().filter(|id| live.contains(id)).collect()
     }
 
-    /// Forgets deleted contacts in My Card and the last import, and saves the preferences when that changed them.
+    /// The contacts that an edit changed, in this run or an earlier one, that still exist.
+    fn recent_ids(&self) -> BTreeSet<u64> {
+        let live: BTreeSet<u64> = self.contacts.iter().map(|c| c.id).collect();
+        self.prefs.recent.iter().copied().filter(|id| live.contains(id)).collect()
+    }
+
+    /// Forgets deleted contacts in My Card, the last import and the recent changes, and saves the preferences when
+    /// that changed them.
     fn forget_in_prefs(&mut self, ids: &[u64]) {
         let mut changed = false;
         if self.prefs.me.is_some_and(|me| ids.contains(&me)) {
@@ -1585,6 +1592,7 @@ impl Contacts {
         }
         for id in ids {
             changed |= self.prefs.last_import.remove(id);
+            changed |= self.prefs.recent.remove(id);
         }
         if changed {
             self.save_display();
@@ -1607,9 +1615,15 @@ impl Contacts {
         }
     }
 
-    /// Records a saved change in the session history. The file is already written, so a history error is not shown.
+    /// Records a saved change in the history and in the Recently Changed list, which is saved with the display settings.
+    /// The file is already written, so a history error is not shown.
     fn record(&mut self, before: &[Contact]) {
         let _ = self.history.record(before, &self.contacts);
+        let known = self.prefs.recent.len();
+        self.prefs.recent.extend(self.history.changed_this_session());
+        if self.prefs.recent.len() != known {
+            self.save_display();
+        }
     }
 
     fn save_groups(&mut self) {
@@ -4372,6 +4386,27 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         assert_eq!(app.prefs.me, None);
         let (_, _, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
         assert_eq!(saved.me, None);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn recent_changes_are_kept_between_runs_and_forgotten_when_deleted() {
+        let path = file_with("recent", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(app.recent_ids().is_empty(), "the contacts loaded at launch are not changes");
+        app.open_detail(&ui, 2);
+        app.toggle_favorite(&ui);
+        assert_eq!(app.recent_ids(), BTreeSet::from([2]));
+        let (_, _, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
+        assert_eq!(saved.recent, BTreeSet::from([2]), "the change is saved with the display settings");
+
+        let next_run = Contacts::new(&ui, 1200, 780, path.clone());
+        assert_eq!(next_run.recent_ids(), BTreeSet::from([2]), "the change is still listed in the next run");
+
+        app.remove_selected(&ui);
+        let (_, _, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
+        assert!(saved.recent.is_empty(), "a deleted contact leaves the recent changes");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

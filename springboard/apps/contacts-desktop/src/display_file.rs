@@ -38,11 +38,20 @@ pub struct Prefs {
     pub template: BTreeSet<Detail>,
     /// The contacts the last import added, for the Last Import list.
     pub last_import: BTreeSet<u64>,
+    /// The contacts an edit changed, for the Recently Changed list. Kept between runs.
+    pub recent: BTreeSet<u64>,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { me: None, export_notes: true, prefer_nicknames: false, template: BTreeSet::new(), last_import: BTreeSet::new() }
+        Prefs {
+            me: None,
+            export_notes: true,
+            prefer_nicknames: false,
+            template: BTreeSet::new(),
+            last_import: BTreeSet::new(),
+            recent: BTreeSet::new(),
+        }
     }
 }
 
@@ -73,6 +82,9 @@ pub fn load(path: &Path) -> io::Result<(ContactsDefaults, NameOrder, Prefs)> {
             ["import", id] => {
                 prefs.last_import.insert(id.parse().map_err(|_| bad("Unknown contact in the last import"))?);
             }
+            ["changed", id] => {
+                prefs.recent.insert(id.parse().map_err(|_| bad("Unknown contact in the recent changes"))?);
+            }
             _ => return Err(bad("Unknown line in the display settings")),
         }
     }
@@ -91,6 +103,9 @@ pub fn save(path: &Path, defaults: &ContactsDefaults, name_order: NameOrder, pre
     }
     for id in &prefs.last_import {
         out.push_str(&format!("import\t{id}\n"));
+    }
+    for id in &prefs.recent {
+        out.push_str(&format!("changed\t{id}\n"));
     }
     let temp = path.with_extension("txt.tmp");
     std::fs::write(&temp, out)?;
@@ -210,6 +225,7 @@ mod tests {
             prefer_nicknames: true,
             template: BTreeSet::from([Detail::Birthday, Detail::Nickname]),
             last_import: BTreeSet::from([3, 9]),
+            recent: BTreeSet::from([4, 9, 12]),
         };
         save(&path, &ContactsDefaults::new(), NameOrder::FirstLast, &prefs).unwrap();
         let (_, _, loaded) = load(&path).unwrap();
