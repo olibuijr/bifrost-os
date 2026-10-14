@@ -59,37 +59,37 @@
     {
       "feature": "Graphics accelerators and displays",
       "apple": "IOAccelerator and IOGraphics services, reached through IOKit",
-      "bifrost": "springboard/src/bare/kms.rs (Display, open_first_available); springboard/src/bare/scanout.rs:236 (probe_drm); springboard/src/shell/gpu_page.rs (Graphics page)",
-      "status": "os",
-      "note": "The shell presents through DRM/KMS. Apps draw through the SDK renderer, not a driver connection."
+      "bifrost": "springboard/ui/src/display_info.rs (DisplayInfo, main_display, active, diff); springboard/sdk/src/displays.rs (display service client); springboard/src/bare/kms.rs (Display, open_first_available)",
+      "status": "partial",
+      "note": "The display list, main display, active filter, point lookup and reconfiguration diffs are tested headless in parity_sdk-os-01. Gap: graphics accelerators are not exposed, the shell alone drives DRM/KMS, and the display service client is not verified on the lab machine."
     },
     {
       "feature": "Input devices (HID)",
       "apple": "IOHIDManager and HID element APIs (IOKit HID classes)",
-      "bifrost": "springboard/src/bare/input.rs:498 (evdev devices by capability, hot-rescanned)",
-      "status": "os",
-      "note": "Keyboard, mouse and touch reach the shell. No HID device API for apps; this is part of the system layer."
+      "bifrost": "springboard/sdk/src/hid_devices.rs (DeviceManager, matching, changes); springboard/ui/src/hid_match.rs (Criteria, Usage, Role); springboard/src/bare/input.rs:498 (evdev devices by capability, hot-rescanned, the snapshot source)",
+      "status": "partial",
+      "note": "Apps get the matching criteria and the matched and removed devices between snapshots, tested headless in parity_sdk-os-01. Gap: the shell supplies the snapshots, and apps get no raw input reports."
     },
     {
       "feature": "Audio devices",
       "apple": "IOAudio and audio device services used by Core Audio",
-      "bifrost": "springboard/src/media/volume.rs:23 (CONTROL_DEVICE /dev/snd/controlC0); springboard/src/media/capture.rs:68 (capture_candidates); springboard/src/media/audioplayer.rs:155 (open_device)",
-      "status": "os",
-      "note": "Playback and capture go through the audiod daemon. Apps reach audio through the audio service, not device access."
+      "bifrost": "springboard/ui/src/default_device.rs (Defaults, Device, Role); springboard/sdk/src/audio_devices.rs (audio-devices service client); springboard/src/media/volume.rs:23 (CONTROL_DEVICE /dev/snd/controlC0)",
+      "status": "partial",
+      "note": "The default device for input, output and sound effects, with a chosen default that returns after the device comes back, is tested headless in parity_sdk-os-01. Gap: the audio-devices client is not verified on the lab machine, and playback and capture still go through the audiod daemon."
     },
     {
       "feature": "Video capture devices",
       "apple": "IOKit camera and video device services (used by AVFoundation)",
-      "bifrost": "springboard/src/media/v4l2.rs:233 (Device::open); springboard/src/shell/camera/ (camera page)",
-      "status": "os",
-      "note": "Only the shell opens the camera through V4L2. No app-facing capture device list."
+      "bifrost": "springboard/ui/src/video_device.rs (VideoDevice, select_device, choose_format, plan_stream); springboard/src/media/v4l2.rs:233 (Device::open)",
+      "status": "partial",
+      "note": "Capture node usability, format choice and the buffer plan are tested headless in parity_sdk-os-01. Gap: only the shell opens the camera through V4L2, so no app receives a capture device list or frames."
     },
     {
       "feature": "Bluetooth devices",
       "apple": "IOBluetooth-related services reached through IOKit",
-      "bifrost": "springboard/src/bare/bluetooth.rs:193 (Device), :222 (State), :231 (Status)",
-      "status": "os",
-      "note": "A Bluetooth stack reached from the shell. No SDK API for pairing or discovery."
+      "bifrost": "springboard/sdk/src/bluetooth_devices.rs (DeviceList, RemoteDevice); springboard/src/bare/bluetooth.rs:193 (Device), :222 (State), :231 (Status)",
+      "status": "partial",
+      "note": "The remote device list, one entry per address with paired and connected state in Settings order, is tested headless in parity_sdk-os-01. Gap: no app receives the shell's scan results, and pairing and discovery are not reachable from apps."
     },
     {
       "feature": "Network interfaces",

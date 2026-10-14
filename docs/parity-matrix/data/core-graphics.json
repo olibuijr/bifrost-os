@@ -115,9 +115,9 @@
   {
    "feature": "Display services (Quartz Display Services)",
    "apple": "CGGetActiveDisplayList, CGDisplayBounds, CGDisplayCopyDisplayMode, display configuration",
-   "bifrost": "springboard/src/gpu/wl.rs (presenter, outputs), springboard/src/bare/scanout.rs",
-   "status": "os",
-   "note": "The window server handles display modes and outputs. Apps get no display list, bounds or mode API in the SDK."
+   "bifrost": "springboard/ui/src/display_info.rs (DisplayInfo, DisplayMode, main_display, at_point, diff); springboard/sdk/src/displays.rs (list, info, modes, reconfigured); springboard/src/gpu/wl.rs (presenter, outputs)",
+   "status": "partial",
+   "note": "Apps read the display list, bounds, pixel size, modes and reconfiguration changes, tested headless in parity_sdk-os-01. Gap: the mode switch and its keep or revert step run in the shell, and live reconfiguration is not verified on the lab machine."
   },
   {
    "feature": "Window services (Quartz Window Services, CGWindowList)",
