@@ -6,7 +6,9 @@
 use crate::find::Hit;
 use bifrost_app::dispatch::DispatchQueue;
 use bifrost_app::kit::Image;
+use crate::inspector;
 use springboard::cg::pdf::doc::Doc;
+use springboard::cg::pdf::obj::Obj;
 use springboard::cg::pdf::draw;
 use springboard::cg::pdf::page::{self, Page as PdfPage};
 use std::collections::VecDeque;
@@ -41,6 +43,10 @@ pub struct Outline {
 pub struct Opened {
     pub sizes: Vec<(usize, usize)>,
     pub outline: Vec<Outline>,
+    /// The document information the Inspector lists, as label and value.
+    pub info: Vec<(&'static str, String)>,
+    /// Whether the file is encrypted.
+    pub encrypted: bool,
 }
 
 /// A result from the worker.
@@ -94,7 +100,19 @@ impl Pdf {
                 page: self.pages.iter().position(|p| p.num == Some(item.dest.page)),
             })
             .collect();
-        Ok(Opened { sizes, outline })
+        Ok(Opened { sizes, outline, info: self.info(), encrypted: self.doc.is_encrypted() })
+    }
+
+    /// The title, author, subject and keywords the document information dictionary holds, when they are text.
+    fn info(&self) -> Vec<(&'static str, String)> {
+        let Some(Obj::Dict(info)) = self.doc.trailer.get("Info").map(|o| self.doc.get(o)) else { return Vec::new() };
+        [("Title", "Title"), ("Author", "Author"), ("Subject", "Subject"), ("Keywords", "Keywords")]
+            .into_iter()
+            .filter_map(|(key, label)| match info.get(key) {
+                Some(Obj::Str(bytes)) => Some((label, inspector::pdf_text(bytes))).filter(|(_, text)| !text.trim().is_empty()),
+                _ => None,
+            })
+            .collect()
     }
 }
 

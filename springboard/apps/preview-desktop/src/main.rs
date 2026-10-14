@@ -765,6 +765,8 @@ impl Viewer {
             size: doc.sizes.first().copied(),
             marks: &doc.marks,
             bookmarks: doc.bookmarks.len(),
+            info: &doc.info,
+            encrypted: doc.encrypted,
         };
         inspector::rows(&self.facts, &shown)
     }

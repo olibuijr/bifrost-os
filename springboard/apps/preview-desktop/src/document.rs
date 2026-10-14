@@ -47,6 +47,10 @@ pub struct Document {
     pub outline: Vec<Outline>,
     /// The bookmarked source pages, kept beside the markup.
     pub bookmarks: Vec<usize>,
+    /// The PDF's document information (title, author, subject, keywords), as label and value. Empty for a picture.
+    pub info: Vec<(&'static str, String)>,
+    /// Whether the PDF is encrypted (it opened with its password).
+    pub encrypted: bool,
     source: Source,
     /// A picture as it was opened, for Revert to Original after pixel edits. None for a PDF.
     original: Option<Rc<Image>>,
@@ -76,6 +80,8 @@ impl Document {
             marks: load_marks(data_dir, path),
             outline,
             bookmarks: load_bookmarks(data_dir, path),
+            info: Vec::new(),
+            encrypted: false,
             source,
             original,
             revision: 0,
@@ -284,7 +290,10 @@ pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
 
 /// The document of a PDF whose worker has opened it. `jobs` and `inbox` are the worker's.
 pub fn from_pdf(path: &Path, data_dir: &Path, opened: Opened, jobs: Sender<Job>, inbox: Inbox) -> Document {
-    Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true)
+    let mut doc = Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true);
+    doc.info = opened.info;
+    doc.encrypted = opened.encrypted;
+    doc
 }
 
 /// The sidecar file for `path` under `data_dir`.
