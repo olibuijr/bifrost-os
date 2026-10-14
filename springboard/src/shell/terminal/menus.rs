@@ -42,6 +42,14 @@ impl Shell {
                 }
                 true
             }
+            Panel::Title => {
+                if matches!(out, Out::Enter) {
+                    self.terminal_save_title(t);
+                } else if let Some(field) = &mut self.terminal_ui.tab_title {
+                    field.edit(&self.ui, out, t);
+                }
+                true
+            }
             Panel::None => false,
             _ => true,
         }
@@ -226,6 +234,40 @@ impl Shell {
             21 => self.terminal_close_split(t),
             22 => self.terminal_save_group(),
             23 => self.terminal_open_group(t),
+            // Every tab but this one closes; tabs running a job stay open and are counted in the message.
+            24 => {
+                let busy = self.close_other_terminal_tabs();
+                self.terminal_ui.message = match busy {
+                    0 => "Other tabs closed".into(),
+                    1 => "1 tab is running a job and stayed open".into(),
+                    n => format!("{n} tabs are running jobs and stayed open"),
+                };
+            }
+            // Paste Escaped Text: the clipboard with the shell's special characters escaped, so a path pastes as one word.
+            25 => {
+                let escaped = escape::shell_escape(&clipboard::text().unwrap_or_default());
+                self.terminal_close_panel(t);
+                if !escaped.is_empty() {
+                    if let Some(term) = self.term.as_mut() {
+                        term.paste(&escaped);
+                    }
+                }
+            }
+            // Man page for selection: the selection's first word opens its manual in a new tab, which
+            // closes when man exits. The topic is passed as a parameter, never spliced into the command.
+            26 => {
+                let selection = self.term.as_ref().and_then(|term| term.selected_text());
+                match selection.as_deref().and_then(escape::man_topic) {
+                    Some(topic) => {
+                        let argv = ["/bin/sh", "-c", "exec man -- \"$1\"", "man", topic];
+                        if self.spawn_terminal_tab(&argv, None) {
+                            self.terminal_close_panel(t);
+                        }
+                    }
+                    None => self.terminal_ui.message = "Select a command name first".into(),
+                }
+            }
+            27 => self.terminal_open_title(t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self

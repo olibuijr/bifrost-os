@@ -154,6 +154,8 @@ pub struct Terminal {
     /// the profile blinks the caret; `blink_on` is the phase the shell last set
     blink: bool,
     blink_on: bool,
+    /// the tab title the user set (Edit Title); None keeps the title the program or the job gives
+    custom_title: Option<String>,
 }
 
 /// Half a blink period of the caret, in milliseconds (on for one half, off for the next).
@@ -192,7 +194,7 @@ impl Terminal {
         let pty = Pty::spawn(argv, &env, cols as u16, rows as u16, login.as_ref())?;
         let mut term = Term::new(cols, rows, history_lines());
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true })
+        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, custom_title: None })
     }
 
     /// The px rect the terminal occupies.
@@ -460,9 +462,22 @@ impl Terminal {
 
     pub fn background(&self) -> u32 { px(termcore::palette::THEMES[self.theme].bg) }
 
-    /// Tab caption: the title the program set, else the running job's name, else `shell N`.
+    /// Tab caption: the title the user set, else the title the program set, else the running job's name, else `shell N`.
     pub fn title(&self, index: usize) -> String {
+        if let Some(custom) = &self.custom_title {
+            return custom.clone();
+        }
         termcore::tabs::label(self.term.title(), self.job().as_deref(), index as u32 + 1)
+    }
+
+    /// The title the user gave this tab, if any.
+    pub fn custom_title(&self) -> Option<&str> {
+        self.custom_title.as_deref()
+    }
+
+    /// Sets the title the user gave this tab; None or an empty title restores the automatic one.
+    pub fn set_custom_title(&mut self, title: Option<String>) {
+        self.custom_title = title.filter(|t| !t.is_empty());
     }
 
     /// The job running in the foreground ("vim"), None at the prompt.

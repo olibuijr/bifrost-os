@@ -234,6 +234,7 @@ impl Shell {
             }
             Panel::Processes => "Processes",
             Panel::Command => "New Command",
+            Panel::Title => "Edit Title",
             _ => "Terminal",
         };
         if panel == Panel::Form {
@@ -291,6 +292,11 @@ impl Shell {
         match panel {
             Panel::Command => {
                 if let Some(field) = &self.terminal_ui.command {
+                    field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
+                }
+            }
+            Panel::Title => {
+                if let Some(field) = &self.terminal_ui.tab_title {
                     field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
                 }
             }
@@ -674,6 +680,9 @@ impl Shell {
         if panel == Panel::Command {
             button(s, ui, "Run", (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
         }
+        if panel == Panel::Title {
+            button(s, ui, "Save", (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
+        }
         let message = if !self.terminal_ui.message.is_empty() {
             self.terminal_ui.message.as_str()
         } else {
@@ -682,13 +691,14 @@ impl Shell {
                 Panel::Form => "Enter a name and host. Port defaults to 22.",
                 Panel::Processes => "Select a process to inspect or terminate.",
                 Panel::Command => "The command runs in a new tab that closes when it ends.",
+                Panel::Title => "Leave the name empty to use the automatic title.",
                 _ => "Changes to text size and theme are saved automatically.",
             }
         };
         let reserved = match panel {
             Panel::Connections => 236.0,
             Panel::Processes => 264.0,
-            Panel::Command => 136.0,
+            Panel::Command | Panel::Title => 136.0,
             _ => 32.0,
         };
         text(

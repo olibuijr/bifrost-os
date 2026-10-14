@@ -27,6 +27,7 @@ use std::{fs, path::PathBuf};
 
 pub mod layout;
 mod command;
+mod escape;
 mod split;
 mod control;
 mod find;
@@ -40,8 +41,11 @@ mod profiles;
 mod session;
 mod ssh;
 mod tabs;
+mod title;
 mod view;
 mod window;
+#[cfg(test)]
+mod parity_app_terminal;
 #[cfg(test)]
 mod tests;
 pub const HEADER_PT: f32 = 40.0;
@@ -53,7 +57,7 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-const MENU: [&str; 24] = [
+const MENU: [&str; 28] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -78,6 +82,10 @@ const MENU: [&str; 24] = [
     "Close split pane",
     "Save window group",
     "Open window group",
+    "Close other tabs",
+    "Paste escaped text",
+    "Open man page for selection",
+    "Edit title",
 ];
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
@@ -106,6 +114,8 @@ pub enum Panel {
     More,
     /// New command: a line typed here runs in a new tab that closes when the command ends
     Command,
+    /// Edit Title: a name for the front tab; an empty name restores the automatic title
+    Title,
 }
 pub struct TerminalUi {
     pub settings: Settings,
@@ -141,6 +151,8 @@ pub struct TerminalUi {
     pub secure: bool,
     /// the command line of the New command panel
     command: Option<TextField>,
+    /// the name typed in the Edit Title panel
+    tab_title: Option<TextField>,
 }
 impl Default for TerminalUi {
     fn default() -> Self {
@@ -174,6 +186,7 @@ impl Default for TerminalUi {
             blink: false,
             secure: false,
             command: None,
+            tab_title: None,
         }
     }
 }
