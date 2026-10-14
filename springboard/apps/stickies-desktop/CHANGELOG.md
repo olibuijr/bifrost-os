@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- Edit > Whole Word (off by default, kept across launches) makes Find, Find Next, Replace and Replace All match only whole words, so "cat" does not match inside "category".
+- File > Paper Size and File > Orientation are kept across launches, not only for the session.
+- Black text stays readable on a dark custom note colour: it turns white on such a colour, and keeps black on light ones.
+
 ## 0.6.0
 
 - Edit > Ignore Case (on by default, kept across launches) makes Find, Find Next, Replace and Replace All match letters of either case, or only the same case when it is off.

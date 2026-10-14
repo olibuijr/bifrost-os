@@ -77,6 +77,14 @@ pub fn ink_value(ink: Ink) -> u32 {
     }
 }
 
+/// The colour of a text ink on a note. Black text turns white on a dark custom colour, so it stays readable there.
+pub fn ink_on(note: &Note, ink: Ink) -> u32 {
+    match (ink, note.rgb) {
+        (Ink::Black, Some(rgb)) if swatch::is_dark(rgb) => rgba(255, 255, 255, 255),
+        _ => ink_value(ink),
+    }
+}
+
 /// Body text size (points) of a note's size.
 pub fn body_pt(size: TextSize) -> f32 {
     match size {
@@ -207,13 +215,13 @@ fn draw_note(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
 
     // disclosure: collapsed notes show a right-pointing mark, expanded ones a downward one
     let disclosure = if note.collapsed { ">" } else { "v" };
-    let img = ui.text(disclosure, MAC_SUBHEAD_PT, Weight::Bold, BLACK);
+    let img = ui.text(disclosure, MAC_SUBHEAD_PT, Weight::Bold, ink_on(note, Ink::Black));
     widgets::blit(c, &img, (x + ui.pt(DISCLOSURE_PT / 2.0) - img.w as f32 / 2.0) as i32, (y + (ui.pt(TITLE_H) - img.h as f32) / 2.0) as i32);
 
     let title_px = ui.pt(note.w - DISCLOSURE_PT - PAD_PT);
     let title = ui.fit(&note.title(), MAC_SUBHEAD_PT, title_px);
     if !title.is_empty() {
-        let img = ui.text(&title, MAC_SUBHEAD_PT, Weight::Semibold, BLACK);
+        let img = ui.text(&title, MAC_SUBHEAD_PT, Weight::Semibold, ink_on(note, Ink::Black));
         widgets::blit(c, &img, (x + ui.pt(DISCLOSURE_PT)) as i32, (y + (ui.pt(TITLE_H) - img.h as f32) / 2.0) as i32);
     }
 
@@ -246,14 +254,14 @@ fn draw_run(c: &mut dyn Canvas, ui: &Ui, note: &Note, m: &BodyMetrics, text: &st
     let (tx, ty) = (x as i32, y as i32);
     if style.outline {
         // the letters are ringed in the text colour and filled with the note colour
-        let ring = shape(ink_value(style.ink));
+        let ring = shape(ink_on(note, style.ink));
         let r = (ui.pt(1.0) as i32).max(1);
         for (dx, dy) in [(-r, 0), (r, 0), (0, -r), (0, r)] {
             widgets::blit(c, &ring, tx + dx, ty + dy);
         }
         widgets::blit(c, &shape(note_fill(note)), tx, ty);
     } else {
-        widgets::blit(c, &shape(ink_value(style.ink)), tx, ty);
+        widgets::blit(c, &shape(ink_on(note, style.ink)), tx, ty);
     }
 }
 
@@ -278,7 +286,7 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
         if focused {
             let img = ui.text("Type a note", m.pt, Weight::Regular, LABEL_2.now());
             widgets::blit(c, &img, text_x as i32, top as i32);
-            c.fill_rect(RectF::new(text_x, top, rule, m.step), ink_value(note.current_style().ink));
+            c.fill_rect(RectF::new(text_x, top, rule, m.step), ink_on(note, note.current_style().ink));
         }
         return;
     }
@@ -300,7 +308,7 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
         // trailing spaces of a line take no decoration
         let visible_end = line.start + note.text[line.start..line.end].trim_end().len();
         for (range, style) in note.style_runs(line.start..line.end) {
-            let ink = ink_value(style.ink);
+            let ink = ink_on(note, style.ink);
             let run_x = text_x + width(line.start, range.start);
             let run_y = ly + m.step * style.baseline.shift();
             draw_run(c, ui, note, &m, &note.text[range.clone()], &style, run_x, run_y);
@@ -339,7 +347,7 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
         let at = layout::line_of(&lines, note.caret);
         let line = lines[at];
         let cx = text_x + width(line.start, note.caret.clamp(line.start, line.end));
-        c.fill_rect(RectF::new(cx, top + m.step * at as f32, rule, m.step), ink_value(note.current_style().ink));
+        c.fill_rect(RectF::new(cx, top + m.step * at as f32, rule, m.step), ink_on(note, note.current_style().ink));
     }
 }
 
@@ -487,6 +495,17 @@ mod tests {
         assert_eq!(note_fill(&n), rgba(10, 20, 30, 255));
         n.set_preset(Colour::Teal);
         assert_eq!(note_fill(&n), colour_value(Colour::Teal));
+    }
+
+    #[test]
+    fn black_ink_turns_white_on_a_dark_custom_colour_only() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        assert_eq!(ink_on(&n, Ink::Black), BLACK, "a preset colour keeps black text");
+        n.rgb = Some((10, 20, 30));
+        assert_eq!(ink_on(&n, Ink::Black), rgba(255, 255, 255, 255), "black text would vanish on navy");
+        assert_eq!(ink_on(&n, Ink::Red), SYSTEM_RED, "other inks keep their colour");
+        n.rgb = Some((250, 250, 210));
+        assert_eq!(ink_on(&n, Ink::Black), BLACK, "a light custom colour keeps black text");
     }
 
     #[test]
