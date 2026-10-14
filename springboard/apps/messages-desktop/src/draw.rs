@@ -2,7 +2,7 @@
 //! sidebar; the timeline and the composer are the main pane; the sign-in form is a sheet over both. [`Layout`] holds the
 //! geometry for the painter and the hit test alike, so a tap lands on what is drawn.
 
-use crate::model::{day_label, day_of, preview, starts_day, typing_text, Overlay, EMOJI_CATALOG, INFO_ROWS_MAX, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
+use crate::model::{day_label, day_of, preview, starts_day, typing_text, EmojiGroup, Overlay, EMOJI_CATALOG, INFO_ROWS_MAX, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
 use crate::protocol::Body;
 use crate::window::MessagesWindow;
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
@@ -92,6 +92,8 @@ pub enum OverlayAction {
     Delete,
     /// The emoji at this index of the picker's choices (`Messages::emoji_choices`).
     Pick(usize),
+    /// A button of the picker's group strip: a group, or None for All.
+    EmojiGroup(Option<EmojiGroup>),
 }
 
 /// A button on a sheet or panel.
@@ -479,20 +481,25 @@ impl MessagesWindow {
                 let rows = EMOJI_CATALOG.len().div_ceil(EMOJI_COLUMNS);
                 let width = (EMOJI_COLUMNS as f32 * cell + 2.0 * lay.pad).min(lay.w);
                 let search_h = ui.pt(SHEET_BOX_PT) + lay.pad;
-                let ph = head + search_h + rows as f32 * cell + lay.pad;
+                let strip_h = ui.pt(SHEET_BOX_PT) + lay.pad;
+                let ph = head + search_h + strip_h + rows as f32 * cell + lay.pad;
                 let r = place(ph, width);
                 let field = [r[0] + lay.pad, r[1] + head, (width - 2.0 * lay.pad).max(0.0), ui.pt(SHEET_BOX_PT)];
-                let content_y = r[1] + head + search_h;
-                let buttons = self
-                    .model
-                    .emoji_choices()
-                    .iter()
+                let strip_y = r[1] + head + search_h;
+                let content_y = strip_y + strip_h;
+                let strip_w = (width - 2.0 * lay.pad).max(0.0) / (EmojiGroup::ALL.len() + 1) as f32;
+                let groups = std::iter::once((None, "All")).chain(EmojiGroup::ALL.iter().map(|g| (Some(*g), g.label())));
+                let mut buttons: Vec<OverlayButton> = groups
                     .enumerate()
-                    .map(|(i, emoji)| {
-                        let rect = [r[0] + lay.pad + (i % EMOJI_COLUMNS) as f32 * cell, content_y + (i / EMOJI_COLUMNS) as f32 * cell, cell, cell];
-                        button(rect, emoji.as_str(), OverlayAction::Pick(i), false, false)
+                    .map(|(i, (group, label))| {
+                        let rect = [r[0] + lay.pad + i as f32 * strip_w, strip_y, strip_w, ui.pt(SHEET_BOX_PT)];
+                        button(rect, label, OverlayAction::EmojiGroup(group), self.model.emoji_group == group, false)
                     })
                     .collect();
+                buttons.extend(self.model.emoji_choices().iter().enumerate().map(|(i, emoji)| {
+                    let rect = [r[0] + lay.pad + (i % EMOJI_COLUMNS) as f32 * cell, content_y + (i / EMOJI_COLUMNS) as f32 * cell, cell, cell];
+                    button(rect, emoji.as_str(), OverlayAction::Pick(i), false, false)
+                }));
                 Some(Panel { panel: r, field: Some(field), content_y, buttons })
             }
         }
@@ -883,7 +890,7 @@ impl MessagesWindow {
                 if let Some(f) = panel.field {
                     draw_field_tail(s, &mut self.labels, ui, lay, f, &self.model.emoji_query, "Search emoji", true);
                 }
-                if panel.buttons.is_empty() {
+                if !panel.buttons.iter().any(|b| matches!(b.action, OverlayAction::Pick(_))) {
                     put_centred(s, &mut self.labels, ui, "No emoji match", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), px_ + pw / 2.0, panel.content_y + lay.pad);
                 }
             }
