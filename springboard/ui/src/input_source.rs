@@ -134,6 +134,15 @@ impl InputSources {
         Ok(())
     }
 
+    /// Selects the first enabled, select-capable source that types `language` (matched on the primary subtag, as
+    /// [`InputSources::for_language`] does). Returns the id it selected, or `None` when no enabled source types that
+    /// language, in which case the current selection stays.
+    pub fn select_for_language(&mut self, language: &str) -> Option<String> {
+        let id = self.for_language(language, false).into_iter().find(|s| s.select_capable).map(|s| s.id.clone())?;
+        self.selected = Some(id.clone());
+        Some(id)
+    }
+
     /// Selects the next enabled select-capable source, wrapping around. The id it chose, or None with no choice.
     pub fn select_next(&mut self) -> Option<String> {
         let ids: Vec<String> =

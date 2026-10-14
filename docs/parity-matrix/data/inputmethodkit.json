@@ -122,9 +122,9 @@
   {
    "feature": "Input source enumeration and selection (TISInputSource)",
    "apple": "TISCreateInputSourceList, TISSelectInputSource, TISEnableInputSource",
-   "bifrost": "springboard/ui/src/input_source.rs (InputSources)",
+   "bifrost": "springboard/ui/src/input_source.rs (InputSources, select_for_language)",
    "status": "partial",
-   "note": "Model with persisted form; the shell does not use it yet."
+   "note": "Selection by language is tested headless in springboard/ui/tests/parity_sdk-complete-40.rs; listing, enabling, selecting by id, cycling and the saved form are covered by the unit tests in input_source.rs. Gap: the shell does not use the model yet, and no SDK API lets apps read the installed sources."
   }
  ],
  "gaps": [

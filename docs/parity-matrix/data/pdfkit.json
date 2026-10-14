@@ -17,9 +17,9 @@
     {
       "feature": "PDFThumbnailView and page thumbnails",
       "apple": "PDFThumbnailView, PDFPage.thumbnail(of:for:)",
-      "bifrost": "springboard/ui/src/pdfpage.rs (PdfPage, PageBoxes, rotation, thumbnail_size, fit_scale, fit_transform)",
+      "bifrost": "springboard/ui/src/pdfpage.rs (PdfPage, PageBoxes, rotation, thumbnail_size, fit_scale, fit_transform, thumbnail_grid)",
       "status": "partial",
-      "note": "Pure page geometry in springboard/ui/src/pdfpage.rs, tested in springboard/ui/tests/parity_sdk-tests-03.rs: unset boxes fall back along the chain (unset_boxes_fall_back_along_the_chain_to_the_media_box, setting_the_crop_box_moves_the_boxes_that_fall_back_to_it), rotation and displayed size (rotation_is_normalised_to_a_quarter_turn_and_odd_angles_are_refused, displayed_size_swaps_width_and_height_on_quarter_turns), aspect-fit thumbnail sizes (fit_scale_keeps_the_aspect_ratio_inside_the_target, a_rotated_thumbnail_fits_its_landscape_size_inside_a_square) and fit_transform_centres_the_page_in_the_target. No thumbnail image is rendered and no thumbnail view exists; the Books page panel (springboard/apps/books-desktop/src/books/mod.rs) is not covered by these tests; verify on Midget for parity."
+      "note": "Page geometry in springboard/ui/src/pdfpage.rs is tested in springboard/ui/tests/parity_sdk-tests-03.rs and parity_sdk-complete-40.rs: box fall-back, rotation, aspect-fit thumbnail sizes, and the grid that places each thumbnail in a column and row cell, centred in it. Gap: no thumbnail image is rasterised into the grid and no thumbnail view draws it; the Books page panel (springboard/apps/books-desktop/src/books/mod.rs) is not covered, so the lab machine must check it on Midget."
     },
     {
       "feature": "PDFDocument loading (URL, data)",

@@ -197,6 +197,41 @@ impl PdfPage {
     }
 }
 
+/// One thumbnail of a grid: the index of its page and the rectangle it fills, in points from the grid's corner.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ThumbnailCell {
+    pub page: usize,
+    pub rect: Rect,
+}
+
+/// Lays out the thumbnails of `pages` in a grid `area_width` points wide, the way a page sidebar shows them. Each
+/// page's crop box is fitted inside a cell of `cell` points and centred in it. Cells are `gap` points apart both ways,
+/// and as many columns as fit the width go in each row, in page order. A zero or non-finite size is refused, and so
+/// is an area too narrow for one cell.
+pub fn thumbnail_grid(pages: &[PdfPage], area_width: f32, cell: (f32, f32), gap: f32) -> Result<Vec<ThumbnailCell>, PageError> {
+    let finite = [area_width, cell.0, cell.1, gap].iter().all(|v| v.is_finite());
+    if !finite || area_width <= 0.0 || cell.0 <= 0.0 || cell.1 <= 0.0 || gap < 0.0 {
+        return Err(PageError::BadSize);
+    }
+    let columns = ((area_width + gap) / (cell.0 + gap)).floor() as usize;
+    if columns == 0 {
+        return Err(PageError::BadSize);
+    }
+    pages
+        .iter()
+        .enumerate()
+        .map(|(index, page)| {
+            let (w, h) = page.thumbnail_size(DisplayBox::Crop, cell)?;
+            let origin_x = (index % columns) as f32 * (cell.0 + gap);
+            let origin_y = (index / columns) as f32 * (cell.1 + gap);
+            Ok(ThumbnailCell {
+                page: index,
+                rect: Rect { x: origin_x + (cell.0 - w) / 2.0, y: origin_y + (cell.1 - h) / 2.0, w, h },
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
