@@ -54,6 +54,6 @@ without cargo, and no test has run on the host or on Midget. Every row stays `pa
 
 ## Verification
 
-- Lead to run: `cargo test -p bifrost-sdk image_metadata image_animation picture_writer` on the host, then the
+- Lead to run: `cargo test -p bifrost-app image_metadata image_animation picture_writer` on the host, then the
   SDK coverage check (`tools/check-sdk-coverage.py`) and `python3 tools/check-names.py`.
 - Midget: not yet tested. Each row stays `partial` until a Midget check passes.
