@@ -73,9 +73,9 @@
     {
       "feature": "Spotlight: metadata queries",
       "apple": "NSMetadataQuery, MDQuery",
-      "bifrost": "springboard/sdk/src/metadata_query.rs (file system), springboard/ui/src/metaquery.rs",
+      "bifrost": "springboard/sdk/src/metadata_query.rs (file system, MetadataSortDescriptor), springboard/ui/src/metaquery.rs; tests: springboard/sdk/tests/parity_sdk-complete-04.rs",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 17 tests (earlier part). Added later, host tests only: MetadataQuery over search scopes: predicate (compare, like, and, or, not on name, path, size, change date, content type, is-directory), gathering then update notifications through fswatch, MetadataItem attributes, disable and enable updates. Host tests only; no sort descriptors, grouping, predicate parser or content attributes."
+      "note": "verified on Midget 0.7.25 by 17 tests (earlier part). Host tests only: MetadataQuery over search scopes with predicates, gathering then update notifications through fswatch, MetadataItem attributes, disable and enable updates, and sort descriptors (ascending and descending by any attribute, ties broken by later keys then path, re-sorted when set on a running query). Still missing: grouping, a predicate text parser and content attributes, and the lab machine has not run these sorts."
     },
     {
       "feature": "iCloud documents and key-value store",
