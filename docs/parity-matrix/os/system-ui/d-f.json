@@ -59,8 +59,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Optical disc drive helper; BifrOSt has no optical drive support",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no dwell control",
+   "bifrost": "springboard/src/shell/accessibility/dwell.rs",
+   "status": "partial",
+   "note": "dwell click model and delay options; pointer input and Settings wiring not built; built on os/team-l-02-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -278,9 +278,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/shell/folder_actions.rs",
+   "status": "partial",
+   "note": "folder attachments and new-file runs; fswatch and intent wiring not built; built on os/team-l-02-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -298,9 +298,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/ui/src/detect.rs",
+   "status": "partial",
+   "note": "data detector matching; no context menu extension host",
    "rea": []
   },
   {
@@ -319,8 +319,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "ExtensionKit extension enablement store is Apple-only plumbing",
    "rea": []
   },
   {
@@ -338,9 +338,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/sdk/src/bluetooth_devices.rs",
+   "status": "partial",
+   "note": "remote device name, class and signal model; no device properties sheet",
    "rea": []
   },
   {
@@ -358,9 +358,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/sdk/src/focus_filter.rs, springboard/src/shell/focus.rs",
+   "status": "partial",
+   "note": "Focus state and filter values; no Do Not Disturb App Intent yet",
    "rea": []
   },
   {
@@ -399,8 +399,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Apple lock screen poster extension (ExtensionKit) with no BifrOSt counterpart",
    "rea": []
   },
   {
@@ -419,8 +419,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Apple enhanced logging follow-up for Apple's diagnostics service",
    "rea": []
   },
   {
@@ -499,8 +499,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Apple Family Sharing App Intents; BifrOSt has no family group service",
    "rea": []
   },
   {
@@ -679,8 +679,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Apple Find My App Intents; BifrOSt has no Find My service",
    "rea": []
   },
   {

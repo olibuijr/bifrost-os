@@ -13,6 +13,7 @@ use super::prefs::Prefs;
 
 pub mod actions;
 pub mod banner;
+pub mod dwell;
 pub mod earcons;
 pub mod reader;
 pub mod shortcut;
