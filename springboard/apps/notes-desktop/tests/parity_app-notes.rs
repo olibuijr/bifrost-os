@@ -146,3 +146,22 @@ fn the_attachment_browser_fits_as_many_tiles_as_the_width_allows() {
     assert_eq!(AttachmentSize::Small.columns(10.0, 8.0), 1, "never fewer than one column");
     assert_eq!(AttachmentSize::Small.columns(0.0, 0.0), 1);
 }
+
+#[test]
+fn a_note_link_names_its_note_and_reads_back_to_the_same_id() {
+    use notes::notes::note_url;
+    let link = note_url::note_url("1789400000123");
+    assert_eq!(link, "notes://note/1789400000123");
+    assert_eq!(note_url::note_id(&link), Some("1789400000123"));
+    assert_eq!(note_url::note_id("  notes://note/abc-9  "), Some("abc-9"), "surrounding space is ignored");
+}
+
+#[test]
+fn text_that_is_not_a_note_link_is_refused() {
+    use notes::notes::note_url::note_id;
+    assert_eq!(note_id("https://example.com/notes://note/1"), None, "another scheme is not a note link");
+    assert_eq!(note_id("notes://note/"), None, "an empty id is refused");
+    assert_eq!(note_id("notes://note/12/extra"), None, "a further path segment is refused");
+    assert_eq!(note_id("notes://note/1?x=2"), None, "a query is refused");
+    assert_eq!(note_id("notes://folder/1"), None, "only note links open a note");
+}

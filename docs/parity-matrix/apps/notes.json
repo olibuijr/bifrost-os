@@ -328,9 +328,9 @@
    "feature": "Open by URL (links to a note)",
    "area": "integration",
    "apple": "Info.plist CFBundleURLTypes; NSUserActivityTypes edit-note activity",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs (note_url, note_id)",
+   "note": "Links of the form notes://note/<id> are built and read back, with the id validated; tested headless in tests/parity_app-notes.rs. Gap: the scheme is not registered in the manifest and the open handler does not yet route a link to its note.",
    "wire": "Register a notes URL scheme in the app manifest and open the note id from the URL in the restore/open handler."
   },
   {
