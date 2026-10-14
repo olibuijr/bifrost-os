@@ -100,8 +100,8 @@
    "area": "panel",
    "apple": "Up Next",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:801",
-   "note": "Play Next and Play Last, an Up Next list with move up/down and clear, auto-advance when an episode ends and Controls > Next Episode. No drag reordering. Needs a lab check.",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:2305",
+   "note": "Play Next and Play Last, an Up Next list with move up/down and clear, auto-advance when an episode ends and Controls > Next Episode. Drag reordering: press and hold an Up Next row for half a second, then drag it to a new place (check_hold, move_in_up_next). Needs a lab check.",
    "wire": "Queue of episode urls, Play Next / Play Last items, auto-advance in end_playback (podcasts.rs:439)"
   },
   {
@@ -136,8 +136,8 @@
    "area": "panel",
    "apple": "episode detail",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:2634",
-   "note": "Notes parsed in feed.rs (HTML to plain text) and shown on the episode page; no links or formatting. Needs a lab check.",
+   "bifrost": "springboard/apps/podcasts-desktop/src/feed.rs:217",
+   "note": "Notes parsed in feed.rs (HTML to plain text; a link keeps its text and its address in parentheses) and shown on the episode page; no bold, italic or tappable links. Needs a lab check.",
    "wire": "Parse item description in feed.rs and show it in an episode detail pane"
   },
   {

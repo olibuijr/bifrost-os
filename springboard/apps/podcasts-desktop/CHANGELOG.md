@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.0 — 2026-10-14
+
+- Up Next can be reordered by hand: press and hold an episode for half a second, then drag it to a new place. The
+  list keeps its order when the app restarts. A drag that starts as a quick swipe still scrolls the list.
+- Episode notes keep links: a link shows its text followed by its address in parentheses, unless the text is the
+  address itself.
+
 ## 1.8.0 — 2026-10-13
 
 - Library: the sidebar has Search, New Episodes (unplayed episodes of every show, newest first), Up Next, Downloaded,

@@ -74,6 +74,19 @@ impl Library {
         }
     }
 
+    /// Moves a queued episode to position `to` of Up Next (clamped to the last place), for a drag. False when the
+    /// episode is not queued or already there.
+    pub fn move_to(&mut self, url: &str, to: usize) -> bool {
+        let Some(from) = self.queue.iter().position(|u| u == url) else { return false };
+        let to = to.min(self.queue.len() - 1);
+        if from == to {
+            return false;
+        }
+        let item = self.queue.remove(from);
+        self.queue.insert(to, item);
+        true
+    }
+
     /// Forgets the played flags and queue entries of `urls` (an unfollowed show's episodes).
     pub fn forget(&mut self, urls: &[&str]) {
         self.played.retain(|u| !urls.contains(&u.as_str()));
@@ -202,6 +215,22 @@ mod tests {
         assert!(!lib.move_in_queue("b", false));
         assert!(!lib.move_in_queue("zzz", true));
         assert_eq!(lib.queue(), ["c", "a", "b"]);
+    }
+
+    #[test]
+    fn a_dragged_episode_lands_at_the_target_place() {
+        let mut lib = Library::default();
+        for u in ["a", "b", "c", "d"] {
+            lib.play_last(u);
+        }
+        assert!(!lib.move_to("b", 1), "already there");
+        assert!(lib.move_to("a", 2));
+        assert_eq!(lib.queue(), ["b", "c", "a", "d"]);
+        assert!(lib.move_to("d", 0));
+        assert_eq!(lib.queue(), ["d", "b", "c", "a"]);
+        assert!(lib.move_to("d", 99), "past the end clamps to the last place");
+        assert_eq!(lib.queue(), ["b", "c", "a", "d"]);
+        assert!(!lib.move_to("zzz", 0));
     }
 
     #[test]
