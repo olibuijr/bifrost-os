@@ -87,6 +87,25 @@ impl SharedList {
         self.items.retain(|i| i.favourite);
     }
 
+    /// Every entry, newest first, with favourites in the place they were used. This is the order `from_recency_order`
+    /// takes back, so a list survives a save and a load unchanged.
+    pub fn in_recency_order(&self) -> &[Item] {
+        &self.items
+    }
+
+    /// Rebuilds a list from entries in recency order, newest first. An empty key or a key already seen is dropped, and
+    /// recents over `capacity` are trimmed as `add` would trim them.
+    pub fn from_recency_order(capacity: usize, items: Vec<Item>) -> Self {
+        let mut list = SharedList::new(capacity);
+        for item in items {
+            if !item.key.is_empty() && !list.contains(&item.key) {
+                list.items.push(item);
+            }
+        }
+        list.trim();
+        list
+    }
+
     /// Favourites in recency order, then recents in recency order.
     pub fn entries(&self) -> Vec<&Item> {
         self.items.iter().filter(|i| i.favourite).chain(self.items.iter().filter(|i| !i.favourite)).collect()

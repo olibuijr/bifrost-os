@@ -80,9 +80,9 @@
   {
    "feature": "Layout fundamentals (stacks, grids)",
    "apple": "https://developer.apple.com/documentation/swiftui/layout-fundamentals",
-   "bifrost": "springboard/ui/src/stack.rs (stack, distribute, grid, adaptive_columns, overlay, first_fitting)",
+   "bifrost": "springboard/ui/src/stack.rs (stack, distribute, grid, adaptive_columns, overlay, first_fitting); springboard/ui/src/lazy_stack.rs (visible_rows, visible_items, content_height: the lazy list and grid windows)",
    "status": "partial",
-   "note": "Stack and grid layout as pure functions: HStack/VStack spacing and flexible items, the four fixed distributions, adaptive columns, grid, a ZStack-style overlay and a ViewThatFits-style first_fitting.The SDK Stack view arranges its children with stack and distribute. No lazy grid. Tests: spare_space_is_shared_by_flexible_items_in_proportion_to_their_weight, equal_centering_keeps_the_centres_equally_far_apart, adaptive_columns_fit_as_many_minimum_cells_as_the_width_allows, a_grid_fills_rows_left_to_right, an_overlay_aligns_each_layer_to_the_anchor, view_that_fits_picks_the_first_candidate_that_fits_the_constrained_axes (springboard/ui/tests/parity_sdk-tests-10.rs)"
+   "note": "Stack and grid layout as pure functions: HStack/VStack spacing and flexible items, the four fixed distributions, adaptive columns, grid, a ZStack-style overlay and a ViewThatFits-style first_fitting. The SDK Stack view arranges its children with stack and distribute. Lazy list and grid windows (the rows or items under a viewport, with overscan) are tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: no SDK view yet builds only the visible rows of a lazy stack or grid, so the windowing is not wired into the Stack view. Tests: spare_space_is_shared_by_flexible_items_in_proportion_to_their_weight, equal_centering_keeps_the_centres_equally_far_apart, adaptive_columns_fit_as_many_minimum_cells_as_the_width_allows, a_grid_fills_rows_left_to_right, an_overlay_aligns_each_layer_to_the_anchor, view_that_fits_picks_the_first_candidate_that_fits_the_constrained_axes (springboard/ui/tests/parity_sdk-tests-10.rs)"
   },
   {
    "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
@@ -129,9 +129,9 @@
   {
    "feature": "Shader effects (Shader, ShaderLibrary, colorEffect, distortionEffect, layerEffect, visualEffect)",
    "apple": "Shader, ShaderLibrary, View.colorEffect(_:isEnabled:), View.distortionEffect(_:maxSampleOffset:isEnabled:), View.layerEffect(_:maxSampleOffset:isEnabled:), View.visualEffect(_:)",
-   "bifrost": "springboard/ui/src/shader_library.rs (shader function table model); springboard/gpu/src/shader.rs (Vulkan shaders, not app-facing)",
+   "bifrost": "springboard/ui/src/shader_library.rs (shader function table model); springboard/ui/src/effect_shader.rs (ShaderEffect: colorEffect, distortionEffect, layerEffect and visualEffect bound to a fragment function with checked uniforms); springboard/gpu/src/shader.rs (Vulkan shaders, not app-facing)",
    "status": "partial",
-   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+   "note": "The four effect modifiers are modelled and validated against the library (the function must exist and run in the fragment stage, and the uniforms are checked), tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: the per-shader inventory is pending the macOS 27 Golden Gate 26A434 extraction (InstallAssistant.pkg, docs/macos-os-inventory.md), and no effect runs in an app until a GPU pipeline is built from it, which needs the lab machine."
   },
   {
    "feature": "Liquid Glass effect (glassEffect, GlassEffectContainer, glassEffectID)",

@@ -24,9 +24,9 @@
   {
    "feature": "Shader-based effects",
    "apple": "GLKNamedEffect, GLKBaseEffect (lighting, transform), GLKReflectionMapEffect, GLKSkyboxEffect",
-   "bifrost": "springboard/ui/src/shader_library.rs, springboard/ui/src/shader_uniform.rs",
+   "bifrost": "springboard/ui/src/shader_library.rs, springboard/ui/src/shader_uniform.rs, springboard/ui/src/effect_shader.rs (an app-supplied effect with checked uniforms)",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (shader_library.rs, shader_uniform.rs); not wired into the shell or apps, not tested on Midget. no app-supplied shaders or lighting model"
+   "note": "Audit 2026-10-13: the row predated this code. App-supplied shader effects are modelled: an effect names a fragment function from a library and carries checked uniforms, tested headless in ui/tests/parity_sdk-complete-33.rs, with the library and uniform tests in shader_library.rs and shader_uniform.rs. Gap: there is no lighting model and no GPU pipeline is built from these effects, which needs the GPU and the lab machine."
   },
   {
    "feature": "Effect properties",

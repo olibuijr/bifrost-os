@@ -10,9 +10,9 @@
     {
       "feature": "View management (MTKView, MTKViewDelegate)",
       "apple": "MTKView, MTKViewDelegate",
-      "bifrost": "springboard/ui/src/render_loop.rs",
+      "bifrost": "springboard/ui/src/render_loop.rs; springboard/ui/src/render_view.rs (RenderView: drawable size from bounds and content scale, automatic resizing, the loop and draw requests)",
       "status": "partial",
-      "note": "Pure model: host unit tests in render_loop.rs and headless tests (headless_a_timed_loop_draws_on_schedule_and_does_not_catch_up_after_a_late_tick, headless_an_on_demand_loop_draws_one_frame_per_batch_of_requests in springboard/ui/tests/parity_sdk-tests-05.rs). Not wired into apps or the shell, not yet tested on the VM or Midget. Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"
+      "note": "The render view model is tested headless in ui/tests/parity_sdk-complete-33.rs: drawable size from bounds and scale, automatic and manual resizing with change reports, and the paused, timed and on-demand loop, alongside the loop tests in render_loop.rs and parity_sdk-tests-05.rs. Gap: no app-facing GPU view or per-frame draw delegate is attached, and the presenter stays internal to the shell, which needs a GPU device and the lab machine."
     },
     {
       "feature": "Device and drawable setup",
@@ -24,9 +24,9 @@
     {
       "feature": "Texture loading from image files",
       "apple": "MTKTextureLoader (newTexture URL, asset catalog)",
-      "bifrost": "springboard/render/src/imgdec.rs (decode, PNG and JPEG); springboard/src/gpu/mod.rs (upload, line 352)",
+      "bifrost": "springboard/render/src/imgdec.rs (decode, PNG and JPEG); springboard/src/gpu/mod.rs (upload, line 352); springboard/ui/src/texture_catalog.rs (named images with scale variants); springboard/ui/src/texture_loader.rs (background load requests)",
       "status": "partial",
-      "note": "Images decode to RGBA on the CPU and upload to GLES. No app-facing GPU texture object, no asynchronous load, no asset catalog lookup, no texture options"
+      "note": "Images decode to RGBA on the CPU and upload to GLES. A named lookup that picks the scale variant for the screen is tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: no app-facing GPU texture object and no asynchronous upload to GLES, and the upload path needs a GPU and the lab machine."
     },
     {
       "feature": "Model I/O mesh handling (MTKMesh, MTKSubmesh, MTKMeshBuffer, allocator)",

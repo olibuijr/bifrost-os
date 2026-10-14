@@ -324,6 +324,13 @@ impl ConfigureSheet {
         self.options.iter().map(|o| (o.key.clone(), o.value.clone())).collect()
     }
 
+    /// Applies saved values, such as the pairs `values` returned on an earlier run. A pair with an unknown key or a
+    /// value the option does not accept is skipped, so a preference from an older version cannot break the sheet.
+    /// Returns the number of values applied.
+    pub fn restore(&mut self, saved: &[(String, SaverValue)]) -> usize {
+        saved.iter().filter(|(key, value)| self.set(key, value.clone())).count()
+    }
+
     /// Number of options.
     pub fn len(&self) -> usize {
         self.options.len()

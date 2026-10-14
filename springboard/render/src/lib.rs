@@ -60,6 +60,7 @@ pub mod distortion_filters;
 pub mod stylize_filters;
 pub mod halftone_tile_filters;
 pub mod filter_catalogue;
+pub mod filter_input;
 pub mod gamma_fade;
 pub mod video_transfer;
 pub mod clip;
