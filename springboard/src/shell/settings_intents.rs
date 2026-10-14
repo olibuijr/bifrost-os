@@ -20,6 +20,12 @@ pub struct SettingsIntent {
 
 /// Every settings intent, in the order Search lists them.
 pub const CATALOGUE: &[SettingsIntent] = &[
+    SettingsIntent { id: "open-sound", title: "Open Sound", description: "Show the sound output, input and alert settings", page: PageId::Sounds },
+    SettingsIntent { id: "open-privacy", title: "Open Privacy", description: "Show the privacy and permission settings", page: PageId::Privacy },
+    SettingsIntent { id: "open-screen-time", title: "Open Screen Time", description: "Show the screen time settings", page: PageId::ScreenTime },
+    SettingsIntent { id: "open-storage", title: "Open Storage", description: "Show the storage use of this computer", page: PageId::Storage },
+    SettingsIntent { id: "open-sharing", title: "Open Sharing", description: "Show the sharing settings", page: PageId::Sharing },
+    SettingsIntent { id: "open-software-update", title: "Open Software Update", description: "Show the software update settings", page: PageId::SoftwareUpdate },
     SettingsIntent { id: "open-about", title: "Open About", description: "Show information about this computer", page: PageId::About },
     SettingsIntent { id: "open-account", title: "Open BifrOSt Account", description: "Show the account settings", page: PageId::Root },
     SettingsIntent { id: "open-accessibility", title: "Open Accessibility", description: "Show the accessibility settings", page: PageId::Accessibility },
