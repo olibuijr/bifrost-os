@@ -1,0 +1,110 @@
+{
+ "framework": "UIKit (Keyboards and input)",
+ "doc": "https://developer.apple.com/documentation/uikit/keyboards-and-input",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/ui/src/text.rs, springboard/src/shell/keyboard.rs, springboard/apps/keyboard, springboard/src/shell/textinput.rs, springboard/sdk/src/runtime.rs, springboard/src/shell/hwkeys.rs",
+ "summary": "An on-screen keyboard runs as a system app, apps declare return keys and content traits and report text state and caret rectangles, and the text editor model handles marked text. The shell refuses the keyboard in desktop mode, there is no Wayland text-input path, no system selection UI for custom views and no predictive or dictation integration.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Text input protocol",
+   "apple": "UITextInput, UIKeyInput, UITextInputDelegate, UITextPosition, UITextRange",
+   "bifrost": "springboard/ui/src/text.rs, springboard/sdk/src/view/mod.rs",
+   "status": "partial",
+   "note": "TextBuffer has selection, marked range and edit commands; TextField reports state to the shell through TextInputInfo. No generic position and range protocol for custom views, no input delegate (selectionWillChange)"
+  },
+  {
+   "feature": "Text input traits",
+   "apple": "UITextInputTraits (keyboardType, returnKeyType, autocapitalization, secure entry)",
+   "bifrost": "springboard/sdk/src/runtime.rs, docs/bifrost-ui.md",
+   "status": "partial",
+   "note": "Ctx::input_traits sends ReturnKeyType and content kinds; the keyboard app draws only some return keys and ignores secure and content traits"
+  },
+  {
+   "feature": "Marked text and composition",
+   "apple": "setMarkedText, unmarkText, input modes",
+   "bifrost": "springboard/ui/src/imsession.rs, springboard/ui/src/input_method.rs, springboard/src/shell/input_methods",
+   "status": "partial",
+   "note": "input method controllers compose Hangul, Telex and VNI; the keyboard app does not send Preedit and the controllers are not wired to the key path"
+  },
+  {
+   "feature": "Software keyboard",
+   "apple": "system keyboard, input views, keyboard types",
+   "bifrost": "springboard/src/shell/keyboard.rs, springboard/apps/keyboard, docs/keyboard-system-app.md",
+   "status": "partial",
+   "note": "touch keyboard with layouts, auto caps and emoji, running as a system app. src/bin/shell.rs calls keyboard::set_disabled(true) and Shell::set_keyboard refuses while desk_active(), so on a tablet in desktop mode no software keyboard appears (area B3)"
+  },
+  {
+   "feature": "Keyboard layout guide and avoidance",
+   "apple": "UIKeyboardLayoutGuide, keyboard notifications",
+   "bifrost": "springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "Ctx::keyboard_height tells apps the keyboard height; no layout guide object, no floating or split keyboard states, no interactive dismissal"
+  },
+  {
+   "feature": "Input accessory and shortcuts bar",
+   "apple": "UITextInputAssistantItem, inputAccessoryView, UIBarButtonItemGroup",
+   "bifrost": "springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "Ctx::input_accessory sends up to eight items that the shell stores; they are not drawn and AccessoryAction is not sent"
+  },
+  {
+   "feature": "Custom keyboards",
+   "apple": "UIInputViewController, UIInputView, UILexicon, UITextDocumentProxy",
+   "bifrost": "springboard/apps/keyboard",
+   "status": "partial",
+   "note": "the keyboard is a replaceable system package, but there is no extension point for third-party keyboards and no document proxy"
+  },
+  {
+   "feature": "Text interaction and selection UI",
+   "apple": "UITextInteraction, UITextSelectionDisplayInteraction, UITextCursorView, selection handles, UITextLoupeSession",
+   "bifrost": "springboard/src/shell/textarea.rs, springboard/src/shell/textfield.rs, springboard/src/shell/editmenu.rs",
+   "status": "partial",
+   "note": "the shell's own fields have lollipop handles, a loupe, double and triple tap and an edit bubble; SDK text views have no handles or loupe and custom views cannot adopt them"
+  },
+  {
+   "feature": "Text tokenizer",
+   "apple": "UITextInputTokenizer",
+   "bifrost": "springboard/ui/src/textbreak.rs",
+   "status": "partial",
+   "note": "grapheme and line break segmentation; word boundaries are alphanumeric runs"
+  },
+  {
+   "feature": "Physical keyboard",
+   "apple": "UIKey, UIKeyboardHIDUsage, handling key presses",
+   "bifrost": "springboard/src/shell/hwkeys.rs, springboard/src/shell/kb_input.rs, springboard/ui/src/keys.rs",
+   "status": "partial",
+   "note": "evdev key events with modifiers, repeat and remapping; apps get KeyInput without HID usage codes"
+  },
+  {
+   "feature": "Dictation",
+   "apple": "UIDictationPhrase",
+   "bifrost": "springboard/sdk/src/speech_recognizer.rs",
+   "status": "partial",
+   "note": "speech recognition requests exist for apps; no dictation key on the keyboard and no phrase alternatives"
+  },
+  {
+   "feature": "Smart Reply and input suggestions",
+   "apple": "UIConversationContext, UIInputSuggestion, UISmartReplySuggestion",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "ties to the vendor's on-device models"
+  },
+  {
+   "feature": "Wayland text input for third-party clients",
+   "apple": "system text input service for any process",
+   "bifrost": "springboard/src/shell/textinput.rs",
+   "status": "os",
+   "note": "the mapping to text-input-v3 is written down; the shell is a Wayland client of the compositor and serves no input method protocol, so GTK or Qt clients get no on-screen keyboard (area B8)"
+  }
+ ],
+ "gaps": [
+  "Enable the software keyboard when the form factor is tablet (B3)",
+  "Wayland text-input and input-method bridge in the compositor for third-party clients (B8)",
+  "Selection handles, loupe and caret drag as a reusable interaction for SDK text views",
+  "Draw the input accessory row and send AccessoryAction",
+  "Floating and split keyboard states and a keyboard layout guide",
+  "Third-party keyboard extension point"
+ ]
+}

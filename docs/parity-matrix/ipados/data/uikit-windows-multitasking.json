@@ -1,0 +1,102 @@
+{
+ "framework": "UIKit (Windows, screens and multitasking)",
+ "doc": "https://developer.apple.com/documentation/uikit/windows-and-screens",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/src/shell/desk.rs, springboard/src/shell/splitview.rs, springboard/src/shell/switcher.rs, springboard/src/shell/overview.rs, springboard/sdk/src/screens.rs, springboard/wm",
+ "summary": "The shell has two modes that already look like the two form factors: floating windows with a dock, and full-screen apps with Split View, Slide Over, a switcher and a home screen. Apps see one surface and a screen list, with no window scenes, no external display scenes and no per-window API for size classes or resizing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Windows",
+   "apple": "UIWindow, UICoordinateSpace, key window, window level",
+   "bifrost": "springboard/sdk/src/windows.rs, springboard/src/shell/desk.rs",
+   "status": "partial",
+   "note": "a window list service and the shell's window model; every app is a singleton with one window"
+  },
+  {
+   "feature": "Floating windows",
+   "apple": "Stage Manager, resizable windows, window controls",
+   "bifrost": "springboard/src/shell/desk.rs, springboard/wm",
+   "status": "partial",
+   "note": "floating windows with traffic lights, move, resize and occlusion; the window server is a Smithay compositor. Tablet-touch move and resize handles are not defined"
+  },
+  {
+   "feature": "Split View",
+   "apple": "Split View, Slide Over",
+   "bifrost": "springboard/src/shell/splitview.rs",
+   "status": "partial",
+   "note": "50/50, 70/30, 30/70 and a 360 pt Slide Over panel with divider drag and swipe away, in handheld mode only"
+  },
+  {
+   "feature": "App switcher",
+   "apple": "app switcher, home indicator gestures",
+   "bifrost": "springboard/src/shell/switcher.rs, springboard/src/shell/gestures.rs",
+   "status": "os",
+   "note": "swipe up from the home indicator, cards and go-home flick, in the shell; apps do not see it"
+  },
+  {
+   "feature": "Spaces and overview",
+   "apple": "Mission Control, Stage Manager overview",
+   "bifrost": "springboard/src/shell/overview.rs",
+   "status": "os",
+   "note": "desktop overview with a strip of desktops; keyboard driven (Ctrl+Up, F3), no touch gesture is assigned"
+  },
+  {
+   "feature": "Multitasking adaptation",
+   "apple": "size class changes, multitasking APIs, UIWindowScene.sizeRestrictions",
+   "bifrost": "springboard/sdk/src/layout.rs",
+   "status": "partial",
+   "note": "apps are laid out at the pane size and Layout recomputes; apps cannot set minimum or maximum window sizes through a scene"
+  },
+  {
+   "feature": "Scenes",
+   "apple": "UIWindowScene, multiple windows of one app",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "see uikit-app-scene-lifecycle"
+  },
+  {
+   "feature": "Screens",
+   "apple": "UIScreen, UIScreenMode, connected displays",
+   "bifrost": "springboard/sdk/src/screens.rs, springboard/ui/src/screen.rs, springboard/ui/src/display_info.rs",
+   "status": "partial",
+   "note": "screen frames, backing scale and which screen holds a point; no way for an app to put content on another display"
+  },
+  {
+   "feature": "Screen rotation",
+   "apple": "device orientation, rotation lock",
+   "bifrost": "springboard/src/shell/rotate.rs, springboard/render/src/gfx/rotate.rs",
+   "status": "os",
+   "note": "the handheld shell turns and letterboxes portrait-only apps; the compositor has no output rotation (area B7)"
+  },
+  {
+   "feature": "Popovers and transient windows",
+   "apple": "UIPopoverPresentationController",
+   "bifrost": "springboard/ui/src/split.rs",
+   "status": "partial",
+   "note": "see uikit-view-controllers"
+  },
+  {
+   "feature": "Picture in picture",
+   "apple": "AVPictureInPictureController",
+   "bifrost": "springboard/ui/src/pip_window.rs",
+   "status": "partial",
+   "note": "model for the floating video window; related to multitasking"
+  },
+  {
+   "feature": "Window server",
+   "apple": "WindowServer / compositor",
+   "bifrost": "springboard/wm",
+   "status": "partial",
+   "note": "Wayland compositor with DRM and libinput; touch routing, rotation and text input are the convergence work (areas B1, B7, B8)"
+  }
+ ],
+ "gaps": [
+  "Scene API for multiple app windows",
+  "Touch move and resize of floating windows in desktop mode on a tablet",
+  "Touch gesture for the desktop overview",
+  "Scene size restrictions and per-window size class",
+  "Output rotation in the compositor (B7)"
+ ]
+}

@@ -1,0 +1,87 @@
+{
+ "framework": "UIKit (Images, drawing, printing, Pencil input)",
+ "doc": "https://developer.apple.com/documentation/uikit/drawing",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/drawing_model.rs, springboard/sdk/src/graphics_context.rs, springboard/render/src/imgdec.rs, springboard/ui/src/pdfview.rs, springboard/ui/src/print.rs, springboard/ui/src/drawing.rs",
+ "summary": "Bezier paths, gradients, shadows, a graphics context, image decoding, a PDF view model, print pagination and CUPS submission, and a drawing and stroke model with a tool picker and lasso exist. A stylus input path with pressure and tilt from the touch panel to apps, a drawing canvas view and renderer format objects are missing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Images",
+   "apple": "UIImage, UIImageAsset, image renderer",
+   "bifrost": "springboard/sdk/src/image_source.rs, springboard/render/src/imgdec.rs, springboard/render/src/symbols.rs",
+   "status": "partial",
+   "note": "PNG and JPEG decoding, scaled drawing, image filters; no asset catalog with trait variants"
+  },
+  {
+   "feature": "PDF",
+   "apple": "PDF rendering and creation",
+   "bifrost": "springboard/ui/src/pdfview.rs, springboard/ui/src/pdfpage.rs, springboard/ui/src/print.rs",
+   "status": "partial",
+   "note": "view layout model and PDF writing for print"
+  },
+  {
+   "feature": "Paths, colours, shadows, gradients",
+   "apple": "UIBezierPath, UIColor, NSShadow",
+   "bifrost": "springboard/sdk/src/drawing_model.rs, springboard/render/src/bezier.rs, springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BezierPath, Gradient and Shadow"
+  },
+  {
+   "feature": "Graphics renderers",
+   "apple": "UIGraphicsImageRenderer, UIGraphicsPDFRenderer",
+   "bifrost": "springboard/sdk/src/graphics_context.rs, springboard/sdk/src/offscreen.rs",
+   "status": "partial",
+   "note": "graphics context and offscreen targets; no renderer format object"
+  },
+  {
+   "feature": "Strings and drawing text",
+   "apple": "draw(in:), NSString drawing",
+   "bifrost": "springboard/sdk/src/richlayout.rs, springboard/sdk/src/glyph_draw.rs",
+   "status": "partial",
+   "note": "attributed text drawing"
+  },
+  {
+   "feature": "Printing",
+   "apple": "UIPrintInteractionController, UIPrintPageRenderer, UIPrinterPickerController",
+   "bifrost": "springboard/ui/src/print.rs, springboard/sdk/src/print_panel.rs, springboard/ui/src/cups.rs",
+   "status": "partial",
+   "note": "print info, paginated PDF and CUPS client; no touch print panel layout"
+  },
+  {
+   "feature": "Drawing canvas model",
+   "apple": "PencilKit canvas, PKDrawing, PKStroke, PKTool",
+   "bifrost": "springboard/ui/src/drawing.rs, springboard/ui/src/markup_drawing.rs, springboard/ui/src/tool_picker.rs, springboard/ui/src/lasso.rs",
+   "status": "partial",
+   "note": "strokes with force, altitude and azimuth, inks, lasso, tool picker state; no canvas view drawing strokes live from touch input"
+  },
+  {
+   "feature": "Stylus input",
+   "apple": "Apple Pencil touches, predicted touches, coalesced touches",
+   "bifrost": "springboard/ui/src/stylus.rs",
+   "status": "partial",
+   "note": "digitizer values map to stroke points; the touch wire has no pressure, tilt, predicted or coalesced samples (areas B1, B5)"
+  },
+  {
+   "feature": "Markup",
+   "apple": "PaperMarkup, annotations",
+   "bifrost": "springboard/sdk/src/markup.rs, springboard/ui/src/annotation.rs",
+   "status": "partial",
+   "note": "markup canvas element model and PDF annotations"
+  },
+  {
+   "feature": "Pencil double tap and squeeze",
+   "apple": "UIPencilInteraction",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "side button and tap events from the pen"
+  }
+ ],
+ "gaps": [
+  "Stylus pressure, tilt and coalesced samples on the touch wire",
+  "Canvas view that renders live strokes",
+  "Pen button and tap events",
+  "Image asset catalogs with trait variants"
+ ]
+}

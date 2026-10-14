@@ -1,0 +1,145 @@
+{
+ "framework": "UIKit (View controllers)",
+ "doc": "https://developer.apple.com/documentation/uikit/view-controllers",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/view/app.rs (ViewController, ControllerHost), springboard/ui/src/nav.rs, springboard/ui/src/sheet.rs, springboard/ui/src/split.rs",
+ "summary": "A view controller with load_view, view_did_load and view_did_layout hooks sits in the responder chain; navigation stacks, toolbars, alerts, sheets, split views and popover placement exist as models. Presentation controllers with detents, container controllers for tabs and pages, search controllers, pickers and activity sheets are missing or only exist inside the shell.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Content view controllers",
+   "apple": "UIViewController (loadView, viewDidLoad, viewWillAppear, viewDidLayoutSubviews)",
+   "bifrost": "springboard/sdk/src/view/app.rs",
+   "status": "partial",
+   "note": "ViewController::load_view, view_did_load, view_did_layout; no appear and disappear callbacks, no child controller containment, no trait change callback"
+  },
+  {
+   "feature": "Showing and hiding view controllers",
+   "apple": "show, present, dismiss, segues, unwind",
+   "bifrost": "springboard/ui/src/nav.rs, springboard/ui/src/sheet.rs",
+   "status": "partial",
+   "note": "push and pop through NavigationStack and sheet models; no general present and dismiss with a transition coordinator and no segues, by design"
+  },
+  {
+   "feature": "Navigation controller",
+   "apple": "UINavigationController, UINavigationItem, UINavigationBar",
+   "bifrost": "springboard/ui/src/nav.rs",
+   "status": "partial",
+   "note": "NavigationStack with back titles and a value path (NavigationPath); no navigation bar view with large titles, no interactive back swipe from the leading edge (needs the edge pan in uikit-touches-gestures)"
+  },
+  {
+   "feature": "Split view controller",
+   "apple": "UISplitViewController (columns, display modes, collapse)",
+   "bifrost": "springboard/ui/src/split.rs",
+   "status": "partial",
+   "note": "two-pane split with draggable divider, minimums and collapse; no three-column style, no compact collapse onto a navigation stack, no display mode toggle button"
+  },
+  {
+   "feature": "Tab bar controller",
+   "apple": "UITabBarController, UITab, UITabGroup, UISearchTab",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "no tab container. Needed as the default top-level navigation of tablet apps; build as a ViewController with a bottom tab bar view and a sidebar adaptive mode"
+  },
+  {
+   "feature": "Page view controller",
+   "apple": "UIPageViewController",
+   "bifrost": "springboard/src/pager.rs",
+   "status": "os",
+   "note": "horizontal paging with rubber band and velocity snap exists for the home screen only; not an SDK container"
+  },
+  {
+   "feature": "Presentation controllers and sheets",
+   "apple": "UIPresentationController, UISheetPresentationController (detents, grabber)",
+   "bifrost": "springboard/ui/src/sheet.rs",
+   "status": "partial",
+   "note": "a sheet hangs from a window title bar, dims and blocks the parent, with default and cancel keys; no bottom sheet with detents and drag-to-resize, no form sheet or page sheet sizes for touch"
+  },
+  {
+   "feature": "Popovers",
+   "apple": "UIPopoverPresentationController",
+   "bifrost": "springboard/ui/src/split.rs, springboard/sdk/src/widgets.rs",
+   "status": "partial",
+   "note": "place_popover picks an edge, flips when it does not fit and stays on screen; popover drawing with an arrow exists. Not a presentation controller: the app positions it by hand"
+  },
+  {
+   "feature": "Alerts and action sheets",
+   "apple": "UIAlertController, UIAlertAction",
+   "bifrost": "springboard/ui/src/nav.rs",
+   "status": "partial",
+   "note": "Alert with default and cancel actions and styles; no text fields in alerts and no action sheet style anchored to a source view"
+  },
+  {
+   "feature": "Search controller",
+   "apple": "UISearchController, UISearchResultsUpdating",
+   "bifrost": "springboard/ui/src/search.rs",
+   "status": "partial",
+   "note": "field model only; no results container, no suggestions list presentation"
+  },
+  {
+   "feature": "Image and video pickers",
+   "apple": "UIImagePickerController, UIVideoEditorController",
+   "bifrost": "springboard/sdk/src/photo_library.rs",
+   "status": "partial",
+   "note": "photo library access for apps; no picker view controller, no capture UI in the SDK"
+  },
+  {
+   "feature": "Document controllers",
+   "apple": "UIDocumentBrowserViewController, UIDocumentPickerViewController, UIDocumentViewController",
+   "bifrost": "springboard/sdk/src/document.rs, springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "Ctx::open_panel, save_document and grants through the file portal; document model with edited state. No in-app document browser and no launch screen for documents"
+  },
+  {
+   "feature": "Activity view controller",
+   "apple": "UIActivityViewController, UIActivityItemSource",
+   "bifrost": "springboard/sdk/src/share.rs, springboard/sdk/src/item_provider.rs",
+   "status": "partial",
+   "note": "ask the shell for the share menu under a rect; items travel as typed providers. No custom activity types published by apps"
+  },
+  {
+   "feature": "Font and colour pickers",
+   "apple": "UIFontPickerViewController, UIColorPickerViewController",
+   "bifrost": "springboard/ui/src/panels.rs",
+   "status": "partial",
+   "note": "font and colour panel models with change callbacks; drawn by the shell for the desktop, no touch layouts"
+  },
+  {
+   "feature": "Printer picker",
+   "apple": "UIPrinterPickerController",
+   "bifrost": "springboard/sdk/src/print_panel.rs, springboard/ui/src/print.rs",
+   "status": "partial",
+   "note": "print panel and CUPS submission"
+  },
+  {
+   "feature": "Interface restoration",
+   "apple": "UIViewControllerRestoration, UIStateRestoring",
+   "bifrost": "springboard/sdk/src/restoration.rs",
+   "status": "partial",
+   "note": "app-level state saving; no per-controller restoration identifiers"
+  },
+  {
+   "feature": "Custom transitions",
+   "apple": "UIViewControllerAnimatedTransitioning, interactive transitions",
+   "bifrost": "springboard/ui/src/transition.rs",
+   "status": "partial",
+   "note": "fade, move in, push and reveal as a model; no interactive (finger-driven) transitions"
+  },
+  {
+   "feature": "Interface orientation",
+   "apple": "isPortrait, isLandscape",
+   "bifrost": "springboard/sdk/src/layout.rs",
+   "status": "partial",
+   "note": "layout derives from window size, so portrait and landscape follow from width and height; no explicit query"
+  }
+ ],
+ "gaps": [
+  "Tab bar controller with sidebar adaptation",
+  "Bottom sheet presentation with detents",
+  "Interactive back swipe and finger-driven transitions",
+  "Collapsing split view onto a navigation stack in compact width",
+  "Presentation controller for popovers anchored to a source view",
+  "Child view controller containment and appear callbacks"
+ ]
+}

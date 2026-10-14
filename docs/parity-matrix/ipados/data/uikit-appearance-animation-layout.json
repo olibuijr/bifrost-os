@@ -1,0 +1,130 @@
+{
+ "framework": "UIKit (View layout, appearance, animation and haptics)",
+ "doc": "https://developer.apple.com/documentation/uikit/appearance-customization",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/view/autolayout.rs, springboard/ui/src/constraint.rs, springboard/ui/src/anim.rs, springboard/sdk/src/view/animation.rs, springboard/render/src/appearance.rs, springboard/ui/src/material_style.rs",
+ "summary": "Auto Layout with a Cassowary solver, layout guides and safe area insets, dark and light appearance, glass and materials, implicit and keyframe animations, physics and transitions exist. Haptic feedback is a single pulse, and appearance proxies, bar appearance, configurations and motion effects are missing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Constraints",
+   "apple": "NSLayoutConstraint, NSLayoutAnchor, priorities",
+   "bifrost": "springboard/ui/src/constraint.rs, springboard/sdk/src/view/autolayout.rs",
+   "status": "partial",
+   "note": "incremental simplex solver with priorities and an anchor API; opt-in for views"
+  },
+  {
+   "feature": "Layout guides and margins",
+   "apple": "UILayoutGuide, layout margins, readable content guide",
+   "bifrost": "springboard/sdk/src/layout.rs, springboard/sdk/src/view/autolayout.rs",
+   "status": "partial",
+   "note": "margins and content top from the window size; no readable content width guide"
+  },
+  {
+   "feature": "Safe area",
+   "apple": "safeAreaInsets, safeAreaLayoutGuide",
+   "bifrost": "springboard/sdk/src/layout.rs",
+   "status": "partial",
+   "note": "Layout carries a top inset (Configure.safe_top) and a bottom inset (Configure.safe_bottom, which the shell fills with the home zone plus keyboard height on a handheld); no side insets for rounded corners and no safe-area layout guide object"
+  },
+  {
+   "feature": "Reserved regions",
+   "apple": "UIView.ReservedRegion",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "regions occupied by system UI such as the keyboard or window controls"
+  },
+  {
+   "feature": "Dark mode and dynamic colours",
+   "apple": "userInterfaceStyle, UIColor dynamic providers",
+   "bifrost": "springboard/render/src/appearance.rs, springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "light and dark appearance with semantic colours; apps follow the system setting"
+  },
+  {
+   "feature": "Liquid Glass and materials",
+   "apple": "UIGlassEffect, UIGlassContainerEffect, UIBackgroundExtensionView",
+   "bifrost": "springboard/ui/src/material_style.rs, springboard/render/src/glass.rs",
+   "status": "partial",
+   "note": "glass and prominent glass styles, container, union and background extension model"
+  },
+  {
+   "feature": "Bar and appearance proxies",
+   "apple": "UINavigationBarAppearance, UITabBarAppearance, UIAppearance",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "styles come from the shared kit; apps cannot restyle bars globally, which is acceptable for a consistent look"
+  },
+  {
+   "feature": "Configurations",
+   "apple": "UIListContentConfiguration, UIBackgroundConfiguration",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "no declarative cell and view configuration objects"
+  },
+  {
+   "feature": "Property-based animations",
+   "apple": "UIView.animate, springs, keyframes",
+   "bifrost": "springboard/sdk/src/view/animation.rs, springboard/ui/src/anim.rs, springboard/ui/src/keypath_anim.rs",
+   "status": "partial",
+   "note": "transactions, curves, springs, key-path and keyframe animation; view properties animate through ViewState"
+  },
+  {
+   "feature": "Interruptible animators",
+   "apple": "UIViewPropertyAnimator",
+   "bifrost": "springboard/ui/src/anim_transaction.rs",
+   "status": "partial",
+   "note": "retargeting without a jump for springs; no scrubbing or pausing animator object"
+  },
+  {
+   "feature": "View controller transitions",
+   "apple": "custom transitions",
+   "bifrost": "springboard/ui/src/transition.rs",
+   "status": "partial",
+   "note": "see uikit-view-controllers"
+  },
+  {
+   "feature": "UIKit Dynamics",
+   "apple": "UIDynamicAnimator, behaviors",
+   "bifrost": "springboard/ui/src/physics.rs",
+   "status": "partial",
+   "note": "rigid body world with gravity and collisions; no attachment, snap or push behaviors"
+  },
+  {
+   "feature": "Motion effects",
+   "apple": "UIInterpolatingMotionEffect",
+   "bifrost": "springboard/sdk/src/motion_raw.rs",
+   "status": "partial",
+   "note": "raw sensor values reach apps; no parallax effect object"
+  },
+  {
+   "feature": "Haptic feedback",
+   "apple": "UIImpactFeedbackGenerator, UISelectionFeedbackGenerator, UINotificationFeedbackGenerator",
+   "bifrost": "springboard/sdk/src/runtime.rs, springboard/src/bare/vibrator.rs",
+   "status": "partial",
+   "note": "Ctx::haptic sends one pulse to the shell vibrator; no intensity, style or selection and notification patterns"
+  },
+  {
+   "feature": "Display refresh timing",
+   "apple": "CADisplayLink, ProMotion",
+   "bifrost": "springboard/sdk/src/display_link.rs",
+   "status": "partial",
+   "note": "display timing and frame clock"
+  },
+  {
+   "feature": "Symbols",
+   "apple": "SF Symbols, UIImage(systemName:)",
+   "bifrost": "springboard/sdk/src/glyphs.rs, springboard/render/src/symbols.rs, springboard/ui/src/symbol_effect.rs",
+   "status": "partial",
+   "note": "line glyphs named after the system symbol set; effects model"
+  }
+ ],
+ "gaps": [
+  "Bottom and side safe area insets",
+  "Haptic generators with styles and intensities",
+  "Declarative content and background configurations",
+  "Interruptible animator with scrubbing",
+  "Readable content guide and reserved regions"
+ ]
+}
