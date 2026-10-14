@@ -186,6 +186,9 @@ pub enum Action {
     SetAuthor,
     /// Adjust > Show Adjust Color / Hide Adjust Color: the right side shows sliders for the colour adjustments.
     ShowColorPanel,
+    /// Adjust > Sharpen and Soften: one step of the sharpness up or down.
+    Sharpen,
+    Soften,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -278,6 +281,8 @@ pub const ACTIONS: &[Action] = &[
     Action::ToggleContactDefault,
     Action::SetAuthor,
     Action::ShowColorPanel,
+    Action::Sharpen,
+    Action::Soften,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -404,6 +409,8 @@ impl Action {
             Action::ToggleContactDefault => "Open PDFs as Contact Sheet",
             Action::SetAuthor => "Annotation Author\u{2026}",
             Action::ShowColorPanel => "Show Adjust Color",
+            Action::Sharpen => "Sharpen",
+            Action::Soften => "Soften",
         }
     }
 

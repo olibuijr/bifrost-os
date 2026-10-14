@@ -350,7 +350,8 @@ pub fn save_bookmarks(data_dir: &Path, path: &Path, pages: &[usize]) -> std::io:
     std::fs::write(file, model::to_bookmarks(pages))
 }
 
-/// `img` with the colour adjustments applied. Returns a copy unchanged when nothing is set.
+/// `img` with the colour adjustments applied: the filter chain first, then the sharpening. Returns a copy unchanged
+/// when nothing is set.
 pub fn adjusted(img: &Image, adjust: &Adjust) -> Image {
     let mut chain = FilterChain::new();
     for (name, value) in adjust.settings() {
@@ -361,10 +362,12 @@ pub fn adjusted(img: &Image, adjust: &Adjust) -> Image {
             chain.push(filter);
         }
     }
-    if chain.is_empty() {
-        return img.clone();
+    let filtered = if chain.is_empty() { img.clone() } else { chain.apply(img).unwrap_or_else(|| img.clone()) };
+    if adjust.sharpness > 0.0 {
+        crate::pixels::sharpen(&filtered, adjust.sharpness)
+    } else {
+        filtered
     }
-    chain.apply(img).unwrap_or_else(|| img.clone())
 }
 
 /// Documents for the tests of other modules.

@@ -202,11 +202,13 @@ pub struct Adjust {
     pub contrast: f32,
     /// Colour temperature, from -100 (cooler) to 100 (warmer), 0 is unchanged.
     pub temperature: f32,
+    /// Sharpness as the unsharp mask amount, from 0 (unchanged) to 2. It is applied after the filter chain.
+    pub sharpness: f32,
 }
 
 impl Default for Adjust {
     fn default() -> Self {
-        Adjust { exposure: 0.0, saturation: 1.0, contrast: 1.0, temperature: 0.0 }
+        Adjust { exposure: 0.0, saturation: 1.0, contrast: 1.0, temperature: 0.0, sharpness: 0.0 }
     }
 }
 
@@ -242,14 +244,15 @@ impl Adjust {
         out
     }
 
-    /// The four sliders of the Adjust Color panel, in panel order: exposure, contrast, saturation and temperature. The
-    /// ranges are the ones the filters accept.
-    pub fn sliders(&self) -> [Slider; 4] {
+    /// The five sliders of the Adjust Color panel, in panel order: exposure, contrast, saturation, temperature and
+    /// sharpness. The ranges are the ones the filters accept.
+    pub fn sliders(&self) -> [Slider; 5] {
         [
             Slider { label: "Exposure", min: -2.0, max: 2.0, value: self.exposure },
             Slider { label: "Contrast", min: 0.0, max: 2.0, value: self.contrast },
             Slider { label: "Saturation", min: 0.0, max: 2.0, value: self.saturation },
             Slider { label: "Temperature", min: -100.0, max: 100.0, value: self.temperature },
+            Slider { label: "Sharpness", min: 0.0, max: 2.0, value: self.sharpness },
         ]
     }
 
@@ -260,6 +263,7 @@ impl Adjust {
             1 => self.contrast = value.clamp(0.0, 2.0),
             2 => self.saturation = value.clamp(0.0, 2.0),
             3 => self.temperature = value.clamp(-100.0, 100.0),
+            4 => self.sharpness = value.clamp(0.0, 2.0),
             _ => {}
         }
     }
@@ -1017,22 +1021,33 @@ mod tests {
     fn default_adjust_adds_no_filters() {
         assert!(Adjust::default().is_identity());
         assert!(Adjust::default().settings().is_empty());
-        let a = Adjust { exposure: 0.5, saturation: 1.0, contrast: 1.2, temperature: 0.0 };
+        let a = Adjust { exposure: 0.5, contrast: 1.2, ..Adjust::default() };
         assert_eq!(a.settings(), vec![("exposure", 0.5), ("contrast", 1.2)]);
+    }
+
+    #[test]
+    fn sharpness_is_not_a_filter_chain_setting() {
+        // the unsharp mask runs on the picture itself, after the chain, so it adds no named filter
+        let a = Adjust { sharpness: 1.0, ..Adjust::default() };
+        assert!(!a.is_identity());
+        assert!(a.settings().is_empty());
     }
 
     #[test]
     fn the_adjust_panel_sliders_set_and_clamp_their_adjustments() {
         let mut a = Adjust::default();
         let sliders = a.sliders();
-        assert_eq!(sliders.iter().map(|s| s.label).collect::<Vec<_>>(), ["Exposure", "Contrast", "Saturation", "Temperature"]);
+        assert_eq!(sliders.iter().map(|s| s.label).collect::<Vec<_>>(), ["Exposure", "Contrast", "Saturation", "Temperature", "Sharpness"]);
         assert_eq!(sliders[0].value, 0.0);
         assert_eq!(sliders[1].value, 1.0, "contrast starts unchanged");
+        assert_eq!(sliders[4].value, 0.0, "sharpness starts unchanged");
         a.set_slider(0, 9.0);
         a.set_slider(1, -1.0);
         a.set_slider(3, 40.0);
         assert_eq!((a.exposure, a.contrast, a.temperature), (2.0, 0.0, 40.0));
         assert_eq!(a.settings(), vec![("exposure", 2.0), ("contrast", 0.0), ("temperatureTint", 40.0)]);
+        a.set_slider(4, 5.0);
+        assert_eq!(a.sharpness, 2.0, "sharpness is clamped to its range");
         a.set_slider(9, 1.0);
         assert!(!a.is_identity());
         assert_eq!(sliders[3].min, -100.0);

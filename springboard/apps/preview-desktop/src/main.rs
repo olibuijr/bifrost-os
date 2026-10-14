@@ -1371,6 +1371,8 @@ impl Viewer {
             Action::Darker => self.adjust.exposure = (self.adjust.exposure - 0.5).clamp(-2.0, 2.0),
             Action::Saturate => self.adjust.saturation = (self.adjust.saturation + 0.25).clamp(0.0, 2.0),
             Action::Desaturate => self.adjust.saturation = (self.adjust.saturation - 0.25).clamp(0.0, 2.0),
+            Action::Sharpen => self.adjust.sharpness = (self.adjust.sharpness + 0.25).clamp(0.0, 2.0),
+            Action::Soften => self.adjust.sharpness = (self.adjust.sharpness - 0.25).clamp(0.0, 2.0),
             Action::ResetColour => self.adjust = Adjust::default(),
             Action::Print => self.print(),
             Action::RevertToOriginal => self.revert(),
@@ -1530,7 +1532,7 @@ impl Viewer {
         }
         // the Adjust Color panel takes the clicks on its side; its value changes while the finger moves
         if self.color_panel && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
-            if let Some(which) = canvas::slider_hit(ui, lay, 4, x, y) {
+            if let Some(which) = canvas::slider_hit(ui, lay, self.adjust.sliders().len(), x, y) {
                 self.gesture = Some(Gesture::Slider { which, before: self.snapshot() });
             }
             return true;
@@ -2070,6 +2072,8 @@ impl App for Viewer {
                     item(Action::Darker, open, false),
                     item(Action::Saturate, open, false),
                     item(Action::Desaturate, open, false),
+                    item(Action::Sharpen, open, false),
+                    item(Action::Soften, open && self.adjust.sharpness > 0.0, false),
                     item(Action::ResetColour, open && !self.adjust.is_identity(), false),
                     AppMenuItem::separator(),
                     item_labelled(
