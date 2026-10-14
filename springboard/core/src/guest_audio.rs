@@ -133,6 +133,86 @@ impl StreamConfig {
     }
 }
 
+/// One request a guest sends for a stream. The stream accepts them in the order set parameters, prepare, start, stop
+/// and release; release is accepted in any state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Request {
+    /// Sets the format, rate, channel count and buffer geometry. Accepted when the stream is not running.
+    SetParams(StreamConfig),
+    /// Prepares the buffers. Accepted once the parameters are set.
+    Prepare,
+    /// Starts moving audio. Accepted only on a prepared stream.
+    Start,
+    /// Stops moving audio. The stream can be started again without new parameters.
+    Stop,
+    /// Releases the stream. It returns to idle and forgets its parameters.
+    Release,
+}
+
+/// Where a stream is in its request order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StreamState {
+    Idle,
+    ParamsSet,
+    Prepared,
+    Running,
+}
+
+/// A request that the stream's state does not allow. The stream is unchanged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RequestError {
+    pub state: StreamState,
+    pub request: Request,
+}
+
+/// One guest stream: its state and the parameters it was last set with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GuestStream {
+    state: StreamState,
+    config: Option<StreamConfig>,
+}
+
+impl GuestStream {
+    /// An idle stream with no parameters.
+    pub fn new() -> Self {
+        GuestStream { state: StreamState::Idle, config: None }
+    }
+
+    pub fn state(&self) -> StreamState {
+        self.state
+    }
+
+    /// The parameters of the stream, `None` until they are set and after a release.
+    pub fn config(&self) -> Option<&StreamConfig> {
+        self.config.as_ref()
+    }
+
+    /// Applies a request and returns the new state, or refuses it with the state it was refused in.
+    pub fn request(&mut self, request: Request) -> Result<StreamState, RequestError> {
+        let next = match (self.state, request) {
+            (StreamState::Idle | StreamState::ParamsSet | StreamState::Prepared, Request::SetParams(_)) => StreamState::ParamsSet,
+            (StreamState::ParamsSet, Request::Prepare) => StreamState::Prepared,
+            (StreamState::Prepared, Request::Start) => StreamState::Running,
+            (StreamState::Running, Request::Stop) => StreamState::Prepared,
+            (_, Request::Release) => StreamState::Idle,
+            _ => return Err(RequestError { state: self.state, request }),
+        };
+        match request {
+            Request::SetParams(config) => self.config = Some(config),
+            Request::Release => self.config = None,
+            Request::Prepare | Request::Start | Request::Stop => {}
+        }
+        self.state = next;
+        Ok(next)
+    }
+}
+
+impl Default for GuestStream {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
