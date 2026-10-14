@@ -1531,7 +1531,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1573,7 +1573,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1594,7 +1594,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1615,7 +1615,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1635,8 +1635,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Troubleshooting dialog catalogue (Templates/dialog/DeviceExpert.catfamily with TroubleshootingHelp) for the vendor's own hardware support, which has no meaning on this system.",
    "rea": [],
    "method": "assessed"
   },
@@ -1656,8 +1656,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "User interface of the vendor's own hardware support assistant (device troubleshooting for the reference system's accessories); nothing comparable applies on this system.",
    "rea": [],
    "method": "assessed"
   },
@@ -1678,7 +1678,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1698,8 +1698,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Mobile device management enrolment and effective-policy store (DMDConfigurationDatabaseModel, DMDEffectivePolicies) for the vendor's enterprise management service, which this system does not enrol with.",
    "rea": [],
    "method": "assessed"
   },
@@ -1720,7 +1720,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1740,8 +1740,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Restores the vendor's mobile devices from recovery mode (Support folder); firmware restore for that hardware has no meaning on this system.",
    "rea": [],
    "method": "assessed"
   },
@@ -1761,8 +1761,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "XPC recovery helper (com.apple.DeviceRecoveryBuiltinBrain) for restoring the vendor's mobile devices; no meaning on this system.",
    "rea": [],
    "method": "assessed"
   },
@@ -1782,8 +1782,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Regulatory labelling data for the vendor's own hardware; it has no meaning on this system.",
    "rea": [],
    "method": "assessed"
   },
@@ -1804,7 +1804,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1825,7 +1825,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1846,7 +1846,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Device-to-device plug-ins (a Wi-Fi Aware plug-in and a peer-to-peer radio link plug-in) for the reference system's device sharing; no BifrOSt counterpart is cited, so this stays unclassified until the radio path is checked on hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -1867,7 +1867,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Handled by the kernel device tree and sysfs (no SDK surface); no separate BifrOSt framework was found, and the framework's own API was not extracted.",
    "rea": [],
    "method": "assessed"
   },
@@ -1888,7 +1888,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1909,7 +1909,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1930,7 +1930,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1949,9 +1949,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/core/src/log.rs",
+   "status": "partial",
+   "note": "Unified logging writes entries to journald, and the store reads them back through the subsystem registry. There is no sysdiagnose-style archive that bundles logs for a support request.",
    "rea": [],
    "method": "assessed"
   },
@@ -1972,7 +1972,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -1993,7 +1993,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -2014,7 +2014,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -2035,7 +2035,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -2056,7 +2056,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -2076,8 +2076,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Adds noise to usage statistics before the reference system's vendor collects them (XPCServices for the collector); the vendor telemetry pipeline has no meaning on this system.",
    "rea": [],
    "method": "assessed"
   },
@@ -2097,8 +2097,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Shared drawing and tap messaging for the vendor's own messaging ecosystem across its watch and phone devices; it has no meaning on this system.",
    "rea": [],
    "method": "assessed"
   },
@@ -2119,7 +2119,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -2140,7 +2140,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -2161,7 +2161,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
@@ -2180,9 +2180,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/core/src/disk_image.rs; springboard/cmd/src/hdiutil.rs",
+   "status": "partial",
+   "note": "Create, attach, detach, inspect and convert RAW and ISO disk images through the hdiutil command and the shell's image control socket. Sparse bundles and encrypted images are not covered.",
    "rea": [],
    "method": "assessed"
   },
@@ -2201,9 +2201,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/core/src/disk_image.rs; springboard/cmd/src/hdiutil.rs",
+   "status": "partial",
+   "note": "The same RAW and ISO image model and hdiutil commands cover the basic image path. The second-generation sparse and encrypted image formats are not implemented.",
    "rea": [],
    "method": "assessed"
   },
@@ -2222,9 +2222,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/core/src/disk_commands.rs; springboard/cmd/src/diskutil.rs",
+   "status": "partial",
+   "note": "Mount, unmount, eject, erase, partition, verify, repair and RAID commands through the disk session and diskutil. Disk arrival and removal events for apps are not provided (see disk-arbitration).",
    "rea": [],
    "method": "assessed"
   },
@@ -2244,8 +2244,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "gap",
+   "note": "Nothing warns when a volume is nearly full. Build a low-space check in the shell on the capacity figures from springboard/core/src/volume.rs, with a notification through springboard/core/src/notify_center.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -2264,9 +2264,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/bare/power.rs",
+   "status": "partial",
+   "note": "Reads and sets the panel brightness from the backlight class, with a maximum. It does not cover display colour, rotation or multi-display configuration.",
    "rea": [],
    "method": "assessed"
   },
@@ -2287,7 +2287,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
    "rea": [],
    "method": "assessed"
   },
