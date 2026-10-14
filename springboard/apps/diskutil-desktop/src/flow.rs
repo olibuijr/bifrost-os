@@ -14,8 +14,10 @@ use std::fs::File;
 /// What a file chosen in an open panel is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenThen {
-    /// Bind the image to a loop device and mount it.
+    /// Bind the image to a loop device and mount it, read-only.
     Attach,
+    /// Bind the image to a loop device and mount it with read and write access.
+    AttachWritable,
     /// Ask which format to convert the image to.
     Convert,
     /// Ask for the image's new size.
@@ -93,9 +95,14 @@ impl DiskUtility {
         true
     }
 
-    /// File > Open Disk Image: choose an image to attach.
+    /// File > Open Disk Image: choose an image to attach read-only.
     pub fn open_image(&mut self) -> bool {
         self.want_open("Open Disk Image", &["iso", "img", "raw"], false, OpenThen::Attach)
+    }
+
+    /// File > Open Disk Image for Writing: choose an image to attach with read and write access.
+    pub fn open_image_for_writing(&mut self) -> bool {
+        self.want_open("Open Disk Image for Writing", &["iso", "img", "raw"], false, OpenThen::AttachWritable)
     }
 
     /// File > New Image > Image from Folder: choose the folder.
@@ -188,10 +195,12 @@ impl DiskUtility {
             }
         };
         match then {
-            OpenThen::Attach => match images::attach_plan(&path) {
-                Ok(plan) => self.start_plan("Attaching", images::base_name(&path).to_string(), plan, false),
-                Err(sentence) => self.error = Some(sentence),
-            },
+            OpenThen::Attach | OpenThen::AttachWritable => {
+                match images::attach_plan(&path, then == OpenThen::AttachWritable) {
+                    Ok(plan) => self.start_plan("Attaching", images::base_name(&path).to_string(), plan, false),
+                    Err(sentence) => self.error = Some(sentence),
+                }
+            }
             OpenThen::Convert => {
                 self.open_convert_form(path);
             }
@@ -289,6 +298,21 @@ mod tests {
             Some(Want::Open { directories, then, .. }) => assert!(directories && then == OpenThen::Folder),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn an_image_opened_for_writing_asks_for_the_writable_attach() {
+        let mut w = DiskUtility::new();
+        assert!(w.open_image_for_writing());
+        assert_eq!(
+            w.want,
+            Some(Want::Open { title: "Open Disk Image for Writing", filters: vec!["iso", "img", "raw"], directories: false, then: OpenThen::AttachWritable })
+        );
+        w.want = None;
+        w.flow = Some(Flow::Open(9, OpenThen::AttachWritable));
+        assert!(w.opened_path(9, Ok("/home/me/disc.img".into()), 700, &[]));
+        let job = w.job.as_ref().expect("an attach job");
+        assert_eq!((job.verb, job.name.as_str()), ("Attaching", "disc.img"));
     }
 
     #[test]

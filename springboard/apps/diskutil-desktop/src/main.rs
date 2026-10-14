@@ -50,6 +50,7 @@ const MENU_NEW_FOLDER: u32 = 41;
 const MENU_OPEN_IMAGE: u32 = 42;
 const MENU_CONVERT: u32 = 43;
 const MENU_RESIZE: u32 = 44;
+const MENU_OPEN_IMAGE_RW: u32 = 45;
 
 impl App for DiskUtility {
     fn id(&self) -> &str {
@@ -61,9 +62,9 @@ impl App for DiskUtility {
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let idle = !self.busy();
         let node = self.selected_node();
-        let mountable = idle && node.is_some_and(|n| n.mount_point.is_none() && n.fs_type.is_some());
-        let mounted = idle && node.is_some_and(|n| n.mount_point.is_some());
-        let ejectable = idle && node.is_some_and(|n| n.kind == Kind::Disk && n.removable);
+        let mountable = self.can_mount();
+        let mounted = self.can_unmount();
+        let ejectable = self.can_eject();
         let has = idle && node.is_some();
         let renamable = has && node.is_some_and(|n| n.fs_type.is_some());
         let whole_disk = idle && node.is_some_and(|n| n.kind == Kind::Disk);
@@ -94,6 +95,7 @@ impl App for DiskUtility {
                     AppMenuItem::new(MENU_NEW_BLANK, "Blank Image\u{2026}").key("cmd+n").enabled(idle).depth(1),
                     AppMenuItem::new(MENU_NEW_FOLDER, "Image from Folder\u{2026}").enabled(idle).depth(1),
                     AppMenuItem::new(MENU_OPEN_IMAGE, "Open Disk Image\u{2026}").key("cmd+o").enabled(idle),
+                    AppMenuItem::new(MENU_OPEN_IMAGE_RW, "Open Disk Image for Writing\u{2026}").enabled(idle),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_INFO, "Get Info").key("cmd+i").enabled(idle && node.is_some()),
                     AppMenuItem::separator(),
@@ -216,6 +218,7 @@ impl DiskUtility {
             MENU_NEW_BLANK => self.open_new_blank_form(),
             MENU_NEW_FOLDER => self.new_image_from_folder(),
             MENU_OPEN_IMAGE => self.open_image(),
+            MENU_OPEN_IMAGE_RW => self.open_image_for_writing(),
             MENU_CONVERT => self.convert_image(),
             MENU_RESIZE => self.resize_image(),
             MENU_VOLUMES_ONLY => self.set_show_all(false),

@@ -54,8 +54,8 @@
    "area": "toolbar",
    "apple": "toolbar and File menu",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:MENU_MOUNT",
-   "note": "File menu items with cmd+M, cmd+U, cmd+E mirror the toolbar.",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:can_mount; springboard/apps/diskutil-desktop/src/main.rs:MENU_MOUNT",
+   "note": "File menu Mount, Unmount and Eject (cmd+M, cmd+U, cmd+E) and the toolbar read the same window predicates (can_mount, can_unmount, can_eject), tested headless in window.rs (the_mount_predicates_disable_every_mount_command_while_busy). Not yet verified on the lab machine.",
    "wire": "Verify on the lab machine that the File menu Mount, Unmount and Eject items match the toolbar state."
   },
   {
@@ -117,8 +117,8 @@
    "area": "menu",
    "apple": "File > Open Disk Image",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/flow.rs:97",
-   "note": "File > Open Disk Image (cmd+O) shows the open panel (documents permission) and attaches the chosen image read-only through hdiutil attach, which binds a loop device and mounts it (flow.rs opened_path, images.rs attach_plan). Detach Disk Image already existed. built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "bifrost": "springboard/apps/diskutil-desktop/src/flow.rs:97 (open_image, open_image_for_writing); springboard/apps/diskutil-desktop/src/images.rs (attach_plan)",
+   "note": "File > Open Disk Image (cmd+O) attaches the chosen image read-only (hdiutil attach -readonly); File > Open Disk Image for Writing attaches it with -readwrite. Both paths are tested in flow.rs and images.rs. Detach Disk Image already existed. Not yet verified on Midget.",
    "wire": "Verify on the lab machine that the panel's file resolves to a path the attach tool accepts; offer read-write attach."
   },
   {
@@ -154,7 +154,7 @@
    "apple": "SURAIDAssistantWindowController.nib",
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:153",
-   "note": "Disk > RAID Assistant: level (RAID 0, 1, 5, 6, 10), array name and tickable members in a form sheet; DiskRequest::CreateRaid plans mdadm --create (core disk_format::create_raid: minimum members, unmounted, no overlap, free name) and privd serves disk.create_raid. A created array is not listed in the sidebar (md devices are hidden), and there is no assemble, add or remove of members. built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "note": "Disk > RAID Assistant: level (RAID 0, 1, 5, 6, 10), array name and tickable members in a form sheet; DiskRequest::CreateRaid plans mdadm --create (core disk_format::create_raid: minimum members, unmounted, no overlap, free name) and privd serves disk.create_raid. Assembled arrays (md devices) are listed in the sidebar and never offered as members (model::is_raid_array, tested in forms.rs and model.rs). Gap: there is no stop, assemble, add or remove of members. Not yet verified on Midget.",
    "wire": "List assembled arrays (show md devices in the sidebar) and add stop, assemble and member add or remove actions."
   },
   {
