@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0 — 2026-10-14
+
+Testing and parity records (no change in the window):
+
+- tests/parity_app-mail.rs covers the signature model, mailbox file reading and writing (From-line escaping, file and
+  mailbox names), the body find with Icelandic capitals, categories, and the Remind Me times and due queues, headless.
+- The mailbox import and export rows now cite the code that calls mbox::read and mbox::write.
+
 ## 0.10.0 — 2026-10-14
 
 Reading:
