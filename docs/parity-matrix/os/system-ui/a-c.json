@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/apps/printers-desktop/src/discover.rs",
+   "status": "partial",
+   "note": "printer discovery and queue exist; no add-printer sheet yet; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -159,8 +159,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no AirPlay receiver",
+   "status": "n/a",
+   "note": "AirPlay receiver protocol is Apple-only",
    "rea": []
   },
   {
@@ -298,9 +298,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no Bluetooth setup assistant",
+   "bifrost": "springboard/sdk/src/bluetooth_picker.rs; springboard/src/bare/bluetooth.rs",
+   "status": "partial",
+   "note": "pairing picker and radio control exist; no guided setup flow; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -358,9 +358,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs",
+   "status": "partial",
+   "note": "ICS parsing exists; no file-type handler registration yet; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -378,9 +378,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/net/captive.rs",
+   "status": "partial",
+   "note": "captive portal probe and sign-in offer exist; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -398,9 +398,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/sdk/src/trust.rs",
+   "status": "partial",
+   "note": "trust evaluation exists; no certificate assistant UI yet; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -418,9 +418,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "clock screen saver, no counterpart yet",
+   "bifrost": "springboard/src/shell/screensaver.rs",
+   "status": "partial",
+   "note": "Clock screen saver exists; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -498,9 +498,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/shell/permission_sheet.rs",
+   "status": "partial",
+   "note": "system prompt sheets exist; other core service dialogs not covered; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -539,8 +539,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Apple-only audio/video control plugin for Apple hardware routing",
    "rea": []
   },
   {
@@ -558,9 +558,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/shell/accessibility/shortcut.rs",
+   "status": "partial",
+   "note": "Accessibility Shortcut exists; no access key navigation; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -599,8 +599,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "AirDrop and Handoff are Apple-only services",
    "rea": []
   },
   {
@@ -618,9 +618,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/clock/alarm.rs; springboard/sdk/src/intents.rs",
+   "status": "partial",
+   "note": "alarms exist; no App Intents exposed for alarms; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -638,9 +638,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs",
+   "status": "partial",
+   "note": "artwork decoding and album cover display exist; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -678,9 +678,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no extension manager",
+   "bifrost": "springboard/sdk/src/extension.rs",
+   "status": "partial",
+   "note": "extension points exist; no extension manager UI; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -858,9 +858,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/sdk/src/intents.rs",
+   "status": "partial",
+   "note": "App Intents plumbing exists; no audio intents yet; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -999,8 +999,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "ClassKit education reporting service is Apple-only",
    "rea": []
   },
   {
@@ -1098,9 +1098,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no computer name page; About page shows the name",
+   "bifrost": "springboard/src/shell/sharing_page.rs; springboard/src/privd_client.rs",
+   "status": "partial",
+   "note": "computer name is set in Sharing; About page shows it; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -1119,8 +1119,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no configuration profiles",
+   "status": "n/a",
+   "note": "device management profiles are not part of BifrOSt",
    "rea": []
   },
   {
@@ -1158,9 +1158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/apps/contacts-desktop/src; springboard/sdk/src/intents.rs",
+   "status": "partial",
+   "note": "Contacts app exists; no App Intents exposed for contacts yet; built on os/team-l-01-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
