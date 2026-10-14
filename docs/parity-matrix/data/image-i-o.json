@@ -87,9 +87,9 @@
     {
       "feature": "Colour profiles and HDR gain maps",
       "apple": "Color management (kCGImageDestinationEncode* gain map and base colour space keys)",
-      "bifrost": "springboard/render/src/icc.rs",
+      "bifrost": "springboard/render/src/icc.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Images are treated as sRGB. No ICC, gain map or HDR support."
+      "note": "Profile parsing, descriptions and matrix-shaper conversion are tested headless in render/tests/parity_sdk-tests-06.rs (a_profile_header_gives..., a_version_two_description_reads..., the_colorants_of_a_white_rgb_profile...). Gap: images are treated as sRGB, nothing in the image decoder reads a profile, and there is no gain map or HDR support."
     },
     {
       "feature": "Spatial photos and stereo HEIC",

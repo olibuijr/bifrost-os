@@ -24,9 +24,9 @@
     {
       "feature": "Color profiles (ICC load, create, inspect, embed)",
       "apple": "ColorSyncProfileCreateWithURL, ColorSyncProfileCopyTag, ColorSyncMutableProfile, ColorSyncProfileCopyData",
-      "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/colorsync.rs",
+      "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/colorsync.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs, springboard/sdk/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "built on parity/team-j-colorsync; not yet verified on Midget. Profile::parse checks the header, the acsp magic and the tag table; description reads desc and mluc; matrix_shaper reads rXYZ/gXYZ/bXYZ and rTRC/gTRC/bTRC (curv and para types 0 to 4). Not read: lookup-table profiles (A2B/B2A, mft1/mft2/mAB), profile creation, tag writing or embedding. The PDF reader still takes ICCBased images only by component count and ignores the profile bytes."
+      "note": "Headless tests in render/tests/parity_sdk-tests-06.rs cover the header and tag table checks (a_profile_header_gives..., a_tag_that_runs_past_the_profile...), the desc and mluc reads (a_version_four_description_reads_utf16...) and the matrix-shaper curves; sdk/tests/parity_sdk-tests-06.rs covers gamma_ramps and ProfileConverter. Gap: lookup-table profiles (A2B/B2A, mft1/mft2/mAB), profile creation, tag writing and embedding are not built; not yet verified on Midget. The PDF reader still takes ICCBased images only by component count and ignores the profile bytes."
     },
     {
       "feature": "Standard RGB profiles (sRGB, Display P3, Adobe RGB, ProPhoto)",
@@ -38,16 +38,16 @@
     {
       "feature": "Display colour adjustment (warmth)",
       "apple": "ColorSyncProfileCreateWithDisplayID, display VCGT transfer tables, Night Shift via the system colour pipeline",
-      "bifrost": "springboard/src/shell/night_shift.rs, springboard/render/src/icc.rs (Profile::vcgt), springboard/sdk/src/colorsync.rs",
+      "bifrost": "springboard/src/shell/night_shift.rs, springboard/render/src/icc.rs (Profile::vcgt), springboard/sdk/src/colorsync.rs; tests: springboard/tests/parity_sdk-tests-06.rs, springboard/render/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "Night Shift tints the final presented frame with a warmth value from 0 to 1 and a daily schedule; it does not read the display profile. built on parity/team-j-colorsync; not yet verified on Midget. Profile::vcgt reads a vcgt gamma table in its table and formula forms, and gamma_ramps samples it as 16-bit ramps for an app. kms.rs still loads no gamma ramp, so the table is not applied to the display."
+      "note": "Headless tests in tests/parity_sdk-tests-06.rs cover the schedule window, saved settings, the page rows, the published channel multipliers (published_settings_set_the_channel_multipliers...) and the frame tint. Night Shift tints the final presented frame with a warmth value from 0 to 1 and a daily schedule; it does not read the display profile. Profile::vcgt table and formula parsing and the 16-bit ramps are tested in render/tests/parity_sdk-tests-06.rs. Gap: kms.rs still loads no gamma ramp, so the table is not applied to the display; not yet verified on Midget."
     },
     {
       "feature": "Device and display profiles",
       "apple": "ColorSyncRegisterDevice, ColorSyncIterateDeviceProfiles, ColorSyncDeviceSetCustomProfiles, ColorSyncProfileCreateWithDisplayID",
-      "bifrost": "springboard/render/src/icc.rs",
+      "bifrost": "springboard/render/src/icc.rs (Devices); tests: springboard/render/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. kms.rs reads the CRTC gamma_size field but does not load a gamma ramp or a profile. No device registry or custom-profile setting exists in the shell."
+      "note": "The device registry is tested headless in render/tests/parity_sdk-tests-06.rs: registration, custom profile override and clearing (a_custom_profile_overrides...), the sRGB fallback for an unregistered display and the iteration order. Gap: kms.rs reads the CRTC gamma_size field but does not load a gamma ramp or a profile, no device registry or custom-profile setting exists in the shell, and nothing is verified on Midget."
     },
     {
       "feature": "Rendering intents and black point compensation",

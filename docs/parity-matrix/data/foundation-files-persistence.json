@@ -87,9 +87,9 @@
     {
       "feature": "Backup exclusion and purgeable data",
       "apple": "URLResourceKey isExcludedFromBackup, purgeable",
-      "bifrost": "springboard/sdk/src/file_metadata.rs (xattr, set_excluded_from_backup, backup_items), springboard/sdk/src/file_manager.rs (IsExcludedFromBackup key), springboard/render/src/purgeable.rs",
+      "bifrost": "springboard/sdk/src/file_metadata.rs (xattr, set_excluded_from_backup, backup_items), springboard/sdk/src/file_manager.rs (IsExcludedFromBackup key), springboard/render/src/purgeable.rs; tests: springboard/sdk/tests/parity_sdk-tests-06.rs, springboard/render/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "isExcludedFromBackup is stored as the user.bifrost.exclude-from-backup xattr and honoured by backup_items (an excluded directory is skipped with its contents). Memory caches purge on pressure; no on-disk purgeable data yet. Host tests only."
+      "note": "isExcludedFromBackup is stored as the user.bifrost.exclude-from-backup xattr: backup_items skips an excluded directory with its contents and never enters a symbolic link, and the file manager reports the flag as a resource value (a_backup_walk_lists_items..., an_excluded_directory_is_skipped..., the_file_manager_reports_the_backup_exclusion...). The purgeable Cache drops its oldest cost under pressure and on limits (a_partial_purge_drops_the_oldest_half...), tested headless in render/tests. Gap: no on-disk purgeable data, and the purge runs only on memory pressure in the process."
     },
     {
       "feature": "File versions",
