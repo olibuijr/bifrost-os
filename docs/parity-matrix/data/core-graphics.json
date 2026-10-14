@@ -108,9 +108,9 @@
   {
    "feature": "Layers and offscreen reusable content (CGLayer)",
    "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
-   "bifrost": "springboard/render/src/cg/reusable_layer.rs; springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
+   "bifrost": "springboard/render/src/cg/reusable_layer.rs; springboard/sdk/src/graphics_layer.rs (CgLayer); springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object. new_layer_context makes an offscreen context and draw_layer_at composites it with clip, alpha and blend; draw_layer draws a group. Host tests only; verify on Midget."
+   "note": "CgLayer is the app-facing reusable layer: it keeps offscreen pixels and a draw count, is drawn into by a closure over a context, and is composited into any context with draw_layer_at (clip, alpha and blend apply); headless tests are in sdk/tests/parity_sdk-complete-02.rs. Gap: no shell or app draws through a CgLayer yet; verify on Midget."
   },
   {
    "feature": "Display services (Quartz Display Services)",

@@ -1,6 +1,8 @@
 //! Parity sdk-complete-02: headless tests for the pattern wrapper. Cells are sampled in memory; no surface is drawn.
 
+use bifrost_app::graphics_context::GraphicsContext;
 use bifrost_app::graphics_gradient::Affine;
+use bifrost_app::graphics_layer::CgLayer;
 use bifrost_app::graphics_pattern::{CgPattern, PatternTiling};
 
 fn close(a: f32, b: f32) -> bool {
@@ -99,4 +101,42 @@ fn minimal_distortion_stretches_the_cell_with_the_step() {
 fn a_pattern_keeps_its_tiling_when_it_is_fitted_again() {
     let p = pattern(PatternTiling::ConstantSpacing, Affine::IDENTITY, (3.3, 3.3));
     assert_eq!(p.fitted(Affine::IDENTITY).tiling(), PatternTiling::ConstantSpacing);
+}
+
+// Layers: the offscreen group an app builds once and draws into a context many times.
+
+#[test]
+fn a_new_layer_is_transparent_and_has_no_draws() {
+    let layer = CgLayer::new(3, 2).unwrap();
+    assert_eq!(layer.size(), (3, 2));
+    assert_eq!(layer.draws(), 0);
+    assert_eq!(layer.pixels().px, vec![0; 6]);
+}
+
+#[test]
+fn a_layer_refuses_an_empty_or_overflowing_size() {
+    assert!(CgLayer::new(0, 4).is_none());
+    assert!(CgLayer::new(4, 0).is_none());
+    assert!(CgLayer::new(usize::MAX, 2).is_none());
+}
+
+#[test]
+fn later_draw_passes_keep_the_pixels_of_earlier_passes() {
+    let mut layer = CgLayer::new(3, 2).unwrap();
+    layer.draw(|ctx| ctx.layer.px[0] = 0xff11_2233);
+    layer.draw(|ctx| ctx.layer.px[5] = 0xff44_5566);
+    assert_eq!(layer.pixels().px[0], 0xff11_2233);
+    assert_eq!(layer.pixels().px[5], 0xff44_5566);
+    assert_eq!(layer.draws(), 2);
+}
+
+#[test]
+fn a_layer_is_drawn_into_a_context_at_an_offset() {
+    let mut badge = CgLayer::new(2, 2).unwrap();
+    badge.draw(|ctx| ctx.layer.px[0] = 0xff11_2233);
+    let mut page = GraphicsContext::new(4, 4);
+    page.draw_layer_at(badge.pixels(), 1, 1);
+    assert_eq!(page.layer.px[4 + 1], 0xff11_2233, "the layer's first pixel lands at (1, 1)");
+    assert_eq!(page.layer.px[0], 0, "nothing lands outside the offset layer");
+    assert_eq!(badge.draws(), 1, "drawing the layer into a context does not count as a layer draw");
 }
