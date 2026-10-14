@@ -68,8 +68,8 @@
    "area": "panel",
    "apple": "event inspector repeat popup",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:975",
-   "note": "Fixed preset cycle (store::REPEATS); calendar/recur.rs supports full RRULE but there is no custom-repeat UI",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:54",
+   "note": "The Repeat row opens a picker under it: Frequency (Never, Daily, Weekly, Monthly, Yearly), Every N, the weekdays of a weekly rule, and Ends (Never, After N times, Until a date). A preset is saved as before; any other rule is saved as its RRULE in calendar-extras.txt (src/calendar/extras.rs) and worked out in Calendar::occurs (src/calendar/overlay.rs:122). Not yet verified on Midget. Left: copy and paste and the print agenda carry only the preset, so a custom rule is not copied or printed.",
    "wire": "Add a Custom repeat sheet (frequency, interval, weekdays, end after N / on date) that writes an RRULE into the rich sidecar via calendar/exchange.rs; open it from Target::Repeat."
   },
   {
@@ -77,8 +77,8 @@
    "area": "panel",
    "apple": "AlarmCustom.nib, AlarmInstance.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:976",
-   "note": "One alert from a preset cycle; delivery via notification-schedule works (calendar/connect.rs)",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:76",
+   "note": "The Alert row opens a checklist of the seven presets (several can be on), a custom alarm from 0 minutes to a week in 5-minute steps, and a row that removes each custom alarm. The alarms are kept in calendar-extras.txt and scheduled one by one through alert_calendar_with (src/calendar/alerts.rs:24). Not yet verified on Midget. Left: copy and paste and the .ics export keep only the first preset.",
    "wire": "Allow a list of alerts per event plus a Custom alert sheet (N minutes/hours/days before, or at a time); store as VALARMs in the rich sidecar and schedule each in connect.rs plan_alerts."
   },
   {
@@ -149,8 +149,8 @@
    "area": "menu",
    "apple": "File > New Calendar, New Calendar Group; LocalCalendarInspector.nib; Get Info",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/overlay.rs:137",
-   "note": "The calendar list shows the saved events, the holidays and each subscription with a colour dot and a click shows or hides it; no new, rename or delete of local calendars; built on parity/team-d-calendar; not yet verified on Midget",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs:97",
+   "note": "File > New Calendar... makes a calendar from a line sheet; File > Rename Calendar and File > Delete Calendar work on each calendar made. Each calendar has a palette colour and its own row in the calendar list that shows or hides it, a Calendar row in the event form, and Settings > Default Calendar. Up to ten calendars, the built-in one included. Delete is refused while the calendar holds events, and the message says to delete them first. The calendars and the events' calendar ids are kept in calendar-extras.txt (src/calendar/extras.rs:56). Not yet verified on Midget. Left: Get Info, calendar groups, choosing a colour, and moving events to another calendar on delete.",
    "wire": "Give saved events a calendar id and colour (store column or sidecar), add File > New Calendar, rename and delete, a Get Info inspector and a calendar popup in the editor."
   },
   {
@@ -176,8 +176,8 @@
    "area": "toolbar",
    "apple": "MainMenu.nib Edit > Search; toolbar search field",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/lookup.rs:33",
-   "note": "Toolbar search field (Cmd+F, Event > Search Events): a results list replaces the grid, a result opens its event on its day; hidden below 560 pt of toolbar width; built on parity/team-d-calendar; not yet verified on Midget",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs:28",
+   "note": "The toolbar search field (Cmd+F, Event > Search Events) lists the matching events in place of the grid, and a result opens its event on its day. Terms match the title, the location and the notes of saved events. Not yet verified on Midget. Left: search by date range, and placing the caret by a click in the field.",
    "wire": "Match locations and notes of saved events (the store keeps them, search.rs reads only titles for them), search by date range, and move the caret by click. The compliance snapshot needs a re-bless on Midget for the new toolbar field."
   },
   {
@@ -203,8 +203,8 @@
    "area": "integration",
    "apple": "Subscribe.nib; File > New Calendar Subscription; Info.plist webcal scheme",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/subscribe.rs:133",
-   "note": "webcal:// and https:// calendars (pasted address or an opened webcal link, manifest schemes) are read in the background every hour into read-only calendars with their own colour, cached for offline start, shown or hidden from the calendar list, and removed with File > Unsubscribe from; built on parity/team-d-calendar; not yet verified on Midget",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs:168",
+   "note": "File > New Calendar Subscription... opens a line sheet filled from the pasteboard. Return subscribes; an address that is refused keeps the sheet open with the reason. webcal:// and https:// calendars are read every hour, cached for offline start, shown or hidden from the list, and removed with File > Unsubscribe from. Not yet verified on Midget. Left: a refresh interval per calendar, and a check of a real webcal feed on Midget.",
    "wire": "Replace File > Subscribe to Calendar from Clipboard with a New Calendar Subscription sheet (an address field), add a per-calendar refresh interval, and check a real webcal feed on Midget."
   },
   {
@@ -221,8 +221,8 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib General/Advanced panes",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs:1",
-   "note": "Settings menu: week start, default event length, day start hour; not day end, days per week or default calendar; built on parity/team-d-calendar; not yet verified on Midget",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:70",
+   "note": "Settings menu: week start, default event length, day start hour, the default alerts and Default Calendar (the calendar new events go to, kept with the calendars). Not yet verified on Midget. Left: the day end hour and the days per week, since the week view draws seven columns.",
    "wire": "Add day end hour, days per week and a default calendar (needs multiple calendars) to the Settings menu in main.rs."
   },
   {
@@ -239,8 +239,8 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib time zone support; TimeZonePickerSheet.nib; InspectorTimeZoneView.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs:1",
-   "note": "TZID/VTIMEZONE offsets read on import; no per-event zone or view-zone UI",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:283",
+   "note": "A Time Zone row in the event form cycles the device's zone, UTC and Iceland (the fixed-offset zones; extras.rs ZONES). The zone sets the alarms (alerts.rs:24) and is written as TZID in the .ics export (extras.rs apply_zones). Not yet verified on Midget. Left: a view time-zone override in the toolbar, zones with daylight saving, and converting the displayed times to the view's zone.",
    "wire": "Add a time zone popup in the editor (TZID in the rich sidecar) and a toolbar view time-zone override in chrome.rs."
   },
   {
@@ -310,9 +310,9 @@
    "feature": "Travel time and Time to Leave",
    "area": "settings",
    "apple": "View > Show Travel Time; Time to Leave setting",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Needs a routing service",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:287",
+   "note": "A Travel Time row in the event form (none, 15, 30, 45 or 60 minutes) saved with the event (extras.rs). Not yet shown in the grid or used for alerts. Left: padding the event block by the travel time, and Time to Leave, which needs a routing service.",
    "wire": "Add a travel-time field in the editor that pads the event block; Time to Leave alerts once a maps routing service exists."
   },
   {

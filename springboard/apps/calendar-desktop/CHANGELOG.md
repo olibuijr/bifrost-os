@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.14.0 — 2026-10-14
+
+- Repeat: the Repeat row opens its picker under the row: Frequency (Never, Daily, Weekly, Monthly, Yearly), Every N, the weekdays for a weekly rule, and Ends (Never, After N times, Until a date). The presets still save as before; any other rule is saved beside the events and repeats in the calendar.
+- Alerts: the Alert row opens a picker that lists the seven presets as a checklist (several can be on), a custom alarm from 0 minutes to a week in 5-minute steps, and a row to remove each custom alarm. The alarms are scheduled one by one.
+- Calendars: File > New Calendar... makes a calendar from a line sheet; File > Rename Calendar and File > Delete Calendar work on the calendars made. Each calendar has its own colour and a row in the calendar list that shows or hides it. A calendar that still holds events is not deleted; the message says to delete them first. Up to ten calendars, the built-in one included.
+- Editor: a Calendar row picks the calendar of the event, a Time Zone row sets the zone of its times (the device's, UTC, or Iceland, which has no daylight saving), and a Travel Time row records the minutes to leave before the event. The zone is written to the .ics export and used for the alarms.
+- Settings > Default Calendar: the calendar new events go to.
+- File > New Calendar Subscription... opens a sheet with an address field, filled from the pasteboard. Return subscribes; an address that is refused keeps the sheet open with the reason.
+- Search matches the location and the notes of saved events as well as their titles.
+- The event form scrolls when its pickers make it taller than the window.
+
 ## 1.13.0 — 2026-10-13
 
 - Search: Cmd+F or a click puts the cursor in the search field at the right of the toolbar. The events whose titles match replace the grid in a list (title, then day, time and place); a result opens its event on its day. Escape or the clear button ends the search; choosing a view or Today does too. The field is left out when the toolbar is narrower than 560 pt. Event > Search Events does the same.
