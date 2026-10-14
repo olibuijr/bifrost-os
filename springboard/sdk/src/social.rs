@@ -121,6 +121,15 @@ pub(crate) fn encode(s: &str, form: bool) -> String {
     out
 }
 
+/// Builds the POST that carries a draft to a service: the text in `text_field` and each link in `link_field`, in the
+/// order added. Images are not included, because a draft keeps only the names the shell gave them; the caller adds the
+/// image bytes with [`ServiceRequest::add_multipart_data`]. An empty text is sent as an empty field.
+pub fn draft_request(draft: &ComposeDraft, url: &str, text_field: &str, link_field: &str) -> ServiceRequest {
+    let mut params: Vec<(&str, &str)> = vec![(text_field, draft.text())];
+    params.extend(draft.urls().iter().map(|u| (link_field, u.as_str())));
+    ServiceRequest::new(RequestMethod::Post, url, &params)
+}
+
 /// The service types the system has registered, each with whether it can take a request now. This answers the same
 /// question as the framework's `isAvailable(forServiceType:)`. No service type is registered by default, so every
 /// check is false until a service is added. This is the model only: nothing in the shell registers services yet.
@@ -215,6 +224,23 @@ mod tests {
         assert!(!services.is_available("mail"));
         assert!(!services.remove("mail"));
         assert_eq!(services.len(), 0);
+    }
+
+    #[test]
+    fn a_draft_becomes_a_form_post_with_its_text_and_links() {
+        let mut draft = ComposeDraft::new();
+        draft.set_initial_text("hi & bye");
+        draft.add_url("https://a.test/x").unwrap();
+        draft.add_url("https://b.test").unwrap();
+        let req = draft_request(&draft, "https://example.test/post", "text", "link").prepared_url_request().unwrap();
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.body.as_deref(), Some(&b"text=hi+%26+bye&link=https%3A%2F%2Fa.test%2Fx&link=https%3A%2F%2Fb.test"[..]));
+    }
+
+    #[test]
+    fn an_empty_draft_still_sends_the_text_field() {
+        let req = draft_request(&ComposeDraft::new(), "https://example.test/post", "text", "link");
+        assert_eq!(req.parameters, vec![("text".to_string(), String::new())]);
     }
 
     #[test]

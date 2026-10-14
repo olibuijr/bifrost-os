@@ -3,16 +3,16 @@
   "doc": "https://developer.apple.com/documentation/social",
   "macos_since": "10.8",
   "status": "partial",
-  "bifrost": "springboard/sdk/src/share.rs (share sheet to installed apps), springboard/sdk/src/url.rs (URLRequest, URLSession); no social-network service",
-  "summary": "Apple's Social framework composes a post to a social network and signs HTTP requests with the user's social account. BifrOSt has a share sheet that passes text, URLs and files to installed apps and a generic HTTP client, but no service that posts to social networks and no social account store.",
+  "bifrost": "springboard/sdk/src/share.rs (share sheet to installed apps), springboard/sdk/src/url.rs (URLRequest, URLSession), springboard/sdk/src/social.rs and springboard/sdk/src/social_account.rs (service requests, accounts, signing); no social-network service",
+  "summary": "Apple's Social framework composes a post to a social network and signs HTTP requests with the user's social account. BifrOSt has a share sheet that passes text, URLs and files to installed apps, a generic HTTP client, a service request model with multipart bodies, a draft that becomes a POST, and an account store with OAuth 1.0a and bearer signing. Nothing signs in an account or posts to a network yet.",
   "rea_evidence": "ev_d8070e35a0b4a4bf77a71cd477acdf308f271f04addcec3639691b3fb911a8f3",
   "features": [
     {
       "feature": "Compose post sheet",
       "apple": "SLComposeViewController, SLComposeServiceViewController",
-      "bifrost": "springboard/ui/src/compose.rs (ComposeSheet), springboard/sdk/src/social.rs; wired: springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs (Compose Post target), springboard/ui/src/compose.rs",
+      "bifrost": "springboard/ui/src/compose.rs (ComposeSheet), springboard/sdk/src/social.rs (draft_request); wired: springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs (Compose Post target)",
       "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The share menu hands items to installed apps. It does not show an editor that posts to a network. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. draft_request turns a sent draft into a form POST (text and links; images need the app's bytes). The share menu hands items to installed apps. It does not show an editor that posts to a network. built on parity/team-n-social; not yet verified on Midget"
     },
     {
       "feature": "Service availability check",
@@ -59,9 +59,9 @@
     {
       "feature": "Social account credentials",
       "apple": "SLRequest.account (signed-in account used to authenticate)",
-      "bifrost": "springboard/sdk/src/keychain.rs (generic secrets only)",
-      "status": "gap",
-      "note": "No account store and no OAuth or token signing. BifrOSt Cloud accounts live in ~/Projects/bifrost-cloud, outside this repo."
+      "bifrost": "springboard/sdk/src/social_account.rs (AccountStore, Credentials, sign, signed_service_request); springboard/sdk/src/keychain.rs (secret storage, called by the app)",
+      "status": "partial",
+      "note": "Account metadata store, keychain form for the secret, and signing: bearer token, and OAuth 1.0a with HMAC-SHA1 per RFC 5849. Host unit tests only. No sign-in flow and no account provider in the shell, so no account can be added from the UI. Signing is not checked against a live service. built on parity/team-n-social; not yet verified on Midget"
     },
     {
       "feature": "Receiving shared content in an extension",
@@ -79,9 +79,9 @@
     }
   ],
   "gaps": [
-    "No compose sheet that posts to a social network (SLComposeViewController equivalent).",
-    "No social account store or request signing (SLRequest.account equivalent).",
-    "No service-typed HTTP request builder and no multipart body (SLRequest equivalent).",
+    "No compose sheet in the shell that edits a draft and posts it through draft_request (SLComposeViewController equivalent).",
+    "No sign-in flow or account provider: accounts can be modelled and signed, but the user cannot add one from the shell (SLRequest.account equivalent).",
+    "OAuth 2 and token refresh are not modelled; signing covers bearer tokens and OAuth 1.0a only.",
     "The share services have no image property and perform(withItems:) reaches only Copy; an app or Compose Post is performed through the menu, because the shell has no message for one named target (see docs/bifrost-ui.md, 'Share sheet' gaps)."
   ]
 }
