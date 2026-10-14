@@ -78,9 +78,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no dynamic wallpapers",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs",
+   "status": "partial",
+   "note": "Dynamic wallpaper: pure time-of-day schedule over the packed stills; shell timer wiring pending. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple wallpaper resource bundle, inventory only",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -158,9 +158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple wallpaper resource bundle, inventory only",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple wallpaper resource bundle, inventory only",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -198,9 +198,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple wallpaper resource bundle, inventory only",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -218,9 +218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Shell intent wallpaper-set (catalogue, parse, effect); Search listing pending. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -238,9 +238,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple wallpaper resource bundle, inventory only",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -258,9 +258,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple wallpaper resource bundle, inventory only",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -278,9 +278,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Wi-Fi intents, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "Shell intents wifi-power and wifi-scan (catalogue, parse, effect); Search listing pending. built on os/team-m-06-settings; not yet verified on Midget",
    "rea": []
   },
   {
