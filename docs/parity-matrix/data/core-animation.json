@@ -87,9 +87,9 @@
   {
    "feature": "Gradient layer (CAGradientLayer)",
    "apple": "CAGradientLayer, CAGradientLayerType",
-   "bifrost": "springboard/render/src/gradient.rs, springboard/sdk/src/layer_kinds/gradient.rs",
+   "bifrost": "springboard/render/src/gradient.rs, springboard/sdk/src/layer_kinds/gradient.rs, springboard/sdk/src/view/layer_views.rs (GradientView)",
    "status": "partial",
-   "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only for the browser's CSS engine; no SDK gradient view or layer"
+   "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. GradientView draws the gradient content of a layer kind (axial, radial and conic ramps). Headless pixel tests in springboard/render/tests/parity_sdk-tests-01c.rs: a_headless_axial_row_runs_from_the_first_colour_to_the_last, a_headless_hard_edge_puts_the_colour_change_at_the_stop, a_headless_radial_buffer_grows_from_the_centre_and_holds_past_the_radius; locations and conic tests are in sdk/src/layer_kinds/gradient.rs. Verify start and end points on Midget."
   },
   {
    "feature": "Corner radius, shadow and masks (CALayer cornerRadius, shadowPath, mask)",
