@@ -38,36 +38,36 @@
    "area": "settings",
    "apple": "View > Magnification",
    "status": "partial",
-   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:156",
-   "note": "Toolbar Zoom cycles loupe size; no slider or menu.",
-   "wire": "Add View > Magnification items or a slider bound to the loupe cell count."
+   "bifrost": "springboard/apps/colormeter-desktop/src/menu.rs:43",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: View > Magnification items change the loupe size. The sizes are a fixed list (7 to 41 cells), not a free slider."
   },
   {
    "feature": "Display values in colour space (native, sRGB, P3, Adobe RGB, Generic RGB)",
    "area": "menu",
    "apple": "View > Display in sRGB, Display in Adobe RGB, Display native values",
    "status": "partial",
-   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:22",
-   "note": "sRGB, Display P3, Generic RGB; no Adobe RGB or native.",
-   "wire": "Add Space::AdobeRgb (gamma 2.2 matrix) to color.rs convert and a View > Display In radio menu in main.rs."
+   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:23",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: View > Display In. Native shows the delivered values unconverted (the display is driven as sRGB), so it equals sRGB until the shell exposes the panel profile; Generic RGB stays a 1.8 gamma approximation."
   },
   {
    "feature": "Display Values format (8-bit, 16-bit, hex, percent)",
    "area": "menu",
    "apple": "View > Display Values",
    "status": "partial",
-   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:130",
-   "note": "Hex, decimal and percent; no 16-bit.",
-   "wire": "Add a 16-bit (0-65535) format to CopyFormat and show the chosen one in the panel."
+   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:175",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: View > Display Values picks the format the Copy action and the Copy as row use; all four formats are always listed in the panel."
   },
   {
    "feature": "Lock position, Lock X, Lock Y",
    "area": "menu",
    "apple": "View > Lock Position, Lock X, Lock Y",
    "status": "partial",
-   "bifrost": "springboard/apps/colormeter-desktop/src/loupe.rs:55",
-   "note": "Locks both axes only.",
-   "wire": "Add per-axis lock flags in loupe.rs follow and View menu items with shortcuts (cmd+L, cmd+X, cmd+Y)."
+   "bifrost": "springboard/apps/colormeter-desktop/src/loupe.rs:52",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: cmd+L, cmd+X and cmd+Y reach the app through the menu and lock the axes independently."
   },
   {
    "feature": "Arrow-key nudge of locked position",
@@ -83,27 +83,27 @@
    "area": "menu",
    "apple": "View > Show Mouse Location",
    "status": "partial",
-   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:141",
-   "note": "Always shown; not toggleable.",
-   "wire": "Add a checked View item toggling the Position row."
+   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:220",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: the View item hides and shows the Position row."
   },
   {
    "feature": "Copy Color as Text",
    "area": "menu",
    "apple": "Color > Copy Color as Text",
    "status": "partial",
-   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:148",
-   "note": "Toolbar Copy only; no menu item or shortcut.",
-   "wire": "Wire into the new Color menu with shift+cmd+C."
+   "bifrost": "springboard/apps/colormeter-desktop/src/menu.rs:79",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: shift+cmd+C puts the reading on the clipboard in the chosen format."
   },
   {
    "feature": "Copy Color as Image",
    "area": "menu",
    "apple": "Color > Copy Color as Image",
    "status": "partial",
-   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:246",
-   "note": "Toolbar Copy Swatch only; no menu item or shortcut.",
-   "wire": "Wire into the new Color menu with alt+cmd+C."
+   "bifrost": "springboard/apps/colormeter-desktop/src/menu.rs:79",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: alt+cmd+C puts a swatch image on the clipboard."
   },
   {
    "feature": "Update Continuously",
@@ -118,10 +118,10 @@
    "feature": "App menus (View and Color)",
    "area": "menu",
    "apple": "MainMenu.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No main_menu implemented in main.rs; all commands only in the toolbar.",
-   "wire": "Implement App::main_menu in main.rs with View (space, values, lock, magnification, mouse location, update continuously) and Color (copy text/image) menus routed to window.rs activate."
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/main.rs:144",
+   "note": "built on parity/team-d-digital-color-meter; not yet verified on Midget",
+   "wire": "Check on Midget: the View and Color menus appear in the menu bar while the app is in front, with checks following the state."
   },
   {
    "feature": "EDR native values",

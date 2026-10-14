@@ -6,10 +6,12 @@ use crate::color::{self, convert, copy_text, CopyFormat, Reading, Rgb8, Space};
 use crate::loupe::{self, Pointer};
 use crate::source::{Ask, PixelRect, ScreenSource};
 use bifrost_core::json::Json;
+use bifrost_app::controls::values::Slider;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::proto::AxAction;
 use bifrost_app::widgets;
 
 /// The outer padding (points).
@@ -27,9 +29,21 @@ pub const B_SPACE: u32 = 3;
 pub const B_FORMAT: u32 = 4;
 pub const B_SWATCH: u32 = 5;
 pub const B_ZOOM: u32 = 6;
+/// The accessibility id of the aperture slider.
+pub const CTL_APERTURE: u32 = 7;
 
-/// The loupe sizes the Zoom button cycles through, in cells across.
-pub const ZOOMS: [u32; 4] = [11, 15, 21, 31];
+/// The loupe sizes the Zoom button and the Magnification menu go through, in cells across (fewer cells is a stronger
+/// magnification).
+pub const ZOOMS: [u32; 6] = [7, 11, 15, 21, 31, 41];
+/// The loupe size a new window starts with.
+pub const DEFAULT_CELLS: u32 = 15;
+/// The aperture sizes, in display pixels across. The reading is the mean of the square this wide around the pointer.
+pub const APERTURE_MIN: u32 = 1;
+pub const APERTURE_MAX: u32 = 31;
+/// The aperture row under the swatch: its height, and the height and side margin of the slider track in it (points).
+pub const APERTURE_PT: f32 = 56.0;
+pub const TRACK_PT: f32 = 24.0;
+pub const TRACK_PAD_PT: f32 = 16.0;
 
 /// What a press or a tap landed on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +51,8 @@ pub enum Target {
     Nothing,
     Toolbar(u32),
     Loupe,
+    /// The aperture slider's track: a press or a drag sets the size.
+    Aperture,
 }
 
 /// What an action asks the app shell to do besides redrawing.
@@ -54,6 +70,15 @@ pub struct ColorMeter {
     pub source: Box<dyn ScreenSource + Send>,
     pub pointer: Pointer,
     pub cells: u32,
+    /// The side of the square of pixels the reading averages, centred on the pointer pixel.
+    pub aperture: u32,
+    /// Whether the loupe is sampled on every refresh. Off, it is sampled only when the readout's pixel or the loupe size
+    /// changed (the pointer is still polled, to notice it move).
+    pub continuous: bool,
+    /// Whether the readout lists the pointer position.
+    pub show_position: bool,
+    /// The readout pixel and loupe size the last loupe request was sent for, to skip repeats while not continuous.
+    pub sampled: Option<(u32, u32, u32)>,
     pub space: Space,
     pub format: CopyFormat,
     /// The last thing copied, shown in the readout.
@@ -70,7 +95,11 @@ impl ColorMeter {
         ColorMeter {
             source,
             pointer: Pointer::default(),
-            cells: ZOOMS[1],
+            cells: DEFAULT_CELLS,
+            aperture: APERTURE_MIN,
+            continuous: true,
+            show_position: true,
+            sampled: None,
             space: Space::Srgb,
             format: CopyFormat::Hex,
             copied: None,
@@ -89,8 +118,27 @@ impl ColorMeter {
     }
 
     /// The requests the source needs sent now, around the readout's pixel.
+    ///
+    /// The square asked for covers the aperture as well as the loupe. While not updating continuously, the loupe is asked
+    /// again only when the readout's pixel or the loupe size changed since the last request.
     pub fn wants(&mut self) -> Vec<Ask> {
-        self.source.wants((self.pointer.x, self.pointer.y), self.cells)
+        let side = self.cells.max(self.aperture);
+        let mut asks = self.source.wants((self.pointer.x, self.pointer.y), side);
+        if !self.continuous {
+            let key = (self.pointer.x, self.pointer.y, side);
+            if self.sampled == Some(key) {
+                asks.retain(|a| !matches!(a, Ask::Loupe(_)));
+            } else if asks.iter().any(|a| matches!(a, Ask::Loupe(_))) {
+                self.sampled = Some(key);
+            }
+        }
+        asks
+    }
+
+    /// Turns continuous updating on or off. Either way the next refresh takes a fresh sample.
+    pub fn set_continuous(&mut self, on: bool) {
+        self.continuous = on;
+        self.sampled = None;
     }
 
     /// Records the request id the shell gave `ask`.
@@ -114,9 +162,50 @@ impl ColorMeter {
         if loupe::pixel_at(self.pointer.x as f32, self.pointer.y as f32, w, h).is_none() {
             return None;
         }
-        let rect = PixelRect { x: self.pointer.x, y: self.pointer.y, w: 1, h: 1 };
-        let px = self.source.read(rect)?.first().copied()?;
+        let rect = self.aperture_rect()?;
+        let px = color::average(&self.source.read(rect)?)?;
         Some(convert(px, self.space))
+    }
+
+    /// The display pixels the reading averages: the aperture square around the readout's pixel.
+    pub fn aperture_rect(&self) -> Option<PixelRect> {
+        let (w, h) = self.display()?;
+        Some(loupe::sample_rect(self.pointer.x, self.pointer.y, self.aperture, w, h))
+    }
+
+    /// Sets the aperture size, kept within its limits. True when it changed.
+    pub fn set_aperture(&mut self, size: u32) -> bool {
+        let size = size.clamp(APERTURE_MIN, APERTURE_MAX);
+        let changed = size != self.aperture;
+        self.aperture = size;
+        changed
+    }
+
+    /// The aperture slider with the current size.
+    fn aperture_slider(&self) -> Slider {
+        Slider::new(APERTURE_MIN as f32, APERTURE_MAX as f32, self.aperture as f32, Some(1.0))
+    }
+
+    /// Sets the aperture from a pointer at `x` (points) on the slider's track. True when it changed.
+    pub fn drag_aperture(&mut self, x: f32) -> bool {
+        let mut slider = self.aperture_slider();
+        slider.drag(self.track_rect(), x);
+        self.set_aperture(slider.value().round() as u32)
+    }
+
+    /// Where the knob sits on the track as a 0 to 1 fraction.
+    pub fn aperture_fraction(&self) -> f32 {
+        self.aperture_slider().fraction()
+    }
+
+    /// An assistive technology steps or sets the aperture. True when it changed.
+    pub fn aperture_action(&mut self, action: &AxAction) -> bool {
+        match action {
+            AxAction::Increment => self.set_aperture(self.aperture.saturating_add(1)),
+            AxAction::Decrement => self.set_aperture(self.aperture.saturating_sub(1)),
+            AxAction::SetValue(text) => text.trim().parse::<f32>().map_or(false, |v| self.set_aperture(v.round().max(0.0) as u32)),
+            _ => false,
+        }
     }
 
     /// The loupe's sample square and its pixels, row by row.
@@ -134,21 +223,35 @@ impl ColorMeter {
             Some(r) => {
                 rows.push(("Hex".into(), color::hex(r.codes)));
                 rows.push(("Decimal".into(), color::decimal(r.codes)));
+                rows.push(("16-bit".into(), color::bit16(r.values)));
                 rows.push(("Percent".into(), color::percent(r.values)));
             }
             None => rows.push(("Value".into(), "Not available".into())),
         }
-        rows.push(("Position".into(), format!("{}, {}", self.pointer.x, self.pointer.y)));
-        rows.push(("Pointer".into(), if self.pointer.locked { "Locked".into() } else { "Following".into() }));
+        rows.push(("Copy as".into(), self.format.name().to_string()));
+        if self.show_position {
+            rows.push(("Position".into(), format!("{}, {}", self.pointer.x, self.pointer.y)));
+        }
+        rows.push(("Pointer".into(), self.pointer_state().into()));
         if let Some(text) = &self.copied {
             rows.push(("Copied".into(), text.clone()));
         }
         rows
     }
 
+    /// How the pointer is followed: "Locked", "Following", or the axis that is locked.
+    pub fn pointer_state(&self) -> &'static str {
+        match (self.pointer.lock_x, self.pointer.lock_y) {
+            (true, true) => "Locked",
+            (true, false) => "X locked",
+            (false, true) => "Y locked",
+            (false, false) => "Following",
+        }
+    }
+
     pub fn toolbar(&self) -> Toolbar {
         Toolbar::new(vec![
-            ToolbarItem::button(B_LOCK, if self.pointer.locked { "Unlock" } else { "Lock" }),
+            ToolbarItem::button(B_LOCK, if self.pointer.locked() { "Unlock" } else { "Lock" }),
             ToolbarItem::button(B_COPY, "Copy"),
             ToolbarItem::button(B_FORMAT, self.format.name()),
             ToolbarItem::button(B_SWATCH, "Copy Swatch"),
@@ -185,6 +288,18 @@ impl ColorMeter {
         Rect { x: p.x, y: p.y, w: p.w, h: SWATCH_PT.min(p.h) }
     }
 
+    /// The aperture row, under the swatch: a label and the slider.
+    pub fn aperture_row(&self) -> Rect {
+        let sw = self.swatch_rect();
+        Rect { x: sw.x, y: sw.y + sw.h + PAD_PT / 2.0, w: sw.w, h: APERTURE_PT }
+    }
+
+    /// The aperture slider's track, in the lower part of the aperture row.
+    pub fn track_rect(&self) -> Rect {
+        let a = self.aperture_row();
+        Rect { x: a.x + TRACK_PAD_PT, y: a.y + APERTURE_PT - TRACK_PT - 6.0, w: (a.w - 2.0 * TRACK_PAD_PT).max(0.0), h: TRACK_PT }
+    }
+
     /// What is under the point `(x, y)`, in points.
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Target {
         if y < UNIFIED_BAR_PT {
@@ -197,10 +312,24 @@ impl ColorMeter {
                 .and_then(|(id, _)| bar.items.iter().find(|i| i.id == *id).filter(|i| i.enabled).map(|i| Target::Toolbar(i.id)))
                 .unwrap_or(Target::Nothing);
         }
+        self.hit_body(x, y)
+    }
+
+    /// What is under the point `(x, y)` below the toolbar: the loupe or the aperture slider.
+    pub fn hit_body(&self, x: f32, y: f32) -> Target {
         if self.loupe_rect().contains(x, y) {
             return Target::Loupe;
         }
+        if self.track_rect().contains(x, y) {
+            return Target::Aperture;
+        }
         Target::Nothing
+    }
+
+    /// The top of the readout rows, under the aperture row.
+    pub fn rows_top(&self) -> f32 {
+        let a = self.aperture_row();
+        a.y + a.h + PAD_PT / 2.0
     }
 
     /// Picks the display pixel under the point `(x, y)` of the loupe: a tap on a cell locks the readout there.
@@ -241,13 +370,7 @@ impl ColorMeter {
                 self.format = self.format.next();
                 Outcome::Redraw
             }
-            Target::Toolbar(B_SWATCH) => match self.reading() {
-                Some(r) => {
-                    self.copied = Some("Swatch".into());
-                    Outcome::CopySwatch(r.codes)
-                }
-                None => Outcome::Nothing,
-            },
+            Target::Toolbar(B_SWATCH) => self.copy_swatch(),
             Target::Toolbar(B_SPACE) => {
                 self.space = self.space.next();
                 Outcome::Redraw
@@ -261,7 +384,18 @@ impl ColorMeter {
         }
     }
 
-    fn copy(&mut self, format: CopyFormat) -> Outcome {
+    /// Copies the reading's colour as a swatch image.
+    pub fn copy_swatch(&mut self) -> Outcome {
+        match self.reading() {
+            Some(r) => {
+                self.copied = Some("Swatch".into());
+                Outcome::CopySwatch(r.codes)
+            }
+            None => Outcome::Nothing,
+        }
+    }
+
+    pub fn copy(&mut self, format: CopyFormat) -> Outcome {
         match self.reading() {
             Some(r) => {
                 let text = copy_text(&r, format);
@@ -340,7 +474,196 @@ mod tests {
         m.activate(Target::Toolbar(B_FORMAT));
         assert_eq!(m.format, CopyFormat::Decimal);
         m.activate(Target::Toolbar(B_ZOOM));
-        assert_eq!(m.cells, ZOOMS[2]);
+        let start = ZOOMS.iter().position(|&z| z == DEFAULT_CELLS).unwrap();
+        assert_eq!(m.cells, ZOOMS[start + 1]);
+        // the last size wraps to the first
+        m.cells = ZOOMS[ZOOMS.len() - 1];
+        m.activate(Target::Toolbar(B_ZOOM));
+        assert_eq!(m.cells, ZOOMS[0]);
+    }
+
+    /// A source whose loupe request is always due.
+    struct Probe;
+
+    impl ScreenSource for Probe {
+        fn display_size(&self) -> Option<(u32, u32)> {
+            Some((100, 100))
+        }
+        fn pointer(&self) -> Option<(u32, u32)> {
+            None
+        }
+        fn read(&self, _: PixelRect) -> Option<Vec<Rgb8>> {
+            None
+        }
+        fn wants(&mut self, center: (u32, u32), cells: u32) -> Vec<Ask> {
+            vec![Ask::Pointer, Ask::Loupe(loupe::sample_rect(center.0, center.1, cells, 100, 100))]
+        }
+    }
+
+    fn loupe_asks(m: &mut ColorMeter) -> usize {
+        m.wants().iter().filter(|a| matches!(a, Ask::Loupe(_))).count()
+    }
+
+    #[test]
+    fn continuous_updating_asks_for_the_loupe_every_time() {
+        let mut m = ColorMeter::new(Box::new(Probe));
+        assert!(m.continuous);
+        assert_eq!(loupe_asks(&mut m), 1);
+        assert_eq!(loupe_asks(&mut m), 1);
+    }
+
+    #[test]
+    fn without_continuous_updating_the_loupe_is_asked_only_when_the_pixel_moves() {
+        let mut m = ColorMeter::new(Box::new(Probe));
+        m.set_continuous(false);
+        m.pointer.follow(10, 10);
+        assert_eq!(loupe_asks(&mut m), 1);
+        // the pointer is still polled, the loupe is not repeated
+        let again = m.wants();
+        assert!(again.contains(&Ask::Pointer));
+        assert!(!again.iter().any(|a| matches!(a, Ask::Loupe(_))));
+        // a move, a change of loupe size or of aperture is sampled once
+        m.pointer.follow(11, 10);
+        assert_eq!(loupe_asks(&mut m), 1);
+        assert_eq!(loupe_asks(&mut m), 0);
+        m.cells = 21;
+        assert_eq!(loupe_asks(&mut m), 1);
+        m.set_aperture(31);
+        assert_eq!(loupe_asks(&mut m), 1);
+        assert_eq!(loupe_asks(&mut m), 0);
+    }
+
+    #[test]
+    fn turning_continuous_updating_back_on_samples_again() {
+        let mut m = ColorMeter::new(Box::new(Probe));
+        m.set_continuous(false);
+        assert_eq!(loupe_asks(&mut m), 1);
+        assert_eq!(loupe_asks(&mut m), 0);
+        m.set_continuous(true);
+        assert_eq!(loupe_asks(&mut m), 1);
+        assert_eq!(loupe_asks(&mut m), 1);
+        m.set_continuous(false);
+        assert_eq!(loupe_asks(&mut m), 1);
+    }
+
+    #[test]
+    fn the_requested_square_covers_a_wide_aperture() {
+        let mut m = ColorMeter::new(Box::new(Probe));
+        m.pointer.follow(50, 50);
+        m.set_aperture(31);
+        let Some(Ask::Loupe(r)) = m.wants().into_iter().find(|a| matches!(a, Ask::Loupe(_))) else { panic!("no loupe ask") };
+        assert_eq!((r.w, r.h), (31, 31));
+    }
+
+    #[test]
+    fn the_aperture_reading_is_the_mean_of_its_square() {
+        // a 5 x 5 display whose red channel is the column and green the row
+        let px: Vec<Rgb8> = (0..25u32).map(|i| Rgb8::new((i % 5) as u8 * 10, (i / 5) as u8 * 10, 7)).collect();
+        let mut f = Fixture::new(5, 5, px).unwrap();
+        f.at = Some((2, 2));
+        let mut m = ColorMeter::new(Box::new(f));
+        m.refresh();
+        assert_eq!(m.reading().unwrap().codes, Rgb8::new(20, 20, 7));
+        // a 3 x 3 square around (2, 2) has the same mean; around the corner it shrinks inward, mean of (0..3, 0..3)
+        assert!(m.set_aperture(3));
+        assert_eq!(m.reading().unwrap().codes, Rgb8::new(20, 20, 7));
+        m.pointer.nudge(-2, -2, 5, 5);
+        assert_eq!(m.reading().unwrap().codes, Rgb8::new(10, 10, 7));
+        // a 1-pixel aperture is the pixel itself
+        m.set_aperture(1);
+        assert_eq!(m.reading().unwrap().codes, Rgb8::new(0, 0, 7));
+    }
+
+    #[test]
+    fn the_aperture_is_kept_within_its_limits() {
+        let mut m = meter(40, 40, (5, 5));
+        assert!(!m.set_aperture(0));
+        assert_eq!(m.aperture, APERTURE_MIN);
+        assert!(m.set_aperture(99));
+        assert_eq!(m.aperture, APERTURE_MAX);
+        assert!(!m.set_aperture(APERTURE_MAX));
+    }
+
+    #[test]
+    fn the_aperture_slider_maps_the_track_to_sizes() {
+        let mut m = meter(40, 40, (5, 5));
+        let t = m.track_rect();
+        assert!(m.drag_aperture(t.x + t.w));
+        assert_eq!(m.aperture, APERTURE_MAX);
+        assert!(m.drag_aperture(t.x));
+        assert_eq!(m.aperture, APERTURE_MIN);
+        assert!(m.drag_aperture(t.x + t.w / 2.0));
+        assert_eq!(m.aperture, 16);
+        // beyond the ends it clamps
+        m.drag_aperture(t.x + 10.0 * t.w);
+        assert_eq!(m.aperture, APERTURE_MAX);
+        assert!((m.aperture_fraction() - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_track_is_found_by_the_hit_test_and_sits_between_the_swatch_and_the_rows() {
+        let m = meter(40, 40, (5, 5));
+        let t = m.track_rect();
+        assert_eq!(m.hit_body(t.x + t.w / 2.0, t.y + t.h / 2.0), Target::Aperture);
+        let l = m.loupe_rect();
+        assert_eq!(m.hit_body(l.x + l.w / 2.0, l.y + l.h / 2.0), Target::Loupe);
+        assert_eq!(m.hit_body(t.x + t.w / 2.0, t.y - 1.0), Target::Nothing);
+        assert!(t.y >= m.swatch_rect().y + m.swatch_rect().h);
+        assert!(m.rows_top() >= m.aperture_row().y + m.aperture_row().h);
+    }
+
+    #[test]
+    fn assistive_actions_step_and_set_the_aperture() {
+        let mut m = meter(40, 40, (5, 5));
+        assert!(m.aperture_action(&AxAction::Increment));
+        assert_eq!(m.aperture, 2);
+        assert!(m.aperture_action(&AxAction::SetValue("9".into())));
+        assert_eq!(m.aperture, 9);
+        assert!(m.aperture_action(&AxAction::Decrement));
+        assert_eq!(m.aperture, 8);
+        assert!(!m.aperture_action(&AxAction::SetValue("not a number".into())));
+        assert!(!m.aperture_action(&AxAction::Focus));
+        assert_eq!(m.aperture, 8);
+    }
+
+    #[test]
+    fn locking_an_axis_shows_in_the_pointer_row_and_the_toolbar() {
+        let mut m = meter(20, 20, (3, 4));
+        assert_eq!(m.pointer_state(), "Following");
+        m.pointer.toggle_lock_x();
+        assert_eq!(m.pointer_state(), "X locked");
+        m.pointer.toggle_lock_y();
+        assert_eq!(m.pointer_state(), "Locked");
+        assert_eq!(m.toolbar().items[0].label, "Unlock");
+        m.pointer.toggle_lock_x();
+        assert_eq!(m.pointer_state(), "Y locked");
+        assert_eq!(m.toolbar().items[0].label, "Lock");
+    }
+
+    #[test]
+    fn the_position_row_follows_the_show_location_setting() {
+        let mut m = meter(20, 20, (3, 4));
+        assert!(m.rows().iter().any(|(k, v)| k == "Position" && v == "3, 4"));
+        m.show_position = false;
+        assert!(!m.rows().iter().any(|(k, _)| k == "Position"));
+    }
+
+    #[test]
+    fn the_readout_lists_every_format_and_marks_the_copy_format() {
+        let mut m = meter(20, 20, (0, 0));
+        m.format = CopyFormat::Bit16;
+        let rows = m.rows();
+        for key in ["Hex", "Decimal", "16-bit", "Percent"] {
+            assert!(rows.iter().any(|(k, _)| k == key), "{key}");
+        }
+        assert!(rows.iter().any(|(k, v)| k == "Copy as" && v == "16-bit"));
+        assert!(rows.iter().any(|(k, v)| k == "16-bit" && v == "0, 10280, 51400"));
+    }
+
+    #[test]
+    fn copying_in_16_bit_puts_the_wide_codes_on_the_clipboard_outcome() {
+        let mut m = meter(20, 20, (0, 0));
+        assert_eq!(m.copy(CopyFormat::Bit16), Outcome::CopyText("0, 10280, 51400".into()));
     }
 
     #[test]

@@ -1,7 +1,8 @@
 //! Pure colour conversions for the Color Meter. A pixel read from the display is 8-bit sRGB; this module converts it to
-//! Display P3 and to Generic RGB and formats the result as hex, decimal and percent. Nothing here reads the screen or
-//! the clipboard. The sRGB transfer function and the sRGB-to-Display-P3 matrix are public standards. Generic RGB is
-//! modelled as a gamma of 1.8 on the sRGB primaries, which is an approximation until its own primaries are wired in.
+//! Display P3, Adobe RGB and Generic RGB, averages the pixels of an aperture, and formats the result as hex, decimal,
+//! 16-bit and percent. Nothing here reads the screen or the clipboard. The sRGB transfer function and the sRGB-to-Display-P3
+//! and sRGB-to-Adobe-RGB matrices are public standards. Generic RGB is modelled as a gamma of 1.8 on the sRGB primaries,
+//! which is an approximation until its own primaries are wired in.
 
 /// One pixel as 8-bit codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,25 +21,29 @@ impl Rgb8 {
 /// The colour space a reading is shown in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Space {
+    /// The display's own values, as the compositor delivers them (the display is driven as sRGB), shown unconverted.
+    Native,
     Srgb,
     DisplayP3,
+    AdobeRgb,
     GenericRgb,
 }
 
 impl Space {
-    /// The order the toolbar cycles through.
+    /// Every space, in the order the toolbar cycles through and the View menu lists them.
+    pub const ALL: [Space; 5] = [Space::Native, Space::Srgb, Space::DisplayP3, Space::AdobeRgb, Space::GenericRgb];
+
     pub fn next(self) -> Space {
-        match self {
-            Space::Srgb => Space::DisplayP3,
-            Space::DisplayP3 => Space::GenericRgb,
-            Space::GenericRgb => Space::Srgb,
-        }
+        let i = Space::ALL.iter().position(|s| *s == self).unwrap_or(0);
+        Space::ALL[(i + 1) % Space::ALL.len()]
     }
 
     pub fn name(self) -> &'static str {
         match self {
+            Space::Native => "Native",
             Space::Srgb => "sRGB",
             Space::DisplayP3 => "Display P3",
+            Space::AdobeRgb => "Adobe RGB",
             Space::GenericRgb => "Generic RGB",
         }
     }
@@ -53,6 +58,16 @@ const SRGB_TO_P3: [[f32; 3]; 3] = [
     [0.0331941, 0.9668058, 0.0000000],
     [0.0170827, 0.0723974, 0.9105199],
 ];
+
+/// Linear sRGB to linear Adobe RGB (1998) (D65), row by row. Public standard matrix.
+const SRGB_TO_ADOBE: [[f32; 3]; 3] = [
+    [0.7151627, 0.2848373, 0.0000000],
+    [0.0000000, 1.0000000, 0.0000000],
+    [0.0000000, 0.0411619, 0.9588381],
+];
+
+/// The gamma of Adobe RGB (1998), 563/256.
+pub const ADOBE_GAMMA: f32 = 2.199_218_8;
 
 /// A pixel in one space: the 8-bit codes and the normalised 0 to 1 values they stand for.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -87,7 +102,16 @@ fn quantize(v: f32) -> u8 {
 pub fn convert(px: Rgb8, space: Space) -> Reading {
     let srgb = [px.r, px.g, px.b].map(|c| c as f32 / 255.0);
     let values = match space {
-        Space::Srgb => srgb,
+        Space::Native | Space::Srgb => srgb,
+        Space::AdobeRgb => {
+            let lin = srgb.map(srgb_to_linear);
+            let mut out = [0.0f32; 3];
+            for (i, row) in SRGB_TO_ADOBE.iter().enumerate() {
+                let l = row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2];
+                out[i] = l.clamp(0.0, 1.0).powf(1.0 / ADOBE_GAMMA);
+            }
+            out
+        }
         Space::DisplayP3 => {
             let lin = srgb.map(srgb_to_linear);
             let mut out = [0.0f32; 3];
@@ -118,27 +142,57 @@ pub fn percent(values: [f32; 3]) -> String {
     format!("{:.1}%, {:.1}%, {:.1}%", values[0] * 100.0, values[1] * 100.0, values[2] * 100.0)
 }
 
-/// The text a copy puts on the clipboard.
+/// The mean of `pixels`, each channel rounded to the nearest code: what an aperture wider than one pixel reads. The
+/// codes are averaged as encoded, the way the display shows them. `None` for no pixels.
+pub fn average(pixels: &[Rgb8]) -> Option<Rgb8> {
+    let n = pixels.len() as u32;
+    if n == 0 {
+        return None;
+    }
+    let mut sum = [0u32; 3];
+    for p in pixels {
+        sum[0] += p.r as u32;
+        sum[1] += p.g as u32;
+        sum[2] += p.b as u32;
+    }
+    let mean = |s: u32| ((s + n / 2) / n) as u8;
+    Some(Rgb8::new(mean(sum[0]), mean(sum[1]), mean(sum[2])))
+}
+
+/// The three normalised values as 16-bit codes (0 to 65535).
+pub fn codes16(values: [f32; 3]) -> [u16; 3] {
+    values.map(|v| (v.clamp(0.0, 1.0) * 65535.0).round() as u16)
+}
+
+/// The three 16-bit codes, separated by commas.
+pub fn bit16(values: [f32; 3]) -> String {
+    let c = codes16(values);
+    format!("{}, {}, {}", c[0], c[1], c[2])
+}
+
+/// The text a copy puts on the clipboard, and the value format the readout marks as chosen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CopyFormat {
     Hex,
     Decimal,
+    Bit16,
     Percent,
 }
 
 impl CopyFormat {
+    /// Every format, in the order the toolbar cycles through and the View menu lists them.
+    pub const ALL: [CopyFormat; 4] = [CopyFormat::Hex, CopyFormat::Decimal, CopyFormat::Bit16, CopyFormat::Percent];
+
     pub fn next(self) -> CopyFormat {
-        match self {
-            CopyFormat::Hex => CopyFormat::Decimal,
-            CopyFormat::Decimal => CopyFormat::Percent,
-            CopyFormat::Percent => CopyFormat::Hex,
-        }
+        let i = CopyFormat::ALL.iter().position(|f| *f == self).unwrap_or(0);
+        CopyFormat::ALL[(i + 1) % CopyFormat::ALL.len()]
     }
 
     pub fn name(self) -> &'static str {
         match self {
             CopyFormat::Hex => "Hex",
             CopyFormat::Decimal => "Decimal",
+            CopyFormat::Bit16 => "16-bit",
             CopyFormat::Percent => "Percent",
         }
     }
@@ -149,6 +203,7 @@ pub fn copy_text(reading: &Reading, format: CopyFormat) -> String {
     match format {
         CopyFormat::Hex => hex(reading.codes),
         CopyFormat::Decimal => decimal(reading.codes),
+        CopyFormat::Bit16 => bit16(reading.values),
         CopyFormat::Percent => percent(reading.values),
     }
 }
@@ -163,7 +218,7 @@ mod tests {
 
     #[test]
     fn black_and_white_stay_put_in_every_space() {
-        for space in [Space::Srgb, Space::DisplayP3, Space::GenericRgb] {
+        for space in Space::ALL {
             assert_eq!(convert(Rgb8::new(0, 0, 0), space).codes, Rgb8::new(0, 0, 0));
             assert_eq!(convert(Rgb8::new(255, 255, 255), space).codes, Rgb8::new(255, 255, 255));
         }
@@ -223,14 +278,55 @@ mod tests {
     #[test]
     fn cycles_return_to_the_start() {
         let mut s = Space::Srgb;
-        for _ in 0..3 {
+        for _ in 0..Space::ALL.len() {
             s = s.next();
         }
         assert_eq!(s, Space::Srgb);
         let mut f = CopyFormat::Hex;
-        for _ in 0..3 {
+        for _ in 0..CopyFormat::ALL.len() {
             f = f.next();
         }
         assert_eq!(f, CopyFormat::Hex);
+    }
+
+    #[test]
+    fn native_shows_the_codes_unconverted() {
+        let r = convert(Rgb8::new(12, 200, 99), Space::Native);
+        assert_eq!(r.codes, Rgb8::new(12, 200, 99));
+    }
+
+    #[test]
+    fn pure_srgb_green_is_the_known_adobe_rgb_code() {
+        // sRGB green sits at (144, 255, 60) in Adobe RGB (1998).
+        let r = convert(Rgb8::new(0, 255, 0), Space::AdobeRgb);
+        assert!((r.codes.r as i32 - 144).abs() <= 1, "{:?}", r.codes);
+        assert_eq!(r.codes.g, 255);
+        assert!((r.codes.b as i32 - 60).abs() <= 1, "{:?}", r.codes);
+    }
+
+    #[test]
+    fn adobe_rgb_greys_stay_grey_with_the_2_2_gamma() {
+        // sRGB 128 is linear 0.2159; 0.2159^(1/2.2) is about 0.498, which is code 127.
+        let r = convert(Rgb8::new(128, 128, 128), Space::AdobeRgb);
+        assert!((r.codes.r as i32 - 127).abs() <= 1, "{:?}", r.codes);
+        assert_eq!(r.codes.r, r.codes.g);
+        assert_eq!(r.codes.g, r.codes.b);
+    }
+
+    #[test]
+    fn sixteen_bit_codes_scale_the_values_to_65535() {
+        assert_eq!(codes16([0.0, 0.5, 1.0]), [0, 32768, 65535]);
+        assert_eq!(codes16([-1.0, 2.0, 0.0]), [0, 65535, 0]);
+        // an 8-bit sRGB code c is exactly c * 257 in 16 bits
+        let r = convert(Rgb8::new(255, 128, 0), Space::Srgb);
+        assert_eq!(copy_text(&r, CopyFormat::Bit16), "65535, 32896, 0");
+    }
+
+    #[test]
+    fn the_average_of_an_aperture_rounds_each_channel() {
+        let px = [Rgb8::new(0, 10, 255), Rgb8::new(1, 11, 254), Rgb8::new(1, 11, 255), Rgb8::new(1, 10, 255)];
+        assert_eq!(average(&px), Some(Rgb8::new(1, 11, 255)));
+        assert_eq!(average(&[Rgb8::new(7, 8, 9)]), Some(Rgb8::new(7, 8, 9)));
+        assert_eq!(average(&[]), None);
     }
 }
