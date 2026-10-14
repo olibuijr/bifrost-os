@@ -59,9 +59,9 @@
     {
       "feature": "Video decoding and picture hand-off (image buffers)",
       "apple": "CMSampleBuffer image buffer path, CMSampleBufferGetImageBuffer, CMVideoFormatDescription matching (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
-      "bifrost": "springboard/src/media/mod.rs:226 (VideoDecoder trait); springboard/src/media/mod.rs:212 (Frame with pts_us and pixels); springboard/src/media/mod.rs:173 (VideoLayer for the GPU); springboard/src/media/hwdec/ffmpeg.rs; springboard/src/media/hwdec/vaapi.rs",
-      "status": "os",
-      "note": "Hardware decode through libavcodec and VA-API on the DRM render node, with software fallback. Decoded pictures reach the shell as VideoLayer. The player is used by the Deildu app; no SDK API for apps."
+      "bifrost": "springboard/sdk/src/video_frame.rs (VideoFormat, VideoFrame, FrameStream); springboard/src/media/mod.rs:226 (VideoDecoder trait); springboard/src/media/mod.rs:212 (Frame with pts_us and pixels); springboard/src/media/mod.rs:173 (VideoLayer for the GPU); springboard/src/media/hwdec/ffmpeg.rs; springboard/src/media/hwdec/vaapi.rs",
+      "status": "partial",
+      "note": "Apps can check a decoded picture against its negotiated format and queue pictures in presentation order (tested headless in springboard/sdk/tests/parity_sdk-rest-02.rs). Gap: the decoder and VideoLayer stay in the shell, so no decoded picture reaches an app process yet; the hand-off path needs the lab machine to verify."
     },
     {
       "feature": "Audio sample decode and conversion",
@@ -75,14 +75,14 @@
       "apple": "Playback through CMAudioClock-synchronized sinks (https://developer.apple.com/documentation/coremedia/cmaudioclock)",
       "bifrost": "springboard/src/media/audio_out.rs; springboard/src/media/speaker.rs; springboard/audiod/ (is.olibuijr.audio service)",
       "status": "os",
-      "note": "Output goes through ALSA's default PCM so PipeWire or PulseAudio can mix. Apps reach it through the audio service, not through a media API."
+      "note": "Output goes through ALSA's default PCM so PipeWire or PulseAudio can mix. Apps reach it through the audio service, not through a media API. Left as os in sdk-rest-02: no typed SDK client was added because the audio service's request protocol must be checked on the lab machine first."
     },
     {
       "feature": "Media capture",
       "apple": "CMSampleBuffer delivery from capture devices (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
       "bifrost": "springboard/src/media/capture.rs; springboard/src/media/v4l2.rs (Frame at :212)",
       "status": "os",
-      "note": "V4L2 capture for the camera. No SDK sample-buffer type for apps."
+      "note": "V4L2 capture for the camera. Left as os in sdk-rest-02: a camera frame reaches apps only through the shell's camera permission flow, and no shell channel that carries frames to an app process exists yet. The ui video_device model covers node selection only."
     },
     {
       "feature": "Container metadata and tags",
