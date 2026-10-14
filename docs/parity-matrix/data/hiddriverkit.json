@@ -52,9 +52,9 @@
     {
       "feature": "Pointer and scrolling devices",
       "apple": "IOUserHIDEventDriver (pointer and scroll events)",
-      "bifrost": "springboard/src/bare/pointer_finger.rs (Mouse, PointerFinger), springboard/src/bare/input.rs:382 (PointerDecoder), :656 (pointer source selection)",
-      "status": "os",
-      "note": "Mouse and pointer events reach the shell only"
+      "bifrost": "springboard/ui/src/device_match.rs (Criteria::pointer, Capabilities); springboard/src/bare/pointer_finger.rs (Mouse, PointerFinger), springboard/src/bare/input.rs:382 (PointerDecoder), :656 (pointer source selection)",
+      "status": "partial",
+      "note": "A pointer device is matched by capability (relative motion and a left button), tested headless in parity_sdk-os-01. Gap: scroll wheel axes are not a matching criterion, and no app reads pointer events."
     },
     {
       "feature": "Switches (lid, jack insert)",

@@ -17,9 +17,9 @@
     {
       "feature": "Publishing media sessions to Lock Screen and Control Center",
       "apple": "Publishing media sessions (article)",
-      "bifrost": "springboard/src/shell/music/system.rs (lock-screen card, Control Center controls); springboard/src/shell/notify/mod.rs (card placement above the notification list)",
-      "status": "os",
-      "note": "Works for whatever the audio service holds, not for an app's own session. The Music app is the only source; other apps reach the card only by playing through the service."
+      "bifrost": "springboard/ui/src/media_session.rs (MediaSession, RemoteCommand, dispatch); springboard/sdk/src/now_playing.rs (publish_body, publish, clear); springboard/src/shell/music/system.rs (lock-screen card, Control Center controls)",
+      "status": "partial",
+      "note": "An app's session, its content, its position capped at the duration and its command gating are tested headless in parity_sdk-os-01. Gap: the lock-screen card for an app's session is not verified on the lab machine, and the shell's Music card is not yet shared with other sessions."
     },
     {
       "feature": "Remote sessions: RemoteMediaSession, extension, attributes, MediaDevice",
