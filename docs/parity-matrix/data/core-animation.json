@@ -129,9 +129,9 @@
   {
    "feature": "Render server and compositing (layer compositor, GPU presenter)",
    "apple": "Core Animation render server (implicit in CALayer rendering)",
-   "bifrost": "springboard/src/gpu/layer.rs, springboard/src/bare/gpu_comp.rs, springboard/render/src/motion.rs (shared motion contract)",
-   "status": "os",
-   "note": "the compositor draws layers for the shell and video, but apps cannot submit layers to it"
+   "bifrost": "springboard/layers/src/session.rs (LayerSession::commit, presentation); springboard/src/gpu/layer.rs, springboard/src/bare/gpu_comp.rs, springboard/render/src/motion.rs (shared motion contract)",
+   "status": "partial",
+   "note": "LayerSession numbers, orders and applies transactions over a layer tree and refuses stale or duplicate batches; headless tests in layers/tests/parity_sdk-rest-09.rs. Gap: the session is not yet connected to the bifrost_layer_v1 protocol, so the compositor does not receive app trees; the compositor path needs the lab machine."
   },
   {
    "feature": "Reduce Motion and motion preferences",
