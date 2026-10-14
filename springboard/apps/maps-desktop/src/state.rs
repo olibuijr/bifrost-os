@@ -2,7 +2,8 @@
 //! (`Act`) changes the state and returns the `Effect`s the window must carry out (a request, the clipboard, a panel of
 //! the shell). Finished requests come back through `search_done`, `route_done` and `gpx_loaded`.
 
-use crate::cache::{download_estimate, OfflineArea, MAX_OFFLINE_TILES};
+use crate::areas::{self, Areas, SavedArea};
+use crate::cache::{download_estimate, OfflineArea, TileCache, MAX_OFFLINE_TILES};
 use crate::geocode::{parse_coordinates, Geocoder, Place, Suggestor, DEFAULT_BASE};
 use crate::gpx;
 use crate::links::{self, Endpoint, LinkAction};
@@ -86,6 +87,8 @@ pub enum Act {
     Download,
     StartDownload,
     CancelDownload,
+    /// remove saved offline area N and its tiles
+    DeleteArea(usize),
     ClosePanel,
     Profile(Profile),
     PickRoute(usize),
@@ -217,6 +220,10 @@ pub struct Maps {
     pub tracks: Vec<(String, Vec<(f64, f64)>)>,
     pub offline_area: Option<OfflineArea>,
     pub progress: Option<(usize, usize)>,
+    /// the areas kept offline, listed in the Download Map card
+    pub areas: Areas,
+    /// the area being downloaded, added to `areas` when it finishes
+    pending_area: Option<SavedArea>,
     /// the collection whose places show on the map
     pub shown_collection: Option<usize>,
     /// one line of news under the card title ("Routing unavailable", "No places found")
@@ -296,6 +303,8 @@ impl Maps {
             tracks: Vec::new(),
             offline_area: None,
             progress: None,
+            areas: areas::load(root),
+            pending_area: None,
             shown_collection: None,
             note: None,
             here: None,
@@ -578,6 +587,7 @@ impl Maps {
             Act::PickRoute(i) => i < self.routes.len(),
             Act::AddToCollection(i) => has_place && i < self.library.collections.len(),
             Act::StartDownload => self.offline_area.is_some_and(|a| a.count().1) && self.progress.is_none(),
+            Act::DeleteArea(i) => i < self.areas.list.len(),
             Act::ClearRecents => !self.library.recents.is_empty(),
             Act::StartNavigation => self.panel == Panel::Directions && self.current_route().is_some_and(|r| nav::can_follow(r, self.profile)),
             Act::EndNavigation => self.nav.is_some(),
@@ -654,11 +664,24 @@ impl Maps {
                     return vec![];
                 }
                 self.progress = Some((0, tiles.len()));
+                if let Some(area) = self.offline_area {
+                    let (name, _) = self.target();
+                    self.pending_area = Some(SavedArea { name, area, source_key: self.map_type.source(&self.version).cache_key(), tiles: tiles.len() });
+                }
                 return vec![Effect::StartDownload(tiles)];
             }
             Act::CancelDownload => {
                 self.progress = None;
+                self.pending_area = None;
                 return vec![Effect::CancelDownload];
+            }
+            Act::DeleteArea(i) => {
+                if let Some(gone) = self.areas.remove(i) {
+                    let cache = TileCache::new(&self.root, &gone.source_key);
+                    areas::delete_tiles(&cache, &self.areas.orphans(&gone));
+                    let _ = areas::save(&self.root, &self.areas);
+                    self.note = Some(format!("Removed {}", gone.name));
+                }
             }
             Act::ClosePanel => return self.close_panel(),
             Act::Escape => {
@@ -771,6 +794,7 @@ impl Maps {
         self.panel = if was == Panel::Place || self.selected.is_none() { Panel::None } else { Panel::Place };
         if was == Panel::Download && self.progress.is_some() {
             self.progress = None;
+            self.pending_area = None;
             return vec![Effect::CancelDownload];
         }
         if was == Panel::Place {
@@ -1180,6 +1204,10 @@ impl Maps {
     /// The finished download: the card goes back to the map.
     pub fn download_done(&mut self) {
         self.progress = None;
+        if let Some(entry) = self.pending_area.take() {
+            self.areas.add(entry);
+            let _ = areas::save(&self.root, &self.areas);
+        }
         self.note = Some("The area is saved for offline use".to_string());
     }
 }
@@ -1528,6 +1556,31 @@ mod tests {
         assert!(m.progress.is_some());
         assert!(!m.can(Act::StartDownload), "one download at a time");
         assert_eq!(m.act(Act::CancelDownload, 0), vec![Effect::CancelDownload]);
+    }
+
+    #[test]
+    fn a_finished_download_is_listed_and_can_be_deleted() {
+        let mut m = maps("areas");
+        m.act(Act::Download, 0);
+        m.act(Act::StartDownload, 0);
+        m.download_done();
+        assert_eq!(m.areas.list.len(), 1);
+        assert!(m.areas.list[0].tiles > 0);
+        assert!(m.can(Act::DeleteArea(0)) && !m.can(Act::DeleteArea(1)));
+        let again = Maps::new(m.root(), "1.0.0", 800.0, 600.0);
+        assert_eq!(again.areas.list.len(), 1, "the list is saved");
+        m.act(Act::DeleteArea(0), 0);
+        assert!(m.areas.list.is_empty());
+    }
+
+    #[test]
+    fn a_cancelled_download_is_not_listed() {
+        let mut m = maps("areas-cancel");
+        m.act(Act::Download, 0);
+        m.act(Act::StartDownload, 0);
+        m.act(Act::CancelDownload, 0);
+        m.download_done();
+        assert!(m.areas.list.is_empty());
     }
 
     #[test]

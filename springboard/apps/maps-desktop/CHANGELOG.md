@@ -15,6 +15,8 @@
   planner set the card says so; there is no straight-line stand-in for a timetable.
 - Show Traffic (View menu, Cmd+T): an optional traffic layer from the tile URL `traffic_url` in settings.json, drawn
   over the map and fetched again after five minutes. Without the setting the menu item says how to turn it on.
+- Download Map keeps a list of saved offline areas in the same card; Delete removes an area and the tiles no other
+  saved area needs.
 - Still not done: 3D and street-level views, Dock New Window and Handoff.
 
 ## 0.2.0 - 2026-10-13
