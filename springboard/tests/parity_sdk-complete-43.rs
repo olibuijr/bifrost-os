@@ -51,12 +51,13 @@ fn incompressible_bytes_still_produce_a_stream_no_larger_than_nine_bits_per_byte
 #[test]
 fn a_solid_screen_frame_is_written_far_smaller_than_its_raw_pixels() {
     let (w, h) = (1200usize, 1920usize);
-    let px = vec![pack(20, 40, 60, 255); w * h];
+    let p = pack(20, 40, 60, 255);
+    let px = vec![p; w * h];
     let bytes = encode_rgb(w, h, &px);
     assert!(bytes.len() * 50 < w * h * 3, "a flat frame compresses, got {} bytes", bytes.len());
     let (dw, dh, data) = decode_rgb(&bytes);
     assert_eq!((dw, dh), (1200, 1920));
-    assert_eq!(&data[data.len() - 3..], &[60, 40, 20]);
+    assert_eq!(&data[data.len() - 3..], &[p as u8, (p >> 8) as u8, (p >> 16) as u8]);
 }
 
 #[test]

@@ -118,10 +118,10 @@ fn match_len(data: &[u8], earlier: usize, at: usize) -> usize {
 
 /// Writes a deflate length/distance pair with the fixed codes of RFC 1951, section 3.2.6.
 fn put_match(bits: &mut BitWriter, len: usize, dist: usize) {
-    let li = LENGTH_BASE.partition_point(|&b| b as usize <= len) - 1;
+    let li = LENGTH_BASE.partition_point(|&b| (b as usize) <= len) - 1;
     put_length_symbol(bits, 257 + li);
     bits.put((len - LENGTH_BASE[li] as usize) as u32, LENGTH_EXTRA[li] as u32);
-    let di = DIST_BASE.partition_point(|&b| b as usize <= dist) - 1;
+    let di = DIST_BASE.partition_point(|&b| (b as usize) <= dist) - 1;
     bits.put_code(di as u32, 5);
     bits.put((dist - DIST_BASE[di] as usize) as u32, DIST_EXTRA[di] as u32);
 }
