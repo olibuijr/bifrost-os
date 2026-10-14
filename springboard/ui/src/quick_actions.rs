@@ -75,8 +75,8 @@ pub fn clean_all(items: Vec<ShortcutItem>) -> Result<Vec<ShortcutItem>, String> 
 /// The list an app shows: `dynamic` items first, then `static_items`, dropping a type already listed and anything past
 /// [`MAX_ITEMS`].
 pub fn combine(dynamic: &[ShortcutItem], static_items: &[ShortcutItem]) -> Vec<ShortcutItem> {
-    let mut seen = HashSet::new();
-    dynamic.iter().chain(static_items).filter(|item| seen.insert(item.kind.as_str())).take(MAX_ITEMS).cloned().collect()
+    let mut seen: HashSet<String> = HashSet::new();
+    dynamic.iter().chain(static_items).filter(|item| seen.insert(item.kind.clone())).take(MAX_ITEMS).cloned().collect()
 }
 
 /// A `key=value` pair from a manifest's `user_info` list. The key is trimmed and must not be empty.
