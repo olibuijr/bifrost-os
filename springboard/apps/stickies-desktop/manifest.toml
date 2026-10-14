@@ -10,6 +10,13 @@ architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 window = "full-size"
 
+[[intent]]
+id = "create-sticky"
+title = "Make New Sticky Note"
+description = "Creates a sticky note holding the given text."
+shortcut = false
+params = ["text:string"]
+
 [[log.subsystem]]
 id = "is.olibuijr.stickies"
 categories = ["save", "import"]

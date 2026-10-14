@@ -1,7 +1,10 @@
-//! The sticky notes board as plain data: the notes, their colour, frame, collapse and text style, editing with a
-//! caret and selection, find, arrange, import and export as text, and the JSON file the app keeps in its data
-//! directory. No drawing here.
+//! The sticky notes board as plain data: the notes, their colour, frame and collapse, and their text. A note's body is
+//! text with one style per character, so a selection can be bold, underlined or outlined on its own. The model also
+//! holds editing with a caret and selection, find, arrange, import and export, and the JSON file the app keeps in its
+//! data directory. No drawing here.
 
+use crate::swatch::{self, Rgb};
+use bifrost_app::attributed::AttributedString;
 use bifrost_app::controls::text::TextBuffer;
 use bifrost_core::json::{self, Json};
 use std::ops::Range;
@@ -29,6 +32,8 @@ pub const ZOOM_W: f32 = 460.0;
 pub const ZOOM_H: f32 = 380.0;
 /// Margin and gap of the grid that Arrange By lays the notes out in, in points.
 pub const ARRANGE_MARGIN_PT: f32 = 16.0;
+/// Height of the bands that Arrange By Location reads as one row of notes, in points.
+pub const LOCATION_BAND_PT: f32 = 60.0;
 
 /// The six sticky colours, in menu order.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -76,7 +81,8 @@ impl Colour {
     }
 }
 
-/// Text size of a note's body. The drawing maps each to a system text style token.
+/// Text size of a note's body. The drawing maps each to a system text style token. The size belongs to the whole
+/// note: Bigger, Smaller and the size items change every character.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextSize {
     Small,
@@ -147,6 +153,89 @@ impl Ink {
     }
 }
 
+/// Where the text sits against the line (Font > Baseline).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Baseline {
+    #[default]
+    Normal,
+    Superscript,
+    Subscript,
+}
+
+impl Baseline {
+    pub const ALL: [Baseline; 3] = [Baseline::Normal, Baseline::Superscript, Baseline::Subscript];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Baseline::Normal => "Use Default",
+            Baseline::Superscript => "Superscript",
+            Baseline::Subscript => "Subscript",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Baseline::Normal => "normal",
+            Baseline::Superscript => "super",
+            Baseline::Subscript => "sub",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Baseline {
+        match name {
+            "super" => Baseline::Superscript,
+            "sub" => Baseline::Subscript,
+            _ => Baseline::Normal,
+        }
+    }
+
+    /// Vertical shift as a fraction of the line step: negative is up.
+    pub fn shift(self) -> f32 {
+        match self {
+            Baseline::Normal => 0.0,
+            Baseline::Superscript => -0.22,
+            Baseline::Subscript => 0.18,
+        }
+    }
+}
+
+/// How a font feature of a run is set: the font's own choice, none of it, or all of it (Font > Kern, Font > Ligature).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Setting {
+    #[default]
+    Default,
+    Off,
+    All,
+}
+
+impl Setting {
+    pub const ALL: [Setting; 3] = [Setting::Default, Setting::Off, Setting::All];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Setting::Default => "Use Default",
+            Setting::Off => "Use None",
+            Setting::All => "Use All",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Setting::Default => "default",
+            Setting::Off => "none",
+            Setting::All => "all",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Setting {
+        match name {
+            "none" => Setting::Off,
+            "all" => Setting::All,
+            _ => Setting::Default,
+        }
+    }
+}
+
 /// How Window > Arrange By orders the notes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Arrange {
@@ -158,8 +247,7 @@ pub enum Arrange {
 }
 
 impl Arrange {
-    pub const ALL: [Arrange; 5] =
-        [Arrange::Colour, Arrange::Content, Arrange::Created, Arrange::Modified, Arrange::Location];
+    pub const ALL: [Arrange; 5] = [Arrange::Colour, Arrange::Content, Arrange::Created, Arrange::Modified, Arrange::Location];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -208,7 +296,8 @@ impl Case {
     }
 }
 
-/// Whole-note formatting: the attributes apply to the entire body (per-range formatting is not kept yet).
+/// The attributes of the characters of a note. Size and the typing style belong to the note; the rest can differ from
+/// one character to the next.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Style {
     pub bold: bool,
@@ -218,48 +307,41 @@ pub struct Style {
     /// Text drawn as an outline: the letters are ringed in the text colour (Font > Outline).
     pub outline: bool,
     pub baseline: Baseline,
+    pub kern: Setting,
+    pub ligature: Setting,
     pub size: TextSize,
     pub ink: Ink,
 }
 
-/// Where the text sits against the line (Font > Baseline).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum Baseline {
-    #[default]
-    Normal,
-    Superscript,
-    Subscript,
-}
-
-impl Baseline {
-    pub fn name(self) -> &'static str {
-        match self {
-            Baseline::Normal => "normal",
-            Baseline::Superscript => "super",
-            Baseline::Subscript => "sub",
-        }
-    }
-    pub fn from_name(name: &str) -> Baseline {
-        match name {
-            "super" => Baseline::Superscript,
-            "sub" => Baseline::Subscript,
-            _ => Baseline::Normal,
-        }
-    }
-    /// Vertical shift as a fraction of the line step: negative is up.
-    pub fn shift(self) -> f32 {
-        match self {
-            Baseline::Normal => 0.0,
-            Baseline::Superscript => -0.22,
-            Baseline::Subscript => 0.18,
-        }
-    }
-}
-
 impl Default for Style {
     fn default() -> Self {
-        Style { bold: false, italic: false, underline: false, strike: false, outline: false, baseline: Baseline::Normal, size: TextSize::Medium, ink: Ink::Black }
+        Style {
+            bold: false,
+            italic: false,
+            underline: false,
+            strike: false,
+            outline: false,
+            baseline: Baseline::Normal,
+            kern: Setting::Default,
+            ligature: Setting::Default,
+            size: TextSize::Medium,
+            ink: Ink::Black,
+        }
     }
+}
+
+impl Style {
+    /// The attributes of `from`, with this style's size: Paste Style keeps the size of the note it lands in.
+    pub fn take_attributes(self, from: Style) -> Style {
+        Style { size: self.size, ..from }
+    }
+}
+
+/// Applies `f` to one style and reports whether it changed.
+fn apply(s: &mut Style, f: &impl Fn(&mut Style)) -> bool {
+    let before = *s;
+    f(s);
+    *s != before
 }
 
 /// The hit areas of a note.
@@ -284,14 +366,19 @@ pub enum Move {
 pub struct Note {
     pub id: u64,
     pub colour: Colour,
+    /// A custom colour (Colour > Custom Colour...), which replaces `colour` while it is set.
+    pub rgb: Option<Rgb>,
     /// Frame in points, board space.
     pub x: f32,
     pub y: f32,
     pub w: f32,
     pub h: f32,
     pub collapsed: bool,
+    /// The note's text size, and the style new text takes where no text precedes the caret.
     pub style: Style,
     pub text: String,
+    /// The style of each character of `text`, in order. Its length is the character count of `text`.
+    pub styles: Vec<Style>,
     /// The selection in the text, as byte offsets: `anchor` stays, `caret` moves. Equal when nothing is selected.
     pub anchor: usize,
     pub caret: usize,
@@ -304,11 +391,35 @@ pub struct Note {
     pub modified: u64,
 }
 
+/// Keeps `styles` in step with an edit that turns `old` into `new`. The characters the edit inserts take the style of
+/// the character before them (the note's style at the start), and every other character keeps its style.
+fn splice_styles(styles: &mut Vec<Style>, base: Style, old: &str, new: &str) {
+    let mut start = old.bytes().zip(new.bytes()).take_while(|(a, b)| a == b).count();
+    while !old.is_char_boundary(start) || !new.is_char_boundary(start) {
+        start -= 1;
+    }
+    let room = old.len().min(new.len()) - start;
+    let mut tail = old.bytes().rev().zip(new.bytes().rev()).take(room).take_while(|(a, b)| a == b).count();
+    while !old.is_char_boundary(old.len() - tail) || !new.is_char_boundary(new.len() - tail) {
+        tail -= 1;
+    }
+    let at = old[..start].chars().count();
+    let removed = old[start..old.len() - tail].chars().count();
+    let inserted = new[start..new.len() - tail].chars().count();
+    let fill = if at > 0 { styles.get(at - 1).copied().unwrap_or(base) } else { base };
+    let from = at.min(styles.len());
+    let to = (at + removed).min(styles.len()).max(from);
+    styles.splice(from..to, std::iter::repeat(fill).take(inserted));
+    // one style per character, even when the text and the styles disagreed before this edit
+    styles.resize(new.chars().count(), base);
+}
+
 impl Note {
     pub fn new(id: u64, x: f32, y: f32, now: u64) -> Note {
         Note {
             id,
             colour: Colour::Yellow,
+            rgb: None,
             x,
             y,
             w: DEFAULT_W,
@@ -316,6 +427,7 @@ impl Note {
             collapsed: false,
             style: Style::default(),
             text: String::new(),
+            styles: Vec::new(),
             anchor: 0,
             caret: 0,
             translucent: true,
@@ -363,22 +475,89 @@ impl Note {
         self.h = h.max(MIN_H);
     }
 
-    /// Runs `f` on a text buffer holding the body and the selection, then takes the result back.
+    /// Takes one of the six colours and drops any custom colour.
+    pub fn set_preset(&mut self, colour: Colour) {
+        self.colour = colour;
+        self.rgb = None;
+    }
+
+    /// The character index of the byte offset `at`.
+    pub fn char_index(&self, at: usize) -> usize {
+        self.text.char_indices().take_while(|(i, _)| *i < at).count()
+    }
+
+    /// The character indices covering the byte range `r`.
+    fn char_range(&self, r: Range<usize>) -> Range<usize> {
+        let start = self.char_index(r.start);
+        start..start + self.text.get(r).map_or(0, |s| s.chars().count())
+    }
+
+    /// The style of the character at index `i`, or the note's style past the end of the text.
+    pub fn style_at_index(&self, i: usize) -> Style {
+        self.styles.get(i).copied().unwrap_or(self.style)
+    }
+
+    /// The style a menu shows and a format change starts from: the first selected character, else the character before
+    /// the caret, else the first character.
+    pub fn current_style(&self) -> Style {
+        if self.has_selection() {
+            return self.style_at_index(self.char_index(self.selection().start));
+        }
+        let at = self.char_index(self.caret);
+        if at > 0 {
+            self.style_at_index(at - 1)
+        } else {
+            self.style_at_index(0)
+        }
+    }
+
+    /// The runs of the byte range `r`: neighbouring characters with equal styles, as byte ranges.
+    pub fn style_runs(&self, r: Range<usize>) -> Vec<(Range<usize>, Style)> {
+        let mut out: Vec<(Range<usize>, Style)> = Vec::new();
+        let Some(slice) = self.text.get(r.clone()) else { return out };
+        let mut i = self.char_index(r.start);
+        for (off, c) in slice.char_indices() {
+            let style = self.style_at_index(i);
+            let start = r.start + off;
+            let end = start + c.len_utf8();
+            match out.last_mut() {
+                Some((range, last)) if *last == style && range.end == start => range.end = end,
+                _ => out.push((start..end, style)),
+            }
+            i += 1;
+        }
+        out
+    }
+
+    /// Runs `f` on a text buffer holding the body and the selection, then takes the result back. The styles follow the
+    /// edit.
     fn with_buffer<R>(&mut self, f: impl FnOnce(&mut TextBuffer) -> R) -> R {
         let mut b = TextBuffer::from_text(&self.text);
         b.set_selection(self.anchor, self.caret);
         let r = f(&mut b);
         if b.text() != self.text {
-            self.text = b.text().to_string();
+            let text = b.text().to_string();
+            splice_styles(&mut self.styles, self.style, &self.text, &text);
+            self.text = text;
         }
         self.anchor = b.anchor();
         self.caret = b.caret();
         r
     }
 
-    /// Replaces the whole body; the caret goes to the end.
+    /// Replaces the whole body; the caret goes to the end. Characters that are still there keep their styles.
     pub fn set_text(&mut self, text: &str) {
-        self.text = text.to_string();
+        let old = std::mem::replace(&mut self.text, text.to_string());
+        splice_styles(&mut self.styles, self.style, &old, &self.text);
+        self.anchor = self.text.len();
+        self.caret = self.text.len();
+    }
+
+    /// Replaces the body with rich text runs, each with its style. The runs take the note's size.
+    pub fn set_runs(&mut self, runs: &[(String, Style)]) {
+        let size = self.style.size;
+        self.text = runs.iter().map(|(t, _)| t.as_str()).collect();
+        self.styles = runs.iter().flat_map(|(t, s)| t.chars().map(move |_| Style { size, ..*s })).collect();
         self.anchor = self.text.len();
         self.caret = self.text.len();
     }
@@ -394,6 +573,33 @@ impl Note {
 
     pub fn selected_text(&self) -> &str {
         self.text.get(self.selection()).unwrap_or("")
+    }
+
+    /// Applies `f` to the styles of the selection, or to the whole note (and its style) when nothing is selected.
+    /// True when a style changed.
+    pub fn restyle(&mut self, f: impl Fn(&mut Style)) -> bool {
+        let mut changed = false;
+        if self.has_selection() {
+            let r = self.char_range(self.selection());
+            if let Some(part) = self.styles.get_mut(r) {
+                for s in part.iter_mut() {
+                    changed |= apply(s, &f);
+                }
+            }
+        } else {
+            changed |= self.restyle_whole(f);
+        }
+        changed
+    }
+
+    /// Applies `f` to every character and to the note's style, whatever the selection. True when a style changed.
+    pub fn restyle_whole(&mut self, f: impl Fn(&mut Style)) -> bool {
+        let mut changed = false;
+        for s in self.styles.iter_mut() {
+            changed |= apply(s, &f);
+        }
+        changed |= apply(&mut self.style, &f);
+        changed
     }
 
     /// Typed text replaces the selection, or goes in at the caret.
@@ -423,6 +629,16 @@ impl Note {
             self.modified = now;
         }
         removed
+    }
+
+    /// Replaces the bytes `range` with `with` and leaves the caret after it. Used by spelling corrections.
+    pub fn replace_range(&mut self, range: Range<usize>, with: &str, now: u64) {
+        let end = range.start + with.len();
+        self.with_buffer(|b| {
+            b.replace_range(range, with);
+            b.set_selection(end, end);
+        });
+        self.modified = now;
     }
 
     /// Removes the selection and returns it (Cut); `None` when nothing is selected.
@@ -505,6 +721,20 @@ impl Note {
     }
 }
 
+/// The rich text runs of an RTF document: its text with the bold, italic, underline and strikethrough of each part.
+/// Other formatting is left at the note's defaults.
+pub fn runs_from_rtf(rtf: &str) -> Vec<(String, Style)> {
+    let attributed = AttributedString::from_rtf(rtf);
+    let runs: Vec<(String, Style)> = attributed
+        .runs()
+        .map(|(text, attrs)| {
+            let style = Style { bold: attrs.bold, italic: attrs.italic, underline: attrs.underline, strike: attrs.strikethrough, ..Style::default() };
+            (text.to_string(), style)
+        })
+        .collect();
+    runs
+}
+
 /// The byte ranges of the web addresses in `text`: words that start with `http://`, `https://` or `www.`, without
 /// the punctuation that ends a sentence.
 pub fn links(text: &str) -> Vec<Range<usize>> {
@@ -522,6 +752,12 @@ pub fn links(text: &str) -> Vec<Range<usize>> {
     out
 }
 
+/// Whether `text` is a web address that Add Link can insert: the whole of it is one link.
+pub fn is_link(text: &str) -> bool {
+    let t = text.trim();
+    !t.is_empty() && links(t) == vec![0..t.len()]
+}
+
 /// A place where the find text occurs: the note and the byte range in its body.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Match {
@@ -537,8 +773,9 @@ pub struct Board {
     pub next_id: u64,
     /// The note that takes typing and draws active.
     pub focus: Option<u64>,
-    /// The colour and text style that new notes start with (Use as Default).
+    /// The colour, custom colour and text style that new notes start with (Use as Default).
     pub default_colour: Colour,
+    pub default_rgb: Option<Rgb>,
     pub default_style: Style,
 }
 
@@ -566,16 +803,19 @@ impl Board {
         let id = self.next_id;
         let mut note = Note::new(id, x, y, now);
         note.colour = self.default_colour;
+        note.rgb = self.default_rgb;
         note.style = self.default_style;
         self.notes.push(note);
         self.focus = Some(id);
         id
     }
 
-    /// Makes the focused note's colour and text style the ones new notes start with. False without a focused note.
+    /// Makes the focused note's colour and the style at its caret the ones new notes start with. False without a
+    /// focused note.
     pub fn use_as_default(&mut self) -> bool {
-        let Some((colour, style)) = self.focused().map(|n| (n.colour, n.style)) else { return false };
+        let Some((colour, rgb, style)) = self.focused().map(|n| (n.colour, n.rgb, n.current_style())) else { return false };
         self.default_colour = colour;
+        self.default_rgb = rgb;
         self.default_style = style;
         true
     }
@@ -604,6 +844,15 @@ impl Board {
         let id = self.new_note(x, y, now);
         if let Some(n) = self.find_mut(id) {
             n.set_text(text);
+        }
+        id
+    }
+
+    /// Adds a note holding rich text runs, placed at `(x, y)`.
+    pub fn add_runs(&mut self, runs: &[(String, Style)], x: f32, y: f32, now: u64) -> u64 {
+        let id = self.new_note(x, y, now);
+        if let Some(n) = self.find_mut(id) {
+            n.set_runs(runs);
         }
         id
     }
@@ -650,12 +899,15 @@ impl Board {
             return false;
         }
         match by {
-            Arrange::Colour => self.notes.sort_by_key(|n| n.colour.index()),
+            Arrange::Colour => self.notes.sort_by_key(|n| (n.rgb.is_some(), n.colour.index(), n.rgb)),
             Arrange::Content => self.notes.sort_by_key(|n| n.title().to_lowercase()),
             Arrange::Created => self.notes.sort_by_key(|n| n.created),
             Arrange::Modified => self.notes.sort_by_key(|n| n.modified),
-            // reading order of where the notes sit now: top to bottom, then left to right
-            Arrange::Location => self.notes.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))),
+            // reading order: rows of notes from the top, left to right inside a row
+            Arrange::Location => self.notes.sort_by(|a, b| {
+                let row = |n: &Note| (n.y / LOCATION_BAND_PT).floor() as i64;
+                row(a).cmp(&row(b)).then(a.x.total_cmp(&b.x)).then(a.y.total_cmp(&b.y))
+            }),
         }
         let (mut x, mut y, mut row_h) = (ARRANGE_MARGIN_PT, ARRANGE_MARGIN_PT, 0.0f32);
         for n in &mut self.notes {
@@ -733,47 +985,6 @@ impl Board {
         found.or(if forward { all.first() } else { all.last() }).cloned()
     }
 
-    /// Replaces the focused note's selection with `with` when the selection is a match of `query`. True when it did.
-    pub fn replace_selected(&mut self, query: &str, with: &str, now: u64) -> bool {
-        if query.is_empty() {
-            return false;
-        }
-        let Some(note) = self.focused_mut() else { return false };
-        if !note.has_selection() || !note.selected_text().eq_ignore_ascii_case(query) {
-            return false;
-        }
-        note.type_text(with, now);
-        true
-    }
-
-    /// Replaces every match of `query` in every note with `with`. Returns how many were replaced. The caret of a
-    /// changed note goes to the end of its text.
-    pub fn replace_all(&mut self, query: &str, with: &str, now: u64) -> usize {
-        let needle = query.to_ascii_lowercase();
-        if needle.is_empty() {
-            return 0;
-        }
-        let mut count = 0;
-        for note in &mut self.notes {
-            let found: Vec<(usize, usize)> = note.text.to_ascii_lowercase().match_indices(&needle).map(|(i, m)| (i, i + m.len())).collect();
-            if found.is_empty() {
-                continue;
-            }
-            let mut text = String::with_capacity(note.text.len());
-            let mut last = 0;
-            for (a, b) in &found {
-                text.push_str(&note.text[last..*a]);
-                text.push_str(with);
-                last = *b;
-            }
-            text.push_str(&note.text[last..]);
-            note.set_text(&text);
-            note.modified = now;
-            count += found.len();
-        }
-        count
-    }
-
     /// Brings the match's note to the front and selects the match in it.
     pub fn select_match(&mut self, m: &Match) {
         self.raise(m.note);
@@ -781,6 +992,47 @@ impl Board {
             n.anchor = m.start;
             n.caret = m.end;
         }
+    }
+
+    /// Replaces the selection of the focused note with `with` when the selection is a match of `query` (ignoring
+    /// ASCII case). False when it is not, so Replace on a stray selection changes nothing.
+    pub fn replace_selected(&mut self, query: &str, with: &str, now: u64) -> bool {
+        let Some(note) = self.focused_mut() else { return false };
+        if query.is_empty() || !note.has_selection() || !note.selected_text().eq_ignore_ascii_case(query) {
+            return false;
+        }
+        note.type_text(with, now);
+        true
+    }
+
+    /// Replaces every match of `query` in every note with `with` (Replace All). Returns how many were replaced.
+    pub fn replace_all(&mut self, query: &str, with: &str, now: u64) -> usize {
+        if query.is_empty() {
+            return 0;
+        }
+        let needle = query.to_ascii_lowercase();
+        let mut total = 0;
+        for note in &mut self.notes {
+            // lower-casing ASCII keeps every byte offset, so the positions in `hay` index `note.text` too
+            let hay = note.text.to_ascii_lowercase();
+            let mut out = String::with_capacity(note.text.len());
+            let (mut pos, mut count) = (0, 0);
+            while let Some(i) = hay[pos..].find(&needle) {
+                let start = pos + i;
+                out.push_str(&note.text[pos..start]);
+                out.push_str(with);
+                pos = start + needle.len();
+                count += 1;
+            }
+            if count == 0 {
+                continue;
+            }
+            out.push_str(&note.text[pos..]);
+            note.set_text(&out);
+            note.modified = now;
+            total += count;
+        }
+        total
     }
 }
 
@@ -792,6 +1044,8 @@ fn style_fields(style: &Style) -> Vec<(String, Json)> {
         ("strike".into(), Json::Bool(style.strike)),
         ("outline".into(), Json::Bool(style.outline)),
         ("baseline".into(), Json::Str(style.baseline.name().into())),
+        ("kern".into(), Json::Str(style.kern.name().into())),
+        ("ligature".into(), Json::Str(style.ligature.name().into())),
         ("size".into(), Json::Str(style.size.name().into())),
         ("ink".into(), Json::Str(style.ink.name().into())),
     ]
@@ -812,9 +1066,25 @@ fn style_from(item: &Json) -> Style {
         strike: flag(item, "strike", false),
         outline: flag(item, "outline", false),
         baseline: Baseline::from_name(&item.str_field("baseline").unwrap_or_default()),
+        kern: Setting::from_name(&item.str_field("kern").unwrap_or_default()),
+        ligature: Setting::from_name(&item.str_field("ligature").unwrap_or_default()),
         size: TextSize::from_name(&item.str_field("size").unwrap_or_default()),
         ink: Ink::from_name(&item.str_field("ink").unwrap_or_default()),
     }
+}
+
+/// The note's styles as runs: each run has the number of characters it covers (`n`) and the style fields.
+fn runs_json(note: &Note) -> Json {
+    let runs = note
+        .style_runs(0..note.text.len())
+        .into_iter()
+        .map(|(range, style)| {
+            let mut fields: Vec<(String, Json)> = vec![("n".into(), Json::Num(note.text[range].chars().count() as f64))];
+            fields.extend(style_fields(&style));
+            Json::Obj(fields)
+        })
+        .collect();
+    Json::Arr(runs)
 }
 
 /// Encodes the board as the app's JSON file.
@@ -833,8 +1103,12 @@ pub fn encode(board: &Board) -> String {
                 ("collapsed".into(), Json::Bool(n.collapsed)),
                 ("translucent".into(), Json::Bool(n.translucent)),
             ];
+            if let Some(rgb) = n.rgb {
+                fields.push(("rgb".into(), Json::Str(swatch::hex(rgb))));
+            }
             fields.extend(style_fields(&n.style));
             fields.push(("text".into(), Json::Str(n.text.clone())));
+            fields.push(("runs".into(), runs_json(n)));
             if let Some((w, h)) = n.restore {
                 fields.push(("restore_w".into(), Json::Num(w as f64)));
                 fields.push(("restore_h".into(), Json::Num(h as f64)));
@@ -845,6 +1119,9 @@ pub fn encode(board: &Board) -> String {
         })
         .collect();
     let mut default: Vec<(String, Json)> = vec![("colour".into(), Json::Str(board.default_colour.name().into()))];
+    if let Some(rgb) = board.default_rgb {
+        default.push(("rgb".into(), Json::Str(swatch::hex(rgb))));
+    }
     default.extend(style_fields(&board.default_style));
     Json::Obj(vec![
         ("version".into(), Json::Num(1.0)),
@@ -856,7 +1133,8 @@ pub fn encode(board: &Board) -> String {
     .encode()
 }
 
-/// Decodes the app's JSON file. Unknown or malformed notes are skipped rather than failing the whole board.
+/// Decodes the app's JSON file. Unknown or malformed notes are skipped rather than failing the whole board. A note from
+/// before the per-character styles gets its one style everywhere.
 pub fn decode(text: &str) -> Result<Board, String> {
     let root = json::parse(text)?;
     let mut board = Board::default();
@@ -866,11 +1144,19 @@ pub fn decode(text: &str) -> Result<Board, String> {
         let num = |k: &str, d: f32| item.get(k).and_then(Json::number).map_or(d, |v| v as f32);
         let mut note = Note::new(id as u64, num("x", 40.0), num("y", 60.0), 0);
         note.colour = item.get("colour").and_then(Json::as_str).and_then(Colour::from_name).unwrap_or(Colour::Yellow);
+        note.rgb = item.get("rgb").and_then(Json::as_str).and_then(swatch::parse);
         note.resize(num("w", DEFAULT_W), num("h", DEFAULT_H));
         note.collapsed = flag(item, "collapsed", false);
         note.translucent = flag(item, "translucent", true);
         note.style = style_from(item);
         note.set_text(&item.str_field("text").unwrap_or_default());
+        if let Some(runs) = item.get("runs").and_then(Json::as_array) {
+            let counts: Vec<(usize, Style)> = runs.iter().map(|run| (run.get("n").and_then(Json::number).unwrap_or(0.0).max(0.0) as usize, style_from(run))).collect();
+            // the runs are kept only when they cover the text exactly; otherwise the note keeps its one style
+            if counts.iter().map(|(n, _)| n).sum::<usize>() == note.text.chars().count() {
+                note.styles = counts.iter().flat_map(|(n, s)| std::iter::repeat(*s).take(*n)).collect();
+            }
+        }
         if let (Some(w), Some(h)) = (item.get("restore_w").and_then(Json::number), item.get("restore_h").and_then(Json::number)) {
             note.restore = Some((w as f32, h as f32));
         }
@@ -880,6 +1166,7 @@ pub fn decode(text: &str) -> Result<Board, String> {
     }
     if let Some(default) = root.get("default") {
         board.default_colour = default.get("colour").and_then(Json::as_str).and_then(Colour::from_name).unwrap_or_default();
+        board.default_rgb = default.get("rgb").and_then(Json::as_str).and_then(swatch::parse);
         board.default_style = style_from(default);
     }
     board.next_id = root.get("next_id").and_then(Json::number).map_or(0, |v| v as u64);
@@ -891,6 +1178,10 @@ pub fn decode(text: &str) -> Result<Board, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bold() -> Style {
+        Style { bold: true, ..Style::default() }
+    }
 
     #[test]
     fn colours_wrap_and_round_trip_by_name() {
@@ -943,6 +1234,7 @@ mod tests {
         assert_eq!(n.text, "héllo", "two backspaces remove the x and the newline");
         assert_eq!(n.modified, 13);
         assert_eq!(n.created, 5);
+        assert_eq!(n.styles.len(), n.text.chars().count(), "one style per character");
         let mut empty = Note::new(2, 0.0, 0.0, 0);
         assert!(!empty.backspace(4));
         assert_eq!(empty.modified, 0);
@@ -1042,6 +1334,15 @@ mod tests {
     }
 
     #[test]
+    fn add_link_takes_only_a_whole_web_address() {
+        assert!(is_link(" https://example.com "));
+        assert!(is_link("www.example.org"));
+        assert!(!is_link("example.com"));
+        assert!(!is_link("see https://example.com"));
+        assert!(!is_link("   "));
+    }
+
+    #[test]
     fn zoom_toggles_between_the_large_size_and_the_old_one() {
         let mut n = Note::new(1, 0.0, 0.0, 0);
         n.collapsed = true;
@@ -1132,6 +1433,24 @@ mod tests {
     }
 
     #[test]
+    fn use_as_default_takes_the_style_at_the_caret() {
+        let mut b = Board::default();
+        let a = b.add_text("plain bold", 0.0, 0.0, 0);
+        let n = b.find_mut(a).unwrap();
+        n.restyle_whole(|s| s.bold = true);
+        n.set_caret(0, false);
+        n.set_caret(5, true);
+        n.restyle(|s| s.bold = false);
+        n.set_caret(5, false);
+        assert!(b.use_as_default());
+        assert!(!b.default_style.bold, "the character before the caret is not bold");
+        let n = b.find_mut(a).unwrap();
+        n.set_caret(10, false);
+        assert!(b.use_as_default());
+        assert!(b.default_style.bold, "the character before the caret is bold");
+    }
+
+    #[test]
     fn collapse_all_and_expand_all_report_whether_anything_changed() {
         let mut b = Board::default();
         b.new_note(0.0, 0.0, 0);
@@ -1171,14 +1490,83 @@ mod tests {
     }
 
     #[test]
-    fn arrange_by_location_follows_reading_order() {
+    fn arrange_by_location_reads_rows_top_down_and_left_to_right() {
         let mut b = Board::default();
-        let low = b.add_text("low", 10.0, 400.0, 1);
-        let right = b.add_text("right", 300.0, 50.0, 2);
-        let left = b.add_text("left", 20.0, 50.0, 3);
+        let low_left = b.add_text("c", 10.0, 300.0, 0);
+        let top_right = b.add_text("b", 400.0, 20.0, 0);
+        let top_left = b.add_text("a", 20.0, 30.0, 0);
         assert!(b.arrange(Arrange::Location, 2000.0));
         let order: Vec<u64> = b.notes.iter().map(|n| n.id).collect();
-        assert_eq!(order, vec![left, right, low]);
+        assert_eq!(order, vec![top_left, top_right, low_left], "the two upper notes share a row band");
+        assert_eq!(Arrange::ALL.len(), 5);
+        assert_eq!(Arrange::Location.title(), "Location");
+    }
+
+    #[test]
+    fn arrange_by_colour_puts_custom_colours_after_the_six() {
+        let mut b = Board::default();
+        let custom = b.add_text("custom", 0.0, 0.0, 0);
+        let purple = b.add_text("purple", 0.0, 0.0, 0);
+        b.find_mut(custom).unwrap().rgb = Some((1, 2, 3));
+        b.find_mut(purple).unwrap().colour = Colour::Purple;
+        b.arrange(Arrange::Colour, 2000.0);
+        assert_eq!(b.notes.iter().map(|n| n.id).collect::<Vec<_>>(), vec![purple, custom]);
+    }
+
+    #[test]
+    fn a_custom_colour_replaces_the_preset_until_one_is_chosen_again() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.rgb = Some((200, 100, 50));
+        n.set_preset(Colour::Teal);
+        assert_eq!((n.colour, n.rgb), (Colour::Teal, None));
+    }
+
+    #[test]
+    fn the_default_colour_carries_a_custom_colour_to_new_notes() {
+        let mut b = Board::default();
+        let a = b.new_note(0.0, 0.0, 0);
+        b.find_mut(a).unwrap().rgb = Some((10, 20, 30));
+        assert!(b.use_as_default());
+        let c = b.new_note(0.0, 0.0, 1);
+        assert_eq!(b.find(c).unwrap().rgb, Some((10, 20, 30)));
+        b.find_mut(a).unwrap().set_preset(Colour::Pink);
+        assert!(b.use_as_default());
+        let d = b.new_note(0.0, 0.0, 2);
+        assert_eq!(b.find(d).unwrap().rgb, None);
+    }
+
+    #[test]
+    fn replace_selected_only_replaces_a_selection_that_matches() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo and foo", 0.0, 0.0, 0);
+        assert!(!b.replace_selected("foo", "bar", 1), "nothing is selected");
+        b.find_mut(a).unwrap().set_caret(0, false);
+        b.find_mut(a).unwrap().set_caret(3, true);
+        assert!(!b.replace_selected("and", "bar", 1), "the selection is another word");
+        assert!(b.replace_selected("foo", "bar", 2), "case is ignored");
+        assert_eq!(b.find(a).unwrap().text, "bar and foo");
+        assert_eq!(b.find(a).unwrap().modified, 2);
+        assert!(!b.replace_selected("", "x", 3));
+    }
+
+    #[test]
+    fn replace_all_replaces_in_every_note_ignoring_case() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo bar FOO", 0.0, 0.0, 0);
+        let c = b.add_text("none here", 0.0, 0.0, 0);
+        let d = b.add_text("foo", 0.0, 0.0, 0);
+        assert_eq!(b.replace_all("foo", "x", 9), 3);
+        assert_eq!(b.find(a).unwrap().text, "x bar x");
+        assert_eq!(b.find(c).unwrap().text, "none here");
+        assert_eq!(b.find(c).unwrap().modified, 0, "an untouched note keeps its date");
+        assert_eq!((b.find(d).unwrap().text.as_str(), b.find(d).unwrap().modified), ("x", 9));
+        assert_eq!(b.replace_all("zzz", "y", 9), 0);
+        assert_eq!(b.replace_all("", "y", 9), 0);
+        // deleting with an empty replacement, and a replacement that contains the search text
+        assert_eq!(b.replace_all("x", "", 10), 3);
+        assert_eq!(b.find(a).unwrap().text, " bar ");
+        b.add_text("a", 0.0, 0.0, 0);
+        assert_eq!(b.replace_all("a", "aa", 11), 2);
     }
 
     #[test]
@@ -1249,37 +1637,89 @@ mod tests {
     }
 
     #[test]
-    fn replace_all_swaps_every_match_in_every_note_ignoring_case() {
-        let mut b = Board::default();
-        let a = b.add_text("Cat and cat", 0.0, 0.0, 1);
-        let c = b.add_text("dog", 0.0, 0.0, 1);
-        assert_eq!(b.replace_all("CAT", "bird", 9), 2);
-        assert_eq!(b.find(a).unwrap().text, "bird and bird");
-        assert_eq!(b.find(a).unwrap().modified, 9);
-        assert_eq!(b.find(c).unwrap().modified, 1);
-        assert_eq!(b.replace_all("", "x", 9), 0);
-        assert_eq!(b.replace_all("zebra", "x", 9), 0);
+    fn a_style_stays_with_its_characters_when_text_is_typed_before_it() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("abc");
+        n.set_caret(1, false);
+        n.set_caret(2, true);
+        n.restyle(|s| s.bold = true);
+        assert!(n.styles[1].bold && !n.styles[0].bold && !n.styles[2].bold);
+        n.set_caret(0, false);
+        n.type_text("XY", 1);
+        assert_eq!(n.text, "XYabc");
+        assert!(!n.styles[0].bold && !n.styles[1].bold, "typed text takes the style before the caret");
+        assert!(n.styles[3].bold, "the bold b moved along with the text");
+        assert_eq!(n.styles.len(), 5);
     }
 
     #[test]
-    fn replace_selected_only_replaces_a_selection_that_matches() {
-        let mut b = Board::default();
-        let id = b.add_text("one two", 0.0, 0.0, 1);
-        b.focus = Some(id);
-        b.find_mut(id).unwrap().anchor = 0;
-        b.find_mut(id).unwrap().caret = 3;
-        assert!(!b.replace_selected("two", "2", 5));
-        assert!(b.replace_selected("ONE", "1", 5));
-        assert_eq!(b.find(id).unwrap().text, "1 two");
+    fn restyle_changes_the_selection_only_and_the_whole_note_without_one() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("one two");
+        n.set_caret(4, false);
+        n.set_caret(7, true);
+        assert!(n.restyle(|s| s.underline = true));
+        assert_eq!(n.style_runs(0..7).len(), 2, "the words before the selection, and the selection");
+        assert!(!n.style.underline, "the typing style is not changed by a selection");
+        assert!(!n.restyle(|s| s.underline = true), "already underlined");
+        n.set_caret(0, false);
+        assert!(n.restyle(|s| s.strike = true));
+        assert!(n.styles.iter().all(|s| s.strike) && n.style.strike);
     }
 
     #[test]
-    fn baseline_names_round_trip_and_shift_the_right_way() {
-        for b in [Baseline::Normal, Baseline::Superscript, Baseline::Subscript] {
-            assert_eq!(Baseline::from_name(b.name()), b);
-        }
-        assert!(Baseline::Superscript.shift() < 0.0 && Baseline::Subscript.shift() > 0.0);
-        assert_eq!(Baseline::from_name("junk"), Baseline::Normal);
+    fn style_runs_group_neighbours_with_equal_styles() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("abcdé");
+        n.set_caret(1, false);
+        n.set_caret(3, true);
+        n.restyle(bold_setter);
+        let runs = n.style_runs(0..n.text.len());
+        let ranges: Vec<Range<usize>> = runs.iter().map(|(r, _)| r.clone()).collect();
+        assert_eq!(ranges, vec![0..1, 1..3, 3..6]);
+        assert!(runs[1].1.bold && !runs[0].1.bold);
+        assert_eq!(n.style_runs(1..3).len(), 1, "a sub range keeps its own runs");
+    }
+
+    fn bold_setter(s: &mut Style) {
+        s.bold = true;
+    }
+
+    #[test]
+    fn current_style_reads_the_selection_then_the_character_before_the_caret() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("ab");
+        n.styles[1] = bold();
+        n.set_caret(2, false);
+        assert!(n.current_style().bold, "the character before the caret");
+        n.set_caret(1, false);
+        assert!(!n.current_style().bold);
+        n.set_caret(0, false);
+        n.set_caret(2, true);
+        assert!(!n.current_style().bold, "the first selected character");
+    }
+
+    #[test]
+    fn set_runs_replaces_the_body_and_takes_the_note_size() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.style.size = TextSize::Large;
+        n.set_runs(&[("bold ".to_string(), bold()), ("plain".to_string(), Style::default())]);
+        assert_eq!(n.text, "bold plain");
+        assert_eq!(n.styles.len(), 10);
+        assert!(n.styles[0].bold && !n.styles[9].bold);
+        assert!(n.styles.iter().all(|s| s.size == TextSize::Large));
+        assert_eq!(n.caret, 10);
+    }
+
+    #[test]
+    fn rich_text_runs_keep_bold_and_italic() {
+        let runs = runs_from_rtf(r"{\rtf1\ansi plain {\b bold} \i it\i0 }");
+        let text: String = runs.iter().map(|(t, _)| t.as_str()).collect();
+        assert!(text.contains("bold") && text.contains("it"));
+        let bold_run = runs.iter().find(|(t, _)| t.contains("bold")).map(|(_, s)| *s);
+        assert!(bold_run.is_some_and(|s| s.bold));
+        assert!(runs.iter().any(|(t, s)| t.contains("it") && s.italic));
+        assert!(runs.iter().any(|(t, s)| t.contains("plain") && !s.bold));
     }
 
     #[test]
@@ -1291,16 +1731,45 @@ mod tests {
             n.colour = Colour::Pink;
             n.collapsed = true;
             n.translucent = false;
-            n.style = Style { bold: true, italic: true, underline: true, strike: true, outline: true, baseline: Baseline::Subscript, size: TextSize::Large, ink: Ink::Green };
+            n.style = Style { bold: true, italic: true, underline: true, strike: true, size: TextSize::Large, ink: Ink::Green, ..Style::default() };
             n.resize(300.0, 240.0);
             n.restore = Some((220.0, 200.0));
             n.modified = 150;
+            n.rgb = Some((255, 128, 0));
+            n.set_caret(0, false);
+            n.set_caret(5, true);
+            n.restyle(|s| {
+                s.outline = true;
+                s.baseline = Baseline::Subscript;
+                s.kern = Setting::All;
+                s.ligature = Setting::Off;
+            });
+            // the caret is not saved; a loaded note opens with it at the end
+            let end = n.text.len();
+            n.set_caret(end, false);
         }
         b.add_text("second", 0.0, 0.0, 101);
         b.default_colour = Colour::Teal;
-        b.default_style = Style { underline: true, ..Style::default() };
+        b.default_rgb = Some((1, 2, 3));
+        b.default_style = Style { underline: true, baseline: Baseline::Superscript, ..Style::default() };
         let decoded = decode(&encode(&b)).unwrap();
         assert_eq!(decoded, b);
+    }
+
+    #[test]
+    fn a_note_without_runs_gets_its_one_style_on_every_character() {
+        let text = r#"{"version":1,"next_id":1,"notes":[{"id":1,"text":"abc","bold":true}]}"#;
+        let b = decode(text).unwrap();
+        let n = &b.notes[0];
+        assert_eq!(n.styles.len(), 3);
+        assert!(n.styles.iter().all(|s| s.bold));
+    }
+
+    #[test]
+    fn runs_that_do_not_cover_the_text_are_ignored() {
+        let text = r#"{"version":1,"next_id":1,"notes":[{"id":1,"text":"abc","runs":[{"n":2,"bold":true}]}]}"#;
+        let b = decode(text).unwrap();
+        assert!(b.notes[0].styles.iter().all(|s| !s.bold), "the note keeps its one style");
     }
 
     #[test]
