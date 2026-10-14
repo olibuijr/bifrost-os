@@ -1,5 +1,5 @@
-//! Background work the window waits for: a process sample or a diagnostics run. The work runs on its own thread and
-//! reports a fraction done; the window polls for the outcome on its sampling tick, so the table stays live.
+//! Background work the window waits for: a process sample or a diagnostics run. The work runs on the utility dispatch
+//! queue and reports progress through the main queue, so each update wakes the window without a worker poll timer.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -37,6 +37,8 @@ impl Progress {
     pub fn set(&self, done: u32, total: u32) {
         self.done.store(done, Ordering::Relaxed);
         self.total.store(total, Ordering::Relaxed);
+        // The main queue's eventfd wakes the app loop, where tick reads the new progress value.
+        DispatchQueue::main().async_(|| {});
     }
 
     /// Asks the job to stop.
@@ -83,7 +85,7 @@ impl Job {
         let (tx, rx) = channel();
         let shared = progress.clone();
         DispatchQueue::global(Qos::Utility).async_(move || {
-            let outcome = work(&shared);
+            let outcome = if shared.cancelled() { Outcome::Cancelled } else { work(&shared) };
             // the window may have been closed meanwhile; nobody is waiting then
             DispatchQueue::main().async_(move || {
                 let _ = tx.send(outcome);
@@ -112,6 +114,13 @@ impl Job {
 
     pub fn counts(&self) -> (u32, u32) {
         self.progress.counts()
+    }
+}
+
+impl Drop for Job {
+    fn drop(&mut self) {
+        // Closing/replacing the UI job cancels queued or running work; workers already check this flag between steps.
+        self.stop();
     }
 }
 

@@ -106,7 +106,6 @@ pub const MENU_SAMPLE_LENGTH: u32 = 140;
 
 /// Height of one line of the report view (points) and how often a running job is looked at (milliseconds).
 pub const REPORT_LINE_PT: f32 = 16.0;
-const JOB_POLL_MS: f64 = 200.0;
 
 /// Text the window shows in place of the table: a process sample or the diagnostics summary. It scrolls, saves and
 /// copies.
@@ -424,12 +423,8 @@ impl Monitor {
     /// The time of the next reading, so the app wakes for it.
     pub fn next_wake(&self, t: f64) -> f64 {
         let reading = self.last_sample.map_or(t, |last| last + self.frequency.millis()).max(t);
-        // a running job is looked at often enough for its progress to move
-        if self.job.is_some() {
-            reading.min(t + JOB_POLL_MS)
-        } else {
-            reading
-        }
+        // Job progress and completion signal the SDK main-queue eventfd; the only timer here is process sampling.
+        reading
     }
 
     // --- background jobs and the report ---
@@ -1656,7 +1651,7 @@ mod tests {
     }
 
     #[test]
-    fn a_running_job_wakes_the_window_sooner() {
+    fn a_running_job_does_not_add_a_progress_poll_timer() {
         let mut m = Monitor::new(800.0, 600.0);
         m.last_sample = Some(1000.0);
         m.frequency = UpdateFrequency::Normally;
@@ -1667,7 +1662,7 @@ mod tests {
             }
             Outcome::Cancelled
         }));
-        assert_eq!(m.next_wake(1100.0), 1300.0);
+        assert_eq!(m.next_wake(1100.0), 6000.0);
         m.stop_job();
         wait_for_job(&mut m);
     }

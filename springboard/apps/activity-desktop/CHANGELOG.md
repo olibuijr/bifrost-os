@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3 — 2026-10-14
+
+- Job progress now wakes through the SDK main queue instead of a short polling timer; dropping a job requests cancellation.
+
 ## 0.7.2 — 2026-10-14
 
 - Use the shared grouped-card radius token for graph cards.

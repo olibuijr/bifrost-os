@@ -45,6 +45,10 @@ impl App for BluetoothExchange {
         Some(self.wake_at(t))
     }
 
+    fn wake_fd(&self) -> Option<i32> {
+        self.link.wake_fd()
+    }
+
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         self.on_service_reply(ctx, request, result)
     }

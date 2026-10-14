@@ -338,6 +338,7 @@ impl App for ActivityApp {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
+        // Regular samples are the app's monitoring cadence; jobs wake through DispatchQueue::main progress messages.
         self.monitor.as_ref().map(|m| m.next_wake(t))
     }
 
