@@ -207,6 +207,10 @@ impl App for ScreenSharing {
         "is.olibuijr.screensharing.desktop"
     }
 
+    fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination();
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
             Input::Touch { kind, x, y, .. } => {
@@ -359,7 +363,7 @@ impl App for ScreenSharing {
 
         // The desktop area: black around the remote screen, which is drawn only while connected.
         let a = self.area();
-        s.fill_rrect(u.pt(a.x), u.pt(a.y), u.pt(a.w), u.pt(a.h), u.pt(10.), pack(0, 0, 0, 255));
+        s.fill_rrect(u.pt(a.x), u.pt(a.y), u.pt(a.w), u.pt(a.h), u.pt(10.), DETAIL_BG.now());
         self.draw_desktop(u, s);
 
         let mut d = Damage::new(s.w, s.h);
