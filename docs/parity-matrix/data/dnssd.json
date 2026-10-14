@@ -61,7 +61,7 @@
       "apple": "DNSServiceRef, DNSServiceProcessResult, DNSServiceRefSockFD, DNSServiceSetDispatchQueue, DNSServiceRefDeallocate, DNSServiceCreateConnection",
       "bifrost": "springboard/core/src/dnssd_ref.rs; springboard/core/tests/parity_sdk-tests-05.rs; wired: springboard/core/src/dnssd_ref.rs via springboard/src/shell/services/network_path.rs (dnssdBrowse, dnssdNext, dnssdClose) and springboard/sdk/src/network_path.rs (dnssd_next, dnssd_close)",
       "status": "partial",
-      "note": "The reference lifecycle (numbering, oldest-first replies, pending replies dropped on deallocation, refusal after deallocation) is tested headless in core/tests/parity_sdk-tests-05.rs. The shell's network service holds its browse references in this model. No DNSServiceRef, socket descriptor or dispatch queue exists and no daemon is connected; the reference number stands in for the descriptor. Verify on Midget for parity."
+      "note": "The reference lifecycle (numbering, oldest-first replies, pending replies dropped on deallocation, refusal after deallocation) is tested headless in core/tests/parity_sdk-tests-05.rs. The shell's network service holds its browse references in this model. No connection reference type, socket descriptor or dispatch queue exists and no daemon is connected; the reference number stands in for the descriptor. Verify on Midget for parity."
     },
     {
       "feature": "NAT port mapping (DNSServiceNATPortMappingCreate)",

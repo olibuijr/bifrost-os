@@ -2,6 +2,7 @@
 //! an in-memory `Surface` and asserts pixels. No shell, window server, display or device is involved, and each test sets
 //! the process-wide vibrancy switch it depends on before drawing.
 
+use bifrost_app::credential_exchange::{escape, export, import, unescape, ExchangeError, PasswordRecord, HEADER};
 use bifrost_app::kit::{pack, Font, Surface, Ui};
 use bifrost_app::proto::{MaterialKind, MaterialState};
 use bifrost_app::widgets::{self, Blending, Material, State};
@@ -222,4 +223,101 @@ fn headless_a_request_that_blends_within_the_window_draws_no_shell_region() {
     assert_eq!(px[0], before[0], "outside the material nothing changes");
     assert_ne!(px[32 * W + 32], before[32 * W + 32], "the content under the material is blurred");
     widgets::set_vibrancy(false, false);
+}
+
+// Credential exchange: the document format for password records (`bifrost_app::credential_exchange`).
+
+fn record(service: &str, user: &str, password: &str) -> PasswordRecord {
+    PasswordRecord { service: service.to_string(), user: user.to_string(), password: password.to_string() }
+}
+
+#[test]
+fn headless_an_export_writes_the_header_and_one_line_per_record_in_order() {
+    let text = export(&[record("example.com", "ann", "pw1"), record("example.org", "bob", "pw2")]);
+    assert_eq!(text, "bifrost-credential-exchange 1\nexample.com\tann\tpw1\nexample.org\tbob\tpw2\n");
+    assert_eq!(export(&[]), format!("{HEADER}\n"), "no records leaves the header alone");
+}
+
+#[test]
+fn headless_escape_keeps_a_field_on_one_line_and_unescape_restores_it() {
+    let raw = "a\\b\tc\nd\re";
+    let escaped = escape(raw);
+    assert_eq!(escaped, "a\\\\b\\tc\\nd\\re");
+    assert!(!escaped.contains('\t') && !escaped.contains('\n') && !escaped.contains('\r'));
+    assert_eq!(unescape(&escaped).as_deref(), Some(raw));
+}
+
+#[test]
+fn headless_unescape_refuses_an_unknown_escape_and_a_trailing_backslash() {
+    assert_eq!(unescape("bad\\x"), None);
+    assert_eq!(unescape("end\\"), None);
+    assert_eq!(unescape("plain"), Some("plain".to_string()));
+}
+
+#[test]
+fn headless_an_exported_document_imports_back_to_the_same_records() {
+    let records = vec![record("mail.example", "ann", "tab\there\nnew line"), record("bank.example", "bob", "")];
+    let report = import(&export(&records)).unwrap();
+    assert_eq!(report.records, records, "an empty password is a record too");
+    assert_eq!(report.duplicates, 0);
+}
+
+#[test]
+fn headless_import_skips_blank_lines() {
+    let doc = format!("{HEADER}\n\nx.example\tu\tp\n\n");
+    let report = import(&doc).unwrap();
+    assert_eq!(report.records, vec![record("x.example", "u", "p")]);
+}
+
+#[test]
+fn headless_a_repeated_service_and_user_replaces_the_password_in_its_first_place() {
+    let doc = format!("{HEADER}\nx\tu\told\ny\tu\tother\nx\tu\tnew\n");
+    let report = import(&doc).unwrap();
+    assert_eq!(report.records, vec![record("x", "u", "new"), record("y", "u", "other")], "the last copy wins and keeps its place");
+    assert_eq!(report.duplicates, 1);
+}
+
+#[test]
+fn headless_the_same_service_with_another_user_is_a_separate_record() {
+    let doc = format!("{HEADER}\nx\tann\tp1\nx\tbob\tp2\n");
+    let report = import(&doc).unwrap();
+    assert_eq!(report.records.len(), 2);
+    assert_eq!(report.duplicates, 0);
+}
+
+#[test]
+fn headless_a_document_without_the_header_is_refused() {
+    assert_eq!(import(""), Err(ExchangeError::MissingHeader));
+    assert_eq!(import("x\tu\tp\n"), Err(ExchangeError::MissingHeader));
+    assert_eq!(import("bifrost-credential-exchange\n"), Err(ExchangeError::MissingHeader), "the version number is required");
+}
+
+#[test]
+fn headless_a_newer_exchange_version_is_refused_rather_than_guessed_at() {
+    assert_eq!(import("bifrost-credential-exchange 2\nx\tu\tp\n"), Err(ExchangeError::UnsupportedVersion));
+}
+
+#[test]
+fn headless_a_record_must_have_three_fields_and_valid_escapes() {
+    assert_eq!(import(&format!("{HEADER}\nonly\ttwo\n")), Err(ExchangeError::MalformedRecord(2)));
+    assert_eq!(import(&format!("{HEADER}\nx\tu\tp\nx\tu\tp\textra\n")), Err(ExchangeError::MalformedRecord(3)));
+    assert_eq!(import(&format!("{HEADER}\nx\tu\tbad\\q\n")), Err(ExchangeError::MalformedRecord(2)));
+}
+
+#[test]
+fn headless_a_record_needs_a_service_and_a_user_name() {
+    assert_eq!(import(&format!("{HEADER}\n\tu\tp\n")), Err(ExchangeError::EmptyField(2)));
+    assert_eq!(import(&format!("{HEADER}\nx\t\tp\n")), Err(ExchangeError::EmptyField(2)));
+}
+
+#[test]
+fn headless_one_bad_record_refuses_the_whole_document() {
+    let doc = format!("{HEADER}\nx\tu\tp\nbad line\n");
+    assert!(import(&doc).is_err(), "a partial import never happens");
+}
+
+#[test]
+fn the_import_errors_name_their_line() {
+    assert_eq!(ExchangeError::MalformedRecord(4).to_string(), "line 4 is not a valid credential record");
+    assert_eq!(ExchangeError::EmptyField(3).to_string(), "line 3 has an empty service or user name");
 }
