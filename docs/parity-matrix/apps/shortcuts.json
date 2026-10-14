@@ -108,10 +108,10 @@
    "feature": "Personal automations",
    "area": "view",
    "apple": "Automation",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not built: the shortcut model has no automation field and the app has no trigger code. The daily reminder is the only trigger (services.rs). An earlier note described an automation row that was never in the code.",
-   "wire": "Automations list with time, app-open and battery triggers"
+   "status": "partial",
+   "bifrost": "springboard/src/shortcuts.rs:624 (Automation, due, battery_fell_below); springboard/tests/parity_app-shortcuts.rs",
+   "note": "The shortcut model stores one automation per shortcut, an app opening or the charge falling below a level, in the list file; due returns the shortcuts that an app opening or a battery change starts, tested headless. Gap: the editor has no Automation row, and the app feeds no app-open or battery events to due, so an automation does not run on its own yet.",
+   "wire": "An Automation row in the editor's Details group (When App Opens, When Battery Is Low, with a stepper); the shell's battery reading and app-open events passed to shortcuts::due"
   },
   {
    "feature": "Open at login",
@@ -172,9 +172,9 @@
    "area": "view",
    "apple": "Gallery",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:879",
-   "note": "A Gallery row in the sidebar lists ten starter shortcuts under three headings (Focus, Everyday, Tools), each with a line of its steps; the search narrows them; tapping one adds a copy. Not yet checked on the lab machine.",
-   "wire": "More starters beyond the ten listed"
+   "bifrost": "springboard/src/shortcuts.rs:949 (starters); springboard/tests/parity_app-shortcuts.rs",
+   "note": "A Gallery row in the sidebar lists fourteen starter shortcuts under three headings (Focus, Everyday, Tools), each with a line of its steps; the search narrows them; tapping one adds a copy. Not yet checked on the lab machine.",
+   "wire": ""
   },
   {
    "feature": "App menus",
