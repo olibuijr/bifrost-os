@@ -94,16 +94,16 @@
     {
       "feature": "Printing: print info and operation",
       "apple": "NSPrintInfo, NSPrintOperation",
-      "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (Job, Layout, paper and scale) over springboard/ui/src/print.rs",
+      "bifrost": "springboard/ui/src/print.rs (PrintInfo, PaperSize, PrintOperation::document, text_pages); wired: springboard/src/shell/print_sheet.rs (PrintSheet, Setup, Job) over springboard/ui/src/print.rs",
       "status": "partial",
-      "note": "paper, orientation, margins, copies, page range; submits a PDF or image file via lp; Save as PDF copies the file; printing a view's drawing is not supported Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs cover paper points and PWG keywords, the imageable rect in portrait and landscape, job attributes, text laid out into pages, and the PDF bytes a job builds. Tests: paper_sizes_report_their_points_and_pwg_keywords, print_info_defaults_to_portrait_a4_with_one_copy_and_72_point_margins, landscape_swaps_the_paper_and_the_printable_area, margins_set_the_printable_rect_and_never_go_negative, job_attributes_carry_copies_media_orientation_and_the_page_range, text_is_laid_out_in_helvetica_from_the_top_left_margin, text_pages_break_after_as_many_lines_as_the_printable_height_holds, a_text_job_builds_a_pdf_document, a_pages_job_writes_the_pages_it_was_given. Not built: PrintableView pagination and rect_for_page, run_modal, and CUPS submission on Midget; PDF text is Helvetica only; verify on Midget for parity."
     },
     {
       "feature": "Printing: print panel, page layout, accessory views",
       "apple": "NSPrintPanel, NSPageLayout, accessory view controllers",
-      "bifrost": "springboard/sdk/src/print_panel.rs; wired: springboard/src/shell/print_sheet.rs (sheet rows: printer, paper, orientation, scale, copies); accessory views not done",
+      "bifrost": "springboard/sdk/src/print_panel.rs (PlugIns, PlugIn, PrintPanel, PanelOption, RESERVED_KEYS, job_options)",
       "status": "partial",
-      "note": "Wave 4 (theme-11, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. print sheet not shell-drawn; apps build their own printer and option controls; no page layout panel Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "The plug-in model keeps typed choice, toggle and number options keyed by CUPS name, filters panels by dialog placement, refuses reserved and duplicate keys, checks set() by kind and range, and emits job_options in registration order. Tests in springboard/sdk/tests/parity_sdk-tests-03.rs: choice_option_starts_at_its_default_index, number_option_accepts_its_bounds_and_refuses_values_outside_them, reserved_print_info_keys_are_refused_at_registration, a_duplicate_key_in_another_plugin_is_refused_and_the_registry_is_unchanged, panels_are_filtered_by_the_dialog_that_hosts_them, set_checks_the_kind_and_range_and_changes_nothing_on_refusal, job_options_follow_registration_order_and_carry_the_current_values. Not built: PageSetup, PanelOptions apply() and PanelRequest (no such types exist); the shell does not draw the panels, the scale row or a page layout panel (springboard/src/shell/print_sheet.rs); accessory views are not done; verify on Midget for parity."
     },
     {
       "feature": "Printing: printer discovery",
