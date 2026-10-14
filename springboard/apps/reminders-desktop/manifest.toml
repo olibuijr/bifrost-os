@@ -9,6 +9,7 @@ category = "Productivity"
 kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "notifications", "documents"]
+handles = ["net.daringfireball.markdown:alternate"]
 window = "full-size"
 
 [[intent]]

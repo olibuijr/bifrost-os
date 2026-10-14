@@ -4,7 +4,6 @@
 mod alerts;
 mod app;
 mod attach;
-mod mark;
 mod model;
 mod organize;
 mod quick;
@@ -13,10 +12,10 @@ mod smartdef;
 mod settings;
 mod store;
 mod system;
-mod templates;
 mod zones;
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::share::INBOUND;
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::proto::{DocErrorCode, DocMode};
@@ -494,8 +493,11 @@ impl App for RemindersApp {
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         use std::io::Read;
         match ev {
-            DocumentEvent::Opened(mut doc) if self.import == Some(doc.request) => {
-                self.import = None;
+            // a checklist chosen in File > Import List, or a Markdown file shared or opened from Files (INBOUND)
+            DocumentEvent::Opened(mut doc) if self.import == Some(doc.request) || doc.request & INBOUND != 0 => {
+                if self.import == Some(doc.request) {
+                    self.import = None;
+                }
                 if doc.size > IMPORT_MAX {
                     ctx.log(&format!("import: {} is too large ({} bytes)", doc.name, doc.size));
                     ctx.release_document(doc.grant);
