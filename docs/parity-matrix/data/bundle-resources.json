@@ -10,9 +10,9 @@
   {
    "feature": "Entitlements",
    "apple": "Entitlements (com.apple.security.* keys in a signed entitlements file)",
-   "bifrost": "springboard/src/shell/apphost.rs (Manifest.entitlements); springboard/src/bare/app_policy.rs (Policy::with_entitlements)",
+   "bifrost": "springboard/src/shell/apphost.rs (Manifest.entitlements); springboard/src/bare/app_policy.rs (Policy::with_entitlements); tests: springboard/tests/parity_sdk-complete-25.rs",
    "status": "partial",
-   "note": "Only the log-store entitlement exists. It is honoured only for is.olibuijr.* packages of kind system-app. Entitlements are a manifest list, not a signed file."
+   "note": "Only the log-store entitlement exists. It is honoured only for is.olibuijr.* packages of kind system-app, tested headless in springboard/tests/parity_sdk-complete-25.rs. Gap: entitlements are a manifest list, not a signed file, and signing needs key infrastructure this repository does not have."
   },
   {
    "feature": "Information property list (bundle identity and configuration)",
@@ -24,9 +24,9 @@
   {
    "feature": "Privacy manifest: permission declarations",
    "apple": "Privacy manifest files (NSPrivacyAccessedAPITypes and tracking declarations), with the app's permission use listed in the bundle",
-   "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain, remote-desktop)",
+   "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain, remote-desktop); tests: springboard/tests/parity_sdk-complete-25.rs",
    "status": "partial",
-   "note": "Apps declare permissions in manifest.toml and the shell enforces them. Unknown permission names are rejected. Nothing is shown to the user as a privacy label, and no tracking domains are declared."
+   "note": "Apps declare permissions in manifest.toml, each name sets its own flag, and unknown names or remote-desktop outside the first-party app are refused, tested headless in springboard/tests/parity_sdk-complete-25.rs. Gap: no privacy label is shown to the user, and no tracking domains are declared because the sandbox shares the network all or nothing."
   },
   {
    "feature": "Privacy manifest: data collection and required-reason API declarations",
