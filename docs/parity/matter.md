@@ -83,3 +83,11 @@ through Base38, QR rejections (prefix, version, padding, flow, passcode), Base38
 passcode validity, the Verhoeff example, the 11 digit manual vector, manual-code rejections, the 21 digit
 form, commissionable TXT parsing and rejection, and service names with operational instances. These were not
 run in this round (no builds in this stage).
+
+## Controller initialization (sdk-rest-09)
+
+- `springboard/core/src/matter_fabric.rs`: `Fabric` (identifier range, root key form, compressed fabric identifier),
+  `Controller::initialize` (reuses or refuses a stored record), node identifier allocation and the record's text form.
+  Tested headless in `springboard/core/tests/parity_sdk-rest-09.rs`.
+- Not built: key pair generation and operational certificate signing (no elliptic-curve code in core), and no service
+  writes the credential record to disk. The compressed fabric identifier needs a check against a published vector.

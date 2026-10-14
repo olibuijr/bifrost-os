@@ -100,3 +100,11 @@ filters beyond background blur.
 
 Nothing in this round was built, run or tested. The lead owns the build and the Midget check. Every row touched here
 stays `partial` and reads "not yet verified on Midget".
+
+## Layer session (sdk-rest-09)
+
+- `springboard/layers/src/session.rs`: `LayerSession` is the app-side commit path to a layer tree. It numbers
+  transactions, applies each one atomically and refuses a batch whose sequence is not newer than the last commit.
+  Tested headless in `springboard/layers/tests/parity_sdk-rest-09.rs`.
+- Needs the lab machine: the session is not connected to the `bifrost_layer_v1` protocol, so the compositor does not
+  yet draw app trees.
