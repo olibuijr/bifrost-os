@@ -3,7 +3,7 @@
 //! one notification for that spell of rain. The pure parts live here so they can be checked without a shell.
 
 use crate::insights;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// The file in the app's data directory that lists the place keys with notifications on, one per line.
@@ -33,13 +33,36 @@ pub struct Notice {
     pub body: String,
 }
 
-/// Remembers the places already notified about a spell of rain, so a refresh every fifteen minutes does not repeat it.
+/// The chance of precipitation tomorrow, in percent, from which a place with notifications on is told.
+pub const TOMORROW_CHANCE: u8 = 60;
+
+/// Remembers the places already notified about a spell of rain, so a refresh every fifteen minutes does not repeat it,
+/// and the day each place was told about rain tomorrow.
 #[derive(Default)]
 pub struct RainWatch {
     notified: HashSet<String>,
+    tomorrow: HashMap<String, String>,
 }
 
 impl RainWatch {
+    /// Looks at tomorrow's chance of precipitation at the place `key` called `name`, on the local date `today` of the
+    /// current conditions. A notice comes back once per day when notifications are on and the chance is at least
+    /// `TOMORROW_CHANCE` percent. Turning notifications off forgets the place.
+    pub fn check_tomorrow(&mut self, key: &str, name: &str, today: &str, chance: u8, enabled: bool) -> Option<Notice> {
+        if !enabled {
+            self.tomorrow.remove(key);
+            return None;
+        }
+        if chance < TOMORROW_CHANCE || self.tomorrow.get(key).is_some_and(|day| day == today) {
+            return None;
+        }
+        self.tomorrow.insert(key.to_string(), today.to_string());
+        Some(Notice {
+            title: format!("Rain likely tomorrow in {name}"),
+            body: format!("The chance of precipitation tomorrow is {chance} percent."),
+        })
+    }
+
     /// Looks at a fresh minute forecast for the place `key` called `name`. A notice comes back when notifications
     /// are on, it is dry now and rain starts within the hour, and this spell has not been announced yet. A dry hour
     /// ends the spell, so the next rain is announced again; turning notifications off forgets the place.
@@ -92,6 +115,25 @@ mod tests {
         assert!(w.check("a", "A", &SOON, true).is_some());
         assert_eq!(w.check("a", "A", &SOON, false), None);
         assert!(w.check("a", "A", &SOON, true).is_some(), "switching off and on again starts afresh");
+    }
+
+    #[test]
+    fn rain_tomorrow_is_announced_once_a_day_at_the_threshold() {
+        let mut w = RainWatch::default();
+        assert_eq!(w.check_tomorrow("a", "Akureyri", "2026-10-04", TOMORROW_CHANCE - 1, true), None, "below the threshold");
+        let n = w.check_tomorrow("a", "Akureyri", "2026-10-04", 60, true).unwrap();
+        assert_eq!(n.title, "Rain likely tomorrow in Akureyri");
+        assert_eq!(n.body, "The chance of precipitation tomorrow is 60 percent.");
+        assert_eq!(w.check_tomorrow("a", "Akureyri", "2026-10-04", 85, true), None, "the next refresh the same day does not repeat it");
+        assert!(w.check_tomorrow("a", "Akureyri", "2026-10-05", 85, true).is_some(), "the next day it is announced again");
+    }
+
+    #[test]
+    fn rain_tomorrow_is_silent_with_notifications_off_and_forgets_the_place() {
+        let mut w = RainWatch::default();
+        assert!(w.check_tomorrow("a", "A", "2026-10-04", 90, true).is_some());
+        assert_eq!(w.check_tomorrow("a", "A", "2026-10-04", 90, false), None);
+        assert!(w.check_tomorrow("a", "A", "2026-10-04", 90, true).is_some(), "switching on again announces it again the same day");
     }
 
     #[test]

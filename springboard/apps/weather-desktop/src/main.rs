@@ -8,7 +8,8 @@ mod notify;
 mod services;
 mod weather;
 
-use bifrost_app::control::{RpcError, INTERNAL_ERROR};
+use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS};
+use bifrost_app::intents::{self, Intent, IntentResult};
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::share::{self, Payload};
 use bifrost_app::{network_path, widgets_timeline, App, Ctx, Input, KeyInput, TouchKind};
@@ -201,6 +202,19 @@ impl App for WeatherApp {
             Some(w) => w.rpc(method, params),
             None => Err(RpcError::new(INTERNAL_ERROR, "Weather has not started yet")),
         }
+    }
+
+    /// `current`: the conditions at the selected place, for Search and the assistant.
+    fn intents(&self) -> Vec<Intent> {
+        vec![Intent::new("current", "Current Weather", "Says the current conditions at the selected place.").shortcut()]
+    }
+
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, _params: &Json) -> Result<IntentResult, RpcError> {
+        if id != "current" {
+            return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}")));
+        }
+        let dialog = self.w.as_ref().and_then(|w| w.intent_dialog()).ok_or_else(|| intents::failed("the forecast for the selected place has not loaded yet"))?;
+        Ok(IntentResult::dialog(&dialog))
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {

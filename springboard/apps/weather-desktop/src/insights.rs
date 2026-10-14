@@ -240,6 +240,14 @@ pub fn precipitation_text(mm: f64, units: Units) -> String {
     }
 }
 
+/// Snowfall, given in centimetres: "2.5 cm", or "1.0 in" with the imperial set.
+pub fn snow_text(cm: f64, units: Units) -> String {
+    match units {
+        Units::Celsius => format!("{cm:.1} cm"),
+        Units::Fahrenheit => format!("{:.1} in", cm / 2.54),
+    }
+}
+
 /// Visibility: "24 km" or "9.0 km", and "15 mi" with the imperial set.
 pub fn visibility_text(metres: f64, units: Units) -> String {
     let (value, unit) = match units {
@@ -267,19 +275,31 @@ pub fn pressure_text(hpa: f64, units: Units) -> String {
     }
 }
 
-/// Whether the pressure rises or falls over the next three hours: a change of 1 hPa or more counts. None when the
-/// hours carry no pressure.
-pub fn pressure_trend(hours: &[Hour]) -> Option<&'static str> {
+/// The change of pressure from now to three hours ahead, in hPa (the last hour given when there are fewer than four).
+/// None when there are fewer than two hours or the hours carry no pressure.
+pub fn pressure_change(hours: &[Hour]) -> Option<f64> {
     if hours.len() < 2 {
         return None;
     }
     let first = hours.first()?.pressure_hpa?;
     let last = hours.get(3).or(hours.last())?.pressure_hpa?;
-    Some(match last - first {
+    Some(last - first)
+}
+
+/// Whether the pressure rises or falls over the next three hours: a change of 1 hPa or more counts. None when the
+/// hours carry no pressure.
+pub fn pressure_trend(hours: &[Hour]) -> Option<&'static str> {
+    Some(match pressure_change(hours)? {
         d if d >= 1.0 => "Rising",
         d if d <= -1.0 => "Falling",
         _ => "Steady",
     })
+}
+
+/// The needle of the pressure trend dial, in degrees from straight up: 0 when steady, 90 when rising and -90 when
+/// falling, reached at a change of 6 hPa in either direction. None when the change is unknown.
+pub fn pressure_dial_angle(hours: &[Hour]) -> Option<f64> {
+    pressure_change(hours).map(|d| (d / 6.0).clamp(-1.0, 1.0) * 90.0)
 }
 
 /// The note under the pressure.
@@ -664,6 +684,25 @@ mod tests {
         assert_eq!(pressure_trend(&with_pressure(&[Some(1010.0)])), None);
         assert_eq!(pressure_trend(&with_pressure(&[None, None])), None);
         assert_eq!(pressure_note(&[]), "Mean sea level");
+    }
+
+    #[test]
+    fn the_pressure_dial_swings_with_the_three_hour_change() {
+        let near = |a: Option<f64>, want: f64| a.is_some_and(|a| (a - want).abs() < 1e-9);
+        let rising = with_pressure(&[Some(1000.0), Some(1000.5), Some(1001.0), Some(1002.0), Some(1010.0)]);
+        assert_eq!(pressure_change(&rising), Some(2.0));
+        assert!(near(pressure_dial_angle(&rising), 30.0), "2 hPa is a third of the way to the rim");
+        let falling = with_pressure(&[Some(1010.0), Some(1008.0), Some(1005.0), Some(1004.0)]);
+        assert!(near(pressure_dial_angle(&falling), -90.0), "6 hPa or more is the rim");
+        let steady = with_pressure(&[Some(1010.0), Some(1010.4)]);
+        assert!(near(pressure_dial_angle(&steady), 6.0), "0.4 hPa is 6 degrees off straight up");
+        assert_eq!(pressure_dial_angle(&with_pressure(&[Some(1010.0)])), None);
+    }
+
+    #[test]
+    fn snowfall_is_given_in_centimetres_or_inches() {
+        assert_eq!(snow_text(2.5, Units::Celsius), "2.5 cm");
+        assert_eq!(snow_text(2.54, Units::Fahrenheit), "1.0 in");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 id = "is.olibuijr.weather.desktop"
 name = "Weather"
-version = "1.6.0"
+version = "1.7.0"
 exec = "bifrost-weather"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -11,3 +11,10 @@ architecture = "x86_64-linux"
 permissions = ["storage", "network", "notifications"]
 schemes = ["weather"]
 window = "full-size"
+
+[[intent]]
+id = "current"
+title = "Current Weather"
+description = "Says the current conditions at the selected place."
+shortcut = true
+params = []
