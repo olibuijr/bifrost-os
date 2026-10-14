@@ -176,3 +176,10 @@ fn a_negative_or_non_finite_lux_value_is_refused() {
     assert_eq!(IlluminanceSample::new(0, f64::INFINITY), Err(SampleError::NotFinite));
     assert_eq!(IlluminanceSample::from_raw(0, -3, 1.0), Err(SampleError::Negative));
 }
+
+#[test]
+fn a_nonpositive_or_non_finite_sensor_scale_is_refused() {
+    assert_eq!(IlluminanceSample::from_raw(0, 1, 0.0), Err(SampleError::InvalidScale));
+    assert_eq!(IlluminanceSample::from_raw(0, 1, -0.5), Err(SampleError::InvalidScale));
+    assert_eq!(IlluminanceSample::from_raw(0, 1, f64::INFINITY), Err(SampleError::InvalidScale));
+}

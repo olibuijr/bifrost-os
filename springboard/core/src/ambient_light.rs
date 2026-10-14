@@ -11,6 +11,8 @@ pub enum SampleError {
     NotFinite,
     /// The lux value is below zero, which no sensor reports.
     Negative,
+    /// The sensor's scale factor must be finite and above zero.
+    InvalidScale,
     /// The raw or scale text is not a number.
     Unreadable,
 }
@@ -38,6 +40,9 @@ impl IlluminanceSample {
 
     /// A sample from a raw count and its scale factor: lux is `raw * scale`.
     pub fn from_raw(timestamp_ms: u64, raw: i64, scale: f64) -> Result<Self, SampleError> {
+        if !scale.is_finite() || scale <= 0.0 {
+            return Err(SampleError::InvalidScale);
+        }
         Self::new(timestamp_ms, raw as f64 * scale)
     }
 

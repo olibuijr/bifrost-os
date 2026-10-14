@@ -2013,9 +2013,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Sample types of the ambient light sensor family (ALS prefix; the reference kernel extensions confirm the sensor). Build with ALSKit: a timestamped illuminance sample type read from the IIO sensor channels.",
+   "bifrost": "springboard/core/src/ambient_light.rs (IlluminanceSample)",
+   "status": "partial",
+   "note": "A timestamped lux sample and raw-count conversion for the IIO scale are modelled and tested headless. No sensor reader or display integration is present.",
    "rea": [],
    "method": "assessed"
   },
@@ -9806,7 +9806,7 @@
    "doc": "",
    "bifrost": "springboard/src/files/trash.rs (purge)",
    "status": "partial",
-   "note": "Recently Deleted is emptied of items older than 30 days (trash::purge, run from springboard/src/shell/workspace.rs). Purging app caches under disk pressure and the reference per-app purge are not built.",
+   "note": "Recently Deleted is emptied of items older than 30 days (trash::purge). core::cache_purge plans an LRU purge of per-app caches while skipping running apps, but the shell does not execute the plan or trigger it under disk pressure.",
    "rea": [],
    "method": "assessed"
   },
