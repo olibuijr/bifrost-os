@@ -17,7 +17,7 @@ fn ramp() -> Plane {
 
 /// The ramp moved one pixel to the right: column x of the current plane holds column x - 1 of the reference.
 fn ramp_moved_right() -> Plane {
-    let pixels = (0..16).flat_map(|y| (0..16).map(move |x| ramp_at(x.saturating_sub(1), y))).collect();
+    let pixels = (0..16usize).flat_map(|y| (0..16usize).map(move |x| ramp_at(x.saturating_sub(1), y))).collect();
     Plane::new(16, 16, pixels).expect("16 by 16 pixels")
 }
 

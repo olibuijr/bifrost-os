@@ -37,7 +37,7 @@ fn a_config_without_an_sbr_object_has_no_extension_rate() {
 #[test]
 fn an_sbr_config_that_stops_before_the_extension_has_no_extension_rate() {
     // The core fields alone: object 5, rate index 6, channel 1. The extension bits are missing.
-    let truncated = [0x2B, 0x08];
+    let truncated: [u8; 2] = [0x2B, 0x08];
     assert_eq!(sbr_output_rate(&truncated), None);
     let config = parse_asc(&truncated).expect("the core fields still parse");
     assert_eq!((config.object_type, config.sample_rate, config.channels), (5, 24_000, 1));
@@ -54,6 +54,6 @@ fn an_escaped_core_rate_and_an_indexed_extension_rate_are_both_read() {
 fn an_escaped_extension_rate_reads_its_24_bit_value() {
     // Object 5, core rate index 6 (24000 Hz), one channel, extension rate index 15 followed by 96,000 in 24 bits
     // (0x017700), then core object 2. Bits: 00101 0110 0001 1111 000000010111011100000000 00010 00, as bytes.
-    let escaped_extension = [0x2B, 0x0F, 0x80, 0xBB, 0x80, 0x08];
+    let escaped_extension: [u8; 6] = [0x2B, 0x0F, 0x80, 0xBB, 0x80, 0x08];
     assert_eq!(sbr_output_rate(&escaped_extension), Some(96_000));
 }
