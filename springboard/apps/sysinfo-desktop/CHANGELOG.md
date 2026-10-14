@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+- New categories: Audio, Bluetooth, Camera, Printers, Thunderbolt, NVMe and SATA under Hardware; a Network section with Wi-Fi, Ethernet, WWAN, Firewall and Volumes; Fonts and Logs under Software.
+- Categories that list devices, disks or apps show an item list above a detail card for the picked item. Up and Down move through the list when it has the focus; Tab cycles the sidebar, the list and the card.
+- Processor adds physical cores, cache sizes and the clock range. Memory adds available memory, swap and one row per memory slot with type, speed and maker when the firmware table can be read. Graphics adds video memory.
+- USB is a tree (bus, hub, device) with each device's maximum power. Storage lists each partition with its file system, mount point and free space.
+- Network interfaces show IPv4 addresses, the gateway, the DNS servers, the link speed and the Wi-Fi signal. Operating System adds the build and the secure boot state. Installed Apps show the app's name, kind and install date.
+- File > Save Report As Text, Rich Text or JSON; File > Open Report reads a JSON report in place of this computer's facts, with Open Recent and Show This Computer. The manifest now asks for the documents permission the save and open panels need.
+- Edit > Speak Serial Number announces the serial digit by digit. Window menu: Show Overview, Previous and Next Category.
+- The search field in the toolbar filters the rows as you type, with Find Next and Previous in the Edit menu.
+- The sidebar sections fold and unfold, the choice is remembered, and the sidebar scrolls.
+- The facts are read on a worker thread behind a "Preparing system profile" sheet with Cancel.
+
 ## 0.4.0
 
 - Menus: File > Save Report As (text), Edit > Copy, Select All, Find, Find Next and Previous, View > Refresh Information (Cmd+R) and Show Less Information, Help.
