@@ -19,6 +19,7 @@ mod password;
 mod pdfjob;
 mod pdfmarks;
 mod pixels;
+mod signature_panel;
 mod prefs;
 mod printjob;
 mod recents;
@@ -150,6 +151,8 @@ struct Viewer {
     color_panel: bool,
     /// Whether the Export As panel is shown on the right, and the format it exports to.
     export_shown: bool,
+    /// Whether the signature picker is shown on the right.
+    signatures_shown: bool,
     export_format: export_panel::Format,
     /// A PDF that needs a password, and the password being typed for it.
     asking: Option<Ask>,
@@ -199,6 +202,7 @@ impl Viewer {
             after_open: None,
             color_panel: false,
             export_shown: false,
+            signatures_shown: false,
             export_format: export_panel::Format::Png,
             asking: None,
             password: None,
@@ -218,7 +222,7 @@ impl Viewer {
         if !self.toolbar {
             lay.bar = 0;
         }
-        if self.inspector || self.color_panel || self.export_shown {
+        if self.inspector || self.color_panel || self.export_shown || self.signatures_shown {
             lay.inspector = Layout::inspector_width(ui, w);
         }
         lay
@@ -1031,6 +1035,7 @@ impl Viewer {
                 self.color_panel = !self.color_panel;
                 if self.color_panel {
                     self.export_shown = false;
+                    self.signatures_shown = false;
                 }
                 true
             }
@@ -1038,6 +1043,15 @@ impl Viewer {
                 self.export_shown = !self.export_shown;
                 if self.export_shown {
                     self.color_panel = false;
+                    self.signatures_shown = false;
+                }
+                true
+            }
+            Action::ShowSignatures => {
+                self.signatures_shown = !self.signatures_shown;
+                if self.signatures_shown {
+                    self.color_panel = false;
+                    self.export_shown = false;
                 }
                 true
             }
@@ -1464,7 +1478,8 @@ impl Viewer {
             | Action::SetAuthor
             | Action::ShowColorPanel
             | Action::ExportAs
-            | Action::ChooseFormat(_) => {}
+            | Action::ChooseFormat(_)
+            | Action::ShowSignatures => {}
             Action::ExportNow => match self.export_format {
                 export_panel::Format::Png => self.export_raster(Raster::Png),
                 export_panel::Format::Jpeg => self.export_raster(Raster::Jpeg(self.jpeg_quality)),
@@ -1590,6 +1605,14 @@ impl Viewer {
         }
         if let Some(action) = canvas::button_hit(ui, lay, x, y) {
             return self.act(ui, lay, action);
+        }
+        // the signature picker takes the clicks on its side; a click on a signature places it on the shown page
+        if self.signatures_shown && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
+            let metrics = canvas::export_metrics(ui, lay);
+            if let Some(index) = signature_panel::hit(&metrics, self.signatures.len(), x, y) {
+                self.track(|v| v.insert_signature(index));
+            }
+            return true;
         }
         // the Export As panel takes the clicks on its side; a click on one of its buttons runs that button's action
         if self.export_shown && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
@@ -2073,6 +2096,12 @@ impl App for Viewer {
             tool_items.push(AppMenuItem::new(MENU_SIGNATURE + i as u32, &format!("Signature {}", i + 1)).enabled(open).depth(1));
         }
         tool_items.push(item(Action::ClearSignatures, !self.signatures.is_empty(), false));
+        tool_items.push(item_labelled(
+            Action::ShowSignatures,
+            if self.signatures_shown { "Hide Signatures" } else { "Show Signatures" },
+            open,
+            self.signatures_shown,
+        ));
         tool_items.extend([
             AppMenuItem::separator(),
             item_labelled(Action::ToggleMagnifier, if self.loupe_on { "Hide Magnifier" } else { "Show Magnifier" }, open, self.loupe_on),
@@ -2285,6 +2314,7 @@ impl App for Viewer {
         let sliders = (self.color_panel && lay.inspector > 0 && self.mode != Mode::Slideshow).then(|| self.adjust.sliders());
         let export = (self.export_shown && lay.inspector > 0 && self.mode != Mode::Slideshow)
             .then(|| export_panel::panel(&canvas::export_metrics(&ctx.ui, &lay), &self.export_choices()));
+        let signatures = (self.signatures_shown && lay.inspector > 0 && self.mode != Mode::Slideshow).then(|| self.signatures.as_slice());
         let scene = Scene {
             doc: self.doc.as_ref(),
             view: self.view,
@@ -2302,6 +2332,7 @@ impl App for Viewer {
             found: &self.found,
             color: sliders.as_ref().map(|s| s.as_slice()),
             export,
+            signatures,
         };
         canvas::draw(s, &ctx.ui, &lay, &scene, &mut self.cache);
         let mut d = Damage::new(s.w, s.h);

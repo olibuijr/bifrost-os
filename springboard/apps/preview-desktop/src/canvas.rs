@@ -5,6 +5,8 @@
 use crate::document::{Document, THUMB_W};
 use crate::export_panel;
 use crate::find::Hit;
+use crate::signature::Signature;
+use crate::signature_panel;
 use crate::model::{self, Adjust, Mark, MarkKind, Norm, Slider, View, HIGHLIGHT, MARK_BLUE};
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{rgba, Image, Surface};
@@ -196,6 +198,8 @@ pub enum Action {
     ChooseFormat(export_panel::Format),
     /// The export panel's Export button: the document is written in the chosen format.
     ExportNow,
+    /// Tools > Show Signatures / Hide Signatures: the saved signatures list on the right, and a click places one.
+    ShowSignatures,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -295,6 +299,7 @@ pub const ACTIONS: &[Action] = &[
     Action::ChooseFormat(export_panel::Format::Jpeg),
     Action::ChooseFormat(export_panel::Format::Pdf),
     Action::ExportNow,
+    Action::ShowSignatures,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -426,6 +431,7 @@ impl Action {
             Action::ExportAs => "Export As\u{2026}",
             Action::ChooseFormat(format) => format.label(),
             Action::ExportNow => "Export",
+            Action::ShowSignatures => "Show Signatures",
         }
     }
 
@@ -751,6 +757,8 @@ pub struct Scene<'a> {
     pub color: Option<&'a [Slider]>,
     /// The Export As panel, when it is shown; it takes the right side before the Adjust Color panel and the Inspector.
     pub export: Option<export_panel::Panel>,
+    /// The saved signatures, when their picker is shown on the right.
+    pub signatures: Option<&'a [Signature]>,
 }
 
 /// Draws the window. `cache` keeps the scaled picture between frames.
@@ -907,10 +915,13 @@ fn draw_sheet(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
     }
 }
 
-/// The right-hand panel: the Export As panel while it is shown, else the Adjust Color sliders, else the Inspector.
+/// The right-hand panel: the Export As panel while it is shown, else the signature picker, else the Adjust Color
+/// sliders, else the Inspector.
 fn draw_right_panel(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     if let Some(panel) = &scene.export {
         draw_export_panel(s, ui, lay, panel);
+    } else if let Some(library) = scene.signatures {
+        draw_signature_panel(s, ui, lay, library);
     } else if let Some(sliders) = scene.color {
         draw_color_panel(s, ui, lay, sliders);
     } else if let Some(rows) = scene.inspector {
@@ -1010,6 +1021,33 @@ fn draw_export_panel(s: &mut Surface, ui: &Ui, lay: &Layout, panel: &export_pane
         let tx = b.x + (b.w - img.w as i32) / 2;
         let ty = b.y + (b.h - img.h as i32) / 2;
         s.blit_colored(&img, tx, ty, text, 255);
+    }
+}
+
+/// The signature picker: one cell per saved signature, each showing the signature's strokes. With no signature saved, a
+/// line says how to save one.
+fn draw_signature_panel(s: &mut Surface, ui: &Ui, lay: &Layout, library: &[Signature]) {
+    let w = lay.inspector;
+    if w <= 0 {
+        return;
+    }
+    let (x, top) = (lay.w - w, lay.bar);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
+    let metrics = export_metrics(ui, lay);
+    if library.is_empty() {
+        let lines = ["No saved signatures.", "Draw one with the Sign tool, then choose Save Signature."];
+        for (i, line) in lines.iter().enumerate() {
+            let text = fit_text(ui, line, ui::MAC_FOOTNOTE_PT, (w - 2 * metrics.pad).max(0) as f32);
+            let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+            s.blit_colored(&img, x + metrics.pad, top + metrics.pad + i as i32 * (img.h as i32 + metrics.gap), ui::LABEL_2.now(), 255);
+        }
+    }
+    for cell in signature_panel::cells(&metrics, library.len()) {
+        s.fill_rrect(cell.x as f32, cell.y as f32, cell.w as f32, cell.h as f32, ui.pt(ui::SPACE_S), ui::FILL);
+        for stroke in signature_panel::strokes_in(&library[cell.index], &cell) {
+            draw_path(s, &stroke, ui::LABEL.now());
+        }
     }
 }
 
