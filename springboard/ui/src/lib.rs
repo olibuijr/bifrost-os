@@ -622,6 +622,8 @@ pub mod calendar_participant;
 pub mod calendar_store;
 pub mod calendar_store_changes;
 pub mod collection;
+pub mod swipe_actions;
+pub mod refresh_control;
 pub mod dockdrag;
 pub mod dock_tile;
 pub mod cursor;
