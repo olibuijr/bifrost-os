@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 — 2026-10-14
+
+- Draw the entry timeline with the shared Golden Gate source-list rows.
+
 ## 0.1.2
 
 - Added the SDK and design compliance test harness.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 — 2026-10-14
+
+- Draw font collections with the shared Golden Gate source-list widget.
+
 ## 0.6.2
 
 - Added the SDK and design compliance test harness.

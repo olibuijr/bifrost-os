@@ -14,6 +14,8 @@ mod validate;
 
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{Damage, Font, Surface};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::widgets;
 use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::DocErrorCode;
 use bifrost_app::workspace;
@@ -1018,25 +1020,21 @@ impl App for FontBookApp {
         let (w, h) = (s.w, s.h);
         let (wp, hp) = (w as f32 / scale, h as f32 / scale);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
-        // sidebar
-        s.fill_rect(0, 0, p(SIDEBAR_PT), h, ui::SIDEBAR_BG.now());
+        // Sidebar source list uses the shared Golden Gate neutral selection and row treatment.
         let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
-        for (i, (label, source)) in rows.iter().enumerate() {
-            let y = HEADER_PT + i as f32 * ROW_PT;
-            if *source == self.source {
-                s.fill_rect(p(6.0), p(y), p(SIDEBAR_PT - 12.0), p(ROW_PT), ui::SIDEBAR_PLATE.now());
-            }
+        let entries = rows.iter().enumerate().map(|(i, (label, source))| {
             let editing = match (&self.edit, source) {
-                (Edit::Rename { old, smart, text }, Source::Collection(n)) if !*smart && old == n => Some(text.clone()),
-                (Edit::Rename { old, smart, text }, Source::Smart(n)) if *smart && old == n => Some(text.clone()),
+                (Edit::Rename { old, smart, text }, Source::Collection(n)) if !*smart && old == n => Some(text.as_str()),
+                (Edit::Rename { old, smart, text }, Source::Smart(n)) if *smart && old == n => Some(text.as_str()),
                 _ => None,
             };
-            let shown = match editing {
-                Some(text) => format!("{text}|"),
-                None => label.clone(),
-            };
-            put(s, ui, &shown, ui::MAC_BODY_PT, ui::LABEL.now(), PAD_PT, y + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
-        }
+            let shown = editing.map_or(label.as_str(), |text| text);
+            let symbol = match i { 0 => "textformat", 1 => "eye.slash", _ => "folder" };
+            SidebarItem::row(i as u32 + 1, shown).with_symbol(symbol)
+        }).collect();
+        let mut sidebar = SourceList::new(entries, ROW_PT, ROW_PT);
+        sidebar.set_selected(rows.iter().position(|(_, source)| *source == self.source).map(|i| i as u32 + 1));
+        widgets::source_list(s, ui, bifrost_app::controls::Rect { x: 0.0, y: HEADER_PT, w: SIDEBAR_PT, h: (hp - HEADER_PT).max(0.0) }, &sidebar, 0.0, None);
         put(s, ui, "New Collection", ui::MAC_BODY_PT, ui::LINK, PAD_PT, HEADER_PT + rows.len() as f32 * ROW_PT + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
         // list column
         let x0 = SIDEBAR_PT;

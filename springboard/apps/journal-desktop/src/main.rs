@@ -8,6 +8,7 @@ mod store;
 
 use bifrost_app::controls::text::TextBuffer;
 use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{
     Ui, Weight, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
@@ -440,7 +441,7 @@ impl JournalApp {
         }
     }
 
-    fn draw_sidebar(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout, timeline: &[u64]) {
+    fn draw_navigation(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout, timeline: &[u64]) {
         let sidebar = Rect { x: 0.0, y: 0.0, w: layout::SIDEBAR_PT, h: layout.h };
         widgets::material(c, ui, controls_rect(sidebar), 0.0, Material::Sidebar);
 
@@ -472,36 +473,26 @@ impl JournalApp {
             return;
         }
 
-        let selected = self.journal.selected;
-        for slot in 0..layout.visible_rows() {
-            let Some(id) = timeline.get(self.top + slot).copied() else { break };
-            let Some(entry) = self.journal.entry(id) else { continue };
-            let row = layout.row(slot);
-            let is_selected = selected == Some(id);
-            if is_selected {
-                plate(c, ui, Rect { x: 6.0, y: row.y + 3.0, w: layout::SIDEBAR_PT - 12.0, h: row.h - 6.0 }, SYSTEM_BLUE);
-            }
-            let (title, sub, meta) = if is_selected {
-                (MENU_HIGHLIGHT_TEXT, MENU_HIGHLIGHT_TEXT, MENU_HIGHLIGHT_TEXT)
-            } else {
-                (LABEL.now(), LABEL_2.now(), LABEL_2.now())
-            };
-            let width = ui.pt(layout::SIDEBAR_PT - 2.0 * layout::PAD_PT);
-            let title_text = ui.fit(&entry.day.long(), MAC_BODY_PT, width);
-            text_at(c, ui, &title_text, MAC_BODY_PT, Weight::Semibold, title, 12.0, row.y + 8.0);
-            let line = if preview(&entry.text).is_empty() { "No text".to_string() } else { preview(&entry.text).to_string() };
-            text_at(c, ui, &ui.fit(&line, MAC_FOOTNOTE_PT, width), MAC_FOOTNOTE_PT, Weight::Regular, sub, 12.0, row.y + 26.0);
-            let mut bits = Vec::new();
-            if entry.bookmarked {
-                bits.push("Bookmarked".to_string());
-            }
+        let selected = self.journal.selected.and_then(|id| timeline.iter().position(|entry| *entry == id));
+        let items = timeline.iter().enumerate().filter_map(|(i, id)| {
+            let entry = self.journal.entry(*id)?;
+            let mut subtitle = if preview(&entry.text).is_empty() { "No text".to_string() } else { preview(&entry.text).to_string() };
+            if entry.bookmarked { subtitle.push_str(" · Bookmarked"); }
             if !entry.photos.is_empty() {
-                bits.push(format!("{} photo{}", entry.photos.len(), if entry.photos.len() == 1 { "" } else { "s" }));
+                subtitle.push_str(&format!(" · {} photo{}", entry.photos.len(), if entry.photos.len() == 1 { "" } else { "s" }));
             }
-            if !bits.is_empty() {
-                text_at(c, ui, &bits.join(" \u{00B7} "), MAC_FOOTNOTE_PT, Weight::Regular, meta, 12.0, row.y + 42.0);
-            }
-        }
+            Some(SidebarItem::row(i as u32 + 1, &entry.day.long()).with_subtitle(&subtitle))
+        }).collect();
+        let mut list = SourceList::new(items, layout::ROW_H_PT, layout::ROW_H_PT);
+        list.set_selected(selected.map(|i| i as u32 + 1));
+        widgets::source_list(
+            c,
+            ui,
+            bifrost_app::controls::Rect { x: 0.0, y: layout::LIST_TOP_PT, w: layout::SIDEBAR_PT, h: (layout.h - layout::LIST_TOP_PT).max(0.0) },
+            &list,
+            self.top as f32 * layout::ROW_H_PT,
+            None,
+        );
     }
 
     fn draw_header(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout) {
@@ -614,7 +605,7 @@ impl App for JournalApp {
         self.visible = layout.visible_rows();
         let timeline = self.timeline();
         let ui = &ctx.ui;
-        self.draw_sidebar(canvas, ui, &layout, &timeline);
+        self.draw_navigation(canvas, ui, &layout, &timeline);
         self.draw_header(canvas, ui, &layout);
         self.draw_editor(canvas, ui, &layout);
         self.draw_photo_bar(canvas, ui, &layout);
