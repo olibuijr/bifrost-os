@@ -1,6 +1,6 @@
 id = "ai.storyteller.vectorcraft"
 name = "VectorCraft"
-version = "0.10.0"
+version = "0.10.1"
 exec = "vectorcraft"
 icon = "icon.png"
 min_shell = "0.4.97"

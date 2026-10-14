@@ -1,5 +1,5 @@
 repo = "storytold/vectorcraft"
-url = "https://github.com/storytold/vectorcraft/releases/download/v0.8.0/vectorcraft-0.10.0-linux-x86_64.tar.gz"
+url = "https://github.com/storytold/vectorcraft/releases/download/v0.10.0/vectorcraft-0.10.0-linux-x86_64.tar.gz"
 sha256 = "a55735a192877038c9b4c3069504f7a73a05433a48edddd8e94fc7d2995aa6fc"
 binary = "vectorcraft-0.10.0-linux-x86_64/bin/vectorcraft"
 licenses = "vectorcraft-0.10.0-linux-x86_64/share/doc/vectorcraft"
