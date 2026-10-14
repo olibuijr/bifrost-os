@@ -1,10 +1,11 @@
 id = "is.olibuijr.photobooth.desktop"
 name = "Photo Booth"
-version = "0.5.1"
+version = "0.5.2"
 exec = "bifrost-photobooth"
-icon = "icon.png"
+icon = "icon-180.png"
 min_shell = "0.6.5"
 summary = "Take photos, bursts and short clips with the camera, with live effects, a strip of captures and export."
 category = "Photo & Video"
 architecture = "x86_64-linux"
 permissions = ["storage", "camera"]
+window = "full-size"
