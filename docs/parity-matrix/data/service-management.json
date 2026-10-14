@@ -31,30 +31,30 @@
   {
    "feature": "Login item by bundle identifier",
    "apple": "SMAppService.loginItem(identifier:)",
-   "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::login_item); springboard/sdk/src/service_bundle.rs (find_login_item, helper_status)",
+   "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::login_item); springboard/sdk/src/service_bundle.rs (BundleServices::login_item, BundleServices::login_item_status, find_login_item, helper_status)",
    "status": "partial",
-   "note": "service_bundle.rs finds an embedded helper by its bundle identifier and gives the reference's JobNotFound and NotFound answers; the handle does not yet read the app bundle, so it still answers NotFound. Pure model with host unit tests; not yet tested on the VM or Midget. Built on parity/team-k-service-management; not yet verified on Midget."
+   "note": "BundleServices answers loginItem(identifier:) for the helpers a bundle lists, with JobNotFound for an unknown or empty identifier and Enabled, NotRegistered or NotFound as the status; tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: the app handle still answers NotFound because BifrOSt apps are manifest packages with no Contents/ tree to scan, and the shell does not report helper state; that needs the lab machine."
   },
   {
    "feature": "Launch agents",
    "apple": "SMAppService.agent(plistName:)",
-   "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::agent); springboard/sdk/src/service_bundle.rs (locate_job_plist, JobKind::Agent)",
+   "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::agent); springboard/sdk/src/service_bundle.rs (BundleServices::job_plist, locate_job_plist, JobKind::Agent)",
    "status": "partial",
-   "note": "service_bundle.rs finds Contents/Library/LaunchAgents/<name>.plist in an app bundle's file list and gives InvalidPlist or JobPlistNotFound. No launch agent is loaded or started: bifrostd is the system supervisor and is not exposed to apps. Pure model with host unit tests; not yet tested on the VM or Midget. Built on parity/team-k-service-management; not yet verified on Midget."
+   "note": "BundleServices::job_plist finds Contents/Library/LaunchAgents/<name>.plist in a bundle's file list and gives InvalidPlist or JobPlistNotFound; tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: no launch agent is loaded or started because bifrostd is the system supervisor and is not exposed to apps, and the app handle still answers NotFound; that needs the lab machine."
   },
   {
    "feature": "Launch daemons",
    "apple": "SMAppService.daemon(plistName:)",
-   "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::daemon); springboard/sdk/src/service_bundle.rs (locate_job_plist, JobKind::Daemon)",
+   "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::daemon); springboard/sdk/src/service_bundle.rs (BundleServices::job_plist, locate_job_plist, JobKind::Daemon)",
    "status": "partial",
-   "note": "service_bundle.rs finds Contents/Library/LaunchDaemons/<name>.plist in an app bundle's file list. No daemon is installed: there is no SDK API for root daemons shipped in an app bundle. Pure model with host unit tests; not yet tested on the VM or Midget. Built on parity/team-k-service-management; not yet verified on Midget."
+   "note": "BundleServices::job_plist finds Contents/Library/LaunchDaemons/<name>.plist in a bundle's file list, with InvalidPlist and JobPlistNotFound answers; tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: no daemon is installed because there is no SDK API for root daemons shipped in an app bundle, and the lookup has not run against a real bundle on the lab machine."
   },
   {
    "feature": "Embedded helper executables",
    "apple": "helper executables inside the app's main bundle, registered through SMAppService",
-   "bifrost": "springboard/sdk/src/service_bundle.rs (LOGIN_ITEMS_DIR, helper_path_ok, helper_from_entry, find_login_item, helper_status)",
+   "bifrost": "springboard/sdk/src/service_bundle.rs (LOGIN_ITEMS_DIR, helper_path_ok, helper_from_entry, BundleServices::new, BundleServices::helpers, find_login_item, helper_status)",
    "status": "partial",
-   "note": "Pure model: a helper is a .app directly in Contents/Library/LoginItems with a CFBundleIdentifier (the caller reads the bundle). helper_status reports NotFound, NotRegistered or Enabled. Not wired: the handles do not scan the app bundle and the shell does not list helpers, so no helper is started or shown in Login Items. Host unit tests only; verify on Midget for parity. Built on parity/team-k-service-management; not yet verified on Midget."
+   "note": "BundleServices takes a bundle's file list and each helper's identifier, keeps only a .app directly in Contents/Library/LoginItems with a non-empty identifier, and reports the helpers and their status; tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: the app handles do not scan the bundle and the shell does not list helpers in Login Items, so no helper is started or shown; that needs the lab machine."
   },
   {
    "feature": "Settings page for login items",
@@ -96,7 +96,7 @@
    "apple": "SMLoginItemSetEnabled(_:_:)",
    "bifrost": "springboard/sdk/src/service_management.rs (set_login_item_enabled)",
    "status": "partial",
-   "note": "set_login_item_enabled fails with JobNotFound and sends nothing, because no helper ships; apps use SMAppService. Test: the_deprecated_enable_call_is_refused_without_a_request (springboard/sdk/tests/parity_sdk-tests-10.rs). Not yet tested on Midget"
+   "note": "set_login_item_enabled fails with JobNotFound and sends nothing, because no helper ships; apps use SMAppService. Test: the_deprecated_enable_call_is_refused_without_a_request (springboard/sdk/tests/parity_sdk-tests-10.rs). Gap: the call cannot succeed until helper bundles are scanned by the app handles, which needs the lab machine."
   }
  ],
  "gaps": [

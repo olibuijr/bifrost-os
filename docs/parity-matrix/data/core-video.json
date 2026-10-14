@@ -12,7 +12,7 @@
       "apple": "CVPixelBuffer, CVPixelBufferCreate, CVPixelBufferLockBaseAddress, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow",
       "bifrost": "springboard/sdk/src/pixel_buffer.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-core-video, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. buffers exist in the system layer only; no SDK type wraps a locked base address with a pixel format PixelBuffer records a revision that advances on each read-write unlock. Built on parity/team-j-core-video; not yet verified on Midget."
+      "note": "PixelBuffer holds the planes of a BGRA or NV12 buffer, reaches them only under a lock, counts read-write unlocks as a revision, and recycles through PixelBufferPool; the Layout description and the lock, revision and pool rules are tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: no app or the shell uses these buffers yet, and the presenter and media decoders do not fill them; that needs the lab machine."
     },
     {
       "feature": "Pixel buffer pool",
@@ -26,7 +26,7 @@
       "apple": "CVBufferSetAttachment, CVBufferCopyAttachments, CVImageBufferGetColorSpace, CVImageBufferGetCleanRect, CVImageBufferCreateColorSpaceFromAttachments",
       "bifrost": "springboard/render/src/buffer_attach.rs; springboard/sdk/src/pixel_buffer.rs (PixelBuffer::attachments, set_attachments, color_space, clean_rect)",
       "status": "partial",
-      "note": "Attachment model in the render crate, reached from PixelBuffer. Decoded pictures (springboard/src/media/mod.rs DmaPicture) do not yet carry primaries, transfer or YCbCr matrix, so decoders do not fill them. Built on parity/team-j-core-video; not yet verified on Midget."
+      "note": "The typed attachments (primaries, transfer, YCbCr matrix, clean aperture) are set and read through PixelBuffer, and the colour space and clean rect follow them; tested headless in sdk/tests/parity_sdk-complete-08.rs. Gap: decoded pictures (springboard/src/media/mod.rs DmaPicture) do not carry primaries, transfer or YCbCr matrix, so decoders do not fill them; that needs the decode path on the lab machine."
     },
     {
       "feature": "Pixel format description and fourcc types",
