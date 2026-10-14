@@ -59,9 +59,9 @@
     {
       "feature": "Cloud account backup of user data",
       "apple": "Not part of GameSave; nearest Apple counterpart is iCloud Drive",
-      "bifrost": "~/Projects/bifrost-cloud/docs/schema.md (device_backups, encrypted backups of a BifrOSt PC); ~/Projects/bifrost-cloud/skill/SKILL.md (backups timer)",
-      "status": "partial",
-      "note": "Account-level encrypted device backups exist in the cloud backend, but the PC client code that uploads them was not found in bifrost-os, and no app can reach its save directory through them. Counted as partial background only, not as GameSave parity."
+      "bifrost": "none in bifrost-os; the account backend is in ~/Projects/bifrost-cloud (outside this repo)",
+      "status": "gap",
+      "note": "Encrypted device backups exist in the bifrost-cloud backend (outside this repo), but no PC client in bifrost-os uploads them and no app can reach its save directory through them. Downgraded from partial: there is no code in this repo to test, and the backend is not GameSave parity."
     }
   ],
   "gaps": [
