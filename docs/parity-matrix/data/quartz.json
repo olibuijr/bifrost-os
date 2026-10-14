@@ -80,9 +80,9 @@
     {
       "feature": "PDF document model (PDFDocument, PDFPage, PDFOutline, PDFSelection)",
       "apple": "PDFDocument, PDFPage, PDFOutline, PDFSelection",
-      "bifrost": "springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/obj.rs, springboard/render/src/cg/pdf/extract.rs",
+      "bifrost": "springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/page.rs, springboard/render/src/cg/pdf/obj.rs, springboard/render/src/cg/pdf/extract.rs",
       "status": "os",
-      "note": "The Books engine parses PDF objects and page trees and extracts text lines and images in reading order. It is internal to Books; apps get no document, page, outline or selection API."
+      "note": "The reader in springboard/render/src/cg/pdf is tested headless in springboard/render/tests/parity_sdk-tests-03.rs: opening and repair, the page tree with sizes and rotation, crop boxes, document information, the outline and text extraction. Apps have no SDK PDF document type yet, and there is no selection or find; verify on Midget for parity."
     },
     {
       "feature": "PDF display view (PDFView, PDFThumbnailView)",
@@ -101,9 +101,9 @@
     {
       "feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)",
       "apple": "QuartzFilter, QuartzFilterManager, QuartzFilterView, Quartz Filter Constants",
-      "bifrost": "springboard/ui/src/print.rs (PrintOperation, Destination::Pdf); wired: springboard/src/shell/print_sheet.rs (write_pdf); no filters",
+      "bifrost": "springboard/render/src/cg/pdf/writer.rs (write, text_literal, winansi), springboard/ui/src/print.rs (PrintOperation::document, text_pages, Destination::Pdf)",
       "status": "partial",
-      "note": "Save as PDF copies the document file; printing goes through lp. There is no PDF page writer, no print-to-PDF filter pipeline and no filter manager. The print sheet is not drawn by the shell yet. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Headless tests in springboard/render/tests/parity_sdk-tests-03.rs and springboard/ui/tests/parity_sdk-tests-03.rs: a_written_document_reads_back_with_its_page_sizes, text_drawn_on_a_written_page_is_extracted_in_reading_order, text_literals_escape_parentheses_and_backslashes, a_text_job_builds_a_pdf_document. No QuartzFilter manager and no filter pipeline; the writer takes finished content streams; the shell print sheet still copies the file for Save as PDF; verify on Midget for parity."
     },
     {
       "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",

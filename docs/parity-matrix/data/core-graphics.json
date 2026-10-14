@@ -94,16 +94,16 @@
   {
    "feature": "PDF documents (CGPDFDocument, PDF reading)",
    "apple": "CGPDFDocument, CGPDFPage, CGContextDrawPDFPage",
-   "bifrost": "springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/interpret.rs (BT and Do operators only), springboard/render/src/cg/pdf/image.rs",
+   "bifrost": "springboard/render/src/cg/pdf/doc.rs (Doc::open, xref), springboard/render/src/cg/pdf/page.rs (pages, Page, info, outline)",
    "status": "partial",
-   "note": "The Books engine reads text and images from PDFs and reflows them. It does not draw vector paths, and the reader is private to the Books shell, not exposed to apps."
+   "note": "Headless tests in springboard/render/tests/parity_sdk-tests-03.rs cover opening a document, xref repair, the page tree, page sizes and rotation, and document information. No app-facing SDK document type exists; Preview reads pages through kit::cg::pdf (springboard/apps/preview-desktop/src/pdfjob.rs); verify on Midget for parity."
   },
   {
    "feature": "PDF creation and printing (CGPDFContext, print to PDF)",
    "apple": "CGPDFContextCreate, CGPDFContextBeginPage, print operations to PDF",
-   "bifrost": "springboard/ui/src/print.rs:137 Destination (Printer or Pdf), :152 PrintOperation, :186 run (submits with lp); wired: springboard/src/shell/print_sheet.rs (write_pdf, Save as PDF)",
+   "bifrost": "springboard/render/src/cg/pdf/writer.rs (write, text_literal, winansi), springboard/ui/src/print.rs (PrintOperation::document, text_pages)",
    "status": "partial",
-   "note": "Apps print an existing file through lp, and Save as PDF copies the document. Apps cannot draw pages into a PDF context, and the NSView-style pagination is missing. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Headless tests in springboard/render/tests/parity_sdk-tests-03.rs and springboard/ui/tests/parity_sdk-tests-03.rs cover writing pages with Helvetica text and reading them back, string escaping, and paginated text jobs. No CGContext-style drawing API for apps: the writer takes finished content streams. Preview saves edited PDFs through writer::save, which these tests do not cover; the print sheet Save as PDF still copies the file."
   },
   {
    "feature": "Layers and offscreen reusable content (CGLayer)",
