@@ -23,6 +23,13 @@ pub fn parse(text: &str) -> Option<Rgb> {
     Some(((v >> 16) as u8, (v >> 8) as u8, v as u8))
 }
 
+/// Whether a colour is dark enough that black text on it would be hard to read. The test is the perceived brightness
+/// of the colour (the Rec. 601 weights), below the middle of the scale.
+pub fn is_dark(c: Rgb) -> bool {
+    let brightness = 0.299 * f32::from(c.0) + 0.587 * f32::from(c.1) + 0.114 * f32::from(c.2);
+    brightness < 128.0
+}
+
 /// The `#RRGGBB` text of a colour, upper case.
 pub fn hex(c: Rgb) -> String {
     format!("#{:02X}{:02X}{:02X}", c.0, c.1, c.2)
@@ -55,6 +62,15 @@ mod tests {
         for bad in ["", "#", "#12", "#12345", "#1234567", "#GGGGGG", "##FFFFFF", "yellow"] {
             assert_eq!(parse(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn a_dark_colour_is_one_whose_brightness_is_under_the_middle() {
+        assert!(is_dark((0, 0, 0)));
+        assert!(is_dark((10, 20, 30)), "a navy colour");
+        assert!(!is_dark((255, 255, 255)));
+        assert!(!is_dark((255, 255, 0)), "yellow is light");
+        assert!(is_dark((128, 0, 0)), "a dark red");
     }
 
     #[test]
