@@ -2,7 +2,8 @@
 //! coordinates, the sidecar file that keeps markup, and the burn-in used by export. Everything here
 //! is plain data, so the tests run without a window.
 
-use bifrost_app::kit::{pack, Image};
+use bifrost_app::kit::ui::{SYSTEM_BLUE, SYSTEM_RED, SYSTEM_YELLOW};
+use bifrost_app::kit::Image;
 use std::rc::Rc;
 
 /// The smallest and largest zoom factor the viewer goes to.
@@ -578,11 +579,11 @@ pub fn neighbour(positions: &[usize], current: usize, forward: bool) -> Option<u
 const NOTE_PX: usize = 14;
 
 /// Highlight colour: system yellow at about 45 per cent.
-pub const HIGHLIGHT: u32 = pack(255, 214, 10, 115);
+pub const HIGHLIGHT: u32 = (SYSTEM_YELLOW & 0x00ff_ffff) | (115 << 24);
 /// Note and shape colour: system blue.
-pub const MARK_BLUE: u32 = pack(10, 132, 255, 255);
+pub const MARK_BLUE: u32 = SYSTEM_BLUE;
 /// Strike-through colour: system red.
-pub const MARK_RED: u32 = pack(255, 69, 58, 255);
+pub const MARK_RED: u32 = SYSTEM_RED;
 
 const SIDECAR_HEADER: &str = "# viewer markup 1";
 
@@ -916,6 +917,7 @@ fn burn_path(img: &mut Image, pts: &[(f32, f32)], color: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::kit::pack;
 
     fn img(w: usize, h: usize) -> Image {
         // each pixel gets a distinct value so a rotation mistake shows up

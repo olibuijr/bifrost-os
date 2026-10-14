@@ -1,11 +1,11 @@
-//! Open documents. A picture (PNG or JPEG) is one page, decoded when it opens. A PDF is opened on its own worker thread
+//! Open documents. A picture (PNG or JPEG) is one page, decoded when it opens. A PDF opens on its serial utility queue
 //! (`pdfjob`), which reports the page sizes and outline at once; pages and sidebar thumbnails are drawn by the worker
 //! when the window asks for them, and kept here until they are evicted. The page order, deletions and turns are kept
 //! for the session and written by Export PDF. Markup lives in a sidecar file under the app's data directory, keyed by
 //! the document's path.
 
 use crate::model::{self, fit_box, Adjust, Mark};
-use crate::pdfjob::{self, Inbox, Job, Key, Opened, Outline, Reply, PAGE_BOX};
+use crate::pdfjob::{self, Inbox, Job, Jobs, Key, Opened, Outline, Reply, DOCUMENT_RENDER_BOUNDS};
 use bifrost_app::image_filter::{Filter, FilterChain};
 use bifrost_app::image_source::ImageSource;
 use bifrost_app::kit::Image;
@@ -13,7 +13,6 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::mpsc::Sender;
 
 /// Thumbnails fit a box this many pixels wide and twice as tall.
 pub const THUMB_W: usize = 132;
@@ -24,8 +23,8 @@ const PDF_KEPT: usize = 6;
 enum Source {
     /// A decoded picture, the only page of a PNG or JPEG.
     Picture(Rc<Image>),
-    /// A PDF: its worker takes the jobs, and its replies come back through the inbox.
-    Pdf { jobs: Sender<Job>, inbox: Inbox },
+/// A PDF: its utility queue takes the jobs, and its replies come back through the inbox.
+    Pdf { jobs: Jobs, inbox: Inbox },
 }
 
 /// An open document: its pages and the markup saved for it.
@@ -212,7 +211,7 @@ impl Document {
         match &self.source {
             Source::Picture(img) => Some(img.clone()),
             Source::Pdf { .. } => {
-                let key = Key { thumb: false, page: src, w: PAGE_BOX.0, h: PAGE_BOX.1 };
+                let key = Key { thumb: false, page: src, w: DOCUMENT_RENDER_BOUNDS.0, h: DOCUMENT_RENDER_BOUNDS.1 };
                 if let Some(img) = self.drawn.borrow().get(&key) {
                     return Some(img.clone());
                 }
@@ -289,7 +288,7 @@ pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
 }
 
 /// The document of a PDF whose worker has opened it. `jobs` and `inbox` are the worker's.
-pub fn from_pdf(path: &Path, data_dir: &Path, opened: Opened, jobs: Sender<Job>, inbox: Inbox) -> Document {
+pub fn from_pdf(path: &Path, data_dir: &Path, opened: Opened, jobs: Jobs, inbox: Inbox) -> Document {
     let mut doc = Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true);
     doc.info = opened.info;
     doc.encrypted = opened.encrypted;

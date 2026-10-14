@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use bifrost_app::kit::{pack, Image, Surface};
-use bifrost_app::kit::ui::SYSTEM_ORANGE as ORANGE;
+use bifrost_app::kit::ui::{CARD_BG, LABEL_2, SYSTEM_ORANGE as ORANGE};
 
 /// The classic Calculator icon, built with software shapes so it shares
 /// the shell's existing icon mask and needs no asset download.
@@ -9,7 +9,7 @@ pub fn icon(size: usize) -> Image {
     let mut image = Image {
         w: size,
         h: size,
-        px: vec![pack(46, 46, 48, 255); size * size],
+        px: vec![CARD_BG.dark; size * size],
     };
     let f = size as f32;
     let mut surface = Surface {
@@ -25,7 +25,7 @@ pub fn icon(size: usize) -> Image {
         f * 0.64,
         f * 0.22,
         f * 0.03,
-        pack(143, 146, 140, 255),
+        LABEL_2.dark,
     );
     for row in 0..3 {
         for col in 0..3 {
@@ -40,7 +40,7 @@ pub fn icon(size: usize) -> Image {
                 if col == 2 {
                     ORANGE
                 } else {
-                    pack(191, 191, 193, 255)
+                    LABEL_2.light
                 },
             );
         }

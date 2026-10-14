@@ -765,7 +765,7 @@ pub struct Scene<'a> {
 pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut Option<PictureCache>) -> Option<Placed> {
     let (cx, cy, cw, ch) = lay.canvas();
     let show = scene.mode == Mode::Slideshow;
-    fill(s, cx, cy, cw, ch, if show { rgba(0, 0, 0, 255) } else { ui::CONTENT_BG.now() });
+    fill(s, cx, cy, cw, ch, ui::CONTENT_BG.now());
     if let (Mode::Contact, Some(doc)) = (scene.mode, scene.doc) {
         draw_sheet(s, ui, lay, scene, doc);
         draw_sidebar(s, ui, lay, scene);
@@ -798,7 +798,8 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
                         cached = true;
                     }
                     // a PDF page is still on its way from the worker: the paper shows first
-                    None => fill(s, p.x, p.y, p.w as i32, p.h as i32, rgba(255, 255, 255, 255)),
+                    // compliance-allow: COL-03 the loading placeholder intentionally depicts the PDF's white paper.
+                    None => fill(s, p.x, p.y, p.w as i32, p.h as i32, ui::WHITE),
                 }
                 for m in doc.marks.iter().filter(|m| m.page == src).chain(scene.draft.iter()) {
                     draw_mark(s, &p, q, m);
@@ -1146,7 +1147,8 @@ fn draw_mark(s: &mut Surface, p: &Placed, quarters: u8, m: &Mark) {
             fill(s, x, y, 14, 14, MARK_BLUE);
         }
         MarkKind::Oval => draw_path(s, &model::ellipse_points(x as f32, y as f32, w as f32, h as f32), m.color),
-        MarkKind::Redact => fill(s, x, y, w, h, rgba(0, 0, 0, 255)),
+        // compliance-allow: COL-03 opaque black is required to permanently conceal redacted picture content.
+        MarkKind::Redact => fill(s, x, y, w, h, ui::BLACK),
         MarkKind::Ink | MarkKind::Line | MarkKind::Arrow | MarkKind::Underline | MarkKind::Strike => {}
         MarkKind::Star | MarkKind::Polygon | MarkKind::Bubble | MarkKind::Text => {}
     }
@@ -1156,7 +1158,7 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     if lay.side <= 0 {
         return;
     }
-    fill(s, 0, lay.bar, lay.side, lay.h - lay.bar, ui::SIDEBAR_FILL);
+    fill(s, 0, lay.bar, lay.h - lay.bar, ui::SIDEBAR_BG.now());
     let Some(doc) = scene.doc else { return };
     match scene.side {
         Side::Pages => draw_pages(s, ui, lay, scene, doc),

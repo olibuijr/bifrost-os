@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-10-14
+
+- Empty-state and caption HUD surfaces use shared appearance-aware material and background colours.
+
 ## 0.2.0 — 2026-10-13
 
 - Open Movie intent (`open-movie`, parameter `path`): the shell hands the Video Player a movie file by path. The shell uses it to open a finished screen recording, which the player plays like a movie from the open panel.

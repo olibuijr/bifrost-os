@@ -1,10 +1,9 @@
-//! The PDF worker. Each open PDF gets its own thread, and that thread owns the parsed file: the engine's objects are
-//! reference counted, so they never leave it. The window sends jobs (draw a page, save an edited copy). A job runs on
-//! the worker in order and returns a `Reply`, which goes into the document's inbox; the delivery runs on the app loop
-//! and wakes it, so `App::tick` can take the reply and the window can draw it.
+//! The PDF worker. Each open PDF has a serial utility queue that owns the parsed file: engine objects stay on that
+//! queue. The window submits jobs (draw a page, save an edited copy); replies return through the document's inbox on
+//! the app loop, waking it so `App::tick` can take them and draw.
 
 use crate::find::Hit;
-use bifrost_app::dispatch::DispatchQueue;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::Image;
 use crate::inspector;
 use springboard::cg::pdf::doc::Doc;
@@ -13,12 +12,10 @@ use springboard::cg::pdf::draw;
 use springboard::cg::pdf::page::{self, Page as PdfPage};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 /// Pages are fitted into this box (width, height) for the window; thumbnails are fitted into smaller boxes.
-pub const PAGE_BOX: (usize, usize) = (1000, 1400);
+pub const DOCUMENT_RENDER_BOUNDS: (usize, usize) = (1000, 1400);
 
 /// A picture of one page the window asked for: the source page, the box it is fitted into, and whether it is a
 /// sidebar thumbnail.
@@ -38,7 +35,7 @@ pub struct Outline {
     pub page: Option<usize>,
 }
 
-/// What the worker reports once the file is open: each page's size before rotation (fitted into `PAGE_BOX`) and the
+/// What the worker reports once the file is open: each page's size before rotation (fitted into `DOCUMENT_RENDER_BOUNDS`) and the
 /// outline.
 pub struct Opened {
     pub sizes: Vec<(usize, usize)>,
@@ -64,13 +61,36 @@ pub enum Reply {
     Copied(String),
 }
 
-/// A job for the worker: it runs on the worker thread with the parsed file and returns its reply.
+/// A job for the PDF utility queue: it runs with the parsed file and returns its reply.
 pub type Job = Box<dyn FnOnce(&Pdf) -> Reply + Send>;
+
+/// A serial utility queue that owns the open document and runs its jobs in submission order.
+#[derive(Clone)]
+pub struct Jobs {
+    queue: DispatchQueue,
+    pdf: Arc<Mutex<Option<Pdf>>>,
+    inbox: Inbox,
+}
+
+impl Jobs {
+    pub fn send(&self, job: Job) -> Result<(), ()> {
+        let pdf = Arc::clone(&self.pdf);
+        let inbox = Arc::clone(&self.inbox);
+        self.queue.async_(move || {
+            let reply = {
+                let guard = pdf.lock().unwrap_or_else(|e| e.into_inner());
+                guard.as_ref().map(job).unwrap_or_else(|| Reply::Opened(Err("The document is no longer available.".into())))
+            };
+            deliver(&inbox, reply);
+        });
+        Ok(())
+    }
+}
 
 /// Replies waiting for the window. The worker fills it and the window empties it in `tick`.
 pub type Inbox = Arc<Mutex<VecDeque<Reply>>>;
 
-/// The parsed file, owned by the worker thread.
+/// The parsed file, owned by the PDF utility queue.
 pub struct Pdf {
     pub doc: Doc,
     pub pages: Vec<PdfPage>,
@@ -90,7 +110,7 @@ impl Pdf {
     fn summary(&self) -> Result<Opened, String> {
         let mut sizes = Vec::with_capacity(self.pages.len());
         for p in &self.pages {
-            sizes.push(draw::fit_size(p, PAGE_BOX.0, PAGE_BOX.1).ok_or("A page has no size.")?);
+            sizes.push(draw::fit_size(p, DOCUMENT_RENDER_BOUNDS.0, DOCUMENT_RENDER_BOUNDS.1).ok_or("A page has no size.")?);
         }
         let outline = page::outline(&self.doc)
             .into_iter()
@@ -122,22 +142,22 @@ pub fn needs_password(error: &str) -> bool {
 }
 
 /// Starts the worker for the PDF at `path`, opened with `password` (empty for a file without one). It opens the file and
-/// reports it, then runs the jobs sent on the returned sender in order. Results collect in the returned inbox.
-pub fn spawn(path: PathBuf, password: Vec<u8>) -> (Sender<Job>, Inbox) {
+/// reports it, then runs submitted jobs in order. Results collect in the returned inbox.
+pub fn spawn(path: PathBuf, password: Vec<u8>) -> (Jobs, Inbox) {
     let inbox: Inbox = Arc::default();
-    let (tx, rx) = channel::<Job>();
+    let queue = DispatchQueue::serial_qos("is.olibuijr.viewer.pdf", Qos::Utility);
+    let pdf: Arc<Mutex<Option<Pdf>>> = Arc::default();
+    let worker = Jobs { queue: queue.clone(), pdf: Arc::clone(&pdf), inbox: Arc::clone(&inbox) };
     let sink = Arc::clone(&inbox);
-    thread::spawn(move || match Pdf::open(&path, &password) {
-        Ok(pdf) => {
-            deliver(&sink, Reply::Opened(pdf.summary()));
-            for job in rx {
-                let reply = job(&pdf);
-                deliver(&sink, reply);
-            }
+    queue.async_(move || match Pdf::open(&path, &password) {
+        Ok(opened) => {
+            let summary = opened.summary();
+            *pdf.lock().unwrap_or_else(|e| e.into_inner()) = Some(opened);
+            deliver(&sink, Reply::Opened(summary));
         }
         Err(e) => deliver(&sink, Reply::Opened(Err(e))),
     });
-    (tx, inbox)
+    (worker, inbox)
 }
 
 /// Queues `reply` on the app loop. The push runs there, so the loop wakes for it.

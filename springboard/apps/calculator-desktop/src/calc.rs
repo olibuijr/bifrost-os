@@ -3,12 +3,13 @@
 //! clipboard copy/paste and Icelandic decimal-comma formatting.
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
-use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_TITLE3_PT};
+use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_LARGE_TITLE_PT};
 use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE1_PT};
-use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
+use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, SEGMENT_ON, SEPARATOR_C, WHITE};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
 use bifrost_app::kit::canvas::{Canvas, RectF};
@@ -1534,46 +1535,29 @@ impl Calculator {
         let locale = self.settings.locale;
         let thousands = self.settings.thousands;
         let now = history::now_secs();
-        s.fill_rect(chrome::whole(x, y, w, h), SIDEBAR_BG.now());
-        s.fill_rect(chrome::whole(x + w, y, 1.0, h), SEPARATOR_C.now());
+        let mut items = vec![SidebarItem::header("History")];
         if self.store.is_empty() {
-            self.label(
-                s,
-                ui,
-                "No Recent Calculations",
-                MAC_TITLE3_PT,
-                LABEL_2.now(),
-                (x, y + ui.pt(130.0), w, ui.pt(70.0)),
-            );
-        }
-        for visual in 0..self.rows_visible(ui) {
-            let index = self.hist_offset + visual;
-            let Some(entry) = self.store.get(index) else {
-                break;
-            };
-            let expression_text = localize_with(&pretty(&entry.expression), locale, thousands);
-            let result = localize_with(&entry.result, locale, thousands);
-            let (rx, ry, rw, rh) = self.result_rect(ui, visual);
-            if self.pressed == Some(Target::Result(index)) {
-                s.fill_rrect(RectF::new(rx, ry, rw, rh), ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
-            }
-            let expression = ui.fit(&expression_text, MAC_CALLOUT_PT, rw - ui.pt(SPACE_XXL));
-            let image = self
-                .cache
-                .get(ui, &expression, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
-            chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + ui.pt(SPACE_XS)) as i32);
-            let image = self.cache.get(ui, &result, MAC_LARGE_TITLE_PT, Weight::Regular, LABEL.now());
-            chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + rh - ui.pt(SPACE_XS) - image.h as f32) as i32);
-            // the first entry of each day carries the day's caption at the left of its row
-            if history::starts_day(|k| self.store.time(k), index) {
-                let caption = history::day_caption(self.store.time(index), now);
-                if !caption.is_empty() {
-                    let image = self.cache.get(ui, &caption, MAC_CALLOUT_PT, Weight::Regular, LABEL_3.now());
-                    chrome::blit(s, image, (rx + ui.pt(SPACE_M)) as i32, (ry + ui.pt(SPACE_XS)) as i32);
+            items.push(SidebarItem::row(u32::MAX, "No Recent Calculations").disabled());
+        } else {
+            for index in 0..self.store.len() {
+                let entry = &self.store[index];
+                let expression = localize_with(&pretty(&entry.expression), locale, thousands);
+                let result = localize_with(&entry.result, locale, thousands);
+                let mut row = SidebarItem::row(ID_HISTORY + index as u32, &expression).with_subtitle(&result);
+                if history::starts_day(|k| self.store.time(k), index) {
+                    let caption = history::day_caption(self.store.time(index), now);
+                    if !caption.is_empty() { row = row.with_trailing(&caption); }
                 }
+                items.push(row);
             }
-            s.fill_rrect(RectF::new(rx, ry + rh - 1.0, rw, 1.0), 0.0, SEPARATOR_C.now());
         }
+        let scale = ui.pt(1.0).max(0.001);
+        let row_h = (self.row_height(ui) / scale - 16.0).max(8.0);
+        let list = SourceList::new(items, row_h, 72.0);
+        let scroll = self.hist_offset as f32 * (row_h + 16.0);
+        let bounds = bifrost_app::controls::Rect { x: x / scale, y: y / scale, w: w / scale, h: (h - ui.pt(64.0)) / scale };
+        let pressed = match self.pressed { Some(Target::Result(i)) => Some(ID_HISTORY + i as u32), _ => None };
+        widgets::source_list(s, ui, bounds, &list, scroll, pressed);
         // Copy Tape takes the left half of the bottom row, Clear History the right half.
         let (row_y, half) = (y + h - ui.pt(64.0), w / 2.0);
         let tape_color = if self.store.is_empty() { LABEL_3.now() } else { LINK };

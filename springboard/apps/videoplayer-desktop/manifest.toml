@@ -1,6 +1,6 @@
 id = "is.olibuijr.videoplayer.desktop"
 name = "Video Player"
-version = "0.2.0"
+version = "0.2.1"
 exec = "bifrost-videoplayer"
 icon = "icon.png"
 min_shell = "0.6.5"

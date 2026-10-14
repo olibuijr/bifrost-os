@@ -5,7 +5,8 @@
 //! captions from `springboard::media::subtitles` and the trim range from the shared recording model.
 
 use bifrost_app::controls::recording::Trim;
-use bifrost_app::kit::{pack, rgba, Event, Image, Surface, Ui, Weight};
+use bifrost_app::kit::{Event, Image, Surface, Ui, Weight};
+use bifrost_app::kit::ui;
 use springboard::deildu::play::{mime_for, PlayState, Player};
 use springboard::deildu::player_view::{Outcome, PlayerView};
 use springboard::media::subtitles::{sidecar_candidates, Track};
@@ -17,7 +18,6 @@ use std::path::{Path, PathBuf};
 /// Subtitle files larger than this are not read (a caption file is a few hundred kilobytes at most).
 const MAX_SUBTITLE_BYTES: u64 = 2 * 1024 * 1024;
 const CAPTION_PT: f32 = 17.0;
-const WHITE: u32 = pack(255, 255, 255, 255);
 
 pub struct Movie {
     path: PathBuf,
@@ -184,7 +184,7 @@ impl Movie {
         }
         let max = (self.view.size().0 as f32 - ui.pt(80.0)).max(ui.pt(100.0));
         self.caption_lines = match text.as_deref() {
-            Some(t) => t.lines().map(|line| ui.text(&ui.fit(line, CAPTION_PT, max), CAPTION_PT, Weight::Semibold, WHITE)).collect(),
+            Some(t) => t.lines().map(|line| ui.text(&ui.fit(line, CAPTION_PT, max), CAPTION_PT, Weight::Semibold, ui::WHITE)).collect(),
             None => Vec::new(),
         };
         self.caption = text;
@@ -207,7 +207,7 @@ impl Movie {
         let (w, h) = self.view.size();
         let x = (w as f32 - width) / 2.0;
         let top = h as f32 - ui.pt(120.0) - height;
-        s.fill_rrect(x, top, width, height, ui.pt(6.0), rgba(0, 0, 0, 150));
+        s.fill_rrect(x, top, width, height, ui.pt(6.0), ui::MATERIAL_HUD.now());
         let mut y = top + pad;
         for img in &self.caption_lines {
             let ix = x + (width - img.w as f32) / 2.0;
