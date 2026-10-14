@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Edit > Undo Delete (cmd+z) puts back the last capture Delete removed, for the rest of the session. There is still no
+  Trash: the file is removed at once.
+- Key equivalents for the daily commands: Show Photo Booth Library (cmd+shift+l), Slideshow (cmd+shift+p) and Full
+  Screen Viewfinder (cmd+ctrl+f). Edit > Auto Flip has none.
+- View > Distortion Strength (Subtle, Normal, Strong) sets how far Bulge and Twirl pull; the choice is remembered.
+- The slideshow fades each capture into the next over 0.4 s instead of cutting.
+- The Camera menu picks up a camera plugged in after launch: while no camera is open the list is read every 2 s.
+- Still missing: Trash, full screen for the window itself (no app-level window API), photo and movie backdrops, and a
+  lab check of Screen Flash, Backdrops and Full Screen Viewfinder on Midget.
+
 ## 0.2.0
 
 - Menus: File (Take Photo, Export, Delete), View (Photo, Four-Up, Video Clip, countdown, Auto Flip, Screen Flash, Play
