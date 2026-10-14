@@ -19,6 +19,7 @@ impl App for ImageCapture {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination();
         self.resize(ctx.cfg.w as f32, ctx.cfg.h as f32);
     }
 
@@ -40,7 +41,7 @@ impl App for ImageCapture {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        Some(self.wake_at(t))
+        (self.in_flight == 0).then(|| self.wake_at(t))
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
