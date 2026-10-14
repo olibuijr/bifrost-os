@@ -4116,15 +4116,11 @@ impl Shell {
         if self.term.as_ref().is_some_and(|t| t.alive()) {
             return;
         }
-        self.terminal_launch_tabs();
+        self.new_terminal_tab(None);
     }
 
-    /// Opens a tab running the login shell: the one chosen in the Terminal's More menu, else the account's.
     fn new_terminal_tab(&mut self, dir: Option<String>) -> bool {
-        match self.terminal_login_shell() {
-            Some(shell) => self.spawn_terminal_tab(&[shell.as_str(), "-l"], dir),
-            None => self.spawn_terminal_tab(self.term_cmd, dir),
-        }
+        self.spawn_terminal_tab(self.term_cmd, dir)
     }
 
     /// Opens a tab running `argv` (the login shell, or a New command line); `dir` is cd'd into first.
@@ -4132,7 +4128,7 @@ impl Shell {
         let size = self.ui.pt(termcore::zoom::SIZES[self.terminal_ui.settings.zoom] as f32);
         match Terminal::spawn(self.mono, self.term_area(), size, argv) {
             Ok(mut term) => {
-                term.appearance_with(self.terminal_ui.settings.theme, self.terminal_scheme(), size);
+                term.appearance(self.terminal_ui.settings.theme, size);
                 term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
                 term.set_mouse_reporting(self.terminal_ui.mouse_reporting);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
@@ -4236,7 +4232,10 @@ impl Shell {
                     None => false,
                 };
                 if let Some(url) = self.term_touch.take_link() {
-                    self.terminal_open_tapped(&url, t);
+                    self.terminal_ui.message = match self.desktop_open_url(&url, t) {
+                        Ok(()) => "Opened link".into(),
+                        Err(e) => format!("Could not open link: {e}"),
+                    };
                     self.dirty = true;
                 }
                 if tap {
@@ -4293,7 +4292,7 @@ impl Shell {
     fn draw_terminal(&mut self, s: &mut Surface, t: f64) {
         // the canvas covers the area, so only the strips around it need paint
         let (_, top, w, h) = self.term_area();
-        let bg = self.terminal_background();
+        let bg = term::theme_background(self.terminal_ui.settings.theme);
         let (w, top, bottom) = (w as usize, top as usize, (top + h) as usize);
         s.fill_rect(0, 0, w, top, bg);
         if self.term.is_some() {

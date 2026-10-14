@@ -64,6 +64,8 @@ pub enum TermKey {
     PrevTab,
     /// Cmd+1 .. Cmd+9, zero based
     Tab(u8),
+    /// Cmd+E: Use Selection for Find
+    UseSelectionForFind,
 }
 
 impl TermKey {
@@ -85,6 +87,7 @@ impl TermKey {
             (27, true) => TermKey::NextTab,
             (26, true) => TermKey::PrevTab,
             (2..=10, false) => TermKey::Tab((code - 2) as u8),
+            (18, false) => TermKey::UseSelectionForFind,
             _ => return None,
         })
     }
