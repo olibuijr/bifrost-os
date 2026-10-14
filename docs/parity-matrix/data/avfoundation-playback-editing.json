@@ -129,9 +129,9 @@
   {
    "feature": "Playback (player, player item, queue player, looper, time observers)",
    "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, addPeriodicTimeObserver, addBoundaryTimeObserver, AVPlayerItemMetadataOutput",
-   "bifrost": "springboard/ui/src/av_player.rs, springboard/ui/src/av_queue_player.rs, springboard/ui/tests/av_playback.rs",
+   "bifrost": "springboard/ui/src/av_player.rs, springboard/ui/src/av_queue_player.rs, springboard/ui/tests/av_playback.rs, springboard/ui/tests/parity_sdk-tests-14.rs",
    "status": "partial",
-   "note": "Sprint10/6: host-tested model on a caller clock (status, rate, time control status, seek with tolerance, observers, did-play-to-end, action at item end, queue, looper, timed metadata, audio mix ramps). Not wired to the audio engine or apps; parity needs a Midget check."
+   "note": "Status, rate, time control status, seek with tolerance, boundary observers, did-play-to-end, queue order, insertion, removal and looping are tested headless on a caller clock in springboard/ui/tests/parity_sdk-tests-14.rs. Not wired to the audio engine or apps; parity needs a Midget check."
   }
  ],
  "gaps": [

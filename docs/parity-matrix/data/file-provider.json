@@ -19,7 +19,7 @@
       "apple": "Replicated File Provider extension",
       "bifrost": "springboard/ui/src/file_sync.rs, springboard/ui/src/file_provider.rs, springboard/sdk/src/file_provider.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (file_sync.rs, file_provider.rs, file_provider.rs); not wired into the shell or apps, not tested on Midget. No extension host, no upload or download queue, and no remote-to-local sync inside the desktop."
+      "note": "Item identifiers, capabilities, placeholder download and eviction, and the sync controller are tested headless in springboard/ui/tests/parity_sdk-tests-14.rs. The SDK file provider module has no test there yet. Not wired into the shell or apps; no extension host, upload or download queue, or remote-to-local sync exists."
     },
     {
       "feature": "Nonreplicated File Provider extension (managed local files with placeholders)",
