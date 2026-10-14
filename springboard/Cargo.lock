@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-books"
-version = "1.6.4"
+version = "1.7.0"
 dependencies = [
  "bifrost-app",
  "springboard",

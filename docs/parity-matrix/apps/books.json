@@ -28,19 +28,19 @@
    "feature": "User collections",
    "area": "menu",
    "apple": "File > New Collection; Add to Collection",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add named collections to store.rs, sidebar rows under a My Collections header (books/mod.rs:987), and menu actions to add/remove books"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1198",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: New Collection, Add to Collection, the sidebar section and the cover context menu. Apple also has smart collections and drag to a collection; neither is built."
   },
   {
    "feature": "Want to Read / Finished, mark as finished",
    "area": "menu",
    "apple": "book context menu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a finished flag to store.rs entries and Finished/Want to Read filters beside Filter::Reading"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1154",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: the Library menu marks, the cover context menu, the Finished mark at the last page and the labels under covers."
   },
   {
    "feature": "Library search",
@@ -56,27 +56,27 @@
    "area": "menu",
    "apple": "View > Sort By",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:265",
-   "note": "fixed sort by last opened",
-   "wire": "Add View > Sort By (Recent/Title/Author) to the View AppMenu (main.rs:97) and a sort pref in store.rs"
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1263",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: View > Sort By (Recent, Title, Author) and that the choice is kept. Apple also sorts by progress and series."
   },
   {
    "feature": "Grid / list library view",
    "area": "menu",
    "apple": "View > As Grid / As List",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a list layout in draw.rs and View menu items"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/draw.rs:238",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: View > as Grid / as List, row layout, scrolling and taps on rows."
   },
   {
    "feature": "Add to Library",
    "area": "menu",
    "apple": "File > Add to Library",
-   "status": "gap",
-   "bifrost": "",
-   "note": "folder scan only",
-   "wire": "Add File > Add to Library... via the shell open panel; copy EPUB/PDF into ~/Books and rescan"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:395",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: File > Add to Library with the open panel (documents permission), copies into ~/Books and the shelf rescan."
   },
   {
    "feature": "Remove book",
@@ -110,7 +110,7 @@
    "area": "menu",
    "apple": "View menu",
    "status": "parity",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:99",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:148",
    "note": "",
    "wire": ""
   },
@@ -118,10 +118,10 @@
    "feature": "Continuous scrolling",
    "area": "menu",
    "apple": "View > scrolling view",
-   "status": "gap",
-   "bifrost": "",
-   "note": "main.rs:95 notes it is not wired",
-   "wire": "Add a scroll layout mode in layout.rs and a View menu item"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1695",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: View > Continuous Scroll with drag and fling, the page scrubber and the contents list. The pages stack one window high; two pages side by side and continuous scrolling replace each other. There is no mouse wheel event for the reader yet."
   },
   {
    "feature": "Table of contents",
@@ -146,7 +146,7 @@
    "area": "menu",
    "apple": "Edit > Highlight / Add Note",
    "status": "parity",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:76",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:121",
    "note": "",
    "wire": ""
   },
@@ -154,17 +154,17 @@
    "feature": "Highlight colours and underline",
    "area": "menu",
    "apple": "highlight colour submenu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "single colour",
-   "wire": "Add a colour index to highlights in store.rs and a Highlight Color submenu"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/draw.rs:94",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: Find > Highlight Color on a match, in an EPUB and in a PDF. The colour applies to the text the last find went to; picking a colour for a selection made by dragging needs text selection by pointer, which the reader does not have."
   },
   {
    "feature": "Find in book with next/previous and whole words",
    "area": "menu",
    "apple": "Edit > Find",
    "status": "parity",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:73",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:118",
    "note": "",
    "wire": ""
   },
@@ -173,7 +173,7 @@
    "area": "menu",
    "apple": "Edit > Copy",
    "status": "parity",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:78",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:129",
    "note": "",
    "wire": ""
   },
@@ -182,7 +182,7 @@
    "area": "menu",
    "apple": "context menu",
    "status": "parity",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:86",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:137",
    "note": "",
    "wire": ""
   },
@@ -191,7 +191,7 @@
    "area": "menu",
    "apple": "Edit > Speech",
    "status": "parity",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:61",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:140",
    "note": "narrate.rs",
    "wire": ""
   },
@@ -217,10 +217,10 @@
    "feature": "Line spacing / margins / justification",
    "area": "panel",
    "apple": "Aa customise",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add spacing and justification to Settings and layout metrics"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:871",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: the Display panel rows and the View menu items, with a long EPUB. Justification stretches spaces only; there is no hyphenation."
   },
   {
    "feature": "Page scrubber",
@@ -245,9 +245,9 @@
    "area": "menu",
    "apple": "File > Print",
    "status": "partial",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:68",
-   "note": "PDF only (main.rs:150)",
-   "wire": "Render EPUB pages from layout.rs into the print service"
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:333",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget with a CUPS queue. An EPUB prints as plain text in the printer font, without pictures or the reading theme; print the reflowed pages from layout.rs to match the screen."
   },
   {
    "feature": "Show/hide sidebar",
@@ -263,7 +263,7 @@
    "area": "integration",
    "apple": "NSUserActivity",
    "status": "parity",
-   "bifrost": "springboard/apps/books-desktop/src/main.rs:201",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:424",
    "note": "search_index.rs",
    "wire": ""
   },
@@ -298,19 +298,19 @@
    "feature": "Reading goals",
    "area": "settings",
    "apple": "Settings > Reading Goals",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Track minutes read per day in store.rs and show a goal in Reading Now"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1116",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: Library > Reading Goal and the line in Reading Now. Days are counted in UTC; the streak is shown as a count, not as Apple's weekly chart."
   },
   {
    "feature": "Save PDF to Books share target",
    "area": "integration",
    "apple": "SharingExtension.appex (accepts one PDF; BKShareViewController.nib)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Register books-desktop as a PDF share target in the shell share service; copy into ~/Books"
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:395",
+   "note": "built on parity/team-d-books; not yet verified on Midget",
+   "wire": "Verify on Midget: share a PDF from Files or Preview and choose Books; the manifest declares handles com.adobe.pdf and the documents permission."
   },
   {
    "feature": "Settings window",

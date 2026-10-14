@@ -14,6 +14,8 @@ pub struct Metrics {
     pub height: f32,
     /// body font size, px (already including Dynamic Type)
     pub body: f32,
+    /// line height as a multiple of the font size (the Display panel's line spacing)
+    pub line_height: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,6 +79,38 @@ pub fn line_cols(text: &str, line_off: usize, line: &str, a: usize, b: usize) ->
         l
     };
     (col(a), col(b))
+}
+
+/// True when `line`, a wrapped line of `text` that starts at char `line_off`, is the last line of its paragraph: only
+/// white space follows it before the next explicit line break or the end of the text. A justified page leaves such a
+/// line ragged.
+pub fn ends_paragraph(text: &str, line_off: usize, line: &str) -> bool {
+    // walk the original text across the line the way `line_cols` does: a space in the line stands for a run of white space
+    let mut orig = text.chars().skip(line_off).peekable();
+    for c in line.chars() {
+        if orig.next().is_none() {
+            break;
+        }
+        if c == ' ' {
+            while orig.next_if(|w| w.is_whitespace() && *w != '\u{a0}' && *w != '\n').is_some() {}
+        }
+    }
+    orig.take_while(|c| *c != '\n').all(|c| c.is_whitespace())
+}
+
+/// The extra width each of the `spaces` of a justified line takes so that the line, `natural` px wide, fills `max` px.
+/// A line that is already full, or has no space, gets none; so does a line so short that the spaces would gape (more
+/// than twice a normal space wider, which happens before a picture or at the end of a block).
+pub fn justify_extra(natural: f32, max: f32, spaces: usize, space_w: f32) -> f32 {
+    if spaces == 0 || max <= natural {
+        return 0.0;
+    }
+    let extra = (max - natural) / spaces as f32;
+    if extra > space_w * 2.0 {
+        0.0
+    } else {
+        extra
+    }
 }
 
 pub fn heading_scale(level: u8) -> f32 {
@@ -163,7 +197,7 @@ pub fn wrap(text: &str, max: f32, measure: &dyn Fn(&str) -> f32) -> Vec<(usize, 
 
 /// Flows `blocks` into pages. `measure(text, px, bold)` gives a width in px.
 pub fn paginate(blocks: &[Block], m: Metrics, measure: &dyn Fn(&str, f32, bool) -> f32) -> Layout {
-    let body_lh = m.body * LINE_HEIGHT;
+    let body_lh = m.body * m.line_height;
     let mut pages: Vec<Page> = vec![];
     let mut cur = Page::default();
     let mut y = 0.0f32;
@@ -200,7 +234,7 @@ pub fn paginate(blocks: &[Block], m: Metrics, measure: &dyn Fn(&str, f32, bool) 
                 if lines.is_empty() {
                     continue;
                 }
-                let lh = px * LINE_HEIGHT;
+                let lh = px * m.line_height;
                 let before = match kind {
                     Kind::Heading(_) => m.body * HEADING_BEFORE,
                     _ => m.body * PARA_GAP,
@@ -260,7 +294,7 @@ mod tests {
     }
 
     fn m(width: f32, height: f32) -> Metrics {
-        Metrics { width, height, body: 20.0 }
+        Metrics { width, height, body: 20.0, line_height: LINE_HEIGHT }
     }
 
     #[test]
@@ -282,6 +316,45 @@ mod tests {
         // original "three" is chars 12..17
         let (a, b) = line_cols(text, lines[0].0, &lines[0].1, 12, 17);
         assert_eq!(&lines[0].1[a..b], "three");
+    }
+
+    #[test]
+    fn only_the_last_line_of_a_paragraph_ends_it() {
+        let text = "one   two three\nfour five";
+        let w = |s: &str| s.chars().count() as f32 * 10.0;
+        let lines = wrap(text, 100.0, &w);
+        assert_eq!(lines.iter().map(|l| l.1.as_str()).collect::<Vec<_>>(), ["one two", "three", "four five"]);
+        let ends: Vec<bool> = lines.iter().map(|(off, line)| ends_paragraph(text, *off, line)).collect();
+        assert_eq!(ends, [false, true, true], "a forced break ends the line before it");
+        // a long word cut into pieces: only the last piece ends the paragraph
+        let cut = wrap("abcdefghij", 40.0, &w);
+        let ends: Vec<bool> = cut.iter().map(|(off, line)| ends_paragraph("abcdefghij", *off, line)).collect();
+        assert_eq!(ends, [false, false, true]);
+        assert!(ends_paragraph("tail   ", 0, "tail"), "trailing white space does not continue the paragraph");
+    }
+
+    #[test]
+    fn justified_lines_share_the_slack_between_their_spaces() {
+        assert_eq!(justify_extra(90.0, 100.0, 5, 4.0), 2.0);
+        assert_eq!(justify_extra(100.0, 100.0, 5, 4.0), 0.0, "a full line is left alone");
+        assert_eq!(justify_extra(120.0, 100.0, 5, 4.0), 0.0, "so is one that does not fit");
+        assert_eq!(justify_extra(50.0, 100.0, 5, 4.0), 0.0, "a short line would gape, so it stays ragged");
+        assert_eq!(justify_extra(50.0, 100.0, 0, 4.0), 0.0, "one word has no space to widen");
+        assert_eq!(justify_extra(92.0, 100.0, 4, 4.0), 2.0);
+    }
+
+    #[test]
+    fn line_spacing_changes_how_many_lines_fit_a_page() {
+        let blocks: Vec<Block> = (0..20).map(|i| Block::Para(format!("para{i} one two three four five six seven eight"))).collect();
+        let tight = paginate(&blocks, Metrics { width: 200.0, height: 300.0, body: 20.0, line_height: 1.25 }, &measure);
+        let loose = paginate(&blocks, Metrics { width: 200.0, height: 300.0, body: 20.0, line_height: 1.7 }, &measure);
+        assert!(loose.pages.len() > tight.pages.len(), "{} loose pages against {} tight", loose.pages.len(), tight.pages.len());
+        for (m, layout) in [(1.25f32, &tight), (1.7, &loose)] {
+            for p in &layout.pages {
+                let last = p.lines.last().unwrap();
+                assert!(last.y + 20.0 * m <= 300.0 + 0.01, "no line overflows at spacing {m}");
+            }
+        }
     }
 
     #[test]
@@ -314,8 +387,8 @@ mod tests {
     #[test]
     fn font_size_change_keeps_the_reading_position() {
         let blocks: Vec<Block> = (0..30).map(|i| Block::Para(format!("block {i} lorem ipsum dolor sit amet consectetur adipiscing elit"))).collect();
-        let small = paginate(&blocks, Metrics { width: 300.0, height: 300.0, body: 16.0 }, &measure);
-        let big = paginate(&blocks, Metrics { width: 300.0, height: 300.0, body: 28.0 }, &measure);
+        let small = paginate(&blocks, Metrics { width: 300.0, height: 300.0, body: 16.0, line_height: LINE_HEIGHT }, &measure);
+        let big = paginate(&blocks, Metrics { width: 300.0, height: 300.0, body: 28.0, line_height: LINE_HEIGHT }, &measure);
         assert!(big.pages.len() > small.pages.len());
         let pos = small.pos_of(small.pages.len() / 2);
         let page = big.page_of(pos);
