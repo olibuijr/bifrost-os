@@ -10,9 +10,9 @@
   {
    "feature": "Audio HAL object model (system, devices, streams, controls, clocks)",
    "apple": "AudioHardwareSystem, AudioHardwareDevice, AudioHardwareStream, AudioHardwareControl, AudioHardwareClock, AudioHardwareObject",
-   "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA mixer controls), springboard/src/media/capture.rs (PCM discovery via /proc/asound/pcm)",
-   "status": "os",
-   "note": "Device and control enumeration exists in the system layer only. No app-facing device or stream object API in springboard/sdk/src/lib.rs."
+   "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA mixer controls), springboard/src/media/capture.rs (PCM discovery via /proc/asound/pcm); springboard/sdk/src/audio_hal.rs (System, Device, Stream built from the PCM listing)",
+   "status": "partial",
+   "note": "The SDK builds devices, streams and object ids from the PCM listing text, tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: controls and clocks are not objects, the SDK does not read the listing itself, and capture discovery reports only the default input."
   },
   {
    "feature": "Audio server driver plug-ins (virtual devices)",

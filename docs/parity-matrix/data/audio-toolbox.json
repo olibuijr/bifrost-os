@@ -45,9 +45,9 @@
     {
       "feature": "Audio file parsing and demuxing (Audio File Stream, Audio File, Extended Audio File)",
       "apple": "AudioFileStream, AudioFile, ExtAudioFile",
-      "bifrost": "springboard/src/media/mp4.rs, springboard/src/media/symfile.rs, springboard/src/media/audiofile.rs, springboard/src/media/codec.rs, springboard/src/media/stream.rs",
-      "status": "os",
-      "note": "MP4 (AAC track), FLAC, Ogg Vorbis, PCM WAV, ID3 tags and live internet radio streams (MP3, AAC ADTS/LATM, Ogg, FLAC over http) parse in the springboard crate. No SDK file-services API for apps."
+      "bifrost": "springboard/src/media/mp4.rs, springboard/src/media/symfile.rs, springboard/src/media/audiofile.rs, springboard/src/media/codec.rs, springboard/src/media/stream.rs, springboard/src/media/capture.rs (wav_duration_ms)",
+      "status": "partial",
+      "note": "File kind by extension and by magic bytes, and WAV duration from the header, are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: there is no app-facing demuxer, so an app cannot open a file and read its packets through the SDK."
     },
     {
       "feature": "Audio codec and format conversion (Audio Converter, Audio Format Services)",
@@ -59,9 +59,9 @@
     {
       "feature": "Audio session and output route (headphones, speaker)",
       "apple": "Audio session support (route, category, interruption handling)",
-      "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/audio/alsa/src/ctl.rs",
-      "status": "os",
-      "note": "Route switching on the headphone jack, per-route volume and the headphone cap run in the system layer. Apps have no session category or interruption API. The service gives audio focus to the latest player."
+      "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/audio/alsa/src/ctl.rs; springboard/sdk/src/audio_session.rs (SessionHub: categories, activation, interruptions, route changes)",
+      "status": "partial",
+      "note": "Categories, activation, interruptions and route-change events are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: no shell service drives the session hub yet, so the headphone cap and the service's audio focus are not reported to apps."
     },
     {
       "feature": "System sounds and alert playback (Audio Services)",

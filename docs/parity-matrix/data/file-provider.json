@@ -73,9 +73,9 @@
     {
       "feature": "Change feed for item updates (adjacent, FSEvents)",
       "apple": "FSEventStream as used by providers to detect changes",
-      "bifrost": "springboard/sdk/src/fswatch.rs (inotify WatchStream, FSEvent flags)",
-      "status": "os",
-      "note": "Changes are reported for local folders only. Apps get the feed, but nothing connects it to a remote provider."
+      "bifrost": "springboard/sdk/src/fswatch.rs (inotify WatchStream, FSEvent flags, EventJournal)",
+      "status": "partial",
+      "note": "The event journal that numbers changes and replays them after an id is tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: changes are reported for local folders only, nothing connects the feed to a remote provider, and the journal is lost on restart."
     },
     {
       "feature": "Metrics data export",
