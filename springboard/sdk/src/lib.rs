@@ -111,6 +111,7 @@ pub mod dispatch_io;
 pub mod predicate_validating;
 pub mod cf_bundle;
 pub mod app_events;
+pub mod event_descriptor;
 pub mod dispatch_time;
 pub mod timer_source;
 pub mod background_tasks;
