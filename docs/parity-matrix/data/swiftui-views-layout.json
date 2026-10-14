@@ -17,9 +17,9 @@
   {
    "feature": "View configuration (environment, modifiers, state)",
    "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
-   "bifrost": "springboard/ui/src/environment.rs",
+   "bifrost": "springboard/ui/src/environment.rs (Environment::with_value, scoped, typed int/float/text reads)",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (environment.rs); not wired into the shell or apps, not tested on Midget. no environment values or generic modifiers; properties are set on each view"
+   "note": "Environment values with scoped overrides, typed reads and a with_value modifier for one subtree work and are tested headless in springboard/ui/tests/parity_sdk-complete-32.rs. Gap: the model is not wired into the shell or apps, and views still take their properties on each view instead of reading a generic modifier chain; the lab machine is needed only to confirm a shell view reads the environment on Midget."
   },
   {
    "feature": "View styles",

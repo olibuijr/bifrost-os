@@ -68,6 +68,42 @@ impl Environment {
     pub fn flag(&self, key: &str) -> bool {
         matches!(self.get(key), Some(EnvValue::Bool(true)))
     }
+    /// An integer read; `None` when the key is unset or holds another kind of value.
+    pub fn int(&self, key: &str) -> Option<i64> {
+        match self.get(key) {
+            Some(EnvValue::Int(v)) => Some(*v),
+            _ => None,
+        }
+    }
+    /// A real-number read; `None` when the key is unset or holds another kind of value.
+    pub fn float(&self, key: &str) -> Option<f32> {
+        match self.get(key) {
+            Some(EnvValue::Float(v)) => Some(*v),
+            _ => None,
+        }
+    }
+    /// A text read; `None` when the key is unset or holds another kind of value.
+    pub fn text(&self, key: &str) -> Option<&str> {
+        match self.get(key) {
+            Some(EnvValue::Text(v)) => Some(v.as_str()),
+            _ => None,
+        }
+    }
+    /// Runs `body` in a child scope and closes it afterwards, so the settings made inside never outlive the subtree.
+    /// This is the environment modifier for one subtree: a parent wraps the layout of its children in it.
+    pub fn scoped<T>(&mut self, body: impl FnOnce(&mut Self) -> T) -> T {
+        self.enter();
+        let out = body(self);
+        self.leave();
+        out
+    }
+    /// Sets `key` to `value` for the duration of `body` only, then restores what the outer scopes showed.
+    pub fn with_value<T>(&mut self, key: &str, value: EnvValue, body: impl FnOnce(&mut Self) -> T) -> T {
+        self.scoped(|env| {
+            env.set(key, value);
+            body(env)
+        })
+    }
 }
 
 #[cfg(test)]
