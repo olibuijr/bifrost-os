@@ -753,11 +753,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/ui/src/dwell.rs (DwellClick)",
+   "status": "partial",
+   "note": "dwell click model: a pointer resting inside a radius for the dwell time clicks once; not yet wired to pointer input; built on os/team-m-08-daemons; not yet verified on Midget",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.EscrowSecurityAlert.plist",
@@ -1068,11 +1067,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/ui/src/focus.rs (next, entry, exit, nearest)",
+   "status": "partial",
+   "note": "Tab, Shift-Tab and arrow focus loop exists; no Full Keyboard Access switch in Settings; built on os/team-m-08-daemons; not yet verified on Midget",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.LinkedNotesUIService.plist",
@@ -5647,10 +5645,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple keyboard usage analytics collection; BifrOSt runs no input analytics service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.installandsetup.migrationhelper.user.plist",
@@ -5877,11 +5874,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/kb_layouts.rs (cycle, toggle, remembers)",
+   "status": "partial",
+   "note": "keyboard layout list and cycling live in the shell, not in a separate service; built on os/team-m-08-daemons; not yet verified on Midget",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.keychainsharingmessagingd.plist",
@@ -6109,10 +6105,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple login window weekly telemetry report; BifrOSt sends no such report",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.lsd.plist",
@@ -10540,10 +10535,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "biometric (Touch ID or Face ID) login prompt; BifrOSt has no biometric hardware and a password-only login",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.LocalAuthentication.userauthd.plist",
@@ -14739,11 +14733,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/bare/sleep.rs (logind_suspend, LidInhibitor)",
+   "status": "partial",
+   "note": "session, suspend and lid handling come from the Linux base's systemd-logind; no SDK API; built on os/team-m-08-daemons; not yet verified on Midget",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.loginwindow.plist",
