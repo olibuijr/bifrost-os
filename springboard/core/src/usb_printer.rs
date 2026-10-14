@@ -73,6 +73,12 @@ pub fn bulk_endpoints(iface: &InterfaceDescriptor) -> (Option<u8>, Option<u8>) {
     (out, input)
 }
 
+/// Whether the interface can carry print data: it is a printer interface with a bulk-out endpoint. A printer without
+/// one can only report its status, so it is not offered for printing.
+pub fn can_print(iface: &InterfaceDescriptor) -> bool {
+    is_printer_interface(iface) && bulk_endpoints(iface).0.is_some()
+}
+
 /// `GET_DEVICE_ID` to the interface. The reply starts with the two-byte length, so `length` should be the buffer size.
 pub fn get_device_id(interface: u8, length: u16) -> SetupPacket {
     class_request(Direction::DeviceToHost, request::GET_DEVICE_ID, interface, length)
@@ -194,6 +200,20 @@ impl DeviceId {
             .or_else(|| self.get("COMMAND SET"))
             .map(|c| c.split(',').map(str::trim).filter(|s| !s.is_empty()).collect::<Vec<&str>>())
             .unwrap_or_default()
+    }
+
+    /// The name to show in a printer list: the manufacturer and the model joined by a space. A model that already
+    /// starts with the manufacturer name is shown alone, so `HP` with `HP LaserJet` gives `HP LaserJet`.
+    pub fn display_name(&self) -> Option<String> {
+        let mfg = self.manufacturer().map(str::trim).filter(|s| !s.is_empty());
+        let mdl = self.model().map(str::trim).filter(|s| !s.is_empty());
+        match (mfg, mdl) {
+            (Some(m), Some(d)) if d.to_ascii_lowercase().starts_with(&m.to_ascii_lowercase()) => Some(d.to_string()),
+            (Some(m), Some(d)) => Some(format!("{m} {d}")),
+            (Some(m), None) => Some(m.to_string()),
+            (None, Some(d)) => Some(d.to_string()),
+            (None, None) => None,
+        }
     }
 
     /// Whether the printer lists a page description language, such as `PCL` or `PS`, without case.

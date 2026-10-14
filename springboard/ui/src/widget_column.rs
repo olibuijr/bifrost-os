@@ -58,6 +58,17 @@ pub fn layout(
     frames
 }
 
+/// The shown block under the vertical point `y`: its top edge is included and its bottom edge is not. A point in a
+/// gap between blocks, above the column or below it, or a NaN point, gives None.
+pub fn block_at(frames: &[Frame], y: f32) -> Option<&Frame> {
+    frames.iter().find(|f| y >= f.y && y < f.y + f.height)
+}
+
+/// The height the column takes: from the top of the first shown block to the bottom of the last one, gaps included.
+pub fn content_height(frames: &[Frame]) -> f32 {
+    frames.last().map_or(0.0, |f| f.y + f.height)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -52,9 +52,9 @@
     {
       "feature": "Widgets in the column layout",
       "apple": "NCWidgetController, NCWidgetProviding (placement of Today widgets in the column)",
-      "bifrost": "springboard/ui/src/widget_column.rs (layout); springboard/ui/src/widget.rs (Controller, Limits, DisplayMode)",
+      "bifrost": "springboard/ui/src/widget_column.rs (layout, block_at, content_height); springboard/ui/src/widget.rs (Controller, Limits, DisplayMode)",
       "status": "partial",
-      "note": "Team J (parity/team-j-notification-center): pure layout model with host unit tests: hidden widgets take no room, expanded widgets take their expanded height. Not wired into springboard/src/shell/notify/center.rs, which still draws the notification column only; not yet tested on Midget."
+      "note": "Team J (parity/team-j-notification-center): pure layout model with host unit tests: hidden widgets take no room, expanded widgets take their expanded height, and block_at finds the block under a tap point (tested headless in springboard/ui/tests/parity_sdk-complete-45.rs). Not wired into springboard/src/shell/notify/center.rs, which still draws the notification column only; not yet tested on Midget."
     },
     {
       "feature": "Framework status (deprecated)",

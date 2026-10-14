@@ -59,7 +59,7 @@
     {
       "feature": "Audio engine and processing graph",
       "apple": "AVAudioEngine, AVAudioNode, AVAudioUnit effects, AVAudioFile, AVAudioPCMBuffer",
-      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine)",
+      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine, attach_low_pass); springboard/ui/tests/parity_sdk-complete-45.rs",
       "status": "partial",
       "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. File decode and conversion helpers exist; no node graph, effects, mixer nodes or buffer API for apps"
     },

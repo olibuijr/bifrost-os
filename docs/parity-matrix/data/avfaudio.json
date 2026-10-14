@@ -66,9 +66,9 @@
     {
       "feature": "Audio engine graph (AVAudioEngine)",
       "apple": "AVAudioEngine: attach nodes, connect, mixer, input and output nodes, real-time render",
-      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine)",
+      "bifrost": "springboard/ui/src/audio_engine.rs (AudioEngine, attach_low_pass); springboard/ui/tests/parity_sdk-complete-45.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the DAW renders offline inside the app and no node graph API is exposed; speaker.rs writes through libasound's default PCM"
+      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests, now including a one-pole low-pass node that filters each channel, tested headless in parity_sdk-complete-45.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. The DAW renders offline inside the app and no node graph API is exposed; speaker.rs writes through libasound's default PCM"
     },
     {
       "feature": "Speech synthesis (AVSpeechSynthesizer)",
