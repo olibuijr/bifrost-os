@@ -81,9 +81,9 @@
    "description": "",
    "role": "no tips app. Build: browsable how-to cards for BifrOSt features, with search and what is new",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no tips app. Build: browsable how-to cards for BifrOSt features, with search and what is new",
+   "bifrost": "springboard/apps/tips-desktop",
+   "status": "partial",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
    "method": "assessed"
   },

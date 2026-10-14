@@ -39,9 +39,9 @@
    "description": "",
    "role": "no wireless diagnostics app. Build: nearby network scan, signal and noise charts, log capture; reuse the shell Wi-Fi scan",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no wireless diagnostics app. Build: nearby network scan, signal and noise charts, log capture; reuse the shell Wi-Fi scan",
+   "bifrost": "springboard/apps/wireless-diagnostics-desktop",
+   "status": "partial",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
    "method": "assessed"
   }
