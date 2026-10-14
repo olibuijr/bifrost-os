@@ -38,9 +38,9 @@
     {
       "feature": "Parameters and presets",
       "apple": "AudioUnitParameter, AUParameterTree, presets",
-      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params); wired: springboard/apps/daw/src/rack.rs, springboard/apps/daw/src/params.rs (tree_from_extra, write_back), springboard/apps/daw/src/main.rs (draw_rack, rack_slide, rack_save_preset, rack_load_preset)",
+      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params); wired: springboard/apps/daw/src/rack.rs, springboard/apps/daw/src/params.rs (tree_from_extra, write_back), springboard/apps/daw/src/main.rs (draw_rack, rack_slide, rack_save_preset, rack_load_preset); tests: springboard/apps/daw/tests/parity_wire.rs",
       "status": "partial",
-      "note": "parameters are defined per built-in device; no parameter tree or preset API for external processors Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Built-in devices expose a parameter tree with write-back, and presets are saved, applied and written to JSON, tested headless in daw tests parity_wire. Gap: external processors, with their parameter trees and presets, are not hosted, and the rack controls are checked only on the lab machine."
     },
     {
       "feature": "Audio rendering and offline render",
@@ -59,9 +59,9 @@
     {
       "feature": "MIDI input and note data",
       "apple": "MIDI events delivered to instrument units",
-      "bifrost": "springboard/ui/src/midi_events.rs; wired: springboard/apps/daw/src/midi_file.rs, springboard/apps/daw/src/midi.rs",
+      "bifrost": "springboard/ui/src/midi_events.rs; springboard/sdk/src/midi.rs (hub, events, ump); wired: springboard/apps/daw/src/midi_file.rs, springboard/apps/daw/src/midi.rs; tests: springboard/ui/tests/parity_sdk-complete-17.rs, springboard/sdk/tests/parity_sdk-complete-17.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-audio-unit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. note data is internal to the DAW; no MIDI device input or MIDI event API found Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "The MIDI 1.0 parser, encoder and sustain pedal tracker, the shared routing hub and UMP conversion are tested headless, and the DAW records and schedules notes through them. Gap: no device is opened in this repository, so a real keyboard is checked only on the lab machine."
     }
   ],
   "gaps": [

@@ -87,9 +87,9 @@
   {
    "feature": "Text and fonts (CGFont, glyph drawing)",
    "apple": "CGFont, CGContextShowGlyphsAtPoints, CGFontCreateWithDataProvider",
-   "bifrost": "springboard/render/src/font.rs, springboard/render/src/cff.rs:137 Cff and :225 outline, springboard/render/src/gvar.rs, springboard/render/src/fontprefs.rs (font selection)",
+   "bifrost": "springboard/render/src/font.rs, springboard/render/src/cff.rs:137 Cff and :225 outline, springboard/render/src/gvar.rs, springboard/render/src/fontprefs.rs (font selection), springboard/render/src/fontobj.rs, springboard/sdk/src/font_descriptor.rs (UserFonts); springboard/render/tests/parity_sdk-complete-17.rs; springboard/sdk/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "The font engine parses CFF and variable outlines and draws text through the UI text path. Apps get text drawing through the UI kit, not through a glyph-level CGFont API, and no font loading from data is exposed."
+   "note": "Apps load fonts from data through FontObject::from_data and read the packed system and monospaced faces through UserFonts; the CFF and variable outlines, table copies and metrics are tested headless. Gap: text is drawn through the UI text path, with no glyph-level CGFont drawing call."
   },
   {
    "feature": "PDF documents (CGPDFDocument, PDF reading)",

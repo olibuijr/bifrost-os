@@ -73,9 +73,9 @@
   {
    "feature": "Fonts: font rendering engine",
    "apple": "NSFont, NSFontDescriptor",
-   "bifrost": "springboard/render/src/font.rs, cff.rs, gvar.rs",
+   "bifrost": "springboard/render/src/font.rs, cff.rs, gvar.rs, fontobj.rs; springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "TrueType, CFF and variable fonts render; no app-facing descriptor or trait matching API"
+   "note": "TrueType, CFF and variable fonts render, and the font object, metrics, glyph map, cascade and manager behind them are tested headless. Gap: the engine's output is not compared with the reference on the lab machine."
   },
   {
    "feature": "Fonts: user font choice",
