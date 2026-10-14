@@ -45,6 +45,9 @@ use bifrost_app::kit::ui::SYSTEM_GREEN as GREEN;
 use bifrost_app::kit::ui::SYSTEM_ORANGE as ORANGE;
 use bifrost_app::kit::ui::SYSTEM_YELLOW as YELLOW;
 use bifrost_app::kit::ui::SYSTEM_RED as RED;
+use bifrost_app::kit::ui::SYSTEM_PURPLE as PURPLE;
+use bifrost_app::kit::ui::SYSTEM_INDIGO as INDIGO;
+use bifrost_app::kit::ui::SYSTEM_TEAL as TEAL;
 /// The content starts under the unified toolbar band (full-size window).
 fn nav_bottom_pt() -> f32 { UNIFIED_BAR_PT }
 /// Width of the Locations sidebar, and the window width below which it hides (points).
@@ -75,6 +78,8 @@ const CTX_REMOVE: u32 = 1;
 const CTX_NOTIFY: u32 = 2;
 /// The Notifications switch's width (points) between the temperature and the remove button.
 const NOTIFY_W: f32 = 64.0;
+/// Extent of the two compact weather dials (not UI spacing).
+const DIAL_EXTENT_PT: f32 = 32.0;
 /// A finger must move this far (points) on a sidebar row before the row is dragged instead of tapped.
 const DRAG_START_PT: f32 = 6.0;
 /// The leading glyph slot of a sidebar row: its centre, from the row's left edge and middle (points). The list
@@ -1535,28 +1540,28 @@ impl Weather {
         let lo = f.days.iter().map(|d| d.min).fold(f64::MAX, f64::min);
         let hi = f.days.iter().map(|d| d.max).fold(f64::MIN, f64::max);
         let span = (hi - lo).max(1.0) as f32;
-        let (bar_x, bar_w) = (card_x + ui.pt(176.0), card_w - ui.pt(176.0 + 80.0));
+        let (bar_x, bar_w) = (card_x + card_w * 0.36, card_w * 0.48);
         for (i, d) in f.days.iter().enumerate() {
             let mid = p(28.0 + DAILY_TOP + (i as f32 + 0.5) * DAY_ROW);
             if i > 0 {
-                c.fill_rrect(card_x + ui.pt(SPACE_L), mid - ui.pt(DAY_ROW / 2.0), card_w - ui.pt(28.0), 1.0, 0.0, fade(WHITE, 40));
+                c.fill_rrect(card_x + ui.pt(SPACE_L), mid - ui.pt(DAY_ROW / 2.0), card_w - ui.pt(28.0), 1.0, 0.0, fade(LABEL.now(), 40));
             }
             let label = if i == 0 { "Today" } else { d.label.as_str() };
             self.put(&mut c, ui, label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), mid);
             // the chance of precipitation sits under the glyph, which moves up to make room
             let chance = insights::chance_text(d.precip_prob);
             let glyph_y = if chance.is_some() { mid - ui.pt(5.0) } else { mid };
-            glyph::draw(&mut c, Sky::from_code(d.code), true, (card_x + ui.pt(100.0), glyph_y), ui.pt(SPACE_M));
+            glyph::draw(&mut c, Sky::from_code(d.code), true, (card_x + card_w * 0.20, glyph_y), ui.pt(SPACE_M));
             if let Some(chance) = chance {
-                self.put(&mut c, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, rain, Align::Centre, card_x + ui.pt(100.0), mid + ui.pt(15.0));
+                self.put(&mut c, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, rain, Align::Centre, card_x + card_w * 0.20, mid + ui.pt(15.0));
             }
             self.put(&mut c, ui, &units.degrees(d.min), MAC_BODY_PT, Weight::Medium, dim, Align::Right, bar_x - ui.pt(SPACE_M), mid);
-            c.fill_rrect(bar_x, mid - ui.pt(SPACE_XXS), bar_w, ui.pt(SPACE_XS), ui.pt(SPACE_XXS), fade(WHITE, 60));
+            c.fill_rrect(bar_x, mid - ui.pt(SPACE_XXS), bar_w, ui.pt(SPACE_XS), ui.pt(SPACE_XXS), fade(LABEL.now(), 60));
             let (x0, x1) = (((d.min - lo as f64) as f32 / span).clamp(0.0, 1.0), ((d.max - lo as f64) as f32 / span).clamp(0.0, 1.0));
             c.fill_rrect(bar_x + bar_w * x0, mid - ui.pt(SPACE_XXS), (bar_w * (x1 - x0)).max(ui.pt(SPACE_XS)), ui.pt(SPACE_XS), ui.pt(SPACE_XXS), ORANGE);
             if i == 0 {
                 let k = ((f.current.temp - lo) as f32 / span).clamp(0.0, 1.0);
-                c.fill_rrect(bar_x + bar_w * k - ui.pt(SPACE_XS), mid - ui.pt(SPACE_XS), ui.pt(SPACE_S), ui.pt(SPACE_S), ui.pt(SPACE_XS), WHITE);
+                c.fill_rrect(bar_x + bar_w * k - ui.pt(SPACE_XS), mid - ui.pt(SPACE_XS), ui.pt(SPACE_S), ui.pt(SPACE_S), ui.pt(SPACE_XS), LABEL.now());
             }
             self.put(&mut c, ui, &units.degrees(d.max), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Right, card_x + card_w - ui.pt(SPACE_L), mid);
         }
@@ -1634,7 +1639,7 @@ impl Weather {
             Some(air) => {
                 let value = format!("{}", air.aqi);
                 let after = card_x + ui.pt(SPACE_L) + ui.measure(&value, MAC_LARGE_TITLE_PT, Weight::Medium) + ui.pt(SPACE_S);
-                let bands = [GREEN, YELLOW, ORANGE, RED, pack(191, 90, 242, 255), pack(120, 52, 160, 255)];
+            let bands = [GREEN, YELLOW, ORANGE, RED, PURPLE, INDIGO];
                 self.put(&mut c, ui, &value, MAC_LARGE_TITLE_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 44.0));
                 // the band's colour as a dot before its word
                 let dot = ui.pt(SPACE_S);
@@ -1652,7 +1657,7 @@ impl Weather {
                 }
                 let marker = ui.pt(SPACE_M);
                 let mx = bar_x + bar_w * insights::air_position(air.aqi);
-                c.fill_rrect(mx - marker / 2.0, bar_y + ui.pt(SPACE_XS) / 2.0 - marker / 2.0, marker, marker, marker / 2.0, WHITE);
+                c.fill_rrect(mx - marker / 2.0, bar_y + ui.pt(SPACE_XS) / 2.0 - marker / 2.0, marker, marker, marker / 2.0, LABEL.now());
             }
             None => {
                 let text = ui.fit("Air quality is not available for this place.", MAC_BODY_PT, card_w - ui.pt(2.0 * SPACE_L));
@@ -1668,7 +1673,7 @@ impl Weather {
             let plot = insights::temperature_plot(&scale, f.hours.len(), frame);
             for &tick in &scale.ticks {
                 let y = plot.y.map(tick) as f32;
-                c.fill_rrect(card_x + ui.pt(CHART_AXIS), p(CHART_TOP + y), ui.pt(frame.w as f32), 1.0, 0.0, fade(WHITE, 40));
+                c.fill_rrect(card_x + ui.pt(CHART_AXIS), p(CHART_TOP + y), ui.pt(frame.w as f32), 1.0, 0.0, fade(LABEL.now(), 40));
                 self.put(&mut c, ui, &units.degrees(tick), MAC_CAPTION1_PT, Weight::Regular, dim, Align::Right, card_x + ui.pt(CHART_AXIS - SPACE_S), p(CHART_TOP + y));
             }
             // area mark: the fill from the line down to the plot's bottom edge, one column per point
@@ -1678,22 +1683,22 @@ impl Weather {
             for (x, top) in insights::area_columns(&line, 1.0) {
                 let top_px = p(CHART_TOP + top as f32);
                 let bottom_px = p(CHART_TOP + base);
-                c.fill_rrect(card_x + ui.pt(x as f32), top_px, col, bottom_px - top_px, 0.0, fade(WHITE, 40));
+                c.fill_rrect(card_x + ui.pt(x as f32), top_px, col, bottom_px - top_px, 0.0, fade(LABEL.now(), 40));
             }
-            let d = ui.pt(2.0);
+            let d = ui.pt(SPACE_XXS);
             for pair in line.windows(2) {
                 let ((ax, ay), (bx, by)) = (pair[0], pair[1]);
                 let steps = ((bx - ax).abs().max((by - ay).abs()) / 0.5).ceil().max(1.0) as usize;
                 for k in 0..=steps {
                     let t = k as f64 / steps as f64;
                     let (x, y) = ((ax + (bx - ax) * t) as f32, (ay + (by - ay) * t) as f32);
-                    c.fill_rrect(card_x + ui.pt(x) - d / 2.0, p(CHART_TOP + y) - d / 2.0, d, d, d / 2.0, WHITE);
+                    c.fill_rrect(card_x + ui.pt(x) - d / 2.0, p(CHART_TOP + y) - d / 2.0, d, d, d / 2.0, LABEL.now());
                 }
             }
             for (x, y) in insights::temperature_points(&f.hours) {
                 let (px, py) = plot.position(x, y);
                 let dot = ui.pt(5.0);
-                c.fill_rrect(card_x + ui.pt(px as f32) - dot / 2.0, p(CHART_TOP + py as f32) - dot / 2.0, dot, dot, dot / 2.0, WHITE);
+                c.fill_rrect(card_x + ui.pt(px as f32) - dot / 2.0, p(CHART_TOP + py as f32) - dot / 2.0, dot, dot, dot / 2.0, LABEL.now());
             }
             let n = f.hours.len();
             if n > 1 {
@@ -1712,7 +1717,7 @@ impl Weather {
         if let Some(view) = insights::map_view(plat, plon, area_w as f64, MAP_AREA_H as f64) {
             let (ax, ay) = (card_x + ui.pt(SPACE_L), p(MAP_TOP + MAP_AREA_TOP));
             let (aw, ah) = (ui.pt(area_w), ui.pt(MAP_AREA_H));
-            c.fill_rrect(ax, ay, aw, ah, ui.pt(SPACE_S), fade(WHITE, 24));
+            c.fill_rrect(ax, ay, aw, ah, ui.pt(SPACE_S), fade(LABEL.now(), 24));
             let grid = insights::grid(&view);
             let line = fade(WHITE, 90);
             for &(y, lat) in &grid.rows {
@@ -1728,11 +1733,11 @@ impl Weather {
                 self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Left, xx + ui.pt(SPACE_XS), ay + ah - ui.pt(SPACE_L));
             }
             let mark = ui.pt(10.0);
-            c.fill_rrect(ax + aw / 2.0 - mark / 2.0, ay + ah / 2.0 - mark / 2.0, mark, mark, mark / 2.0, WHITE);
+            c.fill_rrect(ax + aw / 2.0 - mark / 2.0, ay + ah / 2.0 - mark / 2.0, mark, mark, mark / 2.0, LABEL.now());
             if let Some(bar) = view.camera().scale_bar(insights::SCALE_MAX_PT) {
                 let bw = ui.pt(bar.width_px as f32);
                 let (bx, by) = (ax + aw - ui.pt(SPACE_S) - bw, ay + ah - ui.pt(SPACE_M));
-                c.fill_rrect(bx, by, bw, ui.pt(3.0), 0.0, WHITE);
+                c.fill_rrect(bx, by, bw, ui.pt(3.0), 0.0, LABEL.now());
                 let text = insights::scale_text(bar.length_m, self.units);
                 self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Right, bx - ui.pt(SPACE_XS), by + ui.pt(1.5));
             }
@@ -1782,8 +1787,8 @@ impl Weather {
                         let chip_w = ui.pt(NOTIFY_W - SPACE_S);
                         let chip_x = right - ui.pt(NOTIFY_W) + ui.pt(SPACE_XS);
                         let chip_y = y + ui.pt((rh - 4.0 - 24.0) / 2.0);
-                        c.fill_rrect(chip_x, chip_y, chip_w, ui.pt(24.0), ui.pt(SPACE_XS), if on { LINK } else { SEPARATOR_C.now() });
-                        self.put(&mut c, ui, "Notify", MAC_FOOTNOTE_PT, Weight::Semibold, if on { WHITE } else { LABEL_2.now() }, Align::Centre, chip_x + chip_w / 2.0, chip_y + ui.pt(12.0));
+                        c.fill_rrect(chip_x, chip_y, chip_w, ui.pt(SPACE_XXL), ui.pt(SPACE_XS), if on { LINK } else { SEPARATOR_C.now() });
+                        self.put(&mut c, ui, "Notify", MAC_FOOTNOTE_PT, Weight::Semibold, if on { WHITE } else { LABEL_2.now() }, Align::Centre, chip_x + chip_w / 2.0, chip_y + ui.pt(SPACE_M));
                         let right = right - ui.pt(NOTIFY_W);
                         let temp = self.forecasts.get(&p.key()).map_or("\u{2013}".to_string(), |f| self.units.degrees(f.current.temp));
                         self.put(&mut c, ui, &temp, MAC_TITLE1_PT, Weight::Regular, LABEL.now(), Align::Right, right - ui.pt(SPACE_S), y + ui.pt(26.0));
@@ -1872,7 +1877,7 @@ impl Weather {
 
 /// The colour of the precipitation chances and bars: a light blue that reads on every sky.
 fn rain_blue() -> u32 {
-    pack(120, 200, 255, 255)
+    TEAL
 }
 
 /// The sun's day arc in a detail tile. `origin` is the arc's centre x and the tile's top, in pixels. A horizon, an arc
@@ -1880,11 +1885,11 @@ fn rain_blue() -> u32 {
 /// the day), the sun at its place on the arc.
 fn draw_sun_arc(c: &mut Surface, ui: &Ui, origin: (f32, f32), progress: Option<f32>) {
     let (cx, top) = origin;
-    let (radius, horizon, dot) = (ui.pt(34.0), top + ui.pt(70.0), ui.pt(2.0));
-    c.fill_rrect(cx - radius - ui.pt(SPACE_S), horizon, 2.0 * radius + ui.pt(2.0 * SPACE_S), 1.0, 0.0, fade(WHITE, 110));
+    let (radius, horizon, dot) = (ui.pt(34.0), top + ui.pt(70.0), ui.pt(SPACE_XXS));
+    c.fill_rrect(cx - radius - ui.pt(SPACE_S), horizon, 2.0 * radius + ui.pt(2.0 * SPACE_S), 1.0, 0.0, fade(LABEL.now(), 110));
     for step in 0..=24 {
         let (x, y) = insights::arc_point(step as f32 / 24.0, cx, horizon, radius);
-        c.fill_rrect(x - dot / 2.0, y - dot / 2.0, dot, dot, dot / 2.0, fade(WHITE, 110));
+        c.fill_rrect(x - dot / 2.0, y - dot / 2.0, dot, dot, dot / 2.0, fade(LABEL.now(), 110));
     }
     if let Some(k) = progress {
         let (x, y) = insights::arc_point(k, cx, horizon, radius);
@@ -1898,24 +1903,24 @@ fn draw_sun_arc(c: &mut Surface, ui: &Ui, origin: (f32, f32), progress: Option<f
 /// the wind comes from (`from`, degrees clockwise from north) when the service gave one.
 fn draw_wind_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), from: Option<f64>) {
     let (cx, top) = origin;
-    let (cy, radius) = (top + ui.pt(56.0), ui.pt(32.0));
+    let (cy, radius) = (top + ui.pt(56.0), ui.pt(DIAL_EXTENT_PT));
     for k in 0..16 {
         let (x, y) = insights::dial_point(k as f64 * 22.5, cx, cy, radius);
-        let (size, alpha) = if k % 4 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(2.0), 100) };
-        c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(WHITE, alpha));
+        let (size, alpha) = if k % 4 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(SPACE_XXS), 100) };
+        c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(LABEL.now(), alpha));
     }
     if let Some(degrees) = from {
         let size = ui.pt(2.5);
         for step in 1..=10 {
             let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
-            c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, WHITE);
+            c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, LABEL.now());
         }
         let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8);
-        let tip = ui.pt(8.0);
+        let tip = ui.pt(SPACE_S);
         c.fill_rrect(x - tip / 2.0, y - tip / 2.0, tip, tip, tip / 2.0, ORANGE);
     }
-    let hub = ui.pt(4.0);
-    c.fill_rrect(cx - hub / 2.0, cy - hub / 2.0, hub, hub, hub / 2.0, WHITE);
+    let hub = ui.pt(SPACE_XS);
+    c.fill_rrect(cx - hub / 2.0, cy - hub / 2.0, hub, hub, hub / 2.0, LABEL.now());
 }
 
 /// The pressure trend dial in a detail tile, centred on `origin.0` and 56 points under the tile's top (`origin.1`):
@@ -1923,24 +1928,24 @@ fn draw_wind_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), from: Option<f64
 /// needle at `angle` degrees from straight up when the service gave the change (see `insights::pressure_dial_angle`).
 fn draw_pressure_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), angle: Option<f64>) {
     let (cx, top) = origin;
-    let (cy, radius) = (top + ui.pt(56.0), ui.pt(32.0));
+    let (cy, radius) = (top + ui.pt(56.0), ui.pt(DIAL_EXTENT_PT));
     for k in 0..7 {
         let (x, y) = insights::dial_point(-90.0 + k as f64 * 30.0, cx, cy, radius);
-        let (size, alpha) = if k % 3 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(2.0), 100) };
-        c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(WHITE, alpha));
+        let (size, alpha) = if k % 3 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(SPACE_XXS), 100) };
+        c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(LABEL.now(), alpha));
     }
     if let Some(degrees) = angle {
         let size = ui.pt(2.5);
         for step in 1..=10 {
             let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
-            c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, WHITE);
+            c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, LABEL.now());
         }
         let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8);
-        let tip = ui.pt(8.0);
+        let tip = ui.pt(SPACE_S);
         c.fill_rrect(x - tip / 2.0, y - tip / 2.0, tip, tip, tip / 2.0, ORANGE);
     }
-    let hub = ui.pt(4.0);
-    c.fill_rrect(cx - hub / 2.0, cy - hub / 2.0, hub, hub, hub / 2.0, WHITE);
+    let hub = ui.pt(SPACE_XS);
+    c.fill_rrect(cx - hub / 2.0, cy - hub / 2.0, hub, hub, hub / 2.0, LABEL.now());
 }
 
 /// The distance from one saved or found place to another, such as "343 km away", in the unit system of the

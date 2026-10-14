@@ -120,7 +120,7 @@ pub fn menus(s: &MenuState) -> Vec<AppMenu> {
     }
     vec![
         AppMenu { title: "File".into(), items: file },
-        AppMenu { title: "Edit".into(), items: edit },
+        AppMenu { title: "Photo".into(), items: edit },
         AppMenu { title: "View".into(), items: view },
         AppMenu { title: "Camera".into(), items: camera },
     ]

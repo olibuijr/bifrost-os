@@ -1666,32 +1666,15 @@ impl TextEditApp {
         }
     }
 
-    fn edit_menu(&self) -> AppMenu {
+    fn text_menu(&self) -> AppMenu {
         let doc = active_doc(&self.docs);
-        let (can_undo, can_redo, has_sel, undo, redo) = match doc {
-            Some(d) => (
-                d.text.can_undo(),
-                d.text.can_redo(),
-                d.text.has_selection(),
-                d.text.undo_name().map_or("Undo".to_string(), |n| format!("Undo {n}")),
-                d.text.redo_name().map_or("Redo".to_string(), |n| format!("Redo {n}")),
-            ),
-            None => (false, false, false, "Undo".into(), "Redo".into()),
-        };
+        let (has_sel, enabled) = doc.map_or((false, false), |d| (d.text.has_selection(), true));
         let has_find = !self.find.is_empty();
-        let enabled = doc.is_some();
         let rich = doc.is_some_and(|d| d.rich);
         let linked = doc.is_some_and(|d| d.text.link_near(if d.text.has_selection() { d.text.selection().start } else { d.text.head() }) != 0);
         let items = vec![
-            menu_item(Action::Undo, &undo, "cmd+z", can_undo),
-            menu_item(Action::Redo, &redo, "cmd+shift+z", can_redo),
-            AppMenuItem::separator(),
-            menu_item(Action::Cut, "Cut", "cmd+x", has_sel),
-            menu_item(Action::Copy, "Copy", "cmd+c", has_sel),
-            menu_item(Action::Paste, "Paste", "cmd+v", clipboard::text().is_some()),
             menu_item(Action::PasteMatch, "Paste and Match Style", "cmd+alt+shift+v", clipboard::text().is_some()),
             menu_item(Action::Delete, "Delete", "", has_sel),
-            menu_item(Action::SelectAll, "Select All", "cmd+a", enabled),
             AppMenuItem::separator(),
             menu_item(Action::Find, "Find\u{2026}", "cmd+f", true),
             menu_item(Action::FindNext, "Find Next", "cmd+g", has_find),
@@ -1732,7 +1715,7 @@ impl TextEditApp {
             AppMenuItem::separator(),
             menu_item(Action::Complete, "Complete", "alt+escape", enabled),
         ];
-        AppMenu { title: "Edit".into(), items }
+        AppMenu { title: "Text".into(), items }
     }
 
     fn format_menu(&self) -> AppMenu {
@@ -2054,7 +2037,7 @@ impl App for TextEditApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        vec![self.file_menu(), self.edit_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
+        vec![self.file_menu(), self.text_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {

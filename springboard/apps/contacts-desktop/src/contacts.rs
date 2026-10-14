@@ -2313,7 +2313,7 @@ impl Contacts {
         } else {
             // the job goes to the print scheduler on its own thread, so the window keeps drawing
             let job = PrintOperation::text(title, text);
-            std::thread::spawn(move || {
+            bifrost_app::dispatch::DispatchQueue::global(bifrost_app::dispatch::Qos::Utility).async_(move || {
                 if let Err(e) = job.run() {
                     eprintln!("Contacts print: {e:?}");
                 }
@@ -3367,7 +3367,7 @@ impl Contacts {
         }
         // a white building with two columns of windows in the avatar's own colour
         let (bw, bh) = (0.8 * r, 1.0 * r);
-        Self::fill(s, ui, rect(cx - bw / 2.0, cy - bh / 2.0, bw, bh), 1.0, WHITE);
+        Self::fill(s, ui, rect(cx - bw / 2.0, cy - bh / 2.0, bw, bh), 1.0, CARD_BG.now());
         let pane = 0.16 * r;
         for col in 0..2 {
             for row in 0..3 {

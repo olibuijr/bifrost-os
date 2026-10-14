@@ -2,11 +2,12 @@
 //! window never waits for them. A poller sends one `Reading` per interval; a scan sends its answer once.
 
 use crate::model::{self, Iface, Link};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::wlan::Sample;
 use std::fs;
 use std::process::Command;
-use std::sync::mpsc::{self, Receiver};
-use std::thread;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 const PROC_WIRELESS: &str = "/proc/net/wireless";
@@ -54,22 +55,29 @@ pub fn read_once() -> Reading {
 }
 
 /// Starts the poller: one `read_once` every `every`, until the receiver is dropped.
-pub fn spawn_poller(every: Duration) -> Receiver<Reading> {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || loop {
-        if tx.send(read_once()).is_err() {
-            break;
-        }
-        thread::sleep(every);
-    });
-    rx
+pub fn spawn_poller(every: Duration, readings: &Arc<Mutex<VecDeque<Reading>>>) {
+    fn schedule(every: Duration, readings: Weak<Mutex<VecDeque<Reading>>>) {
+        DispatchQueue::global(Qos::Utility).async_after(every, move || poll(every, readings));
+    }
+    fn poll(every: Duration, readings: Weak<Mutex<VecDeque<Reading>>>) {
+        DispatchQueue::global(Qos::Utility).async_(move || {
+            let reading = read_once();
+            DispatchQueue::main().async_(move || {
+                let Some(queue) = readings.upgrade() else { return };
+                if let Ok(mut queue) = queue.lock() {
+                    queue.push_back(reading);
+                }
+                schedule(every, readings);
+            });
+        });
+    }
+    poll(every, Arc::downgrade(readings));
 }
 
 /// Scans `iface` on a background thread. A fresh scan usually needs the network privilege; when it is refused the
 /// cached results of the last scan are used and marked as cached.
-pub fn spawn_scan(iface: String) -> Receiver<Result<ScanOutcome, String>> {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
+pub fn spawn_scan(iface: String, result: Arc<Mutex<Option<Result<ScanOutcome, String>>>>) {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let outcome = match run_iw(&["dev", &iface, "scan"]) {
             Ok(text) => Ok(ScanOutcome { samples: model::parse_scan(&text), cached: false }),
             Err(fresh_err) => match run_iw(&["dev", &iface, "scan", "dump"]) {
@@ -77,7 +85,10 @@ pub fn spawn_scan(iface: String) -> Receiver<Result<ScanOutcome, String>> {
                 Err(_) => Err(format!("Scan failed: {fresh_err}")),
             },
         };
-        let _ = tx.send(outcome);
+        DispatchQueue::main().async_(move || {
+            if let Ok(mut slot) = result.lock() {
+                *slot = Some(outcome);
+            }
+        });
     });
-    rx
 }

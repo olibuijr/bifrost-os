@@ -21,8 +21,8 @@ use crate::kb_trackpad::{self, Trackpad};
 use crate::kb_shortcutbar;
 use crate::kb_pressed::{self, ReturnKind};
 use crate::predict::{self, Predictor};
-use springboard::shell::ui::{Ui, Weight, BLACK, SECONDARY, WHITE};
-use springboard::gfx::{pack, rgba, Surface};
+use springboard::shell::ui::{Ui, Weight, AVATAR_BG, AVATAR_FG, BLACK, GRAY_DIM, LABEL_2, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE2_PT, SYSTEM_BLUE, WHITE};
+use springboard::gfx::Surface;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -102,9 +102,9 @@ struct Key {
     h: f32,
 }
 
-pub const BG: u32 = pack(43, 43, 45, 255);
-const KEY: u32 = pack(107, 107, 110, 255);
-const SPECIAL: u32 = pack(70, 70, 73, 255);
+pub const BG: u32 = AVATAR_FG;
+const KEY: u32 = AVATAR_BG;
+const SPECIAL: u32 = GRAY_DIM;
 
 // bifrost keyboard geometry in points (768 pt wide)
 const MARGIN_PT: f32 = 6.0;
@@ -148,7 +148,12 @@ const SPLIT_SCALE: f32 = 0.78;
 const FLOAT_SCALE: f32 = 0.62;
 const POPUP_GAP_PT: f32 = 8.0;
 /// the bifrost selection blue, for the highlighted accent
-const ACCENT_BLUE: u32 = pack(70, 147, 255, 255);
+const ACCENT_BLUE: u32 = SYSTEM_BLUE;
+
+fn fade(color: u32, alpha: u8) -> u32 {
+    let scale = |shift: u32| (((color >> shift) & 0xff) * alpha as u32 / 255) << shift;
+    scale(0) | scale(8) | scale(16) | scale(24)
+}
 
 /// Cubic ease-out for the flick pull, so the alternate leads the finger.
 fn ease_out_cubic(p: f32) -> f32 {
@@ -1376,9 +1381,9 @@ impl Keyboard {
             Kind::EmojiSearch => {
                 s.fill_rrect(k.x, y, k.w, k.h, self.pt(6.0), SPECIAL);
                 let q = self.emoji.query();
-                let (text, color) = if q.is_empty() { ("Search Emoji".to_string(), SECONDARY) } else { (q.to_string(), WHITE) };
+                let (text, color) = if q.is_empty() { ("Search Emoji".to_string(), LABEL_2.now()) } else { (q.to_string(), WHITE) };
                 let ox = (k.x + self.px(MARGIN_PT)) as i32;
-                let img = self.labels.get(ui, &text, 17.0, Weight::Regular, color);
+                let img = self.labels.get(ui, &text, MAC_TITLE2_PT, Weight::Regular, color);
                 s.blit(img, ox, (y + k.h / 2.0 - img.h as f32 / 2.0) as i32, 255, 255);
                 return true;
             }
@@ -1386,7 +1391,7 @@ impl Keyboard {
                 if down || n == self.emoji.tab() {
                     s.fill_rrect(k.x, y, k.w, k.h, r, SPECIAL);
                 }
-                Some((Emoji::icon(n).to_string(), 20.0))
+                Some((Emoji::icon(n).to_string(), MAC_TITLE1_PT))
             }
             _ => return false,
         };
@@ -1411,7 +1416,7 @@ impl Keyboard {
                 let ry = y + i as f32 * h;
                 s.fill_rrect(x0, ry, cw, h, r, if i == sel { ACCENT_BLUE } else { KEY });
                 let ox = (x0 + self.pt(14.0)) as i32;
-                let img = self.labels.get(ui, cell, 20.0, Weight::Regular, WHITE);
+                let img = self.labels.get(ui, cell, MAC_TITLE1_PT, Weight::Regular, WHITE);
                 s.blit(img, ox, (ry + h / 2.0 - img.h as f32 / 2.0) as i32, 255, 255);
             }
             return;
@@ -1421,7 +1426,7 @@ impl Keyboard {
             let x = x0 + i as f32 * cw;
             s.fill_rrect(x, y, cw, h, r, if i == sel { ACCENT_BLUE } else { KEY });
             let text = if upper { cell.to_uppercase() } else { cell.clone() };
-            let img = self.labels.get(ui, &text, 26.0, Weight::Regular, WHITE);
+            let img = self.labels.get(ui, &text, MAC_LARGE_TITLE_PT, Weight::Regular, WHITE);
             s.blit(img, (x + cw / 2.0 - img.w as f32 / 2.0) as i32, (y + h / 2.0 - img.h as f32 / 2.0) as i32, 255, 255);
         }
     }
@@ -1436,7 +1441,7 @@ impl Keyboard {
         if self.mode == Mode::Floating {
             let (lo, hi) = (self.float_x, self.float_x + self.w * FLOAT_SCALE);
             let (x, y, w, h) = fl::grabber_rect(lo, hi, self.h - self.pt(fl::GRABBER_BAND_PT), self.s);
-            s.fill_rrect(x, oy + y, w, h, h.min(self.pt(6.0) * 2.0) / 2.0, rgba(255, 255, 255, 140));
+            s.fill_rrect(x, oy + y, w, h, h.min(self.pt(6.0) * 2.0) / 2.0, fade(WHITE, 140));
         }
         if let Some(m) = self.fl_menu {
             let (x, y, w, h) = m.rect();
@@ -1449,7 +1454,7 @@ impl Keyboard {
                 }
                 let text = if *mode == self.mode { format!("{label}  \u{2713}") } else { label.to_string() };
                 let ox = (x + self.pt(16.0)) as i32;
-                let img = self.labels.get(ui, &text, 17.0, Weight::Regular, WHITE);
+                let img = self.labels.get(ui, &text, MAC_TITLE2_PT, Weight::Regular, WHITE);
                 s.blit(img, ox, (ry + m.row_h / 2.0 - img.h as f32 / 2.0) as i32, 255, 255);
             }
         }
@@ -1477,14 +1482,14 @@ impl Keyboard {
             let (y, cx) = (oy + k.y, k.x + k.w / 2.0);
             kb_pressed::key_shadow(s, k.x, y, k.w, k.h, r, self.ky);
             s.fill_rrect(k.x, y, k.w, k.h, r, color);
-            let dim = rgba(255, 255, 255, 120);
+            let dim = fade(WHITE, 120);
             // pulling a key down slides its alternate into the middle while
             // the main label drops out below, as the bifrost's flick keys do
             let pull = if down && k.alt.is_some() { ease_out_cubic(pull) } else { 0.0 };
             let main_mid = y + k.h * if k.alt.is_some() { 0.58 } else { 0.5 };
             let alt_top = y + self.pt(3.0);
             if let Some(alt) = k.alt {
-                let small = self.labels.get(ui, alt, 11.0, Weight::Regular, dim);
+                let small = self.labels.get(ui, alt, MAC_SUBHEAD_PT, Weight::Regular, dim);
                 let (sw, sh) = (small.w as f32, small.h as f32);
                 let top = alt_top + sh / 2.0;
                 let cy = top + (main_mid - top) * pull;
@@ -1534,7 +1539,7 @@ impl Keyboard {
         }
         let veil = self.trackpad.amount(t);
         if veil > 0.0 {
-            s.fill_rrect(0.0, oy, self.w, self.h, 0.0, rgba(43, 43, 45, (veil * 235.0) as u8));
+            s.fill_rrect(0.0, oy, self.w, self.h, 0.0, fade(BG, (veil * 235.0) as u8));
         }
         self.draw_popup(s, ui, oy);
     }

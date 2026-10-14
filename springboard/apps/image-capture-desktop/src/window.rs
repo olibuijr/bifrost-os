@@ -92,7 +92,7 @@ impl ImageCapture {
             link,
             in_flight: 0,
             next_poll: 0.0,
-            size: (1000.0, 640.0),
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
             home,
@@ -201,11 +201,7 @@ impl ImageCapture {
 
     /// When the loop should come back: soon while a request is in flight, else at the next listing.
     pub fn wake_at(&self, t: f64) -> f64 {
-        if self.in_flight > 0 {
-            t + BUSY_WAKE_MS
-        } else {
-            self.next_poll.max(t + BUSY_WAKE_MS)
-        }
+        self.next_poll.max(t + BUSY_WAKE_MS)
     }
 
     pub fn bar_rect(&self) -> Rect {

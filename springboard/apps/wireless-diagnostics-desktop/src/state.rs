@@ -10,7 +10,8 @@ use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::wlan::{self, Network};
 use bifrost_app::widgets;
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 pub const B_SCAN: u32 = 1;
 pub const B_REPORT: u32 = 2;
@@ -55,7 +56,8 @@ pub struct Diagnostics {
     pub history: History,
     pub networks: Vec<Network>,
     pub scan: ScanState,
-    scan_rx: Option<Receiver<Result<ScanOutcome, String>>>,
+    pub readings: Arc<Mutex<VecDeque<Reading>>>,
+    scan_result: Arc<Mutex<Option<Result<ScanOutcome, String>>>>,
     /// The last thing an action said (a saved report, a copy, an error), shown in the footer until the next action.
     pub message: Option<String>,
 }
@@ -63,14 +65,15 @@ pub struct Diagnostics {
 impl Diagnostics {
     pub fn new() -> Diagnostics {
         Diagnostics {
-            size: (1200.0, 780.0),
+            size: (0.0, 0.0),
             data_dir: PathBuf::from("."),
             labels: TextCache::default(),
             reading: None,
             history: History::default(),
             networks: Vec::new(),
             scan: ScanState::Idle,
-            scan_rx: None,
+            readings: Arc::new(Mutex::new(VecDeque::new())),
+            scan_result: Arc::new(Mutex::new(None)),
             message: None,
         }
     }
@@ -99,15 +102,22 @@ impl Diagnostics {
 
     /// Takes the scan's answer, if it has come back. True when the scan state changed.
     pub fn poll_scan(&mut self) -> bool {
-        let Some(rx) = self.scan_rx.as_ref() else { return false };
-        let outcome = match rx.try_recv() {
-            Ok(result) => result,
-            Err(TryRecvError::Empty) => return false,
-            Err(TryRecvError::Disconnected) => Err("Scan stopped unexpectedly".to_string()),
-        };
-        self.scan_rx = None;
+        let Ok(mut slot) = self.scan_result.lock() else { return false };
+        let Some(outcome) = slot.take() else { return false };
+        drop(slot);
         self.apply_scan(outcome);
         true
+    }
+
+    /// Takes the readings delivered on the main queue and refreshes the chart.
+    pub fn drain_readings(&mut self) -> bool {
+        let Ok(mut queue) = self.readings.lock() else { return false };
+        let pending: Vec<_> = queue.drain(..).collect();
+        drop(queue);
+        for reading in pending.iter().cloned() {
+            self.apply_reading(reading);
+        }
+        !pending.is_empty()
     }
 
     /// Records a scan's answer: the networks merged by name, strongest first.
@@ -123,11 +133,11 @@ impl Diagnostics {
 
     /// Starts a scan on the interface of the latest reading. A scan already running is kept.
     pub fn start_scan(&mut self) -> bool {
-        if self.scan_rx.is_some() {
+        if self.scan == ScanState::Scanning {
             return false;
         }
         let iface = self.reading.as_ref().map_or_else(|| "wlan0".to_string(), |r| r.iface.clone());
-        self.scan_rx = Some(crate::source::spawn_scan(iface));
+        crate::source::spawn_scan(iface, self.scan_result.clone());
         self.scan = ScanState::Scanning;
         self.message = None;
         true

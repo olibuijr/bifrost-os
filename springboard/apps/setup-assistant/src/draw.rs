@@ -3,8 +3,10 @@
 //! the appearance. Text is cached per string in `TextCache`.
 
 use crate::window::{Item, Kind, Setup, BTN_PT, CONTENT_Y, GAP_PT, PAD_PT};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, SEPARATOR_C, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
+use bifrost_app::layout::Layout;
+use bifrost_app::widgets;
 use springboard::setup::Step;
 
 /// Corner radii in points: chips and buttons, grouped cards.
@@ -76,7 +78,9 @@ pub fn body(w: &Setup) -> Vec<String> {
 pub fn paint(w: &mut Setup, s: &mut Surface, ui: &Ui) {
     s.fill_rrect(0.0, 0.0, s.w as f32, s.h as f32, 0.0, CONTENT_BG.now());
     let cw = (w.size.0 - 2.0 * PAD_PT).max(0.0);
-    text_mid(&mut w.labels, s, ui, w.step.title(), MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), PAD_PT, 58.0, cw);
+    let mut layout = Layout::from_points(w.size.0, w.size.1, 0.0, 0.0);
+    layout.margin = PAD_PT;
+    widgets::large_title(s, ui, &layout, w.step.title(), 58.0);
     for (i, line) in body(w).iter().enumerate() {
         let mid = BODY_Y + i as f32 * BODY_LINE_PT + BODY_LINE_PT / 2.0;
         text_mid(&mut w.labels, s, ui, line, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), PAD_PT, mid, cw);
@@ -129,7 +133,7 @@ fn paint_item(labels: &mut TextCache, s: &mut Surface, ui: &Ui, item: &Item) {
             let plate = if item.on { LINK } else { SEPARATOR_C.now() };
             fill(s, ui, track_x, track_y, TRACK_W, TRACK_H, TRACK_H / 2.0, plate);
             let knob_x = if item.on { track_x + TRACK_W - KNOB_PT - 2.0 } else { track_x + 2.0 };
-            fill(s, ui, knob_x, track_y + 2.0, KNOB_PT, KNOB_PT, KNOB_PT / 2.0, WHITE);
+            fill(s, ui, knob_x, track_y + 2.0, KNOB_PT, KNOB_PT, KNOB_PT / 2.0, CARD_BG.now());
         }
     }
 }

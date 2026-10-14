@@ -7,7 +7,7 @@
 //! logged or kept after the script is sent.
 use std::collections::HashSet;
 
-use bifrost_app::keychain_groups::Row;
+use bifrost_app::keychain_groups as keychain;
 use bifrost_app::passwords::{self, Kind};
 use bifrost_app::webview::WebViewId;
 use bifrost_app::Ctx;
@@ -40,7 +40,7 @@ pub fn host_matches(site: &str, host: &str) -> bool {
 
 /// The login to fill for `host` from the group's listing: the newest login (not a note or certificate) whose site
 /// matches. Answers `(service, account)`, the arguments of `passwords::fill`.
-pub fn pick(rows: &[Row], host: &str) -> Option<(String, String)> {
+pub fn pick(rows: &[keychain::Row], host: &str) -> Option<(String, String)> {
     rows.iter()
         .filter(|r| matches!(passwords::kind_of(&r.service), Kind::Login) && host_matches(&r.service, host))
         .max_by_key(|r| r.modified)

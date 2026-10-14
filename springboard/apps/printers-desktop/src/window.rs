@@ -138,7 +138,7 @@ impl PrintCenter {
             link,
             in_flight: 0,
             next_poll: 0.0,
-            size: (1000.0, 640.0),
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
             now_secs: 0,

@@ -42,8 +42,7 @@ const CLIP_MAX_W: usize = 640;
 const SLOT_GAP_PT: f32 = 8.0;
 /// Frame period while the camera streams, in ms.
 const FRAME_MS: f64 = 33.0;
-const WHITE: u32 = pack(255, 255, 255, 255);
-const BLACK: u32 = pack(0, 0, 0, 255);
+const WHITE: u32 = ui::WHITE;
 /// Keys, as the evdev translation hands them to an app.
 const KEY_ESCAPE: u32 = 1;
 const KEY_BACKSPACE: u32 = 8;
@@ -995,7 +994,7 @@ impl PhotoBooth {
 
     /// The slideshow: the capture on screen, as large as the window allows, with its name and position underneath.
     fn draw_slideshow(&mut self, s: &mut Surface, ui: &Ui, scale: f32) {
-        s.fill_rect(0, 0, s.w, s.h, BLACK);
+        s.fill_rect(0, 0, s.w, s.h, ui::DETAIL_BG.now());
         let count = self.captures.len();
         let Some(show) = self.slideshow.filter(|show| show.index < count) else { return };
         let (cw, ch) = (self.captures[show.index].shown.w, self.captures[show.index].shown.h);
@@ -1030,7 +1029,7 @@ impl PhotoBooth {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
         let (x0, y0, vw, vh) = (p(vf.x), p(vf.y), p(vf.w), p(vf.h));
         self.view_px = (vw, vh);
-        s.fill_rect(x0, y0, vw, vh, BLACK);
+        s.fill_rect(x0, y0, vw, vh, ui::CARD_BG.now());
         let centre_x = vf.x * scale + vw as f32 / 2.0;
 
         let picture = match self.selected {
@@ -1081,10 +1080,10 @@ impl PhotoBooth {
 
     fn draw_effects(&self, s: &mut Surface, ui: &Ui, row: Rect, scale: f32) {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
-        s.fill_rect(p(row.x), p(row.y), p(row.w), p(row.h), ui::SIDEBAR_BG.now());
+        s.fill_rect(p(row.x), p(row.y), p(row.w), p(row.h), ui::CONTENT_BG.now());
         for (effect, cell) in model::effect_cells(row) {
             if effect == self.effect {
-                s.fill_rect(p(cell.x + 3.0), p(cell.y + 6.0), p(cell.w - 6.0), p(cell.h - 12.0), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(cell.x + 3.0), p(cell.y + 6.0), p(cell.w - 6.0), p(cell.h - 12.0), ui::SELECTION.now());
             }
             let colour = if effect == self.effect { ui::LABEL.now() } else { ui::LABEL_2.now() };
             label_centred(s, ui, effect.title(), ui::MAC_FOOTNOTE_PT, colour, (cell.x + cell.w / 2.0) * scale, cell.y * scale + 14.0 * scale, cell.w * scale - 6.0 * scale);
@@ -1093,7 +1092,7 @@ impl PhotoBooth {
 
     fn draw_strip(&self, s: &mut Surface, ui: &Ui, strip: Rect, scale: f32) {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
-        s.fill_rect(p(strip.x), p(strip.y), p(strip.w), p(strip.h), ui::SIDEBAR_BG.now());
+        s.fill_rect(p(strip.x), p(strip.y), p(strip.w), p(strip.h), ui::CONTENT_BG.now());
         if self.captures.is_empty() {
             label_centred(s, ui, "Captures appear here", ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), (strip.x + strip.w / 2.0) * scale, strip.y * scale + strip.h * scale / 2.0 - 6.0 * scale, strip.w * scale);
             return;
@@ -1114,7 +1113,7 @@ impl PhotoBooth {
 
     fn draw_controls(&self, s: &mut Surface, ui: &Ui, bar: Rect, scale: f32) {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
-        s.fill_rect(p(bar.x), p(bar.y), p(bar.w), p(bar.h), ui::SIDEBAR_BG.now());
+        s.fill_rect(p(bar.x), p(bar.y), p(bar.w), p(bar.h), ui::CONTENT_BG.now());
         let text_y = |r: Rect| (r.y + 6.0) * scale;
         let mode = model::button_rect(bar, Button::Mode);
         label_centred(s, ui, self.mode.title(), ui::MAC_BODY_PT, ui::LINK, (mode.x + mode.w / 2.0) * scale, text_y(mode), mode.w * scale);

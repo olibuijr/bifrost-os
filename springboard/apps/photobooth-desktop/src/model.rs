@@ -309,7 +309,7 @@ pub fn library_dir(home: &Path) -> PathBuf {
 
 /// A 2 by 2 contact sheet of up to four images, each scaled into its cell of a `w` by `h` sheet. Empty cells stay black.
 pub fn contact_sheet(frames: &[Image], w: usize, h: usize) -> Image {
-    let mut px = vec![pack(0, 0, 0, 255); w * h];
+    let mut px = vec![bifrost_app::kit::ui::BLACK; w * h];
     let (cw, ch) = (w / 2, h / 2);
     for (i, frame) in frames.iter().take(4).enumerate() {
         if cw == 0 || ch == 0 {

@@ -30,8 +30,6 @@ const AREA_Y: f32 = 240.;
 /// The mouse button bits of a PointerEvent.
 const BUTTON_LEFT: u8 = 1;
 const BUTTON_RIGHT: u8 = 4;
-/// The window redraws about 30 times a second while connected, so the remote screen keeps up.
-const FRAME_MS: f64 = 33.;
 /// Cache key for the scaled desktop: generation, origin and scale bits, then the visible device rectangle.
 type CacheKey = (u64, u32, u32, u32, i32, i32, usize, usize);
 
@@ -207,6 +205,10 @@ impl App for ScreenSharing {
         "is.olibuijr.screensharing.desktop"
     }
 
+    fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination();
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
             Input::Touch { kind, x, y, .. } => {
@@ -313,7 +315,8 @@ impl App for ScreenSharing {
     }
 
     fn next_wake(&self, now: f64) -> Option<f64> {
-        self.conn.as_ref().map(|_| now + FRAME_MS)
+        let _ = now;
+        None
     }
 
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
@@ -359,7 +362,7 @@ impl App for ScreenSharing {
 
         // The desktop area: black around the remote screen, which is drawn only while connected.
         let a = self.area();
-        s.fill_rrect(u.pt(a.x), u.pt(a.y), u.pt(a.w), u.pt(a.h), u.pt(10.), pack(0, 0, 0, 255));
+        s.fill_rrect(u.pt(a.x), u.pt(a.y), u.pt(a.w), u.pt(a.h), u.pt(10.), DETAIL_BG.now());
         self.draw_desktop(u, s);
 
         let mut d = Damage::new(s.w, s.h);

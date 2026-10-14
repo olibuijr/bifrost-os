@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.1 — 2026-10-14
+
+- Find Next, Find Previous and Use Selection for Find are now in a dedicated Find menu, avoiding a duplicate shell Edit menu.
+
 ## 1.7.0 — 2026-10-14
 
 - View menu: Show Only This Activity narrows the table to the systemd unit invocation of the selected message, and

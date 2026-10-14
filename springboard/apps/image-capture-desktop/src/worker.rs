@@ -1,12 +1,14 @@
-//! Image Capture's disk and scanner work. A thread runs the requests, so a slow scanner or a large copy never stalls
-//! the window: requests go in on one channel and replies come back on another, which the window drains on each tick.
+//! Image Capture's disk and scanner work. A serial utility queue runs requests, so a slow scanner or a large copy never
+//! stalls the window; replies return on the main queue and wake it without a polling worker.
 
 use crate::model::{self, Reply};
 use bifrost_ui::scan_job::ScanSettings;
 use bifrost_ui::scanner;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use springboard::shell::camera::devices;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// A request for the worker.
@@ -26,44 +28,45 @@ pub enum Request {
 
 /// The window's end of the channels. Dropping it ends the worker thread.
 pub struct Link {
-    tx: Sender<Request>,
-    rx: Receiver<Reply>,
+    queue: DispatchQueue,
+    replies: Arc<Mutex<VecDeque<Reply>>>,
+    enabled: bool,
 }
 
 impl Link {
-    /// Starts the worker thread. If it cannot start, requests are dropped and no replies come back.
+    /// Starts the serial utility queue for disk and scanner requests.
     pub fn start() -> Link {
-        let (tx, requests) = mpsc::channel::<Request>();
-        let (replies, rx) = mpsc::channel::<Reply>();
-        let _ = std::thread::Builder::new().name("image-capture".into()).spawn(move || serve(requests, replies));
-        Link { tx, rx }
+        Link {
+            queue: DispatchQueue::serial_qos("is.olibuijr.imagecapture.work", Qos::Utility),
+            replies: Arc::new(Mutex::new(VecDeque::new())),
+            enabled: true,
+        }
     }
 
     /// A link with no worker behind it: requests are dropped and no reply comes. For tests.
     #[cfg(test)]
     pub fn detached() -> Link {
-        let (tx, _requests) = mpsc::channel::<Request>();
-        let (_replies, rx) = mpsc::channel::<Reply>();
-        Link { tx, rx }
+        Link {
+            queue: DispatchQueue::serial_qos("is.olibuijr.imagecapture.detached", Qos::Utility),
+            replies: Arc::new(Mutex::new(VecDeque::new())),
+            enabled: false,
+        }
     }
 
     pub fn send(&self, request: Request) {
-        let _ = self.tx.send(request);
+        if !self.enabled { return; }
+        let replies = self.replies.clone();
+        self.queue.async_(move || {
+            let reply = handle(request);
+            DispatchQueue::main().async_(move || {
+                if let Ok(mut queue) = replies.lock() { queue.push_back(reply); }
+            });
+        });
     }
 
     /// The replies that arrived since the last call.
     pub fn drain(&self) -> Vec<Reply> {
-        self.rx.try_iter().collect()
-    }
-}
-
-fn serve(requests: Receiver<Request>, replies: Sender<Reply>) {
-    for request in requests {
-        let reply = handle(request);
-        if replies.send(reply).is_err() {
-            break;
-        }
-    }
+        self.replies.lock().map(|mut queue| queue.drain(..).collect()).unwrap_or_default()
 }
 
 /// The folder the signed-in person keeps their files in, from $HOME.

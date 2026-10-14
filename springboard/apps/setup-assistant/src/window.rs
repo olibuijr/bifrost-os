@@ -125,7 +125,7 @@ impl Setup {
         }
         let account = springboard::shell::account::load();
         Setup {
-            size: (1200.0, 780.0),
+            size: (0.0, 0.0),
             dark: true,
             step: Step::Welcome,
             choices,
