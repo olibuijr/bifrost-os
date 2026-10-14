@@ -31,9 +31,9 @@
     {
       "feature": "Archive headers and file attributes",
       "apple": "ArchiveHeader; file ownership, permissions, flags, times, extended attributes",
-      "bifrost": "springboard/src/shell/store/install.rs:250 (TarEntry: path, mode, is_dir, offset, size)",
+      "bifrost": "springboard/src/shell/store/install.rs (TarEntry, read_tar, index_tar)",
       "status": "partial",
-      "note": "Tar entries keep mode only; the zip path was not checked for ownership, times or xattr preservation"
+      "note": "Tar entries keep the path, mode, directory flag, contents offset and size, and the reader refuses unsafe paths, links, pax headers, duplicates and bad checksums, as tested headless in springboard/tests/parity_sdk-tests-12.rs; ownership, times and extended attributes are not kept, and the zip path was not checked."
     },
     {
       "feature": "Archive streams (data blobs and byte buffers)",

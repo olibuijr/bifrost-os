@@ -108,9 +108,9 @@
   {
    "feature": "Environmental nodes (audio, light)",
    "apple": "SKAudioNode, SKLightNode",
-   "bifrost": "springboard/ui/src/scene2d.rs (positional_mix",
+   "bifrost": "springboard/ui/src/scene2d.rs (positional_mix, Scene2d, FrameClock)",
    "status": "partial",
-   "note": "Wave 5 (w5-spritekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audio playback exists as a daemon (springboard/audiod) but has no scene-positioned node API; no 2D light nodes"
+   "note": "The positional audio mix, the scene scale modes and anchors, the scene and view point mapping and the frame clock are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; there is no scene-positioned audio node API over the audio daemon (springboard/audiod) and no 2D light nodes."
   },
   {
    "feature": "Renderer hand-off and custom Metal pipeline",

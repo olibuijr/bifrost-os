@@ -31,9 +31,9 @@
     {
       "feature": "Bounce and pulse effects",
       "apple": "bounce, pulse (BounceSymbolEffect, PulseSymbolEffect)",
-      "bifrost": "springboard/ui/src/symbol_effect.rs; wired: springboard/src/shell/control_center.rs (start_toggle_bounce, glyph_scale; desktop panel Wi-Fi, Bluetooth, Focus)",
+      "bifrost": "springboard/ui/src/symbol_effect.rs (SymbolEffect, Effect::Bounce, Effect::Pulse, replace_poses); wired: springboard/src/shell/control_center.rs (start_toggle_bounce, glyph_scale; desktop panel Wi-Fi, Bluetooth, Focus)",
       "status": "partial",
-      "note": "Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the bounce spring and dock bounce are fixed motions for scrolling and the dock, not symbol effects an app can request Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The bounce and pulse poses, the repeat and speed options and the replace hand-over are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the control centre bounces its toggles, pulse is drawn nowhere yet, and the dock bounce and scroll spring are fixed motions that apps cannot request."
     },
     {
       "feature": "Variable color effect",
