@@ -72,6 +72,7 @@ const ROW_INACTIVE: u32 = 6;
 const ROW_SELECTED: u32 = 7;
 const ROW_GPU: u32 = 8;
 const ROW_WINDOWED: u32 = 9;
+const ROW_RECENT: u32 = 10;
 /// Menu item ids for the app's own menu.
 pub const MENU_QUIT: u32 = 1;
 pub const MENU_FIND: u32 = 2;
@@ -384,6 +385,9 @@ impl Monitor {
             p.energy_avg = self.averages.mean(&p.name);
         }
         self.history.record(&snap);
+        if let Some(pressure) = inspect::read_pressure() {
+            self.history.pressure.push(pressure);
+        }
         if self.dock_mode != DockMode::Off {
             self.dock_update = Some(model::dock_content(self.dock_mode, &snap, &self.history));
         }
@@ -1001,6 +1005,7 @@ impl Monitor {
             SidebarItem::row(ROW_WINDOWED, Filter::Windowed.label()).with_symbol("rectangle.grid.1x2"),
             SidebarItem::row(ROW_SELECTED, Filter::Selected.label()).with_symbol("checkmark.circle"),
             SidebarItem::row(ROW_GPU, Filter::Gpu.label()).with_symbol("desktopcomputer"),
+            SidebarItem::row(ROW_RECENT, Filter::Recent.label()).with_symbol("clock"),
         ];
         let mut list = SourceList::new(items, 28.0, 26.0);
         list.set_selected(Some(match self.filter {
@@ -1013,6 +1018,7 @@ impl Monitor {
             Filter::Windowed => ROW_WINDOWED,
             Filter::Selected => ROW_SELECTED,
             Filter::Gpu => ROW_GPU,
+            Filter::Recent => ROW_RECENT,
         }));
         list
     }
@@ -1035,6 +1041,7 @@ impl Monitor {
             ROW_WINDOWED => Filter::Windowed,
             ROW_SELECTED => Filter::Selected,
             ROW_GPU => Filter::Gpu,
+            ROW_RECENT => Filter::Recent,
             _ => Filter::All,
         };
         self.set_filter(filter);

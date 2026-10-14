@@ -11,7 +11,7 @@ use crate::window::{
     INSPECT_SEGMENTS, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL,
 };
 use bifrost_app::controls::Rect;
-use bifrost_app::kit::colors::{SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE};
+use bifrost_app::kit::colors::{SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_YELLOW};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
@@ -22,6 +22,8 @@ const PAD: f32 = 8.0;
 const CARD_PAD: f32 = 14.0;
 /// Corner radius of the graph card (points): a grouped card.
 const CARD_RADIUS_PT: f32 = 13.0;
+/// The footer width the Memory tab's pressure strip and its label take, left of the footer text (points).
+const PRESSURE_SPACE_PT: f32 = 280.0;
 
 /// A filled rectangle in points.
 fn fill(s: &mut Surface, ui: &Ui, x: f32, y: f32, w: f32, h: f32, color: u32) {
@@ -474,12 +476,50 @@ impl Monitor {
         let fy = g.h - FOOT_PT;
         fill(s, ui, x0, fy, g.w - x0, FOOT_PT, CONTENT_BG.now());
         fill(s, ui, x0, fy, g.w - x0, 1.0, SEPARATOR_C.now());
+        // the Memory tab's pressure strip sits at the right, left of the status line when there is one
+        let pressure = self.tab == Tab::Memory && self.report.is_none() && self.inspector.is_none();
+        let status_max = (g.w - x0) * 0.4;
+        let status_w = if self.status.is_empty() { 0.0 } else { status_max + 12.0 };
         let footer = self.footer_text();
-        text(&mut self.labels, s, ui, &footer, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x0 + 16.0, fy + FOOT_PT / 2.0, g.w - x0 - 32.0);
+        let footer_max = g.w - x0 - 32.0 - (if pressure { PRESSURE_SPACE_PT } else { 0.0 });
+        text(&mut self.labels, s, ui, &footer, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x0 + 16.0, fy + FOOT_PT / 2.0, footer_max);
+        if pressure {
+            self.draw_pressure(ui, s, g.w - 16.0 - status_w, fy);
+        }
         if !self.status.is_empty() {
             let status = self.status.clone();
-            let max = (g.w - x0) * 0.4;
-            text(&mut self.labels, s, ui, &status, MAC_FOOTNOTE_PT, Weight::Regular, SYSTEM_ORANGE.now(), g.w - 16.0 - max, fy + FOOT_PT / 2.0, max);
+            text(&mut self.labels, s, ui, &status, MAC_FOOTNOTE_PT, Weight::Regular, SYSTEM_ORANGE.now(), g.w - 16.0 - status_max, fy + FOOT_PT / 2.0, status_max);
+        }
+    }
+
+    /// The memory pressure strip in the footer: the last minute of the share of time some task waited for memory, as
+    /// bars (green, yellow or red by `model::pressure_level`), with the latest figure beside them. `right` is where the
+    /// strip ends, in points.
+    fn draw_pressure(&mut self, ui: &Ui, s: &mut Surface, right: f32, fy: f32) {
+        const STRIP_W: f32 = 120.0;
+        const STRIP_H: f32 = 12.0;
+        /// A bar is full at this share, so small pressure still shows.
+        const FULL_PCT: f32 = 20.0;
+        let top = fy + (FOOT_PT - STRIP_H) / 2.0;
+        let strip_x = right - STRIP_W;
+        let label = if self.history.pressure.is_empty() {
+            "Pressure not reported".to_string()
+        } else {
+            format!("Pressure {:.1}%", self.history.pressure.last())
+        };
+        let label_w = width(ui, &label, MAC_FOOTNOTE_PT, Weight::Regular);
+        text(&mut self.labels, s, ui, &label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), strip_x - 8.0 - label_w, fy + FOOT_PT / 2.0, label_w + 4.0);
+        let samples: Vec<f32> = self.history.pressure.values().collect();
+        let slot = STRIP_W / HISTORY as f32;
+        let offset = HISTORY.saturating_sub(samples.len());
+        for (i, v) in samples.iter().enumerate() {
+            let color = match model::pressure_level(*v) {
+                model::Pressure::Normal => SYSTEM_GREEN.now(),
+                model::Pressure::Elevated => SYSTEM_YELLOW.now(),
+                model::Pressure::Critical => DESTRUCTIVE,
+            };
+            let bh = (v / FULL_PCT).clamp(0.0, 1.0) * STRIP_H;
+            fill(s, ui, strip_x + (offset + i) as f32 * slot, top + STRIP_H - bh.max(1.0), (slot - 0.5).max(1.0), bh.max(1.0), color);
         }
     }
 }

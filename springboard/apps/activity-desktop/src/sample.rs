@@ -153,6 +153,8 @@ pub struct ProcSample {
     pub private: Option<u64>,
     /// Voluntary context switches of its threads per second: the wake-ups of an idle process. Zero unless counted.
     pub wakeups: f64,
+    /// Seconds since the process started; None when the boot time is not known.
+    pub age_secs: Option<u64>,
 }
 
 /// Everything read in one pass.
@@ -178,6 +180,13 @@ pub struct ProcStat {
     /// User plus system time, in ticks.
     pub ticks: u64,
     pub threads: u32,
+    /// When the process started, in ticks since boot (field 22 of the stat line).
+    pub start_ticks: u64,
+}
+
+/// The boot time in seconds since the epoch: the `btime` line of `/proc/stat`.
+pub fn parse_btime(text: &str) -> Option<u64> {
+    text.lines().find_map(|l| l.strip_prefix("btime "))?.trim().parse().ok()
 }
 
 /// Parses the aggregate `cpu` line of `/proc/stat`.
@@ -300,7 +309,8 @@ pub fn parse_stat(text: &str) -> Option<ProcStat> {
     let stime: u64 = rest.get(12)?.parse().ok()?;
     let threads: u32 = rest.get(17)?.parse().ok()?;
     let ppid: u32 = rest.get(1)?.parse().ok()?;
-    Some(ProcStat { name, ppid, ticks: utime + stime, threads })
+    let start_ticks: u64 = rest.get(19).and_then(|v| v.parse().ok()).unwrap_or(0);
+    Some(ProcStat { name, ppid, ticks: utime + stime, threads, start_ticks })
 }
 
 /// The real user id: the first number of the `Uid:` line of `/proc/<pid>/status`.
@@ -534,6 +544,8 @@ pub struct Sampler {
     pub scan_private: bool,
     /// Count each process's voluntary context switches over its threads (the Idle Wake Ups column). Only while shown.
     pub scan_wakeups: bool,
+    /// The boot time in seconds since the epoch (zero when unknown), to age the processes.
+    boot: u64,
 }
 
 /// How long the list of sleep blockers is trusted before logind is asked again (milliseconds).
@@ -556,12 +568,14 @@ impl Sampler {
         Sampler {
             users: read_file("/etc/passwd").map(|t| parse_passwd(&t)).unwrap_or_default(),
             own_uid: read_file("/proc/self/status").and_then(|t| parse_uid(&t)).unwrap_or(u32::MAX),
+            boot: read_file("/proc/stat").and_then(|t| parse_btime(&t)).unwrap_or(0),
             ..Sampler::default()
         }
     }
 
     /// Reads the machine now. `now_ms` is a monotonic time in milliseconds; the first sample has no rates.
     pub fn sample(&mut self, now_ms: f64) -> Snapshot {
+        let now_unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let dt = self.last_ms.map(|t| (now_ms - t) / 1000.0).filter(|d| *d > 0.0);
         self.last_ms = Some(now_ms);
         let rate = |delta: u64| dt.map_or(0.0, |d| delta as f64 / d);
@@ -679,6 +693,7 @@ impl Sampler {
                     ports,
                     private,
                     wakeups,
+                    age_secs: (self.boot > 0).then(|| now_unix.saturating_sub(self.boot + (stat.start_ticks as f64 / TICKS_PER_SEC) as u64)),
                 });
             }
         }
@@ -816,6 +831,14 @@ mod tests {
         assert!(parse_inhibitors("a(ssssuu) 2 \"sleep\" \"x\"").is_empty());
         assert!(parse_inhibitors("").is_empty());
         assert!(parse_inhibitors("garbage").is_empty());
+    }
+
+    #[test]
+    fn the_boot_time_and_a_process_start_time_give_its_age() {
+        assert_eq!(parse_btime("cpu 1 2 3\nbtime 1700000000\n"), Some(1_700_000_000));
+        assert_eq!(parse_btime("cpu 1\n"), None);
+        let s = parse_stat("1234 (sh) S 1 1234 1234 0 -1 4194304 1 0 0 0 42 8 0 0 20 0 7 0 5000 1 1 1").unwrap();
+        assert_eq!(s.start_ticks, 5000);
     }
 
     #[test]

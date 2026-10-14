@@ -261,14 +261,28 @@ pub enum Filter {
     /// (`visible_within`); the filter itself keeps every row it is given.
     Selected,
     Gpu,
+    /// The processes started in the last eight hours (Applications in the Last 8 Hours), by their start time.
+    Recent,
 }
 
 /// Accounts below this uid belong to the system, not to a person.
 pub const FIRST_PERSON_UID: u32 = 1000;
+/// How far back the Recent filter looks, in seconds.
+pub const RECENT_SECS: u64 = 8 * 3600;
 
 impl Filter {
-    pub const ALL: [Filter; 9] =
-        [Filter::All, Filter::Mine, Filter::Others, Filter::System, Filter::Active, Filter::Inactive, Filter::Windowed, Filter::Selected, Filter::Gpu];
+    pub const ALL: [Filter; 10] = [
+        Filter::All,
+        Filter::Mine,
+        Filter::Others,
+        Filter::System,
+        Filter::Active,
+        Filter::Inactive,
+        Filter::Windowed,
+        Filter::Selected,
+        Filter::Gpu,
+        Filter::Recent,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -281,6 +295,7 @@ impl Filter {
             Filter::Windowed => "Windowed Processes",
             Filter::Selected => "Selected Processes",
             Filter::Gpu => "GPU Processes",
+            Filter::Recent => "Applications in the Last 8 Hours",
         }
     }
 
@@ -294,6 +309,7 @@ impl Filter {
             Filter::Inactive => p.cpu <= 0.0,
             Filter::Windowed | Filter::Selected => true,
             Filter::Gpu => p.gpu > 0.0,
+            Filter::Recent => p.age_secs.map_or(false, |age| age <= RECENT_SECS),
         }
     }
 }
@@ -641,6 +657,27 @@ pub struct History {
     pub cores: Vec<Series>,
     /// GPU busy share, recorded only while the sampler scans the GPU.
     pub gpu: Series,
+    /// Memory pressure: the share of the last ten seconds some task waited for memory (PSI), in percent.
+    pub pressure: Series,
+}
+
+/// How serious a memory pressure share is, for the strip in the Memory footer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pressure {
+    Normal,
+    Elevated,
+    Critical,
+}
+
+/// Normal below 5 %, elevated below 15 %, critical from 15 %: the share of time some task waited for memory.
+pub fn pressure_level(percent: f32) -> Pressure {
+    if percent < 5.0 {
+        Pressure::Normal
+    } else if percent < 15.0 {
+        Pressure::Elevated
+    } else {
+        Pressure::Critical
+    }
 }
 
 impl History {
@@ -1136,5 +1173,28 @@ mod tests {
         assert_eq!(h.cores[0].len(), 2);
         assert_eq!(h.gpu.len(), 1);
         assert_eq!(h.gpu.last(), 55.0);
+    }
+
+    #[test]
+    fn the_recent_filter_keeps_processes_started_in_the_last_eight_hours() {
+        let mut young = proc(1, "young", 1000, 0.0, 0);
+        young.age_secs = Some(3600);
+        let mut old = proc(2, "old", 1000, 0.0, 0);
+        old.age_secs = Some(RECENT_SECS + 1);
+        let unknown = proc(3, "unknown", 1000, 0.0, 0);
+        let sort = Sort { key: SortKey::Pid, descending: false };
+        let rows = visible(&[young, old, unknown], Filter::Recent, 1000, "", sort);
+        assert_eq!(rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![1]);
+        assert_eq!(Filter::Recent.label(), "Applications in the Last 8 Hours");
+        assert!(Filter::ALL.contains(&Filter::Recent));
+    }
+
+    #[test]
+    fn memory_pressure_is_normal_elevated_or_critical() {
+        assert_eq!(pressure_level(0.0), Pressure::Normal);
+        assert_eq!(pressure_level(4.9), Pressure::Normal);
+        assert_eq!(pressure_level(5.0), Pressure::Elevated);
+        assert_eq!(pressure_level(14.9), Pressure::Elevated);
+        assert_eq!(pressure_level(15.0), Pressure::Critical);
     }
 }
