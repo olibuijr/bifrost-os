@@ -248,8 +248,8 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes (list document)",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/manifest.toml; springboard/apps/reminders-desktop/src/main.rs:497",
-   "note": "File > Import List reads a Markdown checklist (subtasks, due days and section headings) into a new list through the open panel; a checklist opened or shared from Files (net.daringfireball.markdown) is imported the same way; Export List still writes the same format; built on parity/team-d-reminders; not yet verified on Midget",
+   "bifrost": "springboard/apps/reminders-desktop/manifest.toml; springboard/apps/reminders-desktop/src/main.rs:497; springboard/apps/reminders-desktop/src/main.rs (File > Save List As, SaveTo)",
+   "note": "File > Import List reads a Markdown checklist (subtasks, due days and section headings) into a new list through the open panel; a checklist opened or shared from Files (net.daringfireball.markdown) is imported the same way; Export List still writes the same format; File > Save List As... writes the same checklist to a file the user chooses in the save panel; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Offer Save As for a list next to Export List."
   },
   {
@@ -284,8 +284,8 @@
    "area": "menu",
    "apple": "File > Print",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:316",
-   "note": "File > Print List sends the list's Markdown checklist text, sections as headings, to the print path as Notes does; built on parity/team-d-reminders; not yet verified on Midget",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:316; springboard/apps/reminders-desktop/src/app.rs (printable_list)",
+   "note": "File > Print List sends the list's Markdown checklist text, sections as headings, and a smart list's rows as one flat checklist, to the print path as Notes does; search results are not printed yet and the printout is plain checklist text; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Print smart lists and search results as well, and lay the printout out as a page rather than plain checklist text."
   },
   {
@@ -365,8 +365,8 @@
    "area": "settings",
    "apple": "Settings window",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1580",
-   "note": "Reminder > Settings (Cmd+,) form with the list new reminders go to, the all-day alert time (ten times from 6:00 to 20:00) and a Dock badge switch, saved in settings.tsv and followed by the alerts and the Today widget; built on parity/team-d-reminders; not yet verified on Midget",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1580; springboard/apps/reminders-desktop/src/settings.rs (ALL_DAY_CHOICES)",
+   "note": "Reminder > Settings (Cmd+,) form with the list new reminders go to, the all-day alert time (every half hour from 6:00 to 20:00, stepped by the row; no picker yet) and a Dock badge switch, saved in settings.tsv and followed by the alerts and the Today widget; built on parity/team-d-reminders; not yet verified on Midget",
    "wire": "Show the pane in the shell's Settings window or a real preferences window and offer any all-day time, not ten choices."
   },
   {
