@@ -19,14 +19,14 @@
    "apple": "CodableRepresentation, DataRepresentation",
    "bifrost": "springboard/sdk/src/transfer.rs (Representations::codable, Representations::data, JSON)",
    "status": "partial",
-   "note": "CodableRepresentation and DataRepresentation are declared on the model and reach the pasteboard and drag through one Transferable declaration (encoders are supplied as functions, no derive). Host tests export_hides_owner_types_from_other_apps_and_import_rejects_bad_bytes and exported_and_imported_types_follow_declaration_order_and_visibility (sdk/tests/parity_sdk-tests-01e.rs). The JSON and property-list encoders in springboard/sdk/src/coding.rs are not part of this evidence; verify on Midget."
+   "note": "CodableRepresentation and DataRepresentation are declared on the model and reach the pasteboard and drag through one Transferable declaration (encoders are supplied as functions, no derive). Headless tests in springboard/sdk/tests/parity_sdk-tests-13.rs cover the JSON round trip, visibility filtering, pasteboard items, drops and the rule that a team-only type is not exported to other processes. Host tests export_hides_owner_types_from_other_apps_and_import_rejects_bad_bytes and exported_and_imported_types_follow_declaration_order_and_visibility (sdk/tests/parity_sdk-tests-01e.rs). The JSON and property-list encoders in springboard/sdk/src/coding.rs are not part of this evidence; verify on Midget."
   },
   {
    "feature": "File transfer (file URL representations)",
    "apple": "FileRepresentation, SentTransferredFile, ReceivedTransferredFile",
    "bifrost": "springboard/sdk/src/transfer.rs (Representations::file, SentTransferredFile, ReceivedTransferredFile)",
    "status": "partial",
-   "note": "FileRepresentation with sender and receiver roles and copy semantics (allow_open_in_place hands over the original). Host tests a_file_representation_hands_over_and_rebuilds_its_file, a_sent_file_opened_in_place_hands_over_the_original and a_sent_file_without_open_in_place_is_copied_to_the_receiver (sdk/tests/parity_sdk-tests-01e.rs). On a pasteboard item a file representation travels as bytes; no file promise in the shell yet, and the document-grant path for dropped files (springboard/proto/src/rich.rs, springboard/sdk/src/dnd.rs) is not part of this evidence. Verify on Midget."
+   "note": "FileRepresentation with sender and receiver roles and copy semantics (allow_open_in_place hands over the original). Headless tests in springboard/sdk/tests/parity_sdk-tests-13.rs cover the declared kind, the handed-over path, the rebuilt model, in-place hand-over, the copy failure for a missing source and the refusal of a path without a file name. Host tests a_file_representation_hands_over_and_rebuilds_its_file, a_sent_file_opened_in_place_hands_over_the_original and a_sent_file_without_open_in_place_is_copied_to_the_receiver (sdk/tests/parity_sdk-tests-01e.rs). On a pasteboard item a file representation travels as bytes; no file promise in the shell yet, and the document-grant path for dropped files (springboard/proto/src/rich.rs, springboard/sdk/src/dnd.rs) is not part of this evidence. Verify on Midget."
   },
   {
    "feature": "Copy and paste of typed items",
@@ -61,7 +61,7 @@
    "apple": "ProxyRepresentation, TransferRepresentationVisibility",
    "bifrost": "springboard/sdk/src/transfer.rs (Representations::proxy_of, Visibility)",
    "status": "partial",
-   "note": "Visibility All, Team and OwnProcess filter exports; proxy_of forwards another Transferable's bytes and file representations with the stricter visibility, and an export-only forward stays export-only. Built on parity/team-k-core-transferable; not yet verified on Midget."
+   "note": "Visibility All, Team and OwnProcess filter exports; proxy_of forwards another Transferable's bytes and file representations with the stricter visibility, and an export-only forward stays export-only. Headless tests in springboard/sdk/tests/parity_sdk-tests-13.rs cover the visibility table, the narrowing of forwarded types, team-only file proxies and export-only forwards. Built on parity/team-k-core-transferable; not yet verified on Midget."
   }
  ],
  "gaps": [
