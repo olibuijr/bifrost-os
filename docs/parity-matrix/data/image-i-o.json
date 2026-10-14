@@ -122,9 +122,9 @@
     {
       "feature": "Tiled image providers",
       "apple": "kCGImageProviderPreferredTileWidth, kCGImageProviderPreferredTileHeight",
-      "bifrost": "springboard/render/src/image_tiles.rs",
+      "bifrost": "springboard/render/src/image_tiles.rs (TileGrid, TileCache)",
       "status": "partial",
-      "note": "Wave 5 (w5-image-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No streaming tile provider."
+      "note": "Tile geometry and a bounded TileCache that a streaming provider fills on demand, evicting the least recently used tile, are tested headless in render/tests/parity_sdk-complete-37.rs. Gap: no decoder or pixel source feeds the cache yet, and the model is not wired into apps or the shell or tested on Midget."
     }
   ],
   "gaps": [

@@ -80,9 +80,9 @@
   {
    "feature": "Offline playback and storage",
    "apple": "AVAssetDownloadTask, AVAssetDownloadStorageManager",
-   "bifrost": "springboard/src/media/stream.rs",
+   "bifrost": "springboard/src/media/offline.rs (OfflineStore); springboard/src/media/stream.rs",
    "status": "partial",
-   "note": "Progressive streaming to a growing file for playback; no HLS download tasks or storage policy"
+   "note": "Download tasks (queued, downloading, paused, finished, failed, resume from stored bytes) and a storage budget that evicts the least recently played finished items are tested headless in springboard/tests/parity_sdk-complete-37.rs. Gap: there is no HLS download transport and the player does not yet play offline items, and storage is not measured on Midget."
   },
   {
    "feature": "Streaming and AirPlay",

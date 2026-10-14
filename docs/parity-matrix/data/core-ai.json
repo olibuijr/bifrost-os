@@ -66,9 +66,9 @@
     {
       "feature": "Ahead-of-time model compilation",
       "apple": "coreai-build command-line tool, compiling Core AI models ahead of time",
-      "bifrost": "springboard/ui/src/model_specialization.rs",
+      "bifrost": "springboard/ui/src/model_compile.rs (compile, prepare); springboard/ui/src/model_specialization.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_specialization.rs); not wired into the shell or apps, not tested on Midget. No build step converts or compiles models."
+      "note": "compile checks the widths of an operator chain and serializes a canonical plan per target, and prepare reuses the artifact through the specialization cache (headless tests in ui/tests/parity_sdk-complete-37.rs). Gap: there is no model importer and no kernel generation, and the cache is not wired into the shell or apps or measured on Midget."
     },
     {
       "feature": "Model debugging and profiling",
