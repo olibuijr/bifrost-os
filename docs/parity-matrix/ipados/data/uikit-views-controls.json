@@ -4,7 +4,7 @@
  "macos_since": "",
  "status": "partial",
  "bifrost": "springboard/sdk/src/view/ (View, ViewBase, controls.rs, forms.rs, scroll.rs), bifrost_ui::values, springboard/ui/src/visual_effect.rs",
- "summary": "A retained view tree with buttons, switches, sliders, segmented controls, steppers, a text field, progress indicators, stacks, forms and a vertical scroll view exists and is shared by form factors. Per-view bounds and transforms, control events and states, pickers, a calendar picker control, bar items and the large content viewer are missing.",
+ "summary": "A retained view tree with buttons, switches, sliders, segmented controls, steppers, a text field, progress indicators, stacks, forms and a vertical scroll view exists and is shared by form factors. A wheel picker, a content-unavailable view and a large content viewer are partial (built on parity/team-p-controls, not yet verified on the tablet). Per-view bounds and transforms, control events and states, and a calendar picker control are missing.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -52,9 +52,9 @@
   {
    "feature": "Wheel picker",
    "apple": "UIPickerView",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "no spinning-wheel value picker. Needed on touch for dates, times and short option lists; build on the scroll physics in springboard/sdk/src/view/scroll.rs with snap-to-row"
+   "bifrost": "springboard/ui/src/picker_wheel.rs, springboard/sdk/src/view/picker.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-controls; not yet verified on the tablet. One wheel per component from a data source (counts, titles, widths); drag with rubber band, flick and snap to a row, tap to select, arrow keys; selection callbacks. No date or time picker variants yet"
   },
   {
    "feature": "Colour well",
@@ -66,9 +66,9 @@
   {
    "feature": "Content unavailable view",
    "apple": "UIContentUnavailableView",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "an empty-state view with symbol, title, text and an action is not a shared component; apps draw their own"
+   "bifrost": "springboard/ui/src/content_unavailable.rs, springboard/sdk/src/view/content_unavailable.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-controls; not yet verified on the tablet. Empty and search presets; title, secondary text, buttons with actions, horizontal or vertical axis; the picture is supplied by the app. No loading preset and no button configuration styles"
   },
   {
    "feature": "Image view",
@@ -122,9 +122,9 @@
   {
    "feature": "Large content viewer",
    "apple": "UILargeContentViewerInteraction",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "accessibility aid for large text sizes; needs content size categories with accessibility sizes; only a continuous text scale exists (Configure.text_scale)"
+   "bifrost": "springboard/ui/src/large_content.rs, springboard/sdk/src/view/large_content.rs, springboard/sdk/src/view/mod.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-controls; not yet verified on the tablet. A hold-still press on a bar item or control presents its large title and picture; slop cancels the hold. The app enables it (set_enabled) from its text size; the wrapped control still fires its action on release. Observer hook View::observe_pointer lives in view/mod.rs"
   },
   {
    "feature": "Private click measurement",
@@ -146,7 +146,9 @@
   "Horizontal and pinch-zoom scrolling, paging",
   "Control events and control states (highlighted, selected)",
   "Bottom tab bar and large-title navigation bar",
-  "Wheel picker, date and time picker controls",
-  "Touch-size control metrics (44 pt targets) selected by form factor"
+  "Date and time picker controls (date wheels, time picker, compact date picker)",
+  "Touch-size control metrics (44 pt targets) selected by form factor",
+  "Large content viewer: automatic enabling at accessibility text sizes, and a long press that does not also fire the control's action",
+  "Picker and content-unavailable views are not yet exercised on the tablet (touch metrics, 44 pt targets)"
  ]
 }
