@@ -54,7 +54,7 @@
       "apple": "kColorSyncRenderingIntentPerceptual, kColorSyncRenderingIntentRelative, kColorSyncBlackPointCompensation",
       "bifrost": "springboard/render/src/rendering_intent.rs (IntentTransform, BlackPoints, compensate_black; intents are cg::color::RenderingIntent)",
       "status": "partial",
-      "note": "Four intents (perceptual with gamut compression, relative colorimetric, saturation with clipping, absolute colorimetric without white adaptation) and affine black point compensation, on linear light. Intents from a profile's own tables are not read, and cg::color::ColorConversionInfo still treats perceptual and saturation as relative. A pure model with no caller outside its tests yet. Built on parity/team-a-09; not yet verified on Midget."
+      "note": "Tested headless in springboard/render/tests/parity_sdk-tests-16.rs: the four intents (perceptual with gamut compression, relative colorimetric, saturation with clipping, absolute colorimetric without white adaptation) and affine black point compensation, on linear light. Intents from a profile's own tables are not read, and cg::color::ColorConversionInfo still treats perceptual and saturation as relative. A pure model with no caller outside its tests yet. Built on parity/team-a-09; not yet verified on Midget."
     },
     {
       "feature": "HDR, extended range and tone mapping",

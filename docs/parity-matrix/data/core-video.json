@@ -19,7 +19,7 @@
       "apple": "CVPixelBufferPool, CVPixelBufferPoolCreate, CVPixelBufferPoolCreatePixelBuffer, CVPixelBufferPoolFlush",
       "bifrost": "springboard/render/src/buffer_pool.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-core-video, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the presenter keeps a fixed set of drawables per surface; no pool with minimum count, maximum age or allocation threshold is exposed to apps"
+      "note": "Pure model: acquire, release, prewarm to a minimum count, ageing past a maximum age, an allocation threshold and flush are tested headless in springboard/render/tests/parity_sdk-tests-16.rs. Not wired into apps or the shell, and not tested on the VM or Midget. The presenter keeps a fixed set of drawables per surface; no pool with these limits is exposed to apps"
     },
     {
       "feature": "Image buffer attachments and colour metadata",
