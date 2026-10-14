@@ -679,6 +679,7 @@ fn parse_field(v: &Value) -> Result<Field, ArchiveError> {
             _ => return Err(malformed("unknown dictionary field")),
         },
         Value::Date(_) => return Err(malformed("a date is not a field")),
+        Value::Data(bytes) => Field::Bytes(bytes.clone()),
     })
 }
 
