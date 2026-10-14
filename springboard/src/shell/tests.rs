@@ -586,6 +586,51 @@
         assert_eq!(sh.session_token.as_deref(), Some("tok"));
     }
 
+    /// In the touch form the lock screen is usable with fingers alone: a tap on the user picture raises the keyboard,
+    /// its keys type into the password field and Return signs in.
+    #[test]
+    fn the_lock_screen_signs_in_with_touch_alone() {
+        keyboard::fake_process(500.0);
+        let mut sh = login_shell(login::Reply::Ok("tok".into()));
+        sh.anim = None;
+        sh.login_ensure(0.0);
+        sh.login.as_mut().unwrap().touch_keyboard = true;
+        let picture = (600.0, 1920.0 * 0.62 + sh.ui.pt(30.0));
+        tap(&mut sh, picture.0, picture.1, 100.0);
+        assert!(sh.keyboard.shown(), "the tap raised the keyboard");
+        assert!(sh.login_owns_keyboard());
+        tap_key(&mut sh, "p", 300.0);
+        tap_key(&mut sh, "w", 400.0);
+        assert_eq!(sh.login.as_ref().map(|l| l.len()), Some(2), "keys type into the password field");
+        keyboard::fake_typed(keyboard::Out::Text("x".into()));
+        sh.tick(500.0);
+        assert_eq!(sh.login.as_ref().map(|l| l.len()), Some(3), "keys from the keyboard process reach it too");
+        tap_key(&mut sh, "delete", 600.0);
+        assert_eq!(sh.login.as_ref().map(|l| l.len()), Some(2), "backspace deletes");
+        tap_key(&mut sh, "return", 700.0);
+        for k in 0..200 {
+            sh.tick(800.0 + k as f64 * 20.0);
+            if !sh.is_locked() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(!sh.is_locked(), "return signed in");
+        assert_eq!(sh.session_token.as_deref(), Some("tok"));
+        assert!(!sh.keyboard.shown(), "the keyboard goes down with the login window");
+    }
+
+    /// In the desktop form a click on the picture leaves the keyboard down.
+    #[test]
+    fn a_click_on_the_lock_screen_picture_keeps_the_keyboard_down_on_a_desktop() {
+        keyboard::fake_process(500.0);
+        let mut sh = login_shell(login::Reply::Unavailable);
+        sh.anim = None;
+        sh.login_ensure(0.0);
+        sh.login.as_mut().unwrap().touch_keyboard = false;
+        let picture = (600.0, 1920.0 * 0.62 + sh.ui.pt(30.0));
+        tap(&mut sh, picture.0, picture.1, 100.0);
+        assert!(!sh.keyboard.shown());
+    }
+
     /// Developer preview: `PREVIEW_DIR=DIR cargo test preview_login -- --ignored` writes login-dark.png and login-light.png
     /// (the boot login window over the lock screen, with a stub account).
     #[test]

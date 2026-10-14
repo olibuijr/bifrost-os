@@ -36,6 +36,22 @@ const RETRY_MS: f64 = 5000.0;
 pub const HINT_AFTER: u32 = 3;
 /// The power button's size in the status bar.
 const POWER_PT: f32 = 22.0;
+/// How long the account group takes to move for the on-screen keyboard.
+pub const LIFT_MS: f64 = 250.0;
+/// Where the account group sits, as a fraction of the screen height (the avatar's top edge).
+const GROUP_TOP: f32 = 0.62;
+
+/// Whether the shell runs in the touch (tablet) form, where the login window raises the on-screen keyboard. This is the
+/// single place the login window reads the form from. It reads what the shared form type reads (`BIFROST_FORM`, then the
+/// file `/etc/bifrost/form`, default desktop) and is replaced by `FormFactor::current().is_tablet()` once that type is
+/// merged.
+pub fn tablet_form() -> bool {
+    let word = |s: &str| s.trim().eq_ignore_ascii_case("tablet");
+    match std::env::var("BIFROST_FORM") {
+        Ok(v) if matches!(v.trim().to_ascii_lowercase().as_str(), "tablet" | "desktop") => word(&v),
+        _ => std::fs::read_to_string("/etc/bifrost/form").is_ok_and(|v| word(&v)),
+    }
+}
 
 /// How far the status icons move left while the login window shows its power button.
 pub fn status_inset(ui: &Ui) -> i32 {
@@ -173,6 +189,10 @@ enum Hit {
     Submit,
     /// name and password mode: the name field
     Name,
+    /// the password field outside the return arrow
+    Field,
+    /// the user picture
+    Avatar,
     Power,
     Sleep,
     Restart,
@@ -211,6 +231,16 @@ pub struct Login {
     typed_name: String,
     /// name mode: keys go to the name field until Return moves them on to the password
     name_focus: bool,
+    /// the touch form: tapping the password field raises the on-screen keyboard
+    pub touch_keyboard: bool,
+    /// the on-screen keyboard is up for this window
+    kb_up: bool,
+    /// a raise or hide the shell has not carried out yet
+    kb_request: Option<bool>,
+    /// how far (px) the account group is moved up now
+    lift: f32,
+    /// the move in progress: start time, from, to
+    lift_anim: Option<(f64, f32, f32)>,
     backend: Arc<dyn Backend>,
     w: i32,
     h: i32,
@@ -238,6 +268,11 @@ impl Login {
             wrong_count: 0,
             typed_name: String::new(),
             name_focus: false,
+            touch_keyboard: tablet_form(),
+            kb_up: false,
+            kb_request: None,
+            lift: 0.0,
+            lift_anim: None,
             backend,
             w,
             h,
@@ -400,6 +435,10 @@ impl Login {
             self.power_open = false;
             return Act::None;
         }
+        if matches!(out, Out::Hide) && self.kb_up {
+            self.request_keyboard(false);
+            return Act::None;
+        }
         if self.pending.is_some() {
             return Act::None;
         }
@@ -453,6 +492,78 @@ impl Login {
             _ => {}
         }
         Act::None
+    }
+
+    // -- the on-screen keyboard -----------------------------------------------------
+
+    /// The keyboard is up for this window (its keys type into the focused field).
+    pub fn keyboard_up(&self) -> bool {
+        self.kb_up
+    }
+
+    /// Asks for the keyboard to go up or down. Only the touch form raises it; hiding always works.
+    fn request_keyboard(&mut self, on: bool) {
+        if on && !self.touch_keyboard {
+            return;
+        }
+        if self.kb_up != on {
+            self.kb_up = on;
+            self.kb_request = Some(on);
+        }
+    }
+
+    /// The shell could not raise the keyboard (no keyboard package, a hardware keyboard, the form): keys keep going to
+    /// the field from the hardware.
+    fn keyboard_refused(&mut self) {
+        self.kb_up = false;
+    }
+
+    /// The raise or hide the shell has still to carry out.
+    pub fn take_keyboard_request(&mut self) -> Option<bool> {
+        self.kb_request.take()
+    }
+
+    /// Where the keyboard's top edge rests (`None` when it is down): the account group moves up so the field, the
+    /// message lines under it and the user picture stay above it.
+    pub fn set_keyboard_top(&mut self, ui: &Ui, top: Option<f32>, t: f64) {
+        let to = top.map_or(0.0, |k| self.lift_for(ui, k));
+        let end = self.lift_anim.map_or(self.lift, |(_, _, to)| to);
+        if (to - end).abs() > 0.5 {
+            self.lift_anim = Some((t, self.lift, to));
+        }
+    }
+
+    /// The move (px) that puts the group above a keyboard whose top edge is at `kb_top`, without pushing its top edge
+    /// into the status bar.
+    fn lift_for(&self, ui: &Ui, kb_top: f32) -> f32 {
+        let (top, d) = (self.h as f32 * GROUP_TOP, ui.pt(72.0));
+        let (fh, gap) = (ui.pt(30.0), ui.pt(10.0));
+        let field_top = top + d + ui.pt(48.0);
+        // room under the field for the caps, error and hint lines
+        let bottom = field_top + fh + ui.pt(60.0);
+        let highest = if self.name_mode { field_top - fh - gap } else { top };
+        let need = (bottom - kb_top).max(0.0);
+        let room = (highest - ui.pt(super::scene::STATUS_PT) - ui.pt(12.0)).max(0.0);
+        need.min(room)
+    }
+
+    /// Moves the account group along its animation. True while it moves.
+    fn tick_lift(&mut self, t: f64) -> bool {
+        let Some((t0, from, to)) = self.lift_anim else { return false };
+        let p = ((t - t0) / LIFT_MS).clamp(0.0, 1.0) as f32;
+        let e = 1.0 - (1.0 - p).powi(3);
+        self.lift = from + (to - from) * e;
+        if p >= 1.0 {
+            self.lift = to;
+            self.lift_anim = None;
+        }
+        true
+    }
+
+    /// A tap on the password field or the user picture: the keys go to the password and the keyboard comes up.
+    fn focus_password(&mut self) {
+        self.name_focus = false;
+        self.request_keyboard(true);
     }
 
     /// Starts the check on a worker thread. An empty field only submits for an account without a password.
@@ -521,7 +632,8 @@ impl Login {
 
     /// Clears an expired lockout; true while the window still needs frames.
     pub fn tick(&mut self, t: f64) -> bool {
-        if self.retry(t) {
+        let moving = self.tick_lift(t);
+        if self.retry(t) || moving {
             return true;
         }
         if self.msg == Msg::LockedOut && t >= self.until_ms {
@@ -533,7 +645,7 @@ impl Login {
 
     /// When the window next needs a frame.
     pub fn wake(&self, t: f64) -> Option<f64> {
-        if self.shaking(t) || self.pending.is_some() {
+        if self.shaking(t) || self.pending.is_some() || self.lift_anim.is_some() {
             Some(t)
         } else if self.locked(t) {
             Some(t + 1000.0)
@@ -559,7 +671,7 @@ impl Login {
     /// The account group (avatar, name, field) sits low in the middle, as in the reference; the clock keeps the top.
     fn avatar_rect(&self, ui: &Ui) -> Rect {
         let d = ui.pt(72.0);
-        (self.w as f32 / 2.0 - d / 2.0, self.h as f32 * 0.62, d, d)
+        (self.w as f32 / 2.0 - d / 2.0, self.h as f32 * GROUP_TOP - self.lift, d, d)
     }
 
     fn field(&self, ui: &Ui) -> Rect {
@@ -636,10 +748,17 @@ impl Login {
         if inside(self.arrow(ui)) {
             return Some(Hit::Submit);
         }
+        if inside(self.field(ui)) {
+            return Some(Hit::Field);
+        }
+        if !self.name_mode && inside(self.avatar_rect(ui)) {
+            return Some(Hit::Avatar);
+        }
         None
     }
 
-    /// Touch and pointer: the arrow submits, the bottom row acts, a sheet confirms or cancels.
+    /// Touch and pointer: the arrow submits, the fields take the keys (and raise the keyboard in the touch form), the
+    /// bottom row acts, a sheet confirms or cancels.
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) -> Act {
         let Event::Up(x, y) = ev else { return Act::None };
         let hit = self.hit(ui, x, y);
@@ -648,10 +767,22 @@ impl Login {
         match hit {
             Some(Hit::Power) => self.power_open = !was_open,
             Some(Hit::Submit) => self.submit(t),
-            Some(Hit::Name) => self.name_focus = true,
+            Some(Hit::Name) => {
+                self.name_focus = true;
+                self.request_keyboard(true);
+            }
+            // the pointer form keeps its behaviour: the keys go where they went before
+            Some(Hit::Field | Hit::Avatar) if self.touch_keyboard => self.focus_password(),
+            Some(Hit::Field | Hit::Avatar) => {}
             Some(Hit::Sleep) => return Act::Sleep,
-            Some(Hit::Restart) => self.sheet = Some(Sheet::Restart),
-            Some(Hit::ShutDown) => self.sheet = Some(Sheet::ShutDown),
+            Some(Hit::Restart) => {
+                self.sheet = Some(Sheet::Restart);
+                self.request_keyboard(false);
+            }
+            Some(Hit::ShutDown) => {
+                self.sheet = Some(Sheet::ShutDown);
+                self.request_keyboard(false);
+            }
             Some(Hit::Confirm) => return self.confirm(),
             Some(Hit::Cancel) => self.sheet = None,
             None => {}
@@ -971,9 +1102,13 @@ impl super::Shell {
     }
 
     pub(super) fn login_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        if let Some(fx) = self.login_keyboard_touch(ev, t) {
+            return fx;
+        }
         let Some(l) = self.login.as_mut() else { return vec![] };
         let act = l.touch(&self.ui, ev, t);
         self.dirty = true;
+        self.login_sync_keyboard(t);
         self.login_act(act)
     }
 
@@ -981,7 +1116,69 @@ impl super::Shell {
         let Some(l) = self.login.as_mut() else { return vec![] };
         let act = l.key(out, t);
         self.dirty = true;
+        self.login_sync_keyboard(t);
         self.login_act(act)
+    }
+
+    /// The on-screen keyboard is up for the login window, so its keys belong to the window.
+    pub(super) fn login_owns_keyboard(&self) -> bool {
+        self.screen == super::Screen::Lock && self.login.as_ref().is_some_and(Login::keyboard_up)
+    }
+
+    /// Touches that land on the keyboard go to it; what it types goes into the login field. `None` when the touch is
+    /// not the keyboard's.
+    fn login_keyboard_touch(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
+        let up = self.login_owns_keyboard() && self.keyboard.shown();
+        let top = self.kb_top();
+        match ev {
+            Event::Down(x, y) if up && y >= top => {
+                self.kb_touch = true;
+                self.keyboard.down(x, y - top, t);
+            }
+            Event::Move(x, y) if self.kb_touch => self.keyboard.moved(x, y - top),
+            Event::Up(x, y) if self.kb_touch => {
+                self.kb_touch = false;
+                self.dirty = true;
+                return Some(match self.keyboard.up(x, y - top, t) {
+                    Some(out) => self.login_key(&out, t),
+                    None => vec![],
+                });
+            }
+            _ => return None,
+        }
+        self.dirty = true;
+        Some(vec![])
+    }
+
+    /// Carries out the window's request to raise or hide the keyboard and tells it where the keyboard rests, so the
+    /// account group stays above it.
+    fn login_sync_keyboard(&mut self, t: f64) {
+        if let Some(on) = self.login.as_mut().and_then(Login::take_keyboard_request) {
+            if on {
+                self.keyboard.set_return_key(bifrost_proto::ReturnKey::Go);
+            }
+            self.set_keyboard(on, t);
+            if on && !self.keyboard.shown() {
+                self.keyboard.set_return_key(bifrost_proto::ReturnKey::Return);
+                if let Some(l) = self.login.as_mut() {
+                    l.keyboard_refused();
+                }
+            }
+        }
+        let up = self.login_owns_keyboard() && self.keyboard.shown() && self.keyboard.h() > 0.0;
+        let top = up.then(|| self.kb_top());
+        if let Some(l) = self.login.as_mut() {
+            l.set_keyboard_top(&self.ui, top, t);
+        }
+    }
+
+    /// The login window goes away (unlocked or locked again): a keyboard it raised goes down with it.
+    fn login_close(&mut self, t: f64) {
+        let raised = self.login.take().is_some_and(|l| l.keyboard_up());
+        if raised {
+            self.set_keyboard(false, t);
+            self.keyboard.set_return_key(bifrost_proto::ReturnKey::Return);
+        }
     }
 
     fn login_act(&mut self, act: Act) -> Vec<Effect> {
@@ -1006,22 +1203,24 @@ impl super::Shell {
         self.login_ensure(t);
         let Some(l) = self.login.as_mut() else { return };
         if let Some(token) = l.poll(t) {
-            self.login = None;
+            self.login_close(t);
             self.session_token = Some(token);
             self.anim = Some((super::Anim::Unlock { from: 0.0, to: 1.0 }, t));
             self.dirty = true;
         } else if l.tick(t) {
             self.dirty = true;
         }
+        self.login_sync_keyboard(t);
     }
 
     pub(super) fn login_wake(&self, t: f64) -> Option<f64> {
-        self.login.as_ref()?.wake(t)
+        let own = self.login_owns_keyboard() && self.keyboard.animating();
+        self.login.as_ref()?.wake(t).or(own.then_some(t))
     }
 
     /// A lock (menu, idle, lid): the session token is dropped and privd forgets the unlock.
     pub(super) fn login_reset(&mut self) {
-        self.login = None;
+        self.login_close(self.last_input);
         if self.session_token.take().is_some() {
             Privd::notify("session.lock");
         }
@@ -1286,5 +1485,205 @@ mod tests {
         assert_eq!(parse_lock_message("other=x"), None);
         assert_eq!(parse_lock_message("message=a\u{7}b").as_deref(), Some("ab"));
         assert_eq!(parse_lock_message(&format!("message={}", "x".repeat(300))).map(|m| m.chars().count()), Some(MESSAGE_MAX));
+    }
+
+    // -- touch: the on-screen keyboard -------------------------------------------------------
+
+    /// A portrait window in the touch form.
+    fn touch_login(r: Reply) -> Login {
+        let mut l = Login::new(Arc::new(Stub(r)), "Owner", 1200, 1920, 0.0);
+        l.touch_keyboard = true;
+        l
+    }
+
+    fn tap(l: &mut Login, ui: &Ui, (x, y): (f32, f32), t: f64) -> Act {
+        l.touch(ui, Event::Up(x, y), t)
+    }
+
+    /// A point on the password field, left of the return arrow.
+    fn field_point(l: &Login, ui: &Ui) -> (f32, f32) {
+        let (x, y, w, h) = l.field(ui);
+        (x + w * 0.25, y + h / 2.0)
+    }
+
+    fn avatar_point(l: &Login, ui: &Ui) -> (f32, f32) {
+        let (x, y, w, h) = l.avatar_rect(ui);
+        (x + w / 2.0, y + h / 2.0)
+    }
+
+    #[test]
+    fn tapping_the_field_or_the_picture_raises_the_keyboard_in_the_touch_form() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        assert!(!l.keyboard_up());
+        let p = field_point(&l, &ui);
+        assert_eq!(tap(&mut l, &ui, p, 0.0), Act::None);
+        assert!(l.keyboard_up());
+        assert_eq!(l.take_keyboard_request(), Some(true));
+        assert_eq!(l.take_keyboard_request(), None, "a request is taken once");
+        let mut l = touch_login(Reply::Unavailable);
+        let p = avatar_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        assert_eq!(l.take_keyboard_request(), Some(true), "the picture takes the same tap");
+    }
+
+    #[test]
+    fn a_click_does_not_raise_the_keyboard_in_the_desktop_form() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        l.touch_keyboard = false;
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        assert!(!l.keyboard_up());
+        assert_eq!(l.take_keyboard_request(), None);
+    }
+
+    #[test]
+    fn tapping_the_name_field_raises_the_keyboard_and_the_password_field_takes_the_focus_back() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        l.name_mode = true;
+        l.name_focus = false;
+        let (x, y, w, h) = l.name_field(&ui);
+        tap(&mut l, &ui, (x + w / 2.0, y + h / 2.0), 0.0);
+        assert!(l.name_focus && l.keyboard_up());
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 1.0);
+        assert!(!l.name_focus, "keys go to the password again");
+    }
+
+    #[test]
+    fn a_click_in_the_desktop_form_leaves_the_key_focus_alone() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        l.touch_keyboard = false;
+        l.name_mode = true;
+        l.name_focus = true;
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        assert!(l.name_focus, "a pointer click on the password field changes nothing in the desktop form");
+        assert!(!l.keyboard_up());
+    }
+
+    #[test]
+    fn a_refused_keyboard_is_not_counted_as_up() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        assert_eq!(l.take_keyboard_request(), Some(true));
+        l.keyboard_refused();
+        assert!(!l.keyboard_up());
+        tap(&mut l, &ui, p, 1.0);
+        assert_eq!(l.take_keyboard_request(), Some(true), "the next tap asks again");
+    }
+
+    #[test]
+    fn keyboard_keys_type_masked_backspace_deletes_and_return_submits() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Ok("tok".into()));
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        for k in ["p", "a", "s", "s"] {
+            l.key(&Out::Text(k.into()), 0.0);
+        }
+        assert_eq!(l.len(), 4, "one dot per key; the text itself is never drawn");
+        l.key(&Out::Backspace, 0.0);
+        assert_eq!(l.len(), 3);
+        l.key(&Out::Enter, 0.0);
+        assert!(l.busy(), "return submits as the Enter key does");
+        assert!(l.is_empty(), "the buffer is taken on submit");
+        assert_eq!(wait(&mut l, 0.0), Some("tok".to_string()));
+    }
+
+    #[test]
+    fn return_on_an_empty_field_does_not_submit_and_hide_lowers_the_keyboard() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Ok("tok".into()));
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        l.take_keyboard_request();
+        l.key(&Out::Enter, 0.0);
+        assert!(!l.busy());
+        assert_eq!(l.key(&Out::Hide, 0.0), Act::None);
+        assert!(!l.keyboard_up());
+        assert_eq!(l.take_keyboard_request(), Some(false));
+    }
+
+    #[test]
+    fn the_return_arrow_still_submits_with_the_keyboard_up() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Ok("tok".into()));
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        l.key(&Out::Text("pw".into()), 0.0);
+        let (x, y, w, h) = l.arrow(&ui);
+        tap(&mut l, &ui, (x + w / 2.0, y + h / 2.0), 1.0);
+        assert!(l.busy());
+        assert_eq!(wait(&mut l, 1.0), Some("tok".to_string()));
+    }
+
+    #[test]
+    fn the_group_moves_above_the_keyboard_and_back() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        let before = l.field(&ui);
+        let kb_top = l.h as f32 * 0.7;
+        assert!(before.1 + before.3 > kb_top, "the field starts under this keyboard");
+        l.set_keyboard_top(&ui, Some(kb_top), 100.0);
+        assert!(l.wake(100.0).is_some(), "the move needs frames");
+        assert!(l.tick(100.0 + LIFT_MS / 2.0));
+        let mid = l.field(&ui).1;
+        assert!(mid < before.1, "on its way up");
+        assert!(l.tick(100.0 + LIFT_MS));
+        assert!(!l.tick(100.0 + LIFT_MS + 10.0), "settled");
+        assert_eq!(l.wake(500.0), None);
+        let (fx, fy, fw, fh) = l.field(&ui);
+        assert!(fy + fh + ui.pt(60.0) <= kb_top + 1.0, "field and the lines under it clear the keyboard");
+        let (_, ay, _, ad) = l.avatar_rect(&ui);
+        assert!(ay + ad < fy, "the picture moved with the field");
+        assert!(ay > ui.pt(super::super::scene::STATUS_PT), "and stays below the status bar");
+        // a touch lands on the moved field, not on the old place
+        assert_eq!(l.hit(&ui, fx + fw * 0.25, fy + fh / 2.0), Some(Hit::Field));
+        assert_eq!(l.hit(&ui, fx + fw * 0.25, before.1 + before.3 / 2.0), None);
+        l.set_keyboard_top(&ui, None, 1000.0);
+        l.tick(1000.0 + LIFT_MS);
+        assert_eq!(l.field(&ui), before, "back in place once the keyboard is down");
+    }
+
+    #[test]
+    fn the_move_never_pushes_the_picture_into_the_status_bar() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        // an absurdly tall keyboard
+        l.set_keyboard_top(&ui, Some(100.0), 0.0);
+        l.tick(LIFT_MS);
+        let (_, ay, _, _) = l.avatar_rect(&ui);
+        assert!(ay >= ui.pt(super::super::scene::STATUS_PT), "top edge {ay}");
+    }
+
+    #[test]
+    fn a_short_keyboard_leaves_the_group_where_it_is() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        let before = l.field(&ui);
+        l.set_keyboard_top(&ui, Some(l.h as f32 - 10.0), 0.0);
+        l.tick(LIFT_MS);
+        assert_eq!(l.field(&ui), before);
+    }
+
+    #[test]
+    fn opening_a_restart_sheet_lowers_the_keyboard() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        l.take_keyboard_request();
+        l.power_open = true;
+        let (x, y, w, h) = l.bottom(&ui)[1].2;
+        tap(&mut l, &ui, (x + w / 2.0, y + h / 2.0), 1.0);
+        assert_eq!(l.sheet, Some(Sheet::Restart));
+        assert!(!l.keyboard_up());
+        assert_eq!(l.take_keyboard_request(), Some(false));
     }
 }

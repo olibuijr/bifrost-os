@@ -2960,8 +2960,16 @@ impl Shell {
             }
         }
         self.audio_tick(t);
+        if self.login_owns_keyboard() && self.keyboard.animating() {
+            self.dirty = true;
+        }
         for out in self.keyboard.tick(t) {
-            self.type_out(out, t);
+            // on the lock screen the login window owns the keys
+            if self.login_owns_keyboard() {
+                effects.extend(self.login_key(&out, t));
+            } else {
+                self.type_out(out, t);
+            }
             self.dirty = true;
         }
         if self.screen == Screen::App(AppId::Terminal) {
@@ -3192,6 +3200,12 @@ impl Shell {
                         l.draw(s, pad_ui, t);
                     }
                 });
+                if self.login_owns_keyboard() && (self.keyboard.shown() || self.keyboard.animating()) {
+                    let kb_top = self.kb_top();
+                    self.keyboard.draw(s, &self.ui, kb_top, t);
+                    let below = (kb_top + self.keyboard.h() + self.keyboard.offset(t)) as usize;
+                    s.fill_rect(0, below, self.w as usize, self.h as usize, keyboard::BG);
+                }
                 now
             }
             (Screen::Switcher, anim) => {
