@@ -1,5 +1,5 @@
-//! The map picture for printing: the tiles on screen drawn into one RGB image, and the PDF page that carries it above the
-//! printed text. The picture is the map as the tiles show it; the route and pin overlays are not drawn into it.
+//! The map picture for printing: the tiles on screen drawn into one RGB image, the route line and the pins laid over
+//! them, and the PDF page that carries the picture above the printed text.
 
 use bifrost_app::kit::Image;
 use bifrost_app::print::{text_pages, PageImage, PdfPage, PrintInfo, TEXT_SIZE};
@@ -48,6 +48,44 @@ pub fn draw_tiles(tiles: &[(f64, f64, &Image)], side: f64, width: f64, height: f
         }
     }
     PageImage { width: w, height: h, rgb }
+}
+
+/// Draws a line `width` points thick through `points` (in points from the top left of the picture) in `rgb`. The line
+/// is stamped as discs along each segment, so a diagonal has no gaps. Parts outside the picture are clipped.
+pub fn draw_line(picture: &mut PageImage, points: &[(f64, f64)], width: f64, rgb: [u8; 3]) {
+    let radius = width * PRINT_SCALE / 2.0;
+    for pair in points.windows(2) {
+        let (ax, ay) = (pair[0].0 * PRINT_SCALE, pair[0].1 * PRINT_SCALE);
+        let (bx, by) = (pair[1].0 * PRINT_SCALE, pair[1].1 * PRINT_SCALE);
+        let steps = (bx - ax).abs().max((by - ay).abs()).ceil().max(1.0) as usize;
+        for s in 0..=steps {
+            let t = s as f64 / steps as f64;
+            stamp(picture, ax + (bx - ax) * t, ay + (by - ay) * t, radius, rgb);
+        }
+    }
+}
+
+/// Draws a filled dot of `radius` points centred at `(x, y)` points from the top left of the picture.
+pub fn draw_dot(picture: &mut PageImage, x: f64, y: f64, radius: f64, rgb: [u8; 3]) {
+    stamp(picture, x * PRINT_SCALE, y * PRINT_SCALE, radius * PRINT_SCALE, rgb);
+}
+
+/// Paints the pixels whose centres lie within `radius` pixels of `(x, y)` pixels.
+fn stamp(picture: &mut PageImage, x: f64, y: f64, radius: f64, rgb: [u8; 3]) {
+    let r = radius.max(0.5);
+    let (w, h) = (picture.width as i64, picture.height as i64);
+    for oy in (y - r).floor() as i64..=(y + r).ceil() as i64 {
+        for ox in (x - r).floor() as i64..=(x + r).ceil() as i64 {
+            if ox < 0 || oy < 0 || ox >= w || oy >= h {
+                continue;
+            }
+            let (dx, dy) = (ox as f64 + 0.5 - x, oy as f64 + 0.5 - y);
+            if dx * dx + dy * dy <= r * r {
+                let i = (oy as usize * picture.width + ox as usize) * 3;
+                picture.rgb[i..i + 3].copy_from_slice(&rgb);
+            }
+        }
+    }
 }
 
 /// The first page of the print job: the picture scaled to the printable width (or height, when it is taller), centred

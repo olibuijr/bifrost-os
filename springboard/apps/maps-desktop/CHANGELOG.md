@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 - 2026-10-14
+
+- Transit requests take a departure time: the planner model has leave-at and arrive-by times, checked as a date
+  and a clock time before they reach the URL. The directions card has no time picker yet.
+- Each transit leg names the stops in between when the planner lists them ("3 stops in between").
+- Print draws the followed route line and the pins over the map picture, as the map shows them.
+- The matrix rows for Current Location, the map data credit and the route alternatives cite the code that does it.
+
 ## 0.4.0 - 2026-10-14
 
 - Hybrid map type (View > Hybrid, Cmd+3): the imagery with the place names drawn over it from a labels layer in its own
