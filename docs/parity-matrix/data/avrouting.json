@@ -59,9 +59,9 @@
     {
       "feature": "Output route switching (local)",
       "apple": "not part of AVRouting (AVAudioSession / AVRouteDetector in other frameworks)",
-      "bifrost": "springboard/src/media/route.rs (Router: Speaker and Headphones with per-route volume)",
-      "status": "os",
-      "note": "a system-layer capability for the built-in card only; no SDK API and no Bluetooth or network output in the same model"
+      "bifrost": "springboard/ui/src/os_services/output_route.rs (Router, Route, RouteChange, HEADPHONE_CAP); springboard/src/media/route.rs (Router: Speaker and Headphones with per-route volume)",
+      "status": "partial",
+      "note": "Jack-driven route changes, the headphone volume cap and per-route volumes are tested headless. Gap: only the built-in card is modelled, with no Bluetooth or network output, and the mixer is not driven from this model."
     }
   ],
   "gaps": [

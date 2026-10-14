@@ -52,16 +52,16 @@
   {
    "feature": "Auto-lock after idle",
    "apple": "Screen saver with password on wake (not a separate Apple API)",
-   "bifrost": "springboard/src/shell/options.rs:34 (auto_lock_ms); springboard/src/shell/low_battery.rs:52 (auto_lock_ms)",
-   "status": "os",
-   "note": "shell-level auto-lock; no SDK hook for an app to take part"
+   "bifrost": "springboard/ui/src/os_services/idle.rs (effective_auto_lock_ms, should_auto_lock); springboard/src/shell/options.rs:34 (auto_lock_ms); springboard/src/shell/low_battery.rs:52 (auto_lock_ms)",
+   "status": "partial",
+   "note": "The Low Power shortening and the idle threshold are tested headless against the shell's rule. Gap: the shell does not report its last input time to apps, and no app takes part in the lock."
   },
   {
    "feature": "System sleep after the screen is off",
    "apple": "Energy settings (outside the framework)",
-   "bifrost": "springboard/src/bare/sleep.rs:SUSPEND_AFTER_MS and SYSTEM_SLEEP_PREF (system_sleep_minutes)",
-   "status": "os",
-   "note": "suspend is decided by the system layer; apps cannot change it"
+   "bifrost": "springboard/ui/src/os_services/idle.rs (system_sleep_after_ms, system_sleep_pref_value, SUSPEND_AFTER_MS); springboard/src/bare/sleep.rs:SUSPEND_AFTER_MS and SYSTEM_SLEEP_PREF (system_sleep_minutes)",
+   "status": "partial",
+   "note": "The preference parsing, the never value and the shell's constants are tested headless. Gap: the suspend decision stays in the system layer, and the model cannot change it."
   },
   {
    "feature": "Sleep inhibitors held by apps",
