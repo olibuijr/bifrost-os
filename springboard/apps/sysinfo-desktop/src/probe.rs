@@ -1028,6 +1028,193 @@ pub fn read_firewall(proc_net: &Path, sys_module: &Path, etc: &Path) -> Firewall
     Firewall { backend: backend.to_string(), tables, configs }
 }
 
+// ---------------------------------------------------------------- card readers, SCSI, Fibre Channel, SAS, optical, diagnostics
+
+/// Whether `name` is `prefix` followed by a number ("host0", "sr1"), not `prefix` alone.
+fn numbered(name: &str, prefix: &str) -> bool {
+    name.strip_prefix(prefix).is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// A memory card slot: its host controller, and the card in it when one is inserted.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CardSlot {
+    pub host: String,
+    pub driver: String,
+    /// The card's name; "" for an empty slot.
+    pub card: String,
+    /// "SD", "MMC" or "SDIO", as the card reports it.
+    pub kind: String,
+    /// The card's manufacturer ID, as the card gives it.
+    pub manufacturer: String,
+}
+
+/// The memory card slots under `mmc_root` (the `mmcN` host folders) and the card in each.
+pub fn read_card_readers(mmc_root: &Path) -> Vec<CardSlot> {
+    entries(mmc_root)
+        .into_iter()
+        .filter(|n| numbered(n, "mmc"))
+        .map(|host| {
+            let dir = mmc_root.join(&host);
+            let card_dir = entries(&dir).into_iter().find(|n| n.starts_with(&format!("{host}:")));
+            let (card, kind, manufacturer) = match card_dir {
+                Some(c) => {
+                    let p = dir.join(c);
+                    (read_trim(&p.join("name")), read_trim(&p.join("type")), read_trim(&p.join("manfid")))
+                }
+                None => Default::default(),
+            };
+            CardSlot { driver: link_name(&dir.join("device/driver")), host, card, kind, manufacturer }
+        })
+        .collect()
+}
+
+/// A SCSI host adapter. `transport` is "Fibre Channel" or "SAS" for an adapter those classes list, "" for the rest.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScsiHost {
+    pub name: String,
+    pub proc_name: String,
+    pub driver: String,
+    pub transport: String,
+}
+
+/// The SCSI host adapters under `scsi_root` (`hostN`). An adapter that has an entry under `fc_root` or `sas_root` is
+/// named by that transport.
+pub fn read_scsi_hosts(scsi_root: &Path, fc_root: &Path, sas_root: &Path) -> Vec<ScsiHost> {
+    entries(scsi_root)
+        .into_iter()
+        .filter(|n| numbered(n, "host"))
+        .map(|name| {
+            let transport = if fc_root.join(&name).exists() {
+                "Fibre Channel"
+            } else if sas_root.join(&name).exists() {
+                "SAS"
+            } else {
+                ""
+            };
+            let dir = scsi_root.join(&name);
+            ScsiHost { proc_name: read_trim(&dir.join("proc_name")), driver: link_name(&dir.join("device/driver")), transport: transport.to_string(), name }
+        })
+        .collect()
+}
+
+/// A Fibre Channel port (`fc_host`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FcPort {
+    pub host: String,
+    /// The name the driver gives the port; "" when it gives none.
+    pub symbolic: String,
+    pub port_name: String,
+    pub node_name: String,
+    /// "Online", "Linkdown" and the like.
+    pub state: String,
+    pub port_type: String,
+    pub speed: String,
+}
+
+pub fn read_fc_ports(fc_root: &Path) -> Vec<FcPort> {
+    entries(fc_root)
+        .into_iter()
+        .filter(|n| numbered(n, "host"))
+        .map(|host| {
+            let p = fc_root.join(&host);
+            FcPort {
+                symbolic: read_trim(&p.join("symbolic_name")),
+                port_name: read_trim(&p.join("port_name")),
+                node_name: read_trim(&p.join("node_name")),
+                state: read_trim(&p.join("port_state")),
+                port_type: read_trim(&p.join("port_type")),
+                speed: read_trim(&p.join("speed")),
+                host,
+            }
+        })
+        .collect()
+}
+
+/// A SAS phy: one link of a SAS host.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SasPhy {
+    /// "phy-0:1".
+    pub name: String,
+    /// The negotiated rate ("6.0 Gbit"); "" when the phy has no link.
+    pub link_rate: String,
+    /// "end device", "edge expander" or "none".
+    pub device: String,
+    pub address: String,
+}
+
+pub fn read_sas_phys(phy_root: &Path) -> Vec<SasPhy> {
+    entries(phy_root)
+        .into_iter()
+        .filter(|n| n.starts_with("phy-"))
+        .map(|name| {
+            let p = phy_root.join(&name);
+            SasPhy {
+                link_rate: read_trim(&p.join("negotiated_linkrate")),
+                device: read_trim(&p.join("device_type")),
+                address: read_trim(&p.join("sas_address")),
+                name,
+            }
+        })
+        .collect()
+}
+
+/// An optical drive (`/sys/block/srN`), with the disc it holds.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OpticalDrive {
+    pub device: String,
+    pub vendor: String,
+    pub model: String,
+    pub revision: String,
+    /// The size of the disc in bytes; 0 when no disc is in the drive.
+    pub media_bytes: u64,
+}
+
+pub fn read_optical_drives(block_root: &Path) -> Vec<OpticalDrive> {
+    entries(block_root)
+        .into_iter()
+        .filter(|n| numbered(n, "sr"))
+        .map(|device| {
+            let p = block_root.join(&device);
+            let sectors: u64 = read_trim(&p.join("size")).parse().unwrap_or(0);
+            OpticalDrive {
+                vendor: read_trim(&p.join("device/vendor")),
+                model: read_trim(&p.join("device/model")),
+                revision: read_trim(&p.join("device/rev")),
+                media_bytes: sectors * 512,
+                device,
+            }
+        })
+        .collect()
+}
+
+/// A crash report or a core dump saved on this computer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DiagnosticReport {
+    pub name: String,
+    pub bytes: u64,
+    /// Days since 1970-01-01 of its last change.
+    pub day: i64,
+}
+
+/// The files in the report folders `dirs`, newest first, at most `limit`. A folder that is missing or not readable by
+/// this user holds nothing.
+pub fn read_diagnostics(dirs: &[PathBuf], limit: usize) -> Vec<DiagnosticReport> {
+    let mut out = Vec::new();
+    for dir in dirs {
+        for name in entries(dir) {
+            let Ok(meta) = fs::metadata(dir.join(&name)) else { continue };
+            if !meta.is_file() {
+                continue;
+            }
+            let secs = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+            out.push(DiagnosticReport { name, bytes: meta.len(), day: (secs / 86_400) as i64 });
+        }
+    }
+    out.sort_by(|a, b| b.day.cmp(&a.day).then(a.name.cmp(&b.name)));
+    out.truncate(limit);
+    out
+}
+
 // ---------------------------------------------------------------- everything
 
 /// Everything above, read once.
@@ -1053,6 +1240,12 @@ pub struct Hardware {
     pub fonts: Vec<FontFamily>,
     pub logs: Vec<LogEntry>,
     pub firewall: Firewall,
+    pub card_readers: Vec<CardSlot>,
+    pub scsi: Vec<ScsiHost>,
+    pub fc_ports: Vec<FcPort>,
+    pub sas_phys: Vec<SasPhy>,
+    pub optical: Vec<OpticalDrive>,
+    pub diagnostics: Vec<DiagnosticReport>,
 }
 
 impl Hardware {
@@ -1094,6 +1287,12 @@ impl Hardware {
             fonts: read_fonts(&font_dirs),
             logs: read_logs(p("/var/log"), 20),
             firewall: read_firewall(p("/proc/net"), p("/sys/module"), p("/etc")),
+            card_readers: read_card_readers(p("/sys/class/mmc_host")),
+            scsi: read_scsi_hosts(p("/sys/class/scsi_host"), p("/sys/class/fc_host"), p("/sys/class/sas_host")),
+            fc_ports: read_fc_ports(p("/sys/class/fc_host")),
+            sas_phys: read_sas_phys(p("/sys/class/sas_phy")),
+            optical: read_optical_drives(p("/sys/block")),
+            diagnostics: read_diagnostics(&[PathBuf::from("/var/crash"), PathBuf::from("/var/lib/systemd/coredump")], 50),
         }
     }
 }
@@ -1109,6 +1308,103 @@ mod tests {
         assert_eq!(parse_cpu_topology(CPUINFO), (2, 1));
         assert_eq!(parse_cpu_topology("processor : 0\nprocessor : 1\n"), (0, 0), "no ids, no topology");
         assert_eq!(parse_cpu_topology(""), (0, 0));
+    }
+
+    /// A fresh folder under the temporary directory, for a fixture tree.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("sysinfo-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn card_slots_name_the_card_in_each_host() {
+        let dir = scratch("mmc");
+        put(&dir.join("mmc0/mmc0:0001/name"), "SD64G\n");
+        put(&dir.join("mmc0/mmc0:0001/type"), "SD\n");
+        put(&dir.join("mmc0/mmc0:0001/manfid"), "0x000003\n");
+        fs::create_dir_all(dir.join("mmc1")).unwrap();
+        let slots = read_card_readers(&dir);
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0], CardSlot { host: "mmc0".into(), driver: String::new(), card: "SD64G".into(), kind: "SD".into(), manufacturer: "0x000003".into() });
+        assert_eq!(slots[1].host, "mmc1");
+        assert!(slots[1].card.is_empty(), "an empty slot has no card");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scsi_adapters_are_named_by_their_transport() {
+        let dir = scratch("scsi");
+        let (scsi, fc, sas) = (dir.join("scsi"), dir.join("fc"), dir.join("sas"));
+        for (host, name) in [("host0", "ahci"), ("host1", "mpt3sas"), ("host2", "sas_host")] {
+            put(&scsi.join(host).join("proc_name"), &format!("{name}\n"));
+        }
+        fs::create_dir_all(fc.join("host1")).unwrap();
+        fs::create_dir_all(sas.join("host2")).unwrap();
+        let hosts = read_scsi_hosts(&scsi, &fc, &sas);
+        let transports: Vec<(&str, &str)> = hosts.iter().map(|h| (h.name.as_str(), h.transport.as_str())).collect();
+        assert_eq!(transports, vec![("host0", ""), ("host1", "Fibre Channel"), ("host2", "SAS")]);
+        assert_eq!(hosts[0].proc_name, "ahci");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fibre_channel_ports_carry_state_and_speed() {
+        let dir = scratch("fcport");
+        let host = dir.join("host1");
+        put(&host.join("symbolic_name"), "HBA 1\n");
+        put(&host.join("port_state"), "Online\n");
+        put(&host.join("speed"), "8 Gbit\n");
+        put(&host.join("port_name"), "0x21000024ff\n");
+        put(&host.join("node_name"), "0x20000024ff\n");
+        put(&host.join("port_type"), "N_Port\n");
+        let ports = read_fc_ports(&dir);
+        assert_eq!(ports.len(), 1);
+        assert_eq!((ports[0].host.as_str(), ports[0].symbolic.as_str(), ports[0].state.as_str(), ports[0].speed.as_str()), ("host1", "HBA 1", "Online", "8 Gbit"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sas_phys_show_their_rate_and_whether_they_have_a_link() {
+        let dir = scratch("sas");
+        put(&dir.join("phy-1:0/negotiated_linkrate"), "6.0 Gbit\n");
+        put(&dir.join("phy-1:0/device_type"), "end device\n");
+        put(&dir.join("phy-1:0/sas_address"), "0x5000c5004\n");
+        fs::create_dir_all(dir.join("phy-1:1")).unwrap();
+        let phys = read_sas_phys(&dir);
+        assert_eq!(phys.len(), 2);
+        assert_eq!((phys[0].link_rate.as_str(), phys[0].device.as_str()), ("6.0 Gbit", "end device"));
+        assert!(phys[1].link_rate.is_empty(), "no negotiated rate: no link");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn optical_drives_report_the_disc_size_only_when_a_disc_is_in() {
+        let dir = scratch("optical");
+        put(&dir.join("sr0/size"), "0\n");
+        put(&dir.join("sr0/device/model"), "DVD-RW\n");
+        put(&dir.join("sr0/device/vendor"), "HL-DT-ST\n");
+        put(&dir.join("sr1/size"), "8388608\n");
+        put(&dir.join("sda/size"), "1000\n");
+        let drives = read_optical_drives(&dir);
+        assert_eq!(drives.iter().map(|d| d.device.as_str()).collect::<Vec<_>>(), vec!["sr0", "sr1"], "disks are not optical drives");
+        assert_eq!((drives[0].model.as_str(), drives[0].media_bytes), ("DVD-RW", 0));
+        assert_eq!(drives[1].media_bytes, 4_294_967_296);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn diagnostics_list_the_newest_files_first_and_skip_missing_folders() {
+        let dir = scratch("diag");
+        put(&dir.join("a.crash"), "abc");
+        put(&dir.join("b.core"), "12345");
+        let reports = read_diagnostics(&[dir.clone(), dir.join("missing")], 10);
+        assert_eq!(reports.len(), 2);
+        assert!(reports.iter().any(|r| r.name == "b.core" && r.bytes == 5));
+        assert!(reports.iter().all(|r| r.day > 19_000), "a file written now is dated after 2022");
+        assert_eq!(read_diagnostics(&[dir.clone()], 1).len(), 1, "the limit holds");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

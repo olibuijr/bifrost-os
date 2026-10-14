@@ -53,12 +53,18 @@ pub enum Category {
     Audio,
     Bluetooth,
     Camera,
+    CardReader,
+    Controller,
     Printers,
     Thunderbolt,
     Power,
     Storage,
     Nvme,
     Sata,
+    Sas,
+    FibreChannel,
+    DiscBurning,
+    Diagnostics,
     Wifi,
     Ethernet,
     Wwan,
@@ -73,7 +79,7 @@ pub enum Category {
     Language,
 }
 
-pub const ALL: [Category; 28] = [
+pub const ALL: [Category; 34] = [
     Category::Overview,
     Category::Processor,
     Category::Memory,
@@ -84,12 +90,18 @@ pub const ALL: [Category; 28] = [
     Category::Audio,
     Category::Bluetooth,
     Category::Camera,
+    Category::CardReader,
+    Category::Controller,
     Category::Printers,
     Category::Thunderbolt,
     Category::Power,
     Category::Storage,
     Category::Nvme,
     Category::Sata,
+    Category::Sas,
+    Category::FibreChannel,
+    Category::DiscBurning,
+    Category::Diagnostics,
     Category::Wifi,
     Category::Ethernet,
     Category::Wwan,
@@ -138,12 +150,18 @@ impl Category {
             Category::Audio => "Audio",
             Category::Bluetooth => "Bluetooth",
             Category::Camera => "Camera",
+            Category::CardReader => "Card Reader",
+            Category::Controller => "Controller",
             Category::Printers => "Printers",
             Category::Thunderbolt => "Thunderbolt",
             Category::Power => "Power",
             Category::Storage => "Storage",
             Category::Nvme => "NVMe",
             Category::Sata => "SATA",
+            Category::Sas => "SAS",
+            Category::FibreChannel => "Fibre Channel",
+            Category::DiscBurning => "Disc Burning",
+            Category::Diagnostics => "Diagnostics",
             Category::Wifi => "Wi-Fi",
             Category::Ethernet => "Ethernet",
             Category::Wwan => "WWAN",
@@ -172,12 +190,18 @@ impl Category {
             Category::Audio => "speaker.wave.2",
             Category::Bluetooth => "antenna.radiowaves.left.and.right",
             Category::Camera => "camera",
+            Category::CardReader => "sdcard",
+            Category::Controller => "gearshape.2",
             Category::Printers => "printer",
             Category::Thunderbolt => "bolt",
             Category::Power => "battery.100",
             Category::Storage => "internaldrive",
             Category::Nvme => "internaldrive",
             Category::Sata => "internaldrive",
+            Category::Sas => "server.rack",
+            Category::FibreChannel => "point.3.connected.trianglepath.dotted",
+            Category::DiscBurning => "opticaldisc",
+            Category::Diagnostics => "stethoscope",
             Category::Wifi => "wifi",
             Category::Ethernet => "cable.connector",
             Category::Wwan => "antenna.radiowaves.left.and.right",
@@ -206,12 +230,18 @@ impl Category {
             Category::Audio => "The sound cards the system sees.",
             Category::Bluetooth => "The Bluetooth controllers and their state.",
             Category::Camera => "The video capture devices.",
+            Category::CardReader => "The memory card slots and the card in each.",
+            Category::Controller => "The storage host adapters that are not Fibre Channel or SAS.",
             Category::Printers => "The printers set up on this computer and those on USB.",
             Category::Thunderbolt => "The devices on the Thunderbolt bus.",
             Category::Power => "Batteries and power supplies, with their health.",
             Category::Storage => "The disks, their partitions and where they are mounted.",
             Category::Nvme => "The NVMe controllers.",
             Category::Sata => "The SATA ports and the speed each link negotiated.",
+            Category::Sas => "The SAS links, their rates and the devices on them.",
+            Category::FibreChannel => "The Fibre Channel ports and their links.",
+            Category::DiscBurning => "The optical drives and whether a disc is in them.",
+            Category::Diagnostics => "Crash reports and core dumps saved on this computer.",
             Category::Wifi => "The wireless interfaces, their addresses and signal.",
             Category::Ethernet => "The wired and virtual interfaces, their addresses and speed.",
             Category::Wwan => "The cellular modem interfaces.",
@@ -357,6 +387,12 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
         Category::Audio => Content::list(x.hw.audio.iter().map(audio_item).collect()),
         Category::Bluetooth => Content::list(x.hw.bluetooth.iter().map(bluetooth_item).collect()),
         Category::Camera => Content::list(x.hw.cameras.iter().map(camera_item).collect()),
+        Category::CardReader => Content::list(x.hw.card_readers.iter().map(card_reader_item).collect()),
+        Category::Controller => Content::list(x.hw.scsi.iter().filter(|h| h.transport.is_empty()).map(scsi_item).collect()),
+        Category::Sas => Content::list(x.hw.sas_phys.iter().map(sas_item).collect()),
+        Category::FibreChannel => Content::list(x.hw.fc_ports.iter().map(fc_item).collect()),
+        Category::DiscBurning => Content::list(x.hw.optical.iter().map(optical_item).collect()),
+        Category::Diagnostics => Content::list(x.hw.diagnostics.iter().map(diagnostic_item).collect()),
         Category::Printers => Content::list(x.hw.printers.iter().map(printer_item).collect()),
         Category::Thunderbolt => Content::list(x.hw.thunderbolt.iter().map(thunderbolt_item).collect()),
         Category::Power => Content::list(r.power.iter().map(power_item).collect()),
@@ -693,6 +729,57 @@ fn camera_item(c: &probe::Camera) -> Item {
     item(title, format!("{} · {}", c.node, or_dash(&c.driver)), vec![kv("Name", or_dash(&c.name)), kv("Device node", c.node.clone()), kv("Driver", or_dash(&c.driver))])
 }
 
+fn card_reader_item(c: &probe::CardSlot) -> Item {
+    let title = if c.card.is_empty() { c.host.clone() } else { c.card.clone() };
+    let state = if c.card.is_empty() { "Empty slot" } else { "Card inserted" };
+    item(
+        title,
+        format!("{} · {state}", or_dash(&c.driver)),
+        vec![kv("Host", c.host.clone()), kv("Driver", or_dash(&c.driver)), kv("Card", or_dash(&c.card)), kv("Card type", or_dash(&c.kind)), kv("Manufacturer ID", or_dash(&c.manufacturer))],
+    )
+}
+
+fn scsi_item(h: &probe::ScsiHost) -> Item {
+    let title = if h.proc_name.is_empty() { h.name.clone() } else { h.proc_name.clone() };
+    item(title, format!("{} · {}", h.name, or_dash(&h.driver)), vec![kv("Host", h.name.clone()), kv("Driver", or_dash(&h.driver)), kv("Name", or_dash(&h.proc_name))])
+}
+
+fn sas_item(p: &probe::SasPhy) -> Item {
+    let link = if p.link_rate.is_empty() { "No link" } else { p.link_rate.as_str() };
+    item(p.name.clone(), format!("{link} · {}", or_dash(&p.device)), vec![kv("Phy", p.name.clone()), kv("Link rate", link), kv("Device", or_dash(&p.device)), kv("SAS address", or_dash(&p.address))])
+}
+
+fn fc_item(p: &probe::FcPort) -> Item {
+    let title = if p.symbolic.is_empty() { p.host.clone() } else { p.symbolic.clone() };
+    item(
+        title,
+        format!("{} · {}", or_dash(&p.state), or_dash(&p.speed)),
+        vec![
+            kv("Host", p.host.clone()),
+            kv("Port name", or_dash(&p.port_name)),
+            kv("Node name", or_dash(&p.node_name)),
+            kv("State", or_dash(&p.state)),
+            kv("Port type", or_dash(&p.port_type)),
+            kv("Speed", or_dash(&p.speed)),
+        ],
+    )
+}
+
+fn optical_item(o: &probe::OpticalDrive) -> Item {
+    let title = if o.model.is_empty() { o.device.clone() } else { o.model.clone() };
+    let media = if o.media_bytes == 0 { "No disc" } else { "Disc inserted" };
+    let size = if o.media_bytes == 0 { "—".to_string() } else { gb_label(o.media_bytes) };
+    item(
+        title,
+        format!("{} · {media}", o.device),
+        vec![kv("Device", format!("/dev/{}", o.device)), kv("Vendor", or_dash(&o.vendor)), kv("Model", or_dash(&o.model)), kv("Revision", or_dash(&o.revision)), kv("Media", media), kv("Disc size", size)],
+    )
+}
+
+fn diagnostic_item(d: &probe::DiagnosticReport) -> Item {
+    item(d.name.clone(), format!("{} · {}", bytes_label(d.bytes), day_label(d.day)), vec![kv("Name", d.name.clone()), kv("Size", bytes_label(d.bytes)), kv("Date", day_label(d.day))])
+}
+
 fn printer_item(p: &probe::Printer) -> Item {
     let state = if p.state.is_empty() { "—".to_string() } else { p.state.clone() };
     item(p.name.clone(), format!("{state} · {}", or_dash(&p.uri)), vec![kv("Name", p.name.clone()), kv("Status", state), kv("Connection", or_dash(&p.uri))])
@@ -981,6 +1068,7 @@ mod tests {
         }
         assert_eq!(Category::from_index(ALL.len()), None);
         assert_eq!(in_section(Section::Network), vec![Category::Wifi, Category::Ethernet, Category::Wwan, Category::Firewall, Category::Volumes]);
+        assert_eq!(in_section(Section::Hardware).len(), 22, "every hardware class is listed under Hardware");
         assert_eq!(in_section(Section::Software)[0], Category::System);
         assert_eq!(in_section(Section::Software).last(), Some(&Category::Language));
     }
@@ -1290,9 +1378,55 @@ mod tests {
     }
 
     #[test]
+    fn the_new_hardware_classes_list_their_devices() {
+        let mut x = Extras::default();
+        x.hw.card_readers = vec![probe::CardSlot { host: "mmc0".into(), driver: "sdhci".into(), card: "SD64G".into(), kind: "SD".into(), manufacturer: "0x03".into() }, probe::CardSlot { host: "mmc1".into(), ..Default::default() }];
+        x.hw.scsi = vec![probe::ScsiHost { name: "host0".into(), proc_name: "ahci".into(), ..Default::default() }, probe::ScsiHost { name: "host1".into(), proc_name: "mpt3sas".into(), transport: "SAS".into(), ..Default::default() }];
+        x.hw.sas_phys = vec![probe::SasPhy { name: "phy-1:0".into(), link_rate: "6.0 Gbit".into(), device: "end device".into(), address: "0x5000".into() }];
+        x.hw.fc_ports = vec![probe::FcPort { host: "host2".into(), symbolic: "HBA 1".into(), state: "Online".into(), speed: "8 Gbit".into(), ..Default::default() }];
+        x.hw.optical = vec![probe::OpticalDrive { device: "sr0".into(), model: "DVD-RW".into(), media_bytes: 4_700_000_000, ..Default::default() }];
+        x.hw.diagnostics = vec![probe::DiagnosticReport { name: "core.app.1".into(), bytes: 2048, day: 20_000 }];
+
+        let slots = content(Category::CardReader, &Report::default(), &x);
+        assert_eq!(slots.items[0].title, "SD64G", "a card is named by the card");
+        assert_eq!(slots.items[1].title, "mmc1", "an empty slot is named by its host");
+        assert!(slots.items[1].summary.ends_with("Empty slot"));
+
+        let controllers = content(Category::Controller, &Report::default(), &x);
+        assert_eq!(controllers.items.len(), 1, "the SAS adapter lists under SAS, not here");
+        assert_eq!(controllers.items[0].title, "ahci");
+        assert_eq!(content(Category::Sas, &Report::default(), &x).items[0].summary, "6.0 Gbit · end device");
+        assert_eq!(content(Category::FibreChannel, &Report::default(), &x).items[0].title, "HBA 1");
+
+        let discs = content(Category::DiscBurning, &Report::default(), &x);
+        assert!(discs.items[0].detail.contains(&kv("Media", "Disc inserted")));
+        assert!(discs.items[0].detail.contains(&kv("Disc size", "4.7 GB")));
+
+        let reports = content(Category::Diagnostics, &Report::default(), &x);
+        assert_eq!(reports.items[0].title, "core.app.1");
+        assert_eq!(reports.items[0].detail.last(), Some(&kv("Date", "2024-10-04")));
+    }
+
+    #[test]
     fn hardware_default_leaves_every_hardware_list_empty() {
         let x = Extras { hw: Hardware::default(), ..Default::default() };
-        for c in [Category::Audio, Category::Bluetooth, Category::Camera, Category::Printers, Category::Thunderbolt, Category::Nvme, Category::Sata, Category::Volumes, Category::Wifi] {
+        for c in [
+            Category::Audio,
+            Category::Bluetooth,
+            Category::Camera,
+            Category::CardReader,
+            Category::Controller,
+            Category::Printers,
+            Category::Thunderbolt,
+            Category::Nvme,
+            Category::Sata,
+            Category::Sas,
+            Category::FibreChannel,
+            Category::DiscBurning,
+            Category::Diagnostics,
+            Category::Volumes,
+            Category::Wifi,
+        ] {
             assert!(content(c, &Report::default(), &x).empty, "{:?}", c);
         }
     }
