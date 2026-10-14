@@ -133,6 +133,8 @@ pub mod service_management;
 pub mod service_bundle;
 pub mod login_items_approval;
 pub mod crash_report;
+pub mod background_download;
+pub mod sample_buffer;
 pub mod bug_report;
 pub mod exception_handler;
 pub mod call_stack_tree;

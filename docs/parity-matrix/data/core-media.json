@@ -10,9 +10,9 @@
     {
       "feature": "Sample buffers",
       "apple": "CMSampleBuffer, CMSampleBufferCreate*, CMSampleBufferGetSampleTimingInfo (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
-      "bifrost": "springboard/src/media/demux/mod.rs:89 (Sample: track, pts_us, dts_us, duration_us, keyframe, data); springboard/src/media/mp4.rs:46 (Sample)",
-      "status": "os",
-      "note": "Samples are owned Vec<u8> values. No shared buffer object, no data-ready callbacks, no invalidation, no sample attachments."
+      "bifrost": "springboard/sdk/src/sample_buffer.rs (SampleBuffer, SampleTiming, from_demuxed); springboard/src/media/demux/mod.rs:89 (Sample: track, pts_us, dts_us, duration_us, keyframe, data); springboard/src/media/mp4.rs:46 (Sample)",
+      "status": "partial",
+      "note": "SampleBuffer gives apps a coded sample with presentation, decode and duration times, a sync flag and presentation ordering, tested headless in springboard/sdk/tests/parity_sdk-os-03.rs. Gap: samples are owned Vec<u8> values with no shared buffer object, no data-ready callbacks, no invalidation and no sample attachments."
     },
     {
       "feature": "Block buffers",
