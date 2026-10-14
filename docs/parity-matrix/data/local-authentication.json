@@ -17,9 +17,9 @@
     {
       "feature": "Device-owner password or passcode authentication for apps",
       "apple": "LAContext, kLAPolicyDeviceOwnerAuthentication",
-      "bifrost": "springboard/sdk/src/local_auth.rs, springboard/src/shell/services/local_auth.rs",
+      "bifrost": "springboard/sdk/src/local_auth.rs (LAContext, LAPolicy, decode_reply); springboard/src/shell/services/local_auth.rs; springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "LAContext canEvaluatePolicy/evaluatePolicy with LAPolicy.deviceOwnerAuthentication: the local_auth shell service verifies the account password through the login backend (read-only), rate-limits failures per app. The password sheet is not drawn yet; callers pass the password. Host unit tests only, not checked on Midget."
+      "note": "LAContext canEvaluatePolicy and evaluatePolicy for LAPolicy.deviceOwnerAuthentication: the local_auth shell service verifies the account password through the login backend (read-only) and rate-limits failures per app. The password sheet is not drawn yet; the caller's ask callback supplies the shell's reply. Headless tests: the_device_owner_policy_needs_a_password_and_biometry_is_never_available, an_invalidated_context_fails_with_invalid_context, a_success_inside_the_reuse_window_does_not_prompt_again, a_refused_prompt_reports_the_shell_error_and_unknown_errors_fall_back_to_authentication_failed. Not checked on Midget."
     },
     {
       "feature": "Authentication prompt UI (LocalAuthenticationView)",
@@ -59,9 +59,9 @@
     {
       "feature": "Authentication errors (LAError, LAErrorDomain)",
       "apple": "LAError, LAError.Code, LAErrorDomain",
-      "bifrost": "springboard/sdk/src/keychain.rs (Error, Reply), springboard/sdk/src/local_auth.rs",
+      "bifrost": "springboard/sdk/src/local_auth.rs (LAError wire names, from_wire); springboard/sdk/src/keychain.rs (Error, Reply); springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "The keychain error type mirrors the SecItem OSStatus codes (DuplicateItem, ItemNotFound, Param, NotPermitted, Io). No LAError codes exist, since there is no LAContext. LAError codes (userCancel, authenticationFailed, biometryNotAvailable, passcodeNotSet, appCancel, invalidContext, ...) exist in bifrost_app::local_auth; not checked on Midget."
+      "note": "LAError codes map to and from their wire names, and an unknown name falls back to authenticationFailed (every_error_wire_name_round_trips_and_policies_have_their_names, a_refused_prompt_reports_the_shell_error_and_unknown_errors_fall_back_to_authentication_failed). The keychain error type mirrors the SecItem OSStatus codes (DuplicateItem, ItemNotFound, Param, NotPermitted, Io). Not checked on Midget."
     },
     {
       "feature": "Biometry type and device state (LADomainState, LAEnvironment, kLABiometryType*)",
