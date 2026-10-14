@@ -106,7 +106,7 @@ mod tests {
         let row = [0x0000_0000, 0x0000_0000, 0x80ff_ffff, 0x80ff_ffff];
         let img = Image { w: 4, h: 4, px: row.repeat(4) };
         let out = edges(&img, 4.0);
-        for p in out.px {
+        for &p in &out.px {
             let a = p >> 24;
             assert!((p & 0xff) <= a, "premultiplied channel above alpha");
         }
