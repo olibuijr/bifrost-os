@@ -10,16 +10,16 @@
     {
       "feature": "Creating a communication experience (AskCenter, PermissionQuestion, AskPermissionAction, AskError)",
       "apple": "AskCenter, PermissionQuestion, AskPermissionAction, AskError",
-      "bifrost": "springboard/ui/src/permission_question.rs; wired: springboard/ui/src/permission_question.rs (for_topic), springboard/src/shell/permission_sheet.rs, springboard/sdk/src/permission_kit.rs",
+      "bifrost": "springboard/ui/src/permission_question.rs (PermissionQuestion, AskCenter::ask, AskError, PermissionButton); wired: springboard/src/shell/permission_sheet.rs (Sheet::new), springboard/sdk/src/permission_kit.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-10, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app cannot send a permission question to a guardian. The request-and-answer flow does not exist in the SDK or the shell. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Question construction, the ask queue, expiry, the refusal of choices the question does not offer and the permission button are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the SDK re-exports the model, but no channel carries a question to a guardian, so an app cannot ask one yet, and AskPermissionAction has no counterpart in the model."
     },
     {
       "feature": "Permission responses stream (responses(for:), PermissionResponse, PermissionChoice)",
       "apple": "responses(for:), PermissionResponse, PermissionChoice",
-      "bifrost": "springboard/ui/src/permission_question.rs (AskCenter::take_responses; wired: springboard/src/shell/permission_sheet.rs (Sheet::finish reads the PermissionResponse)",
+      "bifrost": "springboard/ui/src/permission_question.rs (AskCenter::answer, AskCenter::take_responses, AskCenter::take_response, AskCenter::response_for); wired: springboard/src/shell/permission_sheet.rs (Sheet::finish reads the PermissionResponse from AskCenter::answer)",
       "status": "partial",
-      "note": "Wave 4 (theme-10, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No asynchronous result channel for a parent's answer. The control socket in springboard/sdk/src/control.rs is fire-and-forget for these purposes. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Answers are kept per topic in arrival order, read or taken once, as tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the shell reads each answer as it arrives and does not drain the per-topic stream, and no channel returns a guardian's answer to an app asynchronously."
     },
     {
       "feature": "Significant app update topic",
@@ -52,9 +52,9 @@
     {
       "feature": "Question topic protocol (QuestionTopic)",
       "apple": "QuestionTopic",
-      "bifrost": "springboard/ui/src/permission_question.rs (QuestionTopic; wired: springboard/src/shell/permission_sheet.rs (PrivacyTopic)",
+      "bifrost": "springboard/ui/src/permission_question.rs (QuestionTopic, PermissionQuestion::for_topic); wired: springboard/src/shell/permission_sheet.rs (PrivacyTopic)",
       "status": "partial",
-      "note": "Wave 4 (theme-10, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No protocol lets an app describe what it is asking a parent for. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "A custom topic routes its questions and answers by its name, as tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the topic is only a local name, and no protocol tells a guardian what an app is asking for."
     }
   ],
   "gaps": [

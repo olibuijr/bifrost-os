@@ -38,9 +38,9 @@
   {
    "feature": "Placing content in a bundle (package layout)",
    "apple": "Placing content in a bundle: fixed locations for executables, resources, frameworks and plug-ins",
-   "bifrost": "springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py; springboard/sdk/src/package_layout.rs (classify, check_package)",
+   "bifrost": "springboard/sdk/src/package_layout.rs (classify, check_package); springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py",
    "status": "partial",
-   "note": "A .aap is a tar with manifest.toml, the exec binary, the icon and an optional assets/ tree. It installs under apps/<id>/<version> with a current symlink. springboard/sdk/src/package_layout.rs sets the placement rules: flat libs/<name>.so and plugins/<name>.so modules, resources under assets/, and refusal of unsafe or unplaced names. install_archive does not call it yet, so the rules are not enforced at install. built on parity/team-n-bundle-resources; not yet verified on Midget."
+   "note": "The placement rules for the manifest, icon, executable, assets, flat libs and plugins and unsafe names are tested headless in springboard/sdk/tests/parity_sdk-tests-12.rs; install_archive does not call check_package yet, so the rules are not enforced when a package installs, and the row is not verified on Midget."
   },
   {
    "feature": "Per-app data directory",

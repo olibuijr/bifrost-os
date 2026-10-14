@@ -73,16 +73,16 @@
   {
    "feature": "Rendering modes and accented or Liquid Glass look (widgetRenderingMode, widgetAccentable, AccessoryWidgetBackground)",
    "apple": "WidgetRenderingMode, WidgetAccentedRenderingMode, widgetAccentable(_:), AccessoryWidgetBackground",
-   "bifrost": "springboard/sdk/src/widgets.rs (Material, Vibrant, blit_vibrant); springboard/ui/src/widget_render.rs (mode resolution and tinting)",
+   "bifrost": "springboard/ui/src/widget_render.rs (resolve_mode, tint, luminance); springboard/sdk/src/widgets.rs (Material, Vibrant, blit_vibrant)",
    "status": "partial",
-   "note": "Team J (parity/team-j-notification-center): widget_render models the full colour, accented and vibrant modes with host unit tests; not wired into the shell, not yet tested on Midget. Vibrancy and materials exist for app windows. No widget container background."
+   "note": "Mode resolution, the accent and vibrant tint rules and luminance are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the shell does not draw widgets in these modes yet, widgets have no container background, and the look is not verified on Midget."
   },
   {
    "feature": "Interactivity in widgets (Button, Toggle, AppIntent in widget)",
    "apple": "Button, Toggle, Adding interactivity to widgets and Live Activities",
-   "bifrost": "springboard/ui/src/widget_action.rs",
+   "bifrost": "springboard/ui/src/widget_action.rs (hit_test, Toggle); springboard/ui/src/widget_link.rs (Link)",
    "status": "partial",
-   "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tiles take taps that open the shell's own apps. No widget action invokes an app intent."
+   "note": "Topmost-region hit testing, link parsing and the toggle that shows a tap and settles on the app's answer are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; no widget action invokes an app intent, and the shell's tiles only open the shell's own apps."
   },
   {
    "feature": "Deep links from widgets (widgetURL, Link)",
