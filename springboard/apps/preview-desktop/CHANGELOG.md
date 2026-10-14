@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.8.0
+
+- Tools > Select drags out a rectangle on the page. Tools > Crop (Cmd+K) keeps the selection of a picture and moves its
+  markup with it; View > Zoom to Selection fills the window with it.
+- Tools > Flip Horizontal and Flip Vertical mirror a picture and its markup. Tools > Instant Alpha clears the region of
+  one colour around a click to transparent, and Tools > Remove Background clears the background that reaches the
+  picture's edge. All of these can be undone, and Revert to Original brings the pixels back. PNG export now keeps
+  transparency; JPEG export lays a transparent picture over white.
+- New markup: Oval, Line, Arrow, Underline and Strike Through. They draw in the window, burn into exports and are saved
+  into the PDF as Circle, Line, Underline and StrikeOut annotations.
+- Edit > Find (Cmd+F) searches the text of a PDF: type the text in the status line and press Return. The matching lines
+  are listed in the sidebar (View > Search Results) and Find Next and Find Previous (Cmd+G, Shift+Cmd+G) step through
+  the pages that hold them.
+- View > Markup and View > Bookmarks list every mark and bookmark in the sidebar; a click goes to its page.
+- View > Contact Sheet (Cmd+2) shows every page in a grid. View > Slideshow (Shift+Cmd+F) shows the pages one after
+  another without the toolbar and sidebar; arrows, space and Return step, Escape ends it.
+- Tools > Show Inspector (Cmd+I) lists the file's name, kind, size, pages or pixels, markup counts and, for a JPEG, its
+  camera, exposure and location. Tools > Show Location Info shows the place a picture was taken. Tools > Show Magnifier
+  enlarges the picture under the pointer.
+- File > New from Clipboard (Cmd+N) opens a picture from the clipboard.
+- Tools > Adjust Size (Cmd+Option+I) resamples a picture: type a width, a width x height or a percentage in the status
+  line and press Return. File > JPEG Quality chooses High, Medium or Low for exported JPEGs.
+
 ## 0.7.0
 
 - File > Open (Cmd+O) shows the open panel for PDFs and pictures. The chosen file is copied into the app's data folder and opened from there.

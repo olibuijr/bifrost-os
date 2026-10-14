@@ -48,6 +48,10 @@ pub struct Document {
     /// The bookmarked source pages, kept beside the markup.
     pub bookmarks: Vec<usize>,
     source: Source,
+    /// A picture as it was opened, for Revert to Original after pixel edits. None for a PDF.
+    original: Option<Rc<Image>>,
+    /// Counts the changes to a picture's pixels, so a drawn copy of it can tell it is stale.
+    pub revision: u32,
     /// The pictures and thumbnails drawn so far, by key.
     drawn: RefCell<HashMap<Key, Rc<Image>>>,
     /// The keys asked of the worker and not answered yet, so each is asked once.
@@ -57,6 +61,10 @@ pub struct Document {
 impl Document {
     fn new(path: &Path, data_dir: &Path, sizes: Vec<(usize, usize)>, source: Source, outline: Vec<Outline>, is_pdf: bool) -> Document {
         let n = sizes.len();
+        let original = match &source {
+            Source::Picture(img) => Some(img.clone()),
+            Source::Pdf { .. } => None,
+        };
         let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Document").to_string();
         Document {
             title,
@@ -69,6 +77,8 @@ impl Document {
             outline,
             bookmarks: load_bookmarks(data_dir, path),
             source,
+            original,
+            revision: 0,
             drawn: RefCell::new(HashMap::new()),
             asked: RefCell::new(HashSet::new()),
         }
@@ -111,6 +121,35 @@ impl Document {
             if let Some(t) = self.turns.get_mut(s) {
                 *t = quarters % 4;
             }
+        }
+    }
+
+    /// The picture of a picture document, as it is now. None for a PDF.
+    pub fn picture_rc(&self) -> Option<Rc<Image>> {
+        match &self.source {
+            Source::Picture(img) => Some(img.clone()),
+            Source::Pdf { .. } => None,
+        }
+    }
+
+    /// Puts a new picture in place of the document's (a flip, a crop, a cleared background). The page size follows, and
+    /// the thumbnails drawn from the old picture are dropped. Nothing happens for a PDF or for the picture already there.
+    pub fn replace_picture(&mut self, img: Rc<Image>) {
+        match &self.source {
+            Source::Picture(current) if !Rc::ptr_eq(current, &img) => {}
+            _ => return,
+        }
+        self.sizes = vec![(img.w, img.h)];
+        self.source = Source::Picture(img);
+        self.drawn.borrow_mut().clear();
+        self.asked.borrow_mut().clear();
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    /// Puts the picture as it was opened back, undoing every pixel edit. Nothing happens for a PDF.
+    pub fn restore_original(&mut self) {
+        if let Some(img) = self.original.clone() {
+            self.replace_picture(img);
         }
     }
 
@@ -223,11 +262,22 @@ impl Document {
     }
 }
 
+/// Decodes the bytes of a picture file.
+pub fn decode_picture(bytes: &[u8]) -> Result<Image, String> {
+    let source = ImageSource::new(bytes).map_err(|e| format!("{e:?}"))?;
+    source.decode().map_err(|e| format!("{e:?}"))
+}
+
+/// The file name a picture taken from the clipboard is kept under: `Clipboard <stamp>.png`, or `.jpg` for JPEG data.
+pub fn clipboard_file_name(bytes: &[u8], stamp: u64) -> String {
+    let ext = if bytes.starts_with(&[0xff, 0xd8]) { "jpg" } else { "png" };
+    format!("Clipboard {stamp}.{ext}")
+}
+
 /// Opens the picture at `path` (PNG or JPEG). `data_dir` is the app's private storage directory.
 pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let source = ImageSource::new(&bytes).map_err(|e| format!("{e:?}"))?;
-    let img = source.decode().map_err(|e| format!("{e:?}"))?;
+    let img = decode_picture(&bytes)?;
     let sizes = vec![(img.w, img.h)];
     Ok(Document::new(path, data_dir, sizes, Source::Picture(Rc::new(img)), Vec::new(), false))
 }
@@ -296,6 +346,24 @@ pub fn adjusted(img: &Image, adjust: &Adjust) -> Image {
         return img.clone();
     }
     chain.apply(img).unwrap_or_else(|| img.clone())
+}
+
+/// Documents for the tests of other modules.
+#[cfg(test)]
+pub mod tests_support {
+    use super::*;
+
+    /// A one-page document showing `img`.
+    pub fn picture_of(img: Image) -> Document {
+        let size = (img.w, img.h);
+        Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![size], Source::Picture(Rc::new(img)), Vec::new(), false)
+    }
+
+    /// A document of `n` pages of 4 by 4 pixels, all showing the same picture.
+    pub fn pictures(n: usize) -> Document {
+        let img = Image { w: 4, h: 4, px: vec![0; 16] };
+        Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![(4, 4); n], Source::Picture(Rc::new(img)), Vec::new(), false)
+    }
 }
 
 #[cfg(test)]
@@ -372,6 +440,32 @@ mod tests {
         assert!(load_bookmarks(&dir, path).is_empty());
         save_bookmarks(&dir, path, &[]).expect("removing nothing is fine");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replacing_the_picture_resizes_the_page_drops_thumbnails_and_restores_the_original() {
+        let mut doc = picture_doc(4, 2);
+        let before = doc.thumb(0).expect("a thumbnail");
+        assert_eq!(doc.revision, 0);
+        let cropped = Rc::new(Image { w: 2, h: 2, px: vec![7; 4] });
+        doc.replace_picture(cropped.clone());
+        assert_eq!(doc.sizes, vec![(2, 2)]);
+        assert_eq!(doc.revision, 1);
+        assert!(!Rc::ptr_eq(&before, &doc.thumb(0).expect("a new thumbnail")));
+        // the same picture again changes nothing
+        doc.replace_picture(cropped);
+        assert_eq!(doc.revision, 1);
+        doc.restore_original();
+        assert_eq!(doc.sizes, vec![(4, 2)]);
+        assert_eq!(doc.revision, 2);
+        assert_eq!(doc.picture_rc().map(|i| (i.w, i.h)), Some((4, 2)));
+    }
+
+    #[test]
+    fn clipboard_pictures_are_named_by_their_data() {
+        assert_eq!(clipboard_file_name(&[0xff, 0xd8, 0xff], 5), "Clipboard 5.jpg");
+        assert_eq!(clipboard_file_name(b"\x89PNG", 5), "Clipboard 5.png");
+        assert!(decode_picture(b"not a picture").is_err());
     }
 
     #[test]
