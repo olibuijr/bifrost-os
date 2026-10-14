@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.5 — 2026-10-14
+
+- Write CSV exports through a synced, owner-only sibling file and atomic replacement, preserving the previous export if
+  the new write is interrupted or fails. Failed password reads now abort the export instead of publishing a partial CSV.
+- Report partial keychain imports accurately; imports consist of individual keychain operations and cannot be rolled
+  back transactionally.
+
 ## 0.2.4 — 2026-10-14
 
 - Add the generated app compliance harness.
