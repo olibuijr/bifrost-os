@@ -44,7 +44,8 @@ def shell_package():
     dbpath = os.path.join(POOL, "bifrost.db")
     if not os.path.isfile(dbpath):
         raise RuntimeError(f"missing local BifrOSt repository database: {dbpath}")
-    records = pc_mirror.parse_db(open(dbpath, "rb").read())
+    with open(dbpath, "rb") as f:
+        records = pc_mirror.parse_db(f.read())
     record = records.get("springboard-shell")
     if not record or not re.fullmatch(re.escape(base) + r"\.\d+-[A-Za-z0-9._+]+", record["version"]):
         raise RuntimeError(f"repository shell version must match committed Cargo version {base}.<epoch>-<pkgrel>")
@@ -114,8 +115,20 @@ def checked_destination(dest):
     return dest
 
 
+def require_replaceable(dest):
+    if not os.path.lexists(dest):
+        return
+    marker = os.path.join(dest, MARKER)
+    if os.path.islink(dest) or not os.path.isdir(dest) or not os.path.isfile(marker):
+        raise RuntimeError(f"refusing to replace unmanaged destination: {dest}")
+    with open(marker) as f:
+        if f.read() != "schema=1\n":
+            raise RuntimeError(f"refusing to replace unmanaged destination: {dest}")
+
+
 def build(dest, sync=False):
     dest = checked_destination(dest)
+    require_replaceable(dest)
     if sync:
         pc_mirror.sync()
     selected = package_closure()
@@ -153,10 +166,9 @@ def build(dest, sync=False):
             f.write("\n")
         with open(os.path.join(stage, MARKER), "w") as f:
             f.write("schema=1\n")
+        # Recheck after staging: another process must not swap in an unmanaged path while we prepare the new bundle.
+        require_replaceable(dest)
         if os.path.lexists(dest):
-            marker = os.path.join(dest, MARKER)
-            if os.path.islink(dest) or not os.path.isdir(dest) or not os.path.isfile(marker) or open(marker).read() != "schema=1\n":
-                raise RuntimeError(f"refusing to replace unmanaged destination: {dest}")
             shutil.rmtree(dest)
         os.replace(stage, dest)
         stage = None
