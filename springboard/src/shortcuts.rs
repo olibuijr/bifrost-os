@@ -9,6 +9,8 @@
 use std::path::{Path, PathBuf};
 
 pub mod flow;
+#[cfg(test)]
+mod parity_app_shortcuts;
 
 /// The file the app saves the list to, inside the app's data directory.
 pub const FILE: &str = "shortcuts.tsv";
@@ -36,8 +38,12 @@ pub const FOLDER_CHOICES: [&str; 5] = ["Desktop", "Documents", "Downloads", "Pic
 /// The commands a "Run Shell Script" step can run.
 pub const SCRIPT_CHOICES: [&str; 4] = ["date", "uptime", "df -h /", "free -h"];
 /// The glyphs a tile can show, by symbol name. Index 0 is the plain Shortcuts mark and has no symbol name.
-pub const GLYPHS: [&str; 13] =
-    ["", "star", "house", "clock", "music.note", "photo", "film", "envelope", "phone", "calendar", "globe", "bookmark", "flag"];
+pub const GLYPHS: [&str; 21] = [
+    "", "star", "house", "clock", "music.note", "photo", "film", "envelope", "phone", "calendar", "globe", "bookmark", "flag",
+    "tag", "pencil", "mic", "calculator", "cloud.sun", "doc", "person", "desktopcomputer",
+];
+/// The highest menu key a shortcut can take: the digits 1 to 9 with Control and Command.
+pub const MAX_KEY: u8 = 9;
 /// The folders the sidebar lists. A shortcut's `folder` is 0 for none, or the position here plus one.
 pub const FOLDERS: [&str; 3] = ["Favorites", "Home", "Work"];
 
@@ -180,11 +186,15 @@ pub enum Action {
     EndIf,
     /// runs the steps up to End Repeat this many times
     Repeat(u32),
+    /// runs the steps up to End Repeat once for each line of the previous output, with the line as `{Item}`
+    RepeatEach,
+    /// ends the shortcut here; the steps after it are not run
+    Stop,
     EndRepeat,
 }
 
 /// The kinds the "Add Action" list offers, in order.
-pub const KINDS: [&str; 19] = [
+pub const KINDS: [&str; 21] = [
     "Set Wi-Fi",
     "Set Low Power Mode",
     "Set Do Not Disturb",
@@ -204,6 +214,8 @@ pub const KINDS: [&str; 19] = [
     "Set Variable",
     "If",
     "Repeat",
+    "Repeat with Each",
+    "Stop",
 ];
 
 /// The next or previous of `choices` after `cur` (wrapping). A `cur` that is not one of them counts as the first choice.
@@ -315,16 +327,19 @@ impl Action {
             16 => Action::SetVariable("Name".into()),
             17 => Action::If(Cond::NotEmpty),
             18 => Action::Repeat(2),
+            19 => Action::RepeatEach,
+            20 => Action::Stop,
             _ => Action::Timer(5),
         }
     }
 
     /// The steps the "Add Action" list adds for kind `i`: one step, or a whole block (If with Otherwise and End If,
-    /// Repeat with End Repeat) so the list never holds an opener without its end.
+    /// Repeat and Repeat with Each with End Repeat) so the list never holds an opener without its end.
     pub fn block(i: usize) -> Vec<Action> {
         match i {
             17 => vec![Action::If(Cond::NotEmpty), Action::Otherwise, Action::EndIf],
             18 => vec![Action::Repeat(2), Action::EndRepeat],
+            19 => vec![Action::RepeatEach, Action::EndRepeat],
             _ => vec![Action::of_kind(i)],
         }
     }
@@ -352,6 +367,8 @@ impl Action {
             Action::Otherwise => "Otherwise",
             Action::EndIf => "End If",
             Action::Repeat(_) => KINDS[18],
+            Action::RepeatEach => KINDS[19],
+            Action::Stop => KINDS[20],
             Action::EndRepeat => "End Repeat",
         }
     }
@@ -363,7 +380,12 @@ impl Action {
             Action::Wifi(b) | Action::LowPower(b) | Action::Dnd(b) => onoff(b),
             Action::Brightness(p) => format!("{p}%"),
             Action::OpenApp(a) => a.clone(),
-            Action::Screenshot | Action::Otherwise | Action::EndIf | Action::EndRepeat => String::new(),
+            Action::Screenshot
+            | Action::Otherwise
+            | Action::EndIf
+            | Action::EndRepeat
+            | Action::RepeatEach
+            | Action::Stop => String::new(),
             Action::Timer(m) => format!("{m} min"),
             Action::Notify(m)
             | Action::CopyText(m)
@@ -418,7 +440,9 @@ impl Action {
             | Action::SetVariable(_)
             | Action::Otherwise
             | Action::EndIf
-            | Action::EndRepeat => {}
+            | Action::EndRepeat
+            | Action::RepeatEach
+            | Action::Stop => {}
         }
     }
 
@@ -436,6 +460,8 @@ impl Action {
                 | Action::Otherwise
                 | Action::EndIf
                 | Action::EndRepeat
+                | Action::RepeatEach
+                | Action::Stop
         )
     }
 
@@ -508,6 +534,8 @@ impl Action {
             Action::Otherwise => "else".into(),
             Action::EndIf => "endif".into(),
             Action::Repeat(n) => format!("repeat:{n}"),
+            Action::RepeatEach => "repeatall".into(),
+            Action::Stop => "stop".into(),
             Action::EndRepeat => "endrepeat".into(),
         }
     }
@@ -541,6 +569,8 @@ impl Action {
             "else" => Action::Otherwise,
             "endif" => Action::EndIf,
             "repeat" => Action::Repeat(v.parse::<u32>().ok()?.clamp(1, MAX_REPEAT)),
+            "repeatall" => Action::RepeatEach,
+            "stop" => Action::Stop,
             "endrepeat" => Action::EndRepeat,
             _ => return None,
         })
@@ -597,12 +627,14 @@ pub struct Shortcut {
     pub glyph: usize,
     /// 0 for no folder, or the position in `FOLDERS` plus one
     pub folder: usize,
+    /// the digit (1 to `MAX_KEY`) that runs the shortcut from the Shortcuts menu with Control and Command; 0 for none
+    pub key: u8,
 }
 
 impl Shortcut {
-    /// A shortcut with no reminder, the plain glyph and no folder.
+    /// A shortcut with no reminder, the plain glyph, no folder and no menu key.
     pub fn new(name: &str, color: usize, actions: Vec<Action>) -> Shortcut {
-        Shortcut { name: name.into(), color, actions, schedule: None, glyph: 0, folder: 0 }
+        Shortcut { name: name.into(), color, actions, schedule: None, glyph: 0, folder: 0, key: 0 }
     }
 }
 
@@ -612,12 +644,15 @@ pub fn serialize(list: &[Shortcut]) -> String {
         let name: String = s.name.chars().filter(|c| !c.is_control()).collect();
         let acts: Vec<String> = s.actions.iter().map(Action::encode).collect();
         out += &format!("{name}\t{}\t{}", s.color, acts.join(";"));
-        let extra = s.glyph != 0 || s.folder != 0;
+        let extra = s.glyph != 0 || s.folder != 0 || s.key != 0;
         if s.schedule.is_some() || extra {
             out += &format!("\t{}", s.schedule.map(Daily::label).unwrap_or_default());
         }
         if extra {
             out += &format!("\t{}\t{}", s.glyph, s.folder);
+        }
+        if s.key != 0 {
+            out += &format!("\t{}", s.key);
         }
         out.push('\n');
     }
@@ -634,7 +669,8 @@ pub fn parse(text: &str) -> Vec<Shortcut> {
             let schedule = f.next().and_then(Daily::parse);
             let glyph = f.next().and_then(|g| g.parse::<usize>().ok()).filter(|g| *g < GLYPHS.len()).unwrap_or(0);
             let folder = f.next().and_then(|g| g.parse::<usize>().ok()).filter(|g| *g <= FOLDERS.len()).unwrap_or(0);
-            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule, glyph, folder })
+            let key = f.next().and_then(|k| k.parse::<u8>().ok()).filter(|k| (1..=MAX_KEY).contains(k)).unwrap_or(0);
+            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule, glyph, folder, key })
         })
         .take(MAX_SHORTCUTS)
         .collect()
@@ -667,14 +703,61 @@ pub fn app_data_dir() -> PathBuf {
     crate::shell::apphost::root().join("appdata").join(APP_ID)
 }
 
-/// The shortcuts a first launch starts with.
+/// The shortcuts a first launch starts with. The first four hold the menu keys 1 to 4.
 pub fn defaults() -> Vec<Shortcut> {
-    vec![
+    let mut list = vec![
         Shortcut::new("Bedtime", 6, vec![Action::Dnd(true), Action::Brightness(10), Action::Wifi(false)]),
         Shortcut::new("Save Battery", 3, vec![Action::LowPower(true), Action::Brightness(30)]),
         Shortcut::new("Quick Timer", 1, vec![Action::Timer(10)]),
         Shortcut::new("Capture", 4, vec![Action::Screenshot, Action::OpenApp("Photos".into())]),
-    ]
+    ];
+    for (i, s) in list.iter_mut().enumerate() {
+        s.key = i as u8 + 1;
+    }
+    list
+}
+
+/// Gives shortcut `i` the menu key `key` (0 for none, or 1 to `MAX_KEY`). A key another shortcut holds moves to this one,
+/// so no two shortcuts share a key. Fails, and changes nothing, for a key out of range or a shortcut that is not there.
+pub fn set_key(list: &mut [Shortcut], i: usize, key: u8) -> Result<(), String> {
+    if i >= list.len() {
+        return Err("There is no such shortcut.".into());
+    }
+    if key > MAX_KEY {
+        return Err(format!("A menu key is 1 to {MAX_KEY}."));
+    }
+    if key != 0 {
+        for (k, s) in list.iter_mut().enumerate() {
+            if k != i && s.key == key {
+                s.key = 0;
+            }
+        }
+    }
+    list[i].key = key;
+    Ok(())
+}
+
+/// The next menu key after `cur` in the row's order: none, then 1 to `MAX_KEY`, then none again.
+pub fn next_key(cur: u8) -> u8 {
+    if cur >= MAX_KEY {
+        0
+    } else {
+        cur + 1
+    }
+}
+
+/// The names of the variables a shortcut's steps can use, in order: `Output` (the previous output) first, then each name a
+/// Set Variable step sets, once, so a picker can offer them.
+pub fn variable_names(actions: &[Action]) -> Vec<String> {
+    let mut names = vec!["Output".to_string()];
+    for a in actions {
+        if let Action::SetVariable(name) = a {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+    }
+    names
 }
 
 /// A name for the list: control characters removed, no spaces at the ends, at most `MAX_NAME` characters.
@@ -720,8 +803,9 @@ pub fn rename(list: &mut [Shortcut], i: usize, wanted: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// Adds a copy of shortcut `i` right after it, named "<name> Copy" (made unique) and without the daily reminder, so the
-/// copy does not notify a second time. Returns the copy's position, or `None` when `i` is out of range or the list is full.
+/// Adds a copy of shortcut `i` right after it, named "<name> Copy" (made unique) and without the daily reminder or the
+/// menu key, so the copy does not notify a second time or take a key from the original. Returns the copy's position, or
+/// `None` when `i` is out of range or the list is full.
 pub fn duplicate(list: &mut Vec<Shortcut>, i: usize) -> Option<usize> {
     if i >= list.len() || list.len() >= MAX_SHORTCUTS {
         return None;
@@ -729,6 +813,7 @@ pub fn duplicate(list: &mut Vec<Shortcut>, i: usize) -> Option<usize> {
     let mut copy = list[i].clone();
     copy.name = unique_name(list, &format!("{} Copy", copy.name));
     copy.schedule = None;
+    copy.key = 0;
     list.insert(i + 1, copy);
     Some(i + 1)
 }
@@ -740,6 +825,22 @@ pub fn move_action(actions: &mut [Action], k: usize, up: bool) -> Option<usize> 
         return None;
     }
     actions.swap(k, to);
+    Some(to)
+}
+
+/// Takes step `from` out and puts it back at index `to`, the index it lands on once taken out (a drag onto the row of step
+/// `to`). Only a plain step moves: an opener, an Otherwise or an end keeps its place, so the blocks keep their shape.
+/// Returns the new position, or `None` when nothing moves.
+pub fn move_step(actions: &mut Vec<Action>, from: usize, to: usize) -> Option<usize> {
+    let plain = !matches!(
+        actions.get(from)?,
+        Action::If(_) | Action::Repeat(_) | Action::RepeatEach | Action::Otherwise | Action::EndIf | Action::EndRepeat
+    );
+    if !plain || to >= actions.len() || to == from {
+        return None;
+    }
+    let step = actions.remove(from);
+    actions.insert(to, step);
     Some(to)
 }
 
@@ -766,30 +867,45 @@ pub fn visible(list: &[Shortcut], folder: Option<usize>, query: &str) -> Vec<usi
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Starter {
     pub summary: &'static str,
+    /// the gallery heading the starter is listed under: Focus, Everyday or Tools
+    pub category: &'static str,
     pub shortcut: Shortcut,
 }
 
-/// The starter gallery: shortcuts to add as they are and change afterwards.
+/// The gallery headings, in the order the gallery shows them.
+pub const STARTER_CATEGORIES: [&str; 3] = ["Focus", "Everyday", "Tools"];
+
+/// The starter gallery: shortcuts to add as they are and change afterwards, grouped by category in `STARTER_CATEGORIES`.
 pub fn starters() -> Vec<Starter> {
-    let mk = |summary, name: &str, color, glyph, folder, actions| {
+    let mk = |summary, category, name: &str, color, glyph, folder, actions| {
         let mut shortcut = Shortcut::new(name, color, actions);
         shortcut.glyph = glyph;
         shortcut.folder = folder;
-        Starter { summary, shortcut }
+        Starter { summary, category, shortcut }
     };
     vec![
         mk(
             "Silence notifications, dim the screen and time an hour.",
+            "Focus",
             "Focus Hour",
             6,
             3,
             3,
             vec![Action::Dnd(true), Action::Brightness(40), Action::Timer(60)],
         ),
-        mk("Put a short thank-you on the clipboard.", "Say Thanks", 3, 1, 1, vec![Action::CopyText("Thanks".into())]),
-        mk("Show the Downloads folder.", "Open Downloads", 5, 5, 1, vec![Action::OpenFolder("Downloads".into())]),
+        mk(
+            "Put a short thank-you on the clipboard.",
+            "Everyday",
+            "Say Thanks",
+            3,
+            1,
+            1,
+            vec![Action::CopyText("Thanks".into())],
+        ),
+        mk("Show the Downloads folder.", "Everyday", "Open Downloads", 5, 5, 1, vec![Action::OpenFolder("Downloads".into())]),
         mk(
             "Show how much room is left on the disk.",
+            "Tools",
             "Disk Report",
             4,
             0,
@@ -798,6 +914,7 @@ pub fn starters() -> Vec<Starter> {
         ),
         mk(
             "Ask a name and greet it.",
+            "Everyday",
             "Greeting",
             1,
             7,
@@ -811,6 +928,7 @@ pub fn starters() -> Vec<Starter> {
         ),
         mk(
             "Remind to stand up three times.",
+            "Focus",
             "Stretch Reminder",
             2,
             11,
@@ -819,6 +937,7 @@ pub fn starters() -> Vec<Starter> {
         ),
         mk(
             "Fetch a page and report whether it changed.",
+            "Tools",
             "Check the Site",
             0,
             10,
@@ -831,6 +950,33 @@ pub fn starters() -> Vec<Starter> {
                 Action::ShowResult("The site changed".into()),
                 Action::EndIf,
             ],
+        ),
+        mk(
+            "Turn off Wi-Fi and dim the screen for the night.",
+            "Focus",
+            "Wind Down",
+            7,
+            2,
+            2,
+            vec![Action::Dnd(true), Action::Brightness(10), Action::Wifi(false)],
+        ),
+        mk(
+            "Set a lunch timer and remind when it is over.",
+            "Everyday",
+            "Lunch Break",
+            2,
+            3,
+            0,
+            vec![Action::Timer(45), Action::Notify("Time for a break".into())],
+        ),
+        mk(
+            "Save power and show the battery and memory left.",
+            "Tools",
+            "Battery Check",
+            3,
+            9,
+            3,
+            vec![Action::LowPower(true), Action::RunScript("free -h".into()), Action::ShowResult("{Output}".into())],
         ),
     ]
 }
@@ -855,8 +1001,8 @@ pub fn export(list: &[Shortcut]) -> String {
     format!("{EXPORT_HEADER}\n{}", serialize(list))
 }
 
-/// Adds the shortcuts of an export file to `list` under names no other shortcut has, without their reminders. Returns how
-/// many were added. Fails for a file that is not an export, one with no shortcuts, or a full list.
+/// Adds the shortcuts of an export file to `list` under names no other shortcut has, without their reminders or menu
+/// keys. Returns how many were added. Fails for a file that is not an export, one with no shortcuts, or a full list.
 pub fn import(list: &mut Vec<Shortcut>, text: &str) -> Result<usize, String> {
     if !text.starts_with(EXPORT_HEADER) {
         return Err("This is not a Shortcuts file.".into());
@@ -872,6 +1018,7 @@ pub fn import(list: &mut Vec<Shortcut>, text: &str) -> Result<usize, String> {
         }
         s.name = unique_name(list, &s.name);
         s.schedule = None;
+        s.key = 0;
         list.push(s);
         added += 1;
     }
@@ -916,6 +1063,8 @@ mod tests {
             Action::Otherwise,
             Action::EndIf,
             Action::Repeat(4),
+            Action::RepeatEach,
+            Action::Stop,
             Action::EndRepeat,
         ]
     }
@@ -952,7 +1101,7 @@ mod tests {
         let mut l = defaults();
         l[1].schedule = Some(Daily { hour: 7, minute: 5 });
         let text = serialize(&l);
-        assert!(text.lines().nth(1).unwrap().ends_with("\t07:05"));
+        assert!(text.lines().nth(1).unwrap().ends_with("\t07:05\t0\t0\t2"), "the menu key follows the reminder: {text}");
         assert_eq!(parse(&text), l);
         assert_eq!(parse("A\t2\twifi:1\n")[0].schedule, None);
     }
@@ -965,11 +1114,11 @@ mod tests {
         l[1].glyph = 12;
         l[1].schedule = Some(Daily { hour: 9, minute: 0 });
         let text = serialize(&l);
-        assert!(text.lines().next().unwrap().ends_with("\t\t3\t2"), "no reminder leaves its field empty: {text}");
-        assert!(text.lines().nth(1).unwrap().ends_with("\t09:00\t12\t0"));
+        assert!(text.lines().next().unwrap().ends_with("\t\t3\t2\t1"), "no reminder leaves its field empty: {text}");
+        assert!(text.lines().nth(1).unwrap().ends_with("\t09:00\t12\t0\t2"));
         assert_eq!(parse(&text), l);
         let plain = serialize(&defaults());
-        assert!(!plain.lines().next().unwrap().ends_with("\t0\t0"), "defaults add no extra fields");
+        assert!(!plain.lines().next().unwrap().ends_with("\t0\t0"), "a menu key alone adds no glyph or folder as zeros at the end");
     }
 
     #[test]
@@ -1341,7 +1490,7 @@ mod tests {
             let mut open = 0i32;
             for a in &s.shortcut.actions {
                 match a {
-                    Action::If(_) | Action::Repeat(_) => open += 1,
+                    Action::If(_) | Action::Repeat(_) | Action::RepeatEach => open += 1,
                     Action::EndIf | Action::EndRepeat => open -= 1,
                     _ => {}
                 }

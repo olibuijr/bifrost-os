@@ -11,13 +11,18 @@
 //! implements for what it can reach. A step the host cannot do stops the shortcut, and the steps after it are reported
 //! as not run.
 
-use super::{Action, MAX_VAR};
+use super::{Action, MAX_REPEAT, MAX_VAR};
 
 /// The most steps one run performs, counting every pass through a Repeat. A runaway nest of repeats stops here.
 pub const MAX_STEPS: usize = 200;
 
+/// The variable a Repeat with Each pass sets to the line it is on.
+pub const ITEM_VAR: &str = "Item";
+
 /// What was said about a step that was not run.
 const NOT_RUN: &str = "not run, an earlier step stopped the shortcut";
+/// What a Stop step reports: the shortcut ends there, as a failed step does.
+const STOPPED: &str = "the shortcut stopped here";
 
 /// One step of a run: its plan line and what happened to it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -124,7 +129,7 @@ pub fn depths(actions: &[Action]) -> Vec<usize> {
     actions
         .iter()
         .map(|a| match a {
-            Action::If(_) | Action::Repeat(_) => {
+            Action::If(_) | Action::Repeat(_) | Action::RepeatEach => {
                 depth += 1;
                 depth - 1
             }
@@ -147,7 +152,7 @@ fn block(actions: &[Action], open: usize) -> (Option<usize>, usize) {
     let (mut depth, mut otherwise) = (0usize, None);
     for (j, a) in actions.iter().enumerate().skip(open + 1) {
         match a {
-            Action::If(_) | Action::Repeat(_) => depth += 1,
+            Action::If(_) | Action::Repeat(_) | Action::RepeatEach => depth += 1,
             Action::EndIf | Action::EndRepeat => {
                 if depth == 0 {
                     return (otherwise, j);
@@ -168,7 +173,7 @@ pub fn remove_step(actions: &mut Vec<Action>, k: usize) -> usize {
         return 0;
     }
     let end = match actions[k] {
-        Action::If(_) | Action::Repeat(_) => block(actions, k).1.min(actions.len() - 1),
+        Action::If(_) | Action::Repeat(_) | Action::RepeatEach => block(actions, k).1.min(actions.len() - 1),
         _ => k,
     };
     actions.drain(k..=end).count()
@@ -192,6 +197,14 @@ impl Run<'_> {
     fn fail(&mut self, i: usize, why: &str) {
         self.steps.push(Step { line: self.actions[i].line(), outcome: Err(why.into()) });
         self.failed_at = Some(i);
+    }
+
+    /// Sets variable `name` to `value`, replacing its value when it is already set.
+    fn set_var(&mut self, name: &str, value: String) {
+        match self.vars.iter_mut().find(|(n, _)| n == name) {
+            Some(slot) => slot.1 = value,
+            None => self.vars.push((name.to_string(), value)),
+        }
     }
 
     /// Runs the steps from `from` up to (not including) `to`, stopping at the first one that fails.
@@ -230,6 +243,34 @@ impl Run<'_> {
                         self.range(i + 1, end);
                     }
                     i = end + 1;
+                }
+                Action::RepeatEach => {
+                    let (_, end) = block(actions, i);
+                    let end = end.min(to);
+                    // one pass per line of the previous output, at most MAX_REPEAT of them
+                    let lines: Vec<String> = self
+                        .output
+                        .lines()
+                        .map(str::trim)
+                        .filter(|l| !l.is_empty())
+                        .take(MAX_REPEAT as usize)
+                        .map(str::to_string)
+                        .collect();
+                    let count = if lines.len() == 1 { "1 line".to_string() } else { format!("{} lines", lines.len()) };
+                    self.steps.push(Step { line: a.line(), outcome: Ok(count) });
+                    for line in lines {
+                        if self.failed_at.is_some() {
+                            break;
+                        }
+                        self.set_var(ITEM_VAR, line);
+                        self.range(i + 1, end);
+                    }
+                    i = end + 1;
+                }
+                Action::Stop => {
+                    self.steps.push(Step { line: a.line(), outcome: Err(STOPPED.into()) });
+                    self.failed_at = Some(i);
+                    i += 1;
                 }
                 Action::Otherwise | Action::EndIf | Action::EndRepeat => i += 1,
                 Action::SetVariable(name) => {

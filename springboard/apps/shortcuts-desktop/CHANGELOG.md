@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.0 — 2026-10-14
+
+- Editor: each plain step has a grip at its right edge. Drag the grip up or down and release to move the step to that row. Openers, Otherwise and the ends keep their place so blocks keep their shape. The step moves when released; a line marks where it lands.
+- Tile menu: a long press (about half a second) on a tile opens Run, Rename, Duplicate and Delete under it. A tap anywhere else closes the menu.
+- Menu Key row in the editor: each shortcut takes one of the keys 1 to 9 (Control and Command with the digit), shown in the Shortcuts menu beside its name. Choosing a key another shortcut has moves it. Copies and imports take no key. The first four starter shortcuts keep keys 1 to 4.
+- Repeat with Each: runs its steps once for each line of the previous output, with the line as {Item}; at most 20 lines. Stop ends the shortcut at that step; the steps after it are listed as not run.
+- Insert Variable rows: while a text step is typed into, a row for each variable (Output, then the names Set Variable steps set) inserts {Name} into the text.
+- Search also filters the Add Action list (built-in actions and intents) and the gallery (name, line or heading).
+- Gallery: starters are grouped under Focus, Everyday and Tools; three more starters (Wind Down, Lunch Break, Battery Check).
+- Glyph picker has 21 symbols (eight added at the end, so saved glyph numbers keep their meaning); the colour row gains brown.
+- The list file keeps the menu key as a field after the glyph and folder; older versions ignore it.
+- Not done: user-made folders, the automations (app open and battery triggers), a shell-wide hotkey, a custom colour, Choose from Menu, the Output step, Ask for Input and Get Contents of URL running in the app, drag-to-import of files, the share sheet. The Automation row and the Menu Key row that the 1.8.0 entry describes were not in that release's code: the menu key is added here, the automations are still missing.
+
 ## 1.8.0 — 2026-10-13
 
 - New action kinds in the Add Action list, in groups: Text, Ask for Input, Set Variable and Show Result (Text and Variables); Get Contents of URL and Save File (Web and Files); If, Otherwise, Repeat, Choose from Menu, Menu Item and End (Scripting). The text, variable and scripting steps run inside the app. Show Result opens the result panel, Ask for Input and Choose from Menu ask their question in a panel before the run, and Save File writes into the app's Saved folder. Get Contents of URL is stored and listed, but the app has no network access yet, so a run says it is not available. System steps still cannot run on this device.
