@@ -152,3 +152,42 @@ mod plugin {
         assert_eq!(Bus::new("Empty", &[]), Err(HostError::InvalidChannelList));
     }
 }
+
+mod eventkit {
+    use bifrost_ui::calendar_access::Access;
+    use bifrost_ui::calendar_store::{Availability, Event, EventStore, Span};
+
+    fn store_with_full_access() -> EventStore {
+        let mut access = Access::new();
+        access.request_full_events(true);
+        EventStore::new(access)
+    }
+
+    #[test]
+    fn a_new_event_is_busy_and_has_no_url() {
+        let event = Event::new("Review", 100, 200);
+        assert_eq!(event.availability, Availability::Busy);
+        assert_eq!(event.url, None);
+    }
+
+    #[test]
+    fn a_saved_event_keeps_its_url_and_availability() {
+        let mut store = store_with_full_access();
+        let mut event = Event::new("Focus", 100, 200);
+        event.url = Some("https://example.com/room".into());
+        event.availability = Availability::Free;
+        store.save_event(&mut event, Span::ThisEvent, true).unwrap();
+        let fetched = store.events_between(0, 1000).unwrap();
+        assert_eq!(fetched.len(), 1);
+        assert_eq!(fetched[0].url.as_deref(), Some("https://example.com/room"));
+        assert_eq!(fetched[0].availability, Availability::Free);
+    }
+
+    #[test]
+    fn an_event_without_access_is_not_saved() {
+        let mut store = EventStore::new(Access::new());
+        let mut event = Event::new("Hidden", 100, 200);
+        assert!(store.save_event(&mut event, Span::ThisEvent, true).is_err());
+        assert!(store.events_between(0, 1000).is_err());
+    }
+}

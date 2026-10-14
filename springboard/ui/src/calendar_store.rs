@@ -21,6 +21,16 @@ pub enum Span {
     FutureEvents,
 }
 
+/// `EKEventAvailability`: how the event shows in free and busy time.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Availability {
+    #[default]
+    Busy,
+    Free,
+    Tentative,
+    Unavailable,
+}
+
 /// `EKEvent`. An empty `calendar_item_identifier` means the event was never saved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
@@ -31,6 +41,9 @@ pub struct Event {
     pub is_all_day: bool,
     /// Repeat every this many days; `None` for a single event.
     pub repeat_days: Option<u32>,
+    /// The link the event carries, stored as the caller wrote it.
+    pub url: Option<String>,
+    pub availability: Availability,
 }
 
 impl Event {
@@ -42,6 +55,8 @@ impl Event {
             end_date,
             is_all_day: false,
             repeat_days: None,
+            url: None,
+            availability: Availability::Busy,
         }
     }
 }
