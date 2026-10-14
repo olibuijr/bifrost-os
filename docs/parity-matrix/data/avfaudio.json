@@ -87,9 +87,9 @@
     {
       "feature": "Playback via video pipeline (AVPlayer-adjacent audio out)",
       "apple": "audio output for media playback (AVFAudio audio output)",
-      "bifrost": "springboard/src/media/player.rs (open_parts takes an AudioOut); springboard/src/media/speaker.rs",
-      "status": "os",
-      "note": "the video player writes audio through the AudioOut trait, and the only caller is the shell's video screen (springboard/src/shell/video.rs); the SDK has no app-facing call that opens a video Player, so apps cannot route playback audio through it."
+      "bifrost": "springboard/sdk/src/video_playback.rs (Player, AudioRoute); springboard/src/media/player.rs (AudioOut); springboard/src/media/speaker.rs",
+      "status": "partial",
+      "note": "The SDK facade opens media and models Speaker or Silent audio output, with headless tests. The shell video app is the only real player caller; apps cannot select a hardware/network route or use the facade to drive a system video window. Not yet verified on Midget."
     },
     {
       "feature": "Spatial audio, stereo capture and multidevice routing",
