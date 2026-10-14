@@ -137,6 +137,7 @@ const TYPES: &[Entry] = &[
     Entry { id: "org.openxmlformats.spreadsheetml.sheet", parent: &["public.data", "public.content"], ext: &["xlsx"], mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", desc: "Spreadsheet" },
     Entry { id: "org.openxmlformats.presentationml.presentation", parent: &["public.data", "public.content"], ext: &["pptx"], mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation", desc: "Presentation" },
     Entry { id: "org.oasis-open.opendocument.text", parent: &["public.data", "public.content"], ext: &["odt"], mime: "application/vnd.oasis.opendocument.text", desc: "OpenDocument text" },
+    Entry { id: "bifrost.web-archive", parent: &["public.data", "public.content"], ext: &["webarchive"], mime: "application/x-webarchive", desc: "Web archive" },
     Entry { id: "org.oasis-open.opendocument.spreadsheet", parent: &["public.data", "public.content"], ext: &["ods"], mime: "application/vnd.oasis.opendocument.spreadsheet", desc: "OpenDocument spreadsheet" },
     Entry { id: "org.oasis-open.opendocument.presentation", parent: &["public.data", "public.content"], ext: &["odp"], mime: "application/vnd.oasis.opendocument.presentation", desc: "OpenDocument presentation" },
     Entry { id: "public.vcard", parent: &["public.data", "public.content"], ext: &["vcf", "vcard"], mime: "text/vcard", desc: "vCard" },

@@ -5,7 +5,7 @@
 use crate::encoding::{self, Encoding};
 use crate::properties::Properties;
 use crate::text::Text;
-use crate::{docx, html, odt, rtf};
+use crate::{docx, html, odt, rtf, webarchive};
 use bifrost_app::document::{Document, DocumentError};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -66,6 +66,12 @@ impl TextDocument {
             code = true;
             text.load(rtf::plain_cells(&decoded));
             false
+        } else if webarchive::is_webarchive(bytes) {
+            let Some((cells, tab, props)) = webarchive::read(bytes) else { return Err(DocumentError::new("The web archive could not be read")) };
+            text.load(cells);
+            text.set_tab_width(tab);
+            properties = props;
+            true
         } else if docx::is_docx(bytes) || odt::is_odt(bytes) {
             let cells = if docx::is_docx(bytes) { docx::read(bytes) } else { odt::read(bytes) };
             let Some(cells) = cells else { return Err(DocumentError::new("The document could not be read")) };
@@ -82,6 +88,7 @@ impl TextDocument {
             let (cells, tab) = html::read(bytes);
             text.load(cells);
             text.set_tab_width(tab);
+            properties = html::read_properties(bytes);
             true
         } else {
             let (decoded, found) = encoding::detect(bytes);
@@ -112,9 +119,10 @@ impl Document for TextDocument {
             // markup opened as code is saved as the text it shows
             RTF_TYPE | HTML_TYPE if self.code && !self.rich => self.write_plain(),
             RTF_TYPE => Ok(rtf::write_with_info(self.text.cells(), self.text.tab_width(), &self.properties)),
-            HTML_TYPE => Ok(html::write(self.text.cells(), self.text.tab_width())),
+            HTML_TYPE => Ok(html::write_with(self.text.cells(), self.text.tab_width(), &self.properties)),
             docx::TYPE => Ok(docx::write_with(self.text.cells(), &self.properties)),
             odt::TYPE => Ok(odt::write_with(self.text.cells(), &self.properties)),
+            webarchive::TYPE => Ok(webarchive::write(self.text.cells(), self.text.tab_width(), &self.properties)),
             PLAIN_TYPE => self.write_plain(),
             "public.utf8-plain-text" => Ok(rtf::write_plain(self.text.cells())),
             other => Err(DocumentError::new(&format!("Text Editor cannot write {other}"))),
@@ -126,7 +134,7 @@ impl Document for TextDocument {
     }
 
     fn readable_types() -> &'static [&'static str] {
-        &[RTF_TYPE, PLAIN_TYPE, HTML_TYPE, docx::TYPE, odt::TYPE]
+        &[RTF_TYPE, PLAIN_TYPE, HTML_TYPE, docx::TYPE, odt::TYPE, webarchive::TYPE]
     }
 
     fn default_type() -> &'static str {

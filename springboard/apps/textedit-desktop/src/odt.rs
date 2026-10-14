@@ -384,7 +384,7 @@ fn parse(content: &str, defs: &HashMap<String, StyleDef>, lists: &HashMap<String
                         last_space = false;
                     }
                     "text:line-break" if in_paragraph => {
-                        cells.push(Cell { ch: '\n', style: current(&para_style, &para_props, spans.as_slice()) });
+                        cells.push(Cell { ch: crate::text::LINE_BREAK, style: current(&para_style, &para_props, spans.as_slice()) });
                         last_space = true;
                     }
                     _ => {}
@@ -692,6 +692,18 @@ mod tests {
     }
 
     #[test]
+    fn a_line_break_is_a_break_inside_the_paragraph() {
+        let mut cells = styled("one", Style::default());
+        cells.push(cell(crate::text::LINE_BREAK, Style::default()));
+        cells.extend(styled("two", Style::default()));
+        cells.push(cell('\n', Style::default()));
+        cells.extend(styled("three", Style::default()));
+        let back = read(&write(&cells)).unwrap();
+        assert_eq!(back, cells);
+        assert_eq!(text_of(&back).matches('\n').count(), 1, "only the paragraph break is a newline");
+    }
+
+    #[test]
     fn links_are_anchors_around_spans_and_round_trip() {
         let id = links::intern("https://example.com/a?x=1&y=2");
         let other = links::intern("mailto:ada@example.com");
@@ -748,7 +760,7 @@ mod tests {
         ]);
         assert!(is_odt(&package));
         let cells = read(&package).unwrap();
-        assert_eq!(text_of(&cells), "Head\nquoted text bold  end\tt\nl\nitem");
+        assert_eq!(text_of(&cells), "Head\nquoted text bold  end\tt\u{2028}l\nitem");
         let head = &cells[0];
         assert!(head.style.bold && head.style.size == 20.0);
         let quoted = cells.iter().find(|c| c.ch == 'q').unwrap();

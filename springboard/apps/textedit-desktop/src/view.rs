@@ -3,7 +3,7 @@
 //! reached in device pixels through `Ui::pt`. Colours and type come from the shared tokens only.
 
 use crate::layout::{self, Layout, Line, Marker};
-use crate::properties::{self, PanelLayout};
+use crate::properties::{self, ListLayout, PanelLayout};
 use crate::text::{Align, Cell, ListKind, Style, Transform, COLORS, FAMILIES, SPACINGS};
 use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
@@ -129,6 +129,37 @@ pub enum Action {
     Reinterpret(u8),
     /// Preferences > Open and Save: the encoding of new plain text documents
     DefaultEncoding(u8),
+    /// Format > Text > Copy Ruler and Paste Ruler (the tab stop distance)
+    CopyRuler,
+    PasteRuler,
+    /// File > Print > Rewrap to Fit Page
+    Rewrap,
+    /// View > Use Dark Background for Windows
+    DarkBackground,
+    /// Edit > Substitutions > Text Replacement
+    TextReplacement,
+    /// Preferences > New Documents > Default Font (index into `FAMILIES`)
+    DefaultFont(u8),
+    /// Edit > Find > Select Line: the panel's Select and Cancel buttons
+    LineDone,
+    LineCancel,
+    /// Edit > Spelling and Grammar > Show Spelling and Grammar, and the panel's buttons (Find Next is `SpellNext`)
+    ShowSpelling,
+    SpellingIgnore,
+    SpellingChange,
+    SpellingDone,
+    /// Preferences: the panel's Done button, the item that opens it, and a row of it (index into `prefs::Setting::ALL`)
+    ShowSettings,
+    SettingsDone,
+    Setting(u8),
+    /// Format > Text > Spacing, and the panel's Done and Cancel buttons
+    ShowSpacing,
+    SpacingDone,
+    SpacingCancel,
+    /// Preferences > Customize Encodings List, its Done button, and a row (index into `encoding::ALL`)
+    ShowEncodings,
+    EncodingsDone,
+    EncodingToggle(u8),
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -221,6 +252,27 @@ impl Action {
             Action::Encoding(i) => MENU_BASE + 0xa0 + i as u32,
             Action::Reinterpret(i) => MENU_BASE + 0xa8 + i as u32,
             Action::DefaultEncoding(i) => MENU_BASE + 0xb0 + i as u32,
+            Action::CopyRuler => MENU_BASE + 0xb9,
+            Action::PasteRuler => MENU_BASE + 0xba,
+            Action::Rewrap => MENU_BASE + 0xbb,
+            Action::DarkBackground => MENU_BASE + 0xbc,
+            Action::TextReplacement => MENU_BASE + 0xbd,
+            Action::DefaultFont(i) => MENU_BASE + 0xc0 + i as u32,
+            Action::LineDone => MENU_BASE + 0xbe,
+            Action::LineCancel => MENU_BASE + 0xbf,
+            Action::ShowSpelling => MENU_BASE + 0xc3,
+            Action::SpellingIgnore => MENU_BASE + 0xc4,
+            Action::SpellingChange => MENU_BASE + 0xc5,
+            Action::SpellingDone => MENU_BASE + 0xc6,
+            Action::ShowSettings => MENU_BASE + 0xc7,
+            Action::SettingsDone => MENU_BASE + 0xc8,
+            Action::Setting(i) => MENU_BASE + 0xd0 + i as u32,
+            Action::ShowSpacing => MENU_BASE + 0xc9,
+            Action::SpacingDone => MENU_BASE + 0xca,
+            Action::SpacingCancel => MENU_BASE + 0xcb,
+            Action::ShowEncodings => MENU_BASE + 0xcc,
+            Action::EncodingsDone => MENU_BASE + 0xcd,
+            Action::EncodingToggle(i) => MENU_BASE + 0xe0 + i as u32,
         })
     }
 
@@ -310,6 +362,27 @@ impl Action {
             0xa0..=0xa6 => Action::Encoding((offset - 0xa0) as u8),
             0xa8..=0xae => Action::Reinterpret((offset - 0xa8) as u8),
             0xb0..=0xb6 => Action::DefaultEncoding((offset - 0xb0) as u8),
+            0xb9 => Action::CopyRuler,
+            0xba => Action::PasteRuler,
+            0xbb => Action::Rewrap,
+            0xbc => Action::DarkBackground,
+            0xbd => Action::TextReplacement,
+            0xc0..=0xc2 => Action::DefaultFont((offset - 0xc0) as u8),
+            0xbe => Action::LineDone,
+            0xbf => Action::LineCancel,
+            0xc3 => Action::ShowSpelling,
+            0xc4 => Action::SpellingIgnore,
+            0xc5 => Action::SpellingChange,
+            0xc6 => Action::SpellingDone,
+            0xc7 => Action::ShowSettings,
+            0xc8 => Action::SettingsDone,
+            0xd0..=0xde => Action::Setting((offset - 0xd0) as u8),
+            0xc9 => Action::ShowSpacing,
+            0xca => Action::SpacingDone,
+            0xcb => Action::SpacingCancel,
+            0xcc => Action::ShowEncodings,
+            0xcd => Action::EncodingsDone,
+            0xe0..=0xe6 => Action::EncodingToggle((offset - 0xe0) as u8),
             _ => return None,
         })
     }
@@ -724,6 +797,31 @@ pub fn properties_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
     sheet_buttons(ui, l, &[("Cancel", Action::PropsCancel, false), ("Done", Action::PropsDone, true)])
 }
 
+/// The Show Spelling and Grammar panel's buttons: Change is the default, Find Next moves to the next misspelled word.
+pub fn spelling_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    sheet_buttons(
+        ui,
+        l,
+        &[
+            ("Done", Action::SpellingDone, false),
+            ("Ignore", Action::SpellingIgnore, false),
+            ("Learn", Action::SpellLearn, false),
+            ("Find Next", Action::SpellNext, false),
+            ("Change", Action::SpellingChange, true),
+        ],
+    )
+}
+
+/// The Spacing panel's buttons.
+pub fn spacing_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    sheet_buttons(ui, l, &[("Cancel", Action::SpacingCancel, false), ("Done", Action::SpacingDone, true)])
+}
+
+/// The Select Line panel's buttons.
+pub fn line_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    sheet_buttons(ui, l, &[("Cancel", Action::LineCancel, false), ("Select", Action::LineDone, true)])
+}
+
 /// The link panel's buttons; Remove Link is offered when the text already links somewhere.
 pub fn link_buttons(ui: &Ui, l: &PanelLayout, can_remove: bool) -> Vec<Button> {
     let mut specs = vec![("Cancel", Action::LinkCancel, false)];
@@ -759,6 +857,36 @@ pub fn draw_sheet(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, fie
     }
 }
 
+/// A list panel's Done button, on its bottom row at the right; it does `action`.
+pub fn list_buttons(ui: &Ui, l: &ListLayout, action: Action) -> Vec<Button> {
+    let mut done = label_button(ui, "Done", Some(action), Weight::Bold);
+    done.active = true;
+    let width = done.rect.w;
+    let mut buttons = vec![done];
+    place_row(&mut buttons, &[1], l.right - width, l.buttons_y);
+    buttons
+}
+
+/// Draws a list panel: its title, one row per item (the name at the left, the value at the right), and its buttons. The
+/// rows are the panel's own touch targets (see `ListLayout::rows`).
+pub fn draw_list(c: &mut dyn Canvas, ui: &Ui, l: &ListLayout, title: &str, rows: &[(&str, String)], buttons: &[Button]) {
+    let frame = to_px(ui, l.frame);
+    c.fill_rrect(frame, ui.pt(CONTROL_RADIUS), DETAIL_BG.now());
+    c.stroke_rrect(frame, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), SEPARATOR_C.now());
+    text_at(c, ui, title, MAC_BODY_PT, Weight::Bold, LABEL.now(), l.labels_x, l.title_y);
+    for ((label, value), rect) in rows.iter().zip(l.rows.iter()) {
+        let r = to_px(ui, *rect);
+        c.fill_rrect(r, ui.pt(CONTROL_RADIUS), FIELD_BG.now());
+        let name = ui.text(label, MAC_BODY_PT, Weight::Regular, LABEL.now());
+        blit(c, &name, r.x + ui.pt(BUTTON_PAD), r.y + (r.h - name.h as f32) / 2.0);
+        let shown = ui.text(value, MAC_BODY_PT, Weight::Regular, LABEL_3.now());
+        blit(c, &shown, r.x + r.w - ui.pt(BUTTON_PAD) - shown.w as f32, r.y + (r.h - shown.h as f32) / 2.0);
+    }
+    for b in buttons {
+        draw_button(c, ui, b);
+    }
+}
+
 /// The longest end of `text` that fits in `max_px`.
 fn tail_that_fits(ui: &Ui, text: &str, max_px: f32) -> String {
     let chars: Vec<char> = text.chars().collect();
@@ -774,17 +902,32 @@ fn tail_that_fits(ui: &Ui, text: &str, max_px: f32) -> String {
     String::new()
 }
 
+/// The page's fill when View > Use Dark Background for Windows is on.
+fn dark_page() -> u32 {
+    pack(30, 30, 32, 255)
+}
+
+/// The colour of text with no colour of its own: the window's label colour, or white on a dark page.
+pub fn default_ink(dark: bool) -> u32 {
+    if dark {
+        pack(255, 255, 255, 255)
+    } else {
+        LABEL.now()
+    }
+}
+
 /// The page: its background and a clip to the body so text never draws over the bars.
-pub fn page_clip(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry) -> RectF {
+pub fn page_clip(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, dark: bool) -> RectF {
     let r = RectF::new(0.0, ui.pt(geom.body_top).floor(), ui.pt(geom.width).ceil(), ui.pt(geom.body_bottom - geom.body_top).ceil());
-    c.fill_rect(r, CONTENT_BG.now());
+    c.fill_rect(r, if dark { dark_page() } else { CONTENT_BG.now() });
     c.push_clip(r, 0.0);
     r
 }
 
-/// Draws the selection, the text and the caret at `head`. `scroll` is how far the body is scrolled, in points.
+/// Draws the selection, the text and the caret at `head`. `scroll` is how far the body is scrolled, in points. `dark`
+/// is the dark page: text with no colour of its own is white.
 #[allow(clippy::too_many_arguments)]
-pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool, misspelled: &[std::ops::Range<usize>]) {
+pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool, misspelled: &[std::ops::Range<usize>], dark: bool) {
     let origin_x = geom.text_x;
     let origin_y = geom.body_top - scroll;
     let measure = |ch: char, style: &Style| char_width(ui, ch, style);
@@ -808,7 +951,7 @@ pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, c
     }
     // text: runs of one style per line
     for line in &lines.lines {
-        draw_line(c, ui, lines, line, cells, origin_x, origin_y);
+        draw_line(c, ui, lines, line, cells, origin_x, origin_y, dark);
         for word in misspelled.iter().filter(|w| w.start < line.end && w.end > line.start) {
             let x0 = lines.x_in_line(cells, line, word.start.max(line.start), &measure);
             let x1 = lines.x_in_line(cells, line, word.end.min(line.end), &measure);
@@ -818,7 +961,7 @@ pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, c
     if caret {
         let (x, top, height) = lines.caret(cells, head, &measure);
         let rect = Rect { x: origin_x + x, y: origin_y + top, w: 1.0, h: height };
-        c.fill_rect(to_px(ui, rect), LABEL.now());
+        c.fill_rect(to_px(ui, rect), default_ink(dark));
     }
 }
 
@@ -835,7 +978,8 @@ fn squiggle(c: &mut dyn Canvas, ui: &Ui, x0: f32, x1: f32, y: f32) {
     }
 }
 
-fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[Cell], origin_x: f32, origin_y: f32) {
+#[allow(clippy::too_many_arguments)]
+fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[Cell], origin_x: f32, origin_y: f32, dark: bool) {
     let measure = |ch: char, style: &Style| char_width(ui, ch, style);
     let y = origin_y + line.top;
     // the list marker hangs left of the text
@@ -847,7 +991,7 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
     if let Some(m) = marker {
         let size = cells.get(line.start).or(cells.last()).map_or(crate::text::DEFAULT_SIZE, |c| c.style.size);
         let w = ui.measure(&m, size, Weight::Regular) / ui.s;
-        text_at(c, ui, &m, size, Weight::Regular, LABEL.now(), origin_x + line.indent - 6.0 - w, y);
+        text_at(c, ui, &m, size, Weight::Regular, default_ink(dark), origin_x + line.indent - 6.0 - w, y);
     }
     let base = origin_x + lines.x_offset(line);
     let mut rel = 0.0;
@@ -859,7 +1003,7 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
         let breaks = cell.ch == '\t' || run_style.is_some_and(|s| !s.same_run(&cell.style));
         if breaks {
             if let Some(s) = run_style.take() {
-                flush_run(c, ui, &run, &s, base + run_x, y, line.height);
+                flush_run(c, ui, &run, &s, base + run_x, y, line.height, dark);
             }
             run.clear();
         }
@@ -873,7 +1017,7 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
         rel += step;
     }
     if let Some(s) = run_style {
-        flush_run(c, ui, &run, &s, base + run_x, y, line.height);
+        flush_run(c, ui, &run, &s, base + run_x, y, line.height, dark);
     }
     // a page break shows as a rule across the rest of its line
     if line.end > line.start && cells[line.end - 1].ch == crate::text::PAGE_BREAK {
@@ -888,7 +1032,8 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
 
 /// Draws one run and returns the x after it. Underlines and strikethrough are a rule through the run, a highlight is
 /// a plate behind it, and raised or lowered text is smaller and shifted.
-fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: f32, line_height: f32) -> f32 {
+#[allow(clippy::too_many_arguments)]
+fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: f32, line_height: f32, dark: bool) -> f32 {
     if text.is_empty() {
         return x;
     }
@@ -901,6 +1046,8 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
         LINK
     } else if style.highlight > 0 && style.color == 0 {
         pack(0, 0, 0, 255)
+    } else if style.color == 0 {
+        default_ink(dark)
     } else {
         text_color(style.color)
     };
@@ -1073,6 +1220,28 @@ mod tests {
             Action::Reinterpret(6),
             Action::DefaultEncoding(0),
             Action::DefaultEncoding(6),
+            Action::CopyRuler,
+            Action::PasteRuler,
+            Action::Rewrap,
+            Action::DarkBackground,
+            Action::TextReplacement,
+            Action::DefaultFont(1),
+            Action::LineDone,
+            Action::LineCancel,
+            Action::ShowSpelling,
+            Action::SpellingIgnore,
+            Action::SpellingChange,
+            Action::SpellingDone,
+            Action::ShowSettings,
+            Action::SettingsDone,
+            Action::Setting(0),
+            Action::Setting(14),
+            Action::ShowSpacing,
+            Action::SpacingDone,
+            Action::SpacingCancel,
+            Action::ShowEncodings,
+            Action::EncodingsDone,
+            Action::EncodingToggle(6),
         ];
         let mut ids: Vec<u32> = all.iter().filter_map(|a| a.id()).collect();
         ids.sort_unstable();

@@ -7,7 +7,7 @@
 
 use crate::links;
 use crate::properties::Properties;
-use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, LINE_BREAK, MAX_TAB, MIN_TAB, PAGE_BREAK, SPACINGS};
+use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, LINE_BREAK, MAX_PARAGRAPH_SPACE, MAX_TAB, MIN_TAB, PAGE_BREAK, SPACINGS};
 
 /// Whether `bytes` are an RTF file (the header every RTF file starts with).
 pub fn is_rtf(bytes: &[u8]) -> bool {
@@ -298,6 +298,13 @@ fn paragraph_words(style: &Style) -> String {
     if style.spacing > 0 {
         let multiple = SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0);
         words += &format!("\\sl{}\\slmult1 ", (multiple * 240.0).round() as i32);
+    }
+    // paragraph space before and after, in twips (points times 20)
+    if style.space_before > 0 {
+        words += &format!("\\sb{} ", style.space_before as u32 * 20);
+    }
+    if style.space_after > 0 {
+        words += &format!("\\sa{} ", style.space_after as u32 * 20);
     }
     match style.list {
         ListKind::None => {}
@@ -592,6 +599,18 @@ impl Reader {
                 self.cur.align = Align::Left;
                 self.cur.spacing = 0;
                 self.cur.list = ListKind::None;
+                self.cur.space_before = 0;
+                self.cur.space_after = 0;
+            }
+            "sb" => {
+                if let Some(twips) = param.filter(|&v| v >= 0) {
+                    self.cur.space_before = (twips as f32 / 20.0).round().min(MAX_PARAGRAPH_SPACE as f32) as u8;
+                }
+            }
+            "sa" => {
+                if let Some(twips) = param.filter(|&v| v >= 0) {
+                    self.cur.space_after = (twips as f32 / 20.0).round().min(MAX_PARAGRAPH_SPACE as f32) as u8;
+                }
             }
             "red" if self.ctable.is_some() => self.rgb[0] = param.unwrap_or(0),
             "green" if self.ctable.is_some() => self.rgb[1] = param.unwrap_or(0),
@@ -835,6 +854,18 @@ mod tests {
         let plain = read(b"{\\rtf1 \\strike \\super x\\plain y}");
         assert!(plain[0].style.strike && plain[0].style.script == 1);
         assert!(!plain[1].style.strike && plain[1].style.script == 0);
+    }
+
+    #[test]
+    fn paragraph_space_before_and_after_round_trip() {
+        let spaced = Style { space_before: 12, space_after: 6, ..Style::default() };
+        let cells = vec![cell('a', spaced), cell('\n', spaced), cell('b', Style::default())];
+        let rtf = String::from_utf8(write(&cells)).unwrap();
+        assert!(rtf.contains("\\sb240") && rtf.contains("\\sa120"), "{rtf}");
+        let back = read(rtf.as_bytes());
+        assert_eq!(back[0].style.space_before, 12);
+        assert_eq!(back[0].style.space_after, 6);
+        assert_eq!(back[2].style.space_before, 0, "a paragraph without space starts with none");
     }
 
     #[test]

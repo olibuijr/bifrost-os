@@ -56,6 +56,9 @@ struct Para {
     indent: f32,
     marker: Marker,
     spacing: f32,
+    /// The space above the paragraph's first line and below its last, in points.
+    before: f32,
+    after: f32,
 }
 
 /// How far a tab or character at `x` (from the start of the line's text) advances.
@@ -103,8 +106,12 @@ pub fn layout_tabs(cells: &[Cell], width: f32, measure: &Measure, tab: f32) -> L
                 ListKind::Numbered => Marker::Number(number),
             },
             spacing: SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0),
+            before: style.space_before as f32,
+            after: style.space_after as f32,
         };
+        top += para.before;
         wrap(cells, start, end, width, measure, tab, para, &mut top, &mut lines);
+        top += para.after;
         if end >= cells.len() {
             break;
         }

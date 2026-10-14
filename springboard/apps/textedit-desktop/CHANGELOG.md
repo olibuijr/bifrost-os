@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.0 — 2026-10-14
+
+- Copy and paste keep formatting: a paste of text copied in this document keeps its character and paragraph formatting.
+  Paste and Match Style, and any text copied from elsewhere, is plain text in the style at the caret.
+- Edit > Use Selection for Find puts the selection on the find pasteboard, and the find field starts with the find
+  pasteboard's text. Edit > Substitutions > Text Replacement turns a shortcut such as (c) or ... into its symbol.
+- Edit > Find > Select Line opens a panel that takes a line number or a range. Edit > Spelling and Grammar > Show Spelling
+  and Grammar opens a panel that steps through the misspelled words with Ignore, Learn, Change and Find Next.
+- Copy Style also copies the paragraph's alignment, spacing and list. Format > Text > Copy Ruler and Paste Ruler copy the
+  tab stop distance. Format > Text > Spacing sets the line spacing and the space before and after a paragraph (kept in
+  RTF and HTML).
+- File > Print > Rewrap to Fit Page: when it is off, the lines print where the window breaks them, scaled to the page.
+- View > Use Dark Background for Windows: the page is dark and the text without a colour of its own is white.
+- Preferences opens a panel with the new document format, the default font, the plain text encoding, the markup
+  setting, the spelling, substitution, ruler, wrapping, header and footer and printing options, and the dark background.
+  Preferences > Customize Encodings List chooses which encodings the Text Encoding menu lists.
+- Format > Wrap to Page sits in the Format menu as well as View.
+- Line breaks: a line break inside a paragraph stays inside it in HTML and `.odt` files (it was read as a new paragraph).
+- Properties: HTML files keep the title, author, subject (as the description), keywords and copyright in their head.
+- Web archives open and save (`.webarchive`): the page is kept as the main resource of a binary property list.
+
 ## 1.3.0 — 2026-10-13
 
 - Plain text encodings: a plain text file opens in the encoding it is in (a byte order mark, UTF-8, UTF-16 without a
