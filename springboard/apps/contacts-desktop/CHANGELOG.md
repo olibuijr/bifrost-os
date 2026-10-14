@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.0
+
+- Mark as a Company: the list sorts and sections a company by its company name, as the card and the row already show it.
+- Recently Changed keeps each edited contact between runs. The contacts are saved with the display settings, and a deleted
+  contact leaves the list.
+
 ## 1.9.0
 
 - New Card menu: Go to Next Card (cmd+]) and Go to Previous Card (cmd+[) move through the shown list; Make This My Card and Go to My Card mark and find your own card (saved beside the contacts); Merge Duplicates folds the open card's duplicates into it, keeping differing phone numbers, emails and addresses as extra values, and removes the other cards.

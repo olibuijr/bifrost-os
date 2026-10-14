@@ -27,7 +27,7 @@ use springboard::shell::contactstore as store;
 use springboard::shell::keyboard::Out;
 use springboard::shell::textarea::TextArea;
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use crate::archive;
 use crate::details::{self, CardDetails, Detail, Details};
@@ -450,17 +450,31 @@ fn sort_label(order: SortOrder) -> &'static str {
     }
 }
 
+/// The given and family parts a contact sorts by. A company marked on its card sorts by its company name, which is one
+/// part (so the family part repeats it). Other contacts split their display name at the last space.
+fn sort_parts(c: &Contact, company: Option<&str>) -> (String, String) {
+    let (given, family) = match company {
+        Some(name) => (name, ""),
+        None => names::split(c.display_name()),
+    };
+    if family.is_empty() {
+        (given.to_string(), given.to_string())
+    } else {
+        (given.to_string(), family.to_string())
+    }
+}
+
 /// Orders two contacts for the list. `Keep Order` keeps the identifier order. The family and given names are split
-/// at the last space; the collation is the app's own (see `names`), so accents and Icelandic letters sort as before.
-fn compare_contacts(order: SortOrder, a: &Contact, b: &Contact) -> Ordering {
+/// at the last space; `company_a` and `company_b` are the company names of contacts marked as companies, which sort by
+/// that name. The collation is the app's own (see `names`), so accents and Icelandic letters sort as before.
+fn compare_contacts(order: SortOrder, a: &Contact, b: &Contact, company_a: Option<&str>, company_b: Option<&str>) -> Ordering {
     if order == SortOrder::None {
         return a.id.cmp(&b.id);
     }
-    let (ag, af) = names::split(a.display_name());
-    let (bg, bf) = names::split(b.display_name());
-    let (af, bf) = (if af.is_empty() { ag } else { af }, if bf.is_empty() { bg } else { bf });
-    let by_given = names::key(ag).cmp(&names::key(bg)).then(names::key(af).cmp(&names::key(bf)));
-    let by_family = names::key(af).cmp(&names::key(bf)).then(names::key(ag).cmp(&names::key(bg)));
+    let (ag, af) = sort_parts(a, company_a);
+    let (bg, bf) = sort_parts(b, company_b);
+    let by_given = names::key(&ag).cmp(&names::key(&bg)).then(names::key(&af).cmp(&names::key(&bf)));
+    let by_family = names::key(&af).cmp(&names::key(&bf)).then(names::key(&ag).cmp(&names::key(&bg)));
     let by_name = match order {
         SortOrder::GivenName => by_given,
         _ => by_family,
@@ -554,7 +568,7 @@ pub struct Contacts {
     screen: Screen,
     sidebar_shown: bool,
     filter: Filter,
-    /// Edits made this session, for the Recently Changed list.
+    /// The edits of this session, which are added to `prefs.recent` as they are saved.
     history: History,
     /// Contact groups, saved beside the contacts file.
     groups: Groups,
@@ -1308,7 +1322,7 @@ impl Contacts {
         match self.filter {
             Filter::All => None,
             Filter::Favorites => Some(self.contacts.iter().filter(|c| c.favorite).map(|c| c.id).collect()),
-            Filter::Recent => Some(self.history.changed_this_session()),
+            Filter::Recent => Some(self.recent_ids()),
             Filter::Duplicates => Some(dupes::duplicate_ids(&self.contacts)),
             Filter::LastImport => Some(self.last_import_ids()),
             Filter::UserList(n) => Some(self.lists.get(n).map(|list| list.ids(&self.contacts, &self.extras)).unwrap_or_default()),
@@ -1327,7 +1341,14 @@ impl Contacts {
             self.filter = Filter::All;
         }
         let order = self.display.effective_sort_order(SortOrder::FamilyName);
-        self.contacts.sort_by(|a, b| compare_contacts(order, a, b));
+        // Contacts marked as companies sort and section by their company name.
+        let companies: BTreeMap<u64, String> = self
+            .contacts
+            .iter()
+            .filter(|c| self.details.is_company(c.id) && !c.company.trim().is_empty())
+            .map(|c| (c.id, c.company.trim().to_string()))
+            .collect();
+        self.contacts.sort_by(|a, b| compare_contacts(order, a, b, companies.get(&a.id).map(String::as_str), companies.get(&b.id).map(String::as_str)));
         self.rows.clear();
         let mut top = 0.0;
         let mut previous = None;
@@ -1336,7 +1357,7 @@ impl Contacts {
             if shown.as_ref().is_some_and(|ids| !ids.contains(&self.contacts[i].id)) {
                 continue;
             }
-            let name = self.contacts[i].display_name();
+            let name = companies.get(&self.contacts[i].id).map_or(self.contacts[i].display_name(), String::as_str);
             let letter = match order {
                 // The given name leads the sort, so its first word gives the section.
                 SortOrder::GivenName => names::section(names::split(name).0.split_whitespace().next().unwrap_or(name)),
@@ -1555,7 +1576,14 @@ impl Contacts {
         self.prefs.last_import.iter().copied().filter(|id| live.contains(id)).collect()
     }
 
-    /// Forgets deleted contacts in My Card and the last import, and saves the preferences when that changed them.
+    /// The contacts that an edit changed, in this run or an earlier one, that still exist.
+    fn recent_ids(&self) -> BTreeSet<u64> {
+        let live: BTreeSet<u64> = self.contacts.iter().map(|c| c.id).collect();
+        self.prefs.recent.iter().copied().filter(|id| live.contains(id)).collect()
+    }
+
+    /// Forgets deleted contacts in My Card, the last import and the recent changes, and saves the preferences when
+    /// that changed them.
     fn forget_in_prefs(&mut self, ids: &[u64]) {
         let mut changed = false;
         if self.prefs.me.is_some_and(|me| ids.contains(&me)) {
@@ -1564,6 +1592,7 @@ impl Contacts {
         }
         for id in ids {
             changed |= self.prefs.last_import.remove(id);
+            changed |= self.prefs.recent.remove(id);
         }
         if changed {
             self.save_display();
@@ -1586,9 +1615,15 @@ impl Contacts {
         }
     }
 
-    /// Records a saved change in the session history. The file is already written, so a history error is not shown.
+    /// Records a saved change in the history and in the Recently Changed list, which is saved with the display settings.
+    /// The file is already written, so a history error is not shown.
     fn record(&mut self, before: &[Contact]) {
         let _ = self.history.record(before, &self.contacts);
+        let known = self.prefs.recent.len();
+        self.prefs.recent.extend(self.history.changed_this_session());
+        if self.prefs.recent.len() != known {
+            self.save_display();
+        }
     }
 
     fn save_groups(&mut self) {
@@ -3862,9 +3897,26 @@ mod tests {
     fn the_sort_order_decides_which_name_leads() {
         let zoe = contact(1, "Zoe Ann");
         let adam = contact(2, "Adam Zed");
-        assert_eq!(compare_contacts(SortOrder::FamilyName, &zoe, &adam), Ordering::Less, "Ann sorts before Zed");
-        assert_eq!(compare_contacts(SortOrder::GivenName, &zoe, &adam), Ordering::Greater, "Adam sorts before Zoe");
-        assert_eq!(compare_contacts(SortOrder::None, &zoe, &adam), Ordering::Less, "identifier order");
+        assert_eq!(compare_contacts(SortOrder::FamilyName, &zoe, &adam, None, None), Ordering::Less, "Ann sorts before Zed");
+        assert_eq!(compare_contacts(SortOrder::GivenName, &zoe, &adam, None, None), Ordering::Greater, "Adam sorts before Zoe");
+        assert_eq!(compare_contacts(SortOrder::None, &zoe, &adam, None, None), Ordering::Less, "identifier order");
+    }
+
+    #[test]
+    fn a_company_sorts_by_its_company_name_in_the_list() {
+        let acme = contact(3, "Jon Smith");
+        let bravo = contact(4, "Ann Berg");
+        assert_eq!(
+            compare_contacts(SortOrder::FamilyName, &acme, &bravo, Some("Acme"), None),
+            Ordering::Less,
+            "the company Acme sorts before the person Ann Berg, whose family name is Berg"
+        );
+        assert_eq!(
+            compare_contacts(SortOrder::FamilyName, &acme, &bravo, None, None),
+            Ordering::Greater,
+            "without the company flag Jon Smith sorts after Ann Berg"
+        );
+        assert_eq!(compare_contacts(SortOrder::FamilyName, &acme, &bravo, Some("Zeta"), None), Ordering::Greater, "Zeta sorts after Berg");
     }
 
     #[test]
@@ -4334,6 +4386,27 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         assert_eq!(app.prefs.me, None);
         let (_, _, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
         assert_eq!(saved.me, None);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn recent_changes_are_kept_between_runs_and_forgotten_when_deleted() {
+        let path = file_with("recent", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(app.recent_ids().is_empty(), "the contacts loaded at launch are not changes");
+        app.open_detail(&ui, 2);
+        app.toggle_favorite(&ui);
+        assert_eq!(app.recent_ids(), BTreeSet::from([2]));
+        let (_, _, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
+        assert_eq!(saved.recent, BTreeSet::from([2]), "the change is saved with the display settings");
+
+        let next_run = Contacts::new(&ui, 1200, 780, path.clone());
+        assert_eq!(next_run.recent_ids(), BTreeSet::from([2]), "the change is still listed in the next run");
+
+        app.remove_selected(&ui);
+        let (_, _, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
+        assert!(saved.recent.is_empty(), "a deleted contact leaves the recent changes");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
