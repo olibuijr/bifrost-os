@@ -185,9 +185,9 @@
    "area": "view",
    "apple": "day/week view direct manipulation",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:156",
-   "note": "Dragging empty hour-grid space sizes a new event (15 minute snap) and opens the editor; dragging a timed non-repeating event moves it across times and week days and saves. Drag handles to resize and moving recurring or all-day events are not done. The hour gutter scrolls.",
-   "wire": "Drag at once (no 250 ms hold) when the pointer is a mouse and scrolling has another input; drag all-day events between days; resize an event by its edge."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/drag.rs::begin_press; springboard/apps/calendar-desktop/src/calendar/layout.rs::drag_resize",
+   "note": "Dragging empty hour-grid space sizes a new event (15 minute snap) and opens the editor; dragging a timed event moves it across times and week days and saves; grabbing its top or bottom edge resizes it to the snapped minute (layout::drag_resize, tested headless in tests/parity_app-calendar.rs). Left: all-day events cannot be dragged, the drag starts only after a 250 ms hold, and the travel time padding is not resized with the edge.",
+   "wire": "Drag at once (no 250 ms hold) when the pointer is a mouse and scrolling has another input; drag all-day events between days."
   },
   {
    "feature": "CalDAV accounts sync",

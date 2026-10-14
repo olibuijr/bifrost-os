@@ -1,10 +1,11 @@
 //! Parity app-calendar: headless tests of the Quick Event notes, the travel time block in the Day and Week grids, the
-//! date range of event search and the custom repeats and alarms that copy and paste keep. No test draws a frame or opens a window.
+//! date range of event search, the custom repeats and alarms that copy and paste keep, and the resize of a block by its edge.
+//! No test draws a frame or opens a window.
 
 use bifrost_calendar::calendar::clip::{copy_text, paste};
 use bifrost_calendar::calendar::extras::Extra;
 use bifrost_calendar::calendar::ics::{IcsEvent, Local};
-use bifrost_calendar::calendar::layout::travel_span;
+use bifrost_calendar::calendar::layout::{drag_resize, travel_span, DragSpan, Edge};
 use bifrost_calendar::calendar::recur;
 use bifrost_calendar::calendar::quick::{parse, Quick};
 use bifrost_calendar::calendar::search::{search, split_range, Range};
@@ -162,4 +163,31 @@ fn a_preset_repeat_and_alert_need_no_extras() {
     let got = paste(&copy_text(&e, None, STAMP), on(10, 5), &[]);
     assert!(got[0].1.is_empty());
     assert_eq!((got[0].0.repeat, got[0].0.alert), (4, 3));
+}
+
+#[test]
+fn dragging_the_top_edge_moves_the_start_and_keeps_the_end() {
+    let block = DragSpan { start: 600, end: 660 };
+    assert_eq!(drag_resize(block, Edge::Top, 583, 15), DragSpan { start: 570, end: 660 });
+    assert_eq!(drag_resize(block, Edge::Top, 5, 15), DragSpan { start: 0, end: 660 });
+}
+
+#[test]
+fn the_top_edge_stops_one_snap_step_above_the_end() {
+    let block = DragSpan { start: 600, end: 660 };
+    assert_eq!(drag_resize(block, Edge::Top, 650, 15), DragSpan { start: 645, end: 660 });
+    assert_eq!(drag_resize(block, Edge::Top, 700, 15), DragSpan { start: 645, end: 660 });
+}
+
+#[test]
+fn dragging_the_bottom_edge_moves_the_end_and_keeps_the_start() {
+    let block = DragSpan { start: 600, end: 660 };
+    assert_eq!(drag_resize(block, Edge::Bottom, 640, 15), DragSpan { start: 600, end: 645 });
+    assert_eq!(drag_resize(block, Edge::Bottom, 100, 15), DragSpan { start: 600, end: 615 });
+}
+
+#[test]
+fn a_resized_block_never_ends_after_midnight() {
+    assert_eq!(drag_resize(DragSpan { start: 600, end: 660 }, Edge::Bottom, 1439, 15), DragSpan { start: 600, end: 1440 });
+    assert_eq!(drag_resize(DragSpan { start: 1430, end: 1440 }, Edge::Bottom, 1439, 15), DragSpan { start: 1430, end: 1440 });
 }

@@ -112,6 +112,24 @@ pub fn drag_move(duration: u32, grab_offset: u32, now_min: u32, snap: u32) -> Dr
     DragSpan { start, end: start + duration }
 }
 
+/// The edge of a timed block that a resize drag moves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Edge {
+    Top,
+    Bottom,
+}
+
+/// Resizing moves one edge of `span` to the snapped minute under the pointer and keeps the other edge fixed. The block
+/// keeps at least `snap` minutes, and its end never passes midnight.
+pub fn drag_resize(span: DragSpan, edge: Edge, now_min: u32, snap: u32) -> DragSpan {
+    let snap = snap.max(1);
+    let cell = now_min.min(1439) / snap * snap;
+    match edge {
+        Edge::Top => DragSpan { start: cell.min(span.end.saturating_sub(snap)), end: span.end },
+        Edge::Bottom => DragSpan { start: span.start, end: (cell + snap).max(span.start + snap).min(1440) },
+    }
+}
+
 /// Day offset (-n, 0, +n) for a horizontal drag across week columns.
 pub fn column_at(x: f32, left: f32, col_w: f32, cols: usize) -> usize {
     (((x - left) / col_w).floor().max(0.0) as usize).min(cols.saturating_sub(1))

@@ -270,7 +270,7 @@ impl Calendar {
                 .collect();
             // the event being moved is drawn at the pointer instead
             let lifted = self.drag.and_then(|d| match d.kind {
-                super::drag::Kind::Move { id, .. } => Some(id),
+                super::drag::Kind::Move { id, .. } | super::drag::Kind::Resize { id, .. } => Some(id),
                 super::drag::Kind::Create { .. } => None,
             });
             for (id, x, y, rw, rh) in rects {
