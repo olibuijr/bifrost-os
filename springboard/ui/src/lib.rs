@@ -1215,4 +1215,5 @@ pub mod help_menu;
 pub mod scene_handoff;
 pub mod photo_adjustment;
 pub mod os_services;
+pub mod proposed_event;
 
