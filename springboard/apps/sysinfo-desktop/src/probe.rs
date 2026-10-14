@@ -69,6 +69,12 @@ pub struct CpuDetail {
     pub now_max_mhz: u32,
     /// The highest clock the processor supports (cpufreq), MHz; 0 when unknown.
     pub rated_max_mhz: u32,
+    /// The clock of each logical processor right now, as (processor number, MHz), from cpufreq. Empty when cpufreq is
+    /// not there.
+    pub core_clocks_mhz: Vec<(u32, u32)>,
+    /// Performance and efficiency cores, counted as physical cores. None when every core is alike or the kernel does
+    /// not say which is which.
+    pub core_kinds: Option<(usize, usize)>,
 }
 
 /// The physical cores and packages in `/proc/cpuinfo` text: the distinct `(physical id, core id)` pairs. Logical
@@ -149,7 +155,82 @@ pub fn read_caches(dir: &Path) -> Vec<CacheInfo> {
     caches
 }
 
-pub fn read_cpu(cpuinfo_text: &str, cache_dir: &Path, cpufreq_dir: &Path) -> CpuDetail {
+/// A CPU list as the kernel writes it in sysfs ("0-7,16,18-19") in processor order. Malformed parts are left out.
+pub fn parse_cpu_list(text: &str) -> Vec<u32> {
+    let mut out: BTreeSet<u32> = BTreeSet::new();
+    for part in text.trim().split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        match part.split_once('-') {
+            Some((first, last)) => {
+                if let (Ok(first), Ok(last)) = (first.trim().parse::<u32>(), last.trim().parse::<u32>()) {
+                    if first <= last && last - first < 4096 {
+                        out.extend(first..=last);
+                    }
+                }
+            }
+            None => {
+                if let Ok(n) = part.parse::<u32>() {
+                    out.insert(n);
+                }
+            }
+        }
+    }
+    out.into_iter().collect()
+}
+
+/// The processor numbers under `cpu_root` (`cpuN` directories), with the value of `file` in each one trimmed.
+fn per_cpu(cpu_root: &Path, file: &str) -> Vec<(u32, String)> {
+    entries(cpu_root)
+        .into_iter()
+        .filter_map(|n| {
+            let index: u32 = n.strip_prefix("cpu")?.parse().ok()?;
+            let value = read_trim(&cpu_root.join(&n).join(file));
+            (!value.is_empty()).then_some((index, value))
+        })
+        .collect()
+}
+
+/// The clock of each processor now: `cpuN/cpufreq/scaling_cur_freq` (kHz) as (processor, MHz).
+pub fn read_core_clocks(cpu_root: &Path) -> Vec<(u32, u32)> {
+    per_cpu(cpu_root, "cpufreq/scaling_cur_freq")
+        .into_iter()
+        .filter_map(|(index, khz)| khz.parse::<u32>().ok().map(|khz| (index, khz / 1000)))
+        .collect()
+}
+
+/// The physical cores among the processors `cpus`: the distinct (package, core) pairs from each processor's
+/// `topology` directory. A processor without a core number counts as a core of its own.
+pub fn count_physical_cores(cpu_root: &Path, cpus: &[u32]) -> usize {
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+    for c in cpus {
+        let topology = cpu_root.join(format!("cpu{c}")).join("topology");
+        let core = read_trim(&topology.join("core_id"));
+        let key = if core.is_empty() { (String::new(), format!("cpu{c}")) } else { (read_trim(&topology.join("physical_package_id")), core) };
+        seen.insert(key);
+    }
+    seen.len()
+}
+
+/// The performance and efficiency cores. Intel hybrid processors list each kind under `devices/cpu_core` and
+/// `devices/cpu_atom`. Other processors give each core a `cpu_capacity`: the cores with the largest capacity are the
+/// performance cores. None for one kind of core, or when neither source says.
+pub fn read_core_kinds(devices: &Path, cpu_root: &Path) -> Option<(usize, usize)> {
+    let perf = parse_cpu_list(&read_trim_text(&devices.join("cpu_core/cpus")));
+    let eff = parse_cpu_list(&read_trim_text(&devices.join("cpu_atom/cpus")));
+    if !perf.is_empty() && !eff.is_empty() {
+        return Some((count_physical_cores(cpu_root, &perf), count_physical_cores(cpu_root, &eff)));
+    }
+    let capacities: Vec<(u32, u32)> = per_cpu(cpu_root, "cpu_capacity").into_iter().filter_map(|(i, c)| c.parse::<u32>().ok().map(|c| (i, c))).collect();
+    let top = capacities.iter().map(|(_, c)| *c).max()?;
+    let low = capacities.iter().map(|(_, c)| *c).min()?;
+    if top == low {
+        return None;
+    }
+    let perf: Vec<u32> = capacities.iter().filter(|(_, c)| *c == top).map(|(i, _)| *i).collect();
+    let eff: Vec<u32> = capacities.iter().filter(|(_, c)| *c != top).map(|(i, _)| *i).collect();
+    Some((count_physical_cores(cpu_root, &perf), count_physical_cores(cpu_root, &eff)))
+}
+
+pub fn read_cpu(cpuinfo_text: &str, cache_dir: &Path, cpufreq_dir: &Path, cpu_root: &Path, devices: &Path) -> CpuDetail {
     let (cores, packages) = parse_cpu_topology(cpuinfo_text);
     let clocks = parse_cpuinfo_mhz(cpuinfo_text);
     let rated_khz: u32 = read_trim(&cpufreq_dir.join("cpuinfo_max_freq")).parse().unwrap_or(0);
@@ -160,6 +241,8 @@ pub fn read_cpu(cpuinfo_text: &str, cache_dir: &Path, cpufreq_dir: &Path) -> Cpu
         now_min_mhz: clocks.iter().copied().min().unwrap_or(0),
         now_max_mhz: clocks.iter().copied().max().unwrap_or(0),
         rated_max_mhz: rated_khz / 1000,
+        core_clocks_mhz: read_core_clocks(cpu_root),
+        core_kinds: read_core_kinds(devices, cpu_root),
     }
 }
 
@@ -991,7 +1074,7 @@ impl Hardware {
             font_dirs.push(Path::new(&home).join(".local/share/fonts"));
         }
         Hardware {
-            cpu: read_cpu(&cpuinfo, p("/sys/devices/system/cpu/cpu0/cache"), p("/sys/devices/system/cpu/cpu0/cpufreq")),
+            cpu: read_cpu(&cpuinfo, p("/sys/devices/system/cpu/cpu0/cache"), p("/sys/devices/system/cpu/cpu0/cpufreq"), p("/sys/devices/system/cpu"), p("/sys/devices")),
             memory,
             gpu_memory: read_gpu_memory(p("/sys/class/drm")),
             usb_power: read_usb_power(p("/sys/bus/usb/devices")),
@@ -1026,6 +1109,78 @@ mod tests {
         assert_eq!(parse_cpu_topology(CPUINFO), (2, 1));
         assert_eq!(parse_cpu_topology("processor : 0\nprocessor : 1\n"), (0, 0), "no ids, no topology");
         assert_eq!(parse_cpu_topology(""), (0, 0));
+    }
+
+    #[test]
+    fn cpu_lists_expand_ranges_in_order() {
+        assert_eq!(parse_cpu_list("0-3,8,10-11\n"), vec![0, 1, 2, 3, 8, 10, 11]);
+        assert_eq!(parse_cpu_list("5,5,2"), vec![2, 5], "duplicates collapse, order is numeric");
+        assert!(parse_cpu_list("").is_empty());
+        assert!(parse_cpu_list("junk").is_empty());
+        assert!(parse_cpu_list("9-3").is_empty(), "a backwards range is left out");
+    }
+
+    /// A processor directory tree under a fresh temporary directory: `cpu_root` holds `cpuN` folders, `devices` the
+    /// hybrid core lists.
+    fn cpu_fixture(name: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("sysinfo-cpu-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let cpu_root = dir.join("cpu");
+        let devices = dir.join("devices");
+        fs::create_dir_all(&cpu_root).unwrap();
+        fs::create_dir_all(&devices).unwrap();
+        (dir, cpu_root, devices)
+    }
+
+    fn put(path: &Path, text: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn each_processor_reports_its_clock_now() {
+        let (dir, cpu_root, _) = cpu_fixture("clocks");
+        put(&cpu_root.join("cpu0/cpufreq/scaling_cur_freq"), "3200000\n");
+        put(&cpu_root.join("cpu1/cpufreq/scaling_cur_freq"), "800000\n");
+        fs::create_dir_all(cpu_root.join("cpu2/cpuidle")).unwrap();
+        assert_eq!(read_core_clocks(&cpu_root), vec![(0, 3200), (1, 800)], "a processor without cpufreq is left out");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hybrid_processors_split_performance_and_efficiency_cores() {
+        let (dir, cpu_root, devices) = cpu_fixture("hybrid");
+        put(&devices.join("cpu_core/cpus"), "0-3\n");
+        put(&devices.join("cpu_atom/cpus"), "4-5\n");
+        // two threads per performance core (0 and 1 share core 0, 2 and 3 share core 1), one per efficiency core
+        for (cpu, core) in [(0, 0), (1, 0), (2, 1), (3, 1), (4, 2), (5, 3)] {
+            put(&cpu_root.join(format!("cpu{cpu}/topology/core_id")), &format!("{core}\n"));
+            put(&cpu_root.join(format!("cpu{cpu}/topology/physical_package_id")), "0\n");
+        }
+        assert_eq!(read_core_kinds(&devices, &cpu_root), Some((2, 2)));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn capacity_marks_the_performance_cores_of_other_processors() {
+        let (dir, cpu_root, devices) = cpu_fixture("capacity");
+        for (cpu, capacity) in [(0, 1024), (1, 1024), (2, 512), (3, 512)] {
+            put(&cpu_root.join(format!("cpu{cpu}/cpu_capacity")), &format!("{capacity}\n"));
+        }
+        assert_eq!(read_core_kinds(&devices, &cpu_root), Some((2, 2)), "no topology: each processor is a core");
+        put(&cpu_root.join("cpu3/cpu_capacity"), "1024\n");
+        assert_eq!(read_core_kinds(&devices, &cpu_root), Some((3, 1)));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn one_kind_of_core_reports_no_split() {
+        let (dir, cpu_root, devices) = cpu_fixture("uniform");
+        for cpu in 0..4 {
+            put(&cpu_root.join(format!("cpu{cpu}/cpu_capacity")), "1024\n");
+        }
+        assert_eq!(read_core_kinds(&devices, &cpu_root), None);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -475,9 +475,16 @@ fn processor_rows(r: &Report, x: &Extras) -> Vec<Row> {
     if cpu.packages > 1 {
         out.push(kv("Packages", cpu.packages.to_string()));
     }
+    if let Some((performance, efficiency)) = cpu.core_kinds {
+        out.push(kv("Performance cores", performance.to_string()));
+        out.push(kv("Efficiency cores", efficiency.to_string()));
+    }
     out.push(kv("Clock", clock_label(r.cpu.mhz)));
     if cpu.now_max_mhz > 0 && cpu.now_min_mhz != cpu.now_max_mhz {
         out.push(kv("Clock range now", format!("{} to {}", clock_label(cpu.now_min_mhz as f32), clock_label(cpu.now_max_mhz as f32))));
+    }
+    for (processor, mhz) in &cpu.core_clocks_mhz {
+        out.push(kv(format!("Processor {processor} clock"), clock_label(*mhz as f32)));
     }
     if cpu.rated_max_mhz > 0 {
         out.push(kv("Maximum clock", clock_label(cpu.rated_max_mhz as f32)));
@@ -1013,9 +1020,14 @@ mod tests {
             now_min_mhz: 800,
             now_max_mhz: 3200,
             rated_max_mhz: 4200,
+            core_clocks_mhz: vec![(0, 3200), (1, 800)],
+            core_kinds: Some((2, 2)),
         };
         let rows = rows(Category::Processor, &r, &x);
         assert!(rows.contains(&kv("Physical cores", "4")));
+        assert!(rows.contains(&kv("Performance cores", "2")));
+        assert!(rows.contains(&kv("Efficiency cores", "2")));
+        assert!(rows.contains(&kv("Processor 1 clock", "800 MHz")));
         assert!(rows.contains(&kv("Logical processors", "8")));
         assert!(rows.contains(&kv("Clock range now", "800 MHz to 3.20 GHz")));
         assert!(rows.contains(&kv("Maximum clock", "4.20 GHz")));
