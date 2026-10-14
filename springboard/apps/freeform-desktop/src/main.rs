@@ -4,7 +4,6 @@
 
 mod arrange;
 mod boards;
-mod canvas_view;
 mod freeform;
 mod ink;
 mod items;

@@ -341,6 +341,8 @@ pub struct Freeform {
     pan: (f32, f32),
     /// The hand tool is dragging the view; the last pointer point (window pixels).
     panning: Option<(f32, f32)>,
+    /// The last press or move on the window (window pixels): a paste lands where the pointer is.
+    pointer: Option<(f32, f32)>,
     /// The picture must be painted again before it is next drawn (an undo or redo brought back one made at another view).
     repaint_due: bool,
 }
@@ -472,6 +474,7 @@ impl Freeform {
             zoom: 1.0,
             pan: (0.0, 0.0),
             panning: None,
+            pointer: None,
             repaint_due: false,
         }
     }
@@ -613,8 +616,16 @@ impl Freeform {
         self.mark_changed();
     }
 
-    /// Puts `copies` on the board as new strokes, moved by one paste offset, and selects them (one undo step).
-    fn add_copies(&mut self, ui: &Ui, copies: Vec<(Stroke, Style)>) {
+    /// Where a paste lands: the board point under the last press or move on the canvas, or `None` when the pointer
+    /// was over the toolbar or has not touched the window yet.
+    fn paste_anchor(&self, ui: &Ui) -> Option<(f32, f32)> {
+        let (x, y) = self.pointer?;
+        (y >= self.canvas_top(ui) as f32).then(|| self.canvas_point(ui, x, y))
+    }
+
+    /// Puts `copies` on the board as new strokes and selects them (one undo step). With `at`, their box is centred on
+    /// that board point; without it they are moved by one paste offset.
+    fn add_copies(&mut self, ui: &Ui, copies: Vec<(Stroke, Style)>, at: Option<(f32, f32)>) {
         if copies.is_empty() {
             return;
         }
@@ -622,7 +633,14 @@ impl Freeform {
         self.sync_styles();
         let base = self.model.strokes().len();
         let n = copies.len();
-        let off = Affine::translate(ui.pt(PASTE_OFFSET_PT), ui.pt(PASTE_OFFSET_PT));
+        let (dx, dy) = match at {
+            Some(p) => {
+                let boxes: Vec<Rect> = copies.iter().filter_map(|(s, _)| s.bounds()).collect();
+                arrange::union_of(&boxes).map_or((0.0, 0.0), |b| arrange::centre_on(b, p))
+            }
+            None => (ui.pt(PASTE_OFFSET_PT), ui.pt(PASTE_OFFSET_PT)),
+        };
+        let off = Affine::translate(dx, dy);
         for (stroke, _) in copies.iter() {
             let mut moved = stroke.clone();
             moved.transform(off);
@@ -670,13 +688,14 @@ impl Freeform {
             .filter(|(i, _)| sel.contains_stroke(*i))
             .map(|(_, (s, st))| (s.clone(), *st))
             .collect();
-        self.add_copies(ui, copies);
+        self.add_copies(ui, copies, None);
     }
 
-    /// Edit > Paste: strokes read from the pasteboard land on the board, selected.
+    /// Edit > Paste: strokes read from the pasteboard land on the board at the pointer, selected.
     pub fn paste_strokes(&mut self, ui: &Ui, strokes: &Drawing) {
         let copies = strokes.strokes().iter().map(|s| (s.clone(), Style::default())).collect();
-        self.add_copies(ui, copies);
+        let at = self.paste_anchor(ui);
+        self.add_copies(ui, copies, at);
     }
 
     /// Arrange > Bring to Front / Send to Back: the selected strokes move to the top or the bottom of the drawing
@@ -1839,6 +1858,9 @@ impl Freeform {
 
     pub fn touch(&mut self, ui: &Ui, event: Event, t: f64) {
         self.now = t;
+        if let Event::Down(x, y) | Event::Move(x, y) = event {
+            self.pointer = Some((x, y));
+        }
         self.ensure_canvas(ui);
         if self.search.is_some() {
             // the board search takes every press until it closes
@@ -2533,6 +2555,29 @@ mod model_tests {
         assert_eq!(app.model.strokes().len(), 2);
         assert_eq!(app.selection.as_ref().unwrap().indices(), &[0, 1]);
         assert_eq!(app.tool, Tool::Lasso);
+    }
+
+    #[test]
+    fn paste_centres_the_strokes_on_the_pointer_on_the_board() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        let top = app.canvas_top(&ui) as f32;
+        app.pointer = Some((300.0, top + 200.0));
+        app.paste_strokes(&ui, &two_lines());
+        let boxes: Vec<Rect> = app.model.strokes().iter().filter_map(|s| s.bounds()).collect();
+        let all = arrange::union_of(&boxes).unwrap();
+        let want = app.canvas_point(&ui, 300.0, top + 200.0);
+        assert!((all.x + all.w / 2.0 - want.0).abs() < 0.01, "the box centre lands on the pointer's x");
+        assert!((all.y + all.h / 2.0 - want.1).abs() < 0.01, "the box centre lands on the pointer's y");
+    }
+
+    #[test]
+    fn paste_keeps_the_offset_when_the_pointer_is_over_the_toolbar() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.pointer = Some((10.0, 0.0));
+        app.paste_strokes(&ui, &two_lines());
+        assert_eq!(app.model.strokes()[0].points[0].x, 5.0 + ui.pt(PASTE_OFFSET_PT));
     }
 
     #[test]
