@@ -10,9 +10,9 @@
     {
       "feature": "Uncaught exception capture and logging",
       "apple": "NSExceptionHandler (default(), setExceptionHandlingMask(_:))",
-      "bifrost": "springboard/src/bare/crashlog.rs (install, format_panic)",
-      "status": "os",
-      "note": "Panic hook appends a one-line record to DIR/crash.log before the release abort; no SDK call exposes it to apps"
+      "bifrost": "springboard/sdk/src/exception_handler.rs (ExceptionHandler::capture, FailureKind::name, Failure::log_line); springboard/src/bare/crashlog.rs (try_append, install, format_panic)",
+      "status": "partial",
+      "note": "ExceptionHandler::capture decides a monitored failure and appends its line to the app's crash.log in the shell's format; tested headless in sdk/tests/parity_sdk-rest-08.rs. Gap: the process panic hook stays with the shell, apps cannot install one, and the shell's diagnostics do not read an app's crash.log."
     },
     {
       "feature": "Exception handling mask (which exceptions are monitored)",
@@ -59,9 +59,9 @@
     {
       "feature": "Unclean-exit detection at next start",
       "apple": "Not part of this framework",
-      "bifrost": "springboard/src/bare/crashlog.rs (last_start, last_exit, previous_run_note)",
-      "status": "os",
-      "note": "A start with a last_start marker and no last_exit reports the previous run as unclean"
+      "bifrost": "springboard/src/bare/crashlog.rs (last_start, last_exit, previous_run_note); springboard/sdk/src/exception_handler.rs (start_session, end_session)",
+      "status": "partial",
+      "note": "start_session and end_session give an app's data directory the shell's start and exit marks; a start with a last_start marker and no last_exit reports the previous run as unclean. Tested headless in springboard/tests/parity_sdk-rest-08.rs and sdk/tests/parity_sdk-rest-08.rs. Gap: the marks are not yet written by an app's own launch path, and the note is not shown to the user."
     },
     {
       "feature": "Objective-C exception global string constants and error names",
