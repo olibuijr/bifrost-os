@@ -119,9 +119,9 @@
    "area": "menu",
    "apple": "File > Validate Font, Validate File",
    "status": "partial",
-   "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:draw_validation",
-   "note": "Font > Validate Font shows pass or fail with each problem; no warn level and no Validate File for arbitrary files",
-   "wire": "Add a Validate Font menu item and sheet listing Report issues with pass/warn/fail"
+   "bifrost": "springboard/apps/fontbook-desktop/src/validate.rs:100",
+   "note": "Font > Validate Font shows pass, pass with warnings (missing name, OS/2 or post table, no outlines, no Basic Latin) or fail with each problem; built on parity/team-d-font-book; not yet verified on Midget. No Validate File for arbitrary files",
+   "wire": "Add Validate File for a file chosen in a panel, without installing it"
   },
   {
    "feature": "Resolve duplicates",
@@ -145,10 +145,10 @@
    "feature": "Show font file in the file manager",
    "area": "menu",
    "apple": "File > Show in file manager",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: the workspace reveal call needs a document grant for the file, which the app does not hold for system and library fonts",
-   "wire": "Reveal the font file through the shell's file-manager intent"
+   "status": "partial",
+   "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:226",
+   "note": "Font > Show in Files asks the shell for a grant on the font file and reveals it through the workspace; only fonts inside the home folder (the user's installs and libraries there) can be granted, system and shell-library fonts cannot; built on parity/team-d-font-book; not yet verified on Midget",
+   "wire": "Reveal fonts outside the home folder once the shell can grant a read-only path outside the account's home"
   },
   {
    "feature": "Downloadable system fonts",
