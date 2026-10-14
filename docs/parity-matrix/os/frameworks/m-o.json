@@ -61,10 +61,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Managed app configuration belongs to device management, which BifrOSt does not have.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ManagedAppDistribution.framework",
@@ -334,10 +334,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Composing SMS and MMS needs a carrier transport; BifrOSt has no messaging transport.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Metal.framework",
@@ -627,11 +627,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "tools/parity/os_cli_packages.txt",
+   "status": "os",
+   "note": "Network share mounts are made by the kernel mount helpers from the cifs-utils and nfs-utils packages; apps get no SDK mount API.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Network.framework",
@@ -753,11 +753,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/src/shell/diag.rs; springboard/src/shell/diagnostics_page.rs",
+   "status": "partial",
+   "note": "Crash reports are listed and sent only when the user shares them; the report bundle is built and parsed in shell::diag and tested in that file. Gap: no app-facing analytics event API and no aggregated usage counters.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/OSLog.framework",
@@ -816,11 +816,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "os",
+   "note": "Mesa is in the runtime package list and its rusticl driver is the likely OpenCL provider; it is not verified on the lab machine, and apps get no compute SDK.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/OpenDirectory.framework",

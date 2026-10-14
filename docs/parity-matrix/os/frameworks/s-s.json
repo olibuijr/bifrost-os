@@ -228,11 +228,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "os",
+   "note": "Password entry for the session runs in the login window, which checks it through the root helper; apps get no secure entry API.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/SensitiveContentAnalysis.framework",
@@ -334,10 +334,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Sharing links and media received in messages is a reference-platform service; BifrOSt has no counterpart, and the matching SDK row is n/a.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ShazamKit.framework",
@@ -523,10 +523,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Message sticker extensions have no BifrOSt counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/StoreKit.framework",

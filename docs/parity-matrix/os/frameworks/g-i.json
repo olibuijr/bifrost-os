@@ -40,10 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "A deprecated OpenGL utility toolkit; BifrOSt draws through its own GPU presenter in springboard/src/gpu and has no GLUT surface.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/GSS.framework",
@@ -564,10 +564,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "No installer plugin interface exists; the native installer in springboard/src/installer takes no third-party plugins.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/InstantMessage.framework",
