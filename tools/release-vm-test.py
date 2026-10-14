@@ -152,6 +152,10 @@ def parse_state(text: str):
     return parsed
 
 
+class InstallerFailure(RuntimeError):
+    """The live installer reported a terminal failure state."""
+
+
 class ReleaseVmTest:
     def __init__(self, iso: Path, out: Path):
         self.iso = iso
@@ -180,6 +184,7 @@ class ReleaseVmTest:
         result = fn()
         self.phases[name] = round(time.monotonic() - start, 1)
         self.write_report()
+        print(f"[{time.monotonic() - self.started:7.1f}s] phase {name} completed ({self.phases[name]:.1f}s)", flush=True)
         return result
 
     def save_shot(self, name: str):
@@ -250,6 +255,7 @@ class ReleaseVmTest:
                        "[ -e /usr/lib/systemd/system/bifrost-lab.service ]; then "
                        "echo RELEASE_HARDENING_FAIL >/run/release-hardening; "
                        "else echo RELEASE_HARDENING_OK >/run/release-hardening; fi")
+        clean_check = ("if [ ! -e /run/release-hardening ]; then " + clean_check + "; fi")
         egress_check = ("if curl -fsS --connect-timeout 5 --max-time 8 -o /dev/null "
                         "https://bifrost.olibuijr.com/arch/x86_64/bifrost.db; then "
                         "echo EGRESS_AVAILABLE >/run/release-egress; else echo EGRESS_BLOCKED >/run/release-egress; fi")
@@ -372,7 +378,7 @@ class ReleaseVmTest:
         self.wait_page("confirm")
         self.save_shot("07-confirm")
         self.tap_named("button", "erase")
-        wait_until("installation completes on Done page", INSTALL_TIMEOUT, lambda: self._install_finished(), 5)
+        self.wait_install_finished(INSTALL_TIMEOUT)
         self.save_shot("08-done")
         self.verify_target_clean_and_seed_key()
         # The disk is boot index 1 and the ISO is index 2, so the UI's reboot enters the installed system.
@@ -383,18 +389,51 @@ class ReleaseVmTest:
         result = remote(self.port, self.key, "test -p /run/bifrost-input && test -s /run/bifrost-installer/state && echo ready", timeout=8, check=False)
         return result.returncode == 0 and "ready" in result.stdout
 
-    def _install_finished(self):
+    def wait_install_finished(self, timeout: float):
+        deadline = time.monotonic() + timeout
+        last_state: dict[str, object] = {}
+        last_error = ""
+        while time.monotonic() < deadline:
+            try:
+                state = self.state()
+                last_state = state
+                self.checks["installer_state"] = state
+                if state.get("screen") == "failed":
+                    self.capture_installer_failure(state, "installer entered its failed page")
+                    raise InstallerFailure(f"installer failed: {state}")
+                if state.get("screen") == "done":
+                    return state
+            except InstallerFailure:
+                raise
+            except Exception as exc:
+                last_error = str(exc)
+            time.sleep(min(5, max(0.0, deadline - time.monotonic())))
+        self.capture_installer_failure(last_state, "installer did not reach Done before timeout")
+        raise TimeoutError("installer did not reach Done within " + str(timeout) + " seconds"
+                           + (f"; last state error: {last_error}" if last_error else f"; last state: {last_state}"))
+
+    def capture_installer_failure(self, state: dict[str, object], reason: str):
+        self.checks["installer_failure_reason"] = reason
+        self.checks["installer_state_at_failure"] = state
         try:
-            return self.state().get("screen") == "done"
-        except Exception:
-            return False
+            journal = self.guest("journalctl -b -u bifrost-installer --no-pager -n 100", timeout=20, check=False)
+            body = journal.stdout + ("\n[journal stderr]\n" + journal.stderr if journal.stderr else "")
+            path = self.out / "installer-journal.log"
+            path.write_text(body)
+            self.checks["installer_journal_file"] = str(path)
+            if journal.returncode:
+                self.checks["installer_journal_exit"] = journal.returncode
+        except Exception as exc:
+            self.checks["installer_journal_error"] = str(exc)
+        self.write_report()
 
     def verify_target_clean_and_seed_key(self):
         # Keep the live system and its SSH access until all release-hardening checks pass.
         user = shlex.quote(self.user)
         script = ("set -eu; disk=$(lsblk -dnpo NAME,TYPE | awk '$2==\"disk\" {print $1}'); "
-                  "root=$(lsblk -nrpo NAME,FSTYPE \"$disk\" | awk '$2==\"btrfs\" {print $1}'); "
-                  "test -n \"$root\"; mkdir -p /mnt; mount -t btrfs -o subvol=@system \"$root\" /mnt; "
+                  "set -- $disk; test \"$#\" -eq 1; disk=$1; "
+                  "roots=$(lsblk -nrpo NAME,FSTYPE \"$disk\" | awk '$2==\"btrfs\" {print $1}'); "
+                  "set -- $roots; test \"$#\" -eq 1; root=$1; mkdir -p /mnt; mount -t btrfs -o subvol=@system \"$root\" /mnt; "
                   "trap 'umount -R /mnt || true' EXIT; test -f /mnt/etc/os-release; "
                   "test ! -e /mnt/etc/bifrost/lab.token; test ! -e /mnt/root/.ssh/authorized_keys; "
                   "test ! -e /mnt/usr/lib/systemd/system/bifrost-lab.service; "
