@@ -59,9 +59,9 @@
     {
       "feature": "zlib stream for PNG output",
       "apple": "compression_encode_buffer with ZLIB",
-      "bifrost": "springboard/src/pngenc.rs:31 (zlib_stored)",
+      "bifrost": "springboard/src/pngenc.rs (zlib_compressed, zlib_stored)",
       "status": "partial",
-      "note": "Writes stored (uncompressed) deflate blocks only, so PNG output is not compressed; the SDK encoder could replace it."
+      "note": "zlib_compressed codes PNG output with a fixed-Huffman deflate block and LZ77 back references; headless tests in springboard/tests/parity_sdk-complete-43.rs decode the output with the png crate. Gap: there are no dynamic Huffman blocks and no compression levels."
     },
     {
       "feature": "Error reporting",
