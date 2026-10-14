@@ -31,23 +31,23 @@
     {
       "feature": "Per-app usage records",
       "apple": "Not an Apple API; the Screen Time app's usage data (no public API in this framework)",
-      "bifrost": "springboard/src/shell/screentime/usage.rs (Tracker, one key=value day file per day, 7-day chart history)",
-      "status": "os",
-      "note": "Foreground seconds per app and per hour, pickups and notifications per app. Read only by Settings, not by apps."
+      "bifrost": "springboard/ui/src/os_services/usage_record.rs (UsageDay parse, to_text, ranked, add, window_days); springboard/src/shell/screentime/usage.rs (Tracker, one key=value day file per day, 7-day chart history)",
+      "status": "partial",
+      "note": "The day file format, ranking, totals and the seven-day window are tested headless, and the shell tracker writes the same keys. Gap: the shell reads the day files for Settings only and no app can read usage."
     },
     {
       "feature": "Daily app limits and the Time Limit shield",
       "apple": "Not in this framework (system Screen Time)",
-      "bifrost": "springboard/src/shell/screentime/config.rs (LIMIT_STEPS, Config::block, Ignore grants), springboard/src/shell/screentime/shield.rs",
-      "status": "os",
-      "note": "Limits from 15 min to 4 h, a full-screen shield with OK and Ignore Limit for 15 min or the rest of the day, behind the Screen Time passcode when one is set. Settings is never shielded."
+      "bifrost": "springboard/ui/src/os_services/time_limits.rs (Policy::block, Policy::set_limit, Policy::grant_ignore, LIMIT_STEPS); springboard/src/shell/screentime/config.rs (LIMIT_STEPS, Config::block, Ignore grants), springboard/src/shell/screentime/shield.rs",
+      "status": "partial",
+      "note": "Limit steps from 15 min to 4 h, the used-time threshold, ignore grants and the Settings exemption are tested headless. Gap: the full-screen shield and its passcode stay in the shell, and the model does not draw it."
     },
     {
       "feature": "Downtime schedule and always-allowed apps",
       "apple": "Not in this framework (system Screen Time)",
-      "bifrost": "springboard/src/shell/screentime/config.rs (Downtime, Schedule from springboard/src/shell/notify/schedule.rs), springboard/src/shell/screentime/page.rs",
-      "status": "os",
-      "note": "A daily window that may cross midnight. During Downtime only the apps the user always allows can run."
+      "bifrost": "springboard/ui/src/os_services/time_limits.rs (Downtime::active, Policy::allowed, Policy::set_allowed); springboard/src/shell/screentime/config.rs (Downtime, Schedule from springboard/src/shell/notify/schedule.rs), springboard/src/shell/screentime/page.rs",
+      "status": "partial",
+      "note": "The daily window that crosses midnight and the always-allowed list are tested headless. Gap: the shell keeps its own Schedule copy, and the Settings page is not yet wired to the model."
     },
     {
       "feature": "Settings UI for Screen Time",

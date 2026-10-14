@@ -59,9 +59,9 @@
     {
       "feature": "Alarm scheduling service",
       "apple": "alarm delivery",
-      "bifrost": "docs/alarm-service-design.md",
-      "status": "os",
-      "note": "design for a scheduler service used by Reminders and Calendar"
+      "bifrost": "springboard/ui/src/os_services/alarm.rs (Alarm::occurs_in, Alarm::next_occurrence, weekday masks); docs/alarm-service-design.md",
+      "status": "partial",
+      "note": "Weekday masks, the grace window and the next-occurrence rule are tested headless. Gap: no scheduler service or RTC wake exists yet, and Reminders and Calendar alerts have no schedule source."
     },
     {
       "feature": "Location-based reminders",

@@ -642,3 +642,4 @@ pub mod gpu_pass;
 pub mod pixel_buffer;
 pub mod biquad;
 pub mod extent_map;
+pub mod os_services;

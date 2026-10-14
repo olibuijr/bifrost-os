@@ -122,9 +122,9 @@
   {
    "feature": "Metal and OpenGL layers (CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer)",
    "apple": "CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer",
-   "bifrost": "springboard/src/gpu/layer.rs:10 (compositor API 'shaped like Metal', not app-facing), springboard/src/gpu/wl.rs",
-   "status": "os",
-   "note": "the GPU presenter is in the system layer; apps have no drawable or display-link API (no Metal grep hits in the SDK)"
+   "bifrost": "springboard/ui/src/os_services/drawable.rs (DrawableConfig::drawable_size, DrawableConfig::memory_bytes); springboard/src/gpu/layer.rs:10 (compositor API 'shaped like Metal', not app-facing), springboard/src/gpu/wl.rs",
+   "status": "partial",
+   "note": "Drawable pixel sizes, the two-or-three drawable count and the swap-set memory are tested headless. Gap: apps cannot create a drawable or a display link, and the system presenter does not read this model yet."
   },
   {
    "feature": "Render server and compositing (layer compositor, GPU presenter)",
