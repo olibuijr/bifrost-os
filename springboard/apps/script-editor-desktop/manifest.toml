@@ -1,0 +1,11 @@
+id = "is.olibuijr.scripteditor.desktop"
+name = "Script Editor"
+version = "0.1.0"
+exec = "bifrost-script-editor"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Edit shell scripts, run them through the system shell and read the output."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["storage", "documents"]
+window = "full-size"

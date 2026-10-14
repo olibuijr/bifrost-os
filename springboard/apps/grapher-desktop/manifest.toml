@@ -1,0 +1,11 @@
+id = "is.olibuijr.grapher.desktop"
+name = "Grapher"
+version = "0.1.0"
+exec = "bifrost-grapher"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Plots equations: y = f(x), parametric and polar curves, with pan, zoom and image export."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"

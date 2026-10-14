@@ -1,132 +1,133 @@
 {
-  "framework": "AVKit",
-  "doc": "https://developer.apple.com/documentation/avkit",
-  "macos_since": "10.9",
-  "status": "partial",
-  "bifrost": "springboard/sdk/src/widgets.rs (player), springboard/src/media/ (player, stream, capture), springboard/src/deildu/player_view.rs, springboard/src/shell/camera/",
-  "summary": "AVKit's playback side has partial BifrOSt counterparts: a video decoder and fullscreen player, and a floating audio mini player. Picture in Picture, route picking, the content-proposal and chapter UI, and capture hardware buttons, audio input picker and Continuity Camera have no counterpart; the PiP toggle in Settings is stored but nothing acts on it.",
-  "rea_evidence": "ev_89fce22ae4427a965d86144f1281df4236dabe0684b3b0df3c32a8a3f1661041",
-  "features": [
-    {
-      "feature": "Standard player (AVPlayerViewController, VideoPlayer)",
-      "apple": "AVPlayerViewController, AVPlayerView, VideoPlayer, AVPlayerViewControllerDelegate",
-      "bifrost": "springboard/ui/src/player_view.rs:62 (PlayerView, ControlsStyle, VideoPlayer model), springboard/src/deildu/player_view.rs (fullscreen player HUD), springboard/src/media/mod.rs, springboard/src/media/stream.rs",
-      "status": "partial",
-      "note": "Fullscreen video with transport HUD is used by Deildu and Files, and springboard/ui/src/player_view.rs now models AVPlayerView (controls style, full-screen toggle, scrubber hit-test, play/pause, time labels) and VideoPlayer(player:videoOverlay:) as host-tested state with no drawing or decoding, not yet on Midget; AVPlayerViewController and its delegate have no counterpart; the SDK player() widget in springboard/sdk/src/widgets.rs:900 is an audio capsule, not a video view."
-    },
-    {
-      "feature": "Transport controls and audio mini player",
-      "apple": "AVPlayerViewController transport UI, MPRemoteCommandCenter via player",
-      "bifrost": "springboard/sdk/src/widgets.rs:900 (player capsule), springboard/src/shell/music/mod.rs; wired: springboard/apps/podcasts-desktop/src/podcasts.rs (mini player -15s, play or pause, +30s; sheet with Speed menu and Sleep)",
-      "status": "partial",
-      "note": "Floating capsule with skip, play and progress; audio only, no video surface in the capsule. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Picture in Picture",
-      "apple": "AVPictureInPictureController, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate, AVPlayerViewPictureInPictureDelegate, AVPictureInPictureVideoCallViewController",
-      "bifrost": "springboard/ui/src/pip_window.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-avkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only the Start PiP Automatically preference exists; no floating video window, no start/stop API, no delegate events. Nothing reads pip_auto when the Home button is pressed."
-    },
-    {
-      "feature": "Playback of immersive, multiview and interstitial media",
-      "apple": "AVExperienceController, AVMultiviewManager, AVGroupExperienceCoordinator, AVViewport, AVInterstitialTimeRange, AVNavigationMarkersGroup",
-      "bifrost": "none found",
-      "status": "n/a",
-      "note": "visionOS and HLS interstitial features; no counterpart found in springboard/src/media/ or the SDK."
-    },
-    {
-      "feature": "Content proposals and parental controls",
-      "apple": "AVContentProposal, AVContentProposalViewController, AVContentProposalAction",
-      "bifrost": "springboard/ui/src/content_proposal.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (w3-avkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No next-up proposal sheet in the SDK or the media apps."
-    },
-    {
-      "feature": "Media trimming and export",
-      "apple": "AVPlayerViewTrimResult, trimming in a macOS player",
-      "bifrost": "springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (menu, export_selected); src/store.rs (export_copy); trim handles already wired via recording::Trim; wired: springboard/apps/daw/src/export.rs, springboard/apps/daw/src/main.rs (toggle_trim, nudge_trim, export), springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/store.rs (save_split) and src/voicememos.rs (split_selected, can_split, MENU_SPLIT)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b12, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No trim control in the player HUD (springboard/src/deildu/player_view.rs). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Display management (HDR, refresh mode switching)",
-      "apple": "AVDisplayManager, AVDisplayDynamicRange",
-      "bifrost": "springboard/ui/src/display_manager.rs",
-      "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (display_manager.rs); not wired into the shell or apps, not tested on Midget. No display mode switching API; the video path is in springboard/src/media/ only."
-    },
-    {
-      "feature": "Route selection (AirPlay and nearby receivers)",
-      "apple": "AVRoutePickerView, AVRoutePickerViewDelegate, AVRoutePickerViewButtonStyle",
-      "bifrost": "springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
-      "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (route_picker.rs, route_picker_view.rs); not wired into the shell or apps, not tested on Midget. Settings page only; no route picker view. Deildu serves a LAN URL so an external TV can play the stream (springboard/CHANGELOG.md), which is not an AVRoutePicker equivalent."
-    },
-    {
-      "feature": "Third-party casting and metadata identifiers",
-      "apple": "AVKit metadata identifiers, third-party casting support",
-      "bifrost": "none found",
-      "status": "n/a",
-      "note": "No casting SDK; metadata identifiers are Apple-specific."
-    },
-    {
-      "feature": "Capture view and camera viewfinder (AVCaptureView)",
-      "apple": "AVCaptureView, AVCaptureViewDelegate",
-      "bifrost": "springboard/src/shell/camera/mod.rs (viewfinder, silent shutter, timer, grid, QR), springboard/src/shell/camera/qr.rs",
-      "status": "partial",
-      "note": "The Camera app is a shell app, not an SDK view. Apps get no capture view or delegate, and the camera is not exposed as a reusable widget."
-    },
-    {
-      "feature": "Capture events from hardware buttons",
-      "apple": "AVCaptureEventInteraction, AVCaptureEvent, AVCaptureEventSound",
-      "bifrost": "springboard/ui/src/capture_event.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hardware capture button handler; the shutter is on-screen only."
-    },
-    {
-      "feature": "Camera facing direction",
-      "apple": "AVCaptureDeviceDirectionCoordinator, AVCaptureDeviceDirectionMap, AVCaptureDeviceDescriptor",
-      "bifrost": "springboard/src/shell/camera/mod.rs (front/back switch)",
-      "status": "partial",
-      "note": "Front and back switching exists; no direction coordinator or device descriptor API for apps."
-    },
-    {
-      "feature": "Audio input picker",
-      "apple": "AVInputPickerInteraction",
-      "bifrost": "springboard/ui/src/input_picker.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service records (Recorder, level, elapsed) but no input-device picker UI or SDK API is offered to apps."
-    },
-    {
-      "feature": "Camera access while multitasking",
-      "apple": "Camera in Split View, Slide Over, PiP, Stage Manager",
-      "bifrost": "none found",
-      "status": "n/a",
-      "note": "BifrOSt has no iPad multitasking modes; the camera runs only in the shell's Camera app."
-    },
-    {
-      "feature": "Continuity Camera (iPhone as camera)",
-      "apple": "AVContinuityDevicePickerViewController, AVContinuityDevicePickerViewControllerDelegate",
-      "bifrost": "none found",
-      "status": "n/a",
-      "note": "Apple device pairing; no counterpart planned in the repo."
-    },
-    {
-      "feature": "Error domain and codes",
-      "apple": "AVKitErrorDomain, AVKitError, AVKitError.Code",
-      "bifrost": "springboard/src/media/mod.rs (Error type)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 3 tests. Media errors exist as a Rust Error enum; no AVKit error codes, and the content-restriction codes have no counterpart."
-    }
-  ],
-  "gaps": [
-    "Picture in Picture: no floating video window or PiP controller API; the Settings toggle pip_auto (springboard/src/shell/options.rs:72) is stored but never read by the shell.",
-    "App-facing video player view: the SDK player() widget (springboard/sdk/src/widgets.rs:900) draws audio only; the fullscreen video HUD lives in springboard/src/deildu/player_view.rs and is not reusable by other apps.",
-    "Route picker: no AVRoutePickerView equivalent for AirPlay or nearby receivers; the AirPlay & Handoff page (springboard/src/shell/pages.rs:598) is a settings screen only.",
-    "Capture: no SDK capture view or delegate (AVCaptureView); the camera is a single shell app (springboard/src/shell/camera/mod.rs).",
-    "Capture events: no hardware button interaction API.",
-    "Audio input picker: audiod records (springboard/audiod/src/main.rs) but apps cannot choose a microphone through a system picker.",
-    "Content proposals, trimming and display-mode switching have no counterpart."
-  ]
+ "framework": "AVKit",
+ "doc": "https://developer.apple.com/documentation/avkit",
+ "macos_since": "10.9",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/widgets.rs (player), springboard/src/media/ (player, stream, capture), springboard/src/deildu/player_view.rs, springboard/src/shell/camera/",
+ "summary": "AVKit's playback side has partial BifrOSt counterparts: a video decoder and fullscreen player, and a floating audio mini player. Picture in Picture, route picking, display-mode choice and the capture view are modelled as pure state but not yet wired into the shell or the SDK, so apps cannot use them. The next-up proposal sheet and chapter UI, capture hardware buttons, audio input picker and Continuity Camera have no full counterpart; the PiP toggle in Settings is stored but nothing acts on it.",
+ "rea_evidence": "ev_89fce22ae4427a965d86144f1281df4236dabe0684b3b0df3c32a8a3f1661041",
+ "features": [
+  {
+   "feature": "Standard player (AVPlayerViewController, VideoPlayer)",
+   "apple": "AVPlayerViewController, AVPlayerView, VideoPlayer, AVPlayerViewControllerDelegate",
+   "bifrost": "springboard/ui/src/player_view.rs:62 (PlayerView, ControlsStyle, VideoPlayer model), springboard/src/deildu/player_view.rs (fullscreen player HUD), springboard/src/media/mod.rs, springboard/src/media/stream.rs",
+   "status": "partial",
+   "note": "Fullscreen video with transport HUD is used by Deildu and Files, and springboard/ui/src/player_view.rs now models AVPlayerView (controls style, full-screen toggle, scrubber hit-test, play/pause, time labels) and VideoPlayer(player:videoOverlay:) as host-tested state with no drawing or decoding, not yet on Midget; AVPlayerViewController and its delegate have no counterpart; the SDK player() widget in springboard/sdk/src/widgets.rs:900 is an audio capsule, not a video view."
+  },
+  {
+   "feature": "Transport controls and audio mini player",
+   "apple": "AVPlayerViewController transport UI, MPRemoteCommandCenter via player",
+   "bifrost": "springboard/sdk/src/widgets.rs:900 (player capsule), springboard/src/shell/music/mod.rs; wired: springboard/apps/podcasts-desktop/src/podcasts.rs (mini player -15s, play or pause, +30s; sheet with Speed menu and Sleep)",
+   "status": "partial",
+   "note": "Floating capsule with skip, play and progress; audio only, no video surface in the capsule. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Picture in Picture",
+   "apple": "AVPictureInPictureController, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate, AVPlayerViewPictureInPictureDelegate, AVPictureInPictureVideoCallViewController",
+   "bifrost": "springboard/ui/src/pip_window.rs",
+   "status": "partial",
+   "note": "Wave 3 (w3-avkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only the Start PiP Automatically preference exists; no floating video window, no start/stop API, no delegate events. Nothing reads pip_auto when the Home button is pressed."
+  },
+  {
+   "feature": "Playback of immersive, multiview and interstitial media",
+   "apple": "AVExperienceController, AVMultiviewManager, AVGroupExperienceCoordinator, AVViewport, AVInterstitialTimeRange, AVNavigationMarkersGroup",
+   "bifrost": "none found",
+   "status": "n/a",
+   "note": "visionOS and HLS interstitial features; no counterpart found in springboard/src/media/ or the SDK."
+  },
+  {
+   "feature": "Content proposals and parental controls",
+   "apple": "AVContentProposal, AVContentProposalViewController, AVContentProposalAction",
+   "bifrost": "springboard/ui/src/content_proposal.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (w3-avkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No next-up proposal sheet in the SDK or the media apps."
+  },
+  {
+   "feature": "Media trimming and export",
+   "apple": "AVPlayerViewTrimResult, trimming in a macOS player",
+   "bifrost": "springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (menu, export_selected); src/store.rs (export_copy); trim handles already wired via recording::Trim; wired: springboard/apps/daw/src/export.rs, springboard/apps/daw/src/main.rs (toggle_trim, nudge_trim, export), springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/store.rs (save_split) and src/voicememos.rs (split_selected, can_split, MENU_SPLIT)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b12, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No trim control in the player HUD (springboard/src/deildu/player_view.rs). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Display management (HDR, refresh mode switching)",
+   "apple": "AVDisplayManager, AVDisplayDynamicRange",
+   "bifrost": "springboard/ui/src/display_manager.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (display_manager.rs); not wired into the shell or apps, not tested on Midget. No display mode switching API; the video path is in springboard/src/media/ only."
+  },
+  {
+   "feature": "Route selection (AirPlay and nearby receivers)",
+   "apple": "AVRoutePickerView, AVRoutePickerViewDelegate, AVRoutePickerViewButtonStyle",
+   "bifrost": "springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (route_picker.rs, route_picker_view.rs); not wired into the shell or apps, not tested on Midget. Settings page only; no route picker view. Deildu serves a LAN URL so an external TV can play the stream (springboard/CHANGELOG.md), which is not an AVRoutePicker equivalent."
+  },
+  {
+   "feature": "Third-party casting and metadata identifiers",
+   "apple": "AVKit metadata identifiers, third-party casting support",
+   "bifrost": "none found",
+   "status": "n/a",
+   "note": "No casting SDK; metadata identifiers are Apple-specific."
+  },
+  {
+   "feature": "Capture view and camera viewfinder (AVCaptureView)",
+   "apple": "AVCaptureView, AVCaptureViewDelegate",
+   "bifrost": "springboard/src/shell/camera/mod.rs (viewfinder, silent shutter, timer, grid, QR), springboard/src/shell/camera/qr.rs, springboard/ui/src/capture_view.rs",
+   "status": "partial",
+   "note": "The Camera app is a shell app, not an SDK view. springboard/ui/src/capture_view.rs models the capture view as pure state: session binding with video and audio preview flags, controls style, video gravity, and the start-recording delegate event with its refusals. Not wired into the SDK or the Camera app, and not yet verified on Midget."
+  },
+  {
+   "feature": "Capture events from hardware buttons",
+   "apple": "AVCaptureEventInteraction, AVCaptureEvent, AVCaptureEventSound",
+   "bifrost": "springboard/ui/src/capture_event.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hardware capture button handler; the shutter is on-screen only."
+  },
+  {
+   "feature": "Camera facing direction",
+   "apple": "AVCaptureDeviceDirectionCoordinator, AVCaptureDeviceDirectionMap, AVCaptureDeviceDescriptor",
+   "bifrost": "springboard/src/shell/camera/mod.rs (front/back switch), springboard/ui/src/capture_direction.rs",
+   "status": "partial",
+   "note": "Front and back switching exists in the Camera app. springboard/ui/src/capture_direction.rs models the direction coordinator and its map as pure state: device descriptors grouped into forward and backward facing lists relative to a view, a device-type filter, and a change report only when the grouping differs. Not wired to the capture service or the SDK; not yet verified on Midget."
+  },
+  {
+   "feature": "Audio input picker",
+   "apple": "AVInputPickerInteraction",
+   "bifrost": "springboard/ui/src/input_picker.rs",
+   "status": "partial",
+   "note": "Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service records (Recorder, level, elapsed) but no input-device picker UI or SDK API is offered to apps."
+  },
+  {
+   "feature": "Camera access while multitasking",
+   "apple": "Camera in Split View, Slide Over, PiP, Stage Manager",
+   "bifrost": "none found",
+   "status": "n/a",
+   "note": "BifrOSt has no iPad multitasking modes; the camera runs only in the shell's Camera app."
+  },
+  {
+   "feature": "Continuity Camera (iPhone as camera)",
+   "apple": "AVContinuityDevicePickerViewController, AVContinuityDevicePickerViewControllerDelegate",
+   "bifrost": "none found",
+   "status": "n/a",
+   "note": "Apple device pairing; no counterpart planned in the repo."
+  },
+  {
+   "feature": "Error domain and codes",
+   "apple": "AVKitErrorDomain, AVKitError, AVKitError.Code",
+   "bifrost": "springboard/src/media/mod.rs (Error type)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 3 tests. Media errors exist as a Rust Error enum; no AVKit error codes, and the content-restriction codes have no counterpart."
+  }
+ ],
+ "gaps": [
+  "Picture in Picture: no floating video window or PiP controller API in the shell; springboard/ui/src/pip_window.rs is a model only, and the Settings toggle pip_auto (springboard/src/shell/options.rs:72) is stored but never read by the shell.",
+  "App-facing video player view: the SDK player() widget (springboard/sdk/src/widgets.rs:900) draws audio only; the fullscreen video HUD lives in springboard/src/deildu/player_view.rs and is not reusable by other apps.",
+  "Route picker: springboard/ui/src/route_picker.rs and route_picker_view.rs are models only. No receiver discovery feeds them and nothing draws the picker; the AirPlay & Handoff page (springboard/src/shell/pages.rs:598) is a settings screen only.",
+  "Capture: springboard/ui/src/capture_view.rs is a model only. There is no SDK capture view or delegate in use, and the camera is a single shell app (springboard/src/shell/camera/mod.rs).",
+  "Capture events: springboard/ui/src/capture_event.rs is not wired to a hardware button handler.",
+  "Audio input picker: audiod records (springboard/audiod/src/main.rs) but apps cannot choose a microphone through a system picker.",
+  "Display management: springboard/ui/src/display_manager.rs chooses modes but is not wired into the SDK; HDR is not covered on hardware.",
+  "Content proposals and trimming have no shell counterpart; trimming is wired in the media apps only."
+ ]
 }

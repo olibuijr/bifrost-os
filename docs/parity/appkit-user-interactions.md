@@ -65,3 +65,51 @@ REA evidence (`tools/parity/rea-page.sh`, passive rendered-page capture):
 
 Not built or run in this round, by instruction. A later stage builds and tests `bifrost_ui`. Name-guard check:
 `python3 tools/check-names.py` (see the commit for the result).
+
+# AppKit (User Interactions) parity: round 2 (team k)
+
+Framework status stays `partial`. Round 2 reconciles the matrix row with the code that already exists, and adds one
+pure model. Host tests only; not built or run on Midget in this round.
+
+## Reconciled with the code
+
+The round 1 gaps were partly stale, and the matrix row still listed them as missing:
+
+- Scroll wheel: `springboard/ui/src/wheel.rs` (`Sequencer`, phases and momentum). Not delivered to apps.
+- Tracking areas: `springboard/ui/src/tracking.rs` (`Tracker`, options, key window and visible rect). Not fed by the app input path.
+- Drag sessions: `springboard/ui/src/drag_session.rs` is used by the SDK transfer path (`springboard/sdk/src/transfer_drag.rs`).
+- Cursor shapes: the SDK `springboard/sdk/src/cursor_service.rs` pushes `Kind` shapes to the shell.
+- Dock menu and progress: `springboard/sdk/src/dock_tile.rs` (`set_menu`, `set_progress`, `bounce`), rendered by the shell
+  in `springboard/src/shell/desktop_bar.rs` (`Menu::Dock`). The Dock menu is no longer a gap.
+- Nested accessibility: `springboard/ui/src/ax.rs` records parent links (`AxLink`, `children_of`, `parent_of`,
+  `index_in_parent`). The AT-SPI bridge does not read them yet.
+
+## What was built
+
+| Module | Mirrors | What it does |
+|---|---|---|
+| `springboard/ui/src/trackpad_gesture.rs` | Two-finger magnify and rotate events (`NSEvent` magnify and rotate, the recognizers in `gesture.rs`) | `TwoFinger::frame(a, b)` runs `Magnify` and `Rotate` on the same two-finger touch and returns `Event { kind, state, value }`. Only `Began`, `Changed` and `Ended` are reported; magnify is reported before rotate in a frame. `lift()` ends the gestures that began and resets both recognizers. Six unit tests. |
+
+`springboard/ui/src/lib.rs` gained `pub mod trackpad_gesture;`.
+
+## Official API evidence
+
+- `appkit/nsmagnificationgesturerecognizer` and `appkit/nsrotationgesturerecognizer`, as recorded in round 1.
+- Event delivery for these gestures is described under the AppKit User Interactions topics (Gestures), read from the
+  landing page evidence `ev_89ff57d02f5e0c06fb16d7ed2cd82afa0cc42146fc5d9de9210aefc406081fb0`.
+
+## Remaining gaps
+
+- The app input path carries only Down, Move, Up and Cancel. Scroll wheel, tracking-area (hover) and the new two-finger
+  events need a `ToApp` variant in the shell protocol before apps receive them.
+- Cursor art (`cursor_art.rs`) is not yet drawn by the compositor.
+- Dock tile content beyond the progress bar (a custom `contentView`).
+- Drag and drop inside the retained view kit.
+- Nested accessibility nodes in the AT-SPI bridge.
+- Touch Bar is Apple-only hardware (`n/a`).
+
+## Verification
+
+Not built or run, by team rule (agents write and commit code; the lead builds and tests). The matrix row for this
+framework is now `partial` with coverage 50.0%, down from 56.2%. The Mouse, Keyboard, and Trackpad row was marked
+`parity`, but wheel, hover and two-finger events do not reach apps, so it is `partial` until they do.

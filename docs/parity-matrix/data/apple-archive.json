@@ -2,31 +2,31 @@
   "framework": "Apple Archive",
   "doc": "https://developer.apple.com/documentation/applearchive",
   "macos_since": "11.0",
-  "status": "os",
-  "bifrost": "springboard/src/files/zip.rs (create, extract), springboard/apps/files/src/main.rs (compress_now, extract_now), springboard/src/shell/store/install.rs (read_tar, index_tar, extract_from), springboard/render/src/cg/pdf/inflate.rs, springboard/src/shell/books/engine/zip.rs",
-  "summary": "BifrOSt has zip create and extract in the Files app and its system file layer, tar reading and extraction for app package install, and DEFLATE decoding for the Books engine. None of this is exposed through an SDK API, and the Apple Archive stream, string, metadata-preserving and encrypted formats are not present.",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/archive.rs (ByteStream, compress_to, compress_to_threaded, decompress_from, compress_file, compress_directory, expand), springboard/sdk/src/compression.rs (encode_buffer_threaded), springboard/src/files/zip.rs (create, extract), springboard/src/shell/store/install.rs (read_tar, index_tar, extract_from), springboard/render/src/cg/pdf/inflate.rs",
+  "summary": "BifrOSt has an app-facing archive module in the SDK: ZIP folders and single files, raw DEFLATE for buffers, strings and byte streams, and a thread-count option for large streams. Tar reading and extraction serve app package install. The Apple Archive container format (header, entry messages, stream traits) and encrypted archives are not present.",
   "rea_evidence": "ev_d29483e649b181c7241be638022e1dc6ebfbd3923c5a414205cc47a344dd7a4d",
   "features": [
     {
       "feature": "Compressing and extracting file system directories",
       "apple": "Compressing file system directories; Decompressing and extracting an archived directory",
-      "bifrost": "springboard/sdk/src/archive.rs (compress_directory",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_directory, expand)",
       "status": "partial",
-      "note": "Wave 4 (w4-apple-archive, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Zip folder trees via the Files app; no SDK API; Apple's Apple Archive format is not used"
+      "note": "ZIP folder trees through the SDK archive module and the Files app; the ZIP format, not Apple Archive. built on parity/team-j-apple-archive; not yet verified on Midget."
     },
     {
       "feature": "Compressing and decompressing single files",
       "apple": "Compressing single files; Decompressing single files",
-      "bifrost": "springboard/sdk/src/archive.rs (compress_file",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_file, expand)",
       "status": "partial",
-      "note": "Wave 4 (w4-apple-archive, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files app writes name.zip for one file; covered by a round-trip test; no SDK call"
+      "note": "Writes name.zip for one file and extracts it again; ZIP format, not Apple Archive. built on parity/team-j-apple-archive; not yet verified on Midget."
     },
     {
       "feature": "Compressing and parsing strings",
       "apple": "Compressing and saving a string to the file system; Decompressing and parsing an archived string",
-      "bifrost": "springboard/sdk/src/archive.rs (compress_text",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_text, decompress_text)",
       "status": "partial",
-      "note": "Wave 4 (w4-apple-archive, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No string-level archive API in the SDK or the system layer"
+      "note": "Raw DEFLATE of the UTF-8 bytes with a caller-given size limit; no file-system save of the string. built on parity/team-j-apple-archive; not yet verified on Midget."
     },
     {
       "feature": "Archive headers and file attributes",
@@ -38,9 +38,16 @@
     {
       "feature": "Archive streams (data blobs and byte buffers)",
       "apple": "ArchiveStream, ArchiveStreamProtocol, ArchiveByteStream, ArchiveByteStreamProtocol",
-      "bifrost": "springboard/sdk/src/archive.rs (ByteStream",
+      "bifrost": "springboard/sdk/src/archive.rs (ByteStream, compress_to, compress_to_threaded, decompress_from)",
       "status": "partial",
-      "note": "Wave 5 (w5-apple-archive, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Streaming is internal to read_tar and index_tar; no public stream type for apps"
+      "note": "In-memory cursor stream with Read, Write, Seek and cancel. Not the Apple Archive stream traits. built on parity/team-j-apple-archive; not yet verified on Midget."
+    },
+    {
+      "feature": "Multithreaded compression (thread count for streams)",
+      "apple": "Multithreaded lossless compression (no thread count recorded for this row)",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_to_threaded); springboard/sdk/src/compression/dynamic.rs (encode_threaded)",
+      "status": "partial",
+      "note": "Inputs of 2 MiB or more are split into pieces that each become a DEFLATE block, joined into one stream; matches do not cross pieces. The Files app zip writer is still single-threaded. built on parity/team-j-apple-archive; not yet verified on Midget."
     },
     {
       "feature": "Reading and indexing tar packages for install",
@@ -52,24 +59,23 @@
     {
       "feature": "DEFLATE decoding",
       "apple": "Multithreaded lossless compression (decoding side)",
-      "bifrost": "springboard/sdk/src/archive.rs (decompress",
+      "bifrost": "springboard/sdk/src/archive.rs (decompress, decompress_from) over springboard/render/src/cg/pdf/inflate.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-apple-archive, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decoder lives in the Books engine; not verified which book formats use it; no compression side"
+      "note": "Bounded by a caller-given size limit; the decoder is shared with the Books engine. built on parity/team-j-apple-archive; not yet verified on Midget."
     },
     {
       "feature": "Encrypted archives",
       "apple": "Apple Encrypted Archive; ArchiveEncryptionContext",
       "bifrost": "none found",
       "status": "gap",
-      "note": "No encrypted archive format found in the code searched"
+      "note": "No encrypted archive format in the code. Blocked: the SDK has no cipher (springboard/sdk/src/crypto_key.rs provides HMAC authentication only), and the reference encryption profiles are not implemented."
     }
   ],
   "gaps": [
-    "No SDK API for creating or extracting archives; apps cannot use the Files app zip code",
-    "No Apple Archive format (AAR) reader or writer, with its header and stream model",
-    "No multithreaded compression; the zip creator runs as a single background job",
+    "No Apple Archive container (AAR) reader or writer, with its header, entry messages and stream model; the SDK writes ZIP and raw DEFLATE",
     "No preservation of file ownership, extended attributes or flags in archives, as far as the code shows",
-    "No encrypted archives or encryption context",
-    "No string or byte-buffer compression API"
+    "No encrypted archives or encryption context; blocked until the SDK has a cipher and key derivation",
+    "Multithreaded compression covers byte streams only; the Files app zip writer runs as a single background job",
+    "No lazy matching in the DEFLATE encoder, so output is larger than a full zlib encoder"
   ]
 }

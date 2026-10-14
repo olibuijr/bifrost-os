@@ -1,0 +1,95 @@
+{
+  "framework": "ActivityKit (Live Activities)",
+  "doc": "https://developer.apple.com/documentation/activitykit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/live_activity.rs, springboard/sdk/src/widgets_timeline.rs, springboard/src/shell/services/widgets_timeline.rs",
+  "summary": "An app can start, update and end a live activity with a title, a text line, an optional scheduled start and a stale time. The shell keeps the activities in a registry with a dismissal window and shows them as rows in its Notification Center widget area, but it draws no lock-screen or compact presentation, activities carry no custom views, and there is no remote start or update through push tokens. iPadOS 16.1 and later per the index.",
+  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Activity object: start, update, end",
+      "apple": "Activity, Activity.request, update, end",
+      "bifrost": "springboard/sdk/src/widgets_timeline.rs (start_activity, update_activity, end_activity), springboard/src/shell/services/widgets_timeline.rs",
+      "status": "partial",
+      "note": "functions over the shell service that return an activity id; no typed Activity object and only the app that started an activity may update or end it"
+    },
+    {
+      "feature": "Activity content state",
+      "apple": "ActivityContent, ActivityAttributes content state",
+      "bifrost": "springboard/ui/src/live_activity.rs (Content, State)",
+      "status": "partial",
+      "note": "content is a title and a text line with a stale time; no typed state object"
+    },
+    {
+      "feature": "Life cycle: active, stale, ended",
+      "apple": "ActivityState, staleDate, dismissalPolicy",
+      "bifrost": "springboard/ui/src/live_activity.rs (State, Registry::state)",
+      "status": "partial",
+      "note": "state is derived from the times, so no timer is needed; the registry is a pure model with host tests"
+    },
+    {
+      "feature": "Scheduled start",
+      "apple": "Activity.request with a start date",
+      "bifrost": "springboard/sdk/src/widgets_timeline.rs (start_activity start_at), springboard/ui/src/live_activity.rs",
+      "status": "partial",
+      "note": "start time is passed through; the shell side does not show a timed activity yet"
+    },
+    {
+      "feature": "Dismissal policy",
+      "apple": "ActivityUIDismissalPolicy, end(_:dismissalPolicy:)",
+      "bifrost": "springboard/ui/src/live_activity.rs (Dismissal, DISMISSAL_WINDOW_S), springboard/sdk/src/widgets_timeline.rs",
+      "status": "partial",
+      "note": "an ended activity stays at most four hours; the dismissal options are the ones the model defines"
+    },
+    {
+      "feature": "Notification Center presentation (lock screen and compact views missing)",
+      "apple": "Live Activity views on the Lock Screen and in the Dynamic Island",
+      "bifrost": "springboard/src/shell/notify/center.rs, springboard/src/shell/services/widgets_timeline.rs",
+      "status": "partial",
+      "note": "Notification Center's widget area shows one row per live activity on screen; there is no lock-screen view and no compact or expanded island presentation"
+    },
+    {
+      "feature": "Custom views per presentation",
+      "apple": "ActivityConfiguration, SwiftUI views for each presentation",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "content is text only; apps cannot supply layouts or regions"
+    },
+    {
+      "feature": "Remote start, update and end with push tokens",
+      "apple": "ActivityKit push notifications, push tokens",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no push token or server path for activities"
+    },
+    {
+      "feature": "Declaration in the app bundle",
+      "apple": "NSSupportsLiveActivities, NSSupportsLiveActivitiesFrequentUpdates",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no activity keys are read from the app manifest or the SDK on this branch"
+    },
+    {
+      "feature": "Frequent updates",
+      "apple": "NSSupportsLiveActivitiesFrequentUpdates",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no update budget is enforced or relaxed for activities"
+    },
+    {
+      "feature": "Deep links from an activity",
+      "apple": "Launching your app from a Live Activity",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no tap target on an activity"
+    }
+  ],
+  "gaps": [
+    "No lock-screen or compact presentation: activities appear only as rows in the Notification Center widget area.",
+    "Activities are text only; there is no custom layout per presentation.",
+    "No remote start, update or end from a server through push tokens.",
+    "No manifest declaration and no frequent-update budget.",
+    "No tap target that opens the app scene for an activity."
+  ]
+}

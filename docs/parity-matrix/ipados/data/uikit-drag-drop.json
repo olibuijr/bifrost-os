@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/uikit/drag-and-drop",
  "macos_since": "",
  "status": "partial",
- "bifrost": "springboard/src/shell/dnd.rs, springboard/sdk/src/dnd.rs, springboard/ui/src/drag_session.rs, springboard/sdk/src/item_provider.rs, springboard/sdk/src/pasteboard.rs",
- "summary": "Typed drag and drop between app windows works through the shell with operation negotiation, file grants and a preview image, and item providers carry typed data. The interactions are not attached to views, a touch lift gesture, spring-loading, drop proposals with progress and previews targeting are missing.",
+ "bifrost": "springboard/src/shell/dnd.rs, springboard/sdk/src/dnd.rs, springboard/ui/src/drag_session.rs, springboard/sdk/src/item_provider.rs, springboard/sdk/src/pasteboard.rs, springboard/ui/src/spring_load.rs, springboard/sdk/src/spring_loaded.rs, springboard/ui/src/paste_control.rs, springboard/sdk/src/paste_control.rs, springboard/ui/src/text_drag.rs",
+ "summary": "Typed drag and drop between app windows works through the shell with operation negotiation, file grants and a preview image, and item providers carry typed data. Spring-loaded interactions (a hover timer that activates a target once), a paste control that reads the pasteboard on a tap, and text drag and drop customization exist as models with unit tests, built on parity/team-p-drag-drop and not yet verified on the tablet. Attaching interactions to views with touch lift, drop proposals with progress, and Split View pane targets are still missing.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -45,9 +45,9 @@
   {
    "feature": "Spring-loaded interactions",
    "apple": "UISpringLoadedInteraction and effects",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "hover over a button or folder activates it after a delay; needs a hover timer in the drag session state machine"
+   "bifrost": "springboard/ui/src/spring_load.rs, springboard/sdk/src/spring_loaded.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-drag-drop; not yet verified on the tablet. The hover timer and activation handler exist; the app must feed drag updates and a tick, because the shell does not yet forward ticks or spring-load events"
   },
   {
    "feature": "Paste configuration",
@@ -59,16 +59,16 @@
   {
    "feature": "Paste control",
    "apple": "UIPasteControl",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "system paste button that avoids a permission prompt; depends on a pasteboard access prompt policy that BifrOSt does not have"
+   "bifrost": "springboard/ui/src/paste_control.rs, springboard/sdk/src/paste_control.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-drag-drop; not yet verified on the tablet. The tap is the consent, so the read shows no prompt; the button is not yet drawn by a shell widget"
   },
   {
    "feature": "Text drag and drop",
    "apple": "text view drag and drop customization",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "text selection in springboard/ui/src/textview.rs is not draggable"
+   "bifrost": "springboard/ui/src/text_drag.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-drag-drop; not yet verified on the tablet. Drag payload, drop proposal and drop application are pure functions; springboard/ui/src/textview.rs does not call them yet"
   },
   {
    "feature": "Pasteboard",
@@ -80,8 +80,10 @@
  ],
  "gaps": [
   "Attach drag and drop interactions to views, with touch lift on long press",
+  "Shell forwarding of spring-load ticks and events to apps, and the hover effect drawn by the shell",
+  "Wire the text view to the text drag policy (drag start, proposal and drop)",
+  "Paste control drawn as a shell widget with the system look",
   "Drop proposals with progress style and per-item acceptance",
-  "Spring-loaded interactions",
   "Drag preview parameters and animation hooks",
   "Check Split View and Slide Over panes as drop targets"
  ]

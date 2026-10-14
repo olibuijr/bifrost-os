@@ -47,3 +47,19 @@ CPU only, operating on an 8-bit single-channel `Plane`:
   https://developer.apple.com/documentation/metalperformanceshaders/mpskernel
 - Built on parity/team-a-04; not yet verified on Midget. The tests in `kernel.rs` (module `tests`) were written but
   not run in this round.
+
+## Blur and resampling (team K)
+
+Built on `parity/team-k-metal-performance-shaders` (commit 3a45ebef1); not yet verified on Midget.
+
+- `springboard/render/src/gaussian_filter.rs`: separable blur over `filter::Plane`. `gaussian_blur(src, sigma)`
+  takes a sigma in `(0, 64]` and covers three sigmas on each side. `box_blur` and `tent_blur` take a radius and
+  use `2 * radius + 1` taps. Edges repeat the nearest pixel. Unit tests check normalisation, symmetry, impulse
+  spread, flat-plane invariance, the one-two-one tent weights and the identity at radius zero.
+- `springboard/render/src/lanczos.rs`: Lanczos-3 resampling with `lanczos_scale(src, out_w, out_h)`. The kernel
+  widens by the scale factor when the image shrinks, so the output is antialiased. Weights are normalised per
+  output sample. Unit tests check the window, normalisation, identity size, flat-plane invariance, output size,
+  monotonic upscaling of a ramp and refusal of zero sizes.
+
+Remaining gaps for these rows: no SDK entry point for either module, the shell does not use them (its glass
+blur remains the GPU dual-Kawase pyramid), and the Gaussian pyramid and Laplacian pyramid are still missing.

@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/quicklookthumbnailing",
   "macos_since": "10.15",
   "status": "partial",
-  "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), bifrost_app::cache (springboard/render/src/purgeable.rs), bifrost_render::imgdec, springboard/src/shell/photos/thumbs.rs",
+  "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), bifrost_app::cache (springboard/render/src/purgeable.rs), bifrost_render::imgdec, springboard/src/shell/photos/thumbs.rs, springboard/sdk/src/thumbnail_error.rs (ThumbnailError, ThumbnailErrorCode)",
   "summary": "BifrOSt has a cached-thumbnail path and cache for apps (thumbnail_path, ThumbnailCache) and the image decoder and scaler a generator would need, but no generator for file types (images, text, PDF, audio, video) and no thumbnail-provider extension point for custom file types. The Quick Look panel that would show thumbnails is decoded by the shell and not drawn.",
   "rea_evidence": "ev_e60d2e785c18d96337877fec2a26816888c3df03b4f9de1625c2b21080e1e058",
   "features": [
@@ -66,9 +66,9 @@
     {
       "feature": "Error reporting for thumbnail generation",
       "apple": "QLThumbnailError, QLThumbnailError.Code, QLThumbnailErrorDomain",
-      "bifrost": "springboard/sdk/src/thumbnails.rs (ThumbnailError)",
+      "bifrost": "springboard/sdk/src/thumbnail_error.rs (ThumbnailError, ThumbnailErrorCode, classify); springboard/sdk/src/thumbnails.rs (ThumbnailError from State::Failed and RequestError)",
       "status": "partial",
-      "note": "Wave 2 (theme-35, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A failed render returns None. No error domain or codes."
+      "note": "Domain 'bifrost.thumbnails' and five codes (bad request, no such file, unsupported, cancelled, failed). The code is read from the shell's failure message, and a refused request maps to bad request. Host unit tests only. The codes are BifrOSt's own: the reference codes could not be read from the official page here, so they are not matched. The shell still answers with a message only. built on parity/team-j-quick-look; not yet verified on Midget."
     }
   ],
   "gaps": [
@@ -76,6 +76,6 @@
     "No system-wide thumbnail display in Files, Spotlight or the search panel",
     "No thumbnail generator for PDF, text, audio, video or Live Photo files; only the Photos app decodes images",
     "No representation types (icon, low quality, thumbnail) and no update or completion handlers",
-    "No QLThumbnailError domain or codes"
+    "The shell answers a failed thumbnail with a message only; the error codes in springboard/sdk/src/thumbnail_error.rs are derived from it, and they are not the reference error codes."
   ]
 }

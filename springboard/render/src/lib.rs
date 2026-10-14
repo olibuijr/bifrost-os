@@ -64,6 +64,8 @@ pub mod gamma_fade;
 pub mod video_transfer;
 pub mod block_motion;
 pub mod kernel;
+pub mod gaussian_filter;
+pub mod lanczos;
 
 #[cfg(test)]
 mod tests {
@@ -90,3 +92,9 @@ pub mod bayer;
 pub mod lazy_image;
 pub mod depth_blur;
 pub mod render_intent;
+pub mod color_curve;
+pub mod photo_effects;
+pub mod feature_detect;
+pub mod masked_blur;
+pub mod displacement_filters;
+pub mod edge_tone_filters;

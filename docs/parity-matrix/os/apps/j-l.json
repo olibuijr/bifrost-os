@@ -18,9 +18,9 @@
    "description": "",
    "role": "no journal app. Build: dated entries with photos and places, lock, search",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no journal app. Build: dated entries with photos and places, lock, search",
+   "bifrost": "springboard/apps/journal-desktop",
+   "status": "partial",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
    "method": "assessed"
   },

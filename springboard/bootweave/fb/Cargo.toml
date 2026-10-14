@@ -1,0 +1,13 @@
+[package]
+name = "bootweave-fb"
+version = "0.1.0"
+edition = "2021"
+description = "Paints the Bootweave boot frame (frame 0) into a Linux framebuffer from an initramfs (docs/boot-architecture.md)"
+
+# Only the shared frame renderer: the binary is built static for the initramfs and must not pull in the shell.
+[dependencies]
+bootweave-frame = { path = "../frame" }
+
+[[bin]]
+name = "bootweave-fb"
+path = "src/main.rs"

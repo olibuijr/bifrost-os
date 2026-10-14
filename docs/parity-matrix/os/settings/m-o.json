@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "media extensions, no counterpart yet",
+   "status": "n/a",
+   "note": "Third-party media codec extensions are an Apple ExtensionKit feature; BifrOSt decodes in springboard/src/media with no extension point.",
    "rea": []
   },
   {
@@ -58,9 +58,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/mouse_page.rs",
+   "status": "partial",
+   "note": "Settings > Mouse page exists; its App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -78,9 +78,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Apple wallpaper resource, inventory only",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Settings wallpaper page exists; the Apple wallpaper resource bundle has no counterpart.",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/wifi_page.rs; springboard/src/shell/desktop_network.rs",
+   "status": "partial",
+   "note": "Wi-Fi and network pages exist; App Intents declarations are not exposed.",
    "rea": []
   },
   {
@@ -158,9 +158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/notify_page.rs",
+   "status": "partial",
+   "note": "Settings Notifications page exists; App Intents declarations are not exposed.",
    "rea": []
   },
   {

@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "installer language step only",
+   "bifrost": "springboard/src/setup.rs (Step::Language)",
+   "status": "partial",
+   "note": "Setup language step only; no language chooser outside installer setup; built on os/team-l-04-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -159,8 +159,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no legacy plugin support",
+   "status": "n/a",
+   "note": "Legacy browser plugin enablement (NPAPI-era); BifrOSt has no legacy plugin host",
    "rea": []
   },
   {
@@ -218,9 +218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "Lock state and lock message exist; no App Intent exposes locking to Search or Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget",
    "rea": []
   }
  ]

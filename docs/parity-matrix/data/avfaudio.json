@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/avfaudio",
   "macos_since": "11.3",
   "status": "partial",
-  "bifrost": "bifrost_app::audio (springboard/sdk/src/lib.rs:88 re-exports springboard::svc::audio), springboard/proto/src/svc.rs (audio), springboard/audiod/src/main.rs, springboard/src/media/",
-  "summary": "BifrOSt has a system audio service (audiod) that owns the speaker and microphone, with playback queue, volume, mute and WAV recording exposed to apps through the SDK audio client. Session categories, interruptions, route-change notifications, the AVAudioEngine graph, MIDI and speech synthesis have no app-facing counterpart; the output route (speaker or headphones) is switched by the shell alone.",
+  "bifrost": "bifrost_app::audio (springboard/sdk/src/lib.rs:88 re-exports springboard::svc::audio), springboard/proto/src/svc.rs (audio), springboard/audiod/src/main.rs, springboard/src/media/, springboard/sdk/src/audio_application.rs, springboard/sdk/src/audio_player_control.rs",
+  "summary": "BifrOSt has a system audio service (audiod) that owns the speaker and microphone, with playback queue, volume, mute and WAV recording exposed to apps through the SDK audio client. App-level permission and input mute, player pan, rate and volume fades are modelled in the SDK; session categories, interruptions and route notifications are modelled but not wired to audiod. The AVAudioEngine graph, MIDI playback and speech synthesis have no full app-facing counterpart; the output route is switched by the shell alone.",
   "rea_evidence": "ev_df0e56197670a298d99ca1c65c39630cfb6848bc2d4d337b0ef4e4f301f36f1d",
   "features": [
     {
@@ -17,9 +17,9 @@
     {
       "feature": "Audio application and recording permission",
       "apple": "AVAudioApplication: requestRecordPermission, recordPermission, input mute state",
-      "bifrost": "springboard/proto/src/svc.rs (Cmd::RecordStart, Cmd::RecordStop); springboard/apps/voicememos-desktop/src/voicememos.rs:208",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. recording is gated by an explicit user tap in the app, but there is no permission request or mute state API"
+      "bifrost": "springboard/proto/src/svc.rs (Cmd::RecordStart, Cmd::RecordStop); springboard/apps/voicememos-desktop/src/voicememos.rs:208; springboard/sdk/src/audio_application.rs (bifrost_app::audio_application::AudioApplication, pure model)",
+      "status": "partial",
+      "note": "recording is gated by an explicit user tap in the app (verified on Midget 0.7.25 by 8 tests). The pure model adds the one-time permission request (ask only while undetermined), the denied state changed through settings, and the input mute state with change events; built on parity/team-n-avfaudio; not yet verified on Midget, not yet fed by audiod"
     },
     {
       "feature": "Audio interruptions",
@@ -45,9 +45,9 @@
     {
       "feature": "Basic playback (AVAudioPlayer)",
       "apple": "AVAudioPlayer: play, pause, stop, volume, pan, rate, loops, currentTime, duration",
-      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_at, draw_volume); rate and pan not wired",
+      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_at, draw_volume); rate and pan not wired; springboard/sdk/src/audio_player_control.rs (bifrost_app::audio_player_control::PlayerControl, pure model)",
       "status": "partial",
-      "note": "queue, transport, seek, volume and mute reach apps; no pan, rate or per-player fade Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "queue, transport, seek, volume and mute reach apps; no pan, rate or per-player fade Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity.; pan (-1 to 1), rate (0.5 to 2.0) and timed volume fades are modelled in audio_player_control.rs; built on parity/team-n-avfaudio; not yet verified on Midget or applied by audiod"
     },
     {
       "feature": "Basic recording (AVAudioRecorder)",
@@ -100,12 +100,12 @@
     }
   ],
   "gaps": [
-    "No app-facing audio session category, mode or activation API (AVAudioSession)",
-    "No interruption or route-change notifications for apps",
-    "No recording permission request or input mute state for apps (AVAudioApplication)",
+    "No app-facing audio session category, mode or activation API (AVAudioSession): modelled in audio_session.rs, not wired to audiod",
+    "No interruption or route-change notifications reaching apps: modelled in audio_session.rs, not wired to the shell or audiod",
+    "AVAudioApplication permission and input mute: modelled in audio_application.rs, not wired to the shell or the recording path",
     "No AVAudioEngine-style node graph for real-time processing",
-    "No MIDI playback (AVMIDIPlayer) or sound bank support",
-    "No speech synthesis API",
-    "AVAudioPlayer features missing: pan, playback rate, per-player volume fade"
+    "No MIDI playback (AVMIDIPlayer) or sound bank support in the SDK or audiod",
+    "No speech synthesis API in the SDK audio service",
+    "AVAudioPlayer pan, playback rate and volume fade: modelled in audio_player_control.rs, not applied by audiod"
   ]
 }

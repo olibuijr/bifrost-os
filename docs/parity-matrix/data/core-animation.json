@@ -1,169 +1,168 @@
 {
-  "framework": "Core Animation",
-  "doc": "https://developer.apple.com/documentation/quartzcore",
-  "macos_since": "10.3",
-  "status": "partial",
-  "bifrost": "bifrost_app::view (springboard/sdk/src/view/animation.rs, controls.rs), bifrost_ui::anim (springboard/ui/src/anim.rs), render::motion (springboard/render/src/motion.rs); compositor springboard/src/gpu/layer.rs (not app-facing)",
-  "summary": "Typed-property animation exists for views: frame, opacity and background, with transactions, completions, actions, springs and retargeting. The CALayer tree and the layer classes (text, shape, gradient, transform, replicator, emitter, Metal) have no app-facing counterpart; the compositor underneath is not exposed to apps.",
-  "rea_evidence": "ev_7b05d4f65e159dad2ad9b422203d8d3c31411358dcb1aa5c37bd4b5f1825c75f",
-  "features": [
-    {
-      "feature": "Layer tree (CALayer, CALayerDelegate, layout managers)",
-      "apple": "CALayer, CALayerDelegate, CALayoutManager, CAConstraintLayoutManager, CAConstraint",
-      "bifrost": "springboard/ui/src/layer_tree.rs",
-      "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (layer_tree.rs); not wired into the shell or apps, not tested on Midget. views have no backing layer, sublayers or delegate; docs/bifrost-ui.md 'Animation (Core Animation parity)' records this as decided"
-    },
-    {
-      "feature": "Implicit animation via transactions (CATransaction, CAMediaTiming, timing functions)",
-      "apple": "CATransaction, CAMediaTiming, CAMediaTimingFunction",
-      "bifrost": "springboard/sdk/src/view/animation.rs:232 (Window::animate, Timing), springboard/ui/src/anim.rs; wired: springboard/src/shell/window_fx.rs and springboard/render/src/motion.rs (window effects use the motion curves; dock bounce keeps one hop after the window maps)",
-      "status": "partial",
-      "note": "Timing::DEFAULT is 0.25 s ease-in-out; any change to frame, opacity or background inside animate() is diffed and interpolated; no beginTime, repeatCount, autoreverses or speed Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Basic property animation (CABasicAnimation, CAPropertyAnimation)",
-      "apple": "CAAnimation, CAPropertyAnimation, CABasicAnimation",
-      "bifrost": "springboard/sdk/src/view/animation.rs (Prop: X, Y, Width, Height, Opacity, Background), springboard/ui/src/anim.rs (Animation { from, to, start, duration, curve }); wired: springboard/src/shell/window_fx.rs (close added this wave; open, minimize and restore already present)",
-      "status": "partial",
-      "note": "only typed view properties, no key paths; no explicit fromValue or byValue; no additive animations Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Keyframe and group animations (CAKeyframeAnimation, CAAnimationGroup, CAValueFunction)",
-      "apple": "CAKeyframeAnimation, CAAnimationGroup, CAValueFunction, CAAnimationCalculationMode",
-      "bifrost": "springboard/ui/src/anim.rs, springboard/ui/src/frame_rate.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 16 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md lists keyframe and group animations as decided gaps"
-    },
-    {
-      "feature": "Spring animation (CASpringAnimation)",
-      "apple": "CASpringAnimation",
-      "bifrost": "springboard/sdk/src/view/animation.rs:51 (Timing::spring), springboard/render/src/motion.rs (Curve::Spring)",
-      "status": "partial",
-      "note": "damping ratio and response are supported; velocity is not carried, so a retargeted spring starts from rest (anim.rs keeps no velocity)"
-    },
-    {
-      "feature": "Transaction completion and actions (CATransaction completion, actions, disableActions)",
-      "apple": "CATransaction (setCompletionBlock, setDisableActions, setValue for action names)",
-      "bifrost": "springboard/sdk/src/view/animation.rs:74 (Transaction: completion, action), :243 (Window::disable_actions), :366 (take_animation_actions)",
-      "status": "partial",
-      "note": "completion receives finished (false when interrupted); actions are queued and sent down the responder chain only when finished; no transaction nesting by key path"
-    },
-    {
-      "feature": "Frame clock (CACurrentMediaTime, CADisplayLink)",
-      "apple": "CACurrentMediaTime(), CADisplayLink",
-      "bifrost": "springboard/sdk/src/view/animation.rs:376 (Window::next_wake, Window::tick), springboard/sdk/src/view/animation.rs:1 (module doc)",
-      "status": "partial",
-      "note": "the window ticks at 1/60 s while anything animates; there is no display-link object and no per-display or per-frame timestamp callback for apps"
-    },
-    {
-      "feature": "Preferred frame rate (CAFrameRateRange, ProMotion)",
-      "apple": "CAFrameRateRange, 'Optimizing iPhone and iPad apps to support ProMotion displays'",
-      "bifrost": "springboard/ui/src/anim.rs, springboard/ui/src/frame_rate.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 16 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API for an app to request a refresh rate"
-    },
-    {
-      "feature": "Transitions (CATransition)",
-      "apple": "CATransition, CATransitionType, CATransitionSubtype",
-      "bifrost": "springboard/src/shell/settings.rs:74 (Transition: push and pop slides), springboard/src/files/nav.rs:21 (Transition), springboard/src/shell/mod.rs:3214 (launch card cross-fade)",
-      "status": "partial",
-      "note": "transitions are private to Settings, Files and the shell; no app-facing CATransition-style API; Reduce Motion cross-fade exists (springboard/sdk/src/view/animation.rs:15)"
-    },
-    {
-      "feature": "Text layer (CATextLayer)",
-      "apple": "CATextLayer, CATextLayerAlignmentMode, CATextLayerTruncationMode",
-      "bifrost": "springboard/sdk/src/view/controls.rs:73 (Label), docs/bifrost-ui.md 'Attributed strings and rich text'",
-      "status": "partial",
-      "note": "text is a view (Label) and a rich text view, not a layer; no alignment or truncation mode on a layer; no per-layer text drawing in the animation tree"
-    },
-    {
-      "feature": "Shape layer (CAShapeLayer, Bezier paths)",
-      "apple": "CAShapeLayer, CAShapeLayerFillRule, CAShapeLayerLineCap, CAShapeLayerLineJoin",
-      "bifrost": "springboard/render/src/cg/context.rs, springboard/ui/src/shape.rs (Path::dashed)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 3 tests. Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing path or stroke API; polygon fill is private to shell modules"
-    },
-    {
-      "feature": "Gradient layer (CAGradientLayer)",
-      "apple": "CAGradientLayer, CAGradientLayerType",
-      "bifrost": "springboard/render/src/gradient.rs, springboard/sdk/src/layer_kinds/gradient.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only for the browser's CSS engine; no SDK gradient view or layer"
-    },
-    {
-      "feature": "Corner radius, shadow and masks (CALayer cornerRadius, shadowPath, mask)",
-      "apple": "CALayer cornerRadius, cornerCurve, shadowOpacity, mask, CALayerCornerCurve",
-      "bifrost": "springboard/ui/src/layer_style.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. rounded rects and shadows are drawn by shell code; no per-view corner radius, shadow or mask property in the SDK"
-    },
-    {
-      "feature": "Transforms (CATransform3D, CATransformLayer, transform matrices)",
-      "apple": "CATransform3D, CATransform3DMake*, CATransformLayer",
-      "bifrost": "springboard/ui/src/transform3d.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-04, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. views have no transform and no 3D; the only transform code is the browser CSS transform parser"
-    },
-    {
-      "feature": "Scroll and tiled layers (CAScrollLayer, CATiledLayer)",
-      "apple": "CAScrollLayer, CAScrollLayerScrollMode, CATiledLayer",
-      "bifrost": "springboard/sdk/src/view/scroll.rs:32 (clip view bounds origin)",
-      "status": "partial",
-      "note": "ScrollView is vertical only; there is no tiled asynchronous content provider"
-    },
-    {
-      "feature": "Replicator and particle layers (CAReplicatorLayer, CAEmitterLayer, CAEmitterCell)",
-      "apple": "CAReplicatorLayer, CAEmitterLayer, CAEmitterCell",
-      "bifrost": "springboard/render/src/replicator.rs, springboard/render/src/emitter.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no replication or particle system in the SDK or renderer"
-    },
-    {
-      "feature": "Metal and OpenGL layers (CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer)",
-      "apple": "CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer",
-      "bifrost": "springboard/src/gpu/layer.rs:10 (compositor API 'shaped like Metal', not app-facing), springboard/src/gpu/wl.rs",
-      "status": "os",
-      "note": "the GPU presenter is in the system layer; apps have no drawable or display-link API (no Metal grep hits in the SDK)"
-    },
-    {
-      "feature": "Render server and compositing (layer compositor, GPU presenter)",
-      "apple": "Core Animation render server (implicit in CALayer rendering)",
-      "bifrost": "springboard/src/gpu/layer.rs, springboard/src/bare/gpu_comp.rs, springboard/render/src/motion.rs (shared motion contract)",
-      "status": "os",
-      "note": "the compositor draws layers for the shell and video, but apps cannot submit layers to it"
-    },
-    {
-      "feature": "Reduce Motion and motion preferences",
-      "apple": "Reduce Motion (accessibility) applied through Core Animation timing",
-      "bifrost": "springboard/sdk/src/view/animation.rs:15 (cross-fade under Reduce Motion), springboard/src/shell/accessibility/mod.rs:17, springboard/render/src/appearance.rs",
-      "status": "parity",
-      "note": "frame changes become instant and opacity or background cross-fade over 0.12 s under Reduce Motion, matching the documented behaviour"
-    },
-    {
-      "feature": "Remote layer content and Quartz Composer (CARemoteLayerClient, CARemoteLayerServer, QCCompositionLayer)",
-      "apple": "CARemoteLayerClient, CARemoteLayerServer, QCCompositionLayer",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "legacy cross-process layer hosting and a macOS-only Quartz Composer host; no sensible BifrOSt counterpart"
-    },
-    {
-      "feature": "Layer filters (filters, backgroundFilters, compositingFilter)",
-      "apple": "CALayer.filters, CALayer.backgroundFilters, CALayer.compositingFilter",
-      "bifrost": "springboard/layers/src/layer.rs (Material::Glass is a background blur; no general layer filters)",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    }
-  ],
-  "gaps": [
-    "No layer tree: no CALayer, sublayers, delegate or layout managers for apps (views only).",
-    "No keyframe, group or additive animations, and no key-path animations (typed view properties only).",
-    "No transform, corner radius, shadow or mask on views; no 3D transforms.",
-    "No shape layer (Bezier paths, stroke and fill rule) and no gradient layer in the SDK.",
-    "No display-link object and no frame-rate preference (CAFrameRateRange).",
-    "No replicator or particle layers (CAReplicatorLayer, CAEmitterLayer).",
-    "No app-facing Metal layer or drawable (CAMetalLayer, CAMetalDrawable); the compositor is system-only.",
-    "Springs do not carry velocity into a retarget (springboard/ui/src/anim.rs).",
-    "Transitions (CATransition) are private to Settings, Files and the shell, not an SDK API."
-  ]
+ "framework": "Core Animation",
+ "doc": "https://developer.apple.com/documentation/quartzcore",
+ "macos_since": "10.3",
+ "status": "partial",
+ "bifrost": "bifrost_app::view (springboard/sdk/src/view/animation.rs, controls.rs), bifrost_ui::anim (springboard/ui/src/anim.rs), render::motion (springboard/render/src/motion.rs); compositor springboard/src/gpu/layer.rs (not app-facing)",
+ "summary": "Typed-property animation exists for views (frame, opacity, background) with transactions, completions, actions, springs and retargeting. A retained layer tree (layer model, delegates, constraint layout) backs layer-backed views, and app-facing views exist for shape, gradient, text, replicator, emitter, tiled and scroll layers. Key-path animations, 3D transforms, corner radius and shadows exist as models or view properties. The compositor underneath is not exposed to apps, and no layer class is a public CALayer counterpart yet.",
+ "rea_evidence": "ev_7b05d4f65e159dad2ad9b422203d8d3c31411358dcb1aa5c37bd4b5f1825c75f",
+ "features": [
+  {
+   "feature": "Layer tree (CALayer, CALayerDelegate, layout managers)",
+   "apple": "CALayer, CALayerDelegate, CALayoutManager, CAConstraintLayoutManager, CAConstraint",
+   "bifrost": "springboard/ui/src/layer_tree.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (layer_tree.rs); not wired into the shell or apps, not tested on Midget. views have no backing layer, sublayers or delegate; docs/bifrost-ui.md 'Animation (Core Animation parity)' records this as decided"
+  },
+  {
+   "feature": "Implicit animation via transactions (CATransaction, CAMediaTiming, timing functions)",
+   "apple": "CATransaction, CAMediaTiming, CAMediaTimingFunction",
+   "bifrost": "springboard/sdk/src/view/animation.rs:232 (Window::animate, Timing), springboard/ui/src/anim.rs; wired: springboard/src/shell/window_fx.rs and springboard/render/src/motion.rs (window effects use the motion curves; dock bounce keeps one hop after the window maps)",
+   "status": "partial",
+   "note": "Timing::DEFAULT is 0.25 s ease-in-out; any change to frame, opacity or background inside animate() is diffed and interpolated; no beginTime, repeatCount, autoreverses or speed Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Basic property animation (CABasicAnimation, CAPropertyAnimation)",
+   "apple": "CAAnimation, CAPropertyAnimation, CABasicAnimation",
+   "bifrost": "springboard/sdk/src/view/animation.rs (Prop: X, Y, Width, Height, Opacity, Background), springboard/ui/src/anim.rs (Animation { from, to, start, duration, curve }), springboard/ui/src/keypath_anim.rs (basic animations: from, to, by, over named properties of an Animatable); wired: springboard/src/shell/window_fx.rs",
+   "status": "partial",
+   "note": "SDK animation is still typed view properties only; keypath_anim.rs models from, to and by over named properties but the SDK does not drive it yet. No additive animations. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Keyframe and group animations (CAKeyframeAnimation, CAAnimationGroup, CAValueFunction)",
+   "apple": "CAKeyframeAnimation, CAAnimationGroup, CAValueFunction, CAAnimationCalculationMode",
+   "bifrost": "springboard/ui/src/anim.rs, springboard/ui/src/frame_rate.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 16 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md lists keyframe and group animations as decided gaps"
+  },
+  {
+   "feature": "Spring animation (CASpringAnimation)",
+   "apple": "CASpringAnimation",
+   "bifrost": "springboard/sdk/src/view/animation.rs:51 (Timing::spring), springboard/ui/src/anim.rs (Animation::velocity, Curve::Spring), springboard/render/src/motion.rs (Curve::Spring), springboard/ui/src/keypath_anim.rs (mass, stiffness, damping, initial velocity)",
+   "status": "partial",
+   "note": "damping ratio and response are supported; a retarget carries the interrupted spring's velocity (sdk animation.rs velocity_of). Initial velocity and mass are not exposed through Timing::spring to apps; they exist only in keypath_anim.rs."
+  },
+  {
+   "feature": "Transaction completion and actions (CATransaction completion, actions, disableActions)",
+   "apple": "CATransaction (setCompletionBlock, setDisableActions, setValue for action names)",
+   "bifrost": "springboard/sdk/src/view/animation.rs:74 (Transaction: completion, action), :243 (Window::disable_actions), :366 (take_animation_actions), springboard/ui/src/anim_transaction.rs (nestable transaction stack)",
+   "status": "partial",
+   "note": "completion receives finished (false when interrupted); actions are queued and sent down the responder chain only when finished. The model in anim_transaction.rs nests transactions; the SDK path does not yet nest by key path."
+  },
+  {
+   "feature": "Frame clock (CACurrentMediaTime, CADisplayLink)",
+   "apple": "CACurrentMediaTime(), CADisplayLink",
+   "bifrost": "springboard/sdk/src/view/animation.rs:376 (Window::next_wake, Window::tick), springboard/ui/src/frame_clock.rs (media_time, FrameLink, FrameLinks), springboard/sdk/src/display_link.rs (TimeStamp, DisplayLink)",
+   "status": "partial",
+   "note": "the window ticks at 1/60 s while anything animates. The frame_clock model gives per-frame links with a FrameTick and wake intervals, and sdk display_link.rs has a refresh-period display link with missed-refresh accounting; neither is yet the app-facing CADisplayLink object. Verify on Midget."
+  },
+  {
+   "feature": "Preferred frame rate (CAFrameRateRange, ProMotion)",
+   "apple": "CAFrameRateRange, 'Optimizing iPhone and iPad apps to support ProMotion displays'",
+   "bifrost": "springboard/ui/src/anim.rs, springboard/ui/src/frame_rate.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 16 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API for an app to request a refresh rate"
+  },
+  {
+   "feature": "Transitions (CATransition)",
+   "apple": "CATransition, CATransitionType, CATransitionSubtype",
+   "bifrost": "springboard/ui/src/transition.rs (Transition: fade, move in, push, reveal; shared model), springboard/src/shell/settings.rs:74, springboard/src/files/nav.rs:21, springboard/src/shell/mod.rs:3214 (launch card cross-fade)",
+   "status": "partial",
+   "note": "a shared transition model exists in bifrost_ui; the shell's Settings and Files stacks still carry their own copies. No app-facing CATransition-style API in the SDK. Reduce Motion cross-fade exists (springboard/sdk/src/view/animation.rs:15)."
+  },
+  {
+   "feature": "Text layer (CATextLayer)",
+   "apple": "CATextLayer, CATextLayerAlignmentMode, CATextLayerTruncationMode",
+   "bifrost": "springboard/sdk/src/view/layer_views.rs (TextLayerView), springboard/sdk/src/view/controls.rs:73 (Label), docs/bifrost-ui.md 'Attributed strings and rich text'",
+   "status": "partial",
+   "note": "TextLayerView renders text content as a layer-kind view. No alignment or truncation mode exposed as CATextLayer properties; Label is the usual text view."
+  },
+  {
+   "feature": "Shape layer (CAShapeLayer, Bezier paths)",
+   "apple": "CAShapeLayer, CAShapeLayerFillRule, CAShapeLayerLineCap, CAShapeLayerLineJoin",
+   "bifrost": "springboard/render/src/cg/context.rs, springboard/ui/src/shape.rs (Path::dashed)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 3 tests. Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing path or stroke API; polygon fill is private to shell modules"
+  },
+  {
+   "feature": "Gradient layer (CAGradientLayer)",
+   "apple": "CAGradientLayer, CAGradientLayerType",
+   "bifrost": "springboard/render/src/gradient.rs, springboard/sdk/src/layer_kinds/gradient.rs, springboard/sdk/src/view/layer_views.rs (GradientView)",
+   "status": "partial",
+   "note": "GradientView renders gradient content from the layer kinds. Axial and radial type coverage and the start and end points are the parity checks left; verify on Midget."
+  },
+  {
+   "feature": "Corner radius, shadow and masks (CALayer cornerRadius, shadowPath, mask)",
+   "apple": "CALayer cornerRadius, cornerCurve, shadowOpacity, mask, CALayerCornerCurve",
+   "bifrost": "springboard/ui/src/layer_style.rs (CornerMask, corner radius, shadow footprint, content mask), springboard/sdk/src/view/style_props.rs (set_corner_radius, border, shadow, mask)",
+   "status": "partial",
+   "note": "per-view corner radius, border, shadow and mask setters exist in style_props.rs (set_corner_radius, set_masked_corners, set_border, set_shadow, set_mask); the shell's own rounded rects and shadows are still drawn by shell code. Not yet verified on Midget."
+  },
+  {
+   "feature": "Transforms (CATransform3D, CATransformLayer, transform matrices)",
+   "apple": "CATransform3D, CATransform3DMake*, CATransformLayer",
+   "bifrost": "springboard/ui/src/transform3d.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-04, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. views have no transform and no 3D; the only transform code is the browser CSS transform parser"
+  },
+  {
+   "feature": "Scroll and tiled layers (CAScrollLayer, CATiledLayer)",
+   "apple": "CAScrollLayer, CAScrollLayerScrollMode, CATiledLayer",
+   "bifrost": "springboard/sdk/src/view/layer_views.rs (ScrollLayerView, TiledView), springboard/sdk/src/view/scroll.rs:32 (clip view bounds origin)",
+   "status": "partial",
+   "note": "ScrollLayerView is two-axis per ScrollMode and TiledView takes a TileSource and grid. Tile content is produced synchronously by the source; there is no asynchronous tile-provider callback for apps."
+  },
+  {
+   "feature": "Replicator and particle layers (CAReplicatorLayer, CAEmitterLayer, CAEmitterCell)",
+   "apple": "CAReplicatorLayer, CAEmitterLayer, CAEmitterCell",
+   "bifrost": "springboard/render/src/replicator.rs, springboard/render/src/emitter.rs, springboard/ui/src/emitter.rs, springboard/sdk/src/layer_kinds/replicator.rs, springboard/sdk/src/layer_kinds/emitter.rs, springboard/sdk/src/view/layer_views.rs (ReplicatorView, EmitterView)",
+   "status": "partial",
+   "note": "ReplicatorView and EmitterView are app-facing layer-kind views. The emitter model is seeded and deterministic. No CAEmitterCell-level tuning beyond the model; verify on Midget."
+  },
+  {
+   "feature": "Metal and OpenGL layers (CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer)",
+   "apple": "CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer",
+   "bifrost": "springboard/src/gpu/layer.rs:10 (compositor API 'shaped like Metal', not app-facing), springboard/src/gpu/wl.rs",
+   "status": "os",
+   "note": "the GPU presenter is in the system layer; apps have no drawable or display-link API (no Metal grep hits in the SDK)"
+  },
+  {
+   "feature": "Render server and compositing (layer compositor, GPU presenter)",
+   "apple": "Core Animation render server (implicit in CALayer rendering)",
+   "bifrost": "springboard/src/gpu/layer.rs, springboard/src/bare/gpu_comp.rs, springboard/render/src/motion.rs (shared motion contract)",
+   "status": "os",
+   "note": "the compositor draws layers for the shell and video, but apps cannot submit layers to it"
+  },
+  {
+   "feature": "Reduce Motion and motion preferences",
+   "apple": "Reduce Motion (accessibility) applied through Core Animation timing",
+   "bifrost": "springboard/sdk/src/view/animation.rs:15 (cross-fade under Reduce Motion), springboard/src/shell/accessibility/mod.rs:17, springboard/render/src/appearance.rs",
+   "status": "parity",
+   "note": "frame changes become instant and opacity or background cross-fade over 0.12 s under Reduce Motion, matching the documented behaviour"
+  },
+  {
+   "feature": "Remote layer content and Quartz Composer (CARemoteLayerClient, CARemoteLayerServer, QCCompositionLayer)",
+   "apple": "CARemoteLayerClient, CARemoteLayerServer, QCCompositionLayer",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "legacy cross-process layer hosting and a macOS-only Quartz Composer host; no sensible BifrOSt counterpart"
+  },
+  {
+   "feature": "Layer filters (filters, backgroundFilters, compositingFilter)",
+   "apple": "CALayer.filters, CALayer.backgroundFilters, CALayer.compositingFilter",
+   "bifrost": "springboard/layers/src/layer.rs (Material::Glass is a background blur), springboard/sdk/src/view/style_props.rs (filters)",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+  }
+ ],
+ "gaps": [
+  "No public CALayer class hierarchy for apps: layers are reached through ViewBase::layer and the layer-kind views.",
+  "No keyframe, group or additive animations driven by the SDK window (keypath_anim.rs and keyframe models exist but are not the SDK's animate path).",
+  "No key-path animations through Window::animate (typed view properties only).",
+  "Gradient, text, replicator and emitter layers render through layer-kind views; per-property parity is not yet checked on Midget.",
+  "No app-facing CADisplayLink object or frame-rate preference (CAFrameRateRange) request API.",
+  "No app-facing Metal layer or drawable (CAMetalLayer, CAMetalDrawable); the compositor is system-only.",
+  "Initial spring velocity and mass are not exposed to apps through Timing::spring.",
+  "Layer filters beyond background blur are not modelled (per-shader inventory pending)."
+ ]
 }

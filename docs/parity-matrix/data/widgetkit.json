@@ -73,9 +73,9 @@
     {
       "feature": "Rendering modes and accented or Liquid Glass look (widgetRenderingMode, widgetAccentable, AccessoryWidgetBackground)",
       "apple": "WidgetRenderingMode, WidgetAccentedRenderingMode, widgetAccentable(_:), AccessoryWidgetBackground",
-      "bifrost": "springboard/sdk/src/widgets.rs (Material, Vibrant, blit_vibrant)",
+      "bifrost": "springboard/sdk/src/widgets.rs (Material, Vibrant, blit_vibrant); springboard/ui/src/widget_render.rs (mode resolution and tinting)",
       "status": "partial",
-      "note": "Vibrancy and materials exist for app windows. No accented rendering mode or widget background container."
+      "note": "Team J (parity/team-j-notification-center): widget_render models the full colour, accented and vibrant modes with host unit tests; not wired into the shell, not yet tested on Midget. Vibrancy and materials exist for app windows. No widget container background."
     },
     {
       "feature": "Interactivity in widgets (Button, Toggle, AppIntent in widget)",
@@ -115,9 +115,9 @@
     {
       "feature": "Location and network access in widgets",
       "apple": "Accessing location information in widgets, Making network requests in a widget extension",
-      "bifrost": "",
-      "status": "gap",
-      "note": "No widget process exists, so there is no widget-specific location or network grant. The shell weather tile reads Open-Meteo data directly (springboard/src/shell/weather/mod.rs)."
+      "bifrost": "springboard/ui/src/widget_access.rs",
+      "status": "partial",
+      "note": "Team J (parity/team-j-notification-center): pure model with host unit tests: per-widget location grant and network host grants (subdomains match). Not wired into apps or the shell, not yet tested on Midget. The shell weather tile still reads Open-Meteo directly and does not consult the grant. No widget process exists, so the grant is shell-side only."
     },
     {
       "feature": "Accessibility descriptions for widgets",
@@ -148,8 +148,9 @@
     "No app-provided Control Center controls (ControlWidgetButton, ControlWidgetToggle, ControlValueProvider).",
     "No interactive widget actions that run app intents (Button or Toggle invoking AppIntent) and no widget deep links (widgetURL).",
     "No large widget family; shell widgets stop at small (155 pt) and medium (329 pt).",
-    "No accented rendering mode or widget container background for the Liquid Glass look.",
-    "No widget accessibility descriptions; shell tiles are pixel images.",
-    "No relevance input for Smart Stacks; the shell stack is a manual swipe list."
+    "No widget container background for the accented look; the accented and vibrant modes exist only as a model (springboard/ui/src/widget_render.rs).",
+    "Widget accessibility descriptions are a model only (springboard/ui/src/widget_ax.rs); shell tiles are pixel images.",
+    "No relevance input for Smart Stacks; the shell stack is a manual swipe list.",
+    "Widget location and network grants are a model only (springboard/ui/src/widget_access.rs); nothing enforces them."
   ]
 }

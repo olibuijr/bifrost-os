@@ -79,3 +79,21 @@ The branch first added `pdf_pages.rs`. Its page stepping, page label and fit sca
 (`PdfView::next_page`, `previous_page`, `go_to_page`, `effective_scale`) and `pdfpage.rs` (`fit_scale`), both already
 used by Books, so the module was removed. The "PDF multi-page preview context" row stays `gap`: the Quick Look preview
 does not use `PdfView`. Its note points to the existing model.
+
+## PDF preview layout (team J, built on parity/team-j-quick-look)
+
+Gap row "PDF multi-page preview context" in `docs/parity-matrix/data/quick-look.json`, now `partial`.
+
+- `springboard/sdk/src/peek_pdf.rs`: `PdfPreview` over the page model in `springboard/ui/src/pdfview.rs`, the same model
+  Books uses. `PdfStyle` has the three styles of the official PDF preview style (`standard`, pages with thumbnails on the
+  left, pages with thumbnails on the right; https://developer.apple.com/documentation/quicklook/qlpreviewpdfstyle).
+- The thumbnail column is 120 points wide with 8 points of gap. `sidebar_frames` keeps each page's shape at the column
+  width and stacks them top to bottom. `content_rect` is the viewport less the column, on the column's side. The content
+  view is a continuous single-page `PdfView` with the current page kept across style and size changes.
+- `set_pages` refuses a page size that is zero, negative or not finite, and a document over 10 000 pages.
+- Not done: the shell does not draw this layout, and the Files preview still shows extracted PDF text. Verify on Midget
+  before the row is called parity.
+
+Tests: 13 host unit tests in `springboard/sdk/src/peek_pdf.rs` (styles and column width, thumbnail shape and order,
+right-edge placement, navigation and its clamping, the current thumbnail, style and size changes, bad input).
+Not built or run in this round; the lead builds and tests.

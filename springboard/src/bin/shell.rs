@@ -548,6 +548,7 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         {
             disp.wayland_inputs(&mut events);
+            for batch in disp.wayland_input_method_batches() { shell.input_method_batch(batch, t); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
             for ev in disp.wayland_window_events() { shell.wayland_window_event(ev); }
         }
@@ -555,6 +556,10 @@ fn run() -> std::io::Result<()> {
         keys.read(&mut events);
         inputs.read(&mut events);
         inputs.tick(t, &mut events);
+        // a physical keyboard attached or removed (the first call also reports the start state)
+        if let Some(attached) = inputs.keyboard_change() {
+            shell.set_hardware_keyboard(attached, t);
+        }
         // the pointer moving or a button changing shows the cursor again
         let pointer_now = (inputs.pointer(), inputs.is_down());
         if pointer_now != last_pointer {
@@ -767,6 +772,12 @@ fn run() -> std::io::Result<()> {
                     } else if states.contains(&bifrost_ui::recognizer::GestureState::Cancelled) {
                         shell.cancel_home_gesture(t);
                     }
+                    // a system gesture that is active holds the finger: the foreground app loses the touches it had
+                    let taken = states.iter().any(|s| s.is_active());
+                    if taken {
+                        shell.ext_cancel_touches(at);
+                    }
+                    shell.ext_contact(id, phase, x, y, at, !taken);
                     continue;
                 }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
@@ -885,6 +896,16 @@ fn run() -> std::io::Result<()> {
         effects.extend(shell.tick(vt));
         #[cfg(feature = "desktop-wayland")]
         effects.extend(shell.take_native_activations().into_iter().map(Effect::ActivateForeign));
+        // the keyboard's output for a focused Wayland client's field goes through the window server's input method
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let requests = shell.take_input_method_out();
+            if !requests.is_empty() {
+                if let Err(e) = disp.wayland_input_method_commit(&requests) {
+                    eprintln!("springboard: input method: {e}");
+                }
+            }
+        }
         for fx in effects {
             match fx {
                 Effect::Brightness(f) => {
@@ -1137,6 +1158,8 @@ fn run() -> std::io::Result<()> {
             // the shell draws a logical frame (turned on its side in landscape); the panel gets it rotated
             let (lw, lh) = shell.size();
             (fw, fh) = (lw as usize, lh as usize);
+            // a rotated frame moves the bottom edge the home swipe starts on
+            system_gestures.set_frame(springboard::shell::touch_gestures::Frame { size_px: (lw as f32, lh as f32), points_px: shell.points_px() });
             if frame.len() != fw * fh {
                 frame = vec![0u32; fw * fh];
             }

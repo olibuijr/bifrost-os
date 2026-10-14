@@ -107,6 +107,9 @@ package_bifrost_files() {
   # open equivalents for compat family names (Arial, Times New Roman, Courier New, Menlo, Symbol, ...)
   install -Dm644 "$here/fontconfig/60-bifrost-aliases.conf" "$pkgdir/etc/fonts/conf.d/60-bifrost-aliases.conf"
   install -Dm755 "$here/wayland/apps" "$pkgdir/usr/bin/bifrost-apps"
+  # pico is the older name of nano; the nano package ships only nano, so the name is linked here
+  install -d "$pkgdir/usr/bin"
+  ln -sfn nano "$pkgdir/usr/bin/pico"
   # Personal-use reference assets (gitignored bifrost-ref/assets, already converted to wav/png): skipped when absent.
   local refsrc="${PC_REFASSETS:-$here/../../bifrost-ref/assets}"
   if [ -d "$refsrc" ]; then

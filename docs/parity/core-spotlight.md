@@ -53,3 +53,25 @@ deletes, continue-activity) are unchanged in behaviour.
 - No index descriptions or protection classes.
 - Apple's contact identifier is kept on `Person` but not used.
 - Keywords beyond the wire cap of 8 are dropped by the codec, so a long custom or person list loses its tail.
+
+## Team N wave: assistant search tool
+
+Branch `parity/team-n-core-spotlight`, built on `arm`. Not yet verified on Midget.
+
+6. Foundation models search tool, first slice (`springboard/ui/src/spotlight_tool.rs`). `tool(items)` returns a
+   model `Tool` named `search_indexed_content` (`TOOL_NAME`). It takes `query` (text, required) and `limit`
+   (1 to `MAX_RESULTS`, default `DEFAULT_RESULTS`). Each call runs `usersearch::run_user_query` over the supplied
+   `IndexedItem`s (app, identifier, `Record`) and returns numbered lines with the app, title, a description snippet
+   (keywords when there is no description, cut to `SNIPPET_CHARS` characters on a character boundary) and the
+   identifier, so the model can name the source. An empty query is reported to the model as a tool error through
+   `ToolSet::output_for`. The caller chooses which items the assistant may see.
+
+Tests (host only, not run here): `returns_matches_with_app_and_identifier`, `no_match_is_a_plain_answer_not_an_error`,
+`limit_caps_the_number_of_items`, `schema_rejects_a_missing_query_and_an_out_of_range_limit`,
+`an_empty_query_is_reported_to_the_model`, `keywords_stand_in_for_a_missing_description`,
+`long_descriptions_are_cut_on_a_character_boundary`, `the_tool_is_described_with_its_schema`.
+
+Remaining gaps for this row: `springboard/apps/assistant-desktop` does not register the tool yet, and nothing feeds
+it the shell index. The Foundation pipeline types (`SearchSource`, `CoreSpotlightSource`, `FileSource`,
+`CustomStage`, `SearchPipelineData`, `ContactResolver`, `SearchCount`, `SearchResultsTable`, `SearchStatistic`,
+`SearchTextResult`) are not modelled.

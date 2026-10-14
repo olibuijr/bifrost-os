@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/gojuon.rs",
+   "status": "partial",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; 50-on grid model only, the palette view is not wired",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   }
  ]
 }

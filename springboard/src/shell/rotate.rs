@@ -284,6 +284,9 @@ impl Shell {
         self.today.resize(w, h);
         self.today_stale = true;
         self.keyboard.resize(w as f32);
+        if let Some(login) = &mut self.login {
+            login.resize(w, h);
+        }
         if let Some(st) = &mut self.settings {
             st.resize(&self.ui, w, h);
         }

@@ -15,6 +15,7 @@ pub mod handlers;
 pub mod headless;
 pub mod input;
 pub mod keybindings;
+pub mod live_rotation;
 pub mod lock;
 pub mod material_filter;
 pub mod material_kind;
@@ -23,6 +24,7 @@ pub mod render_server;
 #[cfg(feature = "nested")]
 pub mod nested;
 pub mod scene;
+pub mod scene_stack;
 pub mod session_protocols;
 pub mod overview;
 pub mod spaces;
@@ -31,8 +33,8 @@ pub mod state;
 pub mod sync;
 pub mod text_input;
 pub mod tiling;
-pub mod touch;
 pub mod transform;
+pub mod touch;
 pub mod wm;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;

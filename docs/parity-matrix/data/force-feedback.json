@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/forcefeedback",
   "macos_since": "10.2",
   "status": "partial",
-  "bifrost": "none (no force-feedback device layer; evdev reader in springboard/src/bare/input.rs ignores EV_FF)",
-  "summary": "Apple's Force Feedback framework is a legacy C API (FFCreateDevice, FFEffectDownload, FFEffectStart) for HID force-feedback devices such as wheels and joysticks. BifrOSt has no force-feedback code path: the evdev reader does not read EV_FF capabilities or upload effects, and the SDK's haptic() call is dropped by the shell. Nothing in the framework is covered.",
+  "bifrost": "springboard/core/src/gamepad.rs, ff_effect.rs, ff_device.rs, force_effect.rs, rumble.rs, ff_escape.rs, haptic_request.rs (pure models; no evdev or shell wiring)",
+  "summary": "Apple's Force Feedback framework is a legacy C API (FFCreateDevice, FFEffectDownload, FFEffectStart) for HID force-feedback devices such as wheels and joysticks. BifrOSt has pure models for the device capability bits, effects, device properties, haptic pulses and escape frames in springboard/core, but none is wired to an evdev node or the shell: the evdev reader does not upload effects, and the SDK's haptic() call is still dropped by the shell. Cooperative level has no counterpart, and the driver plug-in interface is not exposed.",
   "rea_evidence": "ev_cfcdde9a3970a00d568422cade4aaff07d84740a3b46f512a0a2d9db35042d16",
   "features": [
     {
@@ -31,16 +31,16 @@
     {
       "feature": "Hardware escape commands",
       "apple": "FFDeviceEscape, FFEffectEscape, FFEFFESCAPE, FFCommandFlag",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no driver pass-through"
+      "bifrost": "springboard/core/src/ff_escape.rs (Escape, EscapeError, encode, decode)",
+      "status": "partial",
+      "note": "built on parity/team-k-force-feedback; not yet verified on Midget. Frame model only: a BifrOSt framing of the command code and payload, with a 4096-byte payload limit. No driver accepts the frame yet, so no escape reaches a device"
     },
     {
       "feature": "Cooperative level and coordinate system",
       "apple": "FFDeviceSetCooperativeLevel, FFCooperativeLevelFlag, FFCoordinateSystemFlag",
       "bifrost": "none",
       "status": "gap",
-      "note": "Apple's own API marks FFDeviceSetCooperativeLevel as unimplemented in version 1.0; nothing to match"
+      "note": "Apple's own reference marks FFDeviceSetCooperativeLevel as unimplemented in version 1.0, so there is nothing to match; left as a gap on purpose"
     },
     {
       "feature": "Plug-in interface for drivers",
@@ -52,9 +52,9 @@
     {
       "feature": "App-facing haptic request",
       "apple": "No direct Force Feedback counterpart; closest is a generic haptic call",
-      "bifrost": "springboard/sdk/src/runtime.rs:258 (haptic() sends ToShell::Haptic); springboard/proto/src/lib.rs:599 (ToShell::Haptic); springboard/src/shell/apphost.rs:1184 (default arm drops it)",
-      "status": "gap",
-      "note": "the SDK call is a no-op: the shell's message match has no Haptic arm"
+      "bifrost": "springboard/core/src/haptic_request.rs (Requests, Outcome, MIN_INTERVAL_MS); springboard/core/src/force_effect.rs (Device::pulse); springboard/sdk/src/runtime.rs:273 (haptic() sends ToShell::Haptic); springboard/src/shell/apphost.rs:1184 (default arm drops it)",
+      "status": "partial",
+      "note": "built on parity/team-k-force-feedback; not yet verified on Midget. Per-app policy (30 ms minimum between pulses, device slot check) is in core. The shell still has no ToShell::Haptic arm, so an app's haptic call does not reach a device"
     },
     {
       "feature": "Keyboard haptics setting (not force feedback)",
@@ -66,9 +66,10 @@
   ],
   "gaps": [
     "No evdev force-feedback path: EV_FF is not read, no EVIOCSFF effect upload, no play events (springboard/src/bare/input.rs has no EV_FF; grep count 0).",
-    "No device-level FF discovery or capability query for wheels and joysticks (springboard/src/bare/input.rs:299 parses bitmaps but not the FF bit).",
+    "Device-level FF discovery is only a pure check (springboard/core/src/gamepad.rs supports_rumble, force_effect.rs supports_constant_force); the evdev node scan does not yet call it.",
     "No SDK API for effects (constant, periodic, ramp, spring and friction) or for gain and autocenter properties.",
-    "The SDK haptic() call is dropped by the shell (springboard/src/shell/apphost.rs:1184 default arm); there is no feedback path from an app to a device.",
+    "The SDK haptic() call is dropped by the shell (springboard/src/shell/apphost.rs:1184 default arm); the per-app policy in springboard/core/src/haptic_request.rs has no caller yet.",
+    "Escape frames (springboard/core/src/ff_escape.rs) have no driver to write to; hardware escape commands stay unreachable until a device path exists.",
     "Web gamepad input is compiled into the browser engine (springboard/apps/browser/engine/Cargo.toml:13, feature gamepad). Whether vibration actuators reach a device was not verified, and this is not covered by this framework row.",
     "The MCP uinput virtual keyboard (springboard/mcp/src/keys.rs:28) sets ff_effects_max in its setup struct for the agent keyboard only; it does not create or drive a force-feedback device."
   ]

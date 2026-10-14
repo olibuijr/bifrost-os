@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/bundleresources",
  "macos_since": "10.0",
  "status": "partial",
- "bifrost": "springboard/src/shell/apphost.rs (Manifest), springboard/src/shell/store/install.rs (parse_manifest, install_archive), springboard/src/bare/app_policy.rs (Policy::with_entitlements, Policy::from_permissions, prepare_data), springboard/sdk/src/locale.rs (Bundle, set_main_bundle), springboard/ui/src/launch.rs (Handler), springboard/sdk/src/workspace.rs, springboard/sdk/src/bundle_resources.rs (association file model)",
- "summary": "BifrOSt covers the app package manifest, permission and entitlement gating, a fixed package layout, localized string bundles and a model of domain association files for universal links. It has no Info.plist, and the universal links model is not yet fetched, verified or wired into the shell.",
+ "bifrost": "springboard/src/shell/apphost.rs (Manifest), springboard/src/shell/store/install.rs (parse_manifest, install_archive), springboard/src/bare/app_policy.rs (Policy::with_entitlements, Policy::from_permissions, prepare_data), springboard/sdk/src/locale.rs (Bundle, set_main_bundle), springboard/ui/src/launch.rs (Handler), springboard/sdk/src/workspace.rs, springboard/sdk/src/bundle_resources.rs (association file model); springboard/sdk/src/package_layout.rs (placement rules); springboard/sdk/src/container_layout.rs (container folders)",
+ "summary": "BifrOSt covers the app package manifest, permission and entitlement gating, a fixed package layout with placement rules for libraries and plug-ins, a per-app container layout model, localized string bundles, a privacy declaration model, and a model of domain association files for universal links. It has no Info.plist, and the universal links model is not yet fetched, verified or wired into the shell.",
  "rea_evidence": "ev_245e8b8557d7a64dd4d2b2b588dff39b3c6f7443c6959b6b4c47f2a11448de12",
  "features": [
   {
@@ -38,16 +38,16 @@
   {
    "feature": "Placing content in a bundle (package layout)",
    "apple": "Placing content in a bundle: fixed locations for executables, resources, frameworks and plug-ins",
-   "bifrost": "springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py",
+   "bifrost": "springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py; springboard/sdk/src/package_layout.rs (classify, check_package)",
    "status": "partial",
-   "note": "A .aap is a tar with manifest.toml, the exec binary, the icon and an optional assets/ tree. It installs under apps/<id>/<version> with a current symlink. No placement rules for frameworks or plug-ins."
+   "note": "A .aap is a tar with manifest.toml, the exec binary, the icon and an optional assets/ tree. It installs under apps/<id>/<version> with a current symlink. springboard/sdk/src/package_layout.rs sets the placement rules: flat libs/<name>.so and plugins/<name>.so modules, resources under assets/, and refusal of unsafe or unplaced names. install_archive does not call it yet, so the rules are not enforced at install. built on parity/team-n-bundle-resources; not yet verified on Midget."
   },
   {
    "feature": "Per-app data directory",
    "apple": "Container directories in the app sandbox (Library, Documents, Caches)",
-   "bifrost": "springboard/src/bare/app_policy.rs (prepare_data); springboard/src/shell/apphost.rs (shell data dir as apps' asset dir); springboard/src/bare/docbroker.rs (document grants)",
+   "bifrost": "springboard/src/bare/app_policy.rs (prepare_data); springboard/src/shell/apphost.rs (shell data dir as apps' asset dir); springboard/src/bare/docbroker.rs (document grants); springboard/sdk/src/container_layout.rs (ContainerLayout, Folder)",
    "status": "partial",
-   "note": "Each app gets a data directory owned by its account. Files outside it need a document grant from the shell. There is no Library, Caches or Documents split."
+   "note": "Each app gets a data directory owned by its account. Files outside it need a document grant from the shell. springboard/sdk/src/container_layout.rs models the Documents, Library, Library/Caches and tmp folders (backed-up and purgeable rules, relative path resolution that refuses escapes, and a creation step that refuses symlinks). The shell does not create or use these folders yet, so apps still write to the flat data directory. built on parity/team-n-bundle-resources; not yet verified on Midget."
   },
   {
    "feature": "Localized bundle resources (Bundle.main, Localizable.strings)",
@@ -72,11 +72,11 @@
   }
  ],
  "gaps": [
-  "No privacy manifest: an app cannot declare the data it collects or its required-reason API use (Privacy manifest files).",
+  "Privacy declarations are a model only: the shell does not load privacy.toml from installed packages, nothing shows it to people, and the store does not check it (springboard/ui/src/privacy.rs).",
   "Universal links are not live: the association file is not fetched or verified over https, and the shell does not route https links to apps (springboard/sdk/src/bundle_resources.rs holds only the model).",
   "No Info.plist equivalent with CFBundle-style keys; manifest.toml is the only identity file and it is not a plist.",
   "URL-scheme routing by the shell is not wired for non-web schemes (docs/default-apps.md, Not done yet).",
   "Entitlements are limited to log-store; there is no general entitlements file and no signing.",
-  "No documented placement rules for frameworks or plug-ins inside an app package."
+  "The container folders (Documents, Library, Library/Caches, tmp) and the package placement rules are models; the shell and install_archive do not enforce them yet (springboard/sdk/src/container_layout.rs, springboard/sdk/src/package_layout.rs)."
  ]
 }

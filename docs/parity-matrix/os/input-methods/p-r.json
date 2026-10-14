@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/plugins.rs",
+   "status": "partial",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; plugin descriptors bound to built-in engines, no third-party code loaded",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/PressAndHold.app",

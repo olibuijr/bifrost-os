@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/kana_typing.rs",
+   "status": "partial",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; JIS kana board, shifted keys not modelled",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/JapaneseIM-RomajiTyping.app",

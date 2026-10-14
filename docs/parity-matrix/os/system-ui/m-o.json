@@ -39,8 +39,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Apple Metal GPU capture replay tool; BifrOSt has no Metal runtime",
    "rea": []
   },
   {
@@ -59,8 +59,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Apple device management (MDM) client; BifrOSt has no MDM service",
    "rea": []
   },
   {
@@ -179,8 +179,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "song recognition, no counterpart yet",
+   "status": "n/a",
+   "note": "Apple song recognition service with no BifrOSt counterpart",
    "rea": []
   },
   {
@@ -258,9 +258,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/apps/bluetooth-exchange-desktop/src/transport.rs, springboard/core/src/obex_packet.rs",
+   "status": "partial",
+   "note": "OBEX file transfer runs in the bluetooth-exchange app and its packet codec; built on os/team-l-05-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -379,8 +379,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of Apple Maps depend on the Apple Maps service; maps-desktop declares no intents",
    "rea": []
   },
   {
@@ -418,9 +418,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/media_intents.rs, springboard/src/shell/services/now_playing.rs",
+   "status": "partial",
+   "note": "Play or pause, next and previous track as App Intents mapped to Now Playing commands; not yet wired into Search or the owner routing; built on os/team-l-05-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -638,9 +638,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/thumbs/images.rs (OfficeProvider)",
+   "status": "partial",
+   "note": "Word, spreadsheet and presentation files get the picture they embed, not a page render; built on os/team-l-05-system-ui; not yet verified on Midget",
    "rea": []
   }
  ]

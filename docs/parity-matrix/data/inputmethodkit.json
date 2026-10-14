@@ -80,9 +80,9 @@
   {
    "feature": "Input method registration and Info dictionary",
    "apple": "IMK info dictionary keys (IMKControllerClass, IMKDelegateClass, IMKModeDictionary)",
-   "bifrost": "springboard/ui/src/input_method.rs (Registration",
+   "bifrost": "springboard/ui/src/input_method.rs (Registration); springboard/ui/src/imk_info.rs (registration_from_info reads IMKControllerClass, IMKDelegateClass, IMKModeDictionary from a property list)",
    "status": "partial",
-   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No input source or input method registration exists."
+   "note": "Built on parity/team-j-inputmethodkit; not yet verified on Midget. Pure model with host unit tests: the Info dictionary is parsed into a validated Registration, and a parsed record starts a Server. The shell does not load any bundle's Info dictionary yet, so no input method is registered at run time. The label key (label) inside a mode's settings is a BifrOSt choice, not an Apple key."
   },
   {
    "feature": "Text input client for apps (caret, text state, traits)",
@@ -128,7 +128,7 @@
   }
  ],
  "gaps": [
-  "No input method provider: no IMKServer, IMKInputController or input method registration (springboard/src/shell/textinput.rs header).",
+  "No input method provider process: the shell does not load an input method's Info dictionary (springboard/ui/src/imk_info.rs parses it, but nothing calls it) and serves no input_method connection (springboard/src/shell/textinput.rs header).",
   "No candidates window (IMKCandidates); popup_origin in springboard/src/shell/textinput.rs only places a popup, and nothing draws it.",
   "The keyboard app does not send Preedit yet (springboard/apps/keyboard), so composition is not produced by anything in practice.",
   "No IMKServerInput event routing (inputText, didCommand, handle) through a provider; no composedString, originalString or candidates queries.",

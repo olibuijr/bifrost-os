@@ -375,11 +375,12 @@ swatches, letterbox, blur bases, plus the legacy gaps below).
 | unemphasizedSelectedContentBackgroundColor | `UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND` | `SIDEBAR_PLATE` |
 | controlAccentColor, linkColor | `CONTROL_ACCENT`, `LINK` | new (Dark 10,132,255; Light 0,122,255) |
 | systemRed ... systemGray (13 colours incl. mint, cyan, indigo, brown) | `SYSTEM_RED` ... `SYSTEM_GRAY` | Apple's Light and Dark values |
+| windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget) |
 
 Gaps (Apple parity rule):
 - The user-chosen accent does not yet feed `CONTROL_ACCENT`; it is fixed systemBlue (the accent is published to the portal separately).
 - `windowBackgroundColor` and `controlBackgroundColor` share `DETAIL_BG` (Dark pure black, per the Golden Gate reference); Apple's Dark values differ slightly.
-- Other `NSColor` names (`windowFrameColor`, `findHighlightColor`, `shadowColor`, ...) are not provided.
+- Other `NSColor` names are not provided.
 - The old `u32` constants (`SYSTEM_RED` ...) remain for fixed-colour uses; migrating callers is ongoing.
 - Still dark-only (allowlisted in the guard): Browser chrome, Clock full-screen, the power alert, `apps/remote`.
   Fixed in 0.4.100 work: the built-in App Store (all backgrounds, text, separators, tab bar) and it now redraws during the Light/Dark fade.
@@ -889,9 +890,11 @@ Gaps, decided:
   `ReturnKeyType::basic()` to the keyboard app, and forwards keyboard-app composition (`KeyboardOut::Preedit` /
   `Unmark`, sub-codes 8 and 9 of the existing tag) as `SetMarkedText` / `UnmarkText`. `textinput::popup_origin` places
   a candidate popup from the caret (`Shell::ext_caret_screen`).
-- Wayland side: `bifrost-wm` now serves `zwp_text_input_v3` / `zwp_input_method_v2` (`docs/window-server.md`), but the
-  shell does not bind the input method yet, so third-party Wayland clients still get no keyboard from it; the mapping is
-  written down in `src/shell/textinput.rs`. The keyboard app (`apps/keyboard`) does not yet send `Preedit`, draw the other return
+- Wayland side: `bifrost-wm` serves `zwp_text_input_v3` / `zwp_input_method_v2` (`docs/window-server.md`), and the shell
+  is the input method: it binds `zwp_input_method_manager_v2` and `zwp_virtual_keyboard_manager_v1` on its seat
+  (`src/bare/wayland.rs`), raises the keyboard on activate, and types into the focused client's field with
+  `commit_string` / `set_preedit_string` / `delete_surrounding_text` and `commit`, named keys through the virtual keyboard.
+  The mapping is in `src/shell/textinput.rs`. The keyboard does not yet use the content kind of the field. The keyboard app (`apps/keyboard`) does not yet send `Preedit`, draw the other return
   keys, or use secure/content traits; nothing draws a candidate popup yet (only the placement helper exists).
   `AccessoryItem`s are stored in the host (`AppHost::accessory`) but not drawn; `AccessoryAction` is not sent.
 - Only `view::TextField` is a text input client; other SDK text widgets (`widgets::text_field` over
@@ -3034,7 +3037,8 @@ matrix rows can become parity.
   and the destination answer (copy, then link, then move); `DraggingItem` carries pasteboard types and an
   `NSFilePromiseProvider`-style `PromisedFile` written on drop.
 - Gaps, recorded: the shell does not yet forward wheel, hover or magnify/rotate events to apps, and the retained view kit is
-  not yet wired to `drag_session`. Magnify and rotate models exist in `ui::gesture`. Needs a Midget check before parity.
+  not yet wired to `drag_session`. Magnify and rotate models exist in `ui::gesture`; `ui::trackpad_gesture::TwoFinger` runs both on one two-finger touch and
+  returns Began, Changed and Ended events (`lift` ends them). Needs a Midget check before parity.
 
 ## InputMethodKit: language methods, input sources, client protocol (sprint 9)
 
@@ -3141,6 +3145,19 @@ plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds
 One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
 `BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
 the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
+
+One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
+the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+=======
+## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
+
+One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`. With neither set, `FormFactor::current` detects it once: a
+tablet or convertible SMBIOS chassis (codes 30 to 32) is a tablet, and without SMBIOS a known tablet device-tree board
+(`samsung,gta8wifi`) or a direct-touch input device (`B: PROP` bit 1 in `/proc/bus/input/devices`) is a tablet. Anything
+else is `Desktop`. `FormFactor::resolve` is the pure form of the lookup, with the machine facts passed in as `Facts`. The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
 app runs on a touch tablet.
 
 Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
@@ -3184,6 +3201,21 @@ recognizers is a separate step.
 One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
 `BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
 the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+app runs on a touch tablet.
+
+Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
+desktop UI; a tablet raises it for text fields with or without that UI, and keeps it down while a hardware keyboard is
+attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
+`keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
+desktop.
+
+## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
+
+One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`. With neither set, `FormFactor::current` detects it once: a
+tablet or convertible SMBIOS chassis (codes 30 to 32) is a tablet, and without SMBIOS a known tablet device-tree board
+(`samsung,gta8wifi`) or a direct-touch input device (`B: PROP` bit 1 in `/proc/bus/input/devices`) is a tablet. Anything
+else is `Desktop`. `FormFactor::resolve` is the pure form of the lookup, with the machine facts passed in as `Facts`. The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
 app runs on a touch tablet.
 
 Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
@@ -3805,6 +3837,10 @@ Apps can take full touch events instead of the single-pointer `Input::Touch` str
   400 ms and the slop of the last tap; a drag, a hold over 500 ms or a cancel is not a tap).
 - Wire (`springboard/proto/src/touch.rs`): `ToApp::Touches(TouchEvent)`, tag `0x1f0`, at most 16 touches, locations in surface
   pixels like `ToApp::Touch`. The shell sends a frame ahead of the matching `ToApp::Touch`.
+- Shell side (`springboard/src/shell/touch_frames.rs`, `AppHost::feed_touch`): each app surface has a `TouchTracker` built with the
+  app's scale. Touchscreen contacts are direct samples under their finger id; the pointer is one indirect sample. The first
+  finger's pointer-stream copy is skipped while a contact is down. A synthesized accessibility tap (`ax press`) makes a frame too.
+  Focus loss, window close and a system gesture that takes the finger cancel every touch the app holds, in one frame.
 - SDK: `App::wants_touch_events()` opts in, `App::touches(ctx, &TouchEvent)` receives frames. `TouchEvent::to_points(scale)` and
   `in_view(scale, ox, oy)` convert to points / view coordinates. Apps that do not opt in keep `Input::Touch`. Once frames
   arrive the plain stream is dropped for opted-in apps; with a shell that sends only plain touches the SDK derives one indirect

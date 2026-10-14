@@ -50,6 +50,33 @@ impl Stopwatch {
         }
     }
 
+    /// Starts a stopped watch; false when it already runs (App Intents: "Start Stopwatch").
+    pub fn start(&mut self, t: f64) -> bool {
+        if self.running() {
+            return false;
+        }
+        self.toggle(t);
+        true
+    }
+
+    /// Stops a running watch; false when it is already stopped (App Intents: "Stop Stopwatch").
+    pub fn stop(&mut self, t: f64) -> bool {
+        if !self.running() {
+            return false;
+        }
+        self.toggle(t);
+        true
+    }
+
+    /// Records a lap while running; false while stopped, where a lap has no meaning (App Intents: "Record Lap").
+    pub fn record_lap(&mut self, t: f64) -> bool {
+        if !self.running() {
+            return false;
+        }
+        self.lap_marks.push(self.elapsed(t));
+        true
+    }
+
     /// Finished laps plus the lap in progress, newest first.
     pub fn laps(&self, t: f64) -> Vec<Lap> {
         if !self.started(t) {
@@ -244,5 +271,26 @@ mod tests {
         assert_eq!(format(61_999.0), "01:01,99");
         assert_eq!(format(3_600_000.0 + 1500.0), "1:00:01,50");
         assert_eq!(format(9.9), "00:00,00", "truncates, never rounds up");
+    }
+
+    #[test]
+    fn intent_start_and_stop_change_only_the_run_state() {
+        let mut sw = Stopwatch::default();
+        assert!(!sw.stop(10.0), "stopping a stopped watch changes nothing");
+        assert!(sw.start(1000.0));
+        assert!(!sw.start(1500.0), "starting a running watch changes nothing");
+        assert!(sw.stop(3000.0));
+        assert_eq!(sw.elapsed(9000.0), 2000.0, "the run from start to stop is banked");
+    }
+
+    #[test]
+    fn intent_lap_is_refused_while_stopped() {
+        let mut sw = Stopwatch::default();
+        assert!(!sw.record_lap(500.0));
+        assert!(sw.laps(500.0).is_empty());
+        sw.start(1000.0);
+        assert!(sw.record_lap(1400.0));
+        assert_eq!(sw.laps(1600.0).len(), 2, "one recorded lap plus the lap in progress");
+        assert_eq!(sw.laps(1600.0)[1].total, 400.0);
     }
 }

@@ -10,7 +10,7 @@ pub const MAX_ENTRIES: usize = 32;
 pub const MAX_META: usize = 160;
 pub const MAX_ANNOUNCE: usize = 512;
 
-fn cut(s: &str, max: usize) -> &str {
+pub(crate) fn cut(s: &str, max: usize) -> &str {
     let mut n = s.len().min(max);
     while !s.is_char_boundary(n) {
         n -= 1;
@@ -18,7 +18,7 @@ fn cut(s: &str, max: usize) -> &str {
     &s[..n]
 }
 
-fn get(r: &mut Reader, max: usize) -> Result<String, DecodeError> {
+pub(crate) fn get(r: &mut Reader, max: usize) -> Result<String, DecodeError> {
     let s = r.str()?;
     if s.len() > max {
         return Err(DecodeError::BadValue);

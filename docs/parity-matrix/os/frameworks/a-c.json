@@ -19,10 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Carbon-era OpenGL attachment API. Apple-only legacy ABI with no BifrOSt counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ARKit.framework",
@@ -40,10 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Augmented reality tracking needs AR sensors and an AR compositor. No counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/AVFAudio.framework",
@@ -229,10 +229,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Live Activities are a phone lock-screen feature. No counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/AdServices.framework",
@@ -333,11 +333,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/sdk/src/intents.rs (ParamType, Entity, EntityQuery)",
+   "status": "partial",
+   "note": "built on arm; not yet verified on Midget. Parameter, entity and query types exist. No Shortcuts type registry beyond the declared intents.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/AppKit.framework",
@@ -397,10 +397,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "AppleScript is an Apple-only scripting language. App control uses the control socket RPC instead.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/AppleScriptObjC.framework",
@@ -418,10 +418,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Objective-C bridge to AppleScript. Apple-only; app control uses the control socket RPC.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ApplicationServices.framework",
@@ -460,10 +460,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Pairing and control of Apple audio accessories. Apple-only hardware.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/AudioToolbox.framework",
@@ -523,10 +523,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "IEEE 802.1 AVB time-sync and stream reservation needs AVB network hardware. Not available.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/AutomaticAssessmentConfiguration.framework",
@@ -609,7 +609,8 @@
    "bifrost": "springboard/sdk/src/url_background.rs",
    "status": "partial",
    "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/BrowserEngineCore.framework",
@@ -627,10 +628,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Internal service interface of Apple browser engine processes. Not an app API.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/BrowserEngineKit.framework",
@@ -647,11 +648,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool)",
+   "status": "partial",
+   "note": "built on arm; not yet verified on Midget. Pages run in a separate engine process. No entitlement or engine-registration API for third-party engines.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/BusinessChat.framework",
@@ -669,10 +670,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Apple Business Chat is an Apple-hosted messaging service. No counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CFNetwork.framework",
@@ -710,11 +711,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/sdk/src/core_location.rs (LocationManager)",
+   "status": "partial",
+   "note": "built on arm; not yet verified on Midget. Location manager and geocoding exist. No location log entry type.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CalendarStore.framework",
@@ -734,7 +735,8 @@
    "bifrost": "springboard/ui/src/calendar_store.rs",
    "status": "partial",
    "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CallKit.framework",
@@ -773,10 +775,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Vehicle digital key needs automotive hardware and an Apple service. Not available.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Carbon.framework",
@@ -794,10 +796,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Legacy Apple-only ABI, deprecated. No BifrOSt counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Charts.framework",
@@ -878,10 +880,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Education activity UI for a hosted education service. No counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CloudKit.framework",
@@ -1004,10 +1006,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Immersive spatial rendering for visionOS hardware. Not available.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ComputeGraph.framework",
@@ -1045,11 +1047,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/sdk/src/contacts.rs",
+   "status": "partial",
+   "note": "built on arm; not yet verified on Midget. Contacts access, fetch, save and picker. No contact provider extension point.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Contacts.framework",
@@ -1234,11 +1236,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/sdk/src/displays.rs, springboard/sdk/src/screens.rs",
+   "status": "partial",
+   "note": "built on arm; not yet verified on Midget. Display list, modes, mode change and capture. Refresh-rate and multi-display gaps are noted in the screens service docs.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreFoundation.framework",
@@ -1318,10 +1320,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/force_effect.rs, springboard/core/src/rumble.rs",
-   "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Haptic actuators are not present on the PC or the tablet. Not available.",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework",

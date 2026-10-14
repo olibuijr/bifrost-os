@@ -3,7 +3,9 @@
 
 Scans springboard/, tools/ and packaging/ (*.rs *.py *.sh *.js *.toml *.html *.css) and fails on any hit.
 Allowlist: tools/check-names-allow.txt, lines `path-glob:pattern:reason` (pattern is a regex matched
-against the offending line; `*` matches any). Usage: check-names.py [--summary]
+against the offending line; `*` matches any). Usage: check-names.py [--summary] [FILE...]
+With FILE arguments only those files are checked (what an agent or a pre-commit step needs);
+without them the whole tree is scanned.
 """
 import fnmatch
 import os
@@ -37,30 +39,46 @@ def load_allow():
     return out
 
 
-def main():
-    allow = load_allow()
+def scan_text(rel, text, allow):
+    """Hits in one file's text: (rel, line number, line). Files with no candidate name anywhere
+    are skipped before any per-line work, which is nearly every file."""
+    if not (CI.search(text) or CS.search(text)):
+        return []
+    pats = [pat for g, pat, _ in allow if fnmatch.fnmatch(rel, g)]
     hits = []
+    for i, line in enumerate(text.split("\n"), 1):
+        ln = line
+        # strip allowlisted fragments, then test what remains
+        for pat in pats:
+            ln = pat.sub("", ln)
+        if CI.search(ln) or CS.search(ln):
+            hits.append((rel, i, line.strip()[:140]))
+    return hits
+
+
+def tree_files():
     for d in DIRS:
         for dp, dn, fn in os.walk(os.path.join(ROOT, d)):
             dn[:] = [x for x in dn if x not in SKIP_DIRS]
             for f in fn:
-                if not f.endswith(EXTS):
-                    continue
-                full = os.path.join(dp, f)
-                rel = os.path.relpath(full, ROOT)
-                if rel in (SELF, "tools/check-names-allow.txt"):
-                    continue
-                try:
-                    lines = open(full, encoding="utf-8").read().split("\n")
-                except (UnicodeDecodeError, OSError):
-                    continue
-                for i, ln in enumerate(lines, 1):
-                    # strip allowlisted fragments, then test what remains
-                    for g, pat, _ in allow:
-                        if fnmatch.fnmatch(rel, g):
-                            ln = pat.sub("", ln)
-                    if CI.search(ln) or CS.search(ln):
-                        hits.append((rel, i, lines[i - 1].strip()[:140]))
+                yield os.path.join(dp, f)
+
+
+def main():
+    allow = load_allow()
+    hits = []
+    given = [a for a in sys.argv[1:] if not a.startswith("--")]
+    for full in (os.path.abspath(a) for a in given) if given else tree_files():
+        if not full.endswith(EXTS):
+            continue
+        rel = os.path.relpath(full, ROOT)
+        if rel in (SELF, "tools/check-names-allow.txt"):
+            continue
+        try:
+            text = open(full, encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        hits += scan_text(rel, text, allow)
     for rel, i, text in hits:
         print(f"{rel}:{i}: {text}")
     if "--summary" in sys.argv or hits:

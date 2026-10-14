@@ -20,6 +20,7 @@
 //! let out = archive::expand(&zip, &dest_dir, &mut |done, total| true)?;
 //! ```
 
+use crate::compression;
 use springboard::files::zip;
 use bifrost_render::cg::pdf::inflate;
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -190,6 +191,16 @@ pub fn compress_to(stream: &mut ByteStream, data: &[u8]) -> io::Result<usize> {
     Ok(packed.len())
 }
 
+/// Writes the raw DEFLATE of `data` at the cursor, like `compress_to`, but with the dynamic-Huffman
+/// encoder at the default level, split over up to `threads` threads for large inputs. This is the
+/// thread count option of the reference stream API. The output decodes with `decompress_from`.
+pub fn compress_to_threaded(stream: &mut ByteStream, data: &[u8], threads: usize) -> io::Result<usize> {
+    let packed = compression::encode_buffer_threaded(compression::Algorithm::Deflate, data, compression::Level::Default, threads)
+        .map_err(|_| invalid("Compression failed"))?;
+    stream.write_all(&packed)?;
+    Ok(packed.len())
+}
+
 /// Inflates everything from the cursor to the end of `stream` and moves the cursor to the end.
 /// Fails like `decompress`.
 pub fn decompress_from(stream: &mut ByteStream, max_len: usize) -> io::Result<Vec<u8>> {
@@ -341,6 +352,17 @@ mod tests {
         s.seek(SeekFrom::Start(0)).unwrap();
         assert_eq!(decompress_from(&mut s, 16).unwrap(), Vec::<u8>::new());
         assert_eq!(s.position(), 2);
+    }
+
+    #[test]
+    fn threaded_stream_write_decodes_from_the_cursor() {
+        let mut s = ByteStream::from_bytes(b"xy".to_vec());
+        s.seek(SeekFrom::End(0)).unwrap();
+        let text = b"threaded threaded threaded";
+        let n = compress_to_threaded(&mut s, text, 4).unwrap();
+        assert_eq!(s.len(), 2 + n);
+        s.seek(SeekFrom::Start(2)).unwrap();
+        assert_eq!(decompress_from(&mut s, 64).unwrap(), text.to_vec());
     }
 
     #[test]

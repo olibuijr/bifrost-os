@@ -1,0 +1,12 @@
+id = "is.olibuijr.wirelessdiagnostics.desktop"
+name = "Wireless Diagnostics"
+version = "0.1.0"
+exec = "bifrost-wireless-diagnostics"
+icon = "icon.png"
+min_shell = "0.7.25"
+summary = "Reads the Wi-Fi link (signal, noise, rate, channel) with a live signal chart, scans nearby networks and saves a diagnostics report."
+category = "Utilities"
+architecture = "x86_64-linux"
+kind = "system-app"
+permissions = ["network", "storage"]
+window = "full-size"

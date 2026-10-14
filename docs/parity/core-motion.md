@@ -4,8 +4,20 @@ Official framework: https://developer.apple.com/documentation/coremotion (macOS 
 Mac Catalyst). Rendered page evidence: REA `ev_8ab92618716263d274d95b15cad68b33b19435b75dd8401dfffea37ac23676da`.
 The matrix row is `docs/parity-matrix/data/core-motion.json`.
 
-This change adds three std-only models. They are the pure part of the framework: the arithmetic that turns raw
-sensor samples into what an app would read. They are not yet wired to hardware or to an app API.
+The first change added three std-only models: the pure arithmetic that turns raw sensor samples into what an app
+would read. A later change on `parity/team-j-core-motion` adds `DeviceMotionManager`, the app-facing start, stop,
+interval and handler shape for device motion, on top of `MotionEstimator`. Built on that branch; not yet verified on
+Midget. No hardware or shell feed is wired yet.
+
+## Device motion manager (team-j)
+
+| Module | What it does | Official names it mirrors (docs only) |
+|---|---|---|
+| `springboard/core/src/device_motion.rs` (`DeviceMotionManager`) | `is_available`, `update_interval` / `set_update_interval` (same rules as the raw manager: non-finite or non-positive refused, minimum raised), `start(handler)` returns false without device motion, `stop`, `is_active`, `device_motion` (newest estimate while running), and `tick(now, &mut dyn SensorSource)`. Each tick with both readings feeds the estimator so integration keeps its rate; the handler runs once per interval. | CMMotionManager device motion updates (startDeviceMotionUpdates, deviceMotion, deviceMotionAvailable, deviceMotionUpdateInterval) |
+
+Tests in `device_motion.rs` cover: refusal without device motion; interval checks; handler gating at 0.1 s with every
+tick integrating; a missing reading or a NaN time changing nothing; stop dropping the handler and the estimate; restart
+replacing the handler and resetting the yaw. The SDK re-exports it from `springboard/sdk/src/sensors.rs`.
 
 ## What was built
 
@@ -40,7 +52,7 @@ Per the workflow, nothing was built or run in this round. The next stage builds 
 
 ## Remaining gaps
 
-- No app-facing API. Apps get no CMMotionManager-style object, no update delivery and no authorization model.
+- No shell or app caller for `DeviceMotionManager` yet, and no authorization model. (The manager exists in the SDK.)
 - No sensor feed. Nothing reads the accelerometer, gyroscope or magnetometer. `set_orientation` in
   `springboard/src/shell/rotate.rs` still has no caller outside its tests; `orientation_from_gravity` is the function
   that caller should use.

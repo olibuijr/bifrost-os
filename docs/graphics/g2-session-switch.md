@@ -75,3 +75,21 @@ Midget is `ssh midget` (192.168.20.140). The Intel HD 530 runs Mesa ANV, Vulkan 
    the third, `/run/bifrost/compositor-fallback` exists, and `bifrost-wm` must be running in safe mode (GLES, no chrome clients).
 6. Clean up: remove `/etc/bifrost/compositor` and `/etc/bifrost/renderer` (or set the renderer to gles) and reboot,
    or `rm -f /run/bifrost/compositor-fallback /run/bifrost/wm-exits`, to leave safe mode. The GLES path must still start.
+
+## Boards with a display driver Mesa does not know
+
+- `/etc/bifrost/wm.env` (optional): `KEY=VALUE` lines added to the window server's environment. Read as data;
+  upper-case keys other than the loader (`LD_*`), `PATH`/`HOME`/identity and session-socket variables, and values
+  made of letters, digits and `_ . , : + / @ % -` only.
+- On an aarch64 or arm device where every `/sys/class/drm/card*` driver has no `/usr/lib/dri/<driver>_dri.so` while a
+  render node has one (a tablet SoC: display controller plus panfrost), the session starts `bifrost-wm` with
+  `MESA_LOADER_DRIVER_OVERRIDE` set to an installed display-only (kmsro) driver, so Mesa pairs the card with the
+  render node. A `MESA_LOADER_DRIVER_OVERRIDE` line in `wm.env` takes its place and disables this. The x86 PC is
+  never touched.
+- If `bifrost-wm` exits during start-up with a session-chosen override, it is started once more with
+  `MESA_LOADER_DRIVER_OVERRIDE=kms_swrast` (software rendering) and `/run/bifrost/mesa-software` keeps the restarts of
+  that boot on software.
+- `video-arg` runs only when an EFI command line file exists under `/boot/EFI`; it exits quietly without one.
+  `seed-data` and `springboard.service` have no EFI or x86 dependency.
+- The decisions are pure functions in `session-policy` (`session_wm_env`, `session_mesa_override`,
+  `session_wm_retry_override`, `session_efi_cmdline`), tested by `tools/test_session_policy.py`.

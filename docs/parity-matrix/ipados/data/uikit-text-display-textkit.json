@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/uikit/textkit",
  "macos_since": "",
  "status": "partial",
- "bifrost": "springboard/ui/src/text_layout_manager.rs, springboard/ui/src/textlayout.rs, springboard/sdk/src/attributed.rs, springboard/sdk/src/richlayout.rs, springboard/ui/src/writing_assist.rs",
- "summary": "Attributed strings, a TextKit 2 style layout model, paragraph styles, lists, tables, attachments, a find bar model, spell checking and writing assistance models exist. Content size categories, handwriting recognition, the text formatting controller and a text view in the SDK that joins these are missing.",
+ "bifrost": "springboard/ui/src/text_layout_manager.rs, springboard/ui/src/textlayout.rs, springboard/sdk/src/attributed.rs, springboard/sdk/src/richlayout.rs, springboard/ui/src/writing_assist.rs, springboard/sdk/src/text_formatting.rs",
+ "summary": "Attributed strings, a TextKit 2 style layout model, paragraph styles, lists, tables, attachments, a find bar model, spell checking and writing assistance models exist. A text formatting panel model and a coordinator that binds it to the focused rich text view exist in the SDK; the shell does not draw the panel yet. Content size categories and the SDK text view that joins these are missing. Handwriting input needs a stylus, which the tablet does not have.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -87,9 +87,9 @@
   {
    "feature": "Text formatting controller",
    "apple": "UITextFormattingViewController, UITextFormattingCoordinator",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "no formatting popover; rich text commands exist in the attributed string editor"
+   "bifrost": "springboard/sdk/src/text_formatting.rs, springboard/sdk/src/attributed.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-text-formatting; not yet verified on the tablet. The panel model (controls with active flags), the commands (marks, font, size, colour, alignment, lists) as undoable edits, and a coordinator bound to the focused text view. The panel is not drawn yet."
   },
   {
    "feature": "Writing Tools",
@@ -102,8 +102,8 @@
    "feature": "Handwriting input",
    "apple": "UIScribbleInteraction, UIIndirectScribbleInteraction",
    "bifrost": "none",
-   "status": "gap",
-   "note": "pen-to-text in fields needs stylus input in apps plus a recognizer; the drawing model exists (springboard/ui/src/drawing.rs) but there is no recognition"
+   "status": "n/a",
+   "note": "needs stylus (pen) input, which the tablet does not have; finger handwriting is not built"
   },
   {
    "feature": "Find in text",
@@ -123,7 +123,6 @@
  "gaps": [
   "Content size categories and per-style font metrics scaling on top of the global text scale",
   "SDK text view that joins the layout manager, selection UI and text input client",
-  "Handwriting recognition for stylus input",
-  "Text formatting popover"
+  "Text formatting panel drawing on the touch UI and binding to the focused text view in the shell (the model is in springboard/sdk/src/text_formatting.rs)"
  ]
 }

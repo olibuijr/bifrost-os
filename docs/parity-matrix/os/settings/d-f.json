@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -78,9 +78,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -199,8 +199,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no follow-up reminders settings",
+   "status": "n/a",
+   "note": "Follow-up flags belong to Apple Mail and Messages services; BifrOSt has no mail or messages follow-up service",
    "rea": []
   },
   {
@@ -259,8 +259,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "optical disc media settings, no counterpart yet",
+   "status": "n/a",
+   "note": "Optical disc insertion rules; the tablet target has no optical drive and the PC desktop does not act on disc insertion (removable volumes are in Storage)",
    "rea": []
   },
   {
@@ -378,9 +378,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no extension manager page",
+   "bifrost": "springboard/src/shell/login_items_page.rs",
+   "status": "partial",
+   "note": "EXTENSIONS group (extension_groups) lists the share, preview, file provider and widget extensions of installed manifests; no separate extension manager; built on os/team-m-02-settings; not yet verified on Midget",
    "rea": []
   },
   {

@@ -2,27 +2,35 @@
 //! its logic in a module here (`pub mod <tool>;`) so it can be unit tested.
 
 pub mod defaults;
+pub mod ditto;
 pub mod caffeinate;
 pub mod control;
 pub mod network;
 pub mod networksetup;
 pub mod diskutil;
 pub mod launchctl;
+pub mod leave;
 pub mod mdfind;
 pub mod mdutil;
 pub mod hdiutil;
+pub mod iconutil;
 pub mod open;
+pub mod plistbuddy;
 pub mod plutil;
 pub mod pasteboard;
 pub mod pmset;
 pub mod say;
 pub mod shortcuts;
+pub mod sips;
 pub mod screencapture;
 pub mod profile;
 pub mod scutil;
 pub mod sw_vers;
 pub mod softwareupdate;
+pub mod textutil;
+pub mod tiff2icns;
 pub mod tmutil;
+pub mod what;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
 pub fn die(tool: &str, msg: &str, code: i32) -> ! {

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GestureBeginEvent, GestureEndEvent, GesturePinchUpdateEvent,
+        Axis, AxisSource, ButtonState, Event, GestureBeginEvent, GestureEndEvent, GesturePinchUpdateEvent,
         GestureSwipeUpdateEvent, InputBackend, InputEvent, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
         PointerMotionEvent,
     },
@@ -345,15 +345,20 @@ impl WmState {
         match event {
             InputEvent::Keyboard { event } => self.key(event.key_code(), event.state(), event.time_msec()),
             InputEvent::PointerMotion { event } => {
+                // real pointer motion shows the pointer image again after a touch (touch.rs)
+                self.last_input_touch = false;
                 let delta = event.delta();
                 self.pointer_relative(delta, event.delta_unaccel(), event.time());
                 let pos = self.pointer_location() + delta;
                 self.pointer_motion(pos, event.time_msec());
             }
             InputEvent::PointerMotionAbsolute { event } => {
-                let Some(geo) = self.output().and_then(|o| self.space.output_geometry(&o)) else { return };
-                let pos = event.position_transformed(geo.size) + geo.loc.to_f64();
-                self.pointer_motion(pos, event.time_msec());
+                self.last_input_touch = false;
+                // the device range goes through the output transform, as a touch does (touch_position)
+                let norm = crate::touch::normalized::<I, _>(&event);
+                if let Some(pos) = self.touch_position(norm) {
+                    self.pointer_motion(pos, event.time_msec());
+                }
             }
             InputEvent::PointerButton { event } => {
                 self.pointer_button(event.button_code(), event.state() == ButtonState::Pressed, event.time_msec())

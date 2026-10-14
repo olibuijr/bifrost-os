@@ -214,10 +214,15 @@ impl Shell {
             let host = self.ext.iter_mut().flatten().find(|h| h.id == id).ok_or("that app is not running")?;
             let n = host.controls.iter().find(|n| Some(n.id) == node).ok_or("that element is gone")?;
             let (x, y) = ((n.bounds.x + n.bounds.w / 2.0) * scale, (n.bounds.y + n.bounds.h / 2.0) * scale);
-            // a tap in the app's own coordinates: down, then up 40 ms later
+            // a tap in the app's own coordinates: down, then up 40 ms later; the touch frames first, as for a real tap
             use bifrost_proto::{ToApp, TouchKind};
+            use bifrost_ui::touch::Raw;
+            use super::touch_frames::synthetic_sample;
             let t_ms = t as u32;
+            let sample = synthetic_sample(x, y);
+            host.feed_touch(Raw::Down, sample, t);
             host.send(&ToApp::Touch { kind: TouchKind::Down, id: 0, x, y, t_ms });
+            host.feed_touch(Raw::Up, sample, t + 40.0);
             host.send(&ToApp::Touch { kind: TouchKind::Up, id: 0, x, y, t_ms: t_ms.wrapping_add(40) });
             return Ok((el.address, Vec::new()));
         }

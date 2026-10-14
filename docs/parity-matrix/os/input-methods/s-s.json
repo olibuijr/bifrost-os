@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/han.rs",
+   "status": "partial",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; pinyin composer with a seed dictionary only, no full dictionary shipped",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   }
  ]
 }

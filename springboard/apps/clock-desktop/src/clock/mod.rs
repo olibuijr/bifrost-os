@@ -6,6 +6,7 @@
 //! RTC wake) whether or not this app is running, and the app reloads what
 //! the service changed (a one-shot alarm switched off, a finished timer).
 
+pub mod intent;
 pub mod stopwatch;
 pub mod world;
 
@@ -331,6 +332,15 @@ impl Clock {
 
     pub fn stopwatch(&self) -> &Stopwatch {
         &self.stopwatch
+    }
+
+    /// Changes the stopwatch (the App Intents path) and saves it when `change` reports a change, as the buttons do.
+    pub fn change_stopwatch(&mut self, t: f64, change: impl FnOnce(&mut Stopwatch) -> bool) -> bool {
+        let changed = change(&mut self.stopwatch);
+        if changed {
+            self.persist_stopwatch(t);
+        }
+        changed
     }
 
     pub fn timers(&self) -> &Timers {

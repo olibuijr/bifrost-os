@@ -39,11 +39,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/ui/src/switch_scan.rs",
+   "status": "partial",
+   "note": "existing Switch Control scanning model; no on-screen assistive keyboard",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/CharacterPalette.app",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/character_viewer.rs",
+   "status": "partial",
+   "note": "existing character viewer (emoji catalogue); symbol tabs not yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle",

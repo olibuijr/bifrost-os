@@ -40,6 +40,8 @@ pub enum Input {
     Activate(u64),
     Context {x:f32,y:f32},
     ContextAction(u32),
+    /// The user chose a Home Screen quick action (`quick_actions`): its type and user info.
+    QuickAction(crate::quick_actions::QuickActionPick),
 }
 
 /// A file the user chose in an open or save panel (`NativeOpenPanel` / `NativeSavePanel`). The app gets the open file, never
@@ -649,12 +651,27 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 ToApp::Context{x,y}=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::Context{x,y});}},
                 ToApp::MenuAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.menu_action(ctx,id);}},
                 ToApp::ContextAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::ContextAction(id));}},
+                ToApp::QuickAction { kind, user_info } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.event(c, Input::QuickAction(crate::quick_actions::QuickActionPick { kind, user_info }));
+                    }
+                }
                 ToApp::Touch { kind, id, x, y, t_ms } => {
                     if let Some(c) = &ctx {
                         need_frame |= deliver_touch(&mut app, c, &mut touch_router, kind, id, x, y, event_time(now, t_ms));
                     }
                 }
                 ToApp::Touches(_) => {}
+                ToApp::GuidedAccessState { active } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.guided_access(c, crate::guided_access::GuidedAccessChange::Session(active));
+                    }
+                }
+                ToApp::GuidedRestriction { id, allowed } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.guided_access(c, crate::guided_access::GuidedAccessChange::Restriction { id, allowed });
+                    }
+                }
                 ToApp::Key(k) => {
                     if let Some(c) = &ctx {
                         need_frame |= app.event(c, Input::Key(k));

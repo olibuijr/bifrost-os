@@ -52,15 +52,20 @@ pub mod widgets_timeline;
 pub mod glyphs;
 pub mod glyph_draw;
 pub mod dock_tile;
+pub mod quick_actions;
 pub mod cursor_service;
 pub mod text_services;
 pub mod accessibility_display;
+pub mod accessibility_rotor;
+pub mod guided_access;
 pub mod defaults;
 pub mod font_descriptor;
 pub mod font_substitution;
 /// App-facing font objects, specs, the font manager, collections and fallback cascade.
 pub use bifrost_render::{fontinfo, fontobj};
 pub mod screen_saver_defaults;
+pub mod screen_saver;
+pub mod idle_watch;
 pub mod screen_time;
 pub mod screens;
 pub mod displays;
@@ -75,6 +80,8 @@ pub mod formatters;
 pub mod pref_domains;
 pub mod calendar_system;
 pub mod bundle_resources;
+pub mod container_layout;
+pub mod package_layout;
 pub mod keychain;
 pub mod keychain_groups;
 pub mod keychain_query;
@@ -105,8 +112,10 @@ pub mod cf_bundle;
 pub mod app_events;
 pub mod dispatch_time;
 pub mod timer_source;
+pub mod background_tasks;
 pub mod keyed_archive;
 pub mod value_types;
+pub mod colorsync;
 pub mod decimal;
 pub mod csv_writer;
 pub mod accounts;
@@ -120,6 +129,7 @@ pub mod notification_schedule;
 pub mod event_recurrence;
 pub mod messaging;
 pub mod service_management;
+pub mod service_bundle;
 pub mod login_items_approval;
 pub mod crash_report;
 pub mod exception_handler;
@@ -134,12 +144,15 @@ pub use bifrost_ui::{cups, ipp};
 pub mod print_panel;
 pub mod drawing_model;
 pub mod usb_printer;
+pub mod usb_device;
 pub mod pasteboard;
 pub mod pasteboard_item;
 pub mod pasteboard_types;
 pub mod pasteboard_promise;
 pub mod item_provider;
 pub mod dnd;
+pub mod spring_loaded;
+pub mod paste_control;
 pub mod review;
 pub mod app_transaction;
 pub mod transfer;
@@ -165,8 +178,12 @@ pub mod quick_look;
 pub mod permission_kit;
 pub mod authorization;
 pub mod audio_session;
+pub mod audio_application;
+pub mod audio_player_control;
 pub mod now_playing;
 pub mod thumbnails;
+pub mod thumbnail_error;
+pub mod peek_pdf;
 pub mod web_download;
 pub mod web_config;
 pub mod web_data;
@@ -179,6 +196,7 @@ pub mod serial_ports;
 pub mod ble_midi;
 pub mod midi;
 pub mod midi_ci;
+pub mod midi_ci_property;
 pub mod midi_network;
 pub mod motion_raw;
 pub mod device_registry;
@@ -186,6 +204,7 @@ pub mod script_value;
 pub mod script_syntax;
 pub mod script_export;
 pub mod view;
+pub mod tabs;
 pub mod wl;
 pub mod layers;
 /// The retained layer tree (`Layer`, delegates, layout managers, constraints); see `ViewBase::layer`.
@@ -210,6 +229,7 @@ pub mod url;
 pub mod url_background;
 pub mod multipart;
 pub mod social;
+pub mod social_account;
 pub mod url_components;
 pub mod network_path;
 pub mod network_connection;
@@ -243,6 +263,7 @@ pub mod local_auth;
 pub mod privacy_permissions;
 pub mod screen_sample;
 pub mod external_accessory;
+pub mod accessory_access;
 pub mod error;
 pub mod coding;
 pub mod peer_session;
@@ -250,12 +271,18 @@ pub mod peer_mesh;
 pub mod peer_identity;
 pub mod nearby_service;
 pub mod restoration;
+pub mod scene_session;
 pub mod image_source;
+pub mod image_metadata;
+pub mod image_animation;
+pub mod picture_writer;
 pub mod photo_library;
 pub mod image_blur;
 pub mod image_filter;
+pub mod image_effects;
 pub use restoration::RestorableState;
 pub mod attributed;
+pub mod text_formatting;
 pub mod layer_kinds;
 pub mod richlayout;
 pub mod spellcheck;
@@ -280,10 +307,15 @@ pub mod disk_arbitration;
 pub mod audio_aggregate;
 /// Process objects and process taps (`CATapDescription`), as pure models with their wire shapes.
 pub mod audio_process;
+/// Audio boxes (`AudioHardwareBox`) as a pure model: enclosures, their devices, enable and acquire state.
+pub mod audio_box;
+/// Virtual audio devices a driver plug-in would publish, as a pure model, and the driver status (no loader here).
+pub mod audio_virtual;
 pub mod speech_recognizer;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;
 pub mod focus_filter;
+pub mod pointer_focus;
 pub mod gamepad_service;
 pub mod distributed;
 pub mod observable;
@@ -297,11 +329,13 @@ pub mod hotspot_configuration;
 pub mod accessory_hotspot;
 pub mod hotspot_helper;
 pub mod vpn_configuration;
+pub mod vpn_intents;
 pub mod wifi_accessory_browser;
 pub mod compression;
 pub mod video_compression;
 pub mod pixel_buffer;
 pub mod display_link;
+pub mod texture_cache;
 pub use bifrost_ui::frame_clock;
 pub mod gpu_layer;
 pub mod offscreen;
@@ -423,6 +457,11 @@ pub trait App {
     fn ax_text(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxText> {Vec::new()}
     /// `accessibilityTitle` and `accessibilityHelp` of elements (`Node::label` is `accessibilityLabel`). Sent only when they change.
     fn ax_meta(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxMeta> {Vec::new()}
+    /// Guided Access started or ended, or the user changed one of the app's restrictions (`UIGuidedAccessRestrictionDelegate`).
+    /// True when the app needs a new frame. The default ignores it.
+    fn guided_access(&mut self, _ctx: &Ctx, _change: guided_access::GuidedAccessChange) -> bool {
+        false
+    }
     /// An assistive technology acts on node `id` (`ax set`: `AXPress`, an `AXValue` write, `AXFocused`). The default maps
     /// `Press` onto `Input::Activate(id)` and ignores the rest; apps with editable nodes override it. True when a frame is needed.
     fn ax_set(&mut self, ctx: &Ctx, id: u64, action: crate::proto::AxAction) -> bool {
@@ -588,3 +627,5 @@ pub mod graphics_gradient;
 pub mod graphics_color;
 pub mod graphics_pdf;
 pub mod graphics_imageio;
+pub mod color_list;
+pub mod image_object;

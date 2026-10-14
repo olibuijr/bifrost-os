@@ -9,7 +9,10 @@ pub mod atspi;
 pub mod account;
 pub mod applib;
 pub mod apphost;
+pub mod folder_actions;
+pub mod touch_frames;
 pub mod intents;
+pub mod media_intents;
 pub mod kinds;
 mod apps;
 mod appgrid;
@@ -26,6 +29,7 @@ mod folders;
 mod dock_stack;
 mod homeedit;
 mod jiggle;
+mod quick_actions;
 pub mod camera;
 pub mod magnifier;
 pub mod calendar;
@@ -80,6 +84,8 @@ pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;
+pub mod dwell;
+pub mod sticky_keys;
 pub mod game_controllers_page;
 mod now_playing_menu;
 pub mod dnd;
@@ -116,6 +122,12 @@ pub mod passcode;
 pub mod rotate;
 pub mod settings;
 pub mod settings_load;
+// the settings App Intents catalogue; Search does not list it yet, so unused items are expected for now
+#[allow(dead_code)]
+pub mod settings_intents;
+// action intents (Wi-Fi, wallpaper); not wired to Search yet
+#[allow(dead_code)]
+pub mod settings_actions;
 pub mod settings_search;
 pub mod screensaver;
 pub mod storage;
@@ -133,6 +145,7 @@ pub mod today;
 pub mod video;
 pub mod ui;
 pub mod splitview;
+pub mod stage_strip;
 mod desk;
 mod desk_occlusion;
 pub mod window_fx;
@@ -160,6 +173,7 @@ pub mod timeset_page;
 pub mod night_shift;
 pub mod notify_page;
 pub mod wallpaper_page;
+pub mod wallpaper_schedule;
 pub mod widgets;
 pub mod widgetgallery;
 pub mod wifi_page;
@@ -640,6 +654,12 @@ pub struct Shell {
     form: bifrost_ui::form_factor::FormFactor,
     /// a physical keyboard is attached; on a tablet it keeps the on-screen keyboard down
     hw_keyboard: bool,
+    /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
+    touch_contacts: touch_frames::Contacts,
+    /// the focused text field of a Wayland client (the window server's input method), and the requests the keyboard
+    /// made for it since the last `take_input_method_out`
+    im: textinput::ImField,
+    im_out: Vec<textinput::ImOut>,
     /// the device has a vibrator (`bare::vibrator::vibrator_available`)
     haptics: bool,
     /// a touch that started on the keyboard
@@ -684,6 +704,8 @@ pub struct Shell {
     low_monitor: low_battery::Monitor,
     /// the announcement banner: the text apps post with `announce`, shown at the top of the screen for a few seconds
     announce: accessibility::banner::Banner,
+    /// Guided Access: the session an app holds (`accessibility::guided`).
+    guided: accessibility::guided::Guided,
     /// the speech engine that speaks the announcements while the screen reader is on (`accessibility::speech`)
     speech: accessibility::speech::Speaker,
     /// the screen reader's cursor over the front Settings page (`accessibility::reader`)
@@ -938,6 +960,9 @@ impl Shell {
             keyboard,
             form: bifrost_ui::form_factor::FormFactor::current(),
             hw_keyboard: false,
+            touch_contacts: touch_frames::Contacts::default(),
+            im: Default::default(),
+            im_out: Vec::new(),
             haptics: false,
             kb_touch: false,
             desk_kb_lift: None,
@@ -963,6 +988,7 @@ impl Shell {
             crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
+            guided: Default::default(),
             speech: accessibility::speech::Speaker::detect(),
             reader: Default::default(),
             battery_checked: f64::NEG_INFINITY,
@@ -2848,6 +2874,7 @@ impl Shell {
             self.dirty = true;
         }
         self.input_memory_tick();
+        self.guided_tick();
         self.split_tick();
         self.markup_tick();
         self.ota_tick(t);
@@ -4117,41 +4144,24 @@ impl Shell {
         }
     }
 
-    /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
-    /// hardware keyboard decide.
-    pub(super) fn keyboard_allowed(&self) -> bool {
-        self.form.allows_onscreen_keyboard(self.desk_active(), self.hw_keyboard)
-    }
-
-    /// The form factor this shell runs as.
-    pub fn form(&self) -> bifrost_ui::form_factor::FormFactor {
-        self.form
-    }
-
-    /// A physical keyboard attached or removed. Attaching hides a raised on-screen keyboard and keeps it down while
-    /// the keyboard stays; removing it lets text fields raise it again (they do so on the next focus).
-    pub fn set_hardware_keyboard(&mut self, attached: bool, t: f64) {
-        if self.hw_keyboard == attached {
-            return;
-        }
-        self.hw_keyboard = attached;
-        if attached {
-            self.set_keyboard(false, t);
-            if matches!(self.screen, Screen::App(AppId::External(_))) {
-                self.ext_set_keyboard(false, t);
-            }
+    /// An input-method batch from the window server. Focus on a Wayland client's text field raises the on-screen
+    /// keyboard (the form policy decides whether it shows), and losing focus lowers it. The field's text and purpose
+    /// are kept for the keyboard's requests (`type_out`, `ext_forward_composition`).
+    pub fn input_method_batch(&mut self, batch: textinput::ImBatch, t: f64) {
+        match self.im.apply(batch) {
+            Some(true) => self.set_keyboard(true, t),
+            Some(false) => self.set_keyboard(false, t),
+            None => {}
         }
         self.dirty = true;
     }
 
-    /// Slides the keyboard in or out; the terminal takes its final size at once.
-    fn set_keyboard(&mut self, shown: bool, t: f64) {
-        // A desktop has a hardware keyboard and Golden Gate has no on-screen one: never raise it there. A tablet
-        // raises it with the desktop UI up too, unless a hardware keyboard is attached. Guarding here, not in each
-        // caller, matters: bringing an app with a focused text field to the front used to raise it, and its top row
-        // showed as grey boxes along the bottom of the window.
-        let shown = shown && self.keyboard_allowed();
-        if self.keyboard.shown() == shown {
+    /// The requests the keyboard made for a Wayland client's field since the last call; the window server's input
+    /// method sends them (`bare::kms`).
+    pub fn take_input_method_out(&mut self) -> Vec<textinput::ImOut> {
+        std::mem::take(&mut self.im_out)
+    }
+
     /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
     /// hardware keyboard decide.
     pub(super) fn keyboard_allowed(&self) -> bool {
@@ -4238,6 +4248,16 @@ impl Shell {
     }
 
     fn type_out(&mut self, out: Out, t: f64) {
+        // a Wayland client's text field has focus: the keyboard types into it through the window server's input method
+        if self.im.active {
+            if out == Out::Hide {
+                self.set_keyboard(false, t);
+            } else {
+                let requests = textinput::outs_for(&self.im, &out);
+                self.im_out.extend(requests);
+            }
+            return;
+        }
         if matches!(self.screen, Screen::App(AppId::External(_))) {
             self.ext_type_out(out, t);
             return;

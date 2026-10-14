@@ -4,7 +4,7 @@
  "macos_since": "",
  "status": "partial",
  "bifrost": "springboard/ui/src/gesture.rs, springboard/ui/src/responder.rs, springboard/sdk/src/view/mod.rs, springboard/src/shell/gestures.rs, springboard/src/pager.rs",
- "summary": "Tap, long press, pan, pinch and rotation recognizers exist as pure state machines, and the responder chain is shared. Apps receive touches with an id on the wire, but the retained view layer drops the id, so multi-touch gestures, recognizer arbitration, swipe, edge pan and hover recognizers are missing.",
+ "summary": "Tap, long press, pan, pinch, rotation and swipe recognizers exist as pure state machines, with a shared arbiter and a screen-edge pan for the shell; the responder chain is shared. Apps receive touches with an id on the wire, but the retained view layer drops the id, so view-level multi-touch gestures, hover recognizers and the touch-to-view arbitration are still missing. The tablet path (wl_touch to recognizers) is not yet verified on the tablet.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -17,9 +17,9 @@
   {
    "feature": "Events and touches",
    "apple": "UIEvent, UITouch (location, phase, tapCount, majorRadius, timestamp, type)",
-   "bifrost": "springboard/proto/src/lib.rs, springboard/sdk/src/runtime.rs",
+   "bifrost": "springboard/proto/src/lib.rs, springboard/sdk/src/runtime.rs, springboard/src/bare/wl_touch.rs, springboard/wm/src/touch.rs, springboard/ui/src/touch.rs, springboard/proto/src/touch.rs",
    "status": "partial",
-   "note": "ToApp::Touch carries kind, touch id, position and time per contact, so multi-touch reaches App::event. ViewEvent::from_input drops the id and the time; no tap count, radius, phase set or touch type (finger, pen, indirect pointer)"
+   "note": "Touch frames reach apps as ToApp::Touches (sdk/src/touch_events.rs); the shell's wl_touch path turns each finger into a contact and the compositor delivers them with the output transform. Host tests only; not yet verified on the tablet."
   },
   {
    "feature": "Tap gesture",
@@ -52,9 +52,9 @@
   {
    "feature": "Swipe gesture",
    "apple": "UISwipeGestureRecognizer (direction, numberOfTouchesRequired)",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "no discrete swipe recognizer; the shell has private swipe code for the home pager (springboard/src/pager.rs). Add Swipe next to Pan in springboard/ui/src/gesture.rs"
+   "bifrost": "springboard/ui/src/recognizer/swipe.rs",
+   "status": "partial",
+   "note": "Pure Swipe recognizer (direction mask, touch count, distance, speed, off-axis ratio) in the shared recognizer set; no view-level UISwipeGestureRecognizer yet. Not yet verified on the tablet."
   },
   {
    "feature": "Screen edge pan",
@@ -73,9 +73,9 @@
   {
    "feature": "Gesture recognizer base and delegate",
    "apple": "UIGestureRecognizer (state, view, requiresFailureOf), UIGestureRecognizerDelegate",
-   "bifrost": "springboard/ui/src/gesture.rs",
+   "bifrost": "springboard/ui/src/gesture.rs, springboard/ui/src/recognizer/mod.rs, springboard/ui/src/recognizer/arbiter.rs, springboard/src/shell/touch_gestures.rs",
    "status": "partial",
-   "note": "common State enum only; no recognizer base trait, no failure requirements, no simultaneous recognition, no shouldReceive or shouldBegin delegate, so a scroll pan and a tap on the same view cannot be arbitrated"
+   "note": "Recognizers track several fingers by id; GestureArbiter gives require-failure and simultaneous rules, and the shell's system gestures run on it. Not yet verified on the tablet."
   },
   {
    "feature": "Custom gesture recognizers",

@@ -1,0 +1,11 @@
+id = "is.olibuijr.colour-utility.desktop"
+name = "Colour Utility"
+version = "0.1.0"
+exec = "bifrost-colour-utility"
+icon = "icon.png"
+min_shell = "0.6.5"
+summary = "Lists the ICC colour profiles on the system and in the user's folders, shows each header and tag, verifies the structure and plots the gamut of an RGB profile."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"

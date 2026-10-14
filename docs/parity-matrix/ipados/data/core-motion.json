@@ -1,0 +1,32 @@
+{
+  "framework": "Core Motion",
+  "doc": "https://developer.apple.com/documentation/coremotion",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/core/src/motion_manager.rs, springboard/core/src/inertial_sensors.rs, springboard/sdk/src/motion_raw.rs, springboard/core/src/motion.rs, springboard/sdk/src/sensors.rs, springboard/core/src/magnetometer.rs, springboard/core/src/altitude.rs, springboard/core/src/pedometer.rs, springboard/core/src/motion_activity.rs, springboard/core/src/sensor_log.rs, springboard/src/shell/rotate.rs",
+  "summary": "Raw accelerometer and gyroscope updates, a device-motion estimator, magnetometer, altitude, pedometer, a rule-based motion activity label and a bounded sensor log exist as pure models with host tests, and the SDK exposes raw motion and sensors to apps. The manager does not feed the attitude estimate, the shell's orientation feed has no production caller on this branch, and nothing has run on a tablet. Apple's Watch and AirPods sensors are n/a. The framework is iPadOS 4.0 and later per the index.",
+  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+  "features": [
+    {"feature": "Raw accelerometer updates", "apple": "CMMotionManager, CMAccelerometerData, startAccelerometerUpdates", "bifrost": "springboard/sdk/src/motion_raw.rs, springboard/core/src/motion_manager.rs, springboard/core/src/inertial_sensors.rs", "status": "partial", "note": "RawMotion starts updates with a handler, snaps the interval to the sensor rate and reads the kernel sensor files; the caller must drive tick; not tested on a tablet"},
+    {"feature": "Raw gyroscope updates", "apple": "CMGyroData, startGyroUpdates", "bifrost": "springboard/sdk/src/motion_raw.rs, springboard/core/src/motion_manager.rs", "status": "partial", "note": "same model as the accelerometer; no mounting matrix is applied"},
+    {"feature": "Device motion (attitude, rotation rate, gravity-free acceleration)", "apple": "CMDeviceMotion, CMAttitude, CMAttitudeReferenceFrame", "bifrost": "springboard/core/src/motion.rs, springboard/sdk/src/sensors.rs", "status": "partial", "note": "MotionEstimator and its types are exported to apps; the motion manager does not feed it yet, and there is no reference frame choice"},
+    {"feature": "Device orientation (four-way)", "apple": "UIDevice orientation notifications fed by the accelerometer", "bifrost": "springboard/src/shell/rotate.rs", "status": "partial", "note": "Rotation Lock and the turn animation exist; set_orientation has test callers only on this branch, so no accelerometer reading reaches it here"},
+    {"feature": "Magnetometer", "apple": "CMMagnetometerData", "bifrost": "springboard/core/src/magnetometer.rs, springboard/sdk/src/sensors.rs", "status": "partial", "note": "heading model exported to apps; no raw magnetometer stream"},
+    {"feature": "Altitude and ambient pressure", "apple": "CMAltimeter, CMAltitudeData, CMAmbientPressureData", "bifrost": "springboard/core/src/altitude.rs, springboard/sdk/src/sensors.rs", "status": "partial", "note": "pressure to altitude conversion only; no live altimeter stream"},
+    {"feature": "Pedometer and step counter", "apple": "CMPedometer, CMPedometerData, CMStepCounter, CMPedometerEvent", "bifrost": "springboard/core/src/pedometer.rs, springboard/sdk/src/sensors.rs", "status": "partial", "note": "step and distance model; no system-recorded history and no odometer"},
+    {"feature": "Motion activity", "apple": "CMMotionActivityManager, CMMotionActivity", "bifrost": "springboard/core/src/motion_activity.rs, springboard/sdk/src/sensors.rs", "status": "partial", "note": "fixed-threshold classifier over a window of magnitudes and steps, with a confidence; not a trained model and no history"},
+    {"feature": "Recorded sensor data", "apple": "CMSensorRecorder, CMSensorDataList, CMRecordedAccelerometerData, CMBatchedSensorManager", "bifrost": "springboard/core/src/sensor_log.rs", "status": "partial", "note": "bounded, time-ordered sample log queried by time range; no recorder that gathers samples from the sensors and no system history"},
+    {"feature": "Heart rate and high-frequency heart data", "apple": "CMHighFrequencyHeartRateData", "bifrost": "none", "status": "n/a", "note": "heart sensing is Apple Watch hardware"},
+    {"feature": "Headphone motion and activity", "apple": "CMHeadphoneMotionManager, CMHeadphoneActivityManager", "bifrost": "none", "status": "n/a", "note": "needs headphones with motion sensors that the tablet does not have"},
+    {"feature": "Water submersion", "apple": "CMWaterSubmersionManager, CMWaterSubmersionMeasurement", "bifrost": "none", "status": "n/a", "note": "Apple Watch Ultra hardware"},
+    {"feature": "Movement disorder symptoms", "apple": "CMMovementDisorderManager, CMTremorResult", "bifrost": "none", "status": "n/a", "note": "Apple Watch data with a medical data collection requirement"},
+    {"feature": "Fall detection", "apple": "CMFallDetectionManager, CMFallDetectionEvent", "bifrost": "none", "status": "n/a", "note": "Apple Watch and iPhone safety feature; not a tablet sensor"}
+  ],
+  "gaps": [
+    "The shell's orientation feed: set_orientation has no production caller on this branch, so Rotation Lock and the four-way orientation never follow the sensor here.",
+    "Device motion is not fed by the motion manager; attitude and gravity-free acceleration are not available to apps as one stream.",
+    "No tested run on a tablet: the raw sensor readers have host tests only, and the kernel sensor file layout is assumed.",
+    "No mounting matrix: a tablet mounted rotated reports rotated values.",
+    "No batched or recorded history that apps can query after the fact (CMSensorRecorder equivalent)."
+  ]
+}

@@ -57,6 +57,7 @@ pub mod bluetooth_service;
 pub mod login_items_approval;
 pub mod network_path;
 pub mod dock_tile;
+pub mod quick_actions;
 pub mod now_playing;
 pub mod notification_schedule;
 pub mod screens;
@@ -70,6 +71,7 @@ pub mod notify_bus;
 pub mod launch_services;
 pub mod display_services;
 pub mod window_services;
+pub mod scene_services;
 pub mod event_services;
 pub mod thumbnails;
 pub mod thumb_providers;
@@ -111,6 +113,7 @@ pub struct Event {
 pub fn all() -> Vec<Box<dyn SystemService>> {
     vec![
         Box::new(dock_tile::DockService),
+        Box::new(quick_actions::QuickActionsService),
         Box::new(system::System),
         Box::new(pasteboard_types::Pasteboards::default()),
         Box::new(keychain_groups::KeychainGroups::default()),
@@ -140,6 +143,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(launch_services::LaunchServices),
         Box::new(display_services::DisplayServices::default()),
         Box::new(window_services::WindowServices),
+        Box::new(scene_services::SceneServices::default()),
         Box::new(event_services::EventServices),
         Box::new(thumbnails::Thumbnails::default()),
         Box::new(disks::Disks::default()),

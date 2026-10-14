@@ -41,3 +41,24 @@ The framework status stays `partial`. Shapes, clipping, shadings, patterns and t
 ## Verification
 
 Not built or tested here, by instruction. The stage that runs `cargo test -p bifrost-ui` must run the 20 new tests. `python3 tools/check-names.py` reports no hits for the new files.
+
+## Team-k refresh (branch parity/team-k-quartz)
+
+Not built or run on this branch; the lead builds and checks it. Verified on Midget: no.
+
+The earlier section above describes the pure models from the first Core Graphics waves. The render crate has moved on,
+and the matrix rows in `docs/parity-matrix/data/core-graphics.json` now reflect the code on the `arm` branch:
+
+- The whole render `cg` tree is public to apps as `bifrost_app::kit::cg` (`springboard/sdk/src/lib.rs`, the `kit` module).
+- `cg::surface` draws lines, ellipses and arcs, and fills and strokes paths, on the Surface.
+- `cg::paint` holds colour ramps, linear, radial and conic gradients, shadings and functions, and patterns.
+- `cg::image` holds `CgImage` with cropping, masks and premultiplied conversion.
+- The SDK wrappers `graphics_pdf`, `graphics_imageio`, `graphics_color`, `graphics_stroke`, `graphics_gradient` and
+  `graphics_context` sit on top of these models.
+- Apps that use the tree today: Freeform (`cg::paint` gradient ramp), Preview (`cg::pdf` read, draw and writer, with annotated save).
+
+Rows updated: bitmap context, path construction and stroking, primitive shapes, affine transforms, colour, gradients,
+shadings, patterns, images, image decoding and encoding, PDF documents, PDF creation. All remain `partial`.
+
+Remaining gaps are listed in the matrix row `gaps` field. The main ones: most of the tree has no app caller yet, PDF
+pages cannot be drawn into a PDF context, and no Boolean path operations exist.

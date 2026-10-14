@@ -31,6 +31,7 @@ one and clean up old code"):
 | The UEFI loader | `springboard/bootweave/efi` | `bootweave-efi` (built for `x86_64-unknown-uefi` by `tools/build-efi-boot.sh`; excluded from the host workspace) |
 | The boot frame and the timing record | `springboard/bootweave/frame` | `bootweave-frame` (`no_std`, shared by every stage) |
 | The early-userspace supervisor | `springboard/bootweave/supervisor.rs` | the `bootweave` binary (`/usr/bin/bifrost-bootweave`) |
+| The initramfs painter (boards without a UEFI loader) | `springboard/bootweave/fb` | the `bootweave-fb` binary, built static for the initramfs |
 
 The loader's artifact is `bootweave.efi` (`/usr/share/bifrost/bootweave.efi`, copied to `EFI/BIFROST/BOOTx64.efi`
 and `EFI/BOOT/BOOTx64.efi`). The old splash code in `springboard/src/bootsplash.rs` (paint, fade, handoff) and the
@@ -103,6 +104,19 @@ Dark (`supervisor::boot_appearance`). The loader reads the record, Bootweave wri
 after 60 s up). A clean stop (SIGTERM from systemd, a requested reboot or shutdown, a requested restart) calls
 `takeover::clean_stop`, which writes `last_exit` and resets the counter; only crashes, panics, kills and stalls
 (a stall takes its attempt back) stay counted. Three quick benchmark reboots no longer show the start-failed screen.
+
+### Boards without the UEFI loader (the Tab A8 port)
+
+On the ARM tablet the signed boot loader loads the kernel and leaves its own logo in a lit framebuffer, so there is no
+S1. The initramfs plays that part: its init runs `bootweave-fb` as soon as `/dev` is mounted, before the root is
+mounted. `bootweave-fb` opens `/dev/fb0` (simpledrm), reads the geometry and channel offsets with
+`FBIOGET_VSCREENINFO` and `FBIOGET_FSCREENINFO`, and writes `bootweave_frame::render` of `Frame::boot` row by row (Dark
+unless `--appearance light`). It has no drawing code of its own and depends on nothing but `bootweave-frame`, so the
+pixels are the ones S3 (`Bar::draw_frame`) and `bifrost-wm` render later; S3 redraws the same frame, and `bifrost-wm`
+fades it into the desktop once as on the PC. The program exits non-zero when there is no usable 32-bit framebuffer and
+the boot goes on. `--raw FILE --size WxH [--order bgrx|rgbx]` paints a plain pixel file instead, for host and emulator
+checks. Build (static, aarch64): `cargo build --release -p bootweave-fb --target aarch64-unknown-linux-gnu` with
+`-C target-feature=+crt-static` and `aarch64-linux-gnu-gcc` as the linker.
 
 ### The progress logic (not drawn)
 

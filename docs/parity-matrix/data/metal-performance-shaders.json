@@ -17,9 +17,9 @@
   {
    "feature": "Gaussian and box blur image filters",
    "apple": "MPSImageGaussianBlur, MPSImageBox, MPSImageTent",
-   "bifrost": "springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid)",
+   "bifrost": "springboard/render/src/gaussian_filter.rs (separable Gaussian by sigma, box and tent); springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid)",
    "status": "partial",
-   "note": "Blur exists only as shell-internal rendering for glass and shadows. There is no app API, no sigma-based gaussian, and no tent filter."
+   "note": "Built on parity/team-k-metal-performance-shaders (commit 3a45ebef1): pure model with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Shell glass blur is still the separate GPU pyramid and CPU box blur; there is no app API."
   },
   {
    "feature": "Morphological filters (erode, dilate, area min and max)",
@@ -66,9 +66,9 @@
   {
    "feature": "Scaling and resampling",
    "apple": "MPSImageScale, MPSImageLanczosScale, MPSImageBilinearScale",
-   "bifrost": "springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize)",
+   "bifrost": "springboard/render/src/lanczos.rs (Lanczos-3, antialiased when shrinking); springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize)",
    "status": "partial",
-   "note": "Bilinear and area-average only. No Lanczos. Not exposed through an SDK image API."
+   "note": "Lanczos-3 and bilinear and area-average paths. The Lanczos model is pure, with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Not exposed through an SDK image API."
   },
   {
    "feature": "Image arithmetic and pixel conversion",
@@ -132,7 +132,7 @@
   "No histogram, threshold, morphology, convolution or statistics filters for images.",
   "No neural network or recurrent layers, and no ML inference runtime anywhere in springboard.",
   "No GPU matrix or linear algebra kernels.",
-  "Resampling is bilinear or area-average only. Lanczos is missing.",
-  "Blur is shell-internal, with no gaussian sigma parameter and no SDK entry point."
+  "Resampling is bilinear or area-average in the shell. Lanczos exists only as an unwired pure model (springboard/render/src/lanczos.rs).",
+  "Blur is shell-internal. The Gaussian, box and tent model (springboard/render/src/gaussian_filter.rs) has no SDK entry point and is not used by the shell."
  ]
 }

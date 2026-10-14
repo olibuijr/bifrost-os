@@ -464,12 +464,17 @@ impl Keyboard {
         SERVICE.with(|s| s.borrow().owner == self.id)
     }
 
-    /// The screen width changed (rotation, resizable window).
+    /// The screen width changed (rotation, resizable window). The keys are laid out again only when the width moved.
     pub fn resize(&mut self, w: f32) {
         if w != self.w {
             self.w = w;
             self.claim(false);
         }
+    }
+
+    /// The width the keys are laid out for.
+    pub fn width(&self) -> f32 {
+        self.w
     }
 
     /// Display Zoom: lays the keys out at `s` px per point.
@@ -743,6 +748,20 @@ impl Drop for Keyboard {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod resize_tests {
+    use super::*;
+
+    #[test]
+    fn resize_takes_the_new_width_and_keeps_the_same_one() {
+        let mut k = Keyboard::new_hidden(1000.0, 1.0);
+        k.resize(600.0);
+        assert_eq!(k.width(), 600.0);
+        k.resize(600.0);
+        assert_eq!(k.width(), 600.0);
     }
 }
 

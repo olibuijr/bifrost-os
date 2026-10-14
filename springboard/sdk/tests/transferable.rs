@@ -137,8 +137,8 @@ fn proxy_of_forwards_another_transferables_representations() {
         }
     }
     let reps = Task::transfer_representations();
-    assert_eq!(reps.types_for(Viewer::Other), vec![JSON, PLAIN, HTML]);
-    assert_eq!(reps.types_for(Viewer::OwnProcess), vec![JSON, PLAIN, HTML, TEAM, PRIVATE], "inner visibility is kept");
+    assert_eq!(reps.types_for(Viewer::Other), vec![JSON, PLAIN, NOTE_FILE, HTML], "file representations are forwarded too");
+    assert_eq!(reps.types_for(Viewer::OwnProcess), vec![JSON, PLAIN, NOTE_FILE, HTML, TEAM, PRIVATE], "inner visibility is kept");
     assert_eq!(reps.export(&Task("t".into()), PLAIN, Viewer::Other), Some(b"t".to_vec()));
     assert_eq!(reps.import(PLAIN, b"t"), Some(Task("t".into())));
     assert_eq!(reps.import(HTML, b"<p>t</p>"), None, "an export-only inner type stays export-only");

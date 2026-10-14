@@ -78,9 +78,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no script menu",
+   "bifrost": "springboard/apps/script-editor-desktop/src/runner.rs, springboard/src/shortcuts.rs",
+   "status": "partial",
+   "note": "scripts run from Script Editor and Shortcuts; no menu bar Script menu yet. built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -99,8 +99,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Apple's AppleScript run monitor; BifrOSt runs scripts as plain shell processes and has no AppleScript runtime to monitor.",
    "rea": []
   },
   {
@@ -119,8 +119,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "launch placeholder for Apple's out-of-process Settings host; BifrOSt Settings draws in-process (springboard/src/shell/settings.rs), so nothing needs a placeholder.",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no first-run setup assistant yet",
+   "bifrost": "springboard/src/setup.rs, springboard/apps/setup-assistant/src/main.rs",
+   "status": "partial",
+   "note": "first-run steps, state file and apply step exist; built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -158,9 +158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/shortcuts.rs",
+   "status": "partial",
+   "note": "shortcuts run from Search and menu keys; no drop-a-file trigger yet. built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -298,9 +298,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no stage manager",
+   "bifrost": "springboard/src/shell/stage_strip.rs",
+   "status": "partial",
+   "note": "stage strip model (one stage per app, limit, removal) only; the window manager does not use it yet. built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -318,9 +318,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/mcp/src/app.rs, springboard/src/shell/atspi/mod.rs",
+   "status": "partial",
+   "note": "app control, window control and the AT-SPI bridge exist; no scripting dictionary for UI automation. built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -338,9 +338,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/intents.rs",
+   "status": "partial",
+   "note": "App Intents declared in manifests and run from Search; built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -518,9 +518,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "Search lists apps, Settings pages, cities, titles and shortcuts; no third-party search extensions. built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -559,8 +559,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "internal shell extension",
+   "status": "n/a",
+   "note": "Apple's internal shell extension host; BifrOSt has no ExtensionKit equivalent, and app extension points are manifest intents.",
    "rea": []
   },
   {
@@ -638,9 +638,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/apps/clock-desktop/src/main.rs, springboard/apps/clock-desktop/src/clock/stopwatch.rs",
+   "status": "partial",
+   "note": "Start Stopwatch, Stop Stopwatch and Record Lap intents; reset is not an intent yet. built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -658,9 +658,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "suggested actions UI, no counterpart yet",
+   "bifrost": "springboard/src/shell/look_up_popover.rs, springboard/ui/src/detect.rs",
+   "status": "partial",
+   "note": "Look Up popover offers actions for a word and data detectors find dates, links and numbers; no general suggested-actions panel. built on os/team-l-07-system-ui; not yet verified on Midget",
    "rea": []
   }
  ]

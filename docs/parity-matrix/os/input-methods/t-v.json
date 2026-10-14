@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/zhuyin.rs",
+   "status": "partial",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; standard zhuyin layout with a seed dictionary only, no full dictionary shipped",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/TYIM.app",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/indic.rs",
+   "status": "partial",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Tamil phonetic romanization, not the Tamil99 layout",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/TrackpadIM.app",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/ui/src/handwriting.rs, springboard/ui/src/scribble.rs",
+   "status": "partial",
+   "note": "existing handwriting layout and scribble models; no handwriting recogniser and no trackpad path",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/TransliterationIM.app",
@@ -102,11 +102,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/indic.rs",
+   "status": "partial",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Devanagari (Hindi) phonetic transliteration",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Input Methods/VietnameseIM.app",

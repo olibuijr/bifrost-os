@@ -16,10 +16,10 @@ pub const WHOLE_BLOCK: u8 = 0x7F;
 /// The MIDI-CI version this module speaks (1.1).
 pub const VERSION: u8 = 0x01;
 
-const SYSEX_START: u8 = 0xF0;
-const SYSEX_END: u8 = 0xF7;
-const UNIVERSAL_NON_REALTIME: u8 = 0x7E;
-const SUB_ID_1: u8 = 0x0D;
+pub(crate) const SYSEX_START: u8 = 0xF0;
+pub(crate) const SYSEX_END: u8 = 0xF7;
+pub(crate) const UNIVERSAL_NON_REALTIME: u8 = 0x7E;
+pub(crate) const SUB_ID_1: u8 = 0x0D;
 const HEADER_LEN: usize = 13;
 
 const DISCOVERY_INQUIRY: u8 = 0x70;
@@ -97,12 +97,12 @@ pub enum Error {
     UnsupportedVersion(u8),
 }
 
-fn put14(out: &mut Vec<u8>, v: u16) {
+pub(crate) fn put14(out: &mut Vec<u8>, v: u16) {
     out.push((v & 0x7F) as u8);
     out.push(((v >> 7) & 0x7F) as u8);
 }
 
-fn get14(b: &[u8]) -> u16 {
+pub(crate) fn get14(b: &[u8]) -> u16 {
     b[0] as u16 | (b[1] as u16) << 7
 }
 

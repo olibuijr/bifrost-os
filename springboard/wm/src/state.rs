@@ -86,8 +86,10 @@ pub struct WmState {
     pub gestures: crate::input::GestureGate,
     /// The fingers on the touchscreen and the one that drives an emulated pointer (`touch.rs`).
     pub contacts: crate::touch::Contacts,
-    /// Touchscreens present; the seat has the touch capability while there is one.
-    pub touch_devices: usize,
+    /// Touchscreens announced by the backend; the seat has the touch capability while there is one.
+    pub touch_devices: crate::touch::TouchDevices,
+    /// The last input was a touch contact, so the pointer image is hidden until real pointer motion (`touch.rs`).
+    pub last_input_touch: bool,
     /// XWayland, its X11 window manager and the xwayland-shell global (`xwayland.rs`).
     #[cfg(feature = "xwayland")]
     pub xwayland: crate::xwayland::XWaylandState,
@@ -171,7 +173,8 @@ impl WmState {
             seat,
             gestures: Default::default(),
             contacts: Default::default(),
-            touch_devices: 0,
+            touch_devices: Default::default(),
+            last_input_touch: false,
             #[cfg(feature = "xwayland")]
             xwayland: crate::xwayland::XWaylandState::new(&dh),
             session,

@@ -55,3 +55,114 @@ shell_exit_note() {
         *) printf '%s\n' "shell exited $1" ;;
     esac
 }
+
+# session_wm_env <file>
+# Prints the KEY=VALUE words of an optional compositor environment file (/etc/bifrost/wm.env), one per line, for
+# `env` to apply to bifrost-wm. Read as data, never sourced. A line is kept only when the key is an upper-case
+# variable name that does not steer the dynamic loader or the session's own identity, and the value is a plain
+# word (letters, digits and _ . , : + / @ % -). Comments, blank lines and anything else are dropped. A missing
+# file prints nothing.
+session_wm_env() {
+    local file=$1 key value
+    [[ -r "$file" ]] || return 0
+    while IFS='=' read -r key value || [[ -n "$key" ]]; do
+        [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || continue
+        case "$key" in
+            LD_*|PATH|HOME|USER|LOGNAME|SHELL|IFS|BASH_ENV|ENV|XDG_RUNTIME_DIR|LIBSEAT_BACKEND|DBUS_SESSION_BUS_ADDRESS) continue ;;
+        esac
+        [[ "$value" =~ ^[a-zA-Z0-9_.,:+/@%-]*$ ]] || continue
+        printf '%s=%s\n' "$key" "$value"
+    done < "$file"
+    return 0
+}
+
+# session_words_set <key> [word...]
+# Succeeds when one of the KEY=VALUE words sets <key>.
+session_words_set() {
+    local key=$1 word
+    shift
+    for word in "$@"; do
+        [[ "$word" == "$key="* ]] && return 0
+    done
+    return 1
+}
+
+# session_dri_known <kernel_driver> <dri_dir>
+# Succeeds when Mesa has a driver for the kernel DRM driver name: <dri_dir>/<name>_dri.so for the name as given,
+# with dashes as underscores, or without a trailing -drm / -dpu (the platform driver name of a display
+# subsystem is often longer than the name Mesa goes by).
+session_dri_known() {
+    local name=$1 dir=$2 base cand
+    [[ -n "$name" ]] || return 1
+    base=${name%-drm}; base=${base%-dpu}
+    for cand in "$name" "${name//-/_}" "$base" "${base//-/_}"; do
+        [[ -e "$dir/${cand}_dri.so" ]] && return 0
+    done
+    return 1
+}
+
+# session_drm_driver <class_dir> <node>
+# Prints the kernel driver bound to a DRM node (the basename of <class_dir>/<node>/device/driver); nothing when
+# the node has no device driver link.
+session_drm_driver() {
+    local link=$1/$2/device/driver
+    [[ -e "$link" ]] || return 0
+    basename "$(readlink -f "$link")"
+}
+
+# session_kmsro_driver <dri_dir>
+# Prints the name of a display-only (kmsro) Mesa driver that is installed, for MESA_LOADER_DRIVER_OVERRIDE: with
+# it Mesa treats an unknown display card as scan-out only and pairs it with the render node. Prints nothing when
+# none is installed.
+session_kmsro_driver() {
+    local dir=$1 name
+    for name in rockchip meson mediatek sun4i-drm imx-drm; do
+        [[ -e "$dir/${name}_dri.so" ]] && { printf '%s\n' "$name"; return 0; }
+    done
+    return 0
+}
+
+# session_mesa_override <class_dir> <dri_dir> <arch>
+# Prints the MESA_LOADER_DRIVER_OVERRIDE value the window server needs, or nothing. Only a device that is not an
+# x86 PC, where every display card has a kernel driver Mesa does not know and a render node has one it does (a
+# tablet or phone SoC: display controller plus panfrost), gets a kmsro driver. A PC, a device with one known
+# card, or one with a card and render node of the same unknown driver (one GPU) is left alone.
+session_mesa_override() {
+    local class_dir=$1 dri_dir=$2 arch=$3 node name cards=0 render_known=0
+    case "$arch" in aarch64|arm*) ;; *) return 0 ;; esac
+    for node in "$class_dir"/card[0-9]*; do
+        [[ -e "$node" ]] || continue
+        name=${node##*/}
+        [[ "$name" == *-* ]] && continue
+        cards=$((cards + 1))
+        session_dri_known "$(session_drm_driver "$class_dir" "$name")" "$dri_dir" && return 0
+    done
+    (( cards > 0 )) || return 0
+    for node in "$class_dir"/renderD[0-9]*; do
+        [[ -e "$node" ]] || continue
+        session_dri_known "$(session_drm_driver "$class_dir" "${node##*/}")" "$dri_dir" && render_known=1
+    done
+    (( render_known )) || return 0
+    session_kmsro_driver "$dri_dir"
+}
+
+# session_wm_retry_override <override>
+# Prints the override for the one retry after bifrost-wm exits during start-up, or nothing. <override> is the one
+# the session chose by itself (empty on a PC, or when wm.env set one): only a chosen override is retried, with
+# software rendering on the KMS device; software rendering itself has nothing further to fall back to.
+session_wm_retry_override() {
+    local current=${1:-}
+    [[ -n "$current" && "$current" != kms_swrast ]] && printf '%s\n' kms_swrast
+    return 0
+}
+
+# session_efi_cmdline <boot_dir>
+# Prints the kernel command line file the EFI loader boots first (video-arg's target), or nothing on a device
+# without one (a board booted by U-Boot with a boot image).
+session_efi_cmdline() {
+    local boot=$1
+    if [[ -e "$boot/EFI/BIFROST/boot.cfg" ]]; then printf '%s\n' "$boot/EFI/BIFROST/boot.cfg"
+    elif [[ -e "$boot/EFI/BOOT/cmdline.txt" ]]; then printf '%s\n' "$boot/EFI/BOOT/cmdline.txt"
+    fi
+    return 0
+}

@@ -4,7 +4,7 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "springboard/apps/daw/src/devices/ (built-in instruments and effects), springboard/audiod/src/main.rs (audio service)",
-  "summary": "Apple's Audio Unit framework hosts third-party AU v2 and v3 plug-ins and provides the AUAudioUnit subclassing API for plug-in extensions. BifrOSt has no plug-in host and no plug-in extension API. The DAW ships its own built-in instruments and effects as JavaScript plug-in directories, which are not Audio Units. The Apple page itself marks the framework as deprecated in favour of Audio Toolbox.",
+  "summary": "Apple's Audio Unit framework hosts third-party AU v2 and v3 plug-ins and provides the AUAudioUnit subclassing API for plug-in extensions. BifrOSt has a pure plug-in host model and an extension point model (manifests, a registry and render-resource allocation), but it loads no third-party plug-in binary and starts no separate extension process. The DAW ships its own built-in instruments and effects as JavaScript plug-in directories, which are not Audio Units. The Apple page itself marks the framework as deprecated in favour of Audio Toolbox.",
   "rea_evidence": "ev_3bf9c005e0da939facd73989466bcbdab9f09176783e42e4aeed3b6e830276e4",
   "features": [
     {
@@ -17,9 +17,9 @@
     {
       "feature": "Implementing AU v3 plug-in extensions",
       "apple": "AUAudioUnit subclassing for app extensions (landing page: Version 3 extensions)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no extension point for apps to ship audio processors"
+      "bifrost": "springboard/ui/src/audio_extension.rs (Manifest, ExtensionRegistry, Session)",
+      "status": "partial",
+      "note": "built on parity/team-j-audio-unit; not yet verified on Midget. Pure model: the host supplies the render unit factory, allocates bus formats and render resources, and renders through the session. No extension process is started."
     },
     {
       "feature": "Built-in effects",
@@ -66,7 +66,6 @@
   ],
   "gaps": [
     "No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app.",
-    "No AUAudioUnit-style extension point for apps to ship audio processors.",
     "No app-facing audio unit or render API; the DAW's rendering and devices are internal.",
     "No MIDI input or MIDI event API.",
     "The audio service (springboard/audiod) has no SDK module for apps."

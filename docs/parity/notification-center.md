@@ -36,3 +36,16 @@ round (no REA evidence ids recorded). Behaviour comes from the existing BifrOSt 
 - `springboard/src/shell/mod.rs`: the notify settings snapshot passes `focus_allowed`; the change match gains
   `FocusAllowed`, and `App` now refreshes the store.
 - `springboard/src/shell/settings.rs`: `set_notify` takes `focus_allowed`; `notify_edit` gains the `FocusAllowed` arm.
+
+## Team J: widgets in the column (parity/team-j-notification-center)
+
+- New row "Widgets in the column layout" (partial) and the gap line on the column now point at
+  `springboard/ui/src/widget_column.rs`.
+- `widget_column::layout` takes the column blocks in order (the notification list and widget bundle identifiers),
+  leaves out widgets whose app reported no content (`widget::Controller`), and gives each widget the height of its
+  display mode (`widget::Limits`, `widget::DisplayMode`). It returns a frame (top edge and height) for each block that is
+  shown, with spacing only between shown blocks. Host unit tests only.
+- Not done: `springboard/src/shell/notify/center.rs` does not call the layout yet, and no app can supply widget content,
+  so the column still shows notifications only. The next step is the shell side: a data source for the widget blocks.
+- The search results view and list view rows stay as they are: both models exist (`widget_search.rs`, `widget_list.rs`)
+  and only the app-facing surface is missing, which needs the extension point first.

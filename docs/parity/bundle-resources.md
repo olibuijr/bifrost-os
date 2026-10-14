@@ -70,3 +70,39 @@ Not built or tested in this round by design; the build and test stage runs `carg
 
 Not done: fetching the file over https, checking that the host serves the file for the app, query-item rules, and
 routing https links to apps in the shell. The browser still claims http and https (springboard/src/shell/defaultapps.rs).
+
+## Package placement rules
+
+`springboard/sdk/src/package_layout.rs` (`bifrost_app::package_layout`), built on parity/team-n-bundle-resources (not yet verified on Midget).
+
+- `classify(name, exec)` places one archive entry: `manifest.toml`, `icon.png` and the `exec` binary at the top level;
+  anything under `assets/`; flat `libs/<name>.so` shared libraries and `plugins/<name>.so` plug-ins.
+- Nested library or plug-in folders, names without a `.so` stem, and unknown top-level files are refused. Names with an
+  absolute path, an empty component, `.`, `..` or a backslash are refused as unsafe.
+- `check_package(names, exec)` checks a whole listing, collects every problem, rejects duplicate names and a non-bare
+  `exec`, and requires the manifest and the executable.
+
+Not done: `install_archive` in `springboard/src/shell/store/install.rs` does not call the check yet. Wiring it in is a
+follow-up, because existing packages must be checked first.
+
+## Container folders
+
+`springboard/sdk/src/container_layout.rs` (`bifrost_app::container_layout`), built on parity/team-n-bundle-resources (not
+yet verified on Midget).
+
+- `Folder` names the four fixed folders: `Documents`, `Library`, `Library/Caches` and `tmp`. `Documents` and `Library`
+  are backed up and never purged; `Library/Caches` and `tmp` are purgeable and not backed up.
+- `ContainerLayout::resolve(relative)` maps an app path under the container root and refuses empty, absolute and `..`
+  paths.
+- `ContainerLayout::ensure()` creates the folders in parent-first order and refuses a symlink or a file in place of a
+  folder, so an app cannot redirect its container.
+
+Not done: the shell does not create these folders for installed apps or move existing data into them.
+`file_manager.rs` (`SearchPathDirectory`) has a home-directory mapping for the desktop file APIs; it is separate and was
+not changed.
+
+## Tests
+
+Unit tests cover the classification and check rules in `package_layout.rs`, and the path rules, backup and purge policy,
+and the symlink and file refusals in `container_layout.rs`. The filesystem tests use `tempfile`. None were run in this
+round: the lead builds and runs `cargo test -p bifrost-app` later.
