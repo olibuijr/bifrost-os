@@ -105,6 +105,7 @@ pub mod cf_bundle;
 pub mod app_events;
 pub mod dispatch_time;
 pub mod timer_source;
+pub mod background_tasks;
 pub mod keyed_archive;
 pub mod value_types;
 pub mod colorsync;
