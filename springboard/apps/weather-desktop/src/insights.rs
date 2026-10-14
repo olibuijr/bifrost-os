@@ -7,9 +7,10 @@ use bifrost_app::controls::chart_marks::{Frame, Interpolation, Plot, line_path};
 use bifrost_app::controls::geo::{Coordinate, DistanceUnits, format_distance};
 use bifrost_app::controls::location_auth::{AuthorizationStatus, LocationError};
 use bifrost_app::controls::mapview::{MapCamera, MapType, MapView};
+use bifrost_app::controls::precipitation::{MinuteForecast, MinuteWeather, Precipitation};
 use bifrost_app::controls::weather_alert::WeatherAvailability;
 use bifrost_app::controls::weather_attribution::WeatherAttribution;
-use springboard::shell::weather::data::{Hour, Units};
+use springboard::shell::weather::data::{Day, Hour, Quarter, Units};
 
 /// The data service the forecast comes from, and the page that carries its terms.
 pub const DATA_SERVICE: &str = "Open-Meteo";
@@ -196,12 +197,231 @@ pub fn footer_lines() -> Vec<String> {
     lines
 }
 
+/// One column of the hourly strip: a forecast hour (by its index) or a sunrise or sunset marker between two hours.
+#[derive(Clone, Debug, PartialEq)]
+pub enum HourlyColumn {
+    Hour(usize),
+    Sun { rise: bool, time: String },
+}
+
+/// The hourly strip's columns: each hour, with the sunrise and sunset that fall between it and the next hour (the
+/// times compare as text, since the answer's local times share one format). Events after the last hour are left out,
+/// because the strip does not reach them.
+pub fn hourly_columns(hours: &[Hour], days: &[Day]) -> Vec<HourlyColumn> {
+    let mut events: Vec<(String, bool)> = Vec::new();
+    for d in days.iter().take(3) {
+        for (clock, rise) in [(&d.sunrise, true), (&d.sunset, false)] {
+            if !clock.is_empty() {
+                events.push((format!("{}T{}", d.date, clock), rise));
+            }
+        }
+    }
+    events.sort();
+    let mut out = Vec::new();
+    for (i, h) in hours.iter().enumerate() {
+        out.push(HourlyColumn::Hour(i));
+        let Some(next) = hours.get(i + 1) else { continue };
+        for (at, rise) in events.iter().filter(|(at, _)| at.as_str() >= h.time.as_str() && at.as_str() < next.time.as_str()) {
+            out.push(HourlyColumn::Sun { rise: *rise, time: at.get(11..16).unwrap_or(at.as_str()).to_string() });
+        }
+    }
+    out
+}
+
+/// The label of a chance of precipitation, rounded to five percent, or None below ten percent (no label is drawn).
+pub fn chance_label(percent: u8) -> Option<String> {
+    (percent >= 10).then(|| format!("{}%", (u16::from(percent) + 2) / 5 * 5))
+}
+
+/// The next hour as the card shows it: one sentence and the four quarter-hour amounts in millimetres.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NextHour {
+    pub summary: String,
+    pub bars: [f64; 4],
+}
+
+/// The next hour from the quarter-hour forecast. `now` is the answer's current time ("2026-10-14T13:15"); the four
+/// quarters from the one that covers it (the last one that starts at or before it) are used. Snowy skies report
+/// snow, anything else rain. None when the forecast has fewer than four quarters from there on.
+pub fn next_hour(quarters: &[Quarter], now: &str, snow: bool) -> Option<NextHour> {
+    let start = quarters.iter().rposition(|q| q.time.as_str() <= now).unwrap_or(0);
+    let window: Vec<&Quarter> = quarters.iter().skip(start).take(4).collect();
+    if window.len() < 4 {
+        return None;
+    }
+    let form = if snow { Precipitation::Snow } else { Precipitation::Rain };
+    let minutes = window
+        .iter()
+        .enumerate()
+        .map(|(k, q)| {
+            let wet = q.mm > 0.0;
+            let kind = if wet { form } else { Precipitation::None };
+            MinuteWeather::new(k as i64 * 900, kind, if wet { 1.0 } else { 0.0 }, q.mm * 4.0)
+        })
+        .collect();
+    let forecast = MinuteForecast::new(minutes);
+    let bars = [window[0].mm, window[1].mm, window[2].mm, window[3].mm];
+    Some(NextHour { summary: forecast.summary(0), bars })
+}
+
+/// The pressure tile: the reading in hPa or inHg (the temperature setting's pair) and the trend over three hours,
+/// "Rising", "Falling" or "Steady" (a change of a whole hPa or more counts as a trend).
+pub fn pressure_text(hpa: f64, trend_hpa: Option<f64>, units: Units) -> (String, String) {
+    let value = match units {
+        Units::Celsius => format!("{:.0} hPa", hpa),
+        Units::Fahrenheit => format!("{:.2} inHg", hpa * 0.029_529_983),
+    };
+    let note = match trend_hpa {
+        Some(d) if d >= 1.0 => "Rising",
+        Some(d) if d <= -1.0 => "Falling",
+        Some(_) => "Steady",
+        None => "Trend not available",
+    };
+    (value, note.to_string())
+}
+
+/// The precipitation tile: the day's total in mm or inches, and tomorrow's total as the note.
+pub fn precipitation_text(today_mm: f64, tomorrow_mm: Option<f64>, units: Units) -> (String, String) {
+    let amount = |mm: f64| match units {
+        Units::Celsius => format!("{mm:.1} mm"),
+        Units::Fahrenheit => format!("{:.2} in", mm / 25.4),
+    };
+    let note = match tomorrow_mm {
+        Some(mm) if mm > 0.0 => format!("Tomorrow: {}", amount(mm)),
+        Some(_) => "No rain tomorrow".to_string(),
+        None => "Tomorrow not available".to_string(),
+    };
+    (amount(today_mm), note)
+}
+
+/// The visibility tile: the distance in km or mi (the temperature setting's pair) and a word for it.
+pub fn visibility_text(metres: Option<f64>, units: Units) -> (String, String) {
+    let Some(m) = metres.filter(|m| m.is_finite() && *m >= 0.0) else {
+        return ("\u{2013}".to_string(), "Not available".to_string());
+    };
+    let system = match units {
+        Units::Celsius => DistanceUnits::Metric,
+        Units::Fahrenheit => DistanceUnits::Imperial,
+    };
+    let note = match m {
+        m if m < 1_000.0 => "Fog",
+        m if m < 4_000.0 => "Poor visibility",
+        m if m < 10_000.0 => "Moderate visibility",
+        _ => "Clear view",
+    };
+    (format_distance(m, system), note.to_string())
+}
+
+/// The point a compass needle reaches at `radius` from its centre, for a bearing in degrees clockwise from north
+/// (screen y grows downwards, so north is up).
+pub fn bearing_offset(degrees: f64, radius: f64) -> (f64, f64) {
+    let r = degrees.to_radians();
+    (radius * r.sin(), -radius * r.cos())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn hour(temp: f64) -> Hour {
-        Hour { label: "13".into(), temp, code: 0, day: true }
+        Hour { label: "13".into(), time: "2026-10-14T13:00".into(), temp, code: 0, day: true, chance: 0, precip_mm: 0.0, visibility_m: None }
+    }
+
+    fn day(date: &str, rise: &str, set: &str) -> Day {
+        Day { label: "Wed".into(), date: date.into(), code: 0, max: 5.0, min: 1.0, uv: 0.0, sunrise: rise.into(), sunset: set.into(), chance: 0, precip_mm: 0.0 }
+    }
+
+    fn at(time: &str, temp: f64) -> Hour {
+        Hour { time: time.into(), ..hour(temp) }
+    }
+
+    #[test]
+    fn sun_markers_sit_between_the_hours_they_fall_in() {
+        // hours 05:00, 06:00, 07:00; sunrise 06:12 falls between 06:00 and 07:00
+        let hours = [at("2026-10-14T05:00", 1.0), at("2026-10-14T06:00", 1.0), at("2026-10-14T07:00", 1.0)];
+        let cols = hourly_columns(&hours, &[day("2026-10-14", "06:12", "18:30")]);
+        assert_eq!(
+            cols,
+            vec![
+                HourlyColumn::Hour(0),
+                HourlyColumn::Hour(1),
+                HourlyColumn::Sun { rise: true, time: "06:12".into() },
+                HourlyColumn::Hour(2),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_sunset_after_the_last_hour_is_left_out() {
+        let hours = [at("2026-10-14T17:00", 1.0), at("2026-10-14T18:00", 1.0)];
+        let cols = hourly_columns(&hours, &[day("2026-10-14", "06:12", "18:30")]);
+        assert_eq!(cols, vec![HourlyColumn::Hour(0), HourlyColumn::Hour(1)]);
+        assert!(hourly_columns(&[], &[day("2026-10-14", "06:12", "18:30")]).is_empty());
+    }
+
+    #[test]
+    fn chances_under_ten_percent_are_not_labelled_and_others_round_to_five() {
+        assert_eq!(chance_label(9), None);
+        assert_eq!(chance_label(10).as_deref(), Some("10%"));
+        assert_eq!(chance_label(42).as_deref(), Some("40%"));
+        assert_eq!(chance_label(43).as_deref(), Some("45%"));
+        assert_eq!(chance_label(100).as_deref(), Some("100%"));
+    }
+
+    fn quarter(time: &str, mm: f64) -> Quarter {
+        Quarter { time: time.into(), mm }
+    }
+
+    #[test]
+    fn next_hour_takes_four_quarters_from_now_and_describes_the_change() {
+        let q = [
+            quarter("2026-10-14T13:00", 0.0),
+            quarter("2026-10-14T13:15", 0.0),
+            quarter("2026-10-14T13:30", 0.4),
+            quarter("2026-10-14T13:45", 0.6),
+            quarter("2026-10-14T14:00", 0.0),
+        ];
+        let next = next_hour(&q, "2026-10-14T13:15", false).unwrap();
+        assert_eq!(next.bars, [0.0, 0.4, 0.6, 0.0]);
+        assert_eq!(next.summary, "Rain starts in 15 min");
+    }
+
+    #[test]
+    fn a_dry_hour_and_a_short_forecast_read_plainly() {
+        let dry = [quarter("2026-10-14T13:00", 0.0), quarter("2026-10-14T13:15", 0.0), quarter("2026-10-14T13:30", 0.0), quarter("2026-10-14T13:45", 0.0)];
+        assert_eq!(next_hour(&dry, "2026-10-14T13:00", false).unwrap().summary, "No precipitation in the next hour");
+        assert!(next_hour(&dry[..2], "2026-10-14T13:00", false).is_none());
+        assert!(next_hour(&[], "2026-10-14T13:00", false).is_none());
+    }
+
+    #[test]
+    fn pressure_and_precipitation_read_in_the_setting_units() {
+        assert_eq!(pressure_text(1013.4, Some(2.0), Units::Celsius), ("1013 hPa".into(), "Rising".into()));
+        assert_eq!(pressure_text(1013.0, Some(-1.5), Units::Celsius).1, "Falling");
+        assert_eq!(pressure_text(1013.0, Some(0.4), Units::Celsius).1, "Steady");
+        assert_eq!(pressure_text(1013.0, None, Units::Celsius).1, "Trend not available");
+        assert_eq!(pressure_text(1013.0, None, Units::Fahrenheit).0, "29.92 inHg");
+        assert_eq!(precipitation_text(2.4, Some(0.0), Units::Celsius), ("2.4 mm".into(), "No rain tomorrow".into()));
+        assert_eq!(precipitation_text(0.0, Some(5.0), Units::Celsius).1, "Tomorrow: 5.0 mm");
+        assert_eq!(precipitation_text(25.4, None, Units::Fahrenheit).0, "1.00 in");
+    }
+
+    #[test]
+    fn visibility_follows_the_setting_and_names_fog() {
+        assert_eq!(visibility_text(Some(800.0), Units::Celsius), ("800 m".into(), "Fog".into()));
+        let (far, note) = visibility_text(Some(24_000.0), Units::Celsius);
+        assert!(far.ends_with(" km") && far.starts_with("24"), "{far}");
+        assert_eq!(note, "Clear view");
+        assert!(visibility_text(Some(16_000.0), Units::Fahrenheit).0.ends_with(" mi"));
+        assert_eq!(visibility_text(None, Units::Celsius).1, "Not available");
+    }
+
+    #[test]
+    fn the_needle_points_toward_where_the_wind_comes_from() {
+        let (x, y) = bearing_offset(0.0, 10.0);
+        assert!(x.abs() < 1e-9 && (y + 10.0).abs() < 1e-9, "north is up");
+        let (x, y) = bearing_offset(90.0, 10.0);
+        assert!((x - 10.0).abs() < 1e-9 && y.abs() < 1e-9, "east is right");
     }
 
     #[test]
