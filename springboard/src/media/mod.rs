@@ -33,6 +33,7 @@ pub mod id3;
 pub mod ilst;
 pub mod mp3;
 pub mod mp4;
+pub mod movie;
 pub mod route;
 pub mod sbr;
 mod sbr_tables;

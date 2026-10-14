@@ -1,210 +1,229 @@
-//! A media picker: browse a library by artist, album, genre or playlist, search, multi-select items, and hand the
-//! chosen items to a player as a queue; plus external player items an app publishes to the system (identifier,
-//! title, a stream URL and artwork). Pure std over simple item records.
+//! Media picker model: the library list an app shows when the user chooses songs, albums or playlists to hand back to
+//! the app. The app asks for a kind and a selection rule, and receives only the ids the user confirmed. It never reads
+//! the library itself. The model draws nothing: the shell draws [`MediaPicker::visible`] and the marks from
+//! [`MediaPicker::chosen`]. Items that cannot be played stay listed, but they cannot be chosen.
 
-use std::collections::BTreeSet;
+use crate::fuzzy;
 
+/// The kind of library item.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Song,
+    Album,
+    Playlist,
+}
+
+/// One library item shown in the picker.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Item {
+pub struct PickItem {
     pub id: u64,
+    pub kind: Kind,
     pub title: String,
     pub artist: String,
     pub album: String,
-    pub genre: String,
-    pub seconds: u32,
+    /// False for items the user cannot play (for example, not downloaded). They stay listed and disabled.
+    pub playable: bool,
 }
 
+/// How many items the user may choose.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Group {
-    Artist,
-    Album,
-    Genre,
+pub enum Selection {
+    /// Choosing an item replaces the previous choice.
+    One,
+    /// Any number of items, or at most `max` when it is given.
+    Many { max: Option<usize> },
 }
 
-/// The distinct values of a grouping with their item counts, sorted without case.
-pub fn groups(items: &[Item], by: Group) -> Vec<(String, usize)> {
-    let mut out: Vec<(String, usize)> = vec![];
-    for it in items {
-        let key = match by {
-            Group::Artist => &it.artist,
-            Group::Album => &it.album,
-            Group::Genre => &it.genre,
-        };
-        if key.is_empty() {
-            continue;
-        }
-        match out.iter_mut().find(|(k, _)| k.eq_ignore_ascii_case(key)) {
-            Some((_, n)) => *n += 1,
-            None => out.push((key.clone(), 1)),
-        }
-    }
-    out.sort_by_key(|(k, _)| k.to_lowercase());
-    out
-}
-
-/// The items whose title, artist or album contains every word of `query`.
-pub fn search<'a>(items: &'a [Item], query: &str) -> Vec<&'a Item> {
-    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
-    items
-        .iter()
-        .filter(|i| {
-            let hay = format!("{} {} {}", i.title, i.artist, i.album).to_lowercase();
-            words.iter().all(|w| hay.contains(w.as_str()))
-        })
-        .collect()
-}
-
-/// The picker's selection: items in the order they were picked, optionally limited in size.
-#[derive(Clone, Debug, Default)]
-pub struct Selection {
-    ids: Vec<u64>,
-    pub limit: Option<usize>,
-}
-
-impl Selection {
-    pub fn with_limit(limit: usize) -> Selection {
-        Selection { ids: vec![], limit: Some(limit) }
-    }
-
-    /// Picks or unpicks an item; false when the limit blocks a new pick.
-    pub fn toggle(&mut self, id: u64) -> bool {
-        if let Some(i) = self.ids.iter().position(|x| *x == id) {
-            self.ids.remove(i);
-            return true;
-        }
-        if self.limit.is_some_and(|l| self.ids.len() >= l) {
-            return false;
-        }
-        self.ids.push(id);
-        true
-    }
-
-    pub fn contains(&self, id: u64) -> bool {
-        self.ids.contains(&id)
-    }
-
-    pub fn ids(&self) -> &[u64] {
-        &self.ids
-    }
-
-    /// The chosen items as a queue, in pick order; ids missing from the library are skipped.
-    pub fn queue<'a>(&self, items: &'a [Item]) -> Vec<&'a Item> {
-        self.ids.iter().filter_map(|id| items.iter().find(|i| i.id == *id)).collect()
-    }
-
-    /// Total length of the chosen items in seconds.
-    pub fn total_seconds(&self, items: &[Item]) -> u32 {
-        self.queue(items).iter().map(|i| i.seconds).sum()
-    }
-}
-
-/// An item an app publishes to the system so it appears in the picker and Now Playing.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExternalItem {
-    pub app_id: String,
-    pub external_id: String,
-    pub title: String,
-    pub stream_url: String,
+pub enum Error {
+    /// No item with that id is in the library.
+    UnknownItem,
+    /// The item is listed but cannot be played.
+    NotPlayable,
+    /// The item's kind is not one the app asked for.
+    WrongKind,
+    /// The selection already holds the most items the rule allows.
+    LimitReached,
+    /// `confirm` was called with nothing chosen.
+    NothingSelected,
 }
 
-/// Registry of external items; an app's item with the same external id is replaced.
-#[derive(Clone, Debug, Default)]
-pub struct ExternalItems {
-    items: Vec<ExternalItem>,
+#[derive(Clone, Debug)]
+pub struct MediaPicker {
+    items: Vec<PickItem>,
+    /// The kinds the app accepts. Empty means every kind.
+    kinds: Vec<Kind>,
+    selection: Selection,
+    chosen: Vec<u64>,
+    query: String,
 }
 
-impl ExternalItems {
-    pub fn publish(&mut self, item: ExternalItem) -> bool {
-        if item.app_id.is_empty() || item.external_id.is_empty() || !(item.stream_url.starts_with("https://") || item.stream_url.starts_with("http://")) {
-            return false;
+impl MediaPicker {
+    pub fn new(items: Vec<PickItem>, kinds: Vec<Kind>, selection: Selection) -> MediaPicker {
+        MediaPicker { items, kinds, selection, chosen: Vec::new(), query: String::new() }
+    }
+
+    pub fn set_query(&mut self, query: &str) {
+        self.query = query.trim().to_string();
+    }
+
+    fn item(&self, id: u64) -> Option<&PickItem> {
+        self.items.iter().find(|i| i.id == id)
+    }
+
+    /// True when `id` is listed, playable and of an accepted kind.
+    pub fn can_choose(&self, id: u64) -> bool {
+        self.item(id).is_some_and(|i| i.playable && self.accepts(i.kind))
+    }
+
+    fn accepts(&self, kind: Kind) -> bool {
+        self.kinds.is_empty() || self.kinds.contains(&kind)
+    }
+
+    /// The ids the list shows: the items of an accepted kind sorted by title, or the matches for the query, best
+    /// match first. Items of other kinds are not listed.
+    pub fn visible(&self) -> Vec<u64> {
+        let shown: Vec<&PickItem> = self.items.iter().filter(|i| self.accepts(i.kind)).collect();
+        if self.query.is_empty() {
+            let mut all = shown;
+            all.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()).then(a.id.cmp(&b.id)));
+            return all.iter().map(|i| i.id).collect();
         }
-        self.items.retain(|i| !(i.app_id == item.app_id && i.external_id == item.external_id));
-        self.items.push(item);
-        true
+        let texts: Vec<String> = shown.iter().map(|i| format!("{} {} {}", i.title, i.artist, i.album)).collect();
+        fuzzy::rank(&self.query, texts.iter().map(|s| s.as_str())).into_iter().map(|(i, _)| shown[i].id).collect()
     }
 
-    pub fn withdraw_app(&mut self, app_id: &str) {
-        self.items.retain(|i| i.app_id != app_id);
+    /// Chooses `id` if it is not chosen, or drops it if it is. Returns true when the item is now chosen.
+    pub fn toggle(&mut self, id: u64) -> Result<bool, Error> {
+        let item = self.item(id).ok_or(Error::UnknownItem)?;
+        if !item.playable {
+            return Err(Error::NotPlayable);
+        }
+        if !self.accepts(item.kind) {
+            return Err(Error::WrongKind);
+        }
+        if let Some(at) = self.chosen.iter().position(|&c| c == id) {
+            self.chosen.remove(at);
+            return Ok(false);
+        }
+        match self.selection {
+            Selection::One => self.chosen = vec![id],
+            Selection::Many { max: Some(max) } if self.chosen.len() >= max => return Err(Error::LimitReached),
+            Selection::Many { .. } => self.chosen.push(id),
+        }
+        Ok(true)
     }
 
-    pub fn for_app(&self, app_id: &str) -> Vec<&ExternalItem> {
-        self.items.iter().filter(|i| i.app_id == app_id).collect()
+    /// The chosen ids in the order the user chose them.
+    pub fn chosen(&self) -> &[u64] {
+        &self.chosen
     }
 
-    pub fn all(&self) -> &[ExternalItem] {
-        &self.items
+    /// The choice handed back to the app. Fails when nothing is chosen.
+    pub fn confirm(&self) -> Result<Vec<u64>, Error> {
+        if self.chosen.is_empty() {
+            return Err(Error::NothingSelected);
+        }
+        Ok(self.chosen.clone())
     }
-}
-
-/// Distinct apps that published items.
-pub fn publishers(items: &ExternalItems) -> BTreeSet<&str> {
-    items.all().iter().map(|i| i.app_id.as_str()).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn item(id: u64, title: &str, artist: &str, album: &str, genre: &str, secs: u32) -> Item {
-        Item { id, title: title.into(), artist: artist.into(), album: album.into(), genre: genre.into(), seconds: secs }
+    fn item(id: u64, kind: Kind, title: &str, playable: bool) -> PickItem {
+        PickItem { id, kind, title: title.to_string(), artist: String::new(), album: String::new(), playable }
     }
 
-    fn library() -> Vec<Item> {
+    fn library() -> Vec<PickItem> {
         vec![
-            item(1, "Alpha", "Ann", "First", "Rock", 100),
-            item(2, "Beta", "ann", "First", "Rock", 200),
-            item(3, "Gamma", "Bob", "Second", "Jazz", 300),
-            item(4, "Delta", "", "", "", 50),
+            item(1, Kind::Song, "Zebra Crossing", true),
+            item(2, Kind::Song, "Blue Sky", true),
+            item(3, Kind::Album, "Radio Days", true),
+            item(4, Kind::Song, "Locked Track", false),
         ]
     }
 
     #[test]
-    fn groups_merge_case_and_skip_empty() {
-        let g = groups(&library(), Group::Artist);
-        assert_eq!(g, vec![("Ann".to_string(), 2), ("Bob".to_string(), 1)]);
-        assert_eq!(groups(&library(), Group::Genre), vec![("Jazz".to_string(), 1), ("Rock".to_string(), 2)]);
+    fn items_are_listed_by_title() {
+        let p = MediaPicker::new(library(), vec![], Selection::One);
+        assert_eq!(p.visible(), vec![2, 4, 3, 1]);
     }
 
     #[test]
-    fn search_needs_every_word() {
-        let lib = library();
-        assert_eq!(search(&lib, "ann first").len(), 2);
-        assert_eq!(search(&lib, "beta ann")[0].id, 2);
-        assert!(search(&lib, "zzz").is_empty());
-        assert_eq!(search(&lib, "").len(), 4);
+    fn a_query_keeps_only_the_matches() {
+        let mut p = MediaPicker::new(library(), vec![], Selection::One);
+        p.set_query("rad");
+        assert_eq!(p.visible(), vec![3]);
+        p.set_query("   ");
+        assert_eq!(p.visible().len(), 4, "a blank query lists everything again");
     }
 
     #[test]
-    fn selection_keeps_pick_order_and_limit() {
-        let lib = library();
-        let mut s = Selection::with_limit(2);
-        assert!(s.toggle(3));
-        assert!(s.toggle(1));
-        assert!(!s.toggle(2)); // limit
-        assert!(s.toggle(3)); // unpick
-        assert!(s.toggle(2));
-        assert_eq!(s.ids(), [1, 2]);
-        assert_eq!(s.queue(&lib).iter().map(|i| i.id).collect::<Vec<_>>(), vec![1, 2]);
-        assert_eq!(s.total_seconds(&lib), 300);
-        assert!(s.contains(1) && !s.contains(3));
-        s.toggle(1);
-        s.limit = None;
-        s.toggle(99);
-        assert_eq!(s.queue(&lib).len(), 1);
+    fn a_query_ranks_the_closer_match_first() {
+        let mut items = library();
+        items.push(PickItem { artist: "Rad".into(), ..item(5, Kind::Song, "Other", true) });
+        let mut p = MediaPicker::new(items, vec![], Selection::One);
+        p.set_query("rad");
+        // "Radio Days" starts with the query; "Other" only matches through its artist.
+        assert_eq!(p.visible(), vec![3, 5]);
     }
 
     #[test]
-    fn external_items_are_replaced_and_withdrawn() {
-        let mut e = ExternalItems::default();
-        let it = |ext: &str, url: &str| ExternalItem { app_id: "radio".into(), external_id: ext.into(), title: "T".into(), stream_url: url.into() };
-        assert!(e.publish(it("a", "https://x.is/a")));
-        assert!(e.publish(it("a", "https://x.is/b")));
-        assert!(!e.publish(it("c", "file:///etc/passwd")));
-        assert!(!e.publish(it("", "https://x.is")));
-        assert_eq!(e.all().len(), 1);
-        assert_eq!(e.for_app("radio")[0].stream_url, "https://x.is/b");
-        assert_eq!(publishers(&e).len(), 1);
-        e.withdraw_app("radio");
-        assert!(e.all().is_empty());
+    fn the_list_hides_kinds_the_app_did_not_ask_for() {
+        let mut p = MediaPicker::new(library(), vec![Kind::Song], Selection::One);
+        assert_eq!(p.visible(), vec![2, 4, 1]);
+        p.set_query("rad");
+        assert!(p.visible().is_empty());
+    }
+
+    #[test]
+    fn many_items_toggle_on_and_off() {
+        let mut p = MediaPicker::new(library(), vec![], Selection::Many { max: None });
+        assert_eq!(p.toggle(1), Ok(true));
+        assert_eq!(p.toggle(2), Ok(true));
+        assert_eq!(p.toggle(1), Ok(false));
+        assert_eq!(p.chosen(), &[2]);
+        assert_eq!(p.confirm(), Ok(vec![2]));
+    }
+
+    #[test]
+    fn a_single_choice_replaces_the_previous_one() {
+        let mut p = MediaPicker::new(library(), vec![], Selection::One);
+        p.toggle(1).unwrap();
+        p.toggle(2).unwrap();
+        assert_eq!(p.chosen(), &[2]);
+    }
+
+    #[test]
+    fn the_limit_stops_further_choices() {
+        let mut p = MediaPicker::new(library(), vec![], Selection::Many { max: Some(2) });
+        p.toggle(1).unwrap();
+        p.toggle(2).unwrap();
+        assert_eq!(p.toggle(3), Err(Error::LimitReached));
+        assert_eq!(p.chosen(), &[1, 2]);
+    }
+
+    #[test]
+    fn an_unplayable_item_is_listed_but_refused() {
+        let mut p = MediaPicker::new(library(), vec![], Selection::Many { max: None });
+        assert!(p.visible().contains(&4));
+        assert!(!p.can_choose(4));
+        assert_eq!(p.toggle(4), Err(Error::NotPlayable));
+    }
+
+    #[test]
+    fn only_the_requested_kinds_can_be_chosen() {
+        let mut p = MediaPicker::new(library(), vec![Kind::Song], Selection::Many { max: None });
+        assert_eq!(p.toggle(3), Err(Error::WrongKind));
+        assert_eq!(p.toggle(1), Ok(true));
+    }
+
+    #[test]
+    fn unknown_ids_and_an_empty_choice_are_refused() {
+        let mut p = MediaPicker::new(library(), vec![], Selection::One);
+        assert_eq!(p.toggle(99), Err(Error::UnknownItem));
+        assert_eq!(p.confirm(), Err(Error::NothingSelected));
     }
 }

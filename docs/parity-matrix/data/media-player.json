@@ -4,7 +4,7 @@
   "macos_since": "10.12.1",
   "status": "partial",
   "bifrost": "springboard/sdk/src/lib.rs (audio client re-export), springboard/src/svc.rs (audio module), springboard/sdk/src/widgets.rs (player capsule), springboard/src/shell/audiosvc.rs, springboard/src/shell/music/system.rs, springboard/src/media/queue.rs",
-  "summary": "Apps can play a queue, transport, shuffle, repeat and volume through the audio service client, and the shell shows Now Playing on the lock screen and in Control Center. Apps have no library query API, no media picker, no app-facing remote command handlers and no playlist or rating API; the media library lives inside the Music app.",
+  "summary": "Apps can play a queue, transport, shuffle, repeat and volume through the audio service client, and the shell shows Now Playing on the lock screen and in Control Center. Apps have no library query API, no media picker, no app-facing remote command handlers and no playlist or rating API; the media library lives inside the Music app. A pure media picker model (springboard/ui/src/media_picker.rs) covers kinds, selection rules and the confirmed choice; no picker view exists yet.",
   "rea_evidence": "ev_1546766457d8bd5255026935cabaef491d1c89baeafb20187fb19940392f1b34",
   "features": [
     {
@@ -52,9 +52,9 @@
     {
       "feature": "Media picker",
       "apple": "MPMediaPickerController",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no picker in the SDK; apps would need to build their own library browser"
+      "bifrost": "springboard/ui/src/media_picker.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-10; not yet verified on Midget. Pure model of a library picker: kinds accepted, one or many selection with a limit, playable filter, title and fuzzy search, and a confirmed choice returned to the app. No SDK widget or shell sheet draws it yet."
     },
     {
       "feature": "Volume control and route button",
@@ -129,7 +129,7 @@
   ],
   "gaps": [
     "No app-facing media library: no query, filter, collection or library change API (MPMediaQuery, MPMediaLibrary); the scan lives in springboard/apps/music-desktop/src/music/library.rs.",
-    "No media picker for apps (MPMediaPickerController).",
+    "No media picker view for apps. springboard/ui/src/media_picker.rs models the picker (kinds, selection rules, search, confirm), but no SDK widget or shell sheet draws it.",
     "No remote command handlers for apps (MPRemoteCommandCenter); Control Center transport and hardware media keys are not exposed to apps (springboard/src/bare/input.rs:826 notes the media-key remote but does not map it).",
     "No playlist, rating or feedback model in the SDK (MPMediaPlaylist, MPRatingCommand); favourites and playlists are private to the Music app.",
     "No volume slider or output route picker widget for apps (MPVolumeView).",
