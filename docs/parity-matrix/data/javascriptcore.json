@@ -10,9 +10,9 @@
     {
       "feature": "Execution environment (virtual machine and context)",
       "apple": "JSVirtualMachine, JSContext",
-      "bifrost": "springboard/src/shell/browser/js/mod.rs (one Boa Context per browser tab, internal to the Browser)",
-      "status": "os",
-      "note": "Boa 0.22 (springboard/Cargo.toml:66) runs inside the browser shell only; no SDK type creates a context for an app"
+      "bifrost": "springboard/sdk/src/js_value.rs (JsValue::from_eval, JsValue::to_literal); springboard/sdk/src/script_value.rs (ScriptValue); springboard/src/shell/browser/js/mod.rs (one Boa Context per browser tab, internal to the Browser)",
+      "status": "partial",
+      "note": "Apps read and write typed script values for the web view engine, tested headless in sdk/tests/parity_sdk-rest-11.rs. Gap: there is no standalone VM or context object, scripts run only inside a web view, and the browser's Boa context stays internal to the Browser."
     },
     {
       "feature": "JavaScript values",
@@ -61,7 +61,7 @@
       "apple": "JSContextRef, JSGlobalContextRef, JSStringRef, JSClassRef, JSValueRef, JSObjectRef, JSValueCompare, JSBigInt* functions",
       "bifrost": "none",
       "status": "gap",
-      "note": "Blocked: BifrOSt has no C ABI and the SDK is Rust-only (springboard/sdk/src/lib.rs). The JavaScript engine the browser uses is not exposed to apps as a context, value or string type, so there is no engine surface for a C interface to wrap."
+      "note": "Blocked on the execution-environment row above: there is no standalone JavaScript context for a C interface to wrap, and no C header or exported symbol set has been designed for the Rust SDK (springboard/sdk/src/lib.rs)."
     },
     {
       "feature": "Engine used for web content",

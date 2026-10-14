@@ -45,9 +45,9 @@
     {
       "feature": "Now-playing state shown outside the app",
       "apple": "Not in Media Intents itself (Now Playing and lock-screen controls are separate Apple APIs)",
-      "bifrost": "springboard/src/shell/music/system.rs, springboard/src/shell/music/nowplaying.rs",
-      "status": "os",
-      "note": "The shell draws the lock-screen card and Control Center media controls for whatever the audio service plays; apps get no SDK call to publish their own metadata"
+      "bifrost": "springboard/sdk/src/now_playing.rs (publish_body, accept, command_from_event); springboard/src/shell/services/now_playing.rs (parse_session, the now_playing service); springboard/src/shell/music/system.rs, springboard/src/shell/music/nowplaying.rs",
+      "status": "partial",
+      "note": "Apps publish their session (content, playback, declared commands) through bifrost_app::now_playing, and the shell reads it back; tested headless in sdk/tests/parity_sdk-rest-11.rs. Gap: artwork does not reach the shell yet, and the card and the Control Center tile are drawn only on the lab machine."
     },
     {
       "feature": "Discovering intents without launching the app",

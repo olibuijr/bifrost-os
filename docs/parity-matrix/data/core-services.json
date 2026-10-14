@@ -115,9 +115,9 @@
     {
       "feature": "Power and sleep",
       "apple": "IOPM and NSProcessInfo activity APIs; sleep and wake notifications through NSWorkspace",
-      "bifrost": "springboard/src/bare/sleep.rs (suspend after screen off, logind); springboard/sdk/src/process_info.rs (beginActivity, endActivity, thermal state, low power mode); springboard/sdk/src/workspace.rs (sleep and wake events)",
-      "status": "os",
-      "note": "Suspend is decided by the shell; apps get activities and sleep and wake events but cannot request a sleep block."
+      "bifrost": "springboard/src/bare/sleep.rs (note_app_activity, forget_app, app_sleep_blockers; suspend after screen off, logind); springboard/src/shell/apphost.rs (ToShell::Activity, Drop); springboard/sdk/src/process_info.rs (beginActivity, endActivity, thermal state, low power mode); springboard/sdk/src/workspace.rs (sleep and wake events)",
+      "status": "partial",
+      "note": "An app's beginActivity with idleSystemSleepDisabled blocks the shell's system sleep, and the activity union is tested headless in sdk/tests/parity_sdk-rest-11.rs and springboard/tests/parity_sdk-rest-11.rs. Gap: the block is a shell-side registry, not a logind inhibitor, so other programs do not see it, and a real refused suspend needs the lab machine."
     },
     {
       "feature": "Icons for files and content types",
