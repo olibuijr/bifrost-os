@@ -82,10 +82,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: hardware driver, kernel side",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Driver for the Bluetooth controller on Apple hardware; BifrOSt targets generic PC and tablet hardware with the Linux kernel's own Bluetooth drivers.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.AppleSunriseWLAN.dext",
@@ -103,10 +102,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: hardware driver, kernel side",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Driver for the Wi-Fi chip on Apple hardware; BifrOSt uses the Linux wireless drivers on other hardware.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.AppleUserHIDDrivers.dext",
@@ -123,11 +121,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: hardware driver, kernel side",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/sdk/src/hid_devices.rs",
+   "status": "partial",
+   "note": "Covers the HID device model the apps read; the kernel's evdev and HID drivers read the hardware, and this row does not replace them.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-Apple16X50PCI.dext",
@@ -146,7 +143,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: hardware driver, kernel side",
+   "note": "Not determined as a BifrOSt component: a 16550 UART PCI serial driver whose counterpart is the Linux kernel serial driver; no kernel package is cited because runtime-packages.txt does not list one.",
    "rea": [],
    "method": "heuristic"
   },

@@ -13774,10 +13774,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Scans for Find My beacon accessories and reports them to Apple's Find My network; BifrOSt has no such network and no beacon hardware.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.findmymac.plist",
@@ -13795,10 +13794,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Reports this Mac's location to Apple's Find My cloud service; BifrOSt has no device location cloud service.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.findmymacmessenger.plist",
@@ -13816,10 +13814,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Carries Find My Mac messages between this computer and Apple's servers; the service exists only for that cloud account.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.fontmover.plist",
@@ -14216,7 +14213,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree (no LaunchDaemons directory), the label does not say which inbox it updates, and no BifrOSt counterpart was found by name search.",
    "rea": [],
    "method": "heuristic"
   },
@@ -14363,7 +14360,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree and the label alone does not identify the I/O registry node cache it serves; no counterpart chosen.",
    "rea": [],
    "method": "heuristic"
   },
@@ -14529,11 +14526,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/usernotif.rs",
+   "status": "partial",
+   "note": "Covers the notifications the shell raises to the user; kernel-originated alerts have no Linux counterpart and are not built.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.libsqlite3.dbtelemetryd.plist",
@@ -14551,10 +14547,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Collects SQLite usage telemetry for Apple's analytics; BifrOSt sends no usage telemetry and SQLite is an ordinary Arch package.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.lightsoutmanagementd.plist",
@@ -14613,11 +14608,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "plocate (Arch package, packaging/arch/runtime-packages.txt)",
+   "status": "partial",
+   "note": "plocate provides locate and updatedb with a timer; the reference's Spotlight-backed index is not mirrored.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.locationd.plist",
@@ -14781,11 +14775,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "systemd (Arch package, packaging/arch/runtime-packages.txt; journald)",
+   "status": "partial",
+   "note": "Kernel module load messages reach the systemd journal; the reference's kext load log has no kext equivalent, so only the logging side is covered.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.lsd.plist",
@@ -14825,7 +14818,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show what the daemon serves; no counterpart chosen.",
    "rea": [],
    "method": "heuristic"
   },
@@ -15139,10 +15132,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Manages Apple provisioning profiles for signed app installs; BifrOSt apps are not distributed with profile-signed packages and no profile store exists.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.mobile.NRDUpdated.plist",
@@ -15369,11 +15361,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/core/src/sysinfo.rs",
+   "status": "partial",
+   "note": "Covers the device model, product name and memory summary; the reference's keyed device capability cache is not built.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.modelcatalogd.plist",
@@ -15560,7 +15551,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree; the label suggests delivery of system asset variants, but that cannot be confirmed; no counterpart chosen.",
    "rea": [],
    "method": "heuristic"
   },
@@ -15580,10 +15571,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Runs Apple Music library and playback sync against Apple's music service; BifrOSt media playback has no vendor store.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.nand.aspcarry.plist",
@@ -15747,11 +15737,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "samba (Arch package, packaging/arch/runtime-packages.txt; nmbd)",
+   "status": "partial",
+   "note": "Samba's nmbd provides the NetBIOS name service on the LAN; nothing in BifrOSt configures or starts it yet.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.newsyslog.plist",
@@ -15895,10 +15884,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Root helper for the reference's x86 to Arm translation layer for vendor binaries; BifrOSt runs native code and ships no translation layer.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.oahd.plist",
@@ -15916,10 +15904,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Translation daemon for the reference's x86 to Arm layer for vendor binaries; BifrOSt runs native code and ships no translation layer.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ocspd.plist",
@@ -15979,10 +15966,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Online authentication for Apple account sign-in against Apple's servers; BifrOSt accounts use BifrOSt Cloud instead.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.opendirectoryd.plist",
@@ -16293,11 +16279,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/battery.rs",
+   "status": "partial",
+   "note": "Covers live battery state in the shell; the reference's on-device power log history is not recorded.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.preferences.timezone.admintool.plist",
@@ -16356,11 +16341,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "systemd (Arch package, packaging/arch/runtime-packages.txt; systemd-random-seed.service)",
+   "status": "partial",
+   "note": "The systemd random seed unit restores and saves the seed across boots, doing the job this daemon does.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.racoon.plist",
@@ -16587,11 +16571,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/apphost.rs",
+   "status": "partial",
+   "note": "The app host tracks launched app processes and their pids; background activity assertions and state-based throttling are not built.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.sandboxd.plist",
@@ -16652,7 +16635,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show the service's purpose; no counterpart chosen.",
    "rea": [],
    "method": "heuristic"
   },
@@ -17135,7 +17118,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show which storage service it helps; no counterpart chosen.",
    "rea": [],
    "method": "heuristic"
   },
@@ -17218,10 +17201,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Collects SwiftUI trace data for the reference's Instruments profiler; BifrOSt development uses its own tooling and no vendor profiler.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.symptomsd-diag.plist",
@@ -17513,7 +17495,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show what status it reports; no counterpart chosen.",
    "rea": [],
    "method": "heuristic"
   },
@@ -17617,10 +17599,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Test manager for the reference's Xcode device test runner; BifrOSt tests run through cargo and the parity kit.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.thermalmonitord.plist",
@@ -17721,11 +17702,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "systemd (Arch package, packaging/arch/runtime-packages.txt; systemd-tmpfiles-clean.timer)",
+   "status": "partial",
+   "note": "The systemd tmpfiles cleaner removes old files from temporary directories; the reference's exact cleaning rules are not copied.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.touchbarserver.plist",
@@ -18122,7 +18102,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show what it warms; no counterpart chosen.",
    "rea": [],
    "method": "heuristic"
   },
@@ -18331,10 +18311,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Shared storage area network filesystem service for the reference's Xsan volumes; BifrOSt has no SAN volume support.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.xscertadmin.plist",
@@ -18352,10 +18331,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Certificate administration for Xsan SAN clients; BifrOSt has no Xsan volumes.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.xscertd-helper.plist",
@@ -18373,10 +18351,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Helper for Xsan certificate handling; BifrOSt has no Xsan volumes.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.xscertd.plist",
@@ -18394,10 +18371,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Certificate daemon for Xsan SAN clients; BifrOSt has no Xsan volumes.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.vix.cron.plist",
