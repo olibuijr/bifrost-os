@@ -46,7 +46,7 @@
    "area": "menu",
    "apple": "episode menu > Download",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:574",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:595",
    "note": "Download and Remove Download in the Episode menu, the context menu and the episode page; a Downloaded sidebar list; a download queue; downloaded state shown in rows. Not checked on the lab machine.",
    "wire": "Add Download and Remove Download to an episode context menu, a downloaded badge in draw_rows and a Downloaded sidebar row"
   },
@@ -100,7 +100,7 @@
    "area": "panel",
    "apple": "Up Next",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:2305",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:2418",
    "note": "Play Next and Play Last, an Up Next list with move up/down and clear, auto-advance when an episode ends and Controls > Next Episode. Drag reordering: press and hold an Up Next row for half a second, then drag it to a new place (check_hold, move_in_up_next). Needs a lab check.",
    "wire": "Queue of episode urls, Play Next / Play Last items, auto-advance in end_playback (podcasts.rs:439)"
   },
@@ -109,7 +109,7 @@
    "area": "menu",
    "apple": "View > Refresh",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:564",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:585",
    "note": "View > Refresh (cmd+R), a toolbar Refresh button and a refresh period from Settings. Needs a lab check.",
    "wire": "Add a Refresh toolbar item and cmd+R that call fetch_feed for every show"
   },
@@ -118,7 +118,7 @@
    "area": "toolbar",
    "apple": "Search sidebar item",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1283",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1317",
    "note": "Search sidebar item with a search field and results from an open directory with Follow buttons. Depends on the directory being reachable; no charts or categories. Needs a lab check.",
    "wire": "Search field querying an open podcast index; results with Follow buttons"
   },
@@ -127,7 +127,7 @@
    "area": "view",
    "apple": "Home / New",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/library.rs:110",
+   "bifrost": "springboard/apps/podcasts-desktop/src/library.rs:123",
    "note": "New Episodes sidebar row: unplayed episodes of all shows, newest first (limit 100). Needs a lab check.",
    "wire": "Sidebar row merging every show's episodes by date"
   },
@@ -136,7 +136,7 @@
    "area": "panel",
    "apple": "episode detail",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/feed.rs:217",
+   "bifrost": "springboard/apps/podcasts-desktop/src/feed.rs:219",
    "note": "Notes parsed in feed.rs (HTML to plain text; a link keeps its text and its address in parentheses) and shown on the episode page; no bold, italic or tappable links. Needs a lab check.",
    "wire": "Parse item description in feed.rs and show it in an episode detail pane"
   },
@@ -145,7 +145,7 @@
    "area": "panel",
    "apple": "Chapters",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/chapters.rs:14",
+   "bifrost": "springboard/apps/podcasts-desktop/src/chapters.rs:13",
    "note": "Podcast namespace chapter marks parsed from the feed, or read from the JSON file a podcast:chapters link names (fetched when the episode plays or its page opens; hidden entries skipped); listed on the episode page and in a Now Playing Chapters panel (tap to seek, current one highlighted). Built on parity/team-d-podcasts; not yet verified on Midget.",
    "wire": "Parse chapter metadata and list chapters in the player sheet"
   },
@@ -154,7 +154,7 @@
    "area": "settings",
    "apple": "show settings sheet",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1921",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:2008",
    "note": "Show settings page from the toolbar and View menu: auto-download, downloads to keep, episode order, persisted in prefs.tsv. It is an in-window page, not a sheet. Needs a lab check.",
    "wire": "Per-show options in the store and a settings sheet on the show page"
   },
@@ -163,7 +163,7 @@
    "area": "settings",
    "apple": "Settings window",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1921",
+   "bifrost": "springboard/apps/podcasts-desktop/src/prefs.rs:16",
    "note": "Settings page (sidebar row, cmd+,) with skip intervals and refresh period read by the transport and the refresh timer. An in-window page rather than a separate Settings window. Needs a lab check.",
    "wire": "Settings window with skip interval choices and refresh period read by transport.rs"
   },
@@ -172,7 +172,7 @@
    "area": "document",
    "apple": "File > Import / Export",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1388",
+   "bifrost": "springboard/apps/podcasts-desktop/src/opml.rs:6",
    "note": "File > Import and Export Subscriptions through the open and save panels (documents permission); OPML parsing and writing are tested in opml.rs. Needs a lab check.",
    "wire": "Read and write OPML of followed feeds through the document open/save flow"
   },
@@ -190,7 +190,7 @@
    "area": "panel",
    "apple": "Transcript view",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1775",
+   "bifrost": "springboard/apps/podcasts-desktop/src/transcript.rs:29",
    "note": "Feed transcript link fetched (WebVTT, SubRip, plain text) and shown in a Now Playing Transcript panel that follows the position; tapping a timed line seeks to it. No search in the transcript. Built on parity/team-d-podcasts; not yet verified on Midget.",
    "wire": "Fetch feed transcript links; a transcript panel synced to the position"
   },
@@ -199,7 +199,7 @@
    "area": "menu",
    "apple": "MainMenu Controls/Episode",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1408",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1476",
    "note": "main_menu with File, View, Controls (play/pause, stop, skip, next, speed, sleep) and Episode menus with key equivalents; a context menu on episode rows. Play/Pause has no menu shortcut because Space is handled as a key so the text fields keep it.",
    "wire": "Implement App::main_menu with Controls (Play, Skip, Speed, Sleep) and Episode menus"
   },
