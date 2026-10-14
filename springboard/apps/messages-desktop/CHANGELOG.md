@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- Exported the app's existing vector icon as the required 180 × 180 PNG, moved background jobs to utility dispatch queues with wake-pipe completions, and tied control radii to shared layout tokens.
+
 ## 0.5.1 — 2026-10-14
 
 - Find and Emoji & Symbols are in the Message menu so the app does not duplicate the shell Edit menu.

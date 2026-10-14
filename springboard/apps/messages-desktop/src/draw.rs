@@ -5,6 +5,7 @@
 use crate::model::{day_label, day_of, preview, starts_day, typing_text, EmojiGroup, Overlay, EMOJI_CATALOG, INFO_ROWS_MAX, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
 use crate::protocol::Body;
 use crate::window::MessagesWindow;
+use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
 use bifrost_app::kit::{colors, Surface, TextCache, Ui, Weight};
 
@@ -20,7 +21,7 @@ const EMOJI_W_PT: f32 = 44.0;
 const INFO_W_PT: f32 = 76.0;
 const BANNER_PT: f32 = 36.0;
 /// Corner radius of the newer controls (flat corners, at most 6 points).
-const CORNER_PT: f32 = 6.0;
+const CORNER_PT: f32 = m::ICON_RADIUS;
 const CELL_PT: f32 = 40.0;
 const MEMBER_ROWS: usize = 8;
 /// How many shared picture names the details panel lists.
@@ -34,7 +35,7 @@ const FOOT_LINE_PT: f32 = 15.0;
 const BUBBLE_SHARE: f32 = 0.62;
 /// Width of the outline around the message a quoted line jumped to.
 const HIGHLIGHT_PT: f32 = 2.0;
-const RADIUS_PT: f32 = 12.0;
+const RADIUS_PT: f32 = m::CARD_RADIUS;
 const BADGE_PT: f32 = 16.0;
 const SHEET_W_PT: f32 = 420.0;
 const SHEET_HEAD_PT: f32 = 44.0;
@@ -43,7 +44,7 @@ const SHEET_LABEL_PT: f32 = 16.0;
 const SHEET_BOX_PT: f32 = 30.0;
 const SHEET_FOOT_PT: f32 = 68.0;
 const SHEET_BUTTON_W_PT: f32 = 120.0;
-const PANEL_RADIUS_PT: f32 = 12.0;
+const PANEL_RADIUS_PT: f32 = m::CARD_RADIUS;
 
 /// A rectangle in pixels: x, y, width, height.
 pub type Rect = [f32; 4];

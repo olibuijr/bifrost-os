@@ -22,7 +22,6 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
 /// Key codes the shell sends for the editing keys (as the other apps read them).
@@ -118,8 +117,7 @@ pub struct MessagesWindow {
     transport: Arc<dyn Transport>,
     /// The signed-in session, once a sign-in succeeded.
     api: Option<Arc<Api>>,
-    tx: Sender<Event>,
-    rx: Receiver<Event>,
+    tx: sync::EventQueue,
     wake_rx: Option<UnixStream>,
     wake_tx: Option<UnixStream>,
     pending: HashMap<u32, Pending>,
@@ -161,7 +159,7 @@ impl MessagesWindow {
     /// Asks Passwords for the saved Matrix logins. The first one signs in as the answer arrives.
     pub fn new(ctx: &Ctx) -> MessagesWindow {
         let transport: Arc<dyn Transport> = Arc::new(Tls::new());
-        let (tx, rx) = channel();
+        let tx = Arc::new(std::sync::Mutex::new(std::collections::VecDeque::new()));
         let (wake_rx, wake_tx) = match wake_pair() {
             Some((rx, tx)) => (Some(rx), Some(tx)),
             None => (None, None),
@@ -173,7 +171,6 @@ impl MessagesWindow {
             transport,
             api: None,
             tx,
-            rx,
             wake_rx,
             wake_tx,
             pending: HashMap::new(),
@@ -231,7 +228,8 @@ impl MessagesWindow {
             let mut buf = [0u8; 64];
             while r.read(&mut buf).is_ok_and(|n| n > 0) {}
         }
-        while let Ok(event) = self.rx.try_recv() {
+        let events = self.tx.lock().map(|mut queue| queue.drain(..).collect::<Vec<_>>()).unwrap_or_default();
+        for event in events {
             self.event(ctx, event);
             self.dirty = true;
         }
