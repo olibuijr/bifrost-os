@@ -101,9 +101,9 @@
     {
       "feature": "HDR presentation",
       "apple": "Metal HDR content and extended dynamic range layers",
-      "bifrost": "springboard/render/src/hdr_transfer.rs",
+      "bifrost": "springboard/render/src/hdr_transfer.rs (pq_encode, hlg_encode, EdrHeadroom); springboard/render/src/hdr_frame.rs (FrameSession, frame_luminance)",
       "status": "partial",
-      "note": "Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. presenter is 8-bit SDR"
+      "note": "Pure model: the PQ and HLG curves, extended range headroom and per-frame metadata with MaxCLL and MaxFALL. Tests: the_perceptual_quantizer_maps_black_and_the_peak_to_the_ends_of_the_code_range, headroom_is_the_peak_over_the_reference_and_values_are_clamped_to_it, a_frame_reports_its_peak_and_mean_codes_and_the_running_light_levels (springboard/render/tests/parity_sdk-tests-10.rs). Not wired into apps or the presenter, which is 8-bit SDR; not yet tested on the VM or Midget"
     },
     {
       "feature": "GPU profiling, counters and frame capture",
