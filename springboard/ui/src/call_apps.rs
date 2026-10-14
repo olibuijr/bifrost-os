@@ -73,6 +73,40 @@ impl CallingApps {
     pub fn is_registered(&self, app_id: &str) -> bool {
         self.apps.iter().any(|id| id == app_id)
     }
+
+    /// Where a call the user does not start from an app goes: the default app, or the system when none is chosen.
+    pub fn route(&self) -> CallRoute<'_> {
+        match self.default.as_deref() {
+            Some(app_id) => CallRoute::App(app_id),
+            None => CallRoute::System,
+        }
+    }
+
+    /// The default as the settings file stores it: the app id, or an empty string when no default is chosen.
+    pub fn settings_value(&self) -> &str {
+        self.default_app().unwrap_or("")
+    }
+
+    /// Restores the default from a stored settings value. An empty value clears the default. A value that names an
+    /// app which has not registered is refused and the current default is kept, so the shell calls this after the
+    /// apps have registered for calling.
+    pub fn load_settings_value(&mut self, value: &str) -> Result<(), AppError> {
+        let value = value.trim();
+        if value.is_empty() {
+            self.clear_default();
+            return Ok(());
+        }
+        self.set_default(value)
+    }
+}
+
+/// Where a call goes when the user did not start it from an app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallRoute<'a> {
+    /// The default app takes the call.
+    App(&'a str),
+    /// No default is chosen, so the system takes the call with no app.
+    System,
 }
 
 #[cfg(test)]

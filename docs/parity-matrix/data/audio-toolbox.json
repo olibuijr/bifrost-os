@@ -24,9 +24,9 @@
     {
       "feature": "Audio Unit v2 render API (AudioUnit, render callbacks, I/O start and stop)",
       "apple": "AudioUnitRender, AURenderCallback, AudioOutputUnitStart/Stop, AudioUnitSetProperty",
-      "bifrost": "springboard/ui/src/audio_render.rs (RenderUnit",
+      "bifrost": "springboard/ui/src/audio_render.rs (RenderUnit); springboard/ui/src/audio_parameters.rs (ParameterTable)",
       "status": "partial",
-      "note": "Wave 2 (theme-08, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The PCM output path is internal to the springboard crate. No SDK render callback and no property or parameter model."
+      "note": "Pure render model with host unit tests, and parameters are a ranged table with clamped writes, reset and unknown-id refusal (parameter tests in springboard/ui/tests/parity_sdk-complete-36.rs). Gap: no SDK render callback, the PCM output path stays inside the springboard crate, and nothing is wired into apps or the shell or tested on the VM or Midget."
     },
     {
       "feature": "Audio Unit v3 plug-ins and AUAudioUnit host (parameters, presets, buses)",
@@ -38,9 +38,9 @@
     {
       "feature": "Audio components (registration, lookup, instantiation)",
       "apple": "AudioComponentFindNext, AudioComponentInstanceNew, AudioComponentDescription",
-      "bifrost": "springboard/ui/src/audio_render.rs (ComponentRegistry",
+      "bifrost": "springboard/ui/src/audio_render.rs (ComponentRegistry, ComponentDescription)",
       "status": "partial",
-      "note": "Wave 2 (theme-08, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No component registry. Codecs are chosen by sniffing in springboard/src/media/codec.rs."
+      "note": "ComponentRegistry registers components by kind, sub-kind and manufacturer, finds the next match with wildcards and instantiates a render unit (host unit tests in audio_render.rs). Gap: no SDK-facing registration or plug-in loading, codecs are still chosen by sniffing in springboard/src/media/codec.rs, and nothing is wired into apps or the shell or tested on the VM or Midget."
     },
     {
       "feature": "Audio file parsing and demuxing (Audio File Stream, Audio File, Extended Audio File)",
