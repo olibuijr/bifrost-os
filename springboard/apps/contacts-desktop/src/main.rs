@@ -13,6 +13,7 @@ mod names;
 mod printing;
 mod services;
 mod smart;
+mod tabular;
 mod textimport;
 
 use bifrost_app::control::{RpcError, INVALID_PARAMS};

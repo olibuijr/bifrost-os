@@ -4,13 +4,16 @@
 mod alerts;
 mod app;
 mod attach;
+mod mark;
 mod model;
 mod organize;
 mod quick;
 mod repeat;
+mod smartdef;
 mod settings;
 mod store;
 mod system;
+mod templates;
 mod zones;
 
 use bifrost_app::kit::{Damage, Event, Surface};
