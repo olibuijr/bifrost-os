@@ -397,6 +397,21 @@ pub fn forwards_to_queue(p: &Printer) -> bool {
     !host.is_empty() && (path.starts_with("/printers/") || path.starts_with("/classes/"))
 }
 
+/// True when the queue can be shared with other computers: a printer that is not a pool and does not send its jobs to
+/// a queue on another computer.
+pub fn share_offered(p: &Printer) -> bool {
+    !p.is_class && !forwards_to_queue(p)
+}
+
+/// The word for the sharing action of a queue: what it does next.
+pub fn share_label(shared: bool) -> &'static str {
+    if shared {
+        "Stop Sharing"
+    } else {
+        "Share Printer"
+    }
+}
+
 /// The second line of a printer row: its state (or Offline), whether it is a pool, remote, shared or the default, then how
 /// many jobs wait.
 pub fn row_summary(p: &Printer, offline: bool) -> String {
@@ -559,6 +574,20 @@ pub fn job_reason_text(keyword: &str) -> Option<&'static str> {
         "printer-stopped" => "Printer is paused",
         "document-format-error" => "Unsupported document",
         "job-completed-with-errors" => "Completed with errors",
+        "job-completed-with-warnings" => "Completed with warnings",
+        "job-canceled-by-operator" => "Canceled by operator",
+        "job-password-wait" => "Waiting for a password",
+        "document-password-error" => "Wrong document password",
+        "document-permission-error" | "document-security-error" => "Not allowed to print this document",
+        "document-unprintable-error" => "Document cannot be printed",
+        "job-digital-signature-wait" => "Waiting for a signature",
+        "job-data-insufficient" => "Waiting for the rest of the document",
+        "job-delay-output-until-specified" => "Waiting for the set time",
+        "compression-error" | "unsupported-compression" => "Document compression failed",
+        "submission-interrupted" => "Submission was interrupted",
+        "queued-in-device" => "Queued in the printer",
+        "printer-stopped-partly" => "Printer is partly paused",
+        "service-off-line" => "Printer service is offline",
         "resources-are-not-ready" => "Waiting for paper or supplies",
         _ => return None,
     })
@@ -941,6 +970,19 @@ mod tests {
     }
 
     #[test]
+    fn the_jam_tray_supply_and_door_reasons_each_have_their_own_sentence() {
+        let sentence = |keyword: &str| reason_problem(keyword).map(|p| (p.level, p.text));
+        assert_eq!(sentence("media-jam-error"), Some((Level::Error, "Paper jam".into())));
+        assert_eq!(sentence("media-empty-error"), Some((Level::Error, "Out of paper".into())));
+        assert_eq!(sentence("media-needed-warning"), Some((Level::Warning, "Paper needed".into())));
+        assert_eq!(sentence("input-tray-missing-error"), Some((Level::Error, "Paper tray is missing".into())));
+        assert_eq!(sentence("toner-low-warning"), Some((Level::Warning, "Toner is running low".into())));
+        assert_eq!(sentence("marker-supply-empty-error"), Some((Level::Error, "Out of ink or toner".into())));
+        assert_eq!(sentence("offline-report"), Some((Level::Report, "Printer is offline".into())));
+        assert_eq!(sentence("door-open-error"), Some((Level::Error, "A door or cover is open".into())));
+    }
+
+    #[test]
     fn problems_are_sorted_worst_first_and_joined_for_the_line() {
         let mut p = printer("Lab", false, PrinterState::Idle, 0);
         assert_eq!(problem_line(&p), None);
@@ -998,6 +1040,19 @@ mod tests {
         assert!(!forwards_to_queue(&p), "an IPP Everywhere queue is not a forward");
         p.device_uri = "ipp://front.local/classes/Floor".into();
         assert!(forwards_to_queue(&p), "a class on another computer forwards too");
+    }
+
+    #[test]
+    fn only_a_queue_of_this_computer_is_offered_for_sharing_and_the_button_says_what_it_does() {
+        let mut queue = printer("Office", false, PrinterState::Idle, 0);
+        assert!(share_offered(&queue));
+        assert_eq!(share_label(false), "Share Printer");
+        assert_eq!(share_label(true), "Stop Sharing");
+        queue.is_class = true;
+        assert!(!share_offered(&queue), "a pool is not shared");
+        queue.is_class = false;
+        queue.device_uri = "ipp://other.local/printers/Lab".into();
+        assert!(!share_offered(&queue), "a queue that forwards to another computer is not shared");
     }
 
     #[test]
@@ -1083,6 +1138,19 @@ mod tests {
         assert_eq!(job_status_text(&h, false), "Held");
         h.reasons = vec!["cups-held-for-authentication".into()];
         assert_eq!(job_status_text(&h, false), "Held for authentication");
+    }
+
+    #[test]
+    fn a_scheduler_reason_without_a_sentence_leaves_the_state_word() {
+        assert_eq!(job_reason_text("job-printing"), None, "the state word already says it");
+        assert_eq!(job_reason_text("job-password-wait"), Some("Waiting for a password"));
+        assert_eq!(job_reason_text("document-password-error"), Some("Wrong document password"));
+        assert_eq!(job_reason_text("job-canceled-by-operator"), Some("Canceled by operator"));
+        let mut j = job(4, JobState::PendingHeld);
+        j.reasons = vec!["job-password-wait".into()];
+        assert_eq!(job_status_text(&j, false), "Waiting for a password");
+        j.reasons = vec!["job-printing".into(), "queued-in-device".into()];
+        assert_eq!(job_status_text(&j, false), "Queued in the printer", "the first reason with a sentence is shown");
     }
 
     #[test]
