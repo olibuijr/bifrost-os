@@ -565,6 +565,7 @@ pub mod undo;
 pub mod text;
 pub mod keys;
 pub mod anim;
+pub mod angle;
 pub mod anim_value;
 pub mod keypath_anim;
 pub mod anim_transaction;
