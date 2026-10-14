@@ -51,9 +51,9 @@
    "area": "toolbar",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Select All / Deselect All",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/commands.rs:277; springboard/src/shell/desktop_bar.rs:photo_overlay (Edit rows)",
-   "note": "Edit > Select All (cmd+a) and Deselect All (cmd+shift+a) while Photos is in front; Deselect All clears the set and keeps selecting (albums.rs deselect_all). Multi-select still has no shift-range gesture: select_range (albums.rs) is modelled and tested but nothing calls it. Not yet verified on Midget.",
-   "wire": "Call Selection::select_range from a shift-held tap on a grid cell (mod.rs activate, Target::Cell)"
+   "bifrost": "springboard/src/shell/photos/commands.rs:277; springboard/src/shell/photos/mod.rs:3041 (select_cell); springboard/src/shell/hwkeys.rs:608 (set_photos_shift); springboard/src/shell/desktop_bar.rs:photo_overlay (Edit rows)",
+   "note": "Edit > Select All (cmd+a) and Deselect All (cmd+shift+a) while Photos is in front; Deselect All clears the set and keeps selecting (albums.rs deselect_all). A Shift-held tap on a grid cell selects the run from the last photo tapped (select_cell, fed the Shift state by bin/shell.rs). Not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "New Album and add photo to album",
@@ -267,9 +267,9 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Auto Enhance",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/commands.rs:277 (AutoEnhance); springboard/src/shell/desktop_bar.rs:photo_image_rows",
-   "note": "Image > Auto Enhance toggles the tone stretch on the open photo or the selection, checked when it is on. The Adjust pane has no Auto button yet. Not yet verified on Midget.",
-   "wire": "Add an Auto button to the Adjust pane (edit.rs auto_enhance)"
+   "bifrost": "springboard/src/shell/photos/commands.rs:277 (AutoEnhance); springboard/src/shell/desktop_bar.rs:photo_image_rows; springboard/src/shell/photos/mod.rs:2344 (Adjust pane Auto row)",
+   "note": "Image > Auto Enhance toggles the tone stretch on the open photo or the selection, checked when it is on. The Adjust pane has an Auto Enhance button in the row under its sliders. Not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Revert to Original",
@@ -294,9 +294,9 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Duplicate",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/commands.rs:277 (Duplicate, cmd+d); springboard/src/shell/photos/library.rs:72",
-   "note": "Image > Duplicate (cmd+d) copies the open photo with its edit, rating and details, as Share > Duplicate does. It is not offered for a selection. Not yet verified on Midget.",
-   "wire": "Duplicate each selected photo (loop over selected_photos in commands.rs)"
+   "bifrost": "springboard/src/shell/photos/commands.rs:277 (Duplicate, cmd+d); springboard/src/shell/photos/mod.rs:3010 (duplicate_photos); springboard/src/shell/photos/library.rs:72",
+   "note": "Image > Duplicate (cmd+d) copies the open photo, or every selected photo, with its edit, rating and details, as Share > Duplicate does; one rescan lists the copies. Not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Hide photo and Hidden album with password unlock",
