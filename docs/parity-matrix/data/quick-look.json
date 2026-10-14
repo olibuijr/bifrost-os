@@ -17,9 +17,9 @@
   {
    "feature": "Preview items (URL and title)",
    "apple": "QLPreviewItem protocol (https://developer.apple.com/documentation/quicklook/qlpreviewitem)",
-   "bifrost": "springboard/proto/src/peek.rs (PreviewItem, MAX_ITEMS), re-exported by springboard/sdk/src/peek.rs",
+   "bifrost": "springboard/proto/src/peek.rs (PreviewItem, MAX_ITEMS), re-exported by springboard/sdk/src/peek.rs; springboard/ui/src/preview_transition.rs (PanelFrame, lerp_rect); springboard/ui/tests/parity_sdk-complete-28.rs",
    "status": "partial",
-   "note": "URL and title only. No previewItemDisplayState, transition source frames or full-screen mode. Wire tests (springboard/proto/tests/parity_sdk-tests-01c.rs): a_preview_list_round_trips_with_its_index, the_list_is_capped_and_the_index_follows_the_cap, an_overlong_title_is_cut_on_a_character_boundary."
+   "note": "URL and title on the wire, and the display state (ItemState) in the SDK. Transition geometry from the item's source frame and the full-screen frame are tested headless in preview_transition.rs. Gap: the wire message carries no display state or source frame, so the shell cannot draw either yet. Wire tests (springboard/proto/tests/parity_sdk-tests-01c.rs): a_preview_list_round_trips_with_its_index, the_list_is_capped_and_the_index_follows_the_cap, an_overlong_title_is_cut_on_a_character_boundary."
   },
   {
    "feature": "Thumbnail generation and cache",

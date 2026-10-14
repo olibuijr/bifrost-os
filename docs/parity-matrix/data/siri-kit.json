@@ -66,9 +66,9 @@
     {
       "feature": "Siri voice input and spoken responses",
       "apple": "Requesting Authorization to Use Siri, SiriKit voice requests, Localizing Your Vocabulary",
-      "bifrost": "springboard/ui/src/speech.rs, springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/voice_commands.rs",
+      "bifrost": "springboard/ui/src/speech.rs, springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/voice_commands.rs, springboard/ui/src/voice_reply.rs, springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (speech.rs, speech_recognizer.rs, voice_commands.rs); not wired into the shell or apps, not tested on Midget. No speech recognition or synthesis in the desktop. The Assistant app sends typed text only."
+      "note": "Spoken replies are tested headless in voice_reply.rs: a confirmed click, an ambiguous name, an unknown name and an unknown phrase get a sentence queued on the speech synthesizer in the chosen language, and silent commands get none. Gap: nothing recognises speech and the shell does not call the reply model yet; the Assistant app sends typed text only, and the voice path needs Midget."
     },
     {
       "feature": "Custom vocabulary, synonyms and intent phrases",
