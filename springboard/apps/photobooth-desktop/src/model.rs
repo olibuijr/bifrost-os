@@ -3,6 +3,7 @@
 
 use bifrost_app::image_filter::{Filter, FilterChain};
 use bifrost_app::kit::{pack, Image};
+use crate::warp;
 use springboard::shell::photos::library::Date;
 use std::path::{Path, PathBuf};
 
@@ -99,10 +100,13 @@ pub enum Effect {
     Posterize,
     Vignette,
     Invert,
+    Bulge,
+    Twirl,
+    Mirror,
 }
 
 impl Effect {
-    pub const ALL: [Effect; 10] = [
+    pub const ALL: [Effect; 13] = [
         Effect::None,
         Effect::Mono,
         Effect::Noir,
@@ -113,6 +117,9 @@ impl Effect {
         Effect::Posterize,
         Effect::Vignette,
         Effect::Invert,
+        Effect::Bulge,
+        Effect::Twirl,
+        Effect::Mirror,
     ];
 
     pub fn title(self) -> &'static str {
@@ -127,7 +134,15 @@ impl Effect {
             Effect::Posterize => "Posterize",
             Effect::Vignette => "Vignette",
             Effect::Invert => "Invert",
+            Effect::Bulge => "Bulge",
+            Effect::Twirl => "Twirl",
+            Effect::Mirror => "Mirror",
         }
+    }
+
+    /// True for the effects that move pixels (`warp.rs`) instead of changing their colour.
+    pub fn is_distortion(self) -> bool {
+        matches!(self, Effect::Bulge | Effect::Twirl | Effect::Mirror)
     }
 
     /// The filters of this preset in order: name, then (input key, value) pairs.
@@ -143,6 +158,7 @@ impl Effect {
             Effect::Posterize => &[("posterize", &[("levels", 5.0)])],
             Effect::Vignette => &[("vignette", &[("strength", 0.6)])],
             Effect::Invert => &[("invert", &[])],
+            Effect::Bulge | Effect::Twirl | Effect::Mirror => &[],
         }
     }
 
@@ -158,6 +174,17 @@ impl Effect {
             }
         }
         chain
+    }
+
+    /// The picture with this effect: the colour filters first, then the distortion if the effect has one.
+    pub fn apply(self, img: Image) -> Image {
+        let img = if self.steps().is_empty() { img } else { self.chain().apply(&img).unwrap_or(img) };
+        match self {
+            Effect::Bulge => warp::bulge(&img),
+            Effect::Twirl => warp::twirl(&img),
+            Effect::Mirror => warp::mirror_left(&img),
+            _ => img,
+        }
     }
 }
 
@@ -194,6 +221,14 @@ pub fn layout(w: f32, h: f32) -> Layout {
     let effects = Rect { x: 0.0, y: (strip.y - EFFECTS_PT).max(0.0), w, h: EFFECTS_PT.min(strip.y) };
     let viewfinder = Rect { x: 0.0, y: 0.0, w, h: effects.y };
     Layout { viewfinder, effects, strip, controls }
+}
+
+/// The layout while the viewfinder fills the window: the other bars have no area, so nothing in them can be hit.
+pub fn layout_full_screen(w: f32, h: f32) -> Layout {
+    let w = w.max(0.0);
+    let h = h.max(0.0);
+    let none = Rect { x: 0.0, y: h, w: 0.0, h: 0.0 };
+    Layout { viewfinder: Rect { x: 0.0, y: 0.0, w, h }, effects: none, strip: none, controls: none }
 }
 
 /// The equal-width cells of the effects row, one per preset in `Effect::ALL`.
@@ -282,6 +317,22 @@ pub fn fit_size(w: usize, h: usize, max_w: usize, max_h: usize) -> (usize, usize
     (((w as f32 * r) as usize).max(1), ((h as f32 * r) as usize).max(1))
 }
 
+/// The size an image of `w` by `h` takes when it is scaled, up or down, to fill as much of `max_w` by `max_h` as its
+/// aspect allows; at least one pixel each way.
+pub fn fit_inside(w: usize, h: usize, max_w: usize, max_h: usize) -> (usize, usize) {
+    if w == 0 || h == 0 {
+        return (max_w.max(1), max_h.max(1));
+    }
+    let r = (max_w as f32 / w as f32).min(max_h as f32 / h as f32);
+    (((w as f32 * r) as usize).clamp(1, max_w.max(1)), ((h as f32 * r) as usize).clamp(1, max_h.max(1)))
+}
+
+/// Which capture is selected after the one at `deleted` left the strip, which then holds `remaining` captures: the one
+/// that took its place, or the last one when the newest was deleted, or none when the strip is empty.
+pub fn selection_after_delete(deleted: usize, remaining: usize) -> Option<usize> {
+    remaining.checked_sub(1).map(|last| deleted.min(last))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,10 +360,53 @@ mod tests {
     }
 
     #[test]
-    fn original_is_an_empty_chain_and_the_others_are_not() {
+    fn original_is_an_empty_chain_and_the_colour_effects_are_not() {
         assert!(Effect::None.chain().is_empty());
-        for effect in Effect::ALL.iter().skip(1) {
+        for effect in Effect::ALL.iter().skip(1).filter(|e| !e.is_distortion()) {
             assert!(!effect.chain().is_empty(), "{effect:?}");
+        }
+    }
+
+    #[test]
+    fn the_distortion_effects_have_no_colour_filters_and_change_the_picture() {
+        let mut px = Vec::new();
+        for y in 0..40usize {
+            for x in 0..60usize {
+                px.push(pack(x as u8 * 4, y as u8 * 6, 90, 255));
+            }
+        }
+        let img = Image { w: 60, h: 40, px };
+        let distortions: Vec<Effect> = Effect::ALL.iter().copied().filter(|e| e.is_distortion()).collect();
+        assert_eq!(distortions, [Effect::Bulge, Effect::Twirl, Effect::Mirror]);
+        for effect in distortions {
+            assert!(effect.chain().is_empty(), "{effect:?}");
+            let out = effect.apply(img.clone());
+            assert_eq!((out.w, out.h), (60, 40), "{effect:?}");
+            assert_ne!(out, img, "{effect:?}");
+        }
+    }
+
+    #[test]
+    fn apply_runs_the_colour_chain_and_leaves_the_original_alone() {
+        let img = solid(3, 3, pack(10, 20, 30, 255));
+        assert_eq!(Effect::None.apply(img.clone()), img);
+        assert_ne!(Effect::Invert.apply(img.clone()), img);
+    }
+
+    #[test]
+    fn effect_titles_are_distinct() {
+        let mut titles: Vec<&str> = Effect::ALL.iter().map(|e| e.title()).collect();
+        titles.sort_unstable();
+        titles.dedup();
+        assert_eq!(titles.len(), Effect::ALL.len());
+    }
+
+    #[test]
+    fn the_full_screen_layout_gives_the_viewfinder_the_whole_window_and_hides_the_bars() {
+        let l = layout_full_screen(1200.0, 780.0);
+        assert_eq!(l.viewfinder, Rect { x: 0.0, y: 0.0, w: 1200.0, h: 780.0 });
+        for bar in [l.effects, l.strip, l.controls] {
+            assert!(!bar.contains(10.0, 779.0) && !bar.contains(0.0, 780.0) && !bar.contains(600.0, 400.0));
         }
     }
 
@@ -413,6 +507,22 @@ mod tests {
         assert_eq!(fit_size(1280, 720, 640, 480), (640, 360));
         assert_eq!(fit_size(100, 50, 640, 480), (100, 50));
         assert_eq!(fit_size(4, 3, 2, 100), (2, 1));
+    }
+
+    #[test]
+    fn fit_inside_scales_up_and_down_and_keeps_the_aspect() {
+        assert_eq!(fit_inside(960, 540, 1920, 1200), (1920, 1080));
+        assert_eq!(fit_inside(960, 540, 480, 480), (480, 270));
+        assert_eq!(fit_inside(100, 100, 100, 100), (100, 100));
+        assert_eq!(fit_inside(0, 0, 50, 40), (50, 40));
+    }
+
+    #[test]
+    fn deleting_selects_the_capture_that_moves_up_or_the_last_one() {
+        assert_eq!(selection_after_delete(1, 3), Some(1));
+        assert_eq!(selection_after_delete(0, 3), Some(0));
+        assert_eq!(selection_after_delete(3, 3), Some(2));
+        assert_eq!(selection_after_delete(0, 0), None);
     }
 
     #[test]

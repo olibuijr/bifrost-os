@@ -10,7 +10,7 @@
    "area": "toolbar",
    "apple": "shutter",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:194",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:320",
    "note": "",
    "wire": ""
   },
@@ -19,7 +19,7 @@
    "area": "toolbar",
    "apple": "mode switch",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:250",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:376",
    "note": "",
    "wire": ""
   },
@@ -28,7 +28,7 @@
    "area": "toolbar",
    "apple": "mode switch",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:205",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:331",
    "note": "",
    "wire": ""
   },
@@ -37,7 +37,7 @@
    "area": "settings",
    "apple": "countdown option",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:56",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:57",
    "note": "",
    "wire": ""
   },
@@ -46,16 +46,16 @@
    "area": "settings",
    "apple": "flash option",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:530",
-   "note": "Always on; no toggle",
-   "wire": "Menu item that toggles the flash"
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:237",
+   "note": "View > Screen Flash toggles it; needs lab check",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Colour effects",
    "area": "panel",
    "apple": "Effects browser",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:91",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:92",
    "note": "",
    "wire": ""
   },
@@ -63,26 +63,26 @@
    "feature": "Distortion effects",
    "area": "panel",
    "apple": "Effects browser",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Warp filters (bulge, twirl, mirror) in the effect list"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/model.rs:204",
+   "note": "Bulge, Twirl, Mirror (nearest sampling); no live-tunable strength",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Backdrops",
    "area": "panel",
    "apple": "Effects backdrops",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Background segmentation and replacement"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/backdrop.rs:194",
+   "note": "Four gradient backdrops over a picture of the empty scene (background subtraction, not a person-segmentation model; no photo or movie backdrops); built on parity/team-d-photo-booth; not yet verified on Midget",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Captures strip",
    "area": "view",
    "apple": "thumbnail strip",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:327",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:536",
    "note": "",
    "wire": ""
   },
@@ -91,7 +91,7 @@
    "area": "menu",
    "apple": "File > Export",
    "status": "parity",
-   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:314",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:440",
    "note": "",
    "wire": ""
   },
@@ -99,55 +99,55 @@
    "feature": "Delete capture",
    "area": "menu",
    "apple": "Edit > Delete",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Delete key and menu item removing the selected file"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:244",
+   "note": "Delete/Backspace key and File > Delete; no undo or Trash",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Auto flip / mirror",
    "area": "menu",
    "apple": "Edit > Auto Flip",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Mirror flag applied in write_still"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:178",
+   "note": "View > Auto Flip, applied in grab so stills, clips and viewfinder match",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Full screen",
    "area": "menu",
    "apple": "View > Full Screen",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Window full-screen toggle"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:492",
+   "note": "View > Full Screen Viewfinder hides the bars so the picture fills the window; the window itself goes full screen only through the shell's shortcut because an app cannot request it; built on parity/team-d-photo-booth; not yet verified on Midget",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Camera selection",
    "area": "menu",
    "apple": "Camera menu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "First device only",
-   "wire": "Camera menu listing devices"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:266",
+   "note": "Camera menu lists probed devices; list refreshes on camera start only",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Slideshow",
    "area": "menu",
    "apple": "View > Slideshow",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Full-window slideshow of captures"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:276",
+   "note": "3 s per capture, Esc ends, arrows step; no transitions",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "App menus",
    "area": "menu",
    "apple": "MainMenu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No main_menu",
-   "wire": "App::main_menu with Take Photo, Export, Delete"
+   "status": "partial",
+   "bifrost": "springboard/apps/photobooth-desktop/src/main.rs:557",
+   "note": "File, View, Camera menus; shortcuts only for Take Photo and Slideshow",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Share capture",
