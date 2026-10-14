@@ -66,3 +66,37 @@ Unit tests in `springboard/ui/src/anim.rs` (`evenly_spaced_linear_keyframes_inte
 `an_infinite_repeat_never_finishes_and_a_zero_duration_is_instant`) and in `springboard/ui/src/frame_rate.rs`
 (`the_default_range_resolves_to_nothing` and six more). Not built or run in this round, per the stage rules; the
 next stage builds and tests. `python3 tools/check-names.py` reports no hits.
+
+## Matrix audit: rows brought in line with the code
+
+Status stays `partial` for the Core Animation row. This round re-read the rows against the code on branch `arm`
+and found the matrix was behind it. Code that already exists is now cited in the matrix, and the gaps list no longer
+says it is missing.
+
+- **Layer tree** moved from `gap` to `partial`. `springboard/ui/src/layer_tree.rs` (sublayers, superlayer, key-path
+  values, observers, rendering to `LayerCmd`), `springboard/ui/src/layer_layout.rs` (delegate, layout manager and the
+  constraint layout manager) and `springboard/ui/src/layer_bridge.rs` back the layer-backed views in
+  `springboard/sdk/src/view/layer_backed.rs` (`ViewBase::layer`). There is still no public CALayer class hierarchy.
+- **Spring velocity** is carried through a retarget (`Animation::velocity` in `springboard/ui/src/anim.rs`, and
+  `velocity_of` in `springboard/sdk/src/view/animation.rs`). The earlier note saying it was not carried was stale.
+  Initial velocity and mass are still not exposed to apps through `Timing::spring`.
+- **Basic property and key-path animation**: `springboard/ui/src/keypath_anim.rs` models basic, keyframe, spring and
+  group animations over named properties. The SDK window still animates typed view properties only.
+- **Corner radius, shadow and mask**: setters exist in `springboard/sdk/src/view/style_props.rs`, with the
+  geometry in `springboard/ui/src/layer_style.rs`.
+- **Shape, gradient, text, replicator, emitter, tiled and scroll layers** each have an app-facing view in
+  `springboard/sdk/src/view/layer_views.rs`, backed by the `layer_kinds` modules.
+- **Transactions**: `springboard/ui/src/anim_transaction.rs` nests transactions as a model. The SDK path does not yet
+  nest by key path.
+- **Frame clock**: `springboard/ui/src/frame_clock.rs` provides frame links, and `springboard/sdk/src/display_link.rs`
+  a refresh-period display link. Neither is yet the app-facing CADisplayLink object.
+- **Transitions**: `springboard/ui/src/transition.rs` is the shared model. Settings and Files still hold their own
+  copies.
+
+Gaps still open after the audit: no public CALayer class hierarchy; no keyframe, group or additive animations driven
+by the SDK window; no key-path animation through `Window::animate`; no app-facing CADisplayLink object or frame-rate
+request API; no app-facing Metal layer (system-only compositor); spring velocity and mass not exposed to apps; layer
+filters beyond background blur.
+
+Nothing in this round was built, run or tested. The lead owns the build and the Midget check. Every row touched here
+stays `partial` and reads "not yet verified on Midget".
