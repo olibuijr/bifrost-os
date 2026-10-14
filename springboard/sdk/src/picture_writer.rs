@@ -1,7 +1,8 @@
 //! Writes pictures with their metadata for apps. A writer takes one or more straight RGBA frames and writes one file in
-//! PNG, JPEG, GIF, BMP, TIFF or ICO, with an orientation, a capture date, a location, a JPEG quality, a frame delay
-//! and a GIF loop count. Each format keeps the metadata it can carry (JPEG, PNG and TIFF keep the orientation, date
-//! and location; GIF, BMP and ICO keep only the pixels and frame timing). WebP is read only.
+//! PNG, JPEG, GIF, BMP, TIFF or ICO, with an orientation, a capture date, a camera, the software that wrote it, a
+//! location and altitude, a JPEG quality, a frame delay and a GIF loop count. Each format keeps the metadata it can
+//! carry (JPEG, PNG and TIFF keep the orientation, date, camera, software and location; GIF, BMP and ICO keep only the
+//! pixels and frame timing). WebP is read only.
 //!
 //! ```ignore
 //! let mut writer = PictureWriter::new(Format::Jpeg)
