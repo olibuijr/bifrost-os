@@ -31,9 +31,9 @@
   {
    "feature": "VPN configuration (personal VPN, IKEv2/IPsec)",
    "apple": "Personal VPN collection group (NEVPNManager, NEVPNProtocol, NEVPNError)",
-   "bifrost": "springboard/core/src/tunnel.rs; wired: springboard/src/shell/pages.rs (PageId::Vpn, desktop_vpn_page); springboard/src/shell/desktop_network.rs (vpn_profiles, vpn_summary); springboard/core/src/tunnel.rs",
+   "bifrost": "springboard/core/src/tunnel.rs (TunnelSession, VpnProfile, VpnProtocol, Ipv4Route, RoutePolicy, parse_ipv4)",
    "status": "partial",
-   "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The VPN & Device Management page is a static placeholder ('VPN' value 'Not Connected'). No VPN profile storage, no IKEv2 or IPsec client. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Host tests a_session_connects_renegotiates_and_stops, a_profile_with_a_scheme_path_space_or_no_port_is_refused and a_failure_records_its_error_and_stops_with_provider_failed (core/tests/parity_sdk-tests-01e.rs). The settings page (springboard/src/shell/pages.rs, springboard/src/shell/desktop_network.rs) is shell wiring and not part of this evidence. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The VPN & Device Management page is a static placeholder ('VPN' value 'Not Connected'). No VPN profile storage, no IKEv2 or IPsec client. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
   },
   {
    "feature": "Packet tunnel provider and app proxy provider (custom VPN)",
