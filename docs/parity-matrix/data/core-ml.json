@@ -59,9 +59,9 @@
     {
       "feature": "Model encryption",
       "apple": "Generating a Model Encryption Key, Encrypting a Model in Your App",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no model encryption; the keychain module (springboard/sdk/src/keychain.rs) could hold a key but nothing uses it for models"
+      "bifrost": "springboard/ui/src/model_seal.rs (seal_with_password, open_with_password, seal_with_key)",
+      "status": "partial",
+      "note": "A model's text form is sealed in the sealed-box container (PBKDF2 with a password, or a raw key) and parsed only after authentication; tested headless in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no key generation or keychain wiring, and no build step encrypts models."
     },
     {
       "feature": "Custom layers and custom models",

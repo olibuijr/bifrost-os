@@ -24,9 +24,9 @@
     {
       "feature": "Remote sessions: RemoteMediaSession, extension, attributes, MediaDevice",
       "apple": "RemoteMediaSessionRepresentable, RemoteMediaSession, RemoteMediaSessionExtension, RemoteMediaSessionExtensionConfiguration, RemoteMediaSessionAttributes, RemoteMediaSessionError, MediaDevice",
-      "bifrost": "springboard/src/bare/bluetooth.rs:250 and springboard/src/media/route.rs:34 (route name only, for the Now Playing route label)",
-      "status": "gap",
-      "note": "No remote playback across devices, no extension point, no device list. The Bluetooth route is displayed, not controlled as a remote session."
+      "bifrost": "springboard/ui/src/remote_session.rs (RemoteMediaSession, MediaDevice); springboard/src/media/route.rs:34 (route name only, for the Now Playing route label)",
+      "status": "partial",
+      "note": "A session's title, app, device list and connect, move and disconnect steps are modelled and tested in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no transport moves the media, no extension point supplies the device list, and the Bluetooth route is still displayed rather than controlled."
     },
     {
       "feature": "Content types and metadata (MusicContent, PodcastContent, MovieContent, TVShowContent, BookContent, RadioContent, GenericContent, MediaType, MediaDuration)",
