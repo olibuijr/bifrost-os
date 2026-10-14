@@ -24,9 +24,9 @@
   {
    "feature": "Password credentials (sign-in form and keychain sharing)",
    "apple": "ASAuthorizationPasswordProvider, ASPasswordCredential, ASGeneratePasswordsRequest, ASSavePasswordRequest",
-   "bifrost": "springboard/sdk/src/keychain.rs (add/get/update/delete of generic passwords, per app id); wired: springboard/sdk/src/passwords.rs (save, update, fill, remove, decode_password); springboard/src/shell/services/keychain_groups.rs (PASSWORDS_GROUP, logins, secret, remove)",
+   "bifrost": "springboard/sdk/src/keychain.rs (add/get/update/delete of generic passwords, per app id); wired: springboard/sdk/src/passwords.rs (save, update, fill, remove, decode_password); springboard/src/shell/services/keychain_groups.rs (PASSWORDS_GROUP, logins, secret, remove); springboard/sdk/src/password_suggest.rs (site_matches, suggestions, save_decision; tests in sdk/tests/parity_sdk-complete-42.rs)",
    "status": "partial",
-   "note": "stores secrets only; no shared credential store, no save-password or generate-password prompt, no password suggestions across apps (kSecAttrAccessGroup absent per docs/bifrost-ui.md Keychain section) Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Saved logins that fit a page's host (newest first) and the save decision for a submitted password (save, update, unchanged or nothing) are tested headless in sdk/tests/parity_sdk-complete-42.rs. Gap: the shared store has no access group across apps (kSecAttrAccessGroup absent per docs/bifrost-ui.md Keychain section), and the save and generate-password sheets are not in the UI; verify on Midget for parity."
   },
   {
    "feature": "Passkeys and FIDO2 (public-key credentials)",

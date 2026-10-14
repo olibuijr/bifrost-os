@@ -18,6 +18,7 @@ pub mod image;
 pub mod inflate;
 pub mod interpret;
 pub mod obj;
+pub mod outline_tree;
 pub mod page;
 pub mod shading;
 pub mod sink;
