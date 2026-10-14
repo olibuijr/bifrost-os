@@ -38,9 +38,9 @@
   {
    "feature": "Key binding and text events to the input method",
    "apple": "IMKServerInput inputText(_:client:), didCommand(by:client:), inputText(_:key:modifiers:client:), handle(_:client:)",
-   "bifrost": "springboard/ui/src/input_method.rs (Event; wired: springboard/src/shell/compose_window.rs (compose_search_key); springboard/src/shell/hwkeys.rs (hw_type Search arm); springboard/ui/src/compose_method.rs (Compose::key); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
+   "bifrost": "springboard/ui/src/input_method.rs (Event, InputController::handle; wired: springboard/src/shell/compose_window.rs (compose_search_key); springboard/src/shell/hwkeys.rs (hw_type Search arm); springboard/ui/src/compose_method.rs (Compose::key); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs); springboard/ui/tests/parity_sdk-complete-03.rs",
    "status": "partial",
-   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Key events reach the app's own text field directly. Nothing routes them through a provider first, and there is no didCommand-style hand-off. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 2: input_text(string, client) and handle(Key, client) route chars, Backspace, Return, Tab and Escape; modifiers and didCommand are not modelled. Host tests only."
+   "note": "Headless tests in springboard/ui/tests/parity_sdk-complete-03.rs: a shortcut, Tab, a function key or an arrow with no candidate window commits the composition and hands the key to the client, while typed text and digits stay in the conversion. Gap: the provider has no didCommand-style selector set, and key events still reach the app's own text field first; verifying the hand-off needs the lab machine (Midget)."
   },
   {
    "feature": "Composed, original string and candidate queries",

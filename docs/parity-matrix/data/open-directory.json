@@ -52,9 +52,9 @@
     {
       "feature": "Contacts search in LDAP or Open Directory",
       "apple": "ODQuery against an LDAP node for contact attributes (framework summary)",
-      "bifrost": "springboard/ui/src/directory_query.rs, springboard/ui/src/directory_node.rs",
+      "bifrost": "springboard/ui/src/directory_query.rs, springboard/ui/src/directory_node.rs, springboard/ui/src/directory_contacts.rs (search_contacts, contact_filter, escape_filter_value); springboard/ui/tests/parity_sdk-complete-03.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (directory_query.rs, directory_node.rs); not wired into the shell or apps, not tested on Midget. The contacts app stores local contacts. Searching a directory server for contacts has no counterpart."
+      "note": "Headless tests in springboard/ui/tests/parity_sdk-complete-03.rs: person records of a node are searched as contacts (name, addresses, phones; groups excluded; sorted and limited), and the same query is written as an RFC 4515 LDAP filter with user text escaped. Gap: no directory server client sends the filter or reads entries back, and the contacts app still searches only its local contacts; that needs a directory service on the lab machine."
     }
   ],
   "gaps": [

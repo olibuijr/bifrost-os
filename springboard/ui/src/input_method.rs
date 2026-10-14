@@ -179,8 +179,8 @@ pub enum Outcome {
     Consumed,
     /// The event is the client's. The client handles it as usual.
     PassThrough,
-    /// The composition was committed. The client replaces its marked text with this text. For a command or a click
-    /// that ended the composition, the client then performs that command or places its caret.
+    /// The composition was committed. The client replaces its marked text with this text. For a command, a click or a
+    /// key that ended the composition, the client then performs that command, places its caret or handles the key.
     Committed(String),
     /// The composition was cancelled. The client replaces its marked text with this original text.
     Cancelled(String),
@@ -361,7 +361,9 @@ impl InputController {
                 }
                 Outcome::Consumed
             }
-            _ => Outcome::PassThrough,
+            // a shortcut (cmd, ctrl or alt), a tab, a function key or any other key that makes no text is not part of
+            // the conversion: the composition is committed and the client then handles the key
+            _ => Outcome::Committed(self.commit_composition().unwrap_or_default()),
         }
     }
 
