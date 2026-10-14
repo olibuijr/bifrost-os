@@ -24,9 +24,9 @@
     {
       "feature": "File paths (typed, component-wise paths)",
       "apple": "FilePath, FilePath.Component, FilePath.ComponentView, FilePath.Root (https://developer.apple.com/documentation/system/filepath)",
-      "bifrost": "Rust std::path::Path and PathBuf, used across springboard/src/ and springboard/sdk/src/ (for example springboard/sdk/src/file_coordination.rs:105 takes &Path)",
-      "status": "os",
-      "note": "The language's path type is the counterpart. No SDK type gives a null-terminated platform string or component views; the Rust path type is what apps use."
+      "bifrost": "springboard/sdk/src/typed_path.rs (TypedPath, Part, PathError)",
+      "status": "partial",
+      "note": "Parsing with checks, component views, push and removal, lexical normalisation and the bridge to the language path type are tested headless in tests/parity_sdk-rest-06.rs. Gap: there is no null-terminated platform string, no root enum and no separate component view type; the language path type stays the storage."
     },
     {
       "feature": "File permissions and modes",
