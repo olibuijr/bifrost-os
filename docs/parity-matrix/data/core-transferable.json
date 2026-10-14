@@ -10,23 +10,23 @@
     {
       "feature": "Transferable protocol and TransferRepresentation builder",
       "apple": "Transferable, TransferRepresentation, TransferRepresentationBuilder, TupleTransferRepresentation",
-      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item, drag_item, begin_drag, drop_values); springboard/sdk/src/item_provider.rs",
+      "bifrost": "springboard/sdk/src/transfer.rs (Representations, Transferable, Visibility, Viewer, pasteboard_item, from_pasteboard_item, drag_item, drop_values)",
       "status": "partial",
-      "note": "Sprint 10: Transferable trait with Representations builder (data, codable, file, proxy, proxy_of), exportedContentType and importedContentTypes, NSItemProvider (item_provider.rs: loadTransferable). Host tests only (sdk/tests/transferable.rs); verify on Midget for parity."
+      "note": "Sprint 10: Transferable trait with Representations builder (data, codable, file, proxy, proxy_of), exportedContentType and importedContentTypes. Host tests exported_and_imported_types_follow_declaration_order_and_visibility, a_pasteboard_item_carries_each_visible_type_and_reads_back, a_drag_carries_the_text_payload_and_its_types and a_drop_rebuilds_text_values_and_skips_links_the_model_cannot_read (sdk/tests/parity_sdk-tests-01e.rs; sdk/tests/transferable.rs). The NSItemProvider bridge (springboard/sdk/src/item_provider.rs) and the share picker are not part of this evidence; verify on Midget for parity."
     },
     {
       "feature": "Data transfer (Codable and binary data)",
       "apple": "CodableRepresentation, DataRepresentation",
-      "bifrost": "springboard/sdk/src/coding.rs (JSONEncoder, JSONDecoder, PropertyListEncoder); springboard/sdk/src/pasteboard.rs (set_data, data(uti)); springboard/sdk/src/transfer.rs (Representations::codable, data, JSON)",
+      "bifrost": "springboard/sdk/src/transfer.rs (Representations::codable, Representations::data, JSON)",
       "status": "partial",
-      "note": "CodableRepresentation and DataRepresentation are declared on the model and reach the pasteboard, drag and item provider through one Transferable declaration (encoders are supplied as functions, no derive). Host tests only; verify on Midget."
+      "note": "CodableRepresentation and DataRepresentation are declared on the model and reach the pasteboard and drag through one Transferable declaration (encoders are supplied as functions, no derive). Host tests export_hides_owner_types_from_other_apps_and_import_rejects_bad_bytes and exported_and_imported_types_follow_declaration_order_and_visibility (sdk/tests/parity_sdk-tests-01e.rs). The JSON and property-list encoders in springboard/sdk/src/coding.rs are not part of this evidence; verify on Midget."
     },
     {
       "feature": "File transfer (file URL representations)",
       "apple": "FileRepresentation, SentTransferredFile, ReceivedTransferredFile",
-      "bifrost": "springboard/proto/src/rich.rs (Payload::File with a document grant); springboard/sdk/src/dnd.rs (dropped files arrive as App::document events with read-only grants); springboard/sdk/src/transfer.rs (Representations::file, SentTransferredFile, ReceivedTransferredFile)",
+      "bifrost": "springboard/sdk/src/transfer.rs (Representations::file, SentTransferredFile, ReceivedTransferredFile)",
       "status": "partial",
-      "note": "FileRepresentation with sender and receiver roles and copy semantics (allow_open_in_place hands over the original). On a pasteboard item a file representation travels as bytes; no file promise in the shell yet. Host tests only; verify on Midget."
+      "note": "FileRepresentation with sender and receiver roles and copy semantics (allow_open_in_place hands over the original). Host tests a_file_representation_hands_over_and_rebuilds_its_file, a_sent_file_opened_in_place_hands_over_the_original and a_sent_file_without_open_in_place_is_copied_to_the_receiver (sdk/tests/parity_sdk-tests-01e.rs). On a pasteboard item a file representation travels as bytes; no file promise in the shell yet, and the document-grant path for dropped files (springboard/proto/src/rich.rs, springboard/sdk/src/dnd.rs) is not part of this evidence. Verify on Midget."
     },
     {
       "feature": "Copy and paste of typed items",
@@ -59,9 +59,9 @@
     {
       "feature": "Proxy representation and transfer visibility",
       "apple": "ProxyRepresentation, TransferRepresentationVisibility",
-      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item hides OwnProcess representations)",
+      "bifrost": "springboard/sdk/src/transfer.rs (Representations::proxy_of, Visibility)",
       "status": "partial",
-      "note": "Visibility All, Team and OwnProcess filter exports; proxy_of forwards another Transferable's bytes representations with the stricter visibility. Host tests only; verify on Midget."
+      "note": "Visibility All, Team and OwnProcess filter exports; proxy_of forwards another Transferable's bytes representations with the stricter visibility. Host tests visibility_gates_each_viewer, a_proxy_is_offered_only_as_visible_as_its_stricter_side and a_proxy_without_a_way_back_is_export_only (sdk/tests/parity_sdk-tests-01e.rs). Verify on Midget."
     }
   ],
   "gaps": [
