@@ -9,10 +9,10 @@
   "summary": {
     "features": 32,
     "parity": 11,
-    "partial": 7,
-    "gap": 13,
+    "partial": 13,
+    "gap": 7,
     "n/a": 1,
-    "coverage_pct": 46.8
+    "coverage_pct": 56.5
   },
   "features": [
     {
@@ -20,9 +20,9 @@
       "area": "view",
       "apple": "Source list of saved places, each with a live temperature and condition",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:391",
-      "note": "Sidebar rows list the places with a subtitle; rows carry no current temperature or condition glyph.",
-      "wire": "Store each place's last Summary (data.rs:271) and draw its temperature and condition glyph on the right of the row in weather.rs side_rows (weather.rs:391), using shell::weather::glyph."
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:345",
+      "note": "Sidebar rows list the places with their last known temperature on the right; rows carry no condition glyph yet.",
+      "wire": "Draw the place's condition glyph on the row. SidebarItem has no icon slot for a drawn glyph, so the kit (springboard/ui/src/sidebar.rs) needs one before weather.rs can use it."
     },
     {
       "feature": "Search and add a location",
@@ -38,18 +38,18 @@
       "area": "view",
       "apple": "Delete from the list (Edit > Delete, swipe, context menu)",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:55",
-      "note": "A remove button per row on the Locations page; no Delete key or context menu in the sidebar.",
-      "wire": "Handle the Delete key in weather.rs key() (weather.rs:933) for the selected sidebar row and add a secondary-click menu with Remove."
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:446",
+      "note": "Location menu Delete Location (Command-Delete), a sidebar context menu with Remove Location, and the per-row remove button on the Locations page.",
+      "wire": "Verify the menu and the sidebar context menu on Midget. The plain Delete key is not mapped: main.rs does not route KeyInput code 46 to a removal."
     },
     {
       "feature": "Reorder locations",
       "area": "view",
       "apple": "Drag rows to reorder the list",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Places keep the order they were added.",
-      "wire": "Add drag handling to the sidebar source_list rows in weather.rs touch() (weather.rs:973) and persist the order in data::Store (data.rs:358)."
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:529",
+      "note": "Drag a place in the sidebar; Location menu Move Location Up and Down (Command-Option arrows) and the sidebar context menu. The order is saved with the places.",
+      "wire": "Drag reordering on the Locations page is not built; its rows only select and remove. Verify the sidebar drag on Midget."
     },
     {
       "feature": "My Location",
@@ -74,27 +74,27 @@
       "area": "forecast",
       "apple": "Scrolling strip of hours with temperature, condition and precipitation chance",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1154",
-      "note": "Hours with temperature and glyph, scrolls sideways; no precipitation chance, no sunrise or sunset markers in the strip.",
-      "wire": "Add precipitation_probability and the day's sunrise and sunset to the hourly query (data.rs:243) and draw the percentage under the glyph and sun markers between the hours in weather.rs:1154."
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1391",
+      "note": "Hours with temperature, glyph and chance of rain (from ten percent, rounded to five); sunrise and sunset columns sit between the hours they fall in. Scrolls sideways.",
+      "wire": "Verify the chance labels and the sun columns on Midget."
     },
     {
       "feature": "10-day forecast",
       "area": "forecast",
       "apple": "Ten days with condition, range bar against the period's range, precipitation chance",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1173",
-      "note": "Ten day rows with glyph, high and low; no range bar, no precipitation chance.",
-      "wire": "Draw a min-max range bar per day scaled to the ten-day extremes in weather.rs:1173 and add precipitation_probability_max to the daily query (data.rs:243)."
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1422",
+      "note": "Ten day rows with glyph and the day's chance of rain under it, high and low, and a range bar scaled to the ten-day extremes.",
+      "wire": "Verify the chance under each glyph on Midget."
     },
     {
       "feature": "Minute-by-minute next-hour precipitation",
       "area": "forecast",
       "apple": "Next-hour precipitation chart with a summary sentence",
-      "status": "gap",
-      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:19",
-      "note": "DATA_HAS_MINUTE is false: the forecast service is not asked for minutely data.",
-      "wire": "Request minutely_15 precipitation in forecast_url (data.rs:243), add Forecast.minutes in data.rs:169 and draw a Next Hour card above the hourly strip."
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:247",
+      "note": "Next Hour card above the hourly strip: one summary sentence and four quarter-hour bars from minutely_15 precipitation (weather.rs:1369). Quarter-hour steps, not per minute.",
+      "wire": "The service gives 15-minute steps, so the card cannot show a per-minute chart. DATA_HAS_MINUTE (insights.rs:19) stays false until the footer reads the minute data."
     },
     {
       "feature": "Condition-driven backdrop",
@@ -128,9 +128,9 @@
       "area": "detail",
       "apple": "Wind speed, gusts and direction compass",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1215",
-      "note": "Speed in km/h or mph; no gusts, no direction.",
-      "wire": "Add wind_direction_10m and wind_gusts_10m to the current query (data.rs:243), extend data::Current (data.rs:136) and draw a compass dial in the tile."
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1290",
+      "note": "Speed in km/h or mph with the gusts in the note; a dotted compass dial with an N mark and a pointer toward where the wind comes from.",
+      "wire": "Verify the dial on Midget. The pointer is dots along the bearing, not an arrow."
     },
     {
       "feature": "Humidity tile",
@@ -163,28 +163,28 @@
       "feature": "Precipitation tile",
       "area": "detail",
       "apple": "Rain or snow amount for 24 hours and the next days",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Precipitation amounts are not requested.",
-      "wire": "Add precipitation_sum to the daily and precipitation to the hourly query (data.rs:243), a Precipitation tile in weather.rs:1212 and mm or in following the unit setting."
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:285",
+      "note": "Today's total in mm or in, with tomorrow's amount in the note. Rain and snow are not split.",
+      "wire": "Split snow from rain and show the next 24 hours from the hourly precipitation sums instead of today's daily total."
     },
     {
       "feature": "Visibility tile",
       "area": "detail",
       "apple": "Visibility distance with a note",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not requested.",
-      "wire": "Add visibility to the hourly query (data.rs:243) and a Visibility tile in weather.rs:1212 with km or mi."
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:299",
+      "note": "Distance in km or mi from the hourly visibility at the current hour, with a word for it.",
+      "wire": "Verify the tile against the reference on Midget."
     },
     {
       "feature": "Pressure tile",
       "area": "detail",
       "apple": "Barometric pressure with a trend dial",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not requested.",
-      "wire": "Add pressure_msl to the current query (data.rs:243) and a Pressure tile in weather.rs:1212 with hPa or inHg and a rising or falling note."
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:270",
+      "note": "Sea-level pressure in hPa or inHg with a Rising, Falling or Steady note from the three-hour change. No trend dial.",
+      "wire": "Draw the reference's trend dial; the tile has the value and the rising, falling or steady note."
     },
     {
       "feature": "Air quality",
@@ -199,10 +199,10 @@
       "feature": "Averages",
       "area": "detail",
       "apple": "Today's high against the average high for the date",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No climate data.",
-      "wire": "Fetch the archive daily maximum for the same date over the last ten years (data.rs) and add an Averages tile that states the difference."
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1477",
+      "note": "Average high for the date over the ten years before (archive request, fetched once a day for the selected place), with a Warmer, Cooler or Typical note from the kit's quartiles.",
+      "wire": "The history is held in memory for the session; keep it on disk so the tile shows offline too."
     },
     {
       "feature": "Temperature chart",

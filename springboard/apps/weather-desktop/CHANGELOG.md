@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0 — 2026-10-14
+
+- The Location menu in the menu bar: Search for a City (Command-F), Delete Location (Command-Delete), Move Location Up and Down (Command-Option arrows), a Temperature submenu with Celsius and Fahrenheit, and Refresh Forecast (Command-R).
+- Places can be reordered by dragging them in the sidebar. A secondary click on a place offers Show Forecast, Move Up, Move Down and Remove Location. The order is saved, and the selection stays on the same place.
+- Each sidebar row shows the place's last known temperature.
+- The forecast has a Next Hour card: one sentence and four quarter-hour bars from the minute forecast.
+- The hourly strip shows each hour's chance of rain from ten percent, and sunrise and sunset between the hours they fall in.
+- The ten-day forecast shows each day's chance of rain under its glyph.
+- The detail tiles gain Wind gusts with a compass dial toward where the wind comes from, Precipitation (today's total, tomorrow in the note), Visibility, Pressure with a Rising, Falling or Steady note, and Average High (today's high against the same date over the ten years before).
+
 ## 1.5.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
