@@ -25,7 +25,7 @@ and when the scene has no area in device pixels.
 - Wired: the scene loop is used by the game scenes. The hand-off is not used by the GPU presenter
   (`springboard/src/gpu/`) or by the SDK yet.
 - Needs: an SDK entry point that gives an app its hand-off, and a presenter path that accepts an app's render pass.
-  There is no Metal pipeline; the presenter is Linux GPU code (`docs/gpu-first.md`).
+  There is no second GPU pipeline; the presenter is Linux GPU code (`docs/gpu-first.md`).
 
 ## Adjustment records of edited photos (`photo_adjustment`)
 

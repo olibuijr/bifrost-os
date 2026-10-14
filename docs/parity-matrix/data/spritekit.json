@@ -117,7 +117,7 @@
    "apple": "SKRenderer, SKView",
    "bifrost": "springboard/ui/src/scene_handoff.rs (SceneHandoff, RenderPass, Viewport); springboard/ui/src/scene_loop.rs (frame cycle)",
    "status": "partial",
-   "note": "SceneHandoff advances a presented scene once per update and gives the app a render pass (viewport in device pixels and scene time), refused until an update has run; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: the GPU presenter does not consume the hand-off yet, apps cannot reach it through the SDK, and there is no Metal pipeline (the presenter is Linux GPU code, docs/gpu-first.md)."
+   "note": "SceneHandoff advances a presented scene once per update and gives the app a render pass (viewport in device pixels and scene time), refused until an update has run; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: the GPU presenter does not consume the hand-off yet, apps cannot reach it through the SDK, and there is no second GPU pipeline for apps (the presenter is Linux GPU code, docs/gpu-first.md)."
   }
  ],
  "gaps": [
