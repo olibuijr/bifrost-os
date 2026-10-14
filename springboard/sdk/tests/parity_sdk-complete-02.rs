@@ -140,3 +140,37 @@ fn a_layer_is_drawn_into_a_context_at_an_offset() {
     assert_eq!(page.layer.px[0], 0, "nothing lands outside the offset layer");
     assert_eq!(badge.draws(), 1, "drawing the layer into a context does not count as a layer draw");
 }
+
+// Lines and arcs: single strokes drawn with the context's stroke colour and line width, headless on a pixel buffer.
+
+#[test]
+fn a_stroked_line_paints_the_pixels_it_crosses_and_no_others() {
+    let mut ctx = GraphicsContext::new(10, 10);
+    ctx.set_stroke_color(0xffff_0000);
+    ctx.set_line_width(2.0);
+    ctx.stroke_line((1.0, 5.0), (8.0, 5.0));
+    let at = |x: usize, y: usize| ctx.layer.px[y * 10 + x];
+    assert_eq!(at(4, 5) >> 24, 0xff, "a pixel on the line is fully covered");
+    assert_eq!(at(0, 0) >> 24, 0, "a pixel far from the line stays transparent");
+}
+
+#[test]
+fn a_stroked_line_leaves_the_current_path_alone() {
+    let mut ctx = GraphicsContext::new(10, 10);
+    ctx.begin_path();
+    ctx.move_to(0.0, 0.0);
+    ctx.add_line(9.0, 0.0);
+    ctx.stroke_line((1.0, 5.0), (8.0, 5.0));
+    assert!(!ctx.current_path().is_empty(), "the path built before the line is still there");
+}
+
+#[test]
+fn a_stroked_arc_paints_the_ring_and_not_its_centre() {
+    let mut ctx = GraphicsContext::new(20, 20);
+    ctx.set_stroke_color(0xffff_0000);
+    ctx.set_line_width(2.0);
+    ctx.stroke_arc((10.0, 10.0), 6.0, 0.0, std::f32::consts::PI, false);
+    let at = |x: usize, y: usize| ctx.layer.px[y * 20 + x];
+    assert!(at(15, 10) >> 24 > 0, "a pixel on the ring is painted");
+    assert_eq!(at(10, 10) >> 24, 0, "the centre of the ring is not painted");
+}

@@ -507,6 +507,24 @@ impl GraphicsContext {
         self.stroke_polys(&polys, color, line_width);
     }
 
+    /// `strokeLineSegments` for one segment: strokes the line from `from` to `to`, in user space, with the stroke
+    /// colour and line parameters. The current path is not changed.
+    pub fn stroke_line(&mut self, from: (f32, f32), to: (f32, f32)) {
+        let mut line = Path::new();
+        line.move_to(from.0, from.1).line_to(to.0, to.1);
+        let (color, width) = (self.st.stroke_color, self.st.line.width);
+        self.stroke(&line, color, width);
+    }
+
+    /// Strokes the arc around `center` (user space) from `start` to `end` radians, with the stroke colour and line
+    /// parameters, as `addArc` followed by a stroke would. The current path is not changed.
+    pub fn stroke_arc(&mut self, center: (f32, f32), radius: f32, start: f32, end: f32, clockwise: bool) {
+        let mut arc = Path::new();
+        arc.add_arc(center.0, center.1, radius, start, end, clockwise);
+        let (color, width) = (self.st.stroke_color, self.st.line.width);
+        self.stroke(&arc, color, width);
+    }
+
     fn stroke_polys(&mut self, polys: &[(Vec<(f32, f32)>, bool)], color: u32, line_width: f32) {
         let t = &self.st.t;
         let scale = (t[0] * t[3] - t[1] * t[2]).abs().sqrt();

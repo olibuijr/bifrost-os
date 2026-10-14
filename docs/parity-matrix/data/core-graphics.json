@@ -24,9 +24,9 @@
   {
    "feature": "Primitive shapes (rects, rounded rects, lines, ellipses, arcs)",
    "apple": "CGContextFillRect, CGContextStrokeRect, CGContextAddEllipseInRect, CGContextAddArc, lines",
-   "bifrost": "springboard/render/src/cg/surface.rs (stroke_line, fill_ellipse, stroke_ellipse, stroke_arc, fill_arc), springboard/render/src/gfx.rs (fill_rect, fill_rrect, stroke_rrect)",
+   "bifrost": "springboard/render/src/cg/surface.rs (stroke_line, fill_ellipse, stroke_ellipse, stroke_arc, fill_arc), springboard/render/src/gfx.rs (fill_rect, fill_rrect, stroke_rrect); springboard/sdk/src/graphics_context.rs (stroke_line, stroke_arc)",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Lines, ellipses and arcs draw on the Surface through the scan converter, with line caps for lines and arcs. Rounded rectangles and squircles are anti-aliased. Lines and arcs have no SDK wrapper call yet."
+   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Lines, ellipses and arcs draw on the Surface through the scan converter, with line caps for lines and arcs. The SDK context strokes one line segment and one arc with its stroke colour and line width, tested headless in sdk/tests/parity_sdk-complete-02.rs. Gap: no app calls the new line and arc wrappers yet; verify on Midget."
   },
   {
    "feature": "Clipping",
