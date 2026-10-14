@@ -19,10 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "The bridge from a desktop Java toolkit to the native windowing layer; BifrOSt ships no such toolkit.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/JavaRuntimeSupport.framework",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "os",
+   "note": "The OpenJDK runtime (jdk-openjdk) is in the runtime package list, so Java programs run as ordinary processes; no SDK surface exposes a Java VM bridge.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Kerberos.framework",
@@ -227,10 +227,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Link reputation checks for messages and mail are a reference-platform service; BifrOSt has no link checking service.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/LiveCommunicationKit.framework",

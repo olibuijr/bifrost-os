@@ -249,10 +249,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Contactless payment reader hardware has no BifrOSt counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/PushKit.framework",
@@ -312,10 +312,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "A deprecated movie framework; playback is in springboard/src/media and no legacy movie surface is planned.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Quartz.framework",
@@ -521,11 +521,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "os",
+   "note": "The ruby and ruby-rake packages are in the runtime package list, so Ruby programs run as ordinary processes; no SDK surface exists.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PAImaging.framework",
