@@ -149,6 +149,7 @@ pub mod chacha_poly;
 pub mod spellcheck;
 pub mod text_replacements;
 pub mod volume;
+pub mod low_space;
 pub mod identity;
 pub mod reachability;
 pub mod vlan_plan;
