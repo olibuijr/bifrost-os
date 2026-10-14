@@ -24,9 +24,9 @@
     {
       "feature": "Credentials (ACAccountCredential, OAuth tokens)",
       "apple": "ACAccountCredential: init(oAuthToken:tokenSecret:), init(oAuth2Token:refreshToken:expiryDate:), oauthToken",
-      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete of opaque bytes by service and account)",
+      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete of opaque bytes by service and account); springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "An app can store a token itself as an opaque secret. The typed credential (Credential::encode and decode) is kept in memory by the account store and never written to accounts.ini; after a reopen the app sets it again from its keychain item. There is no refresh-token flow beyond renewCredentials, and no shared store between apps for secrets."
+      "note": "An app stores a token itself as an opaque keychain secret, and a_keychain_add_is_sent_with_its_service_account_and_secret checks the add message headless. The typed credential is kept in memory by the account store and not written to accounts.ini; after a reopen the app sets it again from its keychain item. There is no refresh-token flow beyond renewCredentials, and no shared store between apps for secrets."
     },
     {
       "feature": "Account types and access grants (ACAccountType)",

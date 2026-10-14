@@ -10,16 +10,16 @@
   {
    "feature": "Searchable items and attribute sets",
    "apple": "CSSearchableItem, CSSearchableItemAttributeSet",
-   "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet::new, content_description, keywords, thumbnail_path, content_url; CSSearchableItem::new); wired: springboard/src/shell/spotindex.rs (kind_of, load_thumbnail, decode_thumbnail); springboard/src/shell/quicksearch.rs (indexed_label, thumbnail cache in search() and draw()); springboard/sdk/src/quicksearch.rs (content_type, content_creation_date, author_names, display_name, ranking_hint, CSCustomAttributeKey)",
+   "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet builders, CSCustomAttributeKey, Person, LocalizedString, search_items); springboard/sdk/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/spotindex.rs (kind_of, load_thumbnail, decode_thumbnail); springboard/src/shell/quicksearch.rs (indexed_label, thumbnail cache in search() and draw())",
    "status": "partial",
    "note": "title, description, keywords, thumbnail path, content URL, content type, creation and modification dates, author names, display name, ranking hint and CSCustomAttributeKey values (searchable or not), plus persons and localized titles. Dates, authors, type and searchable custom values are folded into the indexed keywords. Host tests only; verify on Midget for parity. CSSearchableItem now carries expiration_date with is_expired (springboard/sdk/src/quicksearch.rs); the shell does not honour it on its stored file yet."
   },
   {
    "feature": "Indexing items in an on-device index",
    "apple": "CSSearchableIndex.indexSearchableItems",
-   "bifrost": "springboard/sdk/src/quicksearch.rs:83 (index_searchable_items); springboard/src/shell/spotindex.rs:54 (Index::index); springboard/sdk/src/search_index_batch.rs (SearchIndexLedger, CSIndexError, index_searchable_items_with_completion, begin_batch/end_batch, fetch_last_client_state)",
+   "bifrost": "springboard/sdk/src/search_index_batch.rs (SearchIndexLedger, CSIndexError, index_searchable_items_with_completion, begin_batch/end_batch, fetch_last_client_state); springboard/sdk/src/quicksearch.rs (index_searchable_items, index_checked); springboard/src/shell/spotindex.rs (Index::index); springboard/sdk/tests/parity_sdk-tests-01d.rs",
    "status": "partial",
-   "note": "completion results as Result<(), CSIndexError> (invalidItem, invalidClientState, indexUnavailable, quotaExceeded) from an app-side ledger; the 1000-item cap reports quotaExceeded in the SDK; batches commit all or none with client state. The shell still evicts oldest-first and sends no acknowledgement, so remoteConnectionError is not raised yet. Host tests only."
+   "note": "Completion results as Result<(), CSIndexError> (invalidItem, invalidClientState, indexUnavailable, quotaExceeded) from an app-side ledger; the 1000-item cap reports quotaExceeded; batches commit all or none with client state. Headless tests: index_checked_refuses_bad_identifiers_and_sends_the_rest, the_ledger_refuses_oversized_items_and_names_the_offending_position, the_ledger_caps_the_item_count_with_quota_exceeded, a_batch_commits_all_its_calls_with_the_client_state, a_batch_with_one_failed_call_commits_none_of_them, a_closed_ledger_answers_index_unavailable. The shell still evicts oldest-first and sends no acknowledgement, so remoteConnectionError is not raised yet."
   },
   {
    "feature": "Deleting indexed items",
@@ -59,7 +59,7 @@
   {
    "feature": "App-side search queries",
    "apple": "CSSearchQuery, CSSearchQueryContext, Searching for information in your app",
-   "bifrost": "springboard/ui/src/searchquery.rs, springboard/sdk/src/quicksearch.rs (search_items); wired: springboard/src/shell/services/search_ranking.rs (search reply adds kind); springboard/sdk/src/search_ranking.rs (Hit.kind); springboard/ui/src/quicksearch_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
+   "bifrost": "springboard/ui/src/searchquery.rs (run, Query, Field, Context); springboard/ui/src/quicksearch_query.rs (SearchQuery, UserQuery, SearchableIndex); springboard/sdk/src/quicksearch.rs (search_items); springboard/ui/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/services/search_ranking.rs (search reply adds kind); springboard/sdk/src/search_ranking.rs (Hit.kind)",
    "status": "partial",
    "note": "Wave 2 (theme-23, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot query its own or other apps' indexed items through the SDK Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Added: quicksearch_query::SearchQuery with query language (== != < > <= >=, * wildcard, c d w, && ||, parentheses, $time.now), incremental found_items batches, cancel, filter queries, QueryContext. Per-app isolation is modelled in StoreSet::search (the owner sees all live items, other apps only public ones). The attribute grammar (attribute == value, wildcards, modifiers, && and ||) and streaming found-items replies are not built."
   },
@@ -73,23 +73,23 @@
   {
    "feature": "Opening a search result",
    "apple": "NSUserActivity continuation with CSSearchableItemActionType",
-   "bifrost": "springboard/sdk/src/lib.rs:162 (App::continue_activity); springboard/sdk/src/quicksearch.rs (UserActivity, ACTION_TYPE); springboard/src/shell/quicksearch.rs:1348 (ToApp::ContinueActivity)",
+   "bifrost": "springboard/sdk/src/lib.rs (App::continue_activity); springboard/sdk/src/quicksearch.rs (UserActivity, ACTION_TYPE); springboard/src/shell/quicksearch.rs (ToApp::ContinueActivity); springboard/sdk/tests/parity_sdk-tests-01d.rs",
    "status": "partial",
-   "note": "continuation works for indexed items; the general NSUserActivity handoff path is not exposed by this SDK module"
+   "note": "Continuation works for indexed items: a UserActivity carries ACTION_TYPE and the item identifier (an_open_result_carries_the_action_type_and_the_item_identifier, and continue_activity_reaches_the_wire_format in the module). The general NSUserActivity handoff path is not exposed by this SDK module."
   },
   {
    "feature": "Errors and error domains",
    "apple": "CSIndexError, CSIndexErrorDomain, CSSearchQueryError, CSSearchQueryErrorDomain",
-   "bifrost": "springboard/sdk/src/quicksearch.rs; springboard/ui/src/quicksearch_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
+   "bifrost": "springboard/sdk/src/quicksearch.rs (IndexError, IndexError::check, code, DOMAIN); springboard/sdk/src/search_index_batch.rs (CSIndexError, CSIndexErrorCode raw values); springboard/ui/src/quicksearch_query.rs (Error codes); springboard/ui/src/searchquery.rs (Error codes); springboard/sdk/tests/parity_sdk-tests-01d.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. indexing returns nothing, so no error codes reach the app. Added: quicksearch_query::Error (InvalidQuery, Cancelled, RemoteConnection, BatchState) with stable codes."
+   "note": "Refused items report their position and code (IndexError: empty identifier, identifier or domain over the wire cap); CSIndexError raw values are -1000 to -1004 and the query errors have stable codes. Headless tests: index_error_codes_and_domain_are_stable, index_checked_refuses_bad_identifiers_and_sends_the_rest, client_state_must_be_small_and_a_batch_must_be_open, an_empty_query_or_a_query_with_no_fields_is_refused_with_its_code, a_cancelled_query_reports_cancellation_and_finds_nothing. The shell sends no acknowledgement, so remoteConnectionError and a full shell index are not reported to the app yet."
   },
   {
    "feature": "Custom attributes, localized strings and persons",
    "apple": "CSCustomAttributeKey, CSLocalizedString, CSPerson",
-   "bifrost": "springboard/sdk/src/quicksearch.rs",
+   "bifrost": "springboard/sdk/src/quicksearch.rs (CSCustomAttributeKey, CustomAttribute, Person, LocalizedString::localized_string, custom_value, localized_title); springboard/sdk/tests/parity_sdk-tests-01d.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no custom attribute keys, localized display strings or person records in the item attributes"
+   "note": "Custom values, person names and handles are searched as keywords, and a localized title is picked for the locale. Headless tests: searchable_custom_values_are_found_and_unsearchable_ones_are_not, persons_are_found_by_name_and_by_handle, localized_titles_pick_the_locale_then_the_language_then_the_first_text. The shell stores the folded keywords, not typed attribute records."
   },
   {
    "feature": "Summary and priority data for mail and messages",

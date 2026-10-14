@@ -151,6 +151,61 @@ impl SearchIndex {
     }
 }
 
+/// Headless model tests: the pasteboard text, the search item and the index plan are built from values in memory.
+#[cfg(test)]
+mod headless_model_tests {
+    use super::*;
+
+    fn contact(id: u64, name: &str, company: &str, phone: &str, email: &str) -> Contact {
+        Contact {
+            id,
+            name: name.into(),
+            phone: phone.into(),
+            email: email.into(),
+            notes: String::new(),
+            favorite: false,
+            company: company.into(),
+            address: String::new(),
+            labels: [0; 3],
+        }
+    }
+
+    #[test]
+    fn the_plain_text_lists_the_non_empty_fields_one_per_line() {
+        let c = contact(1, "  Ada Lovelace ", "Analytical", "555 1234", "");
+        assert_eq!(plain_text(&c, &[]), "Ada Lovelace\nAnalytical\n555 1234");
+    }
+
+    #[test]
+    fn an_unnamed_contact_is_labelled_contact() {
+        assert_eq!(label(&contact(2, "  ", "", "", "")), "contact");
+    }
+
+    #[test]
+    fn a_contact_is_indexed_under_its_item_id_with_its_fields_as_keywords() {
+        let item = search_item(&contact(7, "Ada Lovelace", "Analytical", "555 1234", "ada@example.test"));
+        assert_eq!(item.unique_identifier, item_id(7));
+        assert_eq!(item.unique_identifier, "contact.7");
+        assert_eq!(item.domain_identifier, DOMAIN);
+        assert_eq!(item.attribute_set.keywords, ["Ada Lovelace", "Analytical", "555 1234", "ada@example.test"]);
+        assert_eq!(item.attribute_set.content_description, "555 1234, ada@example.test");
+    }
+
+    #[test]
+    fn the_index_plan_sends_new_and_changed_contacts_and_removes_the_gone_ones() {
+        let mut sent = BTreeMap::new();
+        assert_eq!(plan(&sent, &[contact(1, "Ada", "", "1", ""), contact(2, "Bo", "", "2", "")]), Plan { index: vec![0, 1], remove: vec![] });
+        sent.insert(1, fingerprint(&contact(1, "Ada", "", "1", "")));
+        sent.insert(9, fingerprint(&contact(9, "Gone", "", "", "")));
+        // contact 1 changed its phone, contact 2 is new, contact 9 is no longer in the list
+        assert_eq!(plan(&sent, &[contact(1, "Ada", "", "3", ""), contact(2, "Bo", "", "2", "")]), Plan { index: vec![0, 1], remove: vec![9] });
+        sent.insert(1, fingerprint(&contact(1, "Ada", "", "3", "")));
+        sent.insert(2, fingerprint(&contact(2, "Bo", "", "2", "")));
+        sent.remove(&9);
+        assert_eq!(plan(&sent, &[contact(1, "Ada", "", "3", ""), contact(2, "Bo", "", "2", "")]), Plan { index: vec![], remove: vec![] }, "nothing changed, nothing sent");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

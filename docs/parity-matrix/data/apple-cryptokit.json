@@ -80,9 +80,9 @@
     {
       "feature": "Typed key storage in the keychain",
       "apple": "CryptoKit keys stored as keychain items (sample: Storing CryptoKit Keys in the Keychain)",
-      "bifrost": "springboard/sdk/src/keychain.rs:36-51 (add, get, update, delete)",
+      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "SDK keychain stores opaque secret bytes keyed by service and account, with a permission; there are no typed key objects and no key references"
+      "note": "The SDK keychain stores opaque secret bytes keyed by service and account, and a_keychain_add_is_sent_with_its_service_account_and_secret checks the add message headless. There are no typed key objects and no key references."
     },
     {
       "feature": "Hardware-backed keys (SecureEnclave)",
