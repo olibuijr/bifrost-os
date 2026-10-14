@@ -645,6 +645,7 @@ pub mod searchquery;
 pub mod searchindex;
 pub mod searchstore;
 pub mod usersearch;
+pub mod spotlight_tool;
 pub mod index_client;
 pub mod quicksearch_query;
 pub mod pathbar;
