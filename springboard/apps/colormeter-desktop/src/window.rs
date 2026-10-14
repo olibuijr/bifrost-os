@@ -38,8 +38,14 @@ pub const ZOOMS: [u32; 6] = [7, 11, 15, 21, 31, 41];
 /// The loupe size a new window starts with.
 pub const DEFAULT_CELLS: u32 = 15;
 /// The aperture sizes, in display pixels across. The reading is the mean of the square this wide around the pointer.
+/// Sizes are odd, so the square has a centre pixel and the pointer pixel is its middle.
 pub const APERTURE_MIN: u32 = 1;
 pub const APERTURE_MAX: u32 = 31;
+
+/// Rounds an aperture size up to the odd size it stands for, within the limits: an even size would centre on no pixel.
+pub fn odd_aperture(size: u32) -> u32 {
+    size.clamp(APERTURE_MIN, APERTURE_MAX) | 1
+}
 /// The aperture row under the swatch: its height, and the height and side margin of the slider track in it (points).
 pub const APERTURE_PT: f32 = 56.0;
 pub const TRACK_PT: f32 = 24.0;
@@ -173,9 +179,9 @@ impl ColorMeter {
         Some(loupe::sample_rect(self.pointer.x, self.pointer.y, self.aperture, w, h))
     }
 
-    /// Sets the aperture size, kept within its limits. True when it changed.
+    /// Sets the aperture size, kept within its limits and odd. True when it changed.
     pub fn set_aperture(&mut self, size: u32) -> bool {
-        let size = size.clamp(APERTURE_MIN, APERTURE_MAX);
+        let size = odd_aperture(size);
         let changed = size != self.aperture;
         self.aperture = size;
         changed
@@ -201,8 +207,8 @@ impl ColorMeter {
     /// An assistive technology steps or sets the aperture. True when it changed.
     pub fn aperture_action(&mut self, action: &AxAction) -> bool {
         match action {
-            AxAction::Increment => self.set_aperture(self.aperture.saturating_add(1)),
-            AxAction::Decrement => self.set_aperture(self.aperture.saturating_sub(1)),
+            AxAction::Increment => self.set_aperture(self.aperture.saturating_add(2)),
+            AxAction::Decrement => self.set_aperture(self.aperture.saturating_sub(2)),
             AxAction::SetValue(text) => text.trim().parse::<f32>().map_or(false, |v| self.set_aperture(v.round().max(0.0) as u32)),
             _ => false,
         }
@@ -585,6 +591,28 @@ mod tests {
     }
 
     #[test]
+    fn an_even_aperture_size_is_rounded_up_to_the_odd_size_above_it() {
+        let mut m = meter(40, 40, (5, 5));
+        assert!(m.set_aperture(4));
+        assert_eq!(m.aperture, 5);
+        assert!(!m.set_aperture(5));
+        assert_eq!(odd_aperture(30), 31);
+        assert_eq!(odd_aperture(0), APERTURE_MIN);
+    }
+
+    #[test]
+    fn the_aperture_square_is_centred_on_the_pointer_pixel() {
+        let mut m = meter(40, 40, (20, 20));
+        for size in [1, 2, 9, 30] {
+            m.set_aperture(size);
+            let r = m.aperture_rect().unwrap();
+            assert_eq!(r.w % 2, 1, "an odd square has a centre pixel");
+            assert_eq!(r.x + r.w / 2, 20, "the centre column is the pointer column");
+            assert_eq!(r.y + r.h / 2, 20, "the centre row is the pointer row");
+        }
+    }
+
+    #[test]
     fn the_aperture_slider_maps_the_track_to_sizes() {
         let mut m = meter(40, 40, (5, 5));
         let t = m.track_rect();
@@ -593,7 +621,7 @@ mod tests {
         assert!(m.drag_aperture(t.x));
         assert_eq!(m.aperture, APERTURE_MIN);
         assert!(m.drag_aperture(t.x + t.w / 2.0));
-        assert_eq!(m.aperture, 16);
+        assert_eq!(m.aperture, 17, "the middle of the track is 16, which rounds up to the odd size 17");
         // beyond the ends it clamps
         m.drag_aperture(t.x + 10.0 * t.w);
         assert_eq!(m.aperture, APERTURE_MAX);
@@ -616,14 +644,14 @@ mod tests {
     fn assistive_actions_step_and_set_the_aperture() {
         let mut m = meter(40, 40, (5, 5));
         assert!(m.aperture_action(&AxAction::Increment));
-        assert_eq!(m.aperture, 2);
+        assert_eq!(m.aperture, 3, "steps move between odd sizes");
         assert!(m.aperture_action(&AxAction::SetValue("9".into())));
         assert_eq!(m.aperture, 9);
         assert!(m.aperture_action(&AxAction::Decrement));
-        assert_eq!(m.aperture, 8);
+        assert_eq!(m.aperture, 7);
         assert!(!m.aperture_action(&AxAction::SetValue("not a number".into())));
         assert!(!m.aperture_action(&AxAction::Focus));
-        assert_eq!(m.aperture, 8);
+        assert_eq!(m.aperture, 7);
     }
 
     #[test]
