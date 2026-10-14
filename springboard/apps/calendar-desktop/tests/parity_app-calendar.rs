@@ -1,8 +1,11 @@
-//! Parity app-calendar: headless tests of the Quick Event notes, the travel time block in the Day and Week grids and
-//! the date range of event search. No test draws a frame or opens a window.
+//! Parity app-calendar: headless tests of the Quick Event notes, the travel time block in the Day and Week grids, the
+//! date range of event search and the custom repeats and alarms that copy and paste keep. No test draws a frame or opens a window.
 
+use bifrost_calendar::calendar::clip::{copy_text, paste};
+use bifrost_calendar::calendar::extras::Extra;
 use bifrost_calendar::calendar::ics::{IcsEvent, Local};
 use bifrost_calendar::calendar::layout::travel_span;
+use bifrost_calendar::calendar::recur;
 use bifrost_calendar::calendar::quick::{parse, Quick};
 use bifrost_calendar::calendar::search::{search, split_range, Range};
 use bifrost_calendar::calendar::store::CalendarEvent;
@@ -15,6 +18,13 @@ fn today() -> Date {
 
 fn day(day: u32) -> Date {
     Date { year: 2026, month: 10, day }
+}
+
+/// The stamp every copied event is written with.
+const STAMP: &str = "20261004T120000Z";
+
+fn on(month: u32, day: u32) -> Date {
+    Date { year: 2026, month, day }
 }
 
 fn saved(id: u64, on: u32, title: &str) -> CalendarEvent {
@@ -129,4 +139,27 @@ fn a_range_applies_to_imported_events_by_their_start_day() {
 fn a_query_with_neither_words_nor_range_still_matches_nothing() {
     assert!(search("", &[saved(1, 1, "x")], &[]).is_empty());
     assert!(search("   ", &[saved(1, 1, "x")], &[]).is_empty());
+}
+
+#[test]
+fn a_custom_repeat_and_custom_alarms_survive_copy_and_paste() {
+    let e = CalendarEvent { id: 1, date: on(10, 5), minute: 600, duration: 45, all_day: false, title: "Gym".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 };
+    let extra = Extra { rrule: Some("FREQ=WEEKLY;BYDAY=MO,WE".into()), alarms: Some(vec![5, 1440]), ..Extra::default() };
+    let got = paste(&copy_text(&e, Some(&extra), STAMP), on(10, 12), &[]);
+    assert_eq!(got.len(), 1);
+    let (pasted_event, pasted_extra) = &got[0];
+    assert_eq!(pasted_event.repeat, 0, "a custom rule is not a preset");
+    let rule = pasted_extra.rrule.as_deref().and_then(recur::parse_rrule);
+    assert_eq!(rule, recur::parse_rrule("FREQ=WEEKLY;BYDAY=MO,WE"));
+    assert_eq!(pasted_extra.alarms, Some(vec![5, 1440]));
+}
+
+#[test]
+fn a_preset_repeat_and_alert_need_no_extras() {
+    let mut e = CalendarEvent { id: 1, date: on(10, 5), minute: 600, duration: 45, all_day: false, title: "Dentist".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 };
+    e.repeat = 4;
+    e.alert = 3;
+    let got = paste(&copy_text(&e, None, STAMP), on(10, 5), &[]);
+    assert!(got[0].1.is_empty());
+    assert_eq!((got[0].0.repeat, got[0].0.alert), (4, 3));
 }

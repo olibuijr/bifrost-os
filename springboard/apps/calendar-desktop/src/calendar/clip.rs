@@ -1,7 +1,9 @@
 //! Cut, Copy and Paste of events (the Edit menu). An event travels on the pasteboard as .ics text, so it can be pasted
 //! here, into another calendar app, or read in a text editor. Pasting puts the events on the shown day, keeping their
-//! times, lengths, locations, notes, alert and (preset) repeat.
+//! times, lengths, locations, notes, alert and repeat. A custom repeat rule and custom alarms travel too, as the event's
+//! extras (`extras.rs`) on the way out and in.
 use super::alerts::{ALERT_MINUTES, REPEAT_RULES};
+use super::extras::{self, Extra};
 use super::ics::{self, IcsEvent};
 use super::store::{self, CalendarEvent};
 use super::{recur, Calendar, Date, UNDO_MS};
@@ -17,13 +19,17 @@ pub fn pasteable(text: &str) -> bool {
     text.contains("BEGIN:VEVENT")
 }
 
-/// One event as .ics text, with what the store holds beyond the .ics conversion (location, notes, alert, repeat).
-pub fn copy_text(e: &CalendarEvent, stamp: &str) -> String {
+/// One event as .ics text, with what the store holds beyond the .ics conversion (location, notes, alert, repeat). The
+/// event's extras add a custom repeat rule and custom alarms in place of the presets.
+pub fn copy_text(e: &CalendarEvent, extra: Option<&Extra>, stamp: &str) -> String {
     let mut ev = ics::from_calendar_event(e);
     ev.location = e.location.clone();
     ev.notes = e.notes.clone();
-    ev.alarms = ALERT_MINUTES.get(e.alert as usize).copied().flatten().into_iter().collect();
-    ev.rule = REPEAT_RULES.get(e.repeat as usize).and_then(|r| recur::parse_rrule(r));
+    ev.alarms = extra.and_then(|x| x.alarms.clone()).unwrap_or_else(|| extras::preset_alarms(e.alert));
+    ev.rule = extra
+        .and_then(|x| x.rrule.as_deref())
+        .and_then(recur::parse_rrule)
+        .or_else(|| REPEAT_RULES.get(e.repeat as usize).and_then(|r| recur::parse_rrule(r)));
     ics::write_single(&ev, &[], stamp)
 }
 
@@ -50,9 +56,20 @@ fn clean(text: &str) -> String {
     flat.trim().chars().take(FIELD_MAX).collect()
 }
 
-/// The events in `text` as store events on `target`: the earliest one lands on it, the others keep their distance from
-/// it. Ids are new (after `existing`); events the store cannot hold are left out, and so is anything past its limit.
-pub fn paste(text: &str, target: Date, existing: &[CalendarEvent]) -> Vec<CalendarEvent> {
+/// The extras a pasted event brings beyond its store fields: a custom repeat rule (when the rule is not a preset) and
+/// custom alarms (when the alarms are not the alert's preset). Nothing is kept for a preset.
+fn extra_of(e: &IcsEvent, ev: &CalendarEvent) -> Extra {
+    let rrule = e.rule.as_ref().filter(|_| ev.repeat == 0).map(recur::to_rrule);
+    let alarms = Some(e.alarms.clone())
+        .filter(|list| *list != extras::preset_alarms(ev.alert))
+        .map(|list| extras::clean_alarms(&list));
+    Extra { rrule, alarms, ..Extra::default() }
+}
+
+/// The events in `text` as store events on `target` with their extras: the earliest one lands on it, the others keep
+/// their distance from it. Ids are new (after `existing`); events the store cannot hold are left out, and so is anything
+/// past its limit.
+pub fn paste(text: &str, target: Date, existing: &[CalendarEvent]) -> Vec<(CalendarEvent, Extra)> {
     let cal = ics::parse(text);
     let Some(anchor) = cal.events.iter().map(|e| e.start.date).min() else { return vec![] };
     let delta = target.days() - anchor.days();
@@ -71,8 +88,9 @@ pub fn paste(text: &str, target: Date, existing: &[CalendarEvent]) -> Vec<Calend
         if !ev.valid() {
             continue;
         }
+        let extra = extra_of(e, &ev);
         all.push(ev.clone());
-        added.push(ev);
+        added.push((ev, extra));
     }
     added
 }
@@ -174,7 +192,7 @@ impl Calendar {
     pub fn copy_event(&mut self) -> bool {
         self.notice = None;
         let Some(e) = self.copy_target() else { return false };
-        let text = copy_text(e, &ics::stamp(self.wall.unix));
+        let text = copy_text(e, self.extras.events.get(&e.id), &ics::stamp(self.wall.unix));
         self.notice = Some(format!("Copied {}", e.title));
         self.copied = Some(text);
         true
@@ -229,13 +247,17 @@ impl Calendar {
             self.error = Some("There are no events to paste".into());
             return false;
         };
-        let last = last.id;
+        let last = last.0.id;
         let mut events = self.events.clone();
-        events.extend(added.iter().cloned());
+        events.extend(added.iter().map(|(e, _)| e.clone()));
         store::sort(&mut events);
         match store::save(&self.path, &events) {
             Ok(()) => {
                 self.events = events;
+                for (e, extra) in &added {
+                    self.extras.put(e.id, extra.clone());
+                }
+                self.save_extras();
                 self.changes.post();
                 self.picked = Some(last);
                 self.notice = Some(match added.len() {
@@ -267,6 +289,11 @@ mod tests {
     }
     const STAMP: &str = "20261004T120000Z";
 
+    /// The events a paste makes, without their extras.
+    fn pasted(text: &str, target: Date, existing: &[CalendarEvent]) -> Vec<CalendarEvent> {
+        paste(text, target, existing).into_iter().map(|(e, _)| e).collect()
+    }
+
     #[test]
     fn a_copied_event_pastes_with_everything_the_store_holds() {
         let mut e = ev(7, d(10, 5), "Dentist");
@@ -274,9 +301,9 @@ mod tests {
         e.notes = "Bring the form, ask about x-rays".into();
         e.alert = 3;
         e.repeat = 4;
-        let text = copy_text(&e, STAMP);
+        let text = copy_text(&e, None, STAMP);
         assert!(pasteable(&text));
-        let got = paste(&text, d(10, 20), &[ev(1, d(10, 1), "Other")]);
+        let got = pasted(&text, d(10, 20), &[ev(1, d(10, 1), "Other")]);
         assert_eq!(got.len(), 1);
         let p = &got[0];
         assert_eq!(p.id, 2, "a new id after the existing events");
@@ -295,7 +322,7 @@ mod tests {
                 let mut e = ev(1, d(10, 5), "Round trip");
                 e.repeat = repeat;
                 e.alert = alert;
-                let got = paste(&copy_text(&e, STAMP), d(10, 5), &[]);
+                let got = pasted(&copy_text(&e, None, STAMP), d(10, 5), &[]);
                 assert_eq!((got[0].repeat, got[0].alert), (repeat, alert), "repeat {repeat} alert {alert}");
             }
         }
@@ -307,7 +334,7 @@ mod tests {
         e.all_day = true;
         e.minute = 0;
         e.duration = 1440;
-        let got = paste(&copy_text(&e, STAMP), d(11, 2), &[]);
+        let got = pasted(&copy_text(&e, None, STAMP), d(11, 2), &[]);
         assert_eq!((got[0].date, got[0].all_day, got[0].duration), (d(11, 2), true, 1440));
     }
 
@@ -322,7 +349,7 @@ mod tests {
             timezones: vec![],
         };
         let text = ics::write(&cal, STAMP);
-        let got = paste(&text, d(12, 1), &[]);
+        let got = pasted(&text, d(12, 1), &[]);
         let days: Vec<(String, Date)> = got.iter().map(|e| (e.title.clone(), e.date)).collect();
         assert_eq!(days, vec![("Second".to_string(), d(12, 3)), ("First".to_string(), d(12, 1))]);
         assert_ne!(got[0].id, got[1].id);
@@ -333,7 +360,7 @@ mod tests {
         let mut e = IcsEvent::new("a", "Gym", Local::new(d(10, 5), 540), Local::new(d(10, 5), 600));
         e.rule = recur::parse_rrule("FREQ=WEEKLY;BYDAY=MO,WE");
         let text = ics::write(&ics::IcsCalendar { name: String::new(), events: vec![e], timezones: vec![] }, STAMP);
-        let got = paste(&text, d(10, 12), &[]);
+        let got = pasted(&text, d(10, 12), &[]);
         assert_eq!((got.len(), got[0].repeat), (1, 0));
     }
 
@@ -344,21 +371,21 @@ mod tests {
         let mut e = IcsEvent::new("a", "Notes", Local::new(d(10, 5), 540), Local::new(d(10, 5), 600));
         e.notes = "first\nsecond".into();
         let text = ics::write(&ics::IcsCalendar { name: String::new(), events: vec![e], timezones: vec![] }, STAMP);
-        assert_eq!(paste(&text, d(10, 5), &[])[0].notes, "first second");
+        assert_eq!(pasted(&text, d(10, 5), &[])[0].notes, "first second");
     }
 
     #[test]
     fn text_without_events_pastes_nothing() {
         assert!(!pasteable("buy milk"));
-        assert!(paste("buy milk", d(10, 5), &[]).is_empty());
-        assert!(paste("BEGIN:VCALENDAR\nEND:VCALENDAR\n", d(10, 5), &[]).is_empty());
+        assert!(pasted("buy milk", d(10, 5), &[]).is_empty());
+        assert!(pasted("BEGIN:VCALENDAR\nEND:VCALENDAR\n", d(10, 5), &[]).is_empty());
     }
 
     #[test]
     fn pasting_stops_at_the_store_limit() {
         let existing: Vec<CalendarEvent> = (1..=store::MAX_EVENTS as u64).map(|i| ev(i, d(10, 1), "x")).collect();
-        let text = copy_text(&ev(1, d(10, 5), "One more"), STAMP);
-        assert!(paste(&text, d(10, 5), &existing).is_empty());
-        assert_eq!(paste(&text, d(10, 5), &existing[..existing.len() - 1]).len(), 1);
+        let text = copy_text(&ev(1, d(10, 5), "One more"), None, STAMP);
+        assert!(pasted(&text, d(10, 5), &existing).is_empty());
+        assert_eq!(pasted(&text, d(10, 5), &existing[..existing.len() - 1]).len(), 1);
     }
 }
