@@ -17,9 +17,9 @@
     {
       "feature": "Device inquiry (scan)",
       "apple": "IOBluetoothDeviceInquiry, IOBluetoothDeviceInquiryDelegate",
-      "bifrost": "springboard/sdk/src/bluetooth_inquiry.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_inquiry.rs (parse_device_found, Inquiry::feed); springboard/sdk/tests/parity_sdk-complete-41.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Discovery runs through the mgmt socket. No delegate or callback API for apps."
+      "note": "The inquiry model reads the controller's Device Found payload headless (address order, name preference, class of device, unknown RSSI, truncated data) and feeds it into a search. Gap: nothing opens the mgmt socket yet, and there is no delegate or callback API for apps; the radio path needs the lab machine."
     },
     {
       "feature": "Remote device model (name, class, paired, connected)",
