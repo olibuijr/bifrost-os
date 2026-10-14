@@ -80,9 +80,9 @@
     {
       "feature": "HDR per-frame metadata",
       "apple": "VTHDRPerFrameMetadataGenerationSession, VTCompressionPropertyKey_LogTransferFunction",
-      "bifrost": "springboard/render/src/hdr_metadata.rs",
+      "bifrost": "springboard/render/src/hdr_metadata.rs (FrameLightSession, code_to_nits; PQ and HLG transfers)",
       "status": "partial",
-      "note": "Wave 5 (w5-video-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. decoder path is 8-bit NV12 only; no 10-bit or HDR transfer handling found"
+      "note": "The PQ and HLG light model, the per-frame peak and mean and the scene peak over 10-bit codes are tested headless in render/tests/parity_sdk-tests-02.rs. Gaps: the model is not attached to decoded frames, the decoder path is 8-bit NV12 only, and nothing is run on the VM or Midget."
     },
     {
       "feature": "Frame processing (super resolution, frame interpolation, optical flow, noise filter, motion blur)",

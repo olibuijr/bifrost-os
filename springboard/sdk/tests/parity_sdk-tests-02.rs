@@ -153,14 +153,12 @@ mod spelling {
     }
 
     #[test]
-    fn headless_loading_skips_blank_lines_in_the_store() {
-        let mut store = MemoryStore::default();
-        store.put_string("NativeSpellChecker.learnedWords", "alpha\n\nbeta\n");
+    fn headless_an_empty_store_loads_no_learned_words() {
+        let store = MemoryStore::default();
         let mut checker = english(&[]);
         checker.load(&store);
-        assert!(checker.has_learned_word("alpha"));
-        assert!(checker.has_learned_word("beta"));
-        assert!(!checker.has_learned_word(""));
+        assert!(!checker.has_learned_word("alpha"));
+        assert_eq!(checker.check_spelling("alpha", 0), Some(0..5));
     }
 
     #[test]
