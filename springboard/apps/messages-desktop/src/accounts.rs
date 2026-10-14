@@ -3,7 +3,7 @@
 //! homeserver base address (`matrix:https://matrix.org`), its account is the Matrix user id, and its value is the
 //! password. The access token is not stored; each start signs in again and makes a device.
 
-use bifrost_app::keychain_groups::Row;
+use bifrost_app::keychain_groups as keychain;
 
 /// The service prefix of a Matrix login. A website login never starts with it, because a site name has no colon.
 pub const SERVICE_PREFIX: &str = "matrix:";
@@ -30,7 +30,7 @@ pub fn from_item(service_name: &str, account: &str) -> Option<Account> {
 }
 
 /// Every Matrix account in a passwords listing, in the listing's order.
-pub fn from_rows(rows: &[Row]) -> Vec<Account> {
+pub fn from_rows(rows: &[keychain::Row]) -> Vec<Account> {
     rows.iter().filter_map(|row| from_item(&row.service, &row.account)).collect()
 }
 
@@ -38,8 +38,8 @@ pub fn from_rows(rows: &[Row]) -> Vec<Account> {
 mod tests {
     use super::*;
 
-    fn row(service: &str, account: &str) -> Row {
-        Row { service: service.into(), account: account.into(), modified: 0 }
+    fn row(service: &str, account: &str) -> keychain::Row {
+        keychain::Row { service: service.into(), account: account.into(), modified: 0 }
     }
 
     #[test]
