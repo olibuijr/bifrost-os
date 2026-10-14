@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/uikit/collection-views",
  "macos_since": "",
  "status": "partial",
- "bifrost": "springboard/ui/src/collection.rs, springboard/ui/src/table.rs, springboard/ui/src/diff.rs, springboard/ui/src/sidebar.rs, springboard/ui/src/stack.rs",
- "summary": "Diffable snapshots, a card grid with adaptive columns, a column-based table model, a source list and visible-row windowing exist as pure models. There are no SDK list or collection views with cells, reuse, selection modes, swipe actions, pull to refresh or drag and drop integration.",
+ "bifrost": "springboard/ui/src/collection.rs, springboard/ui/src/table.rs, springboard/ui/src/diff.rs, springboard/ui/src/sidebar.rs, springboard/ui/src/stack.rs, springboard/ui/src/swipe_actions.rs, springboard/ui/src/refresh_control.rs",
+ "summary": "Diffable snapshots, a card grid with adaptive columns, a column-based table model, a source list and visible-row windowing exist as pure models. Leading and trailing row swipe actions and pull to refresh exist as pure UI toolkit models (springboard/ui/src/swipe_actions.rs, springboard/ui/src/refresh_control.rs). There are no SDK list or collection views with cells, reuse, selection modes, or drag and drop integration, and the swipe and refresh models are not yet wired into a scroll view or table.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -52,16 +52,16 @@
   {
    "feature": "Swipe actions",
    "apple": "UISwipeActionsConfiguration, UIContextualAction",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "leading and trailing row actions revealed by a horizontal swipe. Needs the swipe recognizer and a row view; a common touch pattern"
+   "bifrost": "springboard/ui/src/swipe_actions.rs, springboard/ui/src/refresh_control.rs",
+   "status": "partial",
+   "note": "Leading and trailing contextual actions with a style (normal or destructive) and a full swipe that performs the first action; RowSwipe follows the drag, settles open or closed on release and hit tests the revealed buttons. Touch drags and pointer or trackpad drags feed the same calls. built on parity/team-p-swipe-refresh; not yet verified on the tablet."
   },
   {
    "feature": "Refresh control",
    "apple": "UIRefreshControl",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "pull to refresh needs overscroll events from the scroll view (springboard/sdk/src/view/scroll.rs has the rubber band)"
+   "bifrost": "springboard/ui/src/refresh_control.rs, springboard/sdk/src/view/scroll.rs",
+   "status": "partial",
+   "note": "A pull past the top of a scroll view arms the control at a threshold and a release starts the refresh; the running refresh keeps a top inset for the spinner. RefreshControl reads the scroll offset that the scroller already reports (its rubber band). built on parity/team-p-swipe-refresh; not yet verified on the tablet."
   },
   {
    "feature": "Reordering and editing",
@@ -101,7 +101,7 @@
  ],
  "gaps": [
   "SDK list and collection views with cell reuse, accessories and selection modes",
-  "Swipe actions and pull to refresh",
+  "SDK wiring of swipe actions and pull to refresh into table and scroll views",
   "Section snapshots and compositional layout sections",
   "Drop proposals and placeholders for lists",
   "Section index and editing mode for tables"
