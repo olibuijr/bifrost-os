@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calculator"
-version = "1.8.1"
+version = "1.9.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.8.0"
+version = "1.9.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
