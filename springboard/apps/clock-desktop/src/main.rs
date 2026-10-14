@@ -12,6 +12,8 @@ mod system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::intents::{self, Intent, IntentResult};
 use bifrost_app::widgets_timeline as wt;
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
@@ -88,6 +90,26 @@ impl App for ClockApp {
             self.sync_world(ctx, true);
         }
         false
+    }
+
+    fn intents(&self) -> Vec<Intent> {
+        vec![
+            Intent::new("start-stopwatch", "Start Stopwatch", "Starts the stopwatch if it is stopped.").shortcut(),
+            Intent::new("stop-stopwatch", "Stop Stopwatch", "Stops the stopwatch if it is running.").shortcut(),
+            Intent::new("record-lap", "Record Lap", "Records a lap while the stopwatch is running.").shortcut(),
+        ]
+    }
+
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, _params: &Json) -> Result<IntentResult, RpcError> {
+        let t = bifrost_proto::sys::now_ms();
+        let Some(c) = &mut self.clock else { return Err(intents::failed("Clock is not ready yet")) };
+        let (changed, done) = match id {
+            "start-stopwatch" => (c.change_stopwatch(t, |s| s.start(t)), "Stopwatch started"),
+            "stop-stopwatch" => (c.change_stopwatch(t, |s| s.stop(t)), "Stopwatch stopped"),
+            "record-lap" => (c.change_stopwatch(t, |s| s.record_lap(t)), "Lap recorded"),
+            _ => return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}"))),
+        };
+        Ok(IntentResult::dialog(if changed { done } else { "Nothing to change" }))
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
