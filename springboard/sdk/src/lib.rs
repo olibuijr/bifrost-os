@@ -223,6 +223,7 @@ pub mod url;
 pub mod url_background;
 pub mod multipart;
 pub mod social;
+pub mod social_account;
 pub mod url_components;
 pub mod network_path;
 pub mod network_connection;
