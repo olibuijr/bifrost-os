@@ -38,9 +38,9 @@
   {
    "feature": "Blur and glass materials",
    "apple": "No direct GLKit equivalent; GLKBaseEffect and GLKSkyboxEffect cover shading only",
-   "bifrost": "springboard/sdk/src/widgets.rs:22 Material, :297 material(), :307 visual_effect() (blur plus tint, Reduce Transparency); springboard/render/src/gfx.rs:788 glass panel",
+   "bifrost": "springboard/sdk/src/widgets.rs:23 Material, :334 material(), :349 visual_effect() (blur plus tint, Reduce Transparency); springboard/render/src/gfx.rs:863 glass_rrect",
    "status": "partial",
-   "note": "the app-facing material covers the blur-and-tint case that shader effects would otherwise be used for; no custom blur radius or shader"
+   "note": "The material list, its window-server kinds and the selection and window-state tints are tested headless in springboard/sdk/tests/parity_sdk-tests-14.rs. The blur itself is not tested headless; there is no custom blur radius or shader."
   },
   {
    "feature": "Texture loading",

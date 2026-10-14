@@ -38,16 +38,16 @@
     {
       "feature": "Current selection and target folder",
       "apple": "FIFinderSyncController.selectedItemURLs(), targetedURL()",
-      "bifrost": "springboard/ui/src/file_sync.rs",
+      "bifrost": "springboard/ui/src/file_sync.rs (SyncController::set_selection, selected_items, targeted)",
       "status": "partial",
-      "note": "Wave 3 (w3-finder-sync, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK call returns the Files selection or current folder to another app."
+      "note": "The reported selection, the target folder and the managed-item lookups are tested headless in springboard/ui/tests/parity_sdk-tests-14.rs. Not wired into apps or the shell, and no SDK call returns the Files selection or current folder to another app."
     },
     {
       "feature": "Extension controller and enablement",
       "apple": "FIFinderSyncController.default(), isExtensionEnabled, showExtensionManagementInterface()",
       "bifrost": "springboard/ui/src/file_sync.rs (ExtensionEnablement)",
       "status": "partial",
-      "note": "Wave 5 (theme-19, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension host for file-manager plugins, and no enable or disable UI for one."
+      "note": "Declaration, the off-by-default choice, a choice made before declaration and the management list are tested headless in springboard/ui/tests/parity_sdk-tests-14.rs. Not wired into apps or the shell; there is no extension host for file-manager plugins and no enable or disable UI for one."
     },
     {
       "feature": "Per-item tags and last-used data shared with the Finder",

@@ -124,7 +124,7 @@
    "apple": "Adding accessible descriptions to widgets and Live Activities",
    "bifrost": "springboard/ui/src/widget_ax.rs",
    "status": "partial",
-   "note": "Wave 3 (w3-widgetkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell tiles are pixel images with no widget-level label or value for assistive technology."
+   "note": "The spoken label, value and hint, skipped blank parts, decorative widgets and multi-part phrasing are tested headless in springboard/ui/tests/parity_sdk-tests-14.rs. Not wired into apps or the shell, and shell tiles are still pixel images with no widget-level label or value."
   },
   {
    "feature": "Accessory, watch complication, StandBy, CarPlay and visionOS widgets (AccessoryWidgetGroup, widgetLabel, WidgetTexture, LevelOfDetail)",

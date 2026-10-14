@@ -38,9 +38,9 @@
     {
       "feature": "Sharing a contact as a card",
       "apple": "CNContact share via UI (no dedicated Contacts UI class)",
-      "bifrost": "springboard/src/shell/share/mod.rs (Item::Card and vcard() at line 88)",
+      "bifrost": "springboard/src/shell/share/mod.rs (Item::Card, vcard())",
       "status": "partial",
-      "note": "The shell builds a vCard 3.0 for a contact and the share menu sends it. Apps cannot create a contact card item themselves."
+      "note": "The vCard 3.0 writer (escaping, blank fields, begin and end lines), the card's file name and its bytes are tested headless in springboard/tests/parity_sdk-tests-14.rs. Apps cannot create a contact card item themselves."
     },
     {
       "feature": "Contact access button (limited access)",
