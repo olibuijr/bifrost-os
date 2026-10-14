@@ -1590,18 +1590,22 @@ impl Weather {
             self.put(&mut c, ui, name, MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(SPACE_XL));
             self.put(&mut c, ui, value, MAC_LARGE_TITLE_PT, Weight::Medium, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(54.0));
             // the sun's day arc and the wind dial take the right of their tile, so the note stops short of them
-            let has_graphic = graphic && matches!(*name, "SUNRISE" | "WIND");
+            let has_graphic = graphic && matches!(*name, "SUNRISE" | "WIND" | "PRESSURE");
             let note_w = tile_w - ui.pt(28.0) - if has_graphic { ui.pt(TILE_GRAPHIC_W) } else { 0.0 };
             let note = ui.fit(note, MAC_FOOTNOTE_PT, note_w);
             self.put(&mut c, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(86.0));
             if has_graphic {
                 let centre = (tx + tile_w - ui.pt(TILE_GRAPHIC_W / 2.0), ty);
-                if *name == "SUNRISE" {
-                    let (rise, set) = today.map_or((String::new(), String::new()), |d| (d.sunrise.clone(), d.sunset.clone()));
-                    draw_sun_arc(&mut c, ui, centre, insights::sun_progress(&f.time, &rise, &set));
-                } else {
-                    draw_wind_dial(&mut c, ui, centre, f.current.wind_dir);
-                    self.put(&mut c, ui, "N", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Centre, centre.0, ty + ui.pt(15.0));
+                match *name {
+                    "SUNRISE" => {
+                        let (rise, set) = today.map_or((String::new(), String::new()), |d| (d.sunrise.clone(), d.sunset.clone()));
+                        draw_sun_arc(&mut c, ui, centre, insights::sun_progress(&f.time, &rise, &set));
+                    }
+                    "WIND" => {
+                        draw_wind_dial(&mut c, ui, centre, f.current.wind_dir);
+                        self.put(&mut c, ui, "N", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Centre, centre.0, ty + ui.pt(15.0));
+                    }
+                    _ => draw_pressure_dial(&mut c, ui, centre, insights::pressure_dial_angle(&f.hours)),
                 }
             }
         }
@@ -1883,6 +1887,31 @@ fn draw_wind_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), from: Option<f64
         c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(WHITE, alpha));
     }
     if let Some(degrees) = from {
+        let size = ui.pt(2.5);
+        for step in 1..=10 {
+            let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
+            c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, WHITE);
+        }
+        let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8);
+        let tip = ui.pt(8.0);
+        c.fill_rrect(x - tip / 2.0, y - tip / 2.0, tip, tip, tip / 2.0, ORANGE);
+    }
+    let hub = ui.pt(4.0);
+    c.fill_rrect(cx - hub / 2.0, cy - hub / 2.0, hub, hub, hub / 2.0, WHITE);
+}
+
+/// The pressure trend dial in a detail tile, centred on `origin.0` and 56 points under the tile's top (`origin.1`):
+/// seven ticks over the half circle from falling (left) through steady (straight up) to rising (right), and a
+/// needle at `angle` degrees from straight up when the service gave the change (see `insights::pressure_dial_angle`).
+fn draw_pressure_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), angle: Option<f64>) {
+    let (cx, top) = origin;
+    let (cy, radius) = (top + ui.pt(56.0), ui.pt(32.0));
+    for k in 0..7 {
+        let (x, y) = insights::dial_point(-90.0 + k as f64 * 30.0, cx, cy, radius);
+        let (size, alpha) = if k % 3 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(2.0), 100) };
+        c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(WHITE, alpha));
+    }
+    if let Some(degrees) = angle {
         let size = ui.pt(2.5);
         for step in 1..=10 {
             let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
