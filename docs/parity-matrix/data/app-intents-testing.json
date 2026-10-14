@@ -17,9 +17,9 @@
     {
       "feature": "Intent catalog (IntentDefinitions)",
       "apple": "IntentDefinitions, AppIntentDefinition, intents",
-      "bifrost": "springboard/sdk/src/intents.rs (App::intents(), methods(), Intent::to_json); springboard/apps/shortcuts-desktop/src/widget.rs (picker Intents section); springboard/sdk/tests/parity_sdk-tests-01d.rs",
+      "bifrost": "springboard/sdk/src/intents.rs (App::intents(), methods(), Intent::to_json); springboard/sdk/src/intent_catalog.rs (Catalog::new, get, shortcuts); springboard/apps/shortcuts-desktop/src/widget.rs (picker Intents section); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-45.rs",
       "status": "partial",
-      "note": "The catalog is served as intent.list JSON, and an_intent_serialises_its_identifier_and_title_into_the_catalog checks the title and description keys headless. There is no typed definition collection for tests. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Catalog::new checks a declared intent list as one set (method-token identifiers, no duplicates, titles, shortcuts with no required parameter) and serves get, ids and shortcuts, tested headless in parity_sdk-complete-45.rs. Gap: dispatch still reads the raw App::intents() list, so the checks run only when an app builds a Catalog; verify the picker on Midget for parity."
     },
     {
       "feature": "Entity queries (suggested, by id, by string)",
