@@ -87,9 +87,9 @@
     {
       "feature": "Loudness normalization and calibration",
       "apple": "PHASENormalizationMode, PHASECalibrationMode",
-      "bifrost": "springboard/src/media/volume.rs (apply, software gain)",
+      "bifrost": "springboard/src/media/volume.rs (apply, software gain, normalization_gain_db, normalized_linear)",
       "status": "partial",
-      "note": "a per-route volume and headphone cap exist; no per-asset loudness normalization"
+      "note": "A per-route volume, a headphone cap and a per-track normalization gain (a target and boost limit, tested headless in springboard/tests/parity_sdk-complete-32.rs) exist. Gap: no loudness analysis of the asset yet, so the measured level must be supplied, and calibration of a device's output needs the lab machine's speakers."
     },
     {
       "feature": "Head tracking and personalized spatial audio",
