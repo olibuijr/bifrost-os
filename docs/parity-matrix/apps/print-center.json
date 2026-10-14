@@ -66,9 +66,9 @@
    "area": "printer",
    "apple": "Add Printer menu item opens the printer browser with discovered, nearby and address entries",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:304",
-   "note": "Still the clipboard address only (Cmd+N); no discovery list, name or location fields: needs an mDNS browse in the cups client.",
-   "wire": "Add a Discover sheet to window.rs listing mDNS (_ipp._tcp) and USB devices from bifrost_app::controls::cups, with name, location and protocol fields, behind the Add Printer button; keep the clipboard path as a fallback."
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:366",
+   "note": "Add Printer opens a pane of the printers found over mDNS (_ipps._tcp and _ipp._tcp, discover.rs:147) and adds one under its advertised name with model and location (worker.rs:124); the clipboard address stays as a fallback. USB devices are not listed, the app sandbox binds no USB nodes. built on parity/team-d-print-center; not yet verified on Midget.",
+   "wire": "List USB devices beside the network printers once the sandbox allows a device listing, and offer a name field before the queue is added."
   },
   {
    "feature": "Cancel a job",
@@ -128,10 +128,10 @@
    "feature": "Job thumbnail",
    "area": "job",
    "apple": "JobCellView shows a preview image (JobThumbnailImageChangedNotification, jobImageURL)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Rows are text only.",
-   "wire": "Request job-preview or the first-page raster through cups::Client (bifrost_app::controls::cups) in worker.rs, cache it per job id in Model and draw a 24 pt thumbnail left of the name in draw.rs:79."
+   "status": "partial",
+   "bifrost": "springboard/apps/printers-desktop/src/draw.rs:187",
+   "note": "A document tile with the file type in capitals sits left of the name. The scheduler offers no job preview, so there is no first-page raster. built on parity/team-d-print-center; not yet verified on Midget.",
+   "wire": "Request a first-page raster through cups::Client once the scheduler or a converter offers one, cache it per job id in Model and draw it in the tile at draw.rs:187."
   },
   {
    "feature": "Job progress",
@@ -246,18 +246,18 @@
    "area": "view",
    "apple": "PKPrinterListChangedNotification, PKJobListNotification, PKJobProgressNotification push changes",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:133",
-   "note": "Lists again every 5 s while open, and at once after an action.",
-   "wire": "Subscribe to scheduler events (cupsSubscribeEvents / ipp Create-Printer-Subscriptions) in worker.rs and send Reply::Changed so the list refreshes within a second instead of POLL_MS (window.rs:30)."
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:471",
+   "note": "Lists every second while a job waits or prints and every five seconds otherwise (model.rs:575). No scheduler event subscription yet. built on parity/team-d-print-center; not yet verified on Midget.",
+   "wire": "Subscribe to scheduler events (Create-Printer-Subscriptions and Get-Notifications) in worker.rs and send Reply::Changed so the list refreshes at once."
   },
   {
    "feature": "Dock badge and bounce for a stalled job",
    "area": "shell",
    "apple": "Print Center icon appears in the Dock while a job prints and shows the job count",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/window.rs:245",
-   "note": "Badge shows waiting jobs while the app is running (main.rs tick). The app is not launched in the background and does not bounce.",
-   "wire": "Publish queued_jobs from worker.rs to the shell dock model (springboard/src/shell) as a badge and launch the app in the background while a job is active."
+   "bifrost": "springboard/apps/printers-desktop/src/main.rs:107",
+   "note": "The badge shows the waiting jobs and the Dock icon bounces when a printer gains an error, while the app runs. The app is not launched in the background. built on parity/team-d-print-center; not yet verified on Midget.",
+   "wire": "Publish queued_jobs to the shell dock model (springboard/src/shell) so the badge shows and the app starts in the background while a job is active."
   },
   {
    "feature": "Notifications for printer problems",
@@ -272,19 +272,19 @@
    "feature": "Widget",
    "area": "shell",
    "apple": "PrintCenterWidgetExtension shows printer status on the desktop",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No widget.",
-   "wire": "Add a printers widget to the widgets host reading the same Model through the app control socket."
+   "status": "partial",
+   "bifrost": "springboard/apps/printers-desktop/src/widget.rs:10",
+   "note": "Timeline entry for the shell's widgets_timeline service, sent when the printer state changes (window.rs:398, main.rs tick); it leads with an error, an offline or paused printer, or the waiting jobs. The shell shows it in Notification Centre as a text row; the app draws no widget layout. built on parity/team-d-print-center; not yet verified on Midget.",
+   "wire": "Add a printers widget kind to the shell's widgets host that draws supplies and the queue, reading the same model through the app control socket."
   },
   {
    "feature": "App Intents",
    "area": "shell",
    "apple": "Metadata.appintents actions (print documents, cancel job)",
    "status": "partial",
-   "bifrost": "springboard/apps/printers-desktop/src/rpc.rs:1",
-   "note": "Control methods printers.list, printers.jobs, printers.pause, printers.resume, printers.cancel_job; no Shortcuts action registration or print-documents method yet.",
-   "wire": "Expose list, pause, resume, cancel as app control methods (bifrost-app-control) so Shortcuts can call them."
+   "bifrost": "springboard/apps/printers-desktop/src/app_intents.rs:21",
+   "note": "Shortcuts actions List Printers, Pause Printer, Resume Printer, Set Default Printer, Cancel Print Job and Print File with a Printer entity, declared in manifest.toml, besides the printers.* control methods. built on parity/team-d-print-center; not yet verified on Midget.",
+   "wire": "Add Hold Job and Release Job intents and a Job entity so Shortcuts can pick a job from the queue."
   },
   {
    "feature": "Window actions published to accessibility",
@@ -308,10 +308,10 @@
    "feature": "Help menu",
    "area": "menu",
    "apple": "Print Center Help",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No Help item for this app.",
-   "wire": "Register a Help topic page for the app in the Help book registry and bind it to the menu bar Help item."
+   "status": "partial",
+   "bifrost": "springboard/apps/printers-desktop/src/window.rs:883",
+   "note": "Help menu with Print Center Help, which shows the topics (model.rs HELP) in the window. built on parity/team-d-print-center; not yet verified on Midget.",
+   "wire": "Publish a Print Center page in the website documentation and open it from the Help item as System Information does; the in-window topics stay as the offline copy."
   }
  ]
 }

@@ -2,7 +2,10 @@
 //! rectangles are `PrintCenter`'s geometry, which the taps share, so a tap lands on what is drawn. Colours are the kit's
 //! semantic tokens, resolved with `now()`, so Light and Dark follow the appearance.
 
-use crate::model::{created_text, info_lines, job_progress, job_status_text, pages_text, printer_detail, problem_line, row_summary, size_text, supply_rgb, supply_text, Level};
+use crate::discover::{detail_line, is_added};
+use crate::model::{
+    created_text, document_tag, info_lines, job_progress, job_status_text, pages_text, printer_detail, problem_line, row_summary, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
+};
 use crate::window::{Field, PrintCenter, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SELECTION, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED, TINT, WHITE};
@@ -11,6 +14,12 @@ use bifrost_app::widgets;
 
 /// Corner radius of a selection plate (points), as the sidebar selections.
 const SEL_R: f32 = 9.0;
+/// The document tile left of a job's name: its width and height (points) and the gap before the name.
+const TILE_W: f32 = 32.0;
+const TILE_H: f32 = 22.0;
+const TILE_GAP: f32 = 8.0;
+/// The average width of a help character (points), used to wrap the topics. A little wide, so a line never overflows.
+const HELP_CHAR_PT: f32 = 7.0;
 /// The column headings, in order.
 const HEADINGS: [&str; 7] = ["Job", "Document", "Owner", "Pages", "Size", "Created", "Status"];
 
@@ -105,6 +114,11 @@ fn warning_mark(labels: &mut TextCache, s: &mut Surface, ui: &Ui, x: f32, mid: f
 
 /// The queue pane: the selected printer's name and detail, the column headings and its jobs.
 fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
+    match p.model.pane() {
+        Pane::Discover => return paint_discover(p, s, ui),
+        Pane::Help => return paint_help(p, s, ui),
+        Pane::Queue | Pane::Info => {}
+    }
     let d = p.detail_rect();
     let x0 = d.x + PAD_PT;
     let w = (d.w - 2.0 * PAD_PT).max(0.0);
@@ -150,9 +164,13 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
             job_status_text(job),
         ];
         let mid = r.y + JOB_ROW_PT / 2.0;
+        let tile = Rect { x: cols[1], y: mid - TILE_H / 2.0, w: TILE_W, h: TILE_H };
+        document_tile(&mut p.labels, s, ui, tile, &document_tag(&job.name), on);
         for (k, text) in cells.iter().enumerate() {
             let color = if k >= 3 { state_color } else { name_color };
-            text_mid(&mut p.labels, s, ui, text, MAC_BODY_PT, Weight::Regular, color, cols[k], mid, column_width(&cols, k, x0 + w));
+            // the document name starts after its tile
+            let (x, max) = if k == 1 { (cols[k] + TILE_W + TILE_GAP, column_width(&cols, k, x0 + w) - TILE_W - TILE_GAP) } else { (cols[k], column_width(&cols, k, x0 + w)) };
+            text_mid(&mut p.labels, s, ui, text, MAC_BODY_PT, Weight::Regular, color, x, mid, max);
         }
         // a printing job shows how far it is under its status
         if let Some(done) = job_progress(job) {
@@ -162,6 +180,74 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
             fill(s, ui, bar, 0.0, track);
             fill(s, ui, Rect { w: bar.w * done, ..bar }, 0.0, fill_color);
         }
+    }
+}
+
+/// A small page-shaped tile with the document's type in capitals, drawn in place of a first-page preview.
+fn document_tile(labels: &mut TextCache, s: &mut Surface, ui: &Ui, r: Rect, tag: &str, on_plate: bool) {
+    let (plate, ink) = if on_plate { (pack(255, 255, 255, 70), WHITE) } else { (SEPARATOR_C.now(), LABEL_2.now()) };
+    fill(s, ui, r, 3.0, plate);
+    let img = labels.get(ui, tag, MAC_FOOTNOTE_PT, Weight::Semibold, ink);
+    s.blit(img, (ui.pt(r.x + r.w / 2.0) - img.w as f32 / 2.0) as i32, (ui.pt(r.y + r.h / 2.0) - img.h as f32 / 2.0) as i32, 255, 255);
+}
+
+/// The Add Printer pane: the printers the network announced, one row each, and the button that adds the address on the
+/// clipboard for a printer that is not listed.
+fn paint_discover(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
+    let d = p.detail_rect();
+    let x0 = d.x + PAD_PT;
+    let w = (d.w - 2.0 * PAD_PT).max(0.0);
+    text_mid(&mut p.labels, s, ui, "Add a Printer", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x0, d.y + 24.0, w);
+    text_mid(&mut p.labels, s, ui, "Printers on this network that announce themselves", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0, d.y + 50.0, w);
+    let button = p.clipboard_rect();
+    fill(s, ui, button, 6.0, TINT);
+    text_mid(&mut p.labels, s, ui, "Use Address from Clipboard", MAC_BODY_PT, Weight::Semibold, WHITE, button.x + 14.0, button.y + button.h / 2.0, button.w - 28.0);
+    let found = p.discover.found.clone();
+    if found.is_empty() {
+        let message = if p.discover.failed() { "Printers on the network cannot be listed here. Copy an address and use the button above." } else { "Looking for printers…" };
+        let top = p.found_row(0).y;
+        text_mid(&mut p.labels, s, ui, message, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0, top + 16.0, w);
+        return;
+    }
+    let bottom = p.footer_rect().y;
+    for (i, printer) in found.iter().enumerate() {
+        let r = p.found_row(i);
+        if r.y + r.h > bottom {
+            break;
+        }
+        let added = is_added(printer, &p.model.printers);
+        text_mid(&mut p.labels, s, ui, &printer.name, MAC_BODY_PT, Weight::Regular, LABEL.now(), r.x + 12.0, r.y + r.h * 0.34, r.w - 110.0);
+        text_mid(&mut p.labels, s, ui, &detail_line(printer), MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), r.x + 12.0, r.y + r.h * 0.72, r.w - 24.0);
+        if added {
+            text_mid(&mut p.labels, s, ui, "Added", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), r.x + r.w - 70.0, r.y + r.h * 0.34, 58.0);
+        }
+        rule(s, ui, r.x + 12.0, r.y + r.h, r.w - 24.0, 0.0);
+    }
+}
+
+/// The help pane: each topic's heading and its text, wrapped to the pane. Lines that would pass the footer are left off.
+fn paint_help(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
+    let d = p.detail_rect();
+    let x0 = d.x + PAD_PT;
+    let w = (d.w - 2.0 * PAD_PT).max(0.0);
+    text_mid(&mut p.labels, s, ui, "Print Center Help", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x0, d.y + 24.0, w);
+    let bottom = p.footer_rect().y - 8.0;
+    let max_chars = ((w / HELP_CHAR_PT) as usize).max(20);
+    let mut y = d.y + 52.0;
+    for (heading, body) in HELP {
+        if y + 20.0 > bottom {
+            return;
+        }
+        text_mid(&mut p.labels, s, ui, heading, MAC_CALLOUT_PT, Weight::Semibold, LABEL.now(), x0, y + 8.0, w);
+        y += 20.0;
+        for line in wrap_words(body, max_chars) {
+            if y + 16.0 > bottom {
+                return;
+            }
+            text_mid(&mut p.labels, s, ui, &line, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0, y + 8.0, w);
+            y += 16.0;
+        }
+        y += 8.0;
     }
 }
 
