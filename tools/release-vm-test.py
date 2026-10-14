@@ -11,6 +11,7 @@ Stdlib only. QEMU, OVMF, ssh and ssh-keygen are required; the ISO must include a
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -40,6 +41,76 @@ SHIFTED = dict(zip("!@#$%^&*()_+", "1234567890-="))
 PUNCT = {" ": "spc", "-": "minus", "=": "equal", "[": "bracket_left", "]": "bracket_right", "\\": "backslash",
          ";": "semicolon", "'": "apostrophe", ",": "comma", ".": "dot", "/": "slash", "`": "grave_accent",
          ":": "semicolon", '"': "apostrophe", "<": "comma", ">": "dot", "?": "slash", "|": "backslash", "~": "grave_accent"}
+
+
+def decode_guest_exec_status(status: dict) -> tuple[bool, int | None, str, str]:
+    """Decode one QGA guest-exec-status response (whose output fields are base64 strings)."""
+    if not isinstance(status, dict):
+        raise RuntimeError(f"invalid QGA guest-exec-status response: {status!r}")
+    if not status.get("exited", False):
+        return False, None, "", ""
+    exitcode = status.get("exitcode")
+    if exitcode is not None and not isinstance(exitcode, int):
+        raise RuntimeError(f"invalid QGA guest process exit code: {exitcode!r}")
+    try:
+        stdout = base64.b64decode(status.get("out-data", ""), validate=True).decode("utf-8", errors="replace")
+        stderr = base64.b64decode(status.get("err-data", ""), validate=True).decode("utf-8", errors="replace")
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(f"invalid base64 output from QGA guest process: {exc}") from exc
+    return True, exitcode, stdout, stderr
+
+
+class Qga:
+    """Small synchronous QEMU Guest Agent JSON-line client for the harness-owned guest channel."""
+
+    def __init__(self, path: Path):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(10)
+        self.sock.connect(str(path))
+        self.reader = self.sock.makefile("r", encoding="utf-8")
+        self.writer = self.sock.makefile("w", encoding="utf-8")
+
+    def execute(self, name: str, **arguments):
+        self.writer.write(json.dumps({"execute": name, "arguments": arguments}) + "\n")
+        self.writer.flush()
+        while True:
+            line = self.reader.readline()
+            if not line:
+                raise RuntimeError(f"QGA closed while waiting for {name}")
+            reply = json.loads(line)
+            if "return" in reply:
+                return reply["return"]
+            if "error" in reply:
+                error = reply["error"]
+                raise RuntimeError(f"QGA {name}: {error.get('desc', error)}")
+            # Some agents can emit events between command replies; they are not command results.
+
+    def run(self, script: str, *, timeout: float = 30, poll_interval: float = 0.25) -> str:
+        result = self.execute("guest-exec", path="/bin/sh", arg=["-c", script], **{"capture-output": True})
+        pid = result.get("pid") if isinstance(result, dict) else None
+        if not isinstance(pid, int):
+            raise RuntimeError(f"QGA guest-exec returned no process id: {result!r}")
+        deadline = time.monotonic() + timeout
+        while True:
+            status = self.execute("guest-exec-status", pid=pid)
+            exited, exitcode, stdout, stderr = decode_guest_exec_status(status)
+            if exited:
+                if exitcode != 0:
+                    raise RuntimeError(f"guest command exited {exitcode}; stdout={stdout[-2000:]!r}; stderr={stderr[-2000:]!r}")
+                return stdout
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"QGA guest process {pid} did not finish within {timeout} seconds")
+            time.sleep(min(poll_interval, remaining))
+
+    def close(self):
+        try:
+            self.reader.close()
+        finally:
+            try:
+                self.writer.close()
+            finally:
+                self.sock.close()
 
 
 class Qmp:
@@ -163,13 +234,17 @@ class ReleaseVmTest:
         self.disk = out / "target.raw"
         self.vars = out / "ovmf-vars.fd"
         self.qmp_path = out / "qmp.sock"
+        self.qga_path = out / "qga.sock"
         if len(str(self.qmp_path)) >= 104:
             self.qmp_path = Path("/tmp") / f"bifrost-release-{out.name[-16:]}.sock"
+        if len(str(self.qga_path)) >= 104:
+            self.qga_path = Path("/tmp") / f"bifrost-qga-{out.name[-16:]}.sock"
         self.port = choose_port()
         self.key = out / "diagnostic_ed25519"
         self.pub = self.key.with_suffix(".pub")
         self.process: subprocess.Popen | None = None
         self.qmp: Qmp | None = None
+        self.qga: Qga | None = None
         self.started = time.monotonic()
         self.phases: dict[str, float] = {}
         self.checks: dict[str, object] = {}
@@ -234,6 +309,10 @@ class ReleaseVmTest:
                 "-drive", f"file={self.iso},media=cdrom,if=none,id=cd,readonly=on", "-device", "ide-cd,drive=cd,bootindex=2",
                 "-device", "virtio-scsi-pci,id=scsi0", "-drive", f"file={self.disk},if=none,id=target,format=raw", "-device", "scsi-hd,drive=target,bus=scsi0.0,bootindex=1",
                 "-device", f"virtio-vga,xres={WIDTH},yres={HEIGHT}", "-device", "virtio-keyboard-pci", "-device", "virtio-tablet-pci",
+                # The existing Arch ISO includes qemu-guest-agent; Arch's udev rule starts it when this named port appears.
+                "-chardev", f"socket,id=qga,path={self.qga_path},server=on,wait=off",
+                "-device", "virtio-serial-pci,id=qga-serial",
+                "-device", "virtserialport,chardev=qga,name=org.qemu.guest_agent.0",
                 "-netdev", f"user,id=net0,restrict=on,hostfwd=tcp:127.0.0.1:{self.port}-:22", "-device", "virtio-net-pci,netdev=net0",
                 "-display", "none", "-qmp", f"unix:{self.qmp_path},server=on,wait=off", "-serial", f"file:{self.out / 'serial.log'}"]
         qemu_log = (self.out / "qemu.log").open("wb")
@@ -251,57 +330,51 @@ class ReleaseVmTest:
         self.ok = True
 
     def boot_and_instrument(self):
-        clean_check = ("if [ -e /etc/bifrost/lab.token ] || [ -e /root/.ssh/authorized_keys ] || "
-                       "[ -e /usr/lib/systemd/system/bifrost-lab.service ]; then "
-                       "echo RELEASE_HARDENING_FAIL >/run/release-hardening; "
-                       "else echo RELEASE_HARDENING_OK >/run/release-hardening; fi")
-        clean_check = ("if [ ! -e /run/release-hardening ]; then " + clean_check + "; fi")
-        egress_check = ("if curl -fsS --connect-timeout 5 --max-time 8 -o /dev/null "
-                        "https://bifrost.olibuijr.com/arch/x86_64/bifrost.db; then "
-                        "echo EGRESS_AVAILABLE >/run/release-egress; else echo EGRESS_BLOCKED >/run/release-egress; fi")
-        public_key = self.pub.read_text().strip()
-        inject = ("mkdir -p -m 700 /root/.ssh && printf '%s\\n' " + shlex.quote(public_key) +
-                  " > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys && systemctl start sshd")
-        # Bounded retry handles both a slow boot and either an auto-login shell or login prompt on tty2.
-        # SSH is the positive boot marker; screenshots alone are content-size dependent and not readiness proof.
-        def instrumented():
-            if self._ssh_ready():
-                return True
-            self.console_enter()
-            self.console_command(clean_check)
-            self.console_command(egress_check, settle=10)
-            self.qmp.screenshot(self.out / "01-live-release.png")
-            self.console_command(inject)
-            return self._ssh_ready()
-        wait_until("release live boot and diagnostic SSH", BOOT_TIMEOUT, instrumented, 3)
-        result = remote(self.port, self.key, "cat /run/release-hardening /run/release-egress; "
-                        "test ! -e /etc/bifrost/lab.token && test ! -e /usr/lib/systemd/system/bifrost-lab.service", timeout=20)
-        if "RELEASE_HARDENING_OK" not in result.stdout:
-            raise RuntimeError("release ISO contained a lab token or preseeded root authorized key before instrumentation")
-        if "EGRESS_BLOCKED" not in result.stdout:
+        wait_until("QEMU Guest Agent", BOOT_TIMEOUT, self._guest_agent_ready, 2)
+        hardening = self.qga.run(
+            "if [ -e /etc/bifrost/lab.token ] || [ -e /root/.ssh/authorized_keys ] || "
+            "[ -e /usr/lib/systemd/system/bifrost-lab.service ]; then "
+            "echo RELEASE_HARDENING_FAIL; exit 31; fi; echo RELEASE_HARDENING_OK",
+            timeout=20,
+        )
+        if "RELEASE_HARDENING_OK" not in hardening:
+            raise RuntimeError("could not prove the unchanged live ISO is release-hardened before instrumentation")
+        self.checks["live_release_hardening"] = "passed before diagnostic key injection"
+        egress = self.qga.run(
+            "if curl -fsS --connect-timeout 5 --max-time 8 -o /dev/null "
+            "https://bifrost.olibuijr.com/arch/x86_64/bifrost.db; then "
+            "echo EGRESS_AVAILABLE; exit 32; else echo EGRESS_BLOCKED; fi",
+            timeout=20,
+        )
+        if "EGRESS_BLOCKED" not in egress:
             raise RuntimeError("release VM had outbound network access; offline install isolation was not proven")
-        # The diagnostic key has necessarily just been installed. The recorded marker proves the check happened first.
-        self.qmp.key("f1", "ctrl", "alt")
-        time.sleep(1)
+        self.checks["guest_outbound_network"] = "blocked"
+        public_key = self.pub.read_text().strip()
+        inject = ("install -d -m 700 /root/.ssh && printf '%s\\n' " + shlex.quote(public_key) +
+                  " > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys && systemctl start sshd")
+        self.qga.run(inject, timeout=20)
+        wait_until("diagnostic SSH", 90, self._ssh_ready, 2)
+        result = remote(self.port, self.key, "test ! -e /etc/bifrost/lab.token && "
+                        "test ! -e /usr/lib/systemd/system/bifrost-lab.service", timeout=20)
+        if result.returncode:
+            raise RuntimeError("release live system changed its lab-token/service hardening state after instrumentation")
         self.save_shot("01-live-release")
         return True
 
-    def _console_available(self):
-        return self.process is not None and self.process.poll() is None and self.qmp is not None
-
-    def console_enter(self):
-        self.qmp.key("f2", "ctrl", "alt")
-        time.sleep(2)
-        self.qmp.type_text("root")
-        self.qmp.key("ret")
-        time.sleep(1)
-        self.qmp.key("ret")  # archiso root password is empty
-        time.sleep(2)
-
-    def console_command(self, value: str, *, settle=2):
-        self.qmp.type_text(value, 0.008)
-        self.qmp.key("ret")
-        time.sleep(settle)
+    def _guest_agent_ready(self):
+        try:
+            if self.qga is None:
+                self.qga = Qga(self.qga_path)
+            self.qga.execute("guest-ping")
+            return True
+        except Exception:
+            if self.qga is not None:
+                try:
+                    self.qga.close()
+                except Exception:
+                    pass
+                self.qga = None
+            return False
 
     def _ssh_ready(self):
         result = remote(self.port, self.key, "echo ready", timeout=8, check=False)
@@ -541,6 +614,12 @@ class ReleaseVmTest:
                 self.qmp.command("quit")
             except Exception:
                 pass
+        if self.qga:
+            try:
+                self.qga.close()
+            except Exception:
+                pass
+        if self.qmp:
             try:
                 self.qmp.close()
             except Exception:
@@ -557,6 +636,10 @@ class ReleaseVmTest:
                     self.process.wait(timeout=5)
         if self.qmp_path.parent == Path("/tmp"):
             self.qmp_path.unlink(missing_ok=True)
+        if self.qga_path.parent == Path("/tmp"):
+            self.qga_path.unlink(missing_ok=True)
+        else:
+            self.qga_path.unlink(missing_ok=True)
         self.key.unlink(missing_ok=True)
         self.pub.unlink(missing_ok=True)
 
