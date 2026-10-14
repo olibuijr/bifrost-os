@@ -1801,9 +1801,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "perf (Arch package, tools/parity/os_cli_packages.txt)",
+   "status": "partial",
+   "note": "The reference counter library reads hardware performance counters. Linux perf reads the same counters through perf_event_open and its command-line tools are in the package list. BifrOSt has no SDK counter API, and the perf probe is not verified on Midget.",
    "rea": [],
    "method": "assessed"
   },
@@ -1824,7 +1824,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Kernel trace session library for the reference's trace tooling. Syscall tracing is covered by strace in the runtime package list, but no kernel event trace API is mirrored, and no daily-desktop job needs one, so it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1844,8 +1844,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Introspects allocations inside the reference vendor's exclave secure-world environment, which runs on that vendor's hardware. Linux has no such environment and BifrOSt has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1865,8 +1865,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Self-test library for the reference vendor's Thunderbolt controller (bundle com.apple.internal.AppleThunderboltSAT.libsat). BifrOSt uses the Linux Thunderbolt driver and has no vendor controller test.",
    "rea": [],
    "method": "assessed"
   },
@@ -1887,7 +1887,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only the bundle identifier (com.apple.lighthouse-runtime) was readable from the reference image. Its job is not determined, so it stays os.",
    "rea": [],
    "method": "assessed"
   },
@@ -1906,9 +1906,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "The lock screen draws the login window, the account avatar, the password field and the power menu. The reference's login user service (LoginUserService XPC) and its multi-user login logic are not built.",
    "rea": [],
    "method": "assessed"
   }
