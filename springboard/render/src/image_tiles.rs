@@ -1,6 +1,8 @@
 //! Tile grids for large pictures. A picture is cut into tiles of a preferred size, so a viewer
-//! can decode or draw only the tiles on screen. The model is pure geometry with no pixels; the
-//! tiles on the right and bottom edges are cut short to the picture.
+//! can decode or draw only the tiles on screen. The grid is pure geometry with no pixels; the
+//! tiles on the right and bottom edges are cut short to the picture. `TileCache` is the streaming
+//! side: it holds the decoded tiles a viewer asked for, decodes the others on demand and evicts the
+//! least recently used one when full.
 
 /// One tile: its position in the grid and its rectangle on the picture, in pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,6 +88,82 @@ impl TileGrid {
             }
         }
         out
+    }
+}
+
+/// A bounded cache of decoded tiles for a streaming tile provider. A viewer asks for a tile with
+/// [`TileCache::get_or_load`]: a held tile is returned and marked as recently used, a missing tile is decoded by the
+/// caller's loader and held, and the least recently used tile goes once the cache is full. The cache holds at most
+/// `capacity` tiles, whatever their size.
+pub struct TileCache<P> {
+    capacity: usize,
+    tiles: std::collections::HashMap<(usize, usize), P>,
+    // Least recently used first.
+    order: std::collections::VecDeque<(usize, usize)>,
+}
+
+impl<P> TileCache<P> {
+    /// An empty cache that holds `capacity` tiles. None when `capacity` is zero.
+    pub fn new(capacity: usize) -> Option<Self> {
+        if capacity == 0 {
+            return None;
+        }
+        Some(TileCache { capacity, tiles: std::collections::HashMap::new(), order: std::collections::VecDeque::new() })
+    }
+
+    /// The number of tiles held.
+    pub fn len(&self) -> usize {
+        self.tiles.len()
+    }
+
+    /// Whether no tile is held.
+    pub fn is_empty(&self) -> bool {
+        self.tiles.is_empty()
+    }
+
+    /// Whether the tile at `col`, `row` is held. Does not change the recency order.
+    pub fn contains(&self, col: usize, row: usize) -> bool {
+        self.tiles.contains_key(&(col, row))
+    }
+
+    /// The held tile at `tile`'s position, marked as recently used.
+    pub fn get_or_load<F>(&mut self, tile: Tile, load: F) -> Option<&P>
+    where
+        F: FnOnce(Tile) -> Option<P>,
+    {
+        let key = (tile.col, tile.row);
+        if self.tiles.contains_key(&key) {
+            self.touch(key);
+        } else {
+            let pixels = load(tile)?;
+            self.insert(key, pixels);
+        }
+        self.tiles.get(&key)
+    }
+
+    /// The tiles of `wanted` that are not held, in the order given. These are what a provider still has to load.
+    pub fn missing(&self, wanted: &[Tile]) -> Vec<Tile> {
+        wanted.iter().copied().filter(|t| !self.contains(t.col, t.row)).collect()
+    }
+
+    fn insert(&mut self, key: (usize, usize), pixels: P) {
+        if self.tiles.insert(key, pixels).is_some() {
+            self.touch(key);
+        } else {
+            self.order.push_back(key);
+        }
+        while self.tiles.len() > self.capacity {
+            if let Some(oldest) = self.order.pop_front() {
+                self.tiles.remove(&oldest);
+            }
+        }
+    }
+
+    fn touch(&mut self, key: (usize, usize)) {
+        if let Some(pos) = self.order.iter().position(|k| *k == key) {
+            self.order.remove(pos);
+            self.order.push_back(key);
+        }
     }
 }
 

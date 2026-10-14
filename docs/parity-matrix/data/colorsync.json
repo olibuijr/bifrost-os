@@ -59,9 +59,9 @@
     {
       "feature": "HDR, extended range and tone mapping",
       "apple": "kColorSyncExtendedRange, kColorSyncPQDerivative, kColorSyncHLGDerivative, Headroom Adaptive Gain Curve (SMPTE ST 2094-50)",
-      "bifrost": "springboard/render/src/hdr_transfer.rs, springboard/render/src/hdr_metadata.rs, springboard/src/gpu/nv12.rs",
+      "bifrost": "springboard/render/src/hdr_transfer.rs (tone_map_nits), springboard/render/src/hdr_metadata.rs, springboard/src/gpu/nv12.rs",
       "status": "partial",
-      "note": "hdr_transfer.rs has the SMPTE ST 2084 (PQ) and ARIB STD-B67 (HLG) transfer curves and EdrHeadroom for extended-range output. hdr_metadata.rs derives per-frame peak and mean light and keeps a scene peak. Pure models with host unit tests, not wired into the shell or video output and not yet verified on Midget. No Headroom Adaptive Gain Curve (SMPTE ST 2094-50) metadata, no tone mapping into the display, and nv12.rs still selects Rec.601 or Rec.709 by frame height only."
+      "note": "hdr_transfer.rs has the SMPTE ST 2084 (PQ) and ARIB STD-B67 (HLG) transfer curves, EdrHeadroom, and a BT.2390 tone_map_nits roll-off onto the display peak, tested headless in render/tests/parity_sdk-complete-37.rs. hdr_metadata.rs derives per-frame peak and mean light and keeps a scene peak. Pure models with host unit tests, not wired into the shell or video output and not yet verified on Midget. Gap: no Headroom Adaptive Gain Curve (SMPTE ST 2094-50) metadata, and nv12.rs still selects Rec.601 or Rec.709 by frame height only."
     },
     {
       "feature": "Color management modules (CMM plug-ins)",

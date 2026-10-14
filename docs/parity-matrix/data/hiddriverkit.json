@@ -59,9 +59,9 @@
     {
       "feature": "Switches (lid, jack insert)",
       "apple": "IOHIDEventService sensor and switch elements",
-      "bifrost": "springboard/ui/src/input_switches.rs",
+      "bifrost": "springboard/ui/src/input_switches.rs (SwitchState, SwitchWatch)",
       "status": "partial",
-      "note": "Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell reads switches; apps get no switch events"
+      "note": "Lid, tablet mode and headset states, their edges, and per-observer SwitchWatch selection are tested headless in ui/tests/parity_sdk-complete-37.rs. Gap: the shell does not yet publish switch edges to apps, and the feed needs the tablet or Midget hardware."
     },
     {
       "feature": "Virtual HID devices (synthetic input)",
