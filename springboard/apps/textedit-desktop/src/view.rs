@@ -9,11 +9,12 @@ use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
 use bifrost_app::kit::ui::{
-    Ui, Weight, CONTENT_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, SELECTION,
+    Ui, Weight, BLACK, CONTENT_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, SELECTION,
     SEGMENT_ON, SEPARATOR_C,
 };
 use bifrost_app::kit::{pack, Image};
 use bifrost_app::layout::{traffic_lights_trailing, MARGIN_PT, READABLE_MAX_PT, UNIFIED_BAR_PT};
+use bifrost_app::controls::prefs_layout::m;
 
 /// Height of the format bar under the toolbar, and of the tab ruler under it.
 pub const FORMAT_H: f32 = 36.0;
@@ -30,7 +31,7 @@ const BUTTON_H: f32 = 26.0;
 const BUTTON_PAD: f32 = 10.0;
 const ITEM_GAP: f32 = 4.0;
 const GROUP_GAP: f32 = 14.0;
-const CONTROL_RADIUS: f32 = 6.0;
+const CONTROL_RADIUS: f32 = m::ICON_RADIUS;
 const BAR_GAP: f32 = 8.0;
 
 /// What a control or a menu item does. Document commands (New, Open, Save...) are the document controller's and
@@ -909,13 +910,13 @@ fn tail_that_fits(ui: &Ui, text: &str, max_px: f32) -> String {
 
 /// The page's fill when View > Use Dark Background for Windows is on.
 fn dark_page() -> u32 {
-    pack(30, 30, 32, 255)
+    DETAIL_BG.dark
 }
 
 /// The colour of text with no colour of its own: the window's label colour, or white on a dark page.
 pub fn default_ink(dark: bool) -> u32 {
     if dark {
-        pack(255, 255, 255, 255)
+        LABEL.dark
     } else {
         LABEL.now()
     }
@@ -977,7 +978,7 @@ fn squiggle(c: &mut dyn Canvas, ui: &Ui, x0: f32, x1: f32, y: f32) {
     while x < x1 {
         let w = 2.0f32.min(x1 - x);
         let rect = Rect { x, y: if up { y } else { y + 1.0 }, w, h: 1.0 };
-        c.fill_rect(to_px(ui, rect), pack(255, 69, 58, 255));
+        c.fill_rect(to_px(ui, rect), DESTRUCTIVE);
         x += w;
         up = !up;
     }
@@ -1050,7 +1051,7 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
     let color = if style.link != 0 {
         LINK
     } else if style.highlight > 0 && style.color == 0 {
-        pack(0, 0, 0, 255)
+        BLACK
     } else if style.color == 0 {
         default_ink(dark)
     } else {
