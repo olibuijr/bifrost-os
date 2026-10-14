@@ -543,3 +543,80 @@ mod disks {
         assert_eq!(plan_from_reply(&empty), Err("disks: the reply has no commands".to_string()));
     }
 }
+
+mod artwork {
+    use bifrost_app::kit::{Font, Surface, Ui};
+    use bifrost_app::widgets::{player, Player, PlayerLayout, PLAYER_PT};
+    use bifrost_ui::Rect;
+
+    fn ui() -> Ui {
+        let data: &'static [u8] = Box::leak(
+            std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice(),
+        );
+        Ui::new(Font::parse(data).unwrap(), 1.0)
+    }
+
+    fn music() -> Player<'static> {
+        Player { title: "Song", subtitle: "Artist", playing: true, progress: Some(0.5), skips: None }
+    }
+
+    #[test]
+    fn headless_the_artwork_slot_is_a_square_inset_in_the_capsule() {
+        let l = PlayerLayout::new(Rect { x: 10.0, y: 0.0, w: 400.0, h: 80.0 }, &music());
+        assert_eq!(l.capsule.h, PLAYER_PT);
+        assert_eq!(l.artwork.w, l.artwork.h, "the artwork slot is square");
+        assert_eq!(l.artwork.x, l.capsule.x + 6.0, "six points of padding on the left");
+        assert_eq!(l.artwork.y, l.capsule.y + 6.0, "six points of padding on top");
+        assert!(l.artwork.bottom() <= l.capsule.bottom());
+    }
+
+    #[test]
+    fn headless_the_artwork_slot_shrinks_with_a_shorter_bounds() {
+        let l = PlayerLayout::new(Rect { x: 10.0, y: 0.0, w: 400.0, h: 40.0 }, &music());
+        assert_eq!(l.capsule.h, 40.0, "the capsule is at most the bounds height");
+        assert_eq!(l.artwork.w, 28.0, "the slot is the capsule height less the padding");
+        assert_eq!(l.artwork.y, 6.0);
+    }
+
+    #[test]
+    fn headless_the_title_text_sits_between_the_artwork_and_the_transport() {
+        let with_skips = Player { skips: Some(("gobackward.15", "goforward.30")), ..music() };
+        let l = PlayerLayout::new(Rect { x: 0.0, y: 0.0, w: 400.0, h: 52.0 }, &with_skips);
+        assert!(l.text.x > l.artwork.right(), "the text starts after the artwork");
+        assert!(l.text.right() <= l.back.unwrap().x, "the text ends before the back control");
+        assert!(l.back.unwrap().right() <= l.play.x && l.play.right() <= l.forward.unwrap().x);
+    }
+
+    #[test]
+    fn headless_a_live_stream_without_progress_has_no_progress_track() {
+        let live = Player { progress: None, ..music() };
+        let l = PlayerLayout::new(Rect { x: 0.0, y: 0.0, w: 300.0, h: 52.0 }, &live);
+        assert!(l.progress.is_none());
+        let with_progress = PlayerLayout::new(Rect { x: 0.0, y: 0.0, w: 300.0, h: 52.0 }, &music());
+        let track = with_progress.progress.expect("a progress track under the text");
+        assert_eq!(track.x, with_progress.text.x);
+        assert!(track.bottom() <= with_progress.text.bottom());
+    }
+
+    #[test]
+    fn headless_the_drawn_capsule_leaves_the_pixels_outside_its_bounds_clear() {
+        let bounds = Rect { x: 10.0, y: 0.0, w: 400.0, h: 80.0 };
+        let ui = ui();
+        let mut px = vec![0u32; 420 * 90];
+        let layout = player(&mut Surface { w: 420, h: 90, stride: 420, px: &mut px, y0: 0 }, &ui, bounds, &music(), None);
+        assert_eq!(layout, PlayerLayout::new(bounds, &music()));
+        assert_eq!(px[0], 0, "the top-left corner is outside the player");
+        assert_eq!(px[20 * 420 + 5], 0, "the pixel left of the capsule is clear");
+    }
+
+    #[test]
+    fn headless_the_artwork_slot_is_painted_under_the_player_artwork() {
+        let bounds = Rect { x: 10.0, y: 0.0, w: 400.0, h: 80.0 };
+        let ui = ui();
+        let mut px = vec![0u32; 420 * 90];
+        let layout = player(&mut Surface { w: 420, h: 90, stride: 420, px: &mut px, y0: 0 }, &ui, bounds, &music(), None);
+        let cx = (layout.artwork.x + layout.artwork.w / 2.0) as usize;
+        let cy = (layout.artwork.y + layout.artwork.h / 2.0) as usize;
+        assert_ne!(px[cy * 420 + cx], 0, "the artwork slot is drawn at its centre");
+    }
+}
