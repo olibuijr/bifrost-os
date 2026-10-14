@@ -25,6 +25,10 @@ pub struct Slideshow {
     hide_at: f64,
     /// how long one picture stays, fade included (ms)
     slide_ms: f64,
+    /// the next picture replaces this one at once instead of fading in
+    cut: bool,
+    /// the pictures stay still instead of drifting
+    still: bool,
 }
 
 impl Slideshow {
@@ -34,12 +38,19 @@ impl Slideshow {
             return None;
         }
         let index = index.min(photos.len() - 1);
-        Some(Slideshow { photos, index, paused: false, controls: false, elapsed: 0.0, last: None, hide_at: 0.0, slide_ms: SLIDE_MS })
+        Some(Slideshow { photos, index, paused: false, controls: false, elapsed: 0.0, last: None, hide_at: 0.0, slide_ms: SLIDE_MS, cut: false, still: false })
     }
 
     /// Shows each picture for `seconds` (at least two, so the cross-fade fits).
     pub fn with_seconds(mut self, seconds: u32) -> Self {
         self.slide_ms = f64::from(seconds.max(2)) * 1000.0;
+        self
+    }
+
+    /// The transition between pictures (a cross-fade, or a cut) and whether the pictures drift.
+    pub fn with_style(mut self, fade: bool, motion: bool) -> Self {
+        self.cut = !fade;
+        self.still = !motion;
         self
     }
 
@@ -102,10 +113,11 @@ impl Slideshow {
     /// opacity 0..255): the current one, then the next while it fades in.
     pub fn layers(&self) -> Vec<(usize, f32, u32)> {
         let total = self.slide_ms + FADE_MS;
-        let mut out = vec![(self.index, ((self.elapsed + FADE_MS) / total) as f32, 255)];
+        let drift = |p: f32| if self.still { 0.0 } else { p };
+        let mut out = vec![(self.index, drift(((self.elapsed + FADE_MS) / total) as f32), 255)];
         let into = self.elapsed - (self.slide_ms - FADE_MS);
-        if into > 0.0 && self.photos.len() > 1 {
-            out.push((self.next_index(), (into / total) as f32, ((into / FADE_MS).min(1.0) * 255.0) as u32));
+        if into > 0.0 && self.photos.len() > 1 && !self.cut {
+            out.push((self.next_index(), drift((into / total) as f32), ((into / FADE_MS).min(1.0) * 255.0) as u32));
         }
         out
     }
@@ -183,6 +195,24 @@ mod tests {
         let before = s.layers();
         assert!(!s.tick(9999.0));
         assert_eq!(s.layers(), before);
+    }
+
+    #[test]
+    fn a_cut_shows_one_picture_and_still_pictures_do_not_drift() {
+        let mut s = show(3).with_style(false, false);
+        s.tick(0.0);
+        for k in 1..=15 {
+            s.tick(k as f64 * 250.0);
+        }
+        let layers = s.layers();
+        assert_eq!(layers.len(), 1, "no cross-fade in a cut");
+        assert_eq!(layers[0].1, 0.0, "no drift when still");
+        let mut f = show(3);
+        f.tick(0.0);
+        for k in 1..=15 {
+            f.tick(k as f64 * 250.0);
+        }
+        assert_eq!(f.layers().len(), 2);
     }
 
     #[test]

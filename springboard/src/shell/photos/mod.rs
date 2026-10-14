@@ -8,16 +8,26 @@
 //! whose results arrive through a pipe the shell polls, like Deildu.
 
 pub mod albums;
+pub mod cmd;
+pub mod collections;
+mod commands;
 pub mod edit;
+pub mod export;
 pub mod exif;
 pub mod grid;
 pub mod import;
 pub mod library;
+pub mod meta;
 pub mod models;
+pub mod panel;
+pub mod prompt;
 pub mod recipe;
+pub mod rules;
 pub mod slideshow;
 pub mod stars;
 pub mod thumbs;
+pub mod undo;
+pub mod url;
 pub mod viewer;
 pub mod zoom;
 #[cfg(test)]
@@ -39,12 +49,18 @@ use crate::imgdec;
 use crate::layout::Rect;
 use crate::scene::STATUS_PT;
 use albums::Selection;
+pub use cmd::Cmd;
+use collections::Folder;
+use meta::Meta;
+use panel::{Panel, PanelKind, Purpose};
+use prompt::Prompt;
+use rules::{KindFilter, Smart};
 use bifrost_ui::photo_caching::{Key as PreKey, Manager as PreheatCache};
 use bifrost_ui::photo_smart_albums::SmartAlbum;
 use edit::{Aspect, Edit, Filter};
 use grid::Grid;
 use library::{civil, sections, Photo, Section};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thumbs::{DiskCache, MemCache};
@@ -89,6 +105,8 @@ fn flat(ui: &Ui) -> f32 {
 pub const THUMB_DIR: &str = "cache/thumbs";
 /// Favourites and other settings: `<data dir>/photos.ini`.
 pub const PREFS_FILE: &str = "photos.ini";
+/// Added to a photo's cache key for the whole-picture thumbnails of the aspect ratio grid.
+const FIT_SUFFIX: &str = "-fit";
 /// Wallpapers made from photos are `wallpapers/custom-<n>.raw`.
 pub const CUSTOM_PREFIX: &str = "custom-";
 
@@ -159,6 +177,12 @@ pub enum Target {
     SheetDuplicate,
     /// the Info sheet's Revert to Original row
     InfoRevert,
+    /// the Info sheet's Edit Details row (title, caption, keywords, date, place)
+    InfoDetails,
+    /// the picker's Rename Album row (a user album is open)
+    RenameAlbum,
+    /// the picker's Library and Tools row
+    More,
     Edit,
     EditCancel,
     EditSave,
@@ -307,6 +331,16 @@ pub enum Album {
     Hidden,
     /// a user album: index into the album list
     User(u8),
+    /// a smart album: index into the smart album list
+    Smart(u8),
+    /// the photos that exist as identical files, every set together
+    Duplicates,
+    /// a memory: index into the memories
+    Memory(u8),
+    /// a place: index into the places
+    Place(u8),
+    /// the photos with one keyword: index into the keyword list
+    Keyword(u8),
 }
 
 /// At most this many user albums.
@@ -323,6 +357,11 @@ impl Album {
             Self::Trash => "Recently Deleted",
             Self::Hidden => "Hidden",
             Self::User(_) => "Album",
+            Self::Smart(_) => "Smart Album",
+            Self::Duplicates => "Duplicates",
+            Self::Memory(_) => "Memory",
+            Self::Place(_) => "Place",
+            Self::Keyword(_) => "Keyword",
         }
     }
 }
@@ -359,6 +398,8 @@ enum Done {
     ThumbSkipped { key: String },
     Full { key: String, image: Option<Image> },
     Wallpaper { id: String, ok: bool },
+    /// what the index job read from the files: GPS positions and content hashes of files that share a size
+    Index { gen: u64, gps: HashMap<PathBuf, (f64, f64)>, hashes: HashMap<PathBuf, u64> },
 }
 
 pub struct Photos {
@@ -381,6 +422,42 @@ pub struct Photos {
     screenshots: Vec<Photo>,
     /// user albums: name and members, by `ua.<i>.` prefs
     user_albums: Vec<(String, Vec<Photo>)>,
+    /// smart albums (`sa.<n>` prefs) and the photos each one holds
+    smart: Vec<Smart>,
+    smart_lists: Vec<Vec<Photo>>,
+    /// folders of albums (`sf.<n>` prefs)
+    folders: Vec<Folder>,
+    /// past months with enough photos, places from the GPS positions, keywords, and sets of identical files
+    memories: Vec<(String, Vec<Photo>)>,
+    places: Vec<(String, Vec<Photo>)>,
+    keywords: Vec<(String, Vec<Photo>)>,
+    dupes: Vec<Vec<Photo>>,
+    dupe_photos: Vec<Photo>,
+    /// what the index job found in the files: GPS positions and content hashes
+    gps: HashMap<PathBuf, (f64, f64)>,
+    hashes: HashMap<PathBuf, u64>,
+    /// the details of photos (`meta:<path>` prefs)
+    metas: HashMap<PathBuf, Meta>,
+    /// View > Filter By
+    kind_filter: KindFilter,
+    /// the search text, when a search is on
+    search: Option<String>,
+    /// the grid draws whole pictures inside square cells instead of cropped squares
+    aspect_grid: bool,
+    /// View > Show Histogram: the editor shows the histogram on every page
+    histogram_on: bool,
+    /// undo and redo, and the action being recorded
+    history: undo::History,
+    rec: Option<undo::Entry>,
+    /// Copy Edits keeps a recipe here for Paste Edits
+    copied_edit: Option<Edit>,
+    /// the list panel and the text prompt over the app
+    panel: Option<Panel>,
+    panel_stack: Vec<PanelKind>,
+    prompt: Option<(Purpose, Prompt)>,
+    export_options: export::Options,
+    /// File > Import was chosen; the shell opens its folder panel
+    import_req: bool,
     /// the current album after the date filter: what the grid and viewer index
     view: Vec<Photo>,
     /// the active month filter: its title and `[start, end)` in Unix seconds
@@ -437,6 +514,8 @@ pub struct Photos {
     /// a picture the user chose to send; the shell opens the share sheet
     share_req: Option<PathBuf>,
     camera_req: bool,
+    /// the time of the last touch or tick, for wake-up times
+    last_t: f64,
     dirty: bool,
 }
 
@@ -479,6 +558,29 @@ impl Photos {
             recents: vec![],
             screenshots: vec![],
             user_albums: vec![],
+            smart: vec![],
+            smart_lists: vec![],
+            folders: vec![],
+            memories: vec![],
+            places: vec![],
+            keywords: vec![],
+            dupes: vec![],
+            dupe_photos: vec![],
+            gps: HashMap::new(),
+            hashes: HashMap::new(),
+            metas: HashMap::new(),
+            kind_filter: KindFilter::All,
+            search: None,
+            aspect_grid: false,
+            histogram_on: false,
+            history: undo::History::default(),
+            rec: None,
+            copied_edit: None,
+            panel: None,
+            panel_stack: vec![],
+            prompt: None,
+            export_options: export::Options::default(),
+            import_req: false,
             view: vec![],
             filter: None,
             selection: Selection::default(),
@@ -519,10 +621,12 @@ impl Photos {
             effects: vec![],
             share_req: None,
             camera_req: false,
+            last_t: 0.0,
             dirty: true,
             data,
         };
         p.newest_first = p.prefs.get("sort") == Some("newest");
+        p.load_settings();
         if let Some(c) = p.prefs.get_parsed::<usize>("cols").filter(|c| ZOOMS.contains(c)) {
             p.cols = c;
         }
@@ -557,7 +661,8 @@ impl Photos {
 
     /// When `tick` next needs to run without input.
     pub fn next_wake(&self) -> Option<f64> {
-        self.viewer.as_ref().and_then(Viewer::next_wake)
+        let overlay = self.prompt.as_ref().and_then(|(_, p)| p.next_wake(self.last_t));
+        self.viewer.as_ref().and_then(Viewer::next_wake).into_iter().chain(overlay).reduce(f64::min)
     }
 
     /// The photos of the current album, in grid order.
@@ -575,13 +680,18 @@ impl Photos {
             Album::Screenshots => &self.screenshots,
             Album::Trash => &self.trash,
             Album::User(i) => self.user_albums.get(i as usize).map_or(&[][..], |u| &u.1),
+            Album::Smart(i) => self.smart_lists.get(i as usize).map_or(&[][..], |l| l),
+            Album::Duplicates => &self.dupe_photos,
+            Album::Memory(i) => self.memories.get(i as usize).map_or(&[][..], |m| &m.1),
+            Album::Place(i) => self.places.get(i as usize).map_or(&[][..], |m| &m.1),
+            Album::Keyword(i) => self.keywords.get(i as usize).map_or(&[][..], |m| &m.1),
         }
     }
 
     /// The albums the picker lists: the fixed ones, then the user's.
     fn menu_albums(&self) -> Vec<Album> {
         let mut v = vec![Album::All, Album::Recents, Album::Favorites, Album::Screenshots, Album::Trash];
-        if !self.hidden.is_empty() {
+        if !self.hidden.is_empty() || self.show_hidden_album() {
             v.push(Album::Hidden);
         }
         let names: Vec<(usize, String)> = self.user_albums.iter().enumerate().map(|(i, u)| (i, u.0.clone())).collect();
@@ -608,7 +718,9 @@ impl Photos {
         v.extend([Target::SortOrder, Target::AlbumSort, Target::ShowSeconds]);
         if matches!(self.album, Album::User(_)) {
             v.push(Target::DeleteAlbum);
+            v.push(Target::RenameAlbum);
         }
+        v.push(Target::More);
         v
     }
 
@@ -622,6 +734,7 @@ impl Photos {
             Ok(()) => self.prefs = next,
             Err(e) => eprintln!("photos: {PREFS_FILE}: {e}"),
         }
+        self.forget_album_in_folders(slot as u8);
     }
 
     /// Is `p` hidden from All Photos.
@@ -636,6 +749,10 @@ impl Photos {
     fn album_title(&self, album: Album) -> String {
         match album {
             Album::User(i) => self.user_albums.get(i as usize).map_or_else(|| album.title().to_string(), |u| u.0.clone()),
+            Album::Smart(i) => self.smart.get(i as usize).map_or_else(|| album.title().to_string(), |a| a.name.clone()),
+            Album::Memory(i) => self.memories.get(i as usize).map_or_else(|| album.title().to_string(), |m| m.0.clone()),
+            Album::Place(i) => self.places.get(i as usize).map_or_else(|| album.title().to_string(), |m| m.0.clone()),
+            Album::Keyword(i) => self.keywords.get(i as usize).map_or_else(|| album.title().to_string(), |m| m.0.clone()),
             _ => album.title().to_string(),
         }
     }
@@ -763,9 +880,10 @@ impl Photos {
         let (hidden, visible): (Vec<Photo>, Vec<Photo>) = self.all.iter().cloned().partition(|p| self.is_hidden(p));
         self.hidden = hidden;
         self.visible = visible;
-        if self.album == Album::Hidden && self.hidden.is_empty() {
+        if self.album == Album::Hidden && self.hidden.is_empty() && !self.show_hidden_album() {
             self.album = Album::All;
         }
+        self.load_metas();
         self.favorites = models::smart_album(SmartAlbum::Favourites, &self.visible, |p| self.is_favourite(p), now);
         self.fav_paths = self.all.iter().chain(&self.trash).filter(|p| self.is_favourite(p)).map(|p| p.path.clone()).collect();
         self.user_albums = (0..MAX_USER_ALBUMS)
@@ -777,12 +895,14 @@ impl Photos {
             .collect();
         self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.visible, |p| self.is_favourite(p), now);
         self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.visible, |p| self.is_favourite(p), now);
+        self.derive_collections(now);
         let view = {
             let base = self.album_list(self.album);
             let filtered = match &self.filter {
                 Some((_, range)) => albums::in_range(base, *range),
                 None => base.to_vec(),
             };
+            let filtered = self.apply_kind_and_search(filtered);
             models::by_date(&filtered, self.newest_first)
         };
         self.view = view;
@@ -879,10 +999,14 @@ impl Photos {
 
     /// Writes one setting; false (and the old value kept) if it cannot be saved.
     fn pref_set(&mut self, key: &str, value: &str) -> bool {
+        let before = self.prefs.get(key).unwrap_or("").to_string();
         let mut next = self.prefs.clone();
         match next.set(key, value) {
             Ok(()) => {
                 self.prefs = next;
+                if let Some(rec) = &mut self.rec {
+                    rec.note(key, &before, value.trim());
+                }
                 true
             }
             Err(e) => {
@@ -906,7 +1030,9 @@ impl Photos {
     pub fn add_photo(&mut self, ui: &Ui, photo: Photo, image: Image) {
         let anchor = self.viewer_anchor();
         let key = photo.key();
-        self.thumbs.insert(&key, imgdec::cover(&image, thumbs::SIZE, thumbs::SIZE));
+        let tkey = self.tkey(&photo);
+        let thumb = if self.aspect_grid { imgdec::contain(&image, thumbs::SIZE, thumbs::SIZE) } else { imgdec::cover(&image, thumbs::SIZE, thumbs::SIZE) };
+        self.thumbs.insert(&tkey, thumb);
         self.full.insert(&key, imgdec::contain(&image, self.w as usize, self.h as usize));
         self.all.retain(|p| p.path != photo.path);
         let at = self.all.partition_point(|p| (p.mtime, &p.path) <= (photo.mtime, &photo.path));
@@ -953,7 +1079,7 @@ impl Photos {
         let more: Vec<usize> = self.grid.visible(ahead.0, ahead.1).into_iter().filter(|i| !near.contains(i)).collect();
         let order = [near, more].concat();
         let wanted: Vec<Photo> = order.into_iter().filter_map(|i| self.photos().get(i).cloned()).collect();
-        let keys: Vec<String> = wanted.iter().map(Photo::key).collect();
+        let keys: Vec<String> = wanted.iter().map(|p| self.tkey(p)).collect();
         // jobs still queued for cells that scrolled away give way
         *self.thumb_wanted.lock().unwrap_or_else(|p| p.into_inner()) = keys.iter().cloned().collect();
         // the caching manager keeps the same window as its preparations; the ones that scrolled away stop
@@ -969,7 +1095,7 @@ impl Photos {
             self.thumb_pending.insert(key.clone());
             let recipe = self.recipe(&photo);
             let (disk, still_wanted) = (self.disk.clone(), self.thumb_wanted.clone());
-            let failed = key.clone();
+            let (failed, whole) = (key.clone(), self.aspect_grid);
             self.pool.spawn_or(
                 move || {
                     if !still_wanted.lock().unwrap_or_else(|p| p.into_inner()).contains(&key) {
@@ -977,7 +1103,7 @@ impl Photos {
                     }
                     let image = disk.read(&key).or_else(|| {
                         let img = decode_edited(&std::fs::read(&photo.path).ok()?, recipe)?;
-                        let thumb = imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE);
+                        let thumb = if whole { imgdec::contain(&img, thumbs::SIZE, thumbs::SIZE) } else { imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE) };
                         disk.write(&key, &thumb);
                         Some(thumb)
                     });
@@ -1065,6 +1191,8 @@ impl Photos {
                     let anchor = self.viewer_anchor();
                     self.all = all;
                     self.trash = trash;
+                    self.load_metas();
+                    self.apply_taken_dates();
                     self.purge_expired();
                     self.recent.retain(|r| !self.all.iter().any(|p| p.path == r.path));
                     for r in self.recent.clone() {
@@ -1076,6 +1204,14 @@ impl Photos {
                     if !self.started {
                         self.started = true;
                         self.scroll.jump_to(f32::MAX);
+                    }
+                    self.start_index_job(gen);
+                }
+                Done::Index { gen, gps, hashes } => {
+                    if gen == self.gen {
+                        self.gps = gps;
+                        self.hashes = hashes;
+                        self.rebuild(ui);
                     }
                 }
                 Done::Thumb { key, image } => {
@@ -1112,6 +1248,12 @@ impl Photos {
     /// Advances scrolling, paging and the tap timer; asks for pictures that
     /// came into view. True when the screen changed.
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
+        self.last_t = t;
+        let overlay = self.tick_overlays(ui, t);
+        self.tick_content(ui, t) | overlay
+    }
+
+    fn tick_content(&mut self, ui: &Ui, t: f64) -> bool {
         if let Some(sh) = &mut self.slideshow {
             sh.tick(t);
             self.request_full();
@@ -1141,7 +1283,7 @@ impl Photos {
 
     /// Nothing to show in All Photos: bifrost 15's "Library" with its empty state.
     fn blank_library(&self) -> bool {
-        self.album == Album::All && self.filter.is_none() && !self.selection.active && !self.scanning && self.photos().is_empty()
+        self.album == Album::All && self.filter.is_none() && self.search.is_none() && self.kind_filter == KindFilter::All && !self.selection.active && !self.scanning && self.photos().is_empty()
     }
 
     /// The empty library's Open Camera button (x, y, w, h), centred on the screen.
@@ -1264,7 +1406,7 @@ impl Photos {
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Info {
-                let rated = 2 * usize::from(self.info_has_rating());
+                let rated = 3 * usize::from(self.info_has_rating());
                 if self.info_has_rating() {
                     let (rect, (x0, x1)) = self.info_rating_row(ui);
                     if within(x, y, rect) {
@@ -1272,6 +1414,9 @@ impl Photos {
                     }
                     if within(x, y, self.info_hide_row(ui)) {
                         return Some(Target::InfoHide);
+                    }
+                    if within(x, y, self.info_details_row(ui)) {
+                        return Some(Target::InfoDetails);
                     }
                 }
                 if self.info_revert {
@@ -1319,6 +1464,13 @@ impl Photos {
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
         self.dirty = true;
+        self.last_t = t;
+        if self.prompt.is_some() {
+            return self.prompt_touch(ui, ev, t);
+        }
+        if self.panel.is_some() {
+            return self.panel_touch(ui, ev, t);
+        }
         let (x, y) = match ev {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             Event::Power | Event::Wake | Event::VolumeUp | Event::VolumeDown | Event::Screenshot => return,
@@ -1385,7 +1537,14 @@ impl Photos {
                 }
             }
             Target::OpenCamera => self.camera_req = true,
-            Target::Filter => self.cycle_filter(ui),
+            Target::Filter => {
+                if self.search.is_some() {
+                    self.search = None;
+                    self.rebuild(ui);
+                } else {
+                    self.cycle_filter(ui);
+                }
+            }
             Target::SelectAll => {
                 let all = self.view.clone();
                 self.selection.toggle_all(&all);
@@ -1418,26 +1577,33 @@ impl Photos {
                     self.delete_selected(ui);
                 }
             }
-            Target::Info => {
-                if let Some(p) = self.viewing().cloned() {
-                    let head = read_head(&p.path);
-                    self.info = exif::describe(&p.name(), p.size, p.mtime, self.offset, &head);
-                    // Recently Deleted photos have no revert: their edit left with them
-                    self.info_revert = self.album != Album::Trash && self.recipe(&p).is_some();
-                    self.sheet = Some(Sheet::Info);
+            Target::Info => self.open_info(),
+            Target::InfoDetails => {
+                self.sheet = None;
+                self.open_panel(ui, PanelKind::Details, false);
+            }
+            Target::RenameAlbum => {
+                if let Album::User(i) = self.album {
+                    self.album_menu = false;
+                    let current = self.album_title(Album::User(i));
+                    self.ask(ui, Purpose::RenameAlbum(i), &current, t);
                 }
+            }
+            Target::More => {
+                self.album_menu = false;
+                self.open_panel(ui, PanelKind::Library, false);
             }
             Target::Rate(n) => {
                 if let Some(p) = self.viewing().cloned() {
                     let next = stars::after_tap(self.rating(&p), n);
-                    self.set_rating(&p, next);
+                    self.grouped("Rating", |s| s.set_rating(&p, next));
                 }
             }
             Target::InfoHide => {
                 if let Some(p) = self.viewing().cloned() {
                     let anchor = self.viewer_anchor();
                     let on = !self.is_hidden(&p);
-                    self.set_hidden(&p, on);
+                    self.grouped(if on { "Hide" } else { "Unhide" }, |s| s.set_hidden(&p, on));
                     self.sheet = None;
                     self.rebuild(ui);
                     // the photo has left this album's grid (or come back to it): the viewer lands on its neighbour
@@ -1452,26 +1618,11 @@ impl Photos {
                 self.info_revert = false;
                 self.sheet = None;
                 if let Some(p) = self.viewing().cloned() {
-                    self.set_recipe(&p, Edit::default());
+                    self.grouped("Revert to Original", |s| s.set_recipe(&p, Edit::default()));
                     self.invalidate(&p);
                 }
             }
-            Target::Edit => {
-                // the shown picture already has its edit applied, so the editor decodes the original
-                if let Some(p) = self.viewing().cloned() {
-                    if self.full.contains(&p.key()) {
-                        let (w, h) = (self.w as usize, self.h as usize);
-                        let src = std::fs::read(&p.path).ok().and_then(|b| decode_upright(&b)).map(|img| imgdec::contain(&img, w, h));
-                        if let Some(src) = src {
-                            self.sheet = None;
-                            let edit = self.recipe(&p).unwrap_or_default();
-                            let mut ed = Editor { photo: p, preview: src.clone(), src, edit, pane: EditPane::Adjust, hist: [0; edit::HISTOGRAM_BINS] };
-                            ed.refresh();
-                            self.editor = Some(ed);
-                        }
-                    }
-                }
-            }
+            Target::Edit => self.begin_edit(),
             Target::EditCancel => self.editor = None,
             Target::EditRotate => {
                 if let Some(ed) = &mut self.editor {
@@ -1510,7 +1661,7 @@ impl Photos {
             }
             Target::EditSave => {
                 if let Some(ed) = self.editor.take() {
-                    self.set_recipe(&ed.photo, ed.edit);
+                    self.grouped("Edit", |s| s.set_recipe(&ed.photo, ed.edit));
                     self.invalidate(&ed.photo);
                     self.dirty = true;
                 }
@@ -1565,17 +1716,7 @@ impl Photos {
                     }
                 }
             }
-            Target::ZoomIn | Target::ZoomOut => {
-                let i = ZOOMS.iter().position(|&c| c == self.cols).unwrap_or(ZOOM_DEFAULT);
-                let next = if target == Target::ZoomIn { (i + 1).min(ZOOMS.len() - 1) } else { i.saturating_sub(1) };
-                if ZOOMS[next] != self.cols {
-                    let k = if self.grid.height > 0.0 { self.scroll.offset() / self.grid.height } else { 0.0 };
-                    self.cols = ZOOMS[next];
-                    let _ = self.pref_set("cols", &self.cols.to_string());
-                    self.rebuild(ui);
-                    self.scroll.jump_to(k * self.grid.height);
-                }
-            }
+            Target::ZoomIn | Target::ZoomOut => self.zoom_step(ui, target == Target::ZoomIn),
             Target::Back => self.viewer = None,
             Target::Share => self.sheet = Some(Sheet::Share),
             Target::Delete => self.sheet = Some(Sheet::Delete),
@@ -1635,7 +1776,9 @@ impl Photos {
                     }
                     let anchor = self.viewer_anchor();
                     let on = !self.is_favourite(&p);
-                    self.write_favourite(&p, on);
+                    self.grouped(if on { "Favorite" } else { "Unfavorite" }, |s| {
+                        s.write_favourite(&p, on);
+                    });
                     self.rebuild(ui);
                     self.restore_viewer(anchor);
                 }
@@ -1645,7 +1788,7 @@ impl Photos {
                     return;
                 }
                 if let Some(p) = self.viewing().cloned() {
-                    if self.recover_one(&p) {
+                    if self.grouped("Recover", |s| s.recover_one(&p)) {
                         self.after_removal(ui);
                         self.rescan();
                     }
@@ -1669,22 +1812,31 @@ impl Photos {
                 }
                 ok
             }
-            _ => match library::move_to(&p.path, &self.pictures.join(library::TRASH)).ok().and_then(|t| Photo::from_path_at(t, self.offset)) {
-                Some(t) => {
-                    self.move_favourite(p, &t);
-                    self.pref_set(&format!("del:{}", t.path.display()), &unix_now().to_string());
-                    self.all.retain(|q| q.path != p.path);
-                    self.recent.retain(|q| q.path != p.path);
-                    self.trash.push(t);
-                    true
+            _ => self.trash_one(p),
+        }
+    }
+
+    /// Moves a photo into Recently Deleted whatever album is open. True when it moved.
+    fn trash_one(&mut self, p: &Photo) -> bool {
+        match library::move_to(&p.path, &self.pictures.join(library::TRASH)).ok().and_then(|t| Photo::from_path_at(t, self.offset)) {
+            Some(t) => {
+                if let (Some(rec), Some(dir)) = (&mut self.rec, p.path.parent()) {
+                    rec.moves.push(undo::Move { from: t.path.clone(), to_dir: dir.to_path_buf() });
                 }
-                None => false,
-            },
+                self.move_favourite(p, &t);
+                self.pref_set(&format!("del:{}", t.path.display()), &unix_now().to_string());
+                self.all.retain(|q| q.path != p.path);
+                self.recent.retain(|q| q.path != p.path);
+                self.trash.push(t);
+                true
+            }
+            None => false,
         }
     }
 
     fn delete(&mut self, ui: &Ui, p: &Photo) {
-        if self.remove_one(p) {
+        let removed = self.recorded(self.album != Album::Trash, "Delete", |s| s.remove_one(p));
+        if removed {
             self.after_removal(ui);
             self.rescan();
         } else {
@@ -1700,13 +1852,16 @@ impl Photos {
     /// Deletes the selection (to Recently Deleted, or for good in it).
     fn delete_selected(&mut self, ui: &Ui) {
         let mut removed = 0;
-        for p in self.selected_photos() {
-            if self.remove_one(&p) {
-                removed += 1;
-            } else {
-                eprintln!("photos: could not delete {}", p.path.display());
+        let chosen = self.selected_photos();
+        self.recorded(self.album != Album::Trash, "Delete", |s| {
+            for p in &chosen {
+                if s.remove_one(p) {
+                    removed += 1;
+                } else {
+                    eprintln!("photos: could not delete {}", p.path.display());
+                }
             }
-        }
+        });
         self.selection.end();
         self.confirm_purge = false;
         self.rebuild(ui);
@@ -1719,6 +1874,9 @@ impl Photos {
     fn recover_one(&mut self, p: &Photo) -> bool {
         match library::move_to(&p.path, &self.pictures).ok().and_then(|t| Photo::from_path_at(t, self.offset)) {
             Some(back) => {
+                if let Some(rec) = &mut self.rec {
+                    rec.moves.push(undo::Move { from: back.path.clone(), to_dir: self.pictures.join(library::TRASH) });
+                }
                 self.move_favourite(p, &back);
                 self.forget_deleted(p);
                 self.trash.retain(|q| q.path != p.path);
@@ -1736,11 +1894,14 @@ impl Photos {
 
     fn recover_selected(&mut self, ui: &Ui) {
         let mut moved = 0;
-        for p in self.selected_photos() {
-            if self.recover_one(&p) {
-                moved += 1;
+        let chosen = self.selected_photos();
+        self.grouped("Recover", |s| {
+            for p in &chosen {
+                if s.recover_one(p) {
+                    moved += 1;
+                }
             }
-        }
+        });
         self.selection.end();
         self.rebuild(ui);
         if moved > 0 {
@@ -1841,7 +2002,7 @@ impl Photos {
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
         let revert = usize::from(self.info_revert);
-        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + 2 * usize::from(self.info_has_rating()) + revert) as f32)
+        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + 3 * usize::from(self.info_has_rating()) + revert) as f32)
     }
 
     /// The Info sheet's Hide Photo row (x, y, w, h), under the rating row.
@@ -1850,7 +2011,13 @@ impl Photos {
         (x, y + h, w, h)
     }
 
-    /// The Info sheet has a rating row and a Hide Photo row for every photo that is not in Recently Deleted.
+    /// The Info sheet's Edit Details row, under the Hide Photo row.
+    fn info_details_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (x, y, w, h) = self.info_hide_row(ui);
+        (x, y + h, w, h)
+    }
+
+    /// The Info sheet has a rating row, a Hide Photo row and an Edit Details row for every photo that is not in Recently Deleted.
     fn info_has_rating(&self) -> bool {
         self.album != Album::Trash
     }
@@ -1887,11 +2054,13 @@ impl Photos {
     /// Drops the cached pictures of `p` so the next request decodes it with its current edit.
     fn invalidate(&mut self, p: &Photo) {
         let key = p.key();
-        self.thumbs.remove(&key);
-        self.cells.remove(&key);
+        for k in [key.clone(), format!("{key}{FIT_SUFFIX}")] {
+            self.thumbs.remove(&k);
+            self.cells.remove(&k);
+            self.thumb_failed.remove(&k);
+            let _ = std::fs::remove_file(self.disk.path(&k));
+        }
         self.full.remove(&key);
-        self.thumb_failed.remove(&key);
-        let _ = std::fs::remove_file(self.disk.path(&key));
     }
 
     /// "12 days left" for a photo in Recently Deleted.
@@ -1926,6 +2095,7 @@ impl Photos {
         } else {
             self.draw_grid(s, ui);
         }
+        self.draw_overlays(s, ui, _t);
     }
 
     /// Resamples the thumbnail of `key` to `size` px with a smooth filter (the
@@ -1939,7 +2109,14 @@ impl Photos {
             return;
         }
         let Some(thumb) = self.thumbs.get(key) else { return };
-        if thumb.w != size || thumb.h != size {
+        if self.aspect_grid {
+            let k = (size as f32 / thumb.w.max(1) as f32).min(size as f32 / thumb.h.max(1) as f32);
+            let (dw, dh) = (((thumb.w as f32 * k).round() as usize).max(1), ((thumb.h as f32 * k).round() as usize).max(1));
+            if thumb.w != dw || thumb.h != dh {
+                let scaled = thumb.resized(dw, dh);
+                self.cells.insert(key, scaled);
+            }
+        } else if thumb.w != size || thumb.h != size {
             let scaled = imgdec::cover(thumb, size, size);
             self.cells.insert(key, scaled);
         }
@@ -1950,8 +2127,9 @@ impl Photos {
         let off = self.scroll.offset();
         let pressed = self.pressed;
         let empty = self.photos().is_empty();
+        let aspect = self.aspect_grid;
         let selecting = self.selection.active;
-        let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, p.key(), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
+        let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, self.tkey(p), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
         {
             let mut band = s.rows(top as usize, bottom as usize);
             for (si, y) in self.grid.headers(off, off + bottom - top) {
@@ -1963,9 +2141,16 @@ impl Photos {
                 let (x, y, cw, ch) = self.grid.cell_rect(i);
                 let r = Rect { x: x as i32, y: (top + y - off) as i32, w: cw as i32, h: ch as i32 };
                 self.prepare_cell(&key, cw as usize);
+                band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, CELL);
                 match self.cells.get(&key).or_else(|| self.thumbs.get(&key)) {
+                    Some(img) if aspect => {
+                        let k = (r.w as f32 / img.w.max(1) as f32).min(r.h as f32 / img.h.max(1) as f32);
+                        let (iw, ih) = (((img.w as f32 * k).round() as i32).max(1), ((img.h as f32 * k).round() as i32).max(1));
+                        let at = Rect { x: r.x + (r.w - iw) / 2, y: r.y + (r.h - ih) / 2, w: iw, h: ih };
+                        super::switcher::draw_scaled(&mut band, img, at, 0.0, 255);
+                    }
                     Some(img) => super::switcher::draw_scaled(&mut band, img, r, 0.0, 255),
-                    None => band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, CELL),
+                    None => {}
                 }
                 if pressed == Some(Target::Cell(i)) {
                     band.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, 0.0, pack(0, 0, 0, 100));
@@ -2015,6 +2200,9 @@ impl Photos {
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
                     (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
+                    (Album::Smart(_), _) => ("No Photos", "No photo meets the conditions of this smart album."),
+                    (Album::Duplicates, _) => ("No Duplicates", "Identical files you import or copy appear here."),
+                    (Album::Memory(_) | Album::Place(_) | Album::Keyword(_), _) => ("No Photos", "Nothing matches any more."),
                 };
                 self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
                 self.label(s, ui, hint, 15.0, Weight::Regular, SECONDARY, cx, cy + ui.pt(14.0));
@@ -2031,9 +2219,15 @@ impl Photos {
                 n => format!("{n} Selected"),
             }
         } else {
-            self.filter.as_ref().map_or_else(|| if blank { "Library".to_string() } else { self.album_title(self.album) }, |f| f.0.clone())
+            match (&self.search, &self.filter) {
+                (Some(q), _) => format!("Search: {q}"),
+                (None, Some(f)) => f.0.clone(),
+                (None, None) if self.kind_filter != KindFilter::All => format!("{} \u{b7} {}", self.album_title(self.album), self.kind_filter.label()),
+                (None, None) if blank => "Library".to_string(),
+                (None, None) => self.album_title(self.album),
+            }
         };
-        let title_color = if self.selection.active { dim_blue(self.pressed, Target::SelectAll) } else if self.filter.is_some() { BLUE } else { WHITE };
+        let title_color = if self.selection.active { dim_blue(self.pressed, Target::SelectAll) } else if self.filter.is_some() || self.search.is_some() || self.kind_filter != KindFilter::All { BLUE } else { WHITE };
         self.label(s, ui, &title, 17.0, Weight::Semibold, title_color, self.w as f32 / 2.0, mid);
         if blank {
             let tint = if pressed == Some(Target::Album) { rgba(10, 132, 255, 140) } else { BLUE };
@@ -2144,6 +2338,8 @@ impl Photos {
                 Target::SortOrder => ("Sort by Date", WHITE, if self.newest_first { "Newest" } else { "Oldest" }.to_string()),
                 Target::AlbumSort => ("Sort Albums", WHITE, if self.albums_by_name() { "By Name" } else { "Custom" }.to_string()),
                 Target::ShowSeconds => ("Slideshow Slide", WHITE, format!("{} s", self.show_seconds())),
+                Target::RenameAlbum => ("Rename Album", BLUE, String::new()),
+                Target::More => ("Library and Tools\u{2026}", BLUE, String::new()),
                 _ => ("Delete Album", RED, String::new()),
             };
             self.label_left(s, ui, title, 17.0, Weight::Regular, color, x + ui.pt(16.0), cy);
@@ -2259,8 +2455,8 @@ impl Photos {
             let tx = (x + w - ui.pt(16.0)) as i32 - tw;
             s.blit(text, tx.max((x + ui.pt(100.0)) as i32), cy as i32 - th / 2, 255, 255);
         }
-        let rated = 2 * usize::from(self.info_has_rating());
-        if rated == 2 {
+        let rated = 3 * usize::from(self.info_has_rating());
+        if rated == 3 {
             let cy = y + row * (rows.len() + 1) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             self.label_left(s, ui, "Rating", 14.0, Weight::Regular, SECONDARY, x + ui.pt(16.0), cy);
@@ -2278,12 +2474,16 @@ impl Photos {
                 });
             }
         }
-        if rated == 2 {
+        if rated == 3 {
             let cy = y + row * (rows.len() + 2) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             let hidden = self.viewing().is_some_and(|p| self.is_hidden(p));
             let color = if self.pressed == Some(Target::InfoHide) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, if hidden { "Unhide Photo" } else { "Hide Photo" }, 15.0, Weight::Regular, color, x + w / 2.0, cy);
+            let cy = y + row * (rows.len() + 3) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let color = if self.pressed == Some(Target::InfoDetails) { crate::gfx::scale(BLUE, 140) } else { BLUE };
+            self.label(s, ui, "Edit Details\u{2026}", 15.0, Weight::Regular, color, x + w / 2.0, cy);
         }
         if self.info_revert {
             let cy = y + row * (rows.len() + 1 + rated) as f32 + row / 2.0;
@@ -2767,10 +2967,10 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
         assert_eq!(p.sheet, Some(Sheet::Info));
         assert!(p.info_revert, "an edited photo offers Revert to Original");
-        // the Revert row sits under the detail rows
+        // the Revert row sits under the detail rows, the rating row, the Hide Photo row and the Edit Details row
         let (sx, sy, sw, _) = p.sheet_rect(&ui, Sheet::Info);
         let row = ui.pt(INFO_ROW_PT);
-        let y = sy + row * (p.info.len() + 1) as f32 + row / 2.0;
+        let y = sy + row * (p.info.len() + 1 + 3) as f32 + row / 2.0;
         tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
         assert!(p.recipe(&photo).is_none(), "the saved edit is dropped");
         assert!(original.exists(), "the original is never changed");
