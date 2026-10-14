@@ -51,6 +51,8 @@ pub struct Prefs {
     pub plain_text: bool,
     /// The reader shows every header of the open message (View > All Headers).
     pub all_headers: bool,
+    /// Unread messages show their sender in bold, and read ones in regular type (Mail Settings).
+    pub bold_unread: bool,
 }
 
 impl Default for Prefs {
@@ -69,6 +71,7 @@ impl Default for Prefs {
             quote_replies: true,
             plain_text: false,
             all_headers: false,
+            bold_unread: true,
         }
     }
 }
@@ -169,6 +172,7 @@ impl Prefs {
             ("quote_replies".into(), Json::Bool(self.quote_replies)),
             ("plain_text".into(), Json::Bool(self.plain_text)),
             ("all_headers".into(), Json::Bool(self.all_headers)),
+            ("bold_unread".into(), Json::Bool(self.bold_unread)),
         ])
     }
 
@@ -184,6 +188,7 @@ impl Prefs {
             quote_replies: flag_of(json, "quote_replies", defaults.quote_replies),
             plain_text: flag_of(json, "plain_text", defaults.plain_text),
             all_headers: flag_of(json, "all_headers", defaults.all_headers),
+            bold_unread: flag_of(json, "bold_unread", defaults.bold_unread),
             ..defaults
         };
         if let Some(Json::Obj(fields)) = json.get("signatures") {
@@ -310,6 +315,15 @@ mod tests {
         assert!(older.quote_replies, "a file from before the setting keeps the default");
         let off = Prefs::from_json(&json::parse(r#"{"quote_replies":false,"plain_text":true}"#).unwrap());
         assert!(!off.quote_replies && off.plain_text);
+    }
+
+    #[test]
+    fn unread_senders_are_bold_unless_the_setting_is_off() {
+        assert!(Prefs::default().bold_unread);
+        assert!(Prefs::from_json(&json::parse("{}").unwrap()).bold_unread, "a file from before the setting keeps bold");
+        let off = Prefs::from_json(&json::parse(r#"{"bold_unread":false}"#).unwrap());
+        assert!(!off.bold_unread);
+        assert_eq!(Prefs::from_json(&off.to_json()), off);
     }
 
     #[test]

@@ -1276,6 +1276,7 @@ impl Mail {
                 Field::new("Undo send (seconds)", "0 sends at once", &delay),
                 Field::yes_no("Quote the original in replies", self.prefs.quote_replies),
                 Field::yes_no("Plain text messages only", self.prefs.plain_text),
+                Field::yes_no("Bold unread messages", self.prefs.bold_unread),
             ],
         );
         Ok(())
@@ -1381,6 +1382,9 @@ impl Mail {
         }
         if form.fields.iter().any(|f| f.label == "Plain text messages only") {
             self.prefs.plain_text = is_yes(form.value("Plain text messages only"));
+        }
+        if form.fields.iter().any(|f| f.label == "Bold unread messages") {
+            self.prefs.bold_unread = is_yes(form.value("Bold unread messages"));
         }
         Ok(())
     }
