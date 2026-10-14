@@ -160,8 +160,23 @@ pub enum Btn {
     Open,
     Update,
     Progress(f32),
+    /// the package was built for another SDK protocol than this shell speaks: it cannot run, so nothing to tap
+    NeedsUpdate,
     /// system components are preinstalled: nothing to tap unless an update is on offer
     None,
+}
+
+/// The button for catalogue entry `a` given the installed version (if any) and the shell's SDK protocol.
+pub fn button_for(a: &StoreApp, installed: Option<&str>, shell: u32) -> Btn {
+    match installed {
+        Some(v) if api::update_available(v, &a.version) && a.runs_on(shell) => Btn::Update,
+        Some(_) | None if !a.runs_on(shell) && !a.is_preinstalled() => Btn::NeedsUpdate,
+        Some(v) if api::update_available(v, &a.version) => Btn::None,
+        Some(_) if a.is_system() => Btn::None,
+        Some(_) => Btn::Open,
+        None if a.is_preinstalled() => Btn::None,
+        None => Btn::Get,
+    }
 }
 
 enum Done {
@@ -391,13 +406,7 @@ impl AppStore {
         if a.is_service() {
             return Btn::None;
         }
-        match self.installed_version(&a.id) {
-            Some(v) if api::update_available(v, &a.version) => Btn::Update,
-            Some(_) if a.is_system() => Btn::None,
-            Some(_) => Btn::Open,
-            None if a.is_preinstalled() => Btn::None,
-            None => Btn::Get,
-        }
+        button_for(a, self.installed_version(&a.id), bifrost_proto::SDK_VERSION)
     }
 
     fn find(&self, id: &str) -> Option<&StoreApp> {
@@ -806,7 +815,7 @@ impl AppStore {
 
     fn press_button(&mut self, id: &str) {
         match self.find(id).map(|a| self.button(a)) {
-            Some(Btn::None) => {}
+            Some(Btn::None | Btn::NeedsUpdate) => {}
             // a paid app needs a purchase, and the shell has no purchase sheet yet: it is never installed here
             Some(Btn::Get) if self.find(id).is_some_and(|a| a.is_paid()) => self.open_sheet(id),
             Some(Btn::Get | Btn::Update) => self.start(id),
@@ -1259,11 +1268,13 @@ impl AppStore {
                 let label = match b {
                     Btn::Get => "GET",
                     Btn::Open => "OPEN",
+                    Btn::NeedsUpdate => "Needs update",
                     _ => "UPDATE",
                 };
                 s.fill_rrect(x, y, w, h, CAPSULE_RADIUS, fill);
-                let lw = ui.measure(label, 15.0, Weight::Bold);
-                self.put(s, ui, label, 15.0, Weight::Bold, TINT, false, x + (w - lw) / 2.0, mid);
+                let size = if b == Btn::NeedsUpdate { 11.0 } else { 15.0 };
+                let lw = ui.measure(label, size, Weight::Bold);
+                self.put(s, ui, label, size, Weight::Bold, TINT, false, x + (w - lw) / 2.0, mid);
             }
         }
     }
@@ -1374,7 +1385,13 @@ impl AppStore {
                 }
                 Row::Local(i) => {
                     let a = self.installed[*i].clone();
-                    let b = if a.is_system() { Btn::None } else { Btn::Open };
+                    let b = if a.is_system() {
+                        Btn::None
+                    } else if self.find(&a.id).is_some_and(|s| !s.runs_on(bifrost_proto::SDK_VERSION)) {
+                        Btn::NeedsUpdate
+                    } else {
+                        Btn::Open
+                    };
                     self.draw_app_row(&mut c, ui, y, h, &a.id, &a.name, &format!("Version {}", a.version), if a.is_system() { SYSTEM_COMPONENT } else { "" }, b, last);
                 }
             }
@@ -1823,6 +1840,17 @@ mod tests {
     use crate::shell::store::api::parse_catalog;
 
     const SUM: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    #[test]
+    fn a_package_for_another_sdk_protocol_shows_needs_update_not_get_or_open() {
+        let mk = |p: u32, v: &str, kind: &str| StoreApp { id: "a".into(), version: v.into(), sdk_protocol: p, kind: kind.into(), ..Default::default() };
+        assert_eq!(button_for(&mk(1, "1.0.0", "app"), None, 2), Btn::NeedsUpdate, "no GET for an app that cannot run");
+        assert_eq!(button_for(&mk(1, "1.0.0", "app"), Some("1.0.0"), 2), Btn::NeedsUpdate, "no OPEN for an installed one either");
+        assert_eq!(button_for(&mk(2, "1.1.0", "app"), Some("1.0.0"), 2), Btn::Update, "a compatible newer version is an update");
+        assert_eq!(button_for(&mk(1, "1.1.0", "app"), Some("1.0.0"), 2), Btn::NeedsUpdate, "a newer incompatible one is no update");
+        assert_eq!(button_for(&mk(2, "1.0.0", "app"), None, 2), Btn::Get);
+        assert_eq!(button_for(&mk(0, "1.0.0", "app"), Some("1.0.0"), 2), Btn::Open, "unknown protocol: assume it runs");
+    }
 
     #[test]
     fn a_failed_icon_is_retried_after_a_minute_not_never() {

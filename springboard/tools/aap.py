@@ -43,6 +43,24 @@ def parse_manifest(text):
     return m
 
 
+PROTO = os.path.join(ROOT, "proto", "src", "lib.rs")
+
+
+def sdk_protocol(path=PROTO):
+    """The SDK protocol version apps are built against: `SDK_VERSION` in springboard/proto/src/lib.rs."""
+    m = re.search(r"^pub const SDK_VERSION: u32 = (\d+);", open(path).read(), re.M)
+    if not m:
+        sys.exit(f"{path}: SDK_VERSION not found")
+    return int(m.group(1))
+
+
+def stamp_protocol(text, version):
+    """The packaged manifest with `sdk_protocol = N` as a top-level key (replacing any other), so the store
+    catalogue can tell which shells can run the package. Top-level keys must precede the first table."""
+    kept = [l for l in text.splitlines() if not re.match(r"\s*sdk_protocol\s*=", l)]
+    return f"sdk_protocol = {version}\n" + "\n".join(kept) + "\n"
+
+
 def is_system(m):
     return m.get("kind") == "system"
 
@@ -128,7 +146,9 @@ def pack(args):
     out = os.path.join(args.out, f"{m['id']}-{m['version']}.aap")
     os.makedirs(args.out, exist_ok=True)
     with tarfile.open(out, "w", format=tarfile.USTAR_FORMAT) as tf:
-        add(tf, "manifest.toml", text.encode(), 0o644)
+        # a package with a binary records the protocol that binary was built against
+        packed = stamp_protocol(text, sdk_protocol()) if binary else text
+        add(tf, "manifest.toml", packed.encode(), 0o644)
         add(tf, "CHANGELOG.md", open(cl_path, "rb").read(), 0o644)
         if binary:
             add(tf, m["exec"], open(binary, "rb").read(), 0o755)
@@ -158,15 +178,21 @@ def info(args):
     print(f"{m['id']} {m['version']} ({m['name']}): {', '.join(names)}")
 
 
-ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-sub = ap.add_subparsers(dest="cmd", required=True)
-p = sub.add_parser("pack")
-p.add_argument("dir")
-p.add_argument("--bin")
-p.add_argument("--out", default=os.path.join(ROOT, "target/aap"))
-p.set_defaults(fn=pack)
-i = sub.add_parser("info")
-i.add_argument("file")
-i.set_defaults(fn=info)
-a = ap.parse_args()
-a.fn(a)
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("pack")
+    p.add_argument("dir")
+    p.add_argument("--bin")
+    p.add_argument("--out", default=os.path.join(ROOT, "target/aap"))
+    p.set_defaults(fn=pack)
+    i = sub.add_parser("info")
+    i.add_argument("file")
+    i.set_defaults(fn=info)
+    a = ap.parse_args()
+    a.fn(a)
+
+
+
+if __name__ == "__main__":
+    main()
