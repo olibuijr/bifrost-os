@@ -24,9 +24,9 @@
     {
       "feature": "Cross-process broadcast messages",
       "apple": "Distributed notifications (NSDistributedNotificationCenter-style delivery; Distributed framework docs do not cover it directly)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter, post_with, add_observer); springboard/src/shell/apphost.rs:822 (ToShell::DistPost relay); docs/bifrost-ui.md:1219",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter, post_with, add_observer); springboard/src/shell/apphost.rs (ToShell::DistPost relay); docs/bifrost-ui.md; springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "shell relays posts to every running app; user_info is string to string, max 32 entries and 1024 characters a value; no suspensionBehavior, no deliverImmediately; plain post stays process-local"
+      "note": "The shell relays posts to every running app; user_info is string to string with at most 32 entries. Headless tests: a_distributed_post_reaches_local_observers_and_is_queued_for_the_shell_sorted, a_process_local_distributed_post_sends_nothing_to_the_shell. No suspensionBehavior and no deliverImmediately; a plain post stays process-local."
     },
     {
       "feature": "Remote call errors",
