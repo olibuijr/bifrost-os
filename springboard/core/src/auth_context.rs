@@ -101,6 +101,38 @@ impl AuthContext {
     }
 }
 
+/// What the authentication view shows for a context: the prompt it offers, the reason it cannot prompt, or the outcome
+/// of the last evaluation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Presentation {
+    /// The policy can be evaluated now; the view offers the method that will answer it.
+    Prompt(Method),
+    /// The policy cannot be evaluated on this device right now; the view explains why.
+    Unavailable(Failure),
+    /// The last evaluation succeeded with this method.
+    Succeeded(Method),
+    /// The last evaluation failed for this reason.
+    Failed(Failure),
+    /// The context is over and the view closes.
+    Closed,
+}
+
+impl AuthContext {
+    /// The view state for the current phase. It reads the phase and the device facts and changes nothing.
+    pub fn presentation(&self) -> Presentation {
+        match self.phase {
+            Phase::Ready => match self.can_evaluate() {
+                Ok(method) => Presentation::Prompt(method),
+                Err(failure) => Presentation::Unavailable(failure),
+            },
+            Phase::Evaluating(method) => Presentation::Prompt(method),
+            Phase::Succeeded(method) => Presentation::Succeeded(method),
+            Phase::Failed(failure) => Presentation::Failed(failure),
+            Phase::Invalidated => Presentation::Closed,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
