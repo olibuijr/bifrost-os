@@ -53,3 +53,15 @@ build `springboard/core` and `springboard/ui` and run `cargo test` for the three
 - State machines: states are found by name, not by class, and there is no state lookup by type.
 - Procedural noise, entity-component systems, rule and decision systems, spatial partitioning (quadtree, octree, R-tree), agents with goals and obstacles, and strategists (minimax, Monte Carlo): none built yet.
 - SpriteKit and SceneKit integration: n/a for BifrOSt.
+
+## Value types (parity/team-a-01)
+
+`springboard/ui/src/gameplay_values.rs` adds the value types that the spatial, graph and strategist models use:
+
+- `GAME_MODEL_MAX_SCORE` and `GAME_MODEL_MIN_SCORE`: symmetric score bounds (plus and minus `i32::MAX`). The platform documentation gives no numeric value; the bounds are symmetric so a strategist can negate a score without overflow.
+- `Box3` (box): an axis-aligned three-dimensional box from `min` to `max`, with `is_valid`, `contains` (faces included) and `intersects` (touching faces count).
+- `Quad`: the same for two-dimensional rectangles, with closed edges. `quadtree::Area` is the half-open rectangle the quadtree uses internally.
+- `Triangle`: three 3D points (as `GKTriangle`) with `normal`, `area`, `center`, `signed_area2_xy` (positive for counter-clockwise winding seen from +z) and `contains_xy` (ground-plane query, edges included, either winding).
+- `TriangulationMode` (vertices, centers, edge midpoints) and `SplitStrategy` (halve, linear, quadratic, reduce overlap): option sets with no raw values.
+
+These are pure values with host unit tests. They are not yet exposed through `bifrost_app` and are not yet used by `quadtree.rs` or the graph code.

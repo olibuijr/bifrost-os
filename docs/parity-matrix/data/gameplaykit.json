@@ -1,104 +1,104 @@
 {
-  "framework": "GameplayKit",
-  "doc": "https://developer.apple.com/documentation/gameplaykit",
-  "macos_since": "10.11",
-  "status": "partial",
-  "bifrost": "springboard/sdk/src/testing.rs (seed, PINNED_SEED); springboard/apps/games-desktop/src/games.rs (rand); springboard/apps/games-desktop/src/solitaire.rs (deal); springboard/apps/music-desktop/src/music/upnext.rs (shuffle_slice)",
-  "summary": "GameplayKit is a game-logic framework: entities and components, state machines, pathfinding and agents, noise, decision and rule systems, and seeded randomness. BifrOSt has no app-facing SDK API for any of the game-logic parts. Its only counterpart is randomness: a clock-or-pinned seed helper in the SDK testing kit, and each app keeps its own xorshift generator. The Games app and the Music app both use that pattern.",
-  "rea_evidence": "ev_877ebd0689456225972e844aefe8a9459b3e7bb5c9968cb832b44851f3f8f41a",
-  "features": [
-    {
-      "feature": "Entities and components",
-      "apple": "GKEntity, GKComponent, GKComponentSystem",
-      "bifrost": "springboard/ui/src/ecs.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs)."
-    },
-    {
-      "feature": "State machines",
-      "apple": "GKStateMachine, GKState",
-      "bifrost": "springboard/core/src/random.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/state_machine.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State machines are hand-written per subsystem. No reusable SDK state machine with enter, exit and transition rules."
-    },
-    {
-      "feature": "Spatial partitioning",
-      "apple": "GKQuadtree, GKOctree, GKRTree (and their node types)",
-      "bifrost": "springboard/ui/src/quadtree.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view."
-    },
-    {
-      "feature": "Strategists (turn-based AI)",
-      "apple": "GKStrategist, GKMinmaxStrategist, GKMonteCarloStrategist, GKGameModel",
-      "bifrost": "springboard/ui/src/strategist.rs; wired: springboard/apps/games-desktop/src/tictactoe.rs (uses springboard/ui/src/strategist.rs)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Decision trees and rule systems",
-      "apple": "GKDecisionTree, GKDecisionNode, GKRuleSystem, GKRule, GKNSPredicateRule",
-      "bifrost": "springboard/ui/src/decision.rs, springboard/ui/src/rules.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine or decision tree. Predicate logic is written inline per app."
-    },
-    {
-      "feature": "Pathfinding and navigation graphs",
-      "apple": "GKGraph, GKGridGraph, GKObstacleGraph, GKMeshGraph, GKGraphNode and subclasses",
-      "bifrost": "springboard/core/src/random.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/state_machine.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No graph or route search API. springboard/ui/src/constraint.rs is Cassowary layout, not navigation."
-    },
-    {
-      "feature": "Agents, goals and behaviors",
-      "apple": "GKAgent2D, GKAgent3D, GKGoal, GKBehavior, GKCompositeBehavior, GKPath, GKAgentDelegate",
-      "bifrost": "springboard/ui/src/agents.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (theme-22, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents."
-    },
-    {
-      "feature": "Obstacles",
-      "apple": "GKObstacle, GKCircleObstacle, GKSphereObstacle, GKPolygonObstacle",
-      "bifrost": "springboard/ui/src/obstacle.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No obstacle primitives. Depends on the pathfinding and agent rows."
-    },
-    {
-      "feature": "Procedural noise",
-      "apple": "GKNoise, GKNoiseMap, GKPerlinNoiseSource, GKVoronoiNoiseSource and other noise sources",
-      "bifrost": "springboard/ui/src/noise.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No coherent noise (Perlin, Voronoi, billow, ridged) in the SDK, the UI crate or the render crate. The only noise is an inline hash in kb_clicks.rs and a shader dither in springboard/src/gpu/wl.rs:280."
-    },
-    {
-      "feature": "Randomization",
-      "apple": "GKRandomSource, GKARC4RandomSource, GKMersenneTwisterRandomSource, GKRandomDistribution, GKGaussianDistribution, GKShuffledDistribution",
-      "bifrost": "springboard/sdk/src/testing.rs:52 (seed(), PINNED_SEED); springboard/apps/games-desktop/src/games.rs:150 (xorshift rand); springboard/apps/games-desktop/src/solitaire.rs:73 (deal from seed); springboard/apps/music-desktop/src/music/upnext.rs:19 (shuffle_slice, Fisher-Yates)",
-      "status": "partial",
-      "note": "A seeded source exists only as a test-kit helper. Apps can take seed() and build their own xorshift. There is no SDK random source, no distribution API (uniform ranges, Gaussian, shuffled bag), and no generator choice. Each app repeats the same xorshift in its own code."
-    },
-    {
-      "feature": "Xcode and SpriteKit integration",
-      "apple": "GKScene, GKSceneRootNodeType, GKSKNodeComponent, GKSCNNodeComponent",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "Tied to Apple's SpriteKit and SceneKit scene graphs and the Xcode editor. BifrOSt has no SpriteKit or SceneKit equivalent."
-    },
-    {
-      "feature": "Constants, structures and enumerations",
-      "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy",
-      "bifrost": "springboard/ui/src/strategist.rs, springboard/ui/src/rule_system.rs, springboard/ui/src/state_machine.rs",
-      "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (strategist.rs, rule_system.rs, state_machine.rs); not wired into the shell or apps, not tested on Midget. Value types depend on the spatial, graph and strategist rows, which are all missing."
-    }
-  ],
-  "gaps": [
-    "No SDK pathfinding or navigation graph (GKGraph family): no grid, mesh or obstacle graph and no route search.",
-    "No SDK random source or distribution API: apps copy an xorshift generator, and only seed() is exposed, under the test kit.",
-    "No procedural noise (Perlin, Voronoi, billow, ridged) for apps.",
-    "No reusable state machine, entity-component system, or rule and decision system for game logic.",
-    "No spatial partitioning (quadtree, octree, R-tree) for apps.",
-    "No turn-based AI (minimax or Monte Carlo strategist) or agent steering (goals, behaviors, obstacles).",
-    "SpriteKit and SceneKit integration has no BifrOSt counterpart, so it is n/a."
-  ]
+ "framework": "GameplayKit",
+ "doc": "https://developer.apple.com/documentation/gameplaykit",
+ "macos_since": "10.11",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/testing.rs (seed, PINNED_SEED); springboard/apps/games-desktop/src/games.rs (rand); springboard/apps/games-desktop/src/solitaire.rs (deal); springboard/apps/music-desktop/src/music/upnext.rs (shuffle_slice)",
+ "summary": "GameplayKit is a game-logic framework: entities and components, state machines, pathfinding and agents, noise, decision and rule systems, and seeded randomness. BifrOSt has no app-facing SDK API for any of the game-logic parts. Its only counterpart is randomness: a clock-or-pinned seed helper in the SDK testing kit, and each app keeps its own xorshift generator. The Games app and the Music app both use that pattern.",
+ "rea_evidence": "ev_877ebd0689456225972e844aefe8a9459b3e7bb5c9968cb832b44851f3f8f41a",
+ "features": [
+  {
+   "feature": "Entities and components",
+   "apple": "GKEntity, GKComponent, GKComponentSystem",
+   "bifrost": "springboard/ui/src/ecs.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs)."
+  },
+  {
+   "feature": "State machines",
+   "apple": "GKStateMachine, GKState",
+   "bifrost": "springboard/core/src/random.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/state_machine.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State machines are hand-written per subsystem. No reusable SDK state machine with enter, exit and transition rules."
+  },
+  {
+   "feature": "Spatial partitioning",
+   "apple": "GKQuadtree, GKOctree, GKRTree (and their node types)",
+   "bifrost": "springboard/ui/src/quadtree.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view."
+  },
+  {
+   "feature": "Strategists (turn-based AI)",
+   "apple": "GKStrategist, GKMinmaxStrategist, GKMonteCarloStrategist, GKGameModel",
+   "bifrost": "springboard/ui/src/strategist.rs; wired: springboard/apps/games-desktop/src/tictactoe.rs (uses springboard/ui/src/strategist.rs)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Decision trees and rule systems",
+   "apple": "GKDecisionTree, GKDecisionNode, GKRuleSystem, GKRule, GKNSPredicateRule",
+   "bifrost": "springboard/ui/src/decision.rs, springboard/ui/src/rules.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine or decision tree. Predicate logic is written inline per app."
+  },
+  {
+   "feature": "Pathfinding and navigation graphs",
+   "apple": "GKGraph, GKGridGraph, GKObstacleGraph, GKMeshGraph, GKGraphNode and subclasses",
+   "bifrost": "springboard/core/src/random.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/state_machine.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No graph or route search API. springboard/ui/src/constraint.rs is Cassowary layout, not navigation."
+  },
+  {
+   "feature": "Agents, goals and behaviors",
+   "apple": "GKAgent2D, GKAgent3D, GKGoal, GKBehavior, GKCompositeBehavior, GKPath, GKAgentDelegate",
+   "bifrost": "springboard/ui/src/agents.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (theme-22, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents."
+  },
+  {
+   "feature": "Obstacles",
+   "apple": "GKObstacle, GKCircleObstacle, GKSphereObstacle, GKPolygonObstacle",
+   "bifrost": "springboard/ui/src/obstacle.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No obstacle primitives. Depends on the pathfinding and agent rows."
+  },
+  {
+   "feature": "Procedural noise",
+   "apple": "GKNoise, GKNoiseMap, GKPerlinNoiseSource, GKVoronoiNoiseSource and other noise sources",
+   "bifrost": "springboard/ui/src/noise.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No coherent noise (Perlin, Voronoi, billow, ridged) in the SDK, the UI crate or the render crate. The only noise is an inline hash in kb_clicks.rs and a shader dither in springboard/src/gpu/wl.rs:280."
+  },
+  {
+   "feature": "Randomization",
+   "apple": "GKRandomSource, GKARC4RandomSource, GKMersenneTwisterRandomSource, GKRandomDistribution, GKGaussianDistribution, GKShuffledDistribution",
+   "bifrost": "springboard/sdk/src/testing.rs:52 (seed(), PINNED_SEED); springboard/apps/games-desktop/src/games.rs:150 (xorshift rand); springboard/apps/games-desktop/src/solitaire.rs:73 (deal from seed); springboard/apps/music-desktop/src/music/upnext.rs:19 (shuffle_slice, Fisher-Yates)",
+   "status": "partial",
+   "note": "A seeded source exists only as a test-kit helper. Apps can take seed() and build their own xorshift. There is no SDK random source, no distribution API (uniform ranges, Gaussian, shuffled bag), and no generator choice. Each app repeats the same xorshift in its own code."
+  },
+  {
+   "feature": "Xcode and SpriteKit integration",
+   "apple": "GKScene, GKSceneRootNodeType, GKSKNodeComponent, GKSCNNodeComponent",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "Tied to Apple's SpriteKit and SceneKit scene graphs and the Xcode editor. BifrOSt has no SpriteKit or SceneKit equivalent."
+  },
+  {
+   "feature": "Constants, structures and enumerations",
+   "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy",
+   "bifrost": "springboard/ui/src/strategist.rs, springboard/ui/src/rule_system.rs, springboard/ui/src/state_machine.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (strategist.rs, rule_system.rs, state_machine.rs); not wired into the shell or apps, not tested on Midget. Value types depend on the spatial, graph and strategist rows, which are all missing."
+  }
+ ],
+ "gaps": [
+  "No SDK pathfinding or navigation graph (GKGraph family): no grid, mesh or obstacle graph and no route search.",
+  "No SDK random source or distribution API: apps copy an xorshift generator, and only seed() is exposed, under the test kit.",
+  "No procedural noise (Perlin, Voronoi, billow, ridged) for apps.",
+  "No reusable state machine, entity-component system, or rule and decision system for game logic.",
+  "No spatial partitioning (quadtree, octree, R-tree) for apps.",
+  "No turn-based AI (minimax or Monte Carlo strategist) or agent steering (goals, behaviors, obstacles).",
+  "SpriteKit and SceneKit integration has no BifrOSt counterpart, so it is n/a."
+ ]
 }
