@@ -16,3 +16,4 @@ springboard/apps/mail-desktop/src/html.rs:applet:HTML element name (<applet>) in
 tools/bifrost.py:macos-ref:local checkout path of the reference OS image on the build host (external directory, not a product name in code)
 tools/bifrost.py:26A434__MacOS:build-id directory name inside that local reference checkout
 springboard/ui/src/pane_link.rs:x-apple\.systempreferences:URL scheme System Settings registers for pane links; the scheme name is the interoperable identifier, not a product name
+springboard/apps/reminders-desktop/src/organize.rs:apple:the fruit, a keyword in the grocery category table and a test title

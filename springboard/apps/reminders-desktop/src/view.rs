@@ -136,6 +136,14 @@ impl Reminders {
         }
     }
 
+    /// A pinned list tile's glyph: a white disc with the list's icon in the tile's colour.
+    pub(super) fn list_glyph(&mut self, c: &mut Surface, ui: &Ui, list: u64, (cx, cy): (f32, f32), color: u32) {
+        let r = ui.pt(SPACE_M);
+        paint(c, (cx - r - 1.0, cy - r - 1.0, 2.0 * r + 2.0, 2.0 * r + 2.0), WHITE, disc((cx, cy), r));
+        let icon = self.data.lists.iter().find(|l| l.id == list).map_or(0, |l| l.icon as usize);
+        self.center(c, ui, ICONS[icon % ICONS.len()], MAC_BODY_PT, Weight::Bold, color, cx, cy);
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn draw_item(&mut self, c: &mut Surface, ui: &Ui, r: &Reminder, x: f32, y: f32, w: f32, depth: u8, shift: f32, last: bool) {
         let h = ui.pt(ITEM_H);
@@ -162,11 +170,22 @@ impl Reminders {
             if let Some(t) = r.time {
                 sub = format!("{sub}, {}", model::clock_label(t));
             }
+            if let Some(zone) = &r.tz {
+                sub = format!("{sub} {}", zones::short_name(zone));
+            }
             if let Some(rep) = r.repeat {
                 sub = format!("{sub} · {}", rep.label());
             }
         } else if let Some(line) = r.notes.lines().next().filter(|l| !l.is_empty()) {
             sub = line.to_string();
+        }
+        if r.urgent {
+            sub = if sub.is_empty() { "Urgent".to_string() } else { format!("{sub} · Urgent") };
+        }
+        if !r.attachments.is_empty() {
+            let n = r.attachments.len();
+            let pictures = format!("{n} {}", if n == 1 { "image" } else { "images" });
+            sub = if sub.is_empty() { pictures } else { format!("{sub} · {pictures}") };
         }
         // right-hand decorations, laid out right to left
         let mut rx = right_edge;
@@ -208,6 +227,12 @@ impl Reminders {
         let (title, color) = match self.view {
             View::Smart(sm) => (sm.label().to_string(), BLUE),
             View::Tag(key) => (crate::model::tag_name(&self.data.items, key).map_or(String::new(), |n| format!("#{n}")), BLUE),
+            View::Custom(id) => self
+                .data
+                .smarts
+                .iter()
+                .find(|m| m.id == id)
+                .map_or((String::new(), BLUE), |m| (m.name.clone(), COLORS[m.color as usize % COLORS.len()])),
             View::List(id) => (
                 self.data.lists.iter().find(|l| l.id == id).map_or(String::new(), |l| l.name.clone()),
                 list_color(&self.data, id),
@@ -234,6 +259,16 @@ impl Reminders {
             match row {
                 Row::Header(label) => {
                     self.text(&mut c, ui, label, MAC_BODY_PT, Weight::Bold, LABEL.now(), x + ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
+                }
+                Row::Section { name, .. } => {
+                    // a section header: the name in the list's colour over a rule, and the number of reminders in it
+                    let accent = match self.view {
+                        View::List(id) => list_color(&self.data, id),
+                        _ => LABEL.now(),
+                    };
+                    let name = ui.fit(name, MAC_BODY_PT, w - ui.pt(SPACE_HUGE));
+                    self.text(&mut c, ui, &name, MAC_BODY_PT, Weight::Bold, accent, x + ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
+                    c.fill_rrect(x, y + h - 1.0, w, 1.0, 0.0, SEPARATOR_C.now());
                 }
                 Row::Item { idx, depth } => {
                     let r = self.data.items[*idx].clone();
@@ -431,6 +466,43 @@ impl Reminders {
                 let v = draft.as_ref().and_then(|d| d.early).map_or("None".to_string(), model::early_label);
                 self.value_row(c, ui, rect, "Early Reminder", &v, LABEL_2.now());
             }
+            Target::AddImage => {
+                let n = draft.as_ref().map_or(0, |d| d.attachments.len());
+                self.cell(c, ui, rect);
+                self.text(c, ui, "Add Image...", MAC_BODY_PT, Weight::Regular, LINK, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                self.right(c, ui, &format!("{n} of {}", attach::MAX_PER_REMINDER), MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x + w - ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+            }
+            Target::Thumbs => {
+                self.cell(c, ui, rect);
+                let side = ui.pt(72.0);
+                let names = draft.as_ref().map(|d| d.attachments.clone()).unwrap_or_default();
+                for (i, name) in names.iter().enumerate() {
+                    if !self.thumbs.contains_key(name) {
+                        let thumb = attach::thumbnail(&self.attach_dir, name, side as usize);
+                        self.thumbs.insert(name.clone(), thumb);
+                    }
+                    let (tx, ty) = (x + ui.pt(SPACE_L) + (side + ui.pt(SPACE_M)) * i as f32, y + (h - side) / 2.0);
+                    match self.thumbs.get(name) {
+                        Some(Some(img)) => c.blit(img, (tx + (side - img.w as f32) / 2.0) as i32, (ty + (side - img.h as f32) / 2.0) as i32, 255, 255),
+                        // a picture that is missing or does not decode keeps its place as a plain square
+                        _ => c.fill_rrect(tx, ty, side, side, ui.pt(SWATCH_R), FIELD_BG.now()),
+                    }
+                }
+            }
+            Target::RemoveImage => {
+                self.cell(c, ui, rect);
+                self.center(c, ui, "Remove Last Image", MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);
+            }
+            Target::TimeZone => {
+                let v = draft.as_ref().and_then(|d| d.tz.clone()).map_or("Same as Device".to_string(), |z| zones::short_name(&z));
+                self.value_row(c, ui, rect, "Time Zone", &v, LABEL_2.now());
+            }
+            Target::Urgent => {
+                self.cell(c, ui, rect);
+                self.text(c, ui, "Urgent Alarm", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                let on = draft.as_ref().is_some_and(|d| d.urgent);
+                self.toggle(c, ui, rect, on);
+            }
             Target::Flag => {
                 self.cell(c, ui, rect);
                 self.text(c, ui, "Flag", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
@@ -455,9 +527,58 @@ impl Reminders {
                 self.cell(c, ui, rect);
                 self.center(c, ui, "Duplicate Reminder", MAC_BODY_PT, Weight::Regular, LINK, x + w / 2.0, y + h / 2.0);
             }
+            Target::Rule(row) => {
+                let rules = self.list_edit.as_ref().map(|e| e.rules).unwrap_or_default();
+                let value = match row {
+                    RuleRow::Due => rules.due.label().to_string(),
+                    RuleRow::Time => rules.time.label().to_string(),
+                    RuleRow::Priority => model::priority_rule_label(rules.priority).to_string(),
+                    RuleRow::Flagged => rules.flagged.label().to_string(),
+                    RuleRow::Tag => rules.tag.map_or("Any".to_string(), |key| model::tag_name(&self.data.items, key).map_or("Unused Tag".to_string(), |n| format!("#{n}"))),
+                    RuleRow::List => rules.list.map_or("Any".to_string(), |l| self.data.lists.iter().find(|x| x.id == l).map_or("Unknown List".to_string(), |x| x.name.clone())),
+                };
+                self.value_row(c, ui, rect, row.label(), &value, LABEL_2.now());
+            }
+            Target::Setting(row) => match row {
+                SettingRow::DefaultList => {
+                    let value = self
+                        .settings
+                        .default_list
+                        .and_then(|id| self.data.lists.iter().find(|l| l.id == id))
+                        .map_or("Automatic".to_string(), |l| l.name.clone());
+                    self.value_row(c, ui, rect, "New Reminders Go To", &value, LABEL_2.now());
+                }
+                SettingRow::AllDayAlert => {
+                    let value = model::clock_label(self.settings.all_day_min);
+                    self.value_row(c, ui, rect, "All-Day Reminders Alert At", &value, LABEL_2.now());
+                }
+                SettingRow::Badge => {
+                    self.cell(c, ui, rect);
+                    self.text(c, ui, "Badge Due Reminders on the Dock", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                    let on = self.settings.badge;
+                    self.toggle(c, ui, rect, on);
+                }
+            },
+            Target::PinList => {
+                self.cell(c, ui, rect);
+                self.text(c, ui, "Pin in Sidebar", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                let on = self.list_edit.as_ref().is_some_and(|e| e.pinned);
+                self.toggle(c, ui, rect, on);
+            }
+            Target::ListGroup => {
+                let group = self.list_edit.as_ref().and_then(|e| e.group);
+                let name = group.and_then(|g| self.data.groups.iter().find(|x| x.id == g)).map_or("None".to_string(), |g| g.name.clone());
+                self.value_row(c, ui, rect, "Group", &name, LABEL_2.now());
+            }
             Target::Delete => {
                 self.cell(c, ui, rect);
-                let label = if self.editor.is_some() { "Delete Reminder" } else { "Delete List" };
+                let label = match (self.editor.is_some(), self.list_edit.as_ref().map(|e| e.mode)) {
+                    (true, _) => "Delete Reminder",
+                    (false, Some(EditMode::Section(_))) => "Delete Section",
+                    (false, Some(EditMode::Group)) => "Delete Group",
+                    (false, Some(EditMode::Smart)) => "Delete Smart List",
+                    (false, _) => "Delete List",
+                };
                 self.center(c, ui, label, MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);
             }
             Target::Colors => {

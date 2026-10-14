@@ -13,8 +13,8 @@ mod chrome;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
 use bifrost_app::kit::ui::{home_zone, Ui};
-use bifrost_app::kit::{Event, TextCache};
-use crate::{model, quick, repeat, store};
+use bifrost_app::kit::{Event, Image, TextCache};
+use crate::{attach, model, organize, quick, repeat, settings, store, zones};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::clock::{
     tz::{civil_from_days, days_from_civil},
@@ -24,8 +24,8 @@ use springboard::shell::keyboard::Out;
 use springboard::shell::textfield::TextField;
 use bifrost_app::controls::undo::UndoManager;
 use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, TipViewStyle};
-use model::{Data, Group, ListDef, Options, Reminder, Row, Smart, Sort, View};
-use std::collections::HashSet;
+use model::{Data, Group, ListDef, ListGroup, Options, Reminder, Row, Smart, Sort, View};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use store::local_day;
 
@@ -48,6 +48,8 @@ const OPTIONS_W_PT: f32 = 300.0;
 const UNDO_HIT_PT: f32 = 120.0;
 /// Content y (pt, below HOME_TOP) of the "My Lists" rows.
 const MAX_SEARCH: usize = 100;
+/// Pinned list tiles the sidebar shows beside the smart lists.
+const MAX_PINNED: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Screen {
@@ -77,6 +79,28 @@ enum Target {
     ListInfo(u64),
     /// A tag in the sidebar's Tags section, by its `model::tag_key`.
     Tag(u64),
+    /// A custom smart list in the sidebar, by id.
+    Custom(u64),
+    /// Show List Info for the open custom smart list.
+    SmartInfo(u64),
+    /// A rule row of the smart list form.
+    Rule(RuleRow),
+    /// A row of the Settings form.
+    Setting(SettingRow),
+    /// The reminder form's Time Zone and Urgent rows.
+    TimeZone,
+    Urgent,
+    /// The reminder form's picture rows: add one, the strip of thumbnails, remove the last.
+    AddImage,
+    Thumbs,
+    RemoveImage,
+    /// A section header row of the open list (its row index); choosing it edits the section.
+    Section(usize),
+    /// A list group's disclosure in the sidebar, by group id.
+    ToggleGroup(u64),
+    /// The list editor's Pin toggle and Group chooser.
+    PinList,
+    ListGroup,
     Row(usize),
     Circle(usize),
     Collapse(usize),
@@ -125,12 +149,69 @@ struct Editor {
     id: Option<u64>,
     draft: Reminder,
     month: i64,
+    /// Pictures stored while this form has been open; they are deleted again if the form is cancelled.
+    added: Vec<String>,
 }
 
+/// What the list editor form edits: a list, a section of a list (by list id) or a list group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EditMode {
+    List,
+    Section(u64),
+    Group,
+    /// A custom smart list: a name, a colour and its rules.
+    Smart,
+    /// Reminders > Settings: no name, only the setting rows.
+    Settings,
+}
+
+/// The rows of the Settings form.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SettingRow {
+    DefaultList,
+    AllDayAlert,
+    Badge,
+}
+
+impl SettingRow {
+    const ALL: [Self; 3] = [Self::DefaultList, Self::AllDayAlert, Self::Badge];
+}
+
+/// The rows of the smart list form that choose a rule; each cycles through its choices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RuleRow {
+    Due,
+    Time,
+    Priority,
+    Flagged,
+    Tag,
+    List,
+}
+
+impl RuleRow {
+    const ALL: [Self; 6] = [Self::Due, Self::Time, Self::Priority, Self::Flagged, Self::Tag, Self::List];
+    fn label(self) -> &'static str {
+        match self {
+            Self::Due => "Date",
+            Self::Time => "Time of Day",
+            Self::Priority => "Priority",
+            Self::Flagged => "Flag",
+            Self::Tag => "Tag",
+            Self::List => "List",
+        }
+    }
+}
+
+/// The list editor's draft. `id` is the list, section or group being changed (`None` while creating one).
 struct ListEdit {
     id: Option<u64>,
     color: u8,
     icon: u8,
+    pinned: bool,
+    group: Option<u64>,
+    mode: EditMode,
+    /// The smart list's rules while its form is open.
+    rules: model::SmartRules,
 }
 
 struct UndoBar {
@@ -219,6 +300,15 @@ pub struct Reminders {
     /// Safe inset at the top in points (from the shared `Layout`; 0 on the desktop).
     top_pt: f32,
     path: PathBuf,
+    /// Reminders > Settings, kept in `settings.tsv` beside the reminders.
+    settings: settings::Settings,
+    settings_path: PathBuf,
+    /// The folder beside the reminders file that holds the attached pictures.
+    attach_dir: PathBuf,
+    /// Thumbnails of attached pictures by file name (`None`: the file is missing or does not decode).
+    thumbs: HashMap<String, Option<Image>>,
+    /// The form asked for a picture; `main.rs` opens the open panel.
+    image_request: bool,
     wall: Wall,
     data: Data,
     screen: Screen,
@@ -236,6 +326,8 @@ pub struct Reminders {
     row_y: Vec<f32>,
     items_h: f32,
     collapsed: HashSet<u64>,
+    /// List groups folded shut in the sidebar.
+    collapsed_groups: HashSet<u64>,
     today: i64,
     editor: Option<Editor>,
     /// First-use tips (`TipView`); `None` keeps the tip hidden, as in tests.
@@ -340,6 +432,9 @@ impl Reminders {
     pub fn new(ui: &Ui, w: i32, h: i32, path: PathBuf, wall: Wall) -> Self {
         let loaded = store::load_checked(&path);
         let load_error = loaded.is_err();
+        let settings_path = path.with_file_name("settings.tsv");
+        let attach_dir = path.with_file_name("attachments");
+        let settings = settings::load(&settings_path);
         let mut app = Self {
             w,
             x0: 0.0,
@@ -349,10 +444,15 @@ impl Reminders {
             top_pt: 0.0,
             data: loaded.unwrap_or_default(),
             path,
+            settings,
+            settings_path,
+            attach_dir,
+            thumbs: HashMap::new(),
+            image_request: false,
             wall,
             screen: Screen::Items,
             view: View::Smart(Smart::All),
-            opts: Options::default(),
+            opts: Options { default_list: settings.default_list, ..Options::default() },
             options_open: false,
             file_export: false,
             notice: None,
@@ -362,6 +462,7 @@ impl Reminders {
             row_y: vec![],
             items_h: 0.0,
             collapsed: HashSet::new(),
+            collapsed_groups: HashSet::new(),
             today: local_day(wall.unix, wall.offset),
             editor: None,
             tips: None,
@@ -453,6 +554,449 @@ impl Reminders {
         true
     }
 
+
+    // ---- menu commands --------------------------------------------------
+    // Each acts on the arrow-selected reminder or on the open list, as its menu item says, and goes on the undo
+    // history under the item's name. The menu enables them from the queries next to them.
+
+    /// The open list's id: a list is on screen, not a smart list, a tag or a search.
+    pub fn open_list(&self) -> Option<u64> {
+        match self.view {
+            View::List(id) if self.screen == Screen::Items && !self.searching => Some(id),
+            _ => None,
+        }
+    }
+
+    pub fn open_list_pinned(&self) -> bool {
+        self.open_list().is_some_and(|id| self.data.lists.iter().any(|l| l.id == id && l.pinned))
+    }
+
+    /// Reminders > Indent (Cmd+]): the selected reminder becomes a subtask of the one above it.
+    pub fn can_indent(&self) -> bool {
+        self.on_items() && self.selected_item().is_some_and(|id| organize::can_indent(&self.data.items, id))
+    }
+
+    pub fn indent_selected(&mut self, ui: &Ui) -> bool {
+        let Some(id) = self.selected_item().filter(|_| self.on_items()) else { return false };
+        let mut next = self.data.clone();
+        if !model::indent(&mut next.items, id) {
+            return false;
+        }
+        // a subtask is shown in its parent's section
+        let parent = next.items.iter().find(|r| r.id == id).and_then(|r| r.parent);
+        let section = parent.and_then(|p| next.items.iter().find(|r| r.id == p)).and_then(|p| p.section);
+        if let Some(r) = next.items.iter_mut().find(|r| r.id == id) {
+            r.section = section;
+        }
+        let saved = self.commit_named(next, "Indent");
+        if saved {
+            self.rebuild(ui);
+        }
+        saved
+    }
+
+    /// Reminders > Outdent (Cmd+[): the selected subtask becomes a top-level reminder again.
+    pub fn can_outdent(&self) -> bool {
+        self.on_items() && self.selected_item().is_some_and(|id| self.data.items.iter().any(|r| r.id == id && r.parent.is_some()))
+    }
+
+    pub fn outdent_selected(&mut self, ui: &Ui) -> bool {
+        let Some(id) = self.selected_item().filter(|_| self.on_items()) else { return false };
+        let mut next = self.data.clone();
+        if !organize::outdent(&mut next.items, id) {
+            return false;
+        }
+        let saved = self.commit_named(next, "Outdent");
+        if saved {
+            self.rebuild(ui);
+        }
+        saved
+    }
+
+    /// Whether any reminder has subtasks (what View > Hide All Subtasks acts on).
+    pub fn has_subtasks(&self) -> bool {
+        self.data.items.iter().any(|r| r.parent.is_some())
+    }
+
+    /// Whether every reminder with subtasks is folded shut.
+    pub fn subtasks_hidden(&self) -> bool {
+        let parents = organize::parent_ids(&self.data.items);
+        !parents.is_empty() && parents.iter().all(|p| self.collapsed.contains(p))
+    }
+
+    /// View > Hide All Subtasks / Show All Subtasks.
+    pub fn toggle_all_subtasks(&mut self, ui: &Ui) {
+        if self.subtasks_hidden() {
+            self.collapsed.clear();
+        } else {
+            self.collapsed.extend(organize::parent_ids(&self.data.items));
+        }
+        self.rebuild(ui);
+    }
+
+    /// Reminders > Mark Due Date As: the selected open reminder gets the day, keeping its time.
+    pub fn mark_selected_due(&mut self, ui: &Ui, mark: organize::MarkDue) -> bool {
+        let Some(id) = self.selected_item().filter(|_| self.on_items()) else { return false };
+        let mut next = self.data.clone();
+        if !organize::mark_due(&mut next.items, id, organize::mark_day(mark, self.today)) {
+            return false;
+        }
+        let saved = self.commit_named(next, &format!("Mark Due Date as {}", mark.label()));
+        if saved {
+            self.rebuild(ui);
+        }
+        saved
+    }
+
+    /// Whether Mark All Overdue as Today has anything to move.
+    pub fn has_overdue(&self) -> bool {
+        organize::has_overdue(&self.data.items, self.today)
+    }
+
+    /// Whether the selected reminder is marked urgent.
+    pub fn selected_urgent(&self) -> bool {
+        self.selected_item().is_some_and(|id| self.data.items.iter().any(|r| r.id == id && r.urgent))
+    }
+
+    /// Reminders > Mark as Urgent / Remove Urgent Mark: once an urgent reminder is due, its alert repeats every minute
+    /// until it is completed (see `alerts`).
+    pub fn toggle_urgent_selected(&mut self, ui: &Ui) -> bool {
+        let Some(id) = self.selected_item().filter(|_| self.on_items()) else { return false };
+        let mut next = self.data.clone();
+        let Some(r) = next.items.iter_mut().find(|r| r.id == id) else { return false };
+        r.urgent = !r.urgent;
+        let name = if r.urgent { "Mark as Urgent" } else { "Remove Urgent Mark" };
+        let saved = self.commit_named(next, name);
+        if saved {
+            self.rebuild(ui);
+        }
+        saved
+    }
+
+    /// Whether the details form asked for a picture since the last call; `main.rs` then opens the open panel.
+    pub fn take_image_request(&mut self) -> bool {
+        std::mem::take(&mut self.image_request)
+    }
+
+    /// The open panel answered: stores the picture and adds it to the reminder being edited. The form keeps it until
+    /// Done; Cancel deletes it again.
+    pub fn attach_image(&mut self, bytes: &[u8]) -> Result<(), String> {
+        let Some(e) = &mut self.editor else { return Err("no reminder is open".into()) };
+        if e.draft.attachments.len() >= attach::MAX_PER_REMINDER {
+            return Err(format!("a reminder holds up to {} pictures", attach::MAX_PER_REMINDER));
+        }
+        let name = attach::store(&self.attach_dir, bytes, self.wall.unix).map_err(|_| "the picture is not a PNG or JPEG, or is too large".to_string())?;
+        e.draft.attachments.push(name.clone());
+        e.added.push(name);
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Deletes the pictures stored for a form that is cancelled.
+    fn discard_new_pictures(&mut self) {
+        if let Some(e) = &mut self.editor {
+            for name in std::mem::take(&mut e.added) {
+                attach::remove(&self.attach_dir, &name);
+                self.thumbs.remove(&name);
+            }
+        }
+    }
+
+    /// Reminders > Mark All Overdue as Today: one undo step for every reminder moved.
+    pub fn mark_overdue_today(&mut self, ui: &Ui) -> bool {
+        let mut next = self.data.clone();
+        if organize::overdue_to_today(&mut next.items, self.today) == 0 {
+            return false;
+        }
+        let saved = self.commit_named(next, "Mark All Overdue as Today");
+        if saved {
+            self.rebuild(ui);
+        }
+        saved
+    }
+
+    /// View > Sort By.
+    pub fn sort(&self) -> Sort {
+        self.opts.sort
+    }
+
+    pub fn set_sort(&mut self, ui: &Ui, sort: Sort) {
+        self.opts.sort = sort;
+        self.rebuild(ui);
+    }
+
+    /// View > Show Smart List: whether the sidebar shows the smart list's tile.
+    pub fn smart_shown(&self, smart: Smart) -> bool {
+        self.opts.smart_shown(smart)
+    }
+
+    pub fn toggle_smart(&mut self, smart: Smart) {
+        self.opts.toggle_smart(smart);
+        self.dirty = true;
+    }
+
+    /// Lists > Pin List / Unpin List: a pinned list has a tile beside the smart lists.
+    pub fn toggle_pin(&mut self) -> bool {
+        let Some(list) = self.open_list() else { return false };
+        let pinned = self.data.lists.iter().filter(|l| l.pinned).count();
+        let mut next = self.data.clone();
+        let Some(l) = next.lists.iter_mut().find(|l| l.id == list) else { return false };
+        if !l.pinned && pinned >= MAX_PINNED {
+            self.notice = Some(format!("Up to {MAX_PINNED} lists can be pinned"));
+            self.dirty = true;
+            return false;
+        }
+        l.pinned = !l.pinned;
+        let name = if l.pinned { "Pin List" } else { "Unpin List" };
+        self.commit_named(next, name)
+    }
+
+    /// Lists > New Section: opens the name form for a section of the open list.
+    pub fn new_section(&mut self, ui: &Ui, t: f64) -> bool {
+        let Some(list) = self.open_list() else { return false };
+        if self.data.lists.iter().any(|l| l.id == list && l.sections.len() >= model::MAX_SECTIONS) {
+            self.notice = Some(format!("A list holds up to {} sections", model::MAX_SECTIONS));
+            self.dirty = true;
+            return false;
+        }
+        self.open_section_editor(ui, list, None, t);
+        true
+    }
+
+    /// The sections of the open list, in order.
+    pub fn open_list_sections(&self) -> Vec<(u64, String)> {
+        let Some(list) = self.open_list() else { return vec![] };
+        self.data.lists.iter().find(|l| l.id == list).map_or(vec![], |l| l.sections.iter().map(|s| (s.id, s.name.clone())).collect())
+    }
+
+    /// Whether the selected reminder is a top-level reminder of the open list, so Move to Section applies.
+    pub fn can_move_to_section(&self) -> bool {
+        let Some(list) = self.open_list() else { return false };
+        self.selected_item().is_some_and(|id| self.data.items.iter().any(|r| r.id == id && r.list == list && r.parent.is_none()))
+    }
+
+    /// The section the selected reminder is in (none: no section).
+    pub fn selected_section(&self) -> Option<u64> {
+        let id = self.selected_item()?;
+        self.data.items.iter().find(|r| r.id == id).and_then(|r| r.section)
+    }
+
+    /// Reminders > Move to Section: the selected reminder goes last in `section` (or out of any section).
+    pub fn move_selected_to_section(&mut self, ui: &Ui, section: Option<u64>) -> bool {
+        if !self.can_move_to_section() || section.is_some_and(|s| !self.open_list_sections().iter().any(|(id, _)| *id == s)) {
+            return false;
+        }
+        let Some(id) = self.selected_item() else { return false };
+        let mut next = self.data.clone();
+        if !organize::place_in_section(&mut next.items, id, section, None) {
+            return false;
+        }
+        let saved = self.commit_named(next, "Move to Section");
+        if saved {
+            self.rebuild(ui);
+        }
+        saved
+    }
+
+    /// Lists > Auto-Categorize: grocery sections for the open list's loose reminders.
+    pub fn auto_categorize(&mut self, ui: &Ui) -> bool {
+        let Some(list) = self.open_list() else { return false };
+        let mut next = self.data.clone();
+        let placed = organize::auto_categorize(&mut next, list);
+        if placed == 0 {
+            self.notice = Some("No reminders to categorize".to_string());
+            self.dirty = true;
+            return false;
+        }
+        let saved = self.commit_named(next, "Auto-Categorize");
+        if saved {
+            self.notice = Some(format!("Placed {placed} {} in sections", if placed == 1 { "reminder" } else { "reminders" }));
+            self.rebuild(ui);
+        }
+        saved
+    }
+
+    /// File > New Smart List: opens the form for a custom smart list.
+    pub fn new_smart_list(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.data.smarts.len() >= model::MAX_SMARTS {
+            self.notice = Some(format!("Up to {} smart lists can be made", model::MAX_SMARTS));
+            self.dirty = true;
+            return false;
+        }
+        self.open_smart_editor(ui, None, t);
+        true
+    }
+
+    /// Lists > New List Group: opens the name form for a group.
+    pub fn new_group(&mut self, ui: &Ui, t: f64) {
+        self.open_group_editor(ui, None, t);
+    }
+
+    /// Lists > Edit Group: opens the form for group `id`.
+    pub fn edit_group(&mut self, ui: &Ui, id: u64, t: f64) {
+        if self.data.groups.iter().any(|g| g.id == id) {
+            self.open_group_editor(ui, Some(id), t);
+        }
+    }
+
+    pub fn groups(&self) -> Vec<(u64, String)> {
+        self.data.groups.iter().map(|g| (g.id, g.name.clone())).collect()
+    }
+
+    /// Lists > Save List as Template: the open list's reminders, without dates or completion, under the list's name.
+    pub fn save_as_template(&mut self) -> bool {
+        let Some(list) = self.open_list() else { return false };
+        let Some(name) = self.data.lists.iter().find(|l| l.id == list).map(|l| l.name.clone()) else { return false };
+        let mut next = self.data.clone();
+        if organize::save_template(&mut next, list, &name).is_none() {
+            self.notice = Some("Could not save the template".to_string());
+            self.dirty = true;
+            return false;
+        }
+        let saved = self.commit_named(next, "Save as Template");
+        if saved {
+            self.notice = Some(format!("Saved the template \u{201c}{name}\u{201d}"));
+        }
+        saved
+    }
+
+    pub fn templates(&self) -> Vec<(u64, String)> {
+        self.data.templates.iter().map(|t| (t.id, t.name.clone())).collect()
+    }
+
+    /// Lists > New List from Template: a new list with the template's reminders, opened.
+    pub fn new_list_from_template(&mut self, ui: &Ui, tid: u64) -> bool {
+        if self.has_draft() {
+            return false;
+        }
+        let mut next = self.data.clone();
+        let Some(list) = organize::list_from_template(&mut next, tid, Some(self.wall.unix)) else { return false };
+        let saved = self.commit_named(next, "New List from Template");
+        if saved {
+            self.open_view(ui, View::List(list));
+        }
+        saved
+    }
+
+    pub fn delete_template(&mut self, tid: u64) -> bool {
+        let mut next = self.data.clone();
+        organize::delete_template(&mut next, tid) && self.commit_named(next, "Delete Template")
+    }
+
+    /// File > Import List: `text` is a Markdown checklist (the Export List format); `fallback` names the list when the
+    /// text has no heading. The new list opens.
+    pub fn import_checklist(&mut self, ui: &Ui, text: &str, fallback: &str) -> bool {
+        if self.has_draft() {
+            return false;
+        }
+        let checklist = organize::parse_checklist(text);
+        let mut next = self.data.clone();
+        let Some(list) = organize::import_checklist(&mut next, &checklist, fallback, Some(self.wall.unix)) else {
+            self.notice = Some("Nothing to import".to_string());
+            self.dirty = true;
+            return false;
+        };
+        let saved = self.commit_named(next, "Import List");
+        if saved {
+            self.open_view(ui, View::List(list));
+            self.notice = Some(format!("Imported {} reminders", checklist.items.len()));
+        }
+        saved
+    }
+
+    /// File > Print List: the list's name and its Markdown checklist, when a list is on screen.
+    pub fn printable_list(&self) -> Option<(String, String)> {
+        let list = self.open_list()?;
+        let name = self.data.lists.iter().find(|l| l.id == list)?.name.clone();
+        Some((name, model::export_markdown(&self.data, list)))
+    }
+
+    // ---- intents ---------------------------------------------------------
+
+    /// The `create-list` intent: a new list with the next colour. Returns its id.
+    pub fn create_list(&mut self, ui: &Ui, name: &str) -> Result<u64, String> {
+        let name = organize::clean_name(name).ok_or_else(|| "the name is empty".to_string())?;
+        let mut next = self.data.clone();
+        let id = next.next_list_id().ok_or_else(|| "no list id is left".to_string())?;
+        let color = (next.lists.len() % view::COLORS.len()) as u8;
+        next.lists.push(ListDef::new(id, name, color, 0));
+        if self.commit_named(next, "New List") {
+            self.rebuild(ui);
+            Ok(id)
+        } else {
+            Err("the reminders could not be saved".into())
+        }
+    }
+
+    /// The Quick Reminder menu extra: `text` is read as the quick-add line ("pay rent every month !!") and becomes a
+    /// reminder in the default list. Returns its id.
+    pub fn quick_add(&mut self, ui: &Ui, text: &str, t: f64) -> Result<u64, String> {
+        let line = clean(&text.chars().take(1000).collect::<String>());
+        if line.is_empty() {
+            return Err("there is no text".into());
+        }
+        let q = quick::parse(&line, self.today, self.now_min(t));
+        let title: String = clean(&q.title).chars().take(model::MAX_TITLE).collect();
+        if title.is_empty() {
+            return Err("the title is empty".into());
+        }
+        let mut next = self.data.clone();
+        let list = self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id));
+        let Some(list) = list else { return Err("there is no list".into()) };
+        let Some(id) = next.next_item_id() else { return Err("no reminder id is left".into()) };
+        let mut r = Reminder::new(id, title);
+        r.list = list;
+        r.due = q.due;
+        r.time = q.time;
+        r.repeat = q.repeat;
+        r.priority = q.priority;
+        r.created = Some(self.wall.now(t));
+        next.items.push(r);
+        if self.commit_named(next, "New Reminder") {
+            self.rebuild(ui);
+            Ok(id)
+        } else {
+            Err("the reminders could not be saved".into())
+        }
+    }
+
+    /// The `open-list` intent: shows the list whose name matches without case. Returns the list's name.
+    pub fn open_list_named(&mut self, ui: &Ui, name: &str) -> Result<String, String> {
+        if self.has_draft() {
+            return Err("finish the reminder that is open first".into());
+        }
+        let wanted = name.trim();
+        let found = self.data.lists.iter().find(|l| l.name.eq_ignore_ascii_case(wanted)).map(|l| (l.id, l.name.clone()));
+        let (id, name) = found.ok_or_else(|| format!("there is no list named \"{wanted}\""))?;
+        self.open_view(ui, View::List(id));
+        Ok(name)
+    }
+
+    /// The `open-smart-list` intent: shows the smart list called `name` (Today, Scheduled, Flagged, All, Completed).
+    pub fn open_smart_named(&mut self, ui: &Ui, name: &str) -> Result<Smart, String> {
+        if self.has_draft() {
+            return Err("finish the reminder that is open first".into());
+        }
+        let smart = Smart::ALL.iter().copied().find(|s| s.label().eq_ignore_ascii_case(name.trim())).ok_or_else(|| format!("there is no smart list called \"{}\"", name.trim()))?;
+        self.open_view(ui, View::Smart(smart));
+        Ok(smart)
+    }
+
+    /// The `search-reminders` intent: runs the search and returns how many reminders match.
+    pub fn search_for(&mut self, ui: &Ui, query: &str, t: f64) -> Result<usize, String> {
+        if self.has_draft() {
+            return Err("finish the reminder that is open first".into());
+        }
+        let query = clean(query);
+        if query.is_empty() {
+            return Err("the search is empty".into());
+        }
+        self.begin_search(ui, t);
+        self.set_title_field(ui, "Search", MAX_SEARCH, &query);
+        self.rebuild(ui);
+        Ok(self.rows.iter().filter(|r| matches!(r, Row::Item { .. })).count())
+    }
+
     /// The `add-reminder` intent: a reminder in the default list, with an optional due day (`YYYY-MM-DD`, or
     /// `YYYY-MM-DDTHH:MM` for a time). Returns the new reminder's id.
     pub fn add_reminder(&mut self, ui: &Ui, title: &str, due: Option<&str>) -> Result<u64, String> {
@@ -473,6 +1017,7 @@ impl Reminders {
         let Some(id) = next.next_item_id() else { return Err("no reminder id is left".into()) };
         let mut r = Reminder::new(id, title);
         r.list = list;
+        r.created = Some(self.wall.unix);
         r.due = day;
         r.time = time;
         next.items.push(r);
@@ -533,7 +1078,7 @@ impl Reminders {
     }
     fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
         let h = match self.rows.get(i) {
-            Some(Row::Header(_)) => HEAD_H,
+            Some(Row::Header(_) | Row::Section { .. }) => HEAD_H,
             _ => ITEM_H,
         };
         (
@@ -546,7 +1091,7 @@ impl Reminders {
     fn item_id(&self, row: usize) -> Option<u64> {
         match self.rows.get(row)? {
             Row::Item { idx, .. } => self.data.items.get(*idx).map(|r| r.id),
-            Row::Header(_) => None,
+            Row::Header(_) | Row::Section { .. } => None,
         }
     }
     fn form_rows(&self) -> (Vec<(Target, f32, f32)>, f32) {
@@ -573,12 +1118,20 @@ impl Reminders {
                         add(&mut v, &mut y, Target::TimeStep, 52.0, 8.0);
                     }
                     add(&mut v, &mut y, Target::Repeat, 52.0, 8.0);
-                    add(&mut v, &mut y, Target::Early, 52.0, 20.0);
+                    add(&mut v, &mut y, Target::Early, 52.0, 8.0);
+                    add(&mut v, &mut y, Target::TimeZone, 52.0, 8.0);
+                    add(&mut v, &mut y, Target::Urgent, 52.0, 20.0);
                 }
                 add(&mut v, &mut y, Target::Flag, 52.0, 8.0);
                 add(&mut v, &mut y, Target::Priority, 52.0, 8.0);
                 add(&mut v, &mut y, Target::MoveList, 52.0, 8.0);
                 add(&mut v, &mut y, Target::Indent, 52.0, 20.0);
+                let pictures = e.draft.attachments.len();
+                add(&mut v, &mut y, Target::AddImage, 52.0, if pictures == 0 { 20.0 } else { 8.0 });
+                if pictures > 0 {
+                    add(&mut v, &mut y, Target::Thumbs, 96.0, 8.0);
+                    add(&mut v, &mut y, Target::RemoveImage, 52.0, 20.0);
+                }
                 if e.id.is_some() {
                     add(&mut v, &mut y, Target::Duplicate, 52.0, 8.0);
                     add(&mut v, &mut y, Target::Delete, 52.0, 8.0);
@@ -586,15 +1139,34 @@ impl Reminders {
             }
             Screen::ListEditor => {
                 let Some(e) = &self.list_edit else { return (v, 0.0) };
-                add(&mut v, &mut y, Target::Field(Field::Title), 56.0, 20.0);
-                add(&mut v, &mut y, Target::Colors, 64.0, 8.0);
-                add(&mut v, &mut y, Target::Icons, 64.0, 20.0);
-                if e.id.is_some() {
-                    add(&mut v, &mut y, Target::ListUp, 52.0, 8.0);
-                    add(&mut v, &mut y, Target::ListDown, 52.0, 8.0);
-                    if self.data.lists.len() > 1 {
-                        add(&mut v, &mut y, Target::Delete, 52.0, 8.0);
+                if e.mode == EditMode::Settings {
+                    for (i, row) in SettingRow::ALL.iter().enumerate() {
+                        add(&mut v, &mut y, Target::Setting(*row), 52.0, if i + 1 == SettingRow::ALL.len() { 20.0 } else { 8.0 });
                     }
+                    return (v, y);
+                }
+                add(&mut v, &mut y, Target::Field(Field::Title), 56.0, 20.0);
+                if e.mode == EditMode::Smart {
+                    add(&mut v, &mut y, Target::Colors, 64.0, 20.0);
+                    for (i, row) in RuleRow::ALL.iter().enumerate() {
+                        add(&mut v, &mut y, Target::Rule(*row), 52.0, if i + 1 == RuleRow::ALL.len() { 20.0 } else { 8.0 });
+                    }
+                }
+                if e.mode == EditMode::List {
+                    add(&mut v, &mut y, Target::Colors, 64.0, 8.0);
+                    add(&mut v, &mut y, Target::Icons, 64.0, 20.0);
+                    let groups = !self.data.groups.is_empty();
+                    add(&mut v, &mut y, Target::PinList, 52.0, if groups { 8.0 } else { 20.0 });
+                    if groups {
+                        add(&mut v, &mut y, Target::ListGroup, 52.0, 20.0);
+                    }
+                    if e.id.is_some() {
+                        add(&mut v, &mut y, Target::ListUp, 52.0, 8.0);
+                        add(&mut v, &mut y, Target::ListDown, 52.0, 8.0);
+                    }
+                }
+                if e.id.is_some() && (e.mode != EditMode::List || self.data.lists.len() > 1) {
+                    add(&mut v, &mut y, Target::Delete, 52.0, 8.0);
                 }
             }
             _ => {}
@@ -725,6 +1297,9 @@ impl Reminders {
                     if !within(x, y, rect) {
                         continue;
                     }
+                    if matches!(self.rows.get(i), Some(Row::Section { .. })) {
+                        return Some(Target::Section(i));
+                    }
                     let Some(Row::Item { idx, depth }) = self.rows.get(i) else {
                         return Some(Target::Scroll);
                     };
@@ -803,7 +1378,7 @@ impl Reminders {
         let mut y = 0.0;
         for row in &self.rows {
             self.row_y.push(y);
-            y += if matches!(row, Row::Header(_)) { HEAD_H } else { ITEM_H };
+            y += if matches!(row, Row::Header(_) | Row::Section { .. }) { HEAD_H } else { ITEM_H };
         }
         self.items_h = y;
     }
@@ -922,7 +1497,7 @@ impl Reminders {
             let mut r = Reminder::new(0, "");
             r.list = match self.view {
                 View::List(l) => l,
-                View::Smart(_) | View::Tag(_) => self
+                View::Smart(_) | View::Tag(_) | View::Custom(_) => self
                     .opts
                     .default_list
                     .filter(|id| self.data.lists.iter().any(|l| l.id == *id))
@@ -943,7 +1518,7 @@ impl Reminders {
         self.notes = mk_field(ui, "Notes", model::MAX_NOTES, &draft.notes);
         self.url = mk_field(ui, "URL", model::MAX_URL, &draft.url);
         let month = month_start(draft.due.unwrap_or(self.today));
-        self.editor = Some(Editor { id: id.filter(|_| draft.id != 0), draft, month });
+        self.editor = Some(Editor { id: id.filter(|_| draft.id != 0), draft, month, added: vec![] });
         self.screen = Screen::Editor;
         self.swipe = None;
         self.scroll.jump_top();
@@ -953,12 +1528,107 @@ impl Reminders {
     fn open_list_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
         let found = id.and_then(|i| self.data.lists.iter().find(|l| l.id == i)).cloned();
         let (name, color, icon) = found.as_ref().map_or((String::new(), (self.data.lists.len() % view::COLORS.len()) as u8, 0), |l| (l.name.clone(), l.color, l.icon));
+        let (pinned, group) = found.as_ref().map_or((false, None), |l| (l.pinned, l.group));
         self.set_title_field(ui, "List Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id: found.map(|l| l.id), color, icon });
+        self.list_edit = Some(ListEdit { id: found.map(|l| l.id), color, icon, pinned, group, mode: EditMode::List, rules: Default::default() });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
         self.dirty = true;
+    }
+    /// The list editor form for a section of `list` (a new one when `id` is `None`): a name and, for an existing
+    /// section, Delete.
+    fn open_section_editor(&mut self, ui: &Ui, list: u64, id: Option<u64>, t: f64) {
+        let name = id
+            .and_then(|sid| self.data.lists.iter().flat_map(|l| l.sections.iter()).find(|s| s.id == sid))
+            .map_or(String::new(), |s| s.name.clone());
+        self.set_title_field(ui, "Section Name", model::MAX_NAME, &name);
+        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Section(list), rules: Default::default() });
+        self.screen = Screen::ListEditor;
+        self.scroll.jump_top();
+        self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
+        self.dirty = true;
+    }
+    /// The list editor form for a list group (a new one when `id` is `None`).
+    fn open_group_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        let name = id.and_then(|gid| self.data.groups.iter().find(|g| g.id == gid)).map_or(String::new(), |g| g.name.clone());
+        self.set_title_field(ui, "Group Name", model::MAX_NAME, &name);
+        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Group, rules: Default::default() });
+        self.screen = Screen::ListEditor;
+        self.scroll.jump_top();
+        self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
+        self.dirty = true;
+    }
+    /// Reminders > Settings: the form with the default list, the all-day alert time and the badge switch.
+    pub fn open_settings(&mut self, t: f64) -> bool {
+        if self.has_draft() {
+            return false;
+        }
+        self.list_edit = Some(ListEdit { id: None, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Settings, rules: Default::default() });
+        self.screen = Screen::ListEditor;
+        self.searching = false;
+        self.options_open = false;
+        self.scroll.jump_top();
+        self.set_focus(None, t);
+        self.dirty = true;
+        true
+    }
+
+    /// Whether the Settings form is open.
+    fn settings_open(&self) -> bool {
+        self.list_edit.as_ref().is_some_and(|e| e.mode == EditMode::Settings)
+    }
+
+    /// Writes the settings and tells the alert planner and the widget that they changed.
+    fn save_settings(&mut self) {
+        if let Err(e) = settings::save(&self.settings_path, &self.settings) {
+            eprintln!("springboard: reminders: settings: {e}");
+            self.notice = Some("Could not save the settings".to_string());
+        }
+        self.gen = self.gen.wrapping_add(1);
+        self.dirty = true;
+    }
+
+    /// The time a reminder with a day and no time alerts, in minutes after midnight (Settings).
+    pub fn all_day_min(&self) -> u16 {
+        self.settings.all_day_min
+    }
+
+    /// The number on the Dock badge: the due reminders, or nothing when Settings turned the badge off.
+    pub fn badge_count(&self) -> usize {
+        if self.settings.badge {
+            self.due_count()
+        } else {
+            0
+        }
+    }
+
+    /// The form for a custom smart list (a new one when `id` is `None`).
+    fn open_smart_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        let found = id.and_then(|sid| self.data.smarts.iter().find(|m| m.id == sid)).cloned();
+        let color = found.as_ref().map_or((self.data.smarts.len() % view::COLORS.len()) as u8, |m| m.color);
+        let name = found.as_ref().map_or(String::new(), |m| m.name.clone());
+        let rules = found.as_ref().map_or_else(Default::default, |m| m.rules);
+        self.set_title_field(ui, "Smart List Name", model::MAX_NAME, &name);
+        self.list_edit = Some(ListEdit { id: found.map(|m| m.id), color, icon: 0, pinned: false, group: None, mode: EditMode::Smart, rules });
+        self.screen = Screen::ListEditor;
+        self.scroll.jump_top();
+        self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
+        self.dirty = true;
+    }
+    /// The toolbar title of the list editor form.
+    fn list_edit_title(&self) -> &'static str {
+        match self.list_edit.as_ref().map(|e| (e.mode, e.id.is_some())) {
+            Some((EditMode::List, true)) => "List Info",
+            Some((EditMode::Section(_), true)) => "Section",
+            Some((EditMode::Section(_), false)) => "New Section",
+            Some((EditMode::Group, true)) => "Group",
+            Some((EditMode::Group, false)) => "New Group",
+            Some((EditMode::Smart, true)) => "Smart List",
+            Some((EditMode::Smart, false)) => "New Smart List",
+            Some((EditMode::Settings, _)) => "Settings",
+            Some((EditMode::List, false)) | None => "New List",
+        }
     }
     fn close_form(&mut self, ui: &Ui, t: f64) {
         let back_to = Screen::Items;
@@ -1004,6 +1674,7 @@ impl Reminders {
         let mut copy = next.items[at].clone();
         copy.id = new_id;
         copy.completed = false;
+        copy.created = Some(self.wall.unix);
         next.items.insert(at + 1, copy);
         if self.commit_named(next, "Duplicate Reminder") {
             self.close_form(ui, t);
@@ -1039,7 +1710,7 @@ impl Reminders {
             .iter()
             .filter_map(|r| match r {
                 Row::Item { idx, .. } => Some(self.data.items[*idx].id),
-                Row::Header(_) => None,
+                Row::Header(_) | Row::Section { .. } => None,
             })
             .collect();
         let at = self.selected.and_then(|id| ids.iter().position(|&i| i == id));
@@ -1118,6 +1789,7 @@ impl Reminders {
             d.time = d.time.or(q.time);
             d.repeat = d.repeat.or(q.repeat);
             d.priority = d.priority.max(q.priority);
+            d.created = Some(self.wall.now(t));
         }
         d.title = title;
         let mut next = self.data.clone();
@@ -1129,10 +1801,14 @@ impl Reminders {
                     d.parent = None;
                     for kid in next.items.iter_mut().filter(|r| r.parent == Some(id)) {
                         kid.list = d.list;
+                        if list_changed {
+                            kid.section = None;
+                        }
                     }
                 }
                 if list_changed {
                     d.parent = None;
+                    d.section = None;
                 }
                 d.id = id;
                 next.items[pos] = d;
@@ -1144,51 +1820,144 @@ impl Reminders {
             }
         }
         let name = if id.is_some() { "Edit Reminder" } else { "New Reminder" };
+        let before: Vec<String> = id.and_then(|i| self.data.items.iter().find(|r| r.id == i)).map(|r| r.attachments.clone()).unwrap_or_default();
         if self.commit_named(next, name) {
+            // a picture the reminder no longer lists is deleted unless another reminder (a duplicate) still uses it
+            for gone in before {
+                if !self.data.items.iter().any(|r| r.attachments.contains(&gone)) {
+                    attach::remove(&self.attach_dir, &gone);
+                }
+            }
+            if let Some(e) = &mut self.editor {
+                e.added.clear();
+            }
             self.close_form(ui, t);
         }
     }
     fn save_list(&mut self, ui: &Ui, t: f64) {
         let Some(e) = &self.list_edit else { return };
-        let name = clean(self.title.text());
-        if name.is_empty() {
+        if e.mode == EditMode::Settings {
+            // each setting was saved as it changed; Done closes the form
+            self.close_form(ui, t);
             return;
         }
-        let (id, color, icon) = (e.id, e.color, e.icon);
-        let label = if id.is_some() { "Edit List" } else { "New List" };
+        let Some(name) = organize::clean_name(self.title.text()) else { return };
+        let (id, color, icon, pinned, group, mode, rules) = (e.id, e.color, e.icon, e.pinned, e.group, e.mode, e.rules);
+        let label = match (mode, id.is_some()) {
+            (EditMode::List, true) => "Edit List",
+            (EditMode::List, false) => "New List",
+            (EditMode::Section(_), true) => "Rename Section",
+            (EditMode::Section(_), false) => "New Section",
+            (EditMode::Group, true) => "Rename Group",
+            (EditMode::Group, false) => "New List Group",
+            (EditMode::Smart, true) => "Edit Smart List",
+            (EditMode::Smart, false) => "New Smart List",
+            (EditMode::Settings, _) => "Settings",
+        };
         let mut next = self.data.clone();
-        match id {
-            Some(id) => {
-                if let Some(l) = next.lists.iter_mut().find(|l| l.id == id) {
-                    l.name = name;
-                    l.color = color;
-                    l.icon = icon;
+        let mut opened = None;
+        let done = match mode {
+            EditMode::Settings => false,
+            EditMode::Smart => match id {
+                Some(id) => match next.smarts.iter_mut().find(|m| m.id == id) {
+                    Some(m) => {
+                        m.name = name;
+                        m.color = color;
+                        m.rules = rules;
+                        true
+                    }
+                    None => false,
+                },
+                None => match next.next_smart_id() {
+                    Some(sid) if next.smarts.len() < model::MAX_SMARTS => {
+                        next.smarts.push(model::SmartDef { id: sid, name, color, rules });
+                        opened = Some(sid);
+                        true
+                    }
+                    _ => false,
+                },
+            },
+            EditMode::List => {
+                // The sidebar has room for a few pinned tiles; a list over the limit saves unpinned.
+                let others = next.lists.iter().filter(|l| l.pinned && Some(l.id) != id).count();
+                let pinned = pinned && others < MAX_PINNED;
+                match id {
+                    Some(id) => match next.lists.iter_mut().find(|l| l.id == id) {
+                        Some(l) => {
+                            l.name = name;
+                            l.color = color;
+                            l.icon = icon;
+                            l.pinned = pinned;
+                            l.group = group;
+                            true
+                        }
+                        None => false,
+                    },
+                    None => match next.next_list_id() {
+                        Some(new_id) => {
+                            let mut l = ListDef::new(new_id, name, color, icon);
+                            l.pinned = pinned;
+                            l.group = group;
+                            next.lists.push(l);
+                            true
+                        }
+                        None => false,
+                    },
                 }
             }
-            None => {
-                let Some(new_id) = next.next_list_id() else { return };
-                next.lists.push(ListDef { id: new_id, name, color, icon });
+            EditMode::Section(list) => match id {
+                Some(id) => organize::rename_section(&mut next, id, &name),
+                None => organize::add_section(&mut next, list, &name).is_some(),
+            },
+            EditMode::Group => match id {
+                Some(id) => match next.groups.iter_mut().find(|g| g.id == id) {
+                    Some(g) => {
+                        g.name = name;
+                        true
+                    }
+                    None => false,
+                },
+                None => match next.next_group_id() {
+                    Some(gid) => {
+                        next.groups.push(ListGroup { id: gid, name });
+                        true
+                    }
+                    None => false,
+                },
+            },
+        };
+        if done && self.commit_named(next, label) {
+            if let Some(sid) = opened {
+                self.view = View::Custom(sid);
             }
-        }
-        if self.commit_named(next, label) {
             self.close_form(ui, t);
         }
     }
     fn finish_drag(&mut self, ui: &Ui) {
         let Some(drag) = self.drag.take() else { return };
+        // Where the reminder was dropped: the section whose header was passed last (none above the first header),
+        // and the first reminder of that section below the drop point.
+        let mut section: Option<u64> = None;
         let mut before = None;
         for i in 0..self.rows.len() {
-            if let Some(Row::Item { idx, depth: 0 }) = self.rows.get(i) {
-                let id = self.data.items[*idx].id;
-                let rect = self.row_rect(ui, i);
-                if id != drag.id && rect.1 + rect.3 / 2.0 > drag.y {
-                    before = Some(id);
-                    break;
+            let rect = self.row_rect(ui, i);
+            let below = rect.1 + rect.3 / 2.0 > drag.y;
+            match self.rows.get(i) {
+                // dropped above a section header: the reminder ends the section before it
+                Some(Row::Section { .. }) if below => break,
+                Some(Row::Section { id, .. }) => section = Some(*id),
+                Some(Row::Item { idx, depth: 0 }) => {
+                    let id = self.data.items[*idx].id;
+                    if id != drag.id && below {
+                        before = Some(id);
+                        break;
+                    }
                 }
+                _ => {}
             }
         }
         let mut next = self.data.clone();
-        if model::move_before(&mut next.items, drag.id, before) && self.commit_named(next, "Move Reminder") {
+        if organize::place_in_section(&mut next.items, drag.id, section, before) && self.commit_named(next, "Move Reminder") {
             self.rebuild(ui);
         }
     }
@@ -1277,10 +2046,70 @@ impl Reminders {
         }
         match target {
             Target::OptExport => self.export_list(),
-            Target::OptDefaultList(id) => self.opts.default_list = id,
+            Target::OptDefaultList(id) => {
+                self.opts.default_list = id;
+                self.settings.default_list = id;
+                self.save_settings();
+            }
+            Target::Setting(row) => {
+                match row {
+                    SettingRow::DefaultList => {
+                        // Automatic, then each list in turn, then Automatic again
+                        let ids: Vec<u64> = self.data.lists.iter().map(|l| l.id).collect();
+                        let next = match self.settings.default_list {
+                            None => ids.first().copied(),
+                            Some(id) => ids.iter().position(|x| *x == id).and_then(|i| ids.get(i + 1)).copied(),
+                        };
+                        self.settings.default_list = next;
+                        self.opts.default_list = next;
+                    }
+                    SettingRow::AllDayAlert => self.settings.all_day_min = settings::next_all_day(self.settings.all_day_min),
+                    SettingRow::Badge => self.settings.badge = !self.settings.badge,
+                }
+                self.save_settings();
+            }
             Target::Smart(s) => self.open_view(ui, View::Smart(s)),
             Target::List(id) => self.open_view(ui, View::List(id)),
             Target::Tag(key) => self.open_view(ui, View::Tag(key)),
+            Target::Custom(id) => self.open_view(ui, View::Custom(id)),
+            Target::SmartInfo(id) => self.open_smart_editor(ui, Some(id), t),
+            Target::Rule(row) => {
+                let (items, lists) = (&self.data.items, &self.data.lists);
+                if let Some(e) = &mut self.list_edit {
+                    match row {
+                        RuleRow::Due => e.rules.due = e.rules.due.next(),
+                        RuleRow::Time => e.rules.time = e.rules.time.next(),
+                        RuleRow::Priority => e.rules.priority = (e.rules.priority + 1) % 4,
+                        RuleRow::Flagged => e.rules.flagged = e.rules.flagged.next(),
+                        RuleRow::Tag => e.rules.tag = model::next_tag(e.rules.tag, items),
+                        RuleRow::List => e.rules.list = model::next_list(e.rules.list, lists),
+                    }
+                }
+            }
+            Target::Section(row) => {
+                if let (Some(Row::Section { id, .. }), View::List(list)) = (self.rows.get(row).cloned(), self.view) {
+                    self.open_section_editor(ui, list, Some(id), t);
+                }
+            }
+            Target::ToggleGroup(id) => {
+                if !self.collapsed_groups.remove(&id) {
+                    self.collapsed_groups.insert(id);
+                }
+            }
+            Target::PinList => {
+                if let Some(e) = &mut self.list_edit {
+                    e.pinned = !e.pinned;
+                }
+            }
+            Target::ListGroup => {
+                let ids: Vec<u64> = self.data.groups.iter().map(|g| g.id).collect();
+                if let Some(e) = &mut self.list_edit {
+                    e.group = match e.group {
+                        None => ids.first().copied(),
+                        Some(g) => ids.iter().position(|x| *x == g).and_then(|i| ids.get(i + 1)).copied(),
+                    };
+                }
+            }
             Target::ListInfo(id) => self.open_list_editor(ui, Some(id), t),
             Target::NewList => self.open_list_editor(ui, None, t),
             Target::Search => self.begin_search(ui, t),
@@ -1345,7 +2174,10 @@ impl Reminders {
             }
             Target::Undo => self.run_undo(ui),
             Target::Field(f) => self.set_focus(Some(f), t),
-            Target::Cancel => self.close_form(ui, t),
+            Target::Cancel => {
+                self.discard_new_pictures();
+                self.close_form(ui, t);
+            }
             Target::Save => {
                 if self.editor.is_some() {
                     self.save_editor(ui, t);
@@ -1364,6 +2196,8 @@ impl Reminders {
                         e.draft.time = None;
                         e.draft.repeat = None;
                         e.draft.early = None;
+                        e.draft.tz = None;
+                        e.draft.urgent = false;
                     } else {
                         e.draft.due = Some(today);
                     }
@@ -1407,6 +2241,28 @@ impl Reminders {
             Target::Early => {
                 if let Some(e) = &mut self.editor {
                     e.draft.early = model::cycle_early(e.draft.early);
+                }
+            }
+            Target::TimeZone => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.tz = zones::next_choice(e.draft.tz.as_deref());
+                }
+            }
+            Target::AddImage => {
+                if self.editor.as_ref().is_some_and(|e| e.draft.attachments.len() >= attach::MAX_PER_REMINDER) {
+                    self.notice = Some(format!("A reminder holds up to {} pictures", attach::MAX_PER_REMINDER));
+                } else {
+                    self.image_request = true;
+                }
+            }
+            Target::RemoveImage => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.attachments.pop();
+                }
+            }
+            Target::Urgent => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.urgent = !e.draft.urgent;
                 }
             }
             Target::Flag => {
@@ -1463,10 +2319,22 @@ impl Reminders {
                 }
                 Some(None) => {}
                 None => {
-                    if let Some(id) = self.list_edit.as_ref().and_then(|e| e.id) {
+                    let edit = self.list_edit.as_ref().and_then(|e| e.id.map(|id| (id, e.mode)));
+                    if let Some((id, mode)) = edit {
                         let mut next = self.data.clone();
-                        if next.delete_list(id) && self.commit(next) {
-                            if self.view == View::List(id) {
+                        let (done, name) = match mode {
+                            EditMode::List => (next.delete_list(id), "Delete List"),
+                            EditMode::Section(_) => (organize::delete_section(&mut next, id), "Delete Section"),
+                            EditMode::Group => (next.delete_group(id), "Delete Group"),
+                            EditMode::Smart => {
+                                let before = next.smarts.len();
+                                next.smarts.retain(|m| m.id != id);
+                                (next.smarts.len() != before, "Delete Smart List")
+                            }
+                            EditMode::Settings => (false, "Settings"),
+                        };
+                        if done && self.commit_named(next, name) {
+                            if (mode == EditMode::List && self.view == View::List(id)) || (mode == EditMode::Smart && self.view == View::Custom(id)) {
                                 self.view = View::Smart(Smart::All);
                             }
                             self.close_form(ui, t);
@@ -1474,7 +2342,7 @@ impl Reminders {
                     }
                 }
             },
-            Target::Colors | Target::Icons | Target::Calendar | Target::TimeStep | Target::Scroll => {}
+            Target::Colors | Target::Icons | Target::Calendar | Target::TimeStep | Target::Thumbs | Target::Scroll => {}
             Target::Color(c) => {
                 if let Some(e) = &mut self.list_edit {
                     e.color = c;
@@ -1523,6 +2391,9 @@ impl Reminders {
                 | Target::Smart(_)
                 | Target::List(_)
                 | Target::Tag(_)
+                | Target::ToggleGroup(_)
+                | Target::Custom(_)
+                | Target::SmartInfo(_)
                 | Target::ListInfo(_)
                 | Target::New
                 | Target::NewList
