@@ -4,7 +4,7 @@
  "macos_since": "10.4",
  "status": "partial",
  "bifrost": "springboard/src/shell/photos/ (viewer, edit, slideshow, thumbs), springboard/sdk/src/peek.rs, springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/graphics_imageio.rs, springboard/ui/src/print.rs, springboard/render/src/cg/pdf/, springboard/render/src/imgdec.rs, springboard/src/shell/camera/mod.rs",
- "summary": "BifrOSt covers the viewing and editing side of ImageKit only inside shell apps (Photos viewer, edit mode and slideshow), a Quick Look preview model and thumbnail cache in the SDK, PDF reading and writing through the SDK document and writer wrappers, PNG and JPEG decode and encode, and PDF text extraction for Books. No app-facing SDK API exists yet for image views, slideshows, Core Image filters, PDF outlines or selections, or Quartz Composer.",
+ "summary": "BifrOSt covers the viewing and editing side of ImageKit only inside shell apps (Photos viewer, edit mode and slideshow), a Quick Look preview model and thumbnail cache in the SDK, PDF reading and writing through the SDK document and writer wrappers, PNG and JPEG decode and encode, and PDF text extraction for Books. A pure typed DAG model now covers part of Quartz Composer; there is still no composition UI, renderer or plug-in host. No app-facing SDK API exists yet for image views, slideshows, Core Image filters, PDF outlines or selections.",
  "rea_evidence": "ev_785e790b371318807d1dd7aa7f8f22ed4ec659d31eb5ce193106fc12c14d19a5",
  "features": [
   {
@@ -108,9 +108,9 @@
   {
    "feature": "Quartz Composer compositions and custom patches (QCComposition, QCView, QCPlugIn, QCRenderer)",
    "apple": "QCComposition, QCCompositionLayer, QCView, QCRenderer, QCPlugIn, QCPlugInContext, QCCompositionRepository",
-   "bifrost": "none found",
-   "status": "gap",
-   "note": "Blocked: no node-graph composition runtime (patch graph, renderer, plug-in host) exists in this repository, and it is a separate multi-module project rather than a surface over existing code. The deprecation status was not checked against the official documentation."
+   "bifrost": "springboard/ui/src/patch_graph.rs (typed patches, validated connections, deterministic evaluation)",
+   "status": "partial",
+   "note": "A pure typed DAG model validates port types, single-source inputs and cycles, then evaluates patches in dependency order with headless tests. It is not a Quartz Composer-compatible file/runtime, composition UI, renderer or plug-in host; deprecation status remains unverified."
   }
  ],
  "gaps": [

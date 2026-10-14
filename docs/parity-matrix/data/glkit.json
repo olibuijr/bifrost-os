@@ -3,7 +3,7 @@
  "doc": "https://developer.apple.com/documentation/glkit",
  "macos_since": "10.8",
  "status": "partial",
- "bifrost": "springboard/sdk/src/view/app.rs (frame drawing), springboard/sdk/src/view/animation.rs (frame timing), springboard/sdk/src/widgets.rs (Material blur), springboard/render/src/imgdec.rs (image decode), springboard/ui/src/shader_effect.rs, springboard/ui/src/texture_loader.rs, springboard/ui/src/drawable_view.rs, springboard/ui/src/render_loop.rs, springboard/src/gpu/ (internal GLES presenter, not app-facing)",
+ "bifrost": "springboard/sdk/src/view/app.rs (frame drawing), springboard/sdk/src/view/animation.rs (frame timing), springboard/sdk/src/widgets.rs (Material blur), springboard/render/src/imgdec.rs (image decode), springboard/ui/src/shader_effect.rs, springboard/ui/src/texture_loader.rs, springboard/ui/src/drawable_view.rs, springboard/ui/src/render_loop.rs, springboard/ui/src/gl_requirements.rs, springboard/src/gpu/ (internal GLES presenter, not app-facing)",
  "summary": "GLKit is an OpenGL and OpenGL ES helper layer (GL view, view controller render loop, shader effects, mesh and texture loading, math). Apple marks most of it deprecated on macOS from 10.14, and macOS requires an OpenGL 3.2 Core Profile context. BifrOSt has no app-facing GL view or shader API; its GPU presenter is internal. Pure models in springboard/ui cover the effect, drawable, loop, texture-request and math parts, and apps get blur materials, a draw and animation loop and image decoding.",
  "rea_evidence": "ev_2dea8330752a36acabb14ce26422118cccfeccc1eef2a1724b27913e3d95c67d",
  "features": [
@@ -66,9 +66,9 @@
   {
    "feature": "Rendering on macOS requirements",
    "apple": "OpenGL 3.2 Core Profile context on macOS, OpenGL ES 2.0 on iOS (per the landing page)",
-   "bifrost": "springboard/src/gpu/egl.rs (GLES 3.x via EGL/Mesa, Linux)",
-   "status": "os",
-   "note": "the GPU stack exists in the system layer, but apps have no context or API to use it"
+   "bifrost": "springboard/ui/src/gl_requirements.rs (GL_VERSION parser and requirement checks); springboard/src/gpu/egl.rs (internal GLES 3.x via EGL/Mesa, Linux)",
+   "status": "partial",
+   "note": "The pure helper parses desktop and ES version strings and checks the documented minimums, with headless tests. Apps still cannot create or query a GL context; the system presenter is internal."
   }
  ],
  "gaps": [

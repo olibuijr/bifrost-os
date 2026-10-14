@@ -1254,4 +1254,6 @@ pub mod proposed_event;
 pub mod bluetooth_errors;
 pub mod bluetooth_devices;
 pub mod save_options;
+pub mod gl_requirements;
+pub mod patch_graph;
 
