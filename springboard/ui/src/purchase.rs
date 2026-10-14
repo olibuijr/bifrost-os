@@ -47,6 +47,28 @@ pub enum Outcome {
     Pending,
 }
 
+/// Why the store could not complete a purchase. These are the errors a store reports besides a cancellation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Failure {
+    /// The device could not reach the store. The customer may try again.
+    NetworkUnavailable,
+    /// The store is busy or down for maintenance. The customer may try again.
+    StoreUnavailable,
+    /// The store could not finish for a reason it does not name. The customer may try again.
+    Unknown,
+    /// The customer is not allowed to buy this product (a restriction on the account).
+    NotAllowed,
+    /// The product is not sold in this storefront or is no longer on sale.
+    ProductUnavailable,
+}
+
+impl Failure {
+    /// Whether the same purchase may be attempted again: only the transient failures.
+    pub fn can_retry(self) -> bool {
+        matches!(self, Failure::NetworkUnavailable | Failure::StoreUnavailable | Failure::Unknown)
+    }
+}
+
 /// Where one purchase attempt stands.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
@@ -57,6 +79,8 @@ pub enum Step {
     Pending,
     /// The purchase has a final outcome: success or a cancellation.
     Finished(Outcome),
+    /// The store could not complete the purchase. It may be retried when the failure allows it.
+    Failed(Failure),
 }
 
 /// One purchase attempt of a product at a price.
@@ -84,6 +108,14 @@ impl Purchase {
         }
     }
 
+    /// The failure that ended the attempt, if the store could not complete it.
+    pub fn failure(&self) -> Option<Failure> {
+        match self.step {
+            Step::Failed(f) => Some(f),
+            _ => None,
+        }
+    }
+
     /// Shows the confirmation sheet (`purchase(options:)` was called). False unless the attempt is idle.
     pub fn begin(&mut self) -> bool {
         if self.step == Step::Idle {
@@ -105,6 +137,29 @@ impl Purchase {
         };
         self.step = next;
         true
+    }
+
+    /// Records that the store could not complete the purchase. Accepted from the sheet or while pending; a failed
+    /// attempt is not reopened by a later result.
+    pub fn fail(&mut self, failure: Failure) -> bool {
+        if matches!(self.step, Step::ConfirmationShown | Step::Pending) {
+            self.step = Step::Failed(failure);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Starts the purchase again after a failure that allows a retry. False for any other state, and for failures the
+    /// store does not allow the customer to retry.
+    pub fn retry(&mut self) -> bool {
+        match self.step {
+            Step::Failed(f) if f.can_retry() => {
+                self.step = Step::Idle;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Whether the app may install the paid package now: only after a successful purchase.
