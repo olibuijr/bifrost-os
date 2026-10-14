@@ -17,6 +17,8 @@ pub use extras::{LoginOp, LoginStatus, StatusMenuItem};
 pub mod quicksearch;
 pub mod peek;
 pub mod axtext;
+pub mod touch;
+pub use bifrost_ui::touch::{Raw as RawTouch, Sample as TouchSample, Touch as TouchPoint, TouchEvent, TouchPhase, TouchTracker, TouchType};
 pub use bifrost_ui::ax::{AxMeta, AxText, Priority as AnnouncePriority};
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
@@ -359,6 +361,9 @@ pub const MAX_DOC_PATH: usize = 4096;
 pub enum ToApp {
     Configure(Configure),
     Touch { kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32 },
+    /// Every touch of one frame, with phases, previous locations, tap counts and optional force and radius (see the
+    /// `touch` module). The shell sends it ahead of the matching `Touch`. Tag 0x1f0.
+    Touches(TouchEvent),
     Key(KeyInput),
     /// The shell is done with buffer `buf` of the `Buffers` set numbered `generation`; an app ignores it when
     /// that is not its current set (a late release must not free a slot of the new set).
@@ -1147,6 +1152,7 @@ impl ToApp {
             }
             m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
             m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
+            m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
             m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
@@ -1271,6 +1277,7 @@ impl ToApp {
             t @ (50..=59 | 0x1d0..=0x1df) => rich::decode_app(t, &mut r)?,
             t @ 0x1b0..=0x1bf => extras::decode_app(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_app(t, &mut r)?,
+            t @ 0x1f0..=0x1ff => touch::decode_app(t, &mut r)?,
             t @ 100..=109 => workspace::decode_app(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
         })

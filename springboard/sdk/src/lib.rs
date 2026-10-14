@@ -16,6 +16,7 @@ pub use bifrost_ui::{Command, Commands};
 pub use bifrost_ui::remote_command;
 pub use bifrost_proto as proto;
 pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, TouchKind};
+pub use bifrost_ui::touch::{TouchEvent, TouchPhase, TouchType};
 
 /// The shell's drawing, text and Settings-style list kit, reused as is so apps
 /// look like stock bifrost apps (see AGENTS.md design rules).
@@ -65,6 +66,7 @@ pub mod screens;
 pub mod displays;
 pub mod windows;
 pub mod input_events;
+pub mod touch_events;
 pub mod launch_services;
 pub mod notify_bus;
 pub mod locale;
@@ -397,6 +399,17 @@ pub trait App {
     fn configure(&mut self, _ctx: &Ctx) {}
     /// A touch, key or URL; true when the app needs a new frame.
     fn event(&mut self, _ctx: &Ctx, _ev: Input) -> bool {
+        false
+    }
+    /// True when the app takes touch events (`touches`) instead of the plain `Input::Touch` stream. The default keeps
+    /// the plain stream, so existing apps are unchanged.
+    fn wants_touch_events(&self) -> bool {
+        false
+    }
+    /// One frame of touches (`touchesBegan`, `touchesMoved`, `touchesEnded`, `touchesCancelled`): every touch with its
+    /// phase, location in surface pixels, previous location, tap count and optional force and radius. Called only when
+    /// `wants_touch_events` is true. A plain pointer arrives as one indirect touch. True when the app needs a new frame.
+    fn touches(&mut self, _ctx: &Ctx, _ev: &touch_events::TouchEvent) -> bool {
         false
     }
     /// Semantic controls in logical points; sent only when they change.

@@ -1148,3 +1148,4 @@ pub mod mp4_info;
 pub mod media_picker;
 pub mod map_snapshot;
 pub mod audio_settings;
+pub mod touch;
