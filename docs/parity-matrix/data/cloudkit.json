@@ -52,9 +52,9 @@
     {
       "feature": "User discovery and identity",
       "apple": "CKUserIdentity",
-      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/main.rs (accounts, users)",
-      "status": "os",
-      "note": "accounts exist, no app discovery API"
+      "bifrost": "springboard/sdk/src/cloud_identity.rs (identity_from_me, UserIdentity); ~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (GET /me)",
+      "status": "partial",
+      "note": "The signed-in user's identity (record name, display name, sign-up address, admin flag) is read from the cloud answer to GET /me and mapped to typed errors, tested headless in springboard/sdk/tests/parity_sdk-rest-07.rs. Gap: the service has no lookup by address, so an app cannot discover another user, and the caller performs the request."
     },
     {
       "feature": "Web auth tokens",
