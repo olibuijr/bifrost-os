@@ -117,7 +117,7 @@
    "apple": "CAReplicatorLayer, CAEmitterLayer, CAEmitterCell",
    "bifrost": "springboard/render/src/replicator.rs, springboard/render/src/emitter.rs",
    "status": "partial",
-   "note": "Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no replication or particle system in the SDK or renderer"
+   "note": "Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; ReplicatorView and EmitterView are app-facing layer-kind views (springboard/sdk/src/view/layer_views.rs). Headless model tests in springboard/render/tests/parity_sdk-tests-01c.rs: a_headless_replicator_places_each_copy_by_applying_the_transform_again, a_headless_replicator_fades_each_copy_and_clamps_the_colour. Not wired into apps or the shell, not yet tested on Midget."
   },
   {
    "feature": "Metal and OpenGL layers (CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer)",

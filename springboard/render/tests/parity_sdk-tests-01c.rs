@@ -1,8 +1,10 @@
 //! Gradient ramps and offsets of `bifrost_render::gradient`, rasterised headless into an in-memory buffer: each pixel takes
-//! the ramp colour at its centre's offset, and the buffer is checked pixel by pixel. No window and no display.
+//! the ramp colour at its centre's offset, and the buffer is checked pixel by pixel. The replicator model of
+//! `bifrost_render::replicator` is checked the same way. No window and no display.
 
 use bifrost_render::colorfx::Rgb;
 use bifrost_render::gradient::{linear_t, radial_t, Ramp};
+use bifrost_render::replicator::{translation, Replicator};
 
 const BLACK: Rgb = Rgb::new(0.0, 0.0, 0.0);
 const WHITE: Rgb = Rgb::new(1.0, 1.0, 1.0);
@@ -61,4 +63,23 @@ fn a_ramp_refuses_unsorted_stops_and_nan_reads_the_first_colour() {
     assert!(Ramp::new(&[(f32::NAN, BLACK)]).is_none());
     let ramp = Ramp::new(&[(0.0, BLACK), (1.0, WHITE)]).unwrap();
     assert_eq!(ramp.color_at(f32::NAN), BLACK);
+}
+
+#[test]
+fn a_headless_replicator_places_each_copy_by_applying_the_transform_again() {
+    let rep = Replicator { count: 4, delay: 0.25, transform: translation(10.0, 0.0, 0.0), ..Replicator::default() };
+    assert_eq!(rep.instances(), 4);
+    assert_eq!(rep.matrix(0)[0][3], 0.0, "instance 0 is the untransformed source");
+    assert_eq!(rep.matrix(3)[0][3], 30.0, "instance 3 is the transform applied three times");
+    assert_eq!(rep.matrix(3)[1][3], 0.0);
+    assert!((rep.delay_of(2) - 0.5).abs() < 1e-12);
+}
+
+#[test]
+fn a_headless_replicator_fades_each_copy_and_clamps_the_colour() {
+    let rep = Replicator { count: 0, color_offset: [-0.25, 0.0, 0.0, 0.0], ..Replicator::default() };
+    assert_eq!(rep.instances(), 1, "a count of zero is one copy");
+    let source = [1.0, 0.5, 0.25, 1.0];
+    assert_eq!(rep.color_of(2, source), [0.5, 0.5, 0.25, 1.0]);
+    assert_eq!(rep.color_of(5, source)[0], 0.0, "the red channel clamps at zero");
 }
