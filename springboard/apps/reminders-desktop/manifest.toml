@@ -1,13 +1,13 @@
 id = "is.olibuijr.reminders.desktop"
 name = "Reminders"
-version = "1.13.3"
+version = "1.14.0"
 exec = "bifrost-reminders"
 icon = "icon.png"
 min_shell = "0.5.7"
 summary = "Lists, due dates, repeats and alerts."
 category = "Productivity"
 architecture = "x86_64-linux"
-permissions = ["storage", "notifications"]
+permissions = ["storage", "notifications", "documents"]
 window = "full-size"
 
 [[intent]]
@@ -16,3 +16,38 @@ title = "Add Reminder"
 description = "Adds a reminder to the default list, with an optional due date."
 shortcut = false
 params = ["title:string", "due:date?"]
+
+[[intent]]
+id = "quick-reminder"
+title = "Add Quick Reminder"
+description = "Adds a reminder from a line such as \"call mum tomorrow 9am\"."
+shortcut = false
+params = ["text:string"]
+
+[[intent]]
+id = "create-list"
+title = "Create List"
+description = "Creates a new list."
+shortcut = false
+params = ["name:string"]
+
+[[intent]]
+id = "open-list"
+title = "Open List"
+description = "Shows a list in Reminders."
+shortcut = false
+params = ["list:string"]
+
+[[intent]]
+id = "open-smart-list"
+title = "Open Smart List"
+description = "Shows Today, Scheduled, Flagged, All or Completed in Reminders."
+shortcut = false
+params = ["smart:enum(Today|Scheduled|All|Flagged|Completed)"]
+
+[[intent]]
+id = "search-reminders"
+title = "Search Reminders"
+description = "Searches the reminders and shows the results."
+shortcut = false
+params = ["query:string"]

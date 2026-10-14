@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.14.0 — 2026-10-13
+
+- Mark Due Date As (Reminder menu): Today, Tomorrow, This Weekend and Next Week set the selected reminder's due day and keep its time. Mark All Overdue as Today moves every open overdue reminder in one undo step.
+- Indent and Outdent (Cmd+] and Cmd+[) nest the selected reminder under the one above it, or lift a subtask back to the top level. View > Hide All Subtasks and Show All Subtasks fold every parent at once.
+- Sections: a list can be split into named sections (List > New Section). Choose a section header to rename or delete it, use Reminder > Move to Section, or drag a reminder onto another section. Deleting a section keeps its reminders.
+- List > Auto-Categorize sorts the loose reminders of a list into grocery sections (Produce, Dairy and Eggs, Bakery and so on) from the words in their titles, reusing sections you already have.
+- List groups: List > New List Group makes a collapsible group in the sidebar; the list form has a Group row to put a list in one. Deleting a group keeps its lists.
+- Pinned lists: List > Pin List (or the Pin in Sidebar switch in the list form) adds a tile for the list beside the smart lists. Up to eight lists can be pinned.
+- View > Show Smart List hides or shows each smart list tile in the sidebar. View > Sort By offers the sort orders from the menu bar, and a new Creation Date order lists the oldest reminders first. Reminders now record when they were created.
+- Image attachments: a reminder's details have Add Image, which opens a file panel for a PNG or JPEG (up to 12 MB and 12 million pixels, four to a reminder). The pictures show as thumbnails in the details, the list row says how many a reminder has, and Remove Last Image takes one off. They are copied into an `attachments` folder beside the reminders file; Cancel deletes the ones added in that visit, and removing one and pressing Done deletes its file unless a duplicate still uses it.
+- Urgent alarm: Reminder > Mark as Urgent (or the Urgent Alarm switch in the reminder's details, which needs a date). Once an urgent reminder is due, its alert repeats every minute until you complete it, and stops on its own after a day.
+- Time Zone in a reminder's details: choose from a short list of zones, and the due time is read on that zone's clock, with its daylight saving, instead of the device's. The list shows the place next to the time. Same as Device is the default.
+- Smart lists you define: File > New Smart List opens a form with a name, a colour and rules for the date (overdue, today, next 7 days, later, no date), time of day, priority, flag, one tag and one list. A smart list collects the open reminders that satisfy every rule you set, shows its count in the sidebar, and is edited or deleted from Show List Info.
+- Settings (Reminder > Settings, Cmd+,): the list new reminders go to, the time an all-day reminder alerts (6:00 to 20:00; it was fixed at 9:00) and a switch for the Dock badge. They apply at once and are kept in `settings.tsv`; Undo does not touch them. The Today widget and the scheduled alerts follow the all-day time.
+- Templates: List > Save List as Template keeps a list's reminders without dates or completion; New List from Template makes an open list from one, and Delete Template removes it.
+- File > Import List reads a Markdown checklist (the Export List format, with subtasks, due days and `## section` headings) into a new list. File > Print List prints the open list. Export List now writes each section as a `## heading`.
+- Quick Reminder: a menu bar extra with New Quick Reminder (opens the new reminder form) and Add Reminder from Clipboard, which reads the copied text as a quick-add line such as "pay rent every month !!" and adds it to the default list.
+- Shortcuts: new Add Quick Reminder, Create List, Open List, Open Smart List and Search Reminders actions next to Add Reminder.
+- The store keeps list groups, sections, templates, smart lists, pinned lists, creation dates, time zones, urgent marks and picture names in the same file (format v3). Files from older versions still open and are rewritten in the new format on the next change. An older version of Reminders does not read a v3 file: it reports that it cannot read it and leaves it untouched.
+
 ## 1.13.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

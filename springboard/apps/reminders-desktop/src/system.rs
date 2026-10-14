@@ -13,11 +13,11 @@ pub const MAX_ROWS: usize = 8;
 
 /// The Today timeline: a summary row at `now`, then each open reminder due today or earlier, soonest first. A reminder
 /// that is already overdue is dated `now` and reads "Overdue". Completed and undated reminders are left out.
-pub fn today_entries(items: &[Reminder], today: i64, now: i64, offset_at: model::OffsetAt) -> Vec<Entry> {
+pub fn today_entries(items: &[Reminder], today: i64, now: i64, all_day_min: u16, offset_at: model::OffsetAt) -> Vec<Entry> {
     let mut due: Vec<(i64, &Reminder)> = items
         .iter()
         .filter(|r| !r.completed && r.due.is_some_and(|d| d <= today))
-        .filter_map(|r| model::due_unix(r, offset_at).map(|at| (at, r)))
+        .filter_map(|r| model::due_unix(r, all_day_min, offset_at).map(|at| (at, r)))
         .collect();
     due.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.id.cmp(&b.1.id)));
     let summary = match due.len() {
@@ -27,7 +27,7 @@ pub fn today_entries(items: &[Reminder], today: i64, now: i64, offset_at: model:
     };
     let mut out = vec![Entry { date: now as f64, title: "Today".into(), text: summary }];
     for &(at, r) in due.iter().take(MAX_ROWS) {
-        let text = if at < now { "Overdue".to_string() } else { model::clock_label(r.time.unwrap_or(model::DEFAULT_ALERT_MIN)) };
+        let text = if at < now { "Overdue".to_string() } else { model::clock_label(r.time.unwrap_or(all_day_min)) };
         out.push(Entry { date: at.max(now) as f64, title: r.title.clone(), text });
     }
     out
@@ -40,8 +40,8 @@ pub fn next_midnight(today: i64, offset_at: model::OffsetAt) -> f64 {
 
 /// Replaces the Today timeline with the reminders of `today` as seen at `now`, reloading at the next midnight. Returns
 /// the request id; an older shell without `widgets_timeline` answers with an error, which the app ignores.
-pub fn reload_today(ctx: &Ctx, items: &[Reminder], today: i64, now: i64, offset_at: model::OffsetAt) -> u32 {
-    let entries = today_entries(items, today, now, offset_at);
+pub fn reload_today(ctx: &Ctx, items: &[Reminder], today: i64, now: i64, all_day_min: u16, offset_at: model::OffsetAt) -> u32 {
+    let entries = today_entries(items, today, now, all_day_min, offset_at);
     wt::reload(ctx, WIDGET_KIND, &entries, ReloadPolicy::After(next_midnight(today, offset_at)))
 }
 
@@ -64,6 +64,7 @@ mod tests {
 
     const TODAY: i64 = 20_000;
     const NOON: u16 = 720;
+    const DAY: u16 = model::DEFAULT_ALERT_MIN;
 
     fn at_day(id: u64, title: &str, day: i64, min: u16) -> Reminder {
         let mut r = Reminder::new(id, title);
@@ -82,7 +83,7 @@ mod tests {
         let mut done = at_day(4, "done", TODAY, NOON);
         done.completed = true;
         let items = vec![at_day(1, "later", TODAY + 1, NOON), at_day(2, "today", TODAY, NOON), at_day(3, "late", TODAY - 2, NOON), done, Reminder::new(5, "undated")];
-        let rows = today_entries(&items, TODAY, now, &zero);
+        let rows = today_entries(&items, TODAY, now, DAY, &zero);
         assert_eq!(rows[0].title, "Today");
         assert_eq!(rows[0].text, "2 due");
         assert_eq!(rows[0].date, now as f64);
@@ -93,7 +94,7 @@ mod tests {
     #[test]
     fn overdue_rows_sit_at_now_and_read_overdue() {
         let now = TODAY * 86_400 + 13 * 3600;
-        let rows = today_entries(&[at_day(1, "old", TODAY - 1, 60)], TODAY, now, &zero);
+        let rows = today_entries(&[at_day(1, "old", TODAY - 1, 60)], TODAY, now, DAY, &zero);
         assert_eq!(rows[1].text, "Overdue");
         assert_eq!(rows[1].date, now as f64);
     }
@@ -101,14 +102,26 @@ mod tests {
     #[test]
     fn a_future_row_shows_its_clock_time_at_its_due_moment() {
         let now = TODAY * 86_400;
-        let rows = today_entries(&[at_day(1, "standup", TODAY, 9 * 60 + 15)], TODAY, now, &zero);
+        let rows = today_entries(&[at_day(1, "standup", TODAY, 9 * 60 + 15)], TODAY, now, DAY, &zero);
         assert_eq!(rows[1].text, model::clock_label(9 * 60 + 15));
         assert_eq!(rows[1].date, (TODAY * 86_400 + (9 * 60 + 15) * 60) as f64);
     }
 
     #[test]
+    fn a_date_only_reminder_is_listed_at_the_all_day_time() {
+        let mut r = Reminder::new(1, "birthday");
+        r.due = Some(TODAY);
+        let now = TODAY * 86_400;
+        let rows = today_entries(&[r.clone()], TODAY, now, 8 * 60, &zero);
+        assert_eq!(rows[1].text, model::clock_label(8 * 60));
+        assert_eq!(rows[1].date, (now + 8 * 3600) as f64);
+        let rows = today_entries(&[r], TODAY, now, 17 * 60, &zero);
+        assert_eq!(rows[1].text, model::clock_label(17 * 60));
+    }
+
+    #[test]
     fn an_empty_day_says_nothing_is_due_and_keeps_the_summary_row() {
-        let rows = today_entries(&[], TODAY, 100, &zero);
+        let rows = today_entries(&[], TODAY, 100, DAY, &zero);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].text, "Nothing due");
     }
@@ -116,7 +129,7 @@ mod tests {
     #[test]
     fn the_rows_are_capped() {
         let items: Vec<Reminder> = (1..=20).map(|i| at_day(i, "r", TODAY, 600 + i as u16)).collect();
-        let rows = today_entries(&items, TODAY, TODAY * 86_400, &zero);
+        let rows = today_entries(&items, TODAY, TODAY * 86_400, DAY, &zero);
         assert_eq!(rows.len(), 1 + MAX_ROWS);
         assert_eq!(rows[0].text, "20 due", "the summary still counts all of them");
     }
@@ -132,7 +145,7 @@ mod tests {
     #[test]
     fn reload_today_sends_the_timeline_to_the_widgets_service() {
         let ctx = test_ctx();
-        let id = reload_today(&ctx, &[at_day(1, "standup", TODAY, 540)], TODAY, TODAY * 86_400, &zero);
+        let id = reload_today(&ctx, &[at_day(1, "standup", TODAY, 540)], TODAY, TODAY * 86_400, DAY, &zero);
         let sent = ctx.take_sent();
         assert_eq!(sent.len(), 1);
         match &sent[0] {

@@ -122,7 +122,7 @@ fn arrow_keys_select_rows_and_enter_and_space_act_on_the_selection() {
         .iter()
         .filter_map(|r| match r {
             Row::Item { idx, .. } => Some(app.data.items[*idx].id),
-            Row::Header(_) => None,
+            _ => None,
         })
         .collect();
     let (first, second) = (shown[0], shown[1]);
@@ -194,7 +194,7 @@ fn undo_bar_names_the_change_and_lasts_at_least_five_seconds() {
 #[test]
 fn new_reminders_from_a_smart_list_go_to_the_chosen_default_list() {
     let (mut app, ui, path) = app("default-list");
-    app.data.lists.push(model::ListDef { id: 2, name: "Work".into(), color: 1, icon: 0 });
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
     app.screen = Screen::Items;
     app.view = View::Smart(Smart::All);
     app.open_editor(&ui, None, 0.0);
@@ -224,8 +224,11 @@ fn export_list_is_a_markdown_checklist_with_subtasks_and_due_days() {
     let mut other = model::Reminder::new(4, "Elsewhere");
     other.list = 2;
     let data = model::Data {
-        lists: vec![model::ListDef { id: 1, name: "Groceries".into(), color: 0, icon: 0 }],
+        lists: vec![model::ListDef::new(1, "Groceries", 0, 0)],
         items: vec![milk, bread, rye, other],
+        groups: vec![],
+        templates: vec![],
+        smarts: vec![],
     };
     assert_eq!(
         model::export_markdown(&data, 1),
@@ -306,3 +309,705 @@ fn a_new_change_after_an_undo_drops_the_redo_steps() {
     cleanup(&path);
 }
 
+
+// ---- menu commands, sections, groups, templates, import and intents --------------------------------------------
+
+fn id_of(app: &Reminders, title: &str) -> u64 {
+    app.data.items.iter().find(|r| r.title == title).unwrap().id
+}
+
+/// The rows as text: titles (subtasks indented), `[section]` headers and `<group>` headers.
+fn shape(app: &Reminders) -> Vec<String> {
+    app.rows
+        .iter()
+        .map(|r| match r {
+            Row::Item { idx, depth } => format!("{}{}", if *depth == 1 { "  " } else { "" }, app.data.items[*idx].title),
+            Row::Section { name, .. } => format!("[{name}]"),
+            Row::Header(h) => format!("<{h}>"),
+        })
+        .collect()
+}
+
+fn render(app: &mut Reminders, ui: &Ui) {
+    use bifrost_app::kit::Surface;
+    let mut buf = vec![0u32; 1200 * 1920];
+    app.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, ui, 1000.0);
+}
+
+#[test]
+fn mark_due_date_as_sets_the_selected_reminder_and_undoes_in_one_step() {
+    use organize::MarkDue;
+    let (mut app, ui, path) = app("mark-due");
+    add(&mut app, &ui, "Pay rent", 0.0);
+    let id = id_of(&app, "Pay rent");
+    let today = app.today;
+    assert!(!app.mark_selected_due(&ui, MarkDue::Today), "nothing is selected");
+    app.selected = Some(id);
+    assert!(app.mark_selected_due(&ui, MarkDue::Tomorrow));
+    assert_eq!(app.data.items[0].due, Some(today + 1));
+    assert!(!app.mark_selected_due(&ui, MarkDue::Tomorrow), "already due that day");
+    assert_eq!(app.edit_titles().0, "Undo Mark Due Date as Tomorrow");
+    assert!(app.step_history(&ui, false));
+    assert_eq!(app.data.items[0].due, None);
+    cleanup(&path);
+}
+
+#[test]
+fn mark_all_overdue_as_today_is_one_undo_step() {
+    let (mut app, ui, path) = app("overdue");
+    for (i, title) in ["Milk", "Bread", "Eggs"].iter().enumerate() {
+        add(&mut app, &ui, title, i as f64 * 10.0);
+    }
+    let today = app.today;
+    let mut next = app.data.clone();
+    next.items[0].due = Some(today - 3);
+    next.items[1].due = Some(today - 1);
+    next.items[2].due = Some(today + 2);
+    assert!(app.commit(next));
+    let dues = |app: &Reminders| app.data.items.iter().map(|r| r.due).collect::<Vec<_>>();
+    assert!(app.has_overdue());
+    assert!(app.mark_overdue_today(&ui));
+    assert_eq!(dues(&app), [Some(today), Some(today), Some(today + 2)]);
+    assert!(!app.has_overdue());
+    assert!(!app.mark_overdue_today(&ui), "nothing left to move");
+    assert!(app.step_history(&ui, false), "one step brings them all back");
+    assert_eq!(dues(&app), [Some(today - 3), Some(today - 1), Some(today + 2)]);
+    cleanup(&path);
+}
+
+#[test]
+fn indent_outdent_and_hide_all_subtasks_work_on_the_selection() {
+    let (mut app, ui, path) = app("subtasks");
+    add(&mut app, &ui, "Plan trip", 0.0);
+    add(&mut app, &ui, "Book hotel", 10.0);
+    app.activate(&ui, Target::List(1), 20.0);
+    let (plan, hotel) = (id_of(&app, "Plan trip"), id_of(&app, "Book hotel"));
+    app.selected = Some(plan);
+    assert!(!app.can_indent(), "the first reminder has nothing above it");
+    assert!(!app.can_outdent());
+    app.selected = Some(hotel);
+    assert!(app.can_indent());
+    assert!(app.indent_selected(&ui));
+    assert_eq!(app.data.items[1].parent, Some(plan));
+    assert_eq!(shape(&app), ["Plan trip", "  Book hotel"]);
+    assert!(!app.can_indent(), "already a subtask");
+    assert!(app.can_outdent());
+
+    assert!(app.has_subtasks() && !app.subtasks_hidden());
+    app.toggle_all_subtasks(&ui);
+    assert!(app.subtasks_hidden());
+    assert_eq!(shape(&app), ["Plan trip"]);
+    app.toggle_all_subtasks(&ui);
+    assert_eq!(shape(&app), ["Plan trip", "  Book hotel"]);
+
+    assert!(app.outdent_selected(&ui));
+    assert_eq!(app.data.items[1].parent, None);
+    assert!(!app.outdent_selected(&ui), "a top-level reminder cannot outdent");
+    assert!(app.step_history(&ui, false), "Undo Outdent");
+    assert_eq!(app.data.items[1].parent, Some(plan));
+    cleanup(&path);
+}
+
+#[test]
+fn creation_dates_are_kept_and_sort_by_creation_date_puts_the_oldest_first() {
+    let (mut app, ui, path) = app("created");
+    for (i, title) in ["Alpha", "Beta", "Gamma"].iter().enumerate() {
+        add(&mut app, &ui, title, i as f64 * 10.0);
+    }
+    assert!(app.data.items.iter().all(|r| r.created.is_some()), "a new reminder is stamped");
+    let mut next = app.data.clone();
+    next.items[0].created = Some(300);
+    next.items[1].created = Some(100);
+    next.items[2].created = None;
+    assert!(app.commit(next));
+    app.activate(&ui, Target::List(1), 50.0);
+    assert_eq!(shape(&app), ["Alpha", "Beta", "Gamma"]);
+    app.set_sort(&ui, Sort::Created);
+    assert_eq!(app.sort(), Sort::Created);
+    assert_eq!(shape(&app), ["Gamma", "Beta", "Alpha"], "no date counts as the oldest");
+    assert_eq!(Sort::Created.label(), "Creation Date");
+    cleanup(&path);
+}
+
+#[test]
+fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
+    let (mut app, ui, path) = app("tiles");
+    assert_eq!(app.tiles().len(), 5);
+    app.toggle_smart(Smart::Flagged);
+    assert!(!app.smart_shown(Smart::Flagged));
+    assert_eq!(app.tiles().len(), 4);
+    assert!(!app.tiles().contains(&chrome::Tile::Smart(Smart::Flagged)));
+    app.toggle_smart(Smart::Flagged);
+    assert_eq!(app.tiles().len(), 5);
+
+    assert!(!app.toggle_pin(), "no list is open");
+    app.activate(&ui, Target::List(1), 1.0);
+    assert!(app.toggle_pin());
+    assert!(app.open_list_pinned());
+    assert_eq!(app.tiles().last(), Some(&chrome::Tile::List(1)));
+    let k = ui.pt(1.0);
+    let at = |app: &Reminders, i: usize| {
+        let r = app.tile_rect(&ui, i);
+        app.sidebar_target(&ui, (r.x + r.w / 2.0) * k, (r.y + r.h / 2.0) * k)
+    };
+    assert_eq!(at(&app, 5), Some(Target::List(1)), "the pinned tile opens the list");
+    assert_eq!(at(&app, 0), Some(Target::Smart(Smart::Today)));
+    let tiles: Vec<_> = app.controls(&ui).into_iter().filter(|n| (100..200).contains(&n.id)).map(|n| n.label).collect();
+    assert_eq!(tiles, ["Today", "Scheduled", "All", "Flagged", "Completed", "Reminders"]);
+    render(&mut app, &ui);
+    assert_eq!(app.edit_titles().0, "Undo Pin List");
+    assert!(app.toggle_pin());
+    assert_eq!(app.tiles().len(), 5);
+    cleanup(&path);
+}
+
+#[test]
+fn only_eight_lists_can_be_pinned() {
+    let (mut app, ui, path) = app("pin-cap");
+    let mut next = app.data.clone();
+    for id in 2..=10 {
+        next.lists.push(model::ListDef::new(id, format!("L{id}"), 0, 0));
+    }
+    for l in next.lists.iter_mut().take(MAX_PINNED) {
+        l.pinned = true;
+    }
+    assert!(app.commit(next));
+    app.activate(&ui, Target::List(10), 1.0);
+    assert!(!app.toggle_pin(), "a ninth pin is refused");
+    assert!(app.notice.is_some());
+    cleanup(&path);
+}
+
+#[test]
+fn sections_group_a_list_and_a_header_tap_edits_them() {
+    let (mut app, ui, path) = app("sections");
+    for (i, title) in ["Milk", "Bread", "Soap"].iter().enumerate() {
+        add(&mut app, &ui, title, i as f64 * 10.0);
+    }
+    assert!(!app.new_section(&ui, 5.0), "needs a list on screen");
+    app.activate(&ui, Target::List(1), 6.0);
+    assert!(app.new_section(&ui, 7.0));
+    assert_eq!(app.screen, Screen::ListEditor);
+    assert_eq!(app.list_edit_title(), "New Section");
+    app.key(&ui, Out::Text("Food".into()), 8.0);
+    app.activate(&ui, Target::Save, 9.0);
+    assert_eq!(app.screen, Screen::Items);
+    assert_eq!(shape(&app), ["Milk", "Bread", "Soap", "[Food]"]);
+
+    app.selected = Some(id_of(&app, "Bread"));
+    assert!(app.can_move_to_section());
+    let food = app.open_list_sections()[0].0;
+    assert!(!app.move_selected_to_section(&ui, Some(food + 5)), "an unknown section");
+    assert!(app.move_selected_to_section(&ui, Some(food)));
+    assert_eq!(shape(&app), ["Milk", "Soap", "[Food]", "Bread"]);
+    assert_eq!(app.selected_section(), Some(food));
+    render(&mut app, &ui);
+
+    // tapping the header opens the section's form; the name can change
+    let row = app.rows.iter().position(|r| matches!(r, Row::Section { .. })).unwrap();
+    let (x, y, w, h) = app.row_rect(&ui, row);
+    assert_eq!(app.hit(&ui, x + w / 2.0, y + h / 2.0), Some(Target::Section(row)));
+    app.activate(&ui, Target::Section(row), 10.0);
+    assert_eq!(app.title.text(), "Food");
+    assert_eq!(app.list_edit_title(), "Section");
+    assert!(app.form_rows().0.iter().any(|(t, _, _)| *t == Target::Delete));
+    assert!(!app.form_rows().0.iter().any(|(t, _, _)| *t == Target::Colors), "a section has only a name");
+    render(&mut app, &ui);
+    app.set_focus(Some(Field::Title), 11.0);
+    for _ in 0..4 {
+        app.key(&ui, Out::Backspace, 11.0);
+    }
+    app.key(&ui, Out::Text("Pantry".into()), 12.0);
+    app.activate(&ui, Target::Save, 13.0);
+    assert_eq!(shape(&app), ["Milk", "Soap", "[Pantry]", "Bread"]);
+
+    // moving out and deleting the section keep the reminders
+    assert!(app.move_selected_to_section(&ui, None));
+    assert_eq!(app.selected_section(), None);
+    assert_eq!(shape(&app), ["Milk", "Soap", "Bread", "[Pantry]"]);
+    let row = app.rows.iter().position(|r| matches!(r, Row::Section { .. })).unwrap();
+    app.activate(&ui, Target::Section(row), 14.0);
+    app.activate(&ui, Target::Delete, 15.0);
+    assert!(app.open_list_sections().is_empty());
+    assert_eq!(shape(&app), ["Milk", "Soap", "Bread"]);
+    assert!(app.step_history(&ui, false), "Undo Delete Section");
+    assert_eq!(app.open_list_sections().len(), 1);
+    cleanup(&path);
+}
+
+#[test]
+fn dragging_a_reminder_onto_another_section_moves_it_there() {
+    let (mut app, ui, path) = app("drag-section");
+    for (i, title) in ["One", "Two", "Three"].iter().enumerate() {
+        add(&mut app, &ui, title, i as f64 * 10.0);
+    }
+    let (one, two, three) = (id_of(&app, "One"), id_of(&app, "Two"), id_of(&app, "Three"));
+    let mut next = app.data.clone();
+    let a = organize::add_section(&mut next, 1, "A").unwrap();
+    let b = organize::add_section(&mut next, 1, "B").unwrap();
+    next.items[0].section = Some(a);
+    next.items[1].section = Some(b);
+    assert!(app.commit(next));
+    app.activate(&ui, Target::List(1), 50.0);
+    assert_eq!(shape(&app), ["Three", "[A]", "One", "[B]", "Two"]);
+    assert!(app.can_reorder());
+
+    // dropped below Two: the end of section B
+    let row_two = app.rows.iter().position(|r| matches!(r, Row::Item { idx, .. } if app.data.items[*idx].id == two)).unwrap();
+    let rect = app.row_rect(&ui, row_two);
+    app.drag = Some(Drag { id: three, y: rect.1 + rect.3 });
+    app.finish_drag(&ui);
+    assert_eq!(shape(&app), ["[A]", "One", "[B]", "Two", "Three"]);
+    assert_eq!(app.data.items.iter().find(|r| r.id == three).unwrap().section, Some(b));
+
+    // dropped just above B's header: the end of section A
+    let header_b = app.rows.iter().position(|r| matches!(r, Row::Section { id, .. } if *id == b)).unwrap();
+    let rect = app.row_rect(&ui, header_b);
+    app.drag = Some(Drag { id: three, y: rect.1 + 1.0 });
+    app.finish_drag(&ui);
+    assert_eq!(shape(&app), ["[A]", "One", "Three", "[B]", "Two"]);
+
+    // dropped on the first row: out of every section, to the top
+    let rect = app.row_rect(&ui, 0);
+    app.drag = Some(Drag { id: one, y: rect.1 });
+    app.finish_drag(&ui);
+    assert_eq!(app.data.items.iter().find(|r| r.id == one).unwrap().section, None);
+    assert_eq!(shape(&app)[0], "One");
+    cleanup(&path);
+}
+
+#[test]
+fn auto_categorize_adds_grocery_sections_and_is_one_undo_step() {
+    let (mut app, ui, path) = app("categorize");
+    for (i, title) in ["Milk", "Bread", "Dentist"].iter().enumerate() {
+        add(&mut app, &ui, title, i as f64 * 10.0);
+    }
+    assert!(!app.auto_categorize(&ui), "needs a list on screen");
+    app.activate(&ui, Target::List(1), 40.0);
+    assert!(app.auto_categorize(&ui));
+    assert_eq!(shape(&app), ["Dentist", "[Dairy and Eggs]", "Milk", "[Bakery]", "Bread"]);
+    assert!(app.notice.as_deref().is_some_and(|n| n.contains("2 reminders")));
+    assert!(!app.auto_categorize(&ui), "nothing more to place");
+    assert!(app.step_history(&ui, false));
+    assert!(app.open_list_sections().is_empty());
+    assert_eq!(shape(&app), ["Milk", "Bread", "Dentist"]);
+    cleanup(&path);
+}
+
+#[test]
+fn list_groups_fold_in_the_sidebar_and_deleting_one_keeps_its_lists() {
+    let (mut app, ui, path) = app("groups");
+    // sidebar rows are announced with ids 1000 + list index
+    let has_row = |app: &Reminders| app.controls(&ui).iter().any(|n| n.id == 1000);
+    app.new_group(&ui, 0.0);
+    assert_eq!(app.list_edit_title(), "New Group");
+    app.key(&ui, Out::Text("Home".into()), 1.0);
+    app.activate(&ui, Target::Save, 2.0);
+    let gid = app.data.groups[0].id;
+    assert_eq!(app.data.groups[0].name, "Home");
+
+    app.activate(&ui, Target::ListInfo(1), 3.0);
+    assert!(app.form_rows().0.iter().any(|(t, _, _)| *t == Target::ListGroup), "the form offers groups once one exists");
+    app.activate(&ui, Target::ListGroup, 4.0);
+    app.activate(&ui, Target::PinList, 5.0);
+    render(&mut app, &ui);
+    app.activate(&ui, Target::Save, 6.0);
+    assert_eq!(app.data.lists[0].group, Some(gid));
+    assert!(app.data.lists[0].pinned);
+    assert!(has_row(&app));
+    render(&mut app, &ui);
+
+    app.activate(&ui, Target::ToggleGroup(gid), 7.0);
+    assert!(!has_row(&app), "a folded group hides its lists");
+    app.activate(&ui, Target::ToggleGroup(gid), 8.0);
+    assert!(has_row(&app));
+
+    app.edit_group(&ui, gid, 9.0);
+    assert_eq!(app.title.text(), "Home");
+    app.activate(&ui, Target::Delete, 10.0);
+    assert!(app.data.groups.is_empty());
+    assert_eq!(app.data.lists[0].group, None);
+    assert!(has_row(&app));
+    cleanup(&path);
+}
+
+#[test]
+fn cycling_the_group_chooser_visits_every_group_then_none() {
+    let (mut app, ui, path) = app("group-cycle");
+    let mut next = app.data.clone();
+    next.groups = vec![model::ListGroup { id: 1, name: "A".into() }, model::ListGroup { id: 2, name: "B".into() }];
+    assert!(app.commit(next));
+    app.activate(&ui, Target::ListInfo(1), 0.0);
+    let group = |app: &Reminders| app.list_edit.as_ref().unwrap().group;
+    assert_eq!(group(&app), None);
+    for expected in [Some(1), Some(2), None, Some(1)] {
+        app.activate(&ui, Target::ListGroup, 1.0);
+        assert_eq!(group(&app), expected);
+    }
+    cleanup(&path);
+}
+
+#[test]
+fn a_list_saved_as_a_template_makes_new_open_lists() {
+    let (mut app, ui, path) = app("templates");
+    add(&mut app, &ui, "Socks", 0.0);
+    add(&mut app, &ui, "Shoes", 10.0);
+    let today = app.today;
+    let mut next = app.data.clone();
+    next.items[0].completed = true;
+    next.items[1].due = Some(today + 1);
+    assert!(app.commit(next));
+    assert!(!app.save_as_template(), "needs a list on screen");
+    app.activate(&ui, Target::List(1), 20.0);
+    assert!(app.save_as_template());
+    assert_eq!(app.templates().iter().map(|t| t.1.as_str()).collect::<Vec<_>>(), ["Reminders"]);
+    assert!(app.notice.as_deref().is_some_and(|n| n.contains("template")));
+    let tid = app.templates()[0].0;
+    assert!(app.new_list_from_template(&ui, tid));
+    assert_eq!(app.data.lists.len(), 2);
+    assert_eq!(app.view, View::List(2), "the new list opens");
+    let made: Vec<&Reminder> = app.data.items.iter().filter(|r| r.list == 2).collect();
+    assert_eq!(made.len(), 2);
+    assert!(made.iter().all(|r| !r.completed && r.due.is_none()));
+    assert!(!app.new_list_from_template(&ui, 99));
+    assert!(app.delete_template(tid));
+    assert!(app.templates().is_empty());
+    assert!(!app.delete_template(tid));
+    cleanup(&path);
+}
+
+#[test]
+fn import_reads_a_checklist_into_a_new_list_and_print_gives_it_back() {
+    let (mut app, ui, path) = app("import");
+    let text = "# Trip\n\n- [ ] Socks\n  - [x] Wool (2026-10-08 09:05)\n- [ ] Shoes\n";
+    assert!(app.import_checklist(&ui, text, "ignored"));
+    assert_eq!(app.data.lists.len(), 2);
+    assert_eq!(app.data.lists[1].name, "Trip");
+    assert_eq!(app.view, View::List(2));
+    assert_eq!(shape(&app), ["Socks", "Shoes"], "a completed reminder is hidden until Show Completed");
+    app.activate(&ui, Target::OptCompleted, 4.0);
+    assert_eq!(shape(&app), ["Socks", "  Wool", "Shoes"]);
+    let wool = app.data.items.iter().find(|r| r.title == "Wool").unwrap();
+    assert!(wool.completed && wool.parent.is_some() && wool.time == Some(9 * 60 + 5));
+    let (name, body) = app.printable_list().unwrap();
+    assert_eq!(name, "Trip");
+    assert_eq!(body, "# Trip\n\n- [ ] Socks\n  - [x] Wool (2026-10-08 09:05)\n- [ ] Shoes\n", "the printout is what was imported");
+    assert!(!app.import_checklist(&ui, "nothing to read here", "x"));
+    assert_eq!(app.notice.as_deref(), Some("Nothing to import"));
+    app.activate(&ui, Target::Smart(Smart::All), 5.0);
+    assert!(app.printable_list().is_none(), "a smart list is not printed");
+    assert_eq!(app.edit_titles().0, "Undo Import List");
+    cleanup(&path);
+}
+
+#[test]
+fn the_list_and_search_intents_change_what_is_shown() {
+    let (mut app, ui, path) = app("intents");
+    add(&mut app, &ui, "Water plants", 0.0);
+    let id = app.create_list(&ui, "  Garden  ").unwrap();
+    assert_eq!(app.data.lists.iter().find(|l| l.id == id).unwrap().name, "Garden");
+    assert!(app.create_list(&ui, "  ").is_err());
+    assert_eq!(app.open_list_named(&ui, "garden"), Ok("Garden".to_string()));
+    assert_eq!(app.view, View::List(id));
+    assert!(app.open_list_named(&ui, "nope").is_err());
+    assert_eq!(app.open_smart_named(&ui, " flagged "), Ok(Smart::Flagged));
+    assert_eq!(app.view, View::Smart(Smart::Flagged));
+    assert!(app.open_smart_named(&ui, "later").is_err());
+    assert_eq!(app.search_for(&ui, "plants", 5.0), Ok(1));
+    assert!(app.searching);
+    assert_eq!(app.search_for(&ui, "zebra", 6.0), Ok(0));
+    assert!(app.search_for(&ui, "   ", 7.0).is_err());
+    app.open_editor(&ui, None, 8.0);
+    assert!(app.open_list_named(&ui, "Garden").is_err(), "not while a reminder is being written");
+    assert!(app.search_for(&ui, "plants", 9.0).is_err());
+    cleanup(&path);
+}
+
+#[test]
+fn moving_a_reminder_to_another_list_drops_its_section() {
+    let (mut app, ui, path) = app("section-list-move");
+    add(&mut app, &ui, "Milk", 0.0);
+    let mut next = app.data.clone();
+    next.lists.push(model::ListDef::new(2, "Other", 1, 0));
+    let s = organize::add_section(&mut next, 1, "Dairy").unwrap();
+    next.items[0].section = Some(s);
+    assert!(app.commit(next));
+    let id = id_of(&app, "Milk");
+    app.open_editor(&ui, Some(id), 10.0);
+    app.activate(&ui, Target::MoveList, 11.0);
+    app.activate(&ui, Target::Save, 12.0);
+    let r = app.data.items.iter().find(|r| r.id == id).unwrap();
+    assert_eq!((r.list, r.section), (2, None), "a section belongs to one list");
+    cleanup(&path);
+}
+
+#[test]
+fn quick_add_reads_the_line_as_a_reminder_in_the_default_list() {
+    let (mut app, ui, path) = app("quick-add");
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
+    app.opts.default_list = Some(2);
+    let id = app.quick_add(&ui, "  fix   bug tomorrow 9am !!!  ", 0.0).unwrap();
+    let r = app.data.items.iter().find(|r| r.id == id).unwrap();
+    assert_eq!((r.title.as_str(), r.list, r.priority), ("fix bug", 2, 3));
+    assert_eq!((r.due, r.time), (Some(app.today + 1), Some(9 * 60)));
+    assert!(r.created.is_some());
+    assert_eq!(app.edit_titles().0, "Undo New Reminder");
+    assert!(app.quick_add(&ui, "   ", 1.0).is_err(), "nothing copied");
+    assert!(app.quick_add(&ui, "tomorrow", 2.0).is_ok(), "a date alone stays the title");
+    assert_eq!(app.data.items.len(), 2);
+    cleanup(&path);
+}
+
+#[test]
+fn a_custom_smart_list_is_made_from_its_form_shows_in_the_sidebar_and_can_be_edited_and_deleted() {
+    let (mut app, ui, path) = app("smart-list");
+    add(&mut app, &ui, "Milk #home", 0.0);
+    add(&mut app, &ui, "Bread", 10.0);
+    let mut next = app.data.clone();
+    next.items[0].flagged = true;
+    assert!(app.commit(next));
+
+    assert!(app.new_smart_list(&ui, 20.0));
+    assert_eq!(app.screen, Screen::ListEditor);
+    assert_eq!(app.list_edit_title(), "New Smart List");
+    let rows: Vec<Target> = app.form_rows().0.iter().map(|(t, _, _)| *t).collect();
+    assert!(rows.contains(&Target::Colors) && !rows.contains(&Target::Icons) && !rows.contains(&Target::PinList));
+    for rule in RuleRow::ALL {
+        assert!(rows.contains(&Target::Rule(rule)), "{rule:?} is on the form");
+    }
+    assert!(!rows.contains(&Target::Delete), "nothing to delete in a new smart list");
+    app.key(&ui, Out::Text("Home flags".into()), 21.0);
+    app.activate(&ui, Target::Rule(RuleRow::Flagged), 22.0);
+    app.activate(&ui, Target::Rule(RuleRow::Tag), 23.0);
+    render(&mut app, &ui);
+    app.activate(&ui, Target::Save, 24.0);
+
+    assert_eq!(app.data.smarts.len(), 1);
+    let (id, rules) = (app.data.smarts[0].id, app.data.smarts[0].rules);
+    assert_eq!(app.data.smarts[0].name, "Home flags");
+    assert_eq!(rules.flagged, model::FlagRule::Flagged);
+    assert_eq!(rules.tag, Some(model::tag_key("home")));
+    assert_eq!(app.view, View::Custom(id), "the new smart list opens");
+    assert_eq!(shape(&app), ["Milk #home"]);
+    render(&mut app, &ui);
+    // the sidebar announces it as a row, with its count
+    let row = app.controls(&ui).into_iter().find(|n| n.id == 1500).expect("a smart list row");
+    assert_eq!((row.label.as_str(), row.value.as_str()), ("Home flags", "1"));
+
+    app.activate(&ui, Target::Smart(Smart::All), 30.0);
+    app.activate(&ui, Target::Custom(id), 31.0);
+    assert_eq!(app.view, View::Custom(id));
+
+    // the form opens again with the saved rules; the rules cycle and a save keeps them
+    app.activate(&ui, Target::SmartInfo(id), 32.0);
+    assert_eq!(app.title.text(), "Home flags");
+    assert_eq!(app.list_edit_title(), "Smart List");
+    assert!(app.form_rows().0.iter().any(|(t, _, _)| *t == Target::Delete));
+    app.activate(&ui, Target::Rule(RuleRow::Priority), 33.0);
+    app.activate(&ui, Target::Rule(RuleRow::List), 34.0);
+    app.activate(&ui, Target::Rule(RuleRow::Due), 35.0);
+    app.activate(&ui, Target::Save, 36.0);
+    let rules = app.data.smarts[0].rules;
+    assert_eq!((rules.priority, rules.list, rules.due), (1, Some(1), model::DueRule::Overdue));
+    assert_eq!(shape(&app), Vec::<String>::new(), "no reminder is overdue with a priority");
+    assert_eq!(app.edit_titles().0, "Undo Edit Smart List");
+
+    app.activate(&ui, Target::SmartInfo(id), 40.0);
+    app.activate(&ui, Target::Delete, 41.0);
+    assert!(app.data.smarts.is_empty());
+    assert_eq!(app.view, View::Smart(Smart::All), "the deleted smart list is not left open");
+    assert!(app.step_history(&ui, false), "Undo Delete Smart List");
+    assert_eq!(app.data.smarts.len(), 1);
+    cleanup(&path);
+}
+
+#[test]
+fn the_list_rule_cycles_through_the_lists_and_back_to_any() {
+    let (mut app, ui, path) = app("smart-list-cycle");
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
+    assert!(app.new_smart_list(&ui, 0.0));
+    let list = |app: &Reminders| app.list_edit.as_ref().unwrap().rules.list;
+    assert_eq!(list(&app), None);
+    for expected in [Some(1), Some(2), None] {
+        app.activate(&ui, Target::Rule(RuleRow::List), 1.0);
+        assert_eq!(list(&app), expected);
+    }
+    let tag = |app: &Reminders| app.list_edit.as_ref().unwrap().rules.tag;
+    app.activate(&ui, Target::Rule(RuleRow::Tag), 2.0);
+    assert_eq!(tag(&app), None, "no reminder carries a tag yet");
+    cleanup(&path);
+}
+
+#[test]
+fn settings_apply_at_once_are_saved_beside_the_reminders_and_load_again() {
+    let (mut app, ui, path) = app("settings");
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
+    add(&mut app, &ui, "Pay rent", 0.0);
+    let today = app.today;
+    let mut next = app.data.clone();
+    next.items[0].due = Some(today);
+    assert!(app.commit(next));
+    assert_eq!((app.all_day_min(), app.badge_count()), (9 * 60, 1), "the defaults");
+
+    assert!(app.open_settings(10.0));
+    assert!(!app.open_settings(11.0), "not while a form is open");
+    assert_eq!(app.screen, Screen::ListEditor);
+    assert_eq!(app.list_edit_title(), "Settings");
+    let rows: Vec<Target> = app.form_rows().0.iter().map(|(t, _, _)| *t).collect();
+    assert_eq!(rows, [Target::Setting(SettingRow::DefaultList), Target::Setting(SettingRow::AllDayAlert), Target::Setting(SettingRow::Badge)]);
+    render(&mut app, &ui);
+
+    let gen = app.generation();
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 12.0);
+    assert_eq!((app.settings.default_list, app.opts.default_list), (Some(1), Some(1)));
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 13.0);
+    assert_eq!(app.settings.default_list, Some(2));
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 14.0);
+    assert_eq!(app.settings.default_list, None, "back to Automatic");
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 15.0);
+    app.activate(&ui, Target::Setting(SettingRow::AllDayAlert), 16.0);
+    assert_eq!(app.all_day_min(), 10 * 60);
+    app.activate(&ui, Target::Setting(SettingRow::Badge), 17.0);
+    assert_eq!(app.badge_count(), 0, "the badge is off");
+    assert_eq!(app.due_count(), 1, "the reminders themselves are unchanged");
+    assert!(app.generation() > gen, "the alert planner and the widget are told");
+    render(&mut app, &ui);
+    app.activate(&ui, Target::Save, 18.0);
+    assert_eq!(app.screen, Screen::Items, "Done closes the form");
+
+    // a new run reads them back from settings.tsv, and the default list is in force
+    let again = Reminders::new(&ui, 1200, 1920, path.clone(), Wall { unix: 1_791_073_380, offset: 0, at: 0.0 });
+    assert_eq!((again.settings.default_list, again.all_day_min(), again.settings.badge), (Some(1), 10 * 60, false));
+    assert_eq!(again.opts.default_list, Some(1));
+    // the View Options list chooser writes the same setting
+    app.activate(&ui, Target::OptDefaultList(Some(2)), 20.0);
+    assert_eq!(settings::load(&path.with_file_name("settings.tsv")).default_list, Some(2));
+    // Undo steps through the reminders and leaves the settings alone
+    assert!(app.step_history(&ui, false));
+    assert_eq!(app.settings.default_list, Some(2));
+    cleanup(&path);
+}
+
+#[test]
+fn urgent_and_time_zone_are_set_in_the_details_form_and_urgent_from_the_menu() {
+    let (mut app, ui, path) = app("urgent-zone");
+    add(&mut app, &ui, "Milk", 0.0);
+    let id = id_of(&app, "Milk");
+    let has = |app: &Reminders, t: Target| app.form_rows().0.iter().any(|(row, _, _)| *row == t);
+    app.open_editor(&ui, Some(id), 10.0);
+    assert!(!has(&app, Target::TimeZone) && !has(&app, Target::Urgent), "both need a date");
+    app.activate(&ui, Target::Due, 11.0);
+    assert!(has(&app, Target::TimeZone) && has(&app, Target::Urgent));
+    app.activate(&ui, Target::TimeZone, 12.0);
+    app.activate(&ui, Target::TimeZone, 13.0);
+    app.activate(&ui, Target::Urgent, 14.0);
+    render(&mut app, &ui);
+    app.activate(&ui, Target::Save, 15.0);
+    let r = app.data.items.iter().find(|r| r.id == id).unwrap();
+    assert_eq!((r.tz.as_deref(), r.urgent), (Some("Atlantic/Reykjavik"), true));
+    app.activate(&ui, Target::Smart(Smart::All), 16.0);
+    render(&mut app, &ui);
+
+    // the zone cycles back to the device, and clearing the date clears both
+    app.open_editor(&ui, Some(id), 20.0);
+    for _ in 0..zones::CHOICES.len() - 1 {
+        app.activate(&ui, Target::TimeZone, 21.0);
+    }
+    assert_eq!(app.editor.as_ref().unwrap().draft.tz, None, "after the last zone comes the device again");
+    app.activate(&ui, Target::TimeZone, 22.0);
+    app.activate(&ui, Target::Due, 23.0);
+    let draft = &app.editor.as_ref().unwrap().draft;
+    assert_eq!((draft.due, draft.tz.clone(), draft.urgent), (None, None, false));
+    app.activate(&ui, Target::Cancel, 24.0);
+
+    // Reminder > Mark as Urgent works on the selection, in one undo step each way
+    app.selected = Some(id);
+    assert!(app.selected_urgent());
+    assert!(app.toggle_urgent_selected(&ui));
+    assert!(!app.selected_urgent());
+    assert_eq!(app.edit_titles().0, "Undo Remove Urgent Mark");
+    assert!(app.toggle_urgent_selected(&ui));
+    assert_eq!(app.edit_titles().0, "Undo Mark as Urgent");
+    app.selected = None;
+    assert!(!app.toggle_urgent_selected(&ui));
+    cleanup(&path);
+}
+
+/// A PNG signature and header for a picture of `w` x `h`, enough for the size checks (it does not decode).
+fn png_header(w: u32, h: u32) -> Vec<u8> {
+    let mut b = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D', b'R'];
+    b.extend(w.to_be_bytes());
+    b.extend(h.to_be_bytes());
+    b.extend([8, 6, 0, 0, 0]);
+    b
+}
+
+#[test]
+fn pictures_are_attached_in_the_form_kept_on_done_and_deleted_on_cancel() {
+    let (mut app, ui, path) = app("pictures");
+    add(&mut app, &ui, "Plan trip", 0.0);
+    let id = id_of(&app, "Plan trip");
+    let dir = path.with_file_name("attachments");
+    let files = |dir: &std::path::Path| std::fs::read_dir(dir).map(|d| d.flatten().count()).unwrap_or(0);
+    let has = |app: &Reminders, t: Target| app.form_rows().0.iter().any(|(row, _, _)| *row == t);
+
+    app.open_editor(&ui, Some(id), 10.0);
+    assert!(has(&app, Target::AddImage) && !has(&app, Target::Thumbs) && !has(&app, Target::RemoveImage));
+    assert!(!app.take_image_request());
+    app.activate(&ui, Target::AddImage, 11.0);
+    assert!(app.take_image_request(), "the form asks for the open panel");
+    assert!(!app.take_image_request(), "once");
+    assert!(app.attach_image(b"not a picture").is_err());
+    assert!(app.attach_image(&png_header(5000, 5000)).is_err(), "too many pixels");
+    app.attach_image(&png_header(40, 30)).unwrap();
+    app.attach_image(&png_header(20, 20)).unwrap();
+    assert!(has(&app, Target::Thumbs) && has(&app, Target::RemoveImage));
+    assert_eq!(files(&dir), 2);
+    render(&mut app, &ui);
+    // Cancel throws the new pictures away
+    app.activate(&ui, Target::Cancel, 12.0);
+    assert_eq!(files(&dir), 0);
+    assert!(app.data.items[0].attachments.is_empty());
+
+    // Done keeps them, and they show on the list row
+    app.open_editor(&ui, Some(id), 20.0);
+    app.attach_image(&png_header(40, 30)).unwrap();
+    app.attach_image(&png_header(20, 20)).unwrap();
+    app.activate(&ui, Target::Save, 21.0);
+    assert_eq!(app.data.items[0].attachments.len(), 2);
+    assert_eq!(files(&dir), 2);
+    app.activate(&ui, Target::Smart(Smart::All), 22.0);
+    render(&mut app, &ui);
+
+    // removing one in the form and saving deletes its file; a duplicate that shares a picture keeps it
+    app.open_editor(&ui, Some(id), 30.0);
+    app.activate(&ui, Target::RemoveImage, 31.0);
+    app.activate(&ui, Target::Save, 32.0);
+    assert_eq!(app.data.items[0].attachments.len(), 1);
+    assert_eq!(files(&dir), 1);
+    app.open_editor(&ui, Some(id), 40.0);
+    app.activate(&ui, Target::Duplicate, 41.0);
+    assert_eq!(app.data.items.len(), 2);
+    app.open_editor(&ui, Some(id), 50.0);
+    app.activate(&ui, Target::RemoveImage, 51.0);
+    app.activate(&ui, Target::Save, 52.0);
+    assert!(app.data.items[0].attachments.is_empty());
+    assert_eq!(files(&dir), 1, "the copy still uses it");
+    cleanup(&path);
+}
+
+#[test]
+fn a_reminder_holds_four_pictures_and_the_form_must_be_open_to_add_one() {
+    let (mut app, ui, path) = app("pictures-cap");
+    assert!(app.attach_image(&png_header(8, 8)).is_err(), "no form is open");
+    app.activate(&ui, Target::New, 0.0);
+    for _ in 0..attach::MAX_PER_REMINDER {
+        app.attach_image(&png_header(8, 8)).unwrap();
+    }
+    assert!(app.attach_image(&png_header(8, 8)).is_err());
+    app.activate(&ui, Target::AddImage, 1.0);
+    assert!(!app.take_image_request(), "the form does not ask for a fifth");
+    assert!(app.notice.is_some());
+    app.activate(&ui, Target::Cancel, 2.0);
+    cleanup(&path);
+}
