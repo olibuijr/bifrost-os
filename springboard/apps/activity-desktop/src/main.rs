@@ -18,7 +18,6 @@ mod sample;
 mod sample_proc;
 #[allow(dead_code)]
 mod window;
-mod deltas;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
