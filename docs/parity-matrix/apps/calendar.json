@@ -23,8 +23,8 @@
    "area": "menu",
    "apple": "PreferencesPanel.nib natural-language creation; File > New Event",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/quickentry.rs:31",
-   "note": "Event > Quick Event... (Cmd+Shift+N) opens a sheet with one line; it previews the title, day, time and place read from the sentence and Add saves the event at once. File > New Event from Text still reads the pasteboard; built on parity/team-d-calendar; not yet verified on Midget",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/quick.rs::split_notes; springboard/apps/calendar-desktop/src/calendar/quickentry.rs::preview",
+   "note": "Event > Quick Event... (Cmd+Shift+N) opens a sheet with one line; it previews the title, day, time, place and notes read from the sentence (text after the note marker), and Add saves the event at once. The reading is tested headless in tests/parity_app-calendar.rs. File > New Event from Text still reads the pasteboard; not yet verified on Midget. Left: invitees are not read from the sentence, and the line is a sheet rather than a toolbar popover.",
    "wire": "Move the line into a toolbar popover opened by the New Event button, and read notes and invitees from the sentence."
   },
   {
@@ -105,7 +105,7 @@
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/main.rs:257",
-   "note": "Edit > Cut/Copy/Paste from the shell Edit menu now act on the saved event being edited (Cut = copy then delete with Undo; Paste adds the pasteboard event to the selected day); Event > Cut Event (Shift-Command-X). Copy/Cut work only from the open editor; the month and week grids have no selected-event state, and text selection copy inside the editor fields is not routed.",
+   "note": "Edit > Cut/Copy/Paste from the shell Edit menu now act on the saved event being edited (Cut = copy then delete with Undo; Paste adds the pasteboard event to the selected day); Event > Cut Event (Shift-Command-X). Copy/Cut work only from the open editor; the month and week grids have no selected-event state, and text selection copy inside the editor fields is not routed. A custom repeat rule and custom alarms now go with the event through copy and paste (clip.rs copy_text and paste, tested headless in tests/parity_app-calendar.rs).",
    "wire": "Select an event with a single click (the grid opens it today) and keep custom repeat rules when pasting once the custom repeat sheet exists."
   },
   {
@@ -140,8 +140,8 @@
    "area": "document",
    "apple": "BackupRestore.nib; File > Export > Calendar Archive",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:232",
-   "note": "File > Export Calendar Archive writes Calendar Archive.bfcal (events.tsv and calendar.ics in one file, calendar/archive.rs); File > Import Calendar Archive... replaces the calendar and keeps events.tsv.bak. Export goes to Documents/Calendar Export, not a save panel.",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:232; springboard/apps/calendar-desktop/src/calendar/archive.rs::import_archive",
+   "note": "File > Export Calendar Archive writes Calendar Archive.bfcal (events.tsv and calendar.ics in one file, calendar/archive.rs), through the save job in main.rs. File > Import Calendar Archive... adds the events the calendar does not hold and never removes any (archive.rs merge_events), keeping events.tsv.bak.",
    "wire": "Check File > Export Archive... and Import Archive... on Midget; an import adds what is missing and never removes, so a restore over a changed calendar is a merge."
   },
   {
@@ -176,8 +176,8 @@
    "area": "toolbar",
    "apple": "MainMenu.nib Edit > Search; toolbar search field",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:108",
-   "note": "Go > Search Events... (Command-F) and a toolbar button open a search screen with a query field and scrolling result list; Return or a click opens the event. Uses its own list rather than the kit search_field; no search tokens or location/notes scoping.",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs::split_range; springboard/apps/calendar-desktop/src/calendar/sheets.rs:108",
+   "note": "Go > Search Events... (Command-F) and a toolbar button open a search screen with a query field and scrolling result list; Return or a click opens the event. Saved events match on title, location and notes, and from:YYYY-MM-DD and to:YYYY-MM-DD words limit the hits to a date range (search.rs, tested headless in tests/parity_app-calendar.rs). Uses its own list rather than the kit search_field; the caret does not move by click.",
    "wire": "Match locations and notes of saved events (the store keeps them, search.rs reads only titles for them), search by date range, and move the caret by click. The compliance snapshot needs a re-bless on Midget for the new toolbar field."
   },
   {
@@ -221,8 +221,8 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib General/Advanced panes",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:74",
-   "note": "File > Settings... (Command-comma) sheet: week start, day start hour, default duration; persisted in calendar-prefs.txt (calendar/prefs.rs) and used by the month grid, week view, scroll position and new events. Missing: day end, days per week, default calendar, a separate Settings window (no shell Settings hook found).",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/sheets.rs:74; springboard/apps/calendar-desktop/src/main.rs:85",
+   "note": "File > Settings... (Command-comma) sheet: week start, day start hour, default duration; persisted in calendar-prefs.txt (calendar/prefs.rs) and used by the month grid, week view, scroll position and new events. The default calendar is a Default Calendar submenu (main.rs:85). Missing: day end, days per week, and a separate Settings window (no shell Settings hook found).",
    "wire": "Add day end hour, days per week and a default calendar (needs multiple calendars) to the Settings menu in main.rs."
   },
   {
@@ -311,8 +311,8 @@
    "area": "settings",
    "apple": "View > Show Travel Time; Time to Leave setting",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:287",
-   "note": "A Travel Time row in the event form (none, 15, 30, 45 or 60 minutes) saved with the event (extras.rs). Not yet shown in the grid or used for alerts. Left: padding the event block by the travel time, and Time to Leave, which needs a routing service.",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/layout.rs::travel_span; springboard/apps/calendar-desktop/src/calendar/timeview.rs::grid_span; springboard/apps/calendar-desktop/src/calendar/pickers.rs:287",
+   "note": "A Travel Time row in the event form (none, 15, 30, 45 or 60 minutes) saved with the event (extras.rs). The Day and Week grids pad the event block upwards by its travel time, never before midnight (layout.rs travel_span, tested headless in tests/parity_app-calendar.rs). Not used for alerts. Left: Time to Leave, which needs a routing service.",
    "wire": "Add a travel-time field in the editor that pads the event block; Time to Leave alerts once a maps routing service exists."
   },
   {
@@ -347,8 +347,8 @@
    "area": "intent",
    "apple": "Info.plist NSUserActivityTypes",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:385",
-   "note": "Intents create-event and show-date and control methods calendar.state, calendar.show_date, calendar.create_event. No show-event intent and no user-activity handoff.",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/intents.rs:19; springboard/apps/calendar-desktop/src/main.rs:385",
+   "note": "Intents show-date, show-event and create-event (intents.rs), and control methods calendar.state, calendar.show_date, calendar.create_event. No user-activity handoff.",
    "wire": "Add a continue-activity hook (Search items for events), a show-day intent that picks the view, and a reply with the event for create-event."
   }
  ]

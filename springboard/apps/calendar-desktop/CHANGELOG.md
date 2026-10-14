@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.0 — 2026-10-14
+
+- Event > Quick Event: a note after "note:" or "notes:" in the sentence becomes the event's notes, and the preview has a
+  Notes row.
+- Day and Week: an event with a travel time is drawn from its travel time before the start, so the time to get there
+  shows in the grid. The block never starts before midnight.
+- Go > Search Events...: from:YYYY-MM-DD and to:YYYY-MM-DD words limit the results to a date range, inclusive. A date
+  range alone lists the events in it.
+- Edit > Copy, Cut and Paste keep a custom repeat rule and custom alarms with the event, not only the presets.
+
 ## 1.14.0 — 2026-10-13
 
 - File > Settings... (Command-comma): week start, day start hour, default event length and default alerts for timed and
