@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-10-14
+
+- Add the Passwords store icon.
+
 ## 0.2.0
 
 - Passwords lists three kinds of item in the shared passwords group: Logins, Notes and Certificates tabs. A note or

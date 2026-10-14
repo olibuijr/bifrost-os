@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2 — 2026-10-14
+
+- Export the Disk Utility icon at the store's required 180 × 180 size.
+
 ## 0.7.1 — 2026-10-14
 
 - Run disk operations through the shared utility queue and wake the app loop when each result is ready, without polling.

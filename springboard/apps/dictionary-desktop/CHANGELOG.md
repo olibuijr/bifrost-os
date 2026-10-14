@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3 — 2026-10-14
+
+- Export the Dictionary icon at the store's required 180 × 180 size.
+
 ## 0.5.2 — 2026-10-14
 
 - Run printing on the shared utility queue and declare sudden termination safe when the app configures.
