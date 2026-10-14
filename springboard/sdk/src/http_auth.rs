@@ -80,7 +80,7 @@ pub fn parse_www_authenticate(value: &str) -> Option<HTTPAuthChallenge> {
 }
 
 /// Splits challenge parameters on commas that are outside quoted strings.
-fn split_params(s: &str) -> Vec<&str> {
+pub(crate) fn split_params(s: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut start = 0;
     let mut quoted = false;
