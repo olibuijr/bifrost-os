@@ -59,9 +59,9 @@
     {
       "feature": "BifrOSt account sign-in (cloud)",
       "apple": "Not part of Accounts; Apple's equivalent is Apple Account sign-in",
-      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (BifrOSt Cloud API, separate repo)",
-      "status": "gap",
-      "note": "The cloud account lives on the server and is not exposed to apps through an SDK API in bifrost-os."
+      "bifrost": "springboard/sdk/src/cloud_account.rs (normalize_email, SignIn::request, sign_in, parse_sign_in, sign_out_request); springboard/sdk/tests/parity_sdk-rest-15.rs",
+      "status": "partial",
+      "note": "The sign-in and sign-out requests, the answer reader and the error mapping of the cloud HTTP API are tested headless with canned answers. Gap: the transport runs only on the URL session, which needs the lab machine and a live cloud server; signup, profile, devices and the session store are not exposed."
     },
     {
       "feature": "Errors (ACErrorCode, ACErrorDomain)",
