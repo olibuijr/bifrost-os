@@ -2,6 +2,7 @@
 
 ## 0.5.3 — 2026-10-14
 
+- Require shell 0.8.0 for the launcher's screen permission.
 - Use configured content size instead of a fixed-resolution initial geometry.
 
 ## 0.5.2
