@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.1.1
+## 0.1.1 — 2026-10-14
 
-- Moved disk and scanner requests to a serial utility dispatch queue, with replies waking the app on the main queue; removed in-flight polling, enabled sudden termination, and removed the fixed initial window size.
+- Move disk and scanner requests to a serial utility dispatch queue, with replies waking the app on the main queue; remove in-flight polling, enable sudden termination, and remove the fixed initial window size.
+- Add the store icon and derive the initial layout from the host-provided window size.
 
 ## 0.1.0
 

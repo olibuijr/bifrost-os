@@ -3,11 +3,11 @@
 ## 0.12.2 — 2026-10-14
 
 - Draw and hit-test the mailbox toolbar and sidebar with the shared Golden Gate widgets.
+- Move message-specific writing and search commands into a Writing menu to avoid duplicating the shell Edit menu.
 
 ## 0.12.1
 
 - Removed the duplicate Edit menu; message specific text actions now appear in Message. Added the SDK and design compliance test harness.
-
 ## 0.12.0 — 2026-10-14
 
 Reminders:

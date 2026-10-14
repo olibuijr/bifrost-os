@@ -138,6 +138,7 @@ impl PrintCenter {
             link,
             in_flight: 0,
             next_poll: 0.0,
+            // The app host configures the actual client size before the first frame.
             size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,

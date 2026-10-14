@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.7.1
+## 0.7.1 — 2026-10-14
 
-- Fixed appearance-aware progress tracks and document tiles, removed a fixed initial window size, and moved network probes onto the utility dispatch queue.
+- Fix appearance-aware progress tracks and document tiles, remove a fixed initial window size, and move network probes onto the utility dispatch queue.
+- Add the store icon and derive the initial layout from the host-provided window size.
 
 ## 0.7.0
 
