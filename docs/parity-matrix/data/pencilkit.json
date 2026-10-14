@@ -31,9 +31,9 @@
   {
    "feature": "Ink type (PKInk: type, colour, width)",
    "apple": "PKInk",
-   "bifrost": "springboard/ui/src/drawing.rs (Ink, InkKind, Drawing::to_text, Drawing::from_text); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (INK_COLOR, pen ink only)",
+   "bifrost": "springboard/ui/src/drawing.rs (Ink, InkKind, Drawing::to_text, Drawing::from_text); springboard/ui/src/markup_ink.rs (InkTool, InkCanvas)",
    "status": "partial",
-   "note": "Each stroke carries an ink with a kind (pen, marker or pencil), a packed colour and a width, saved and read back by the drawing text form; verified headless by the headless_ink_kinds and headless_blending tests in springboard/ui/tests/parity_sdk-tests-02.rs. The shell and the sketch pad still fix width and opacity per tool, and the ink catalogue is not built. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "Each stroke carries an ink with a kind, packed colour and width; InkCanvas captures pen, marker, pencil and eraser gestures with per-tool width and opacity. Headless tests cover the canvas and drawing model. The shell editor and sketch pad still keep their own stroke state, and no pressure-sensitive ink catalogue is built. Midget verification remains open."
   },
   {
    "feature": "Tool picker (PKToolPicker)",
@@ -45,9 +45,9 @@
   {
    "feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)",
    "apple": "PKInkingTool, PKEraserTool",
-   "bifrost": "springboard/src/shell/markup.rs:20 (enum Tool: Pen, Marker, Pencil, Eraser), :27 (TOOLS); springboard/tests/parity_sdk-tests-05.rs; springboard/apps/freeform-desktop/src/freeform.rs:183 (enum Tool: Pen, Pencil, Marker, Eraser, plus lasso and shapes); wired: springboard/ui/src/drawing.rs (InkKind::Pencil) via springboard/apps/freeform-desktop/src/freeform.rs (Tool::Pencil, pen_ink); springboard/ui/src/drawing.rs (Drawing::erase_strokes_at, stroke-level erasing model); built on parity/team-j-pencilkit; not yet verified on Midget",
+   "bifrost": "springboard/ui/src/markup_ink.rs (InkTool, InkCanvas); springboard/src/shell/markup.rs:20 (four tools); springboard/apps/freeform-desktop/src/freeform.rs:183 (four tools, lasso and shapes)",
    "status": "partial",
-   "note": "The markup editor's four tools have distinct widths and opacity, tested headless in springboard/tests/parity_sdk-tests-05.rs. Freeform has the same four plus a lasso and shapes. The stroke-level eraser (Drawing::erase_strokes_at) is tested in the ui crate, but no editor calls it yet. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "InkCanvas models the four tools, captures pointer gestures and erases touched strokes; the shell and Freeform editors still keep separate state and do not call it. Headless tests cover the model. No pressure input is supplied, and Midget verification remains open."
   },
   {
    "feature": "Lasso selection and transform (PKLassoTool)",

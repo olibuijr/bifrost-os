@@ -647,6 +647,7 @@ pub mod cursor_art;
 pub mod screen;
 pub mod menu;
 pub mod menu_extras;
+pub mod markup_ink;
 pub mod quick_actions;
 pub mod launch;
 pub mod detect;
