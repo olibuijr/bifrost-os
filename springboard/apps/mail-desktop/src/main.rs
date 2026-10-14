@@ -1,7 +1,7 @@
 //! Mail as an installed BifrOSt desktop app: hosts `window::MailWindow` through the SDK.
 
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, AppMenu, Command, Commands, Ctx, Input};
+use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input};
 use bifrost_mail::window::MailWindow;
 
 struct MailApp {
@@ -50,6 +50,10 @@ impl App for MailApp {
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
         self.window.as_mut().is_some_and(|mail| mail.service_reply(ctx, request, result))
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        self.window.as_mut().is_some_and(|mail| mail.document(ctx, ev))
     }
 
     fn keychain(&mut self, ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {

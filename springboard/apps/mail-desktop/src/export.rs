@@ -10,6 +10,12 @@ pub fn eml_name(subject: &str) -> String {
     format!("{base}.eml")
 }
 
+/// The file name for a message exported as PDF: the same name as [`eml_name`], ending in `.pdf`.
+pub fn pdf_name(subject: &str) -> String {
+    let eml = eml_name(subject);
+    format!("{}.pdf", eml.trim_end_matches(".eml"))
+}
+
 /// The raw text with every line ended by CRLF, as mail files are kept.
 pub fn crlf(raw: &str) -> String {
     raw.replace("\r\n", "\n").replace('\r', "\n").replace('\n', "\r\n")
@@ -40,6 +46,8 @@ mod tests {
         assert_eq!(eml_name("Fundur á morgun"), "Fundur á morgun.eml");
         assert_eq!(eml_name("../etc/passwd"), "_etc_passwd.eml");
         assert_eq!(eml_name("  "), "Message.eml");
+        assert_eq!(pdf_name("Fundur á morgun"), "Fundur á morgun.pdf");
+        assert_eq!(pdf_name("  "), "Message.pdf");
     }
 
     #[test]

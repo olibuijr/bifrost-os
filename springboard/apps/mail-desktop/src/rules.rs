@@ -1,293 +1,198 @@
-//! Mail rules: criteria over a message's headers and actions to run when they match. `evaluate` returns the actions
-//! for one message in rule order; a rule with `Stop` ends the evaluation. Rules are stored one per line.
+//! Mail rules (Mailbox > Rules): a rule names what a message must contain (the sender, the recipients, the subject) and what
+//! happens to it (move it to a mailbox, mark it read, flag it in a colour). Rules run on each message that arrives in an
+//! inbox and on request over the shown mailbox (Mailbox > Rules > Apply Rules).
 
-use crate::message::{address_of, Summary};
+use crate::flags::FlagColor;
+use crate::message::Summary;
+use bifrost_core::json::Json;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Field {
-    From,
-    To,
-    Cc,
-    Subject,
-    /// To or Cc.
-    AnyRecipient,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Test {
-    Contains,
-    DoesNotContain,
-    Is,
-    BeginsWith,
-    EndsWith,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Criterion {
-    pub field: Field,
-    pub test: Test,
-    pub value: String,
-}
-
+/// What a rule does to a message that matches it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
+    /// Moves the message to the mailbox with this name.
     MoveTo(String),
     MarkRead,
-    Flag,
-    Delete,
-    /// Stop evaluating later rules.
-    Stop,
+    /// Flags the message in this colour.
+    Flag(FlagColor),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl Action {
+    /// True when the action takes the message out of the inbox or reads it, so its arrival needs no notification.
+    pub fn is_quiet(&self) -> bool {
+        matches!(self, Action::MoveTo(_) | Action::MarkRead)
+    }
+}
+
+/// A rule: every criterion that is not empty must match (without case), and the rule needs at least one.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Rule {
     pub name: String,
-    pub enabled: bool,
-    /// All criteria must match when true, any one when false.
-    pub all: bool,
-    pub criteria: Vec<Criterion>,
+    /// Text the From header must contain.
+    pub from: String,
+    /// Text the To or Cc header must contain.
+    pub to: String,
+    /// Text the Subject must contain.
+    pub subject: String,
     pub actions: Vec<Action>,
 }
 
-impl Criterion {
-    pub fn matches(&self, s: &Summary) -> bool {
-        let fields: Vec<&str> = match self.field {
-            Field::From => vec![&s.from],
-            Field::To => vec![&s.to],
-            Field::Cc => vec![&s.cc],
-            Field::Subject => vec![&s.subject],
-            Field::AnyRecipient => vec![&s.to, &s.cc],
-        };
-        let want = self.value.to_lowercase();
-        let hit = |text: &str| {
-            let text = text.to_lowercase();
-            // an address matches on its bare form too, so "Is" works for `Ann <ann@x.is>`
-            let bare = address_of(&text).to_string();
-            match self.test {
-                Test::Contains | Test::DoesNotContain => text.contains(&want),
-                Test::Is => text == want || bare == want,
-                Test::BeginsWith => text.starts_with(&want),
-                Test::EndsWith => text.ends_with(&want) || bare.ends_with(&want),
-            }
-        };
-        let any = fields.iter().any(|f| hit(f));
-        if self.test == Test::DoesNotContain { !any } else { any }
-    }
+fn contains(haystack: &str, needle: &str) -> bool {
+    needle.trim().is_empty() || haystack.to_lowercase().contains(&needle.trim().to_lowercase())
 }
 
 impl Rule {
-    pub fn matches(&self, s: &Summary) -> bool {
-        if !self.enabled || self.criteria.is_empty() {
+    /// True when the message meets every criterion the rule has. A rule with no criteria matches nothing.
+    pub fn matches(&self, summary: &Summary) -> bool {
+        let criteria = [&self.from, &self.to, &self.subject];
+        if criteria.iter().all(|c| c.trim().is_empty()) {
             return false;
         }
-        if self.all {
-            self.criteria.iter().all(|c| c.matches(s))
-        } else {
-            self.criteria.iter().any(|c| c.matches(s))
-        }
+        contains(&summary.from, &self.from)
+            && (self.to.trim().is_empty() || contains(&summary.to, &self.to) || contains(&summary.cc, &self.to))
+            && contains(&summary.subject, &self.subject)
     }
-}
 
-/// The actions to run on a message, in rule order, up to and including the first `Stop`.
-pub fn evaluate(rules: &[Rule], s: &Summary) -> Vec<Action> {
-    let mut out = vec![];
-    for rule in rules.iter().filter(|r| r.matches(s)) {
-        for a in &rule.actions {
-            out.push(a.clone());
-            if *a == Action::Stop {
-                return out;
-            }
-        }
-    }
-    out
-}
-
-fn esc(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('|', "\\p").replace(';', "\\s").replace('\n', " ")
-}
-
-fn unesc(s: &str) -> String {
-    let mut out = String::new();
-    let mut it = s.chars();
-    while let Some(c) = it.next() {
-        if c == '\\' {
-            match it.next() {
-                Some('p') => out.push('|'),
-                Some('s') => out.push(';'),
-                Some(o) => out.push(o),
-                None => {}
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
-fn split_esc(s: &str, sep: char) -> Vec<String> {
-    // splits on an unescaped separator; the separators never occur raw inside escaped text
-    if s.is_empty() { vec![] } else { s.split(sep).map(str::to_string).collect() }
-}
-
-impl Rule {
-    /// `name|enabled|all|field:test:value;...|action[:arg];...`
-    pub fn to_line(&self) -> String {
-        let field = |f: Field| match f {
-            Field::From => "from",
-            Field::To => "to",
-            Field::Cc => "cc",
-            Field::Subject => "subject",
-            Field::AnyRecipient => "recipient",
-        };
-        let test = |t: Test| match t {
-            Test::Contains => "contains",
-            Test::DoesNotContain => "not",
-            Test::Is => "is",
-            Test::BeginsWith => "begins",
-            Test::EndsWith => "ends",
-        };
-        let criteria: Vec<String> =
-            self.criteria.iter().map(|c| format!("{}:{}:{}", field(c.field), test(c.test), esc(&c.value))).collect();
-        let actions: Vec<String> = self
+    pub fn to_json(&self) -> Json {
+        let actions = self
             .actions
             .iter()
             .map(|a| match a {
-                Action::MoveTo(m) => format!("move:{}", esc(m)),
-                Action::MarkRead => "read".into(),
-                Action::Flag => "flag".into(),
-                Action::Delete => "delete".into(),
-                Action::Stop => "stop".into(),
+                Action::MoveTo(name) => Json::Obj(vec![("move".into(), Json::Str(name.clone()))]),
+                Action::MarkRead => Json::Obj(vec![("read".into(), Json::Bool(true))]),
+                Action::Flag(color) => Json::Obj(vec![("flag".into(), Json::Str(color.label().to_string()))]),
             })
             .collect();
-        format!(
-            "{}|{}|{}|{}|{}",
-            esc(&self.name),
-            self.enabled as u8,
-            self.all as u8,
-            criteria.join(";"),
-            actions.join(";")
-        )
+        Json::Obj(vec![
+            ("name".into(), Json::Str(self.name.clone())),
+            ("from".into(), Json::Str(self.from.clone())),
+            ("to".into(), Json::Str(self.to.clone())),
+            ("subject".into(), Json::Str(self.subject.clone())),
+            ("actions".into(), Json::Arr(actions)),
+        ])
     }
 
-    pub fn from_line(line: &str) -> Option<Rule> {
-        let f: Vec<&str> = line.split('|').collect();
-        if f.len() != 5 {
-            return None;
-        }
-        let mut criteria = vec![];
-        for c in split_esc(f[3], ';') {
-            let p: Vec<&str> = c.splitn(3, ':').collect();
-            if p.len() != 3 {
-                return None;
+    /// Reads a rule back. A rule with no name or no action is dropped (None).
+    pub fn from_json(json: &Json) -> Option<Rule> {
+        let text = |key: &str| json.get(key).and_then(Json::as_str).unwrap_or("").to_string();
+        let mut actions = Vec::new();
+        for item in json.get("actions").and_then(Json::as_array).unwrap_or(&[]) {
+            if let Some(name) = item.get("move").and_then(Json::as_str) {
+                actions.push(Action::MoveTo(name.to_string()));
+            } else if item.get("read").is_some() {
+                actions.push(Action::MarkRead);
+            } else if let Some(color) = item.get("flag").and_then(Json::as_str).and_then(color_named) {
+                actions.push(Action::Flag(color));
             }
-            let field = match p[0] {
-                "from" => Field::From,
-                "to" => Field::To,
-                "cc" => Field::Cc,
-                "subject" => Field::Subject,
-                "recipient" => Field::AnyRecipient,
-                _ => return None,
-            };
-            let test = match p[1] {
-                "contains" => Test::Contains,
-                "not" => Test::DoesNotContain,
-                "is" => Test::Is,
-                "begins" => Test::BeginsWith,
-                "ends" => Test::EndsWith,
-                _ => return None,
-            };
-            criteria.push(Criterion { field, test, value: unesc(p[2]) });
         }
-        let mut actions = vec![];
-        for a in split_esc(f[4], ';') {
-            actions.push(match a.split_once(':') {
-                Some(("move", m)) => Action::MoveTo(unesc(m)),
-                None if a == "read" => Action::MarkRead,
-                None if a == "flag" => Action::Flag,
-                None if a == "delete" => Action::Delete,
-                None if a == "stop" => Action::Stop,
-                _ => return None,
-            });
-        }
-        Some(Rule { name: unesc(f[0]), enabled: f[1] == "1", all: f[2] == "1", criteria, actions })
+        let rule = Rule { name: text("name"), from: text("from"), to: text("to"), subject: text("subject"), actions };
+        (!rule.name.trim().is_empty() && !rule.actions.is_empty()).then_some(rule)
     }
 }
 
-/// Stores rules, one per line.
-pub fn to_text(rules: &[Rule]) -> String {
-    rules.iter().map(|r| r.to_line() + "\n").collect()
+/// The flag colour with this name (without case).
+pub fn color_named(name: &str) -> Option<FlagColor> {
+    FlagColor::ALL.into_iter().find(|c| c.label().eq_ignore_ascii_case(name.trim()))
 }
 
-/// Reads stored rules; unreadable lines are skipped.
-pub fn from_text(text: &str) -> Vec<Rule> {
-    text.lines().filter_map(Rule::from_line).collect()
+/// The actions the form of a new rule asks for: the mailbox to move to, `yes` to mark read, a colour name to flag. All
+/// three empty is an error.
+pub fn actions_from(move_to: &str, mark_read: &str, flag: &str) -> Result<Vec<Action>, String> {
+    let mut actions = Vec::new();
+    if !move_to.trim().is_empty() {
+        actions.push(Action::MoveTo(move_to.trim().to_string()));
+    }
+    match mark_read.trim().to_lowercase().as_str() {
+        "" | "no" => {}
+        "yes" | "y" | "true" => actions.push(Action::MarkRead),
+        other => return Err(format!("Mark as read takes yes or no, not {other}")),
+    }
+    if !flag.trim().is_empty() {
+        match color_named(flag) {
+            Some(color) => actions.push(Action::Flag(color)),
+            None => return Err(format!("{} is not a flag colour", flag.trim())),
+        }
+    }
+    if actions.is_empty() {
+        return Err("Choose what the rule does: a mailbox to move to, mark as read, or a flag colour".into());
+    }
+    Ok(actions)
+}
+
+/// What happens to one message: the actions of every rule that matches it, in rule order. Once an action moves the
+/// message the rules after it are not run (the message is no longer here).
+pub fn outcome(rules: &[Rule], summary: &Summary) -> Vec<Action> {
+    let mut actions = Vec::new();
+    for rule in rules.iter().filter(|r| r.matches(summary)) {
+        for action in &rule.actions {
+            actions.push(action.clone());
+            if matches!(action, Action::MoveTo(_)) {
+                return actions;
+            }
+        }
+    }
+    actions
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn msg(from: &str, subject: &str) -> Summary {
-        Summary { from: from.into(), subject: subject.into(), to: "me@x.is".into(), ..Summary::default() }
+    fn summary() -> Summary {
+        Summary::from_headers("From: Ana Smith <ana@shop.example>\r\nTo: me@example.com\r\nCc: team@example.com\r\nSubject: Your order has shipped\r\n\r\n")
     }
 
-    fn rule(c: Vec<Criterion>, a: Vec<Action>) -> Rule {
-        Rule { name: "r".into(), enabled: true, all: true, criteria: c, actions: a }
-    }
-
-    fn crit(field: Field, test: Test, value: &str) -> Criterion {
-        Criterion { field, test, value: value.into() }
+    fn rule(from: &str, to: &str, subject: &str) -> Rule {
+        Rule { name: "r".into(), from: from.into(), to: to.into(), subject: subject.into(), actions: vec![Action::MarkRead] }
     }
 
     #[test]
-    fn criteria_tests() {
-        let m = msg("Ann <ann@shop.is>", "Your order #12");
-        assert!(crit(Field::From, Test::Contains, "SHOP").matches(&m));
-        assert!(crit(Field::From, Test::Is, "ann@shop.is").matches(&m));
-        assert!(crit(Field::From, Test::EndsWith, "@shop.is").matches(&m));
-        assert!(crit(Field::Subject, Test::BeginsWith, "your").matches(&m));
-        assert!(crit(Field::Subject, Test::DoesNotContain, "invoice").matches(&m));
-        assert!(!crit(Field::Subject, Test::DoesNotContain, "order").matches(&m));
-        assert!(crit(Field::AnyRecipient, Test::Is, "me@x.is").matches(&m));
+    fn every_given_criterion_must_match_without_case() {
+        assert!(rule("SHOP.example", "", "").matches(&summary()));
+        assert!(rule("shop", "", "order").matches(&summary()));
+        assert!(!rule("shop", "", "invoice").matches(&summary()));
+        assert!(rule("", "team@", "").matches(&summary()), "the Cc header counts as a recipient");
+        assert!(!rule("", "other@", "").matches(&summary()));
     }
 
     #[test]
-    fn all_versus_any_and_disabled() {
-        let m = msg("a@b.is", "hello");
-        let cs = vec![crit(Field::From, Test::Contains, "a@b"), crit(Field::Subject, Test::Contains, "nope")];
-        let mut r = rule(cs, vec![Action::Flag]);
-        assert!(!r.matches(&m));
-        r.all = false;
-        assert!(r.matches(&m));
-        r.enabled = false;
-        assert!(!r.matches(&m));
-        assert!(!rule(vec![], vec![Action::Flag]).matches(&m));
+    fn a_rule_without_criteria_matches_nothing() {
+        assert!(!rule("", "  ", "").matches(&summary()));
     }
 
     #[test]
-    fn evaluation_order_and_stop() {
-        let m = msg("news@shop.is", "Sale");
-        let c = vec![crit(Field::From, Test::Contains, "shop")];
-        let rules = vec![
-            rule(c.clone(), vec![Action::MoveTo("Promos".into()), Action::Stop, Action::Flag]),
-            rule(c.clone(), vec![Action::Delete]),
-        ];
-        assert_eq!(evaluate(&rules, &m), vec![Action::MoveTo("Promos".into()), Action::Stop]);
-        let rules = vec![rule(c.clone(), vec![Action::MarkRead]), rule(c, vec![Action::Flag])];
-        assert_eq!(evaluate(&rules, &m), vec![Action::MarkRead, Action::Flag]);
-        assert!(evaluate(&rules, &msg("x@y.is", "z")).is_empty());
-    }
-
-    #[test]
-    fn text_round_trip_with_awkward_characters() {
-        let mut r = rule(
-            vec![crit(Field::Subject, Test::Contains, "a|b;c:d\\e"), crit(Field::Cc, Test::Is, "x@y.is")],
-            vec![Action::MoveTo("Work;Q4".into()), Action::MarkRead, Action::Stop],
+    fn the_form_builds_actions_and_refuses_an_empty_or_unknown_one() {
+        assert_eq!(
+            actions_from("Receipts", "yes", "green").unwrap(),
+            vec![Action::MoveTo("Receipts".into()), Action::MarkRead, Action::Flag(FlagColor::Green)]
         );
-        r.name = "Name | with ; chars".into();
-        r.all = false;
-        let text = to_text(&[r.clone(), r.clone()]);
-        assert_eq!(from_text(&text), vec![r.clone(), r]);
-        assert!(from_text("garbage\n\n").is_empty());
+        assert_eq!(actions_from("", "no", "").unwrap_err(), "Choose what the rule does: a mailbox to move to, mark as read, or a flag colour");
+        assert!(actions_from("", "maybe", "").unwrap_err().contains("yes or no"));
+        assert_eq!(actions_from("", "", "pink").unwrap_err(), "pink is not a flag colour");
+    }
+
+    #[test]
+    fn the_outcome_stops_at_a_move() {
+        let rules = vec![
+            Rule { actions: vec![Action::Flag(FlagColor::Red), Action::MoveTo("Shops".into()), Action::MarkRead], ..rule("shop", "", "") },
+            Rule { actions: vec![Action::MarkRead], ..rule("", "", "order") },
+        ];
+        assert_eq!(outcome(&rules, &summary()), vec![Action::Flag(FlagColor::Red), Action::MoveTo("Shops".into())]);
+        assert!(outcome(&rules, &Summary::from_headers("Subject: hello\r\n\r\n")).is_empty());
+    }
+
+    #[test]
+    fn quiet_actions_are_the_ones_that_hide_or_read_a_message() {
+        assert!(Action::MoveTo("x".into()).is_quiet() && Action::MarkRead.is_quiet());
+        assert!(!Action::Flag(FlagColor::Blue).is_quiet());
+    }
+
+    #[test]
+    fn rules_survive_a_round_trip_through_json() {
+        let original = Rule { name: "Shops".into(), actions: vec![Action::MoveTo("Shops".into()), Action::MarkRead, Action::Flag(FlagColor::Purple)], ..rule("shop", "me@", "order") };
+        let text = original.to_json().encode();
+        let back = Rule::from_json(&bifrost_core::json::parse(&text).unwrap()).unwrap();
+        assert_eq!(back, original);
+        assert!(Rule::from_json(&bifrost_core::json::parse(r#"{"name":"x","actions":[]}"#).unwrap()).is_none());
+        assert!(Rule::from_json(&bifrost_core::json::parse(r#"{"actions":[{"read":true}]}"#).unwrap()).is_none());
     }
 }

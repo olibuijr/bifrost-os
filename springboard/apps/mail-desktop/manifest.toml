@@ -1,12 +1,12 @@
 id = "is.olibuijr.mail.desktop"
 name = "Mail"
-version = "0.8.0"
+version = "0.10.0"
 exec = "bifrost-mail"
 icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Mailboxes, messages and compose over IMAP and SMTP accounts."
 category = "Productivity"
 architecture = "x86_64-linux"
-permissions = ["storage", "network", "keychain", "notifications"]
+permissions = ["storage", "network", "keychain", "notifications", "documents"]
 keychain_groups = ["is.bifrost.passwords"]
 window = "full-size"

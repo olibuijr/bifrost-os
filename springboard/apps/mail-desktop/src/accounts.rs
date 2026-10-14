@@ -31,6 +31,34 @@ pub fn add(account: Account) -> Result<(), String> {
     shared::save(&path, &all).map_err(|e| format!("{}: {e}", shared::STORE_FILE))
 }
 
+/// The list with the account of the same id replaced by `account`. An id the list lacks is an error.
+fn replaced(mut all: Vec<Account>, account: Account) -> Result<Vec<Account>, String> {
+    let at = all.iter().position(|a| a.id == account.id).ok_or_else(|| format!("{} is not in the account list", account.name))?;
+    all[at] = account;
+    Ok(all)
+}
+
+/// The list without the account with this id. An id the list lacks is an error.
+fn removed(mut all: Vec<Account>, id: &str) -> Result<Vec<Account>, String> {
+    let at = all.iter().position(|a| a.id == id).ok_or_else(|| format!("{id} is not in the account list"))?;
+    all.remove(at);
+    Ok(all)
+}
+
+/// Writes an edited account into the shared list in place of the one with its id (Account Settings).
+pub fn update(account: Account) -> Result<(), String> {
+    let path: PathBuf = shared::store_path().ok_or("There is no data directory for accounts")?;
+    let all = replaced(load_all()?, account)?;
+    shared::save(&path, &all).map_err(|e| format!("{}: {e}", shared::STORE_FILE))
+}
+
+/// Takes the account with this id out of the shared list (Remove Account).
+pub fn remove(id: &str) -> Result<(), String> {
+    let path: PathBuf = shared::store_path().ok_or("There is no data directory for accounts")?;
+    let all = removed(load_all()?, id)?;
+    shared::save(&path, &all).map_err(|e| format!("{}: {e}", shared::STORE_FILE))
+}
+
 /// Adds several accounts to the shared list in one write (the first-run import). Returns how many were added.
 pub fn import(new: Vec<Account>) -> Result<usize, String> {
     let path: PathBuf = shared::store_path().ok_or("There is no data directory for accounts")?;
@@ -55,6 +83,19 @@ pub fn outgoing(account: &Account) -> Result<&Server, String> {
 mod tests {
     use super::*;
     use bifrost_app::controls::internet_accounts::{Kind, Security};
+
+    #[test]
+    fn an_account_is_replaced_or_removed_by_its_id_and_a_missing_id_is_an_error() {
+        let work = Account::new(Kind::Mail, "work", "Work", "me");
+        let home = Account::new(Kind::Mail, "home", "Home", "me");
+        let renamed = Account::new(Kind::Mail, "work", "Office", "me");
+        let list = replaced(vec![work.clone(), home.clone()], renamed).unwrap();
+        assert_eq!(list.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["Office", "Home"]);
+        assert!(replaced(vec![home.clone()], work.clone()).unwrap_err().contains("not in the account list"));
+        let list = removed(vec![work, home.clone()], "work").unwrap();
+        assert_eq!(list, vec![home]);
+        assert!(removed(list, "work").is_err());
+    }
 
     #[test]
     fn a_mail_account_without_servers_is_an_error_not_a_panic() {

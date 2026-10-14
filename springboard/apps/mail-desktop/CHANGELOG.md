@@ -1,5 +1,85 @@
 # Changelog
 
+## 0.10.0 — 2026-10-14
+
+Reading:
+
+- View > All Headers shows every header line above the text of the open message. The choice is remembered.
+- The Reply All button and Message > Reply All are offered only when the message has recipients besides the sender and you.
+- Messages sent with high or low priority carry a "High priority" or "Low priority" tag in the list.
+- The toolbar shows a chip with the filter in use (Unread, Flagged, ...) while a filter is applied; a tap moves to the next
+  filter, and All takes the chip away. The menu still holds every filter.
+
+Writing:
+
+- Replies start with the original quoted under an "On <date>, <name> wrote:" line. Mail Settings has a "Quote the original in
+  replies" switch (on by default).
+- Mail Settings has a "Plain text messages only" switch: such messages are sent without the HTML part.
+- A reply is sent from the address the original was sent to when that address is one of the account's aliases.
+- Message > Forward carries the files of the original along, within the limits of a message (8 files, 20 MB).
+- Message > Paste and Match Style (Edit menu) pastes the text in the style of the text typed so far.
+
+Saving:
+
+- Message > Save Attachments asks for one folder and writes every file of the message into it, under the names the files
+  had. Without a folder panel the files go into the app's data directory.
+- Message > Export as PDF writes the subject and the text of the message to a PDF file through the save panel.
+
+Finding:
+
+- Open Quickly lists the mailboxes its field matches under the field, the best match first. A click opens one of them;
+  Return still opens the first.
+
+## 0.9.0 — 2026-10-13
+
+Sending and receiving files:
+
+- Message > Attach Files (and an Attach button on the compose sheet) opens the open panel; the files are listed on the sheet
+  with a Remove button and sent as `multipart/mixed` (at most 8 files and 20 MB). The app now asks for the `documents`
+  permission.
+- Message > Forward as Attachment sends the original as a `message/rfc822` file. Message > Redirect sends the original
+  unchanged with `Resent-` headers to new recipients.
+- The files of an open message are listed one to a line in the reader; a tap saves that file through the save panel.
+  Message > Save Attachments asks for each file's place in turn, and File > Save As uses the save panel too. Without the
+  panel the files go into the app's data directory as before.
+- Message > Remove Attachments writes the message again without its files (IMAP APPEND) and deletes the old copy.
+- Message > Add Sender to Contacts saves the sender's name and address through the contacts service, unless the address
+  is already there.
+
+Writing:
+
+- A Format menu: Bold, Italic, Underline, Text Color, Bulleted List, Increase and Decrease Indent, Clear Formatting. They
+  apply to the text typed after them; a styled message is sent as plain text and HTML alternatives.
+- Edit > Check Spelling underlines the misspelled words through the system text service. Next Misspelling shows
+  suggestions and Correct Spelling replaces the word in view.
+- Mailbox > Mail Settings keeps a signature and other send-from addresses for each account and an undo-send delay of up
+  to 30 seconds. With other addresses the compose sheet has a From field that a click cycles through. Message > Undo
+  Send takes a held message back.
+- Message > Send Later adds a "Send in" field (30m, 2h, 1d); Mailbox > Send Queued Messages Now sends the outbox at once.
+  Message > Remind Me brings a message back unread, with a notification, at the time given. Both survive a restart.
+- The Cc, Bcc and Reply-To fields of new messages are remembered between runs.
+
+Organising:
+
+- Mailbox > New Smart Mailbox saves a search under a name; it is listed in the sidebar. A favourites bar (Mailbox >
+  Add to Favorites Bar, View > Show Favorites Bar) pins mailboxes under the toolbar.
+- Mailbox > Rules: New Rule (from, to and subject contain; move to a mailbox, mark read, flag in a colour), Delete Rule and
+  Apply Rules. Rules also run on mail that arrives in an inbox, and a message a rule moves or reads raises no
+  notification.
+- View > Category shows Primary, Transactions, Updates or Promotions only. View > Filter adds With Attachments, View >
+  Sort By adds Flag and Read Status. A Reply All button joins the toolbar.
+- Conversations fold and unfold from a triangle in the first row. Muted conversations carry a Muted tag in the list.
+- Message > Move to Junk marks the message `$Junk`; moving it out of Junk sets `$NotJunk`.
+- Mailbox > Export Mailbox and Import Mailbox read and write mbox files through the save and open panels.
+- Mailbox > Account Settings edits the shown account (servers and ports included) and Remove Account deletes it with its
+  password.
+- Edit > Find in Message opens a find bar over the reader: matches are highlighted, Return and Find Next step through
+  them.
+- Mailbox > Show Activity lists what Mail did lately; Mailbox > Check Connection signs in to both servers of the shown
+  account and reports each answer.
+- Move To and Copy To moved into a Move menu, which lists the first 22 mailboxes: one menu holds at most 48 items, and
+  the Message menu had started to lose its last entries on accounts with many mailboxes.
+
 ## 0.8.0 — 2026-10-13
 
 - Message > Flag Color (Red, Orange, Yellow, Green, Blue, Purple, Gray) and Clear Flag. The colour is kept in the

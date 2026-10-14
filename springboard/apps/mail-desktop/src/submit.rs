@@ -6,7 +6,7 @@ use bifrost_app::controls::internet_accounts::{Security, Server};
 use crate::line::Lines;
 use crate::smtp;
 use crate::transport;
-use springboard::deildu::http::Transport;
+use springboard::deildu::http::{Stream, Transport};
 use std::io::{self, Read, Write};
 
 /// Sends `message` (CRLF lines, as [`crate::message::Draft::render`] makes it) from `from` to `recipients`.
@@ -21,23 +21,43 @@ pub fn send(
     message: &str,
 ) -> Result<(), String> {
     let domain = from.rsplit_once('@').map_or("localhost", |(_, domain)| domain);
+    let mut lines = greet(transport, server, domain)?;
+    converse(&mut lines, login, password, from, recipients, message)
+}
+
+/// Opens the connection, reads the greeting, says EHLO, and upgrades to TLS when the account asks for STARTTLS.
+fn greet(transport: &dyn Transport, server: &Server, domain: &str) -> Result<Lines<Box<dyn Stream>>, String> {
     let stream = transport::open(transport, server).map_err(io_text)?;
     let mut lines = Lines::new(stream);
     expect(&mut lines, &[220])?;
     put(&mut lines, &smtp::ehlo(domain))?;
     expect(&mut lines, &[250])?;
-    let mut lines = if server.security == Security::StartTls {
+    if server.security == Security::StartTls {
         put(&mut lines, "STARTTLS\r\n")?;
         expect(&mut lines, &[220])?;
         let secure = transport.upgrade(&server.host, lines.into_inner()).map_err(io_text)?;
         let mut secure = Lines::new(secure);
         put(&mut secure, &smtp::ehlo(domain))?;
         expect(&mut secure, &[250])?;
-        secure
+        Ok(secure)
     } else {
-        lines
-    };
-    converse(&mut lines, login, password, from, recipients, message)
+        Ok(lines)
+    }
+}
+
+/// Finds out whether the outgoing server takes the login (Mailbox > Check Connection): connects, signs in, and quits.
+/// Nothing is sent. `domain` is what EHLO announces.
+pub fn check(transport: &dyn Transport, server: &Server, login: &str, password: &str, domain: &str) -> Result<(), String> {
+    let mut lines = greet(transport, server, domain)?;
+    authenticate(&mut lines, login, password)?;
+    let _ = put(&mut lines, &smtp::quit());
+    Ok(())
+}
+
+/// AUTH PLAIN, and the server's answer to it.
+fn authenticate<S: Read + Write>(lines: &mut Lines<S>, login: &str, password: &str) -> Result<(), String> {
+    put(lines, &smtp::auth_plain(login, password))?;
+    expect(lines, &[235]).map(|_| ())
 }
 
 /// The commands after the greeting and EHLO: authentication, the envelope, the data, and QUIT.
@@ -49,8 +69,7 @@ pub fn converse<S: Read + Write>(
     recipients: &[String],
     message: &str,
 ) -> Result<(), String> {
-    put(lines, &smtp::auth_plain(login, password))?;
-    expect(lines, &[235])?;
+    authenticate(lines, login, password)?;
     put(lines, &smtp::mail_from(from))?;
     expect(lines, &[250])?;
     for to in recipients {
@@ -110,6 +129,16 @@ mod tests {
         let sent = lines.into_inner().sent();
         assert!(sent.starts_with("AUTH PLAIN AHVzZXIAcHc=\r\nMAIL FROM:<a@b.is>\r\nRCPT TO:<c@d.is>\r\nDATA\r\n"), "{sent}");
         assert!(sent.ends_with("\r\n..dot\r\n.\r\nQUIT\r\n"), "{sent}");
+    }
+
+    #[test]
+    fn a_connection_check_signs_in_and_quits_without_sending() {
+        let mut lines = Lines::new(Script::new("235 authenticated\r\n"));
+        authenticate(&mut lines, "user", "pw").unwrap();
+        let sent = lines.into_inner().sent();
+        assert_eq!(sent, "AUTH PLAIN AHVzZXIAcHc=\r\n");
+        let mut refused = Lines::new(Script::new("535 5.7.8 bad credentials\r\n"));
+        assert_eq!(authenticate(&mut refused, "user", "x").unwrap_err(), "535 5.7.8 bad credentials");
     }
 
     #[test]
