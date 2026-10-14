@@ -60,7 +60,10 @@ class OfflineBundleTests(unittest.TestCase):
                     ("is.olibuijr.files.desktop", "0.2.0", payloads["files"])]
 
             def repo_add(cmd, check):
-                open(cmd[2], "wb").write(b"offline index")
+                self.assertTrue(cmd[2].endswith("/repo/offline.db.tar.gz"))
+                with open(cmd[2], "wb") as index:
+                    index.write(b"offline index")
+                os.symlink("offline.db.tar.gz", cmd[2][:-7])
 
             with mock.patch.object(bundle, "package_closure", return_value=selected), \
                  mock.patch.object(bundle, "shell_package", return_value=payloads["shell"]), \

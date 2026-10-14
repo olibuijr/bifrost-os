@@ -134,7 +134,7 @@ def build(dest, sync=False):
             package_rows.append({"file": filename, "sha256": sha256(source)})
             copied_repo.append(os.path.join(repo, filename))
         database = os.path.join(repo, "offline.db")
-        subprocess.run(["repo-add", "-q", database, *copied_repo], check=True)
+        subprocess.run(["repo-add", "-q", database + ".tar.gz", *copied_repo], check=True)
         if not os.path.isfile(database):
             raise RuntimeError("repo-add did not create repo/offline.db")
         shutil.copyfile(shell, os.path.join(stage, "springboard-shell.pkg.tar.zst"))
