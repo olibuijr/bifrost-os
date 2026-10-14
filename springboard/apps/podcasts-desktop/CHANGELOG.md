@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.4 — 2026-10-14
+
+- Clarify that the periodic wake is a media-service clock interval, not window sizing.
+
 ## 1.12.3 — 2026-10-14
 
 - Name the one-second playback-service wake interval explicitly.

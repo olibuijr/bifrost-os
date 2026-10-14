@@ -251,14 +251,28 @@ pub enum Button {
 }
 
 pub fn button_rect(bar: Rect, button: Button) -> Rect {
-    let slot_w = 96.0;
-    let shutter: f32 = 52.0;
+    const SLOT_MAX: f32 = 96.0;
+    const EDGE_GAP: f32 = 12.0;
+    const BUTTON_GAP: f32 = 8.0;
+    const SHUTTER_MAX: f32 = 52.0;
+    let shutter = SHUTTER_MAX.min(bar.w * 0.24);
     let y = bar.y + (bar.h - shutter.min(bar.h)) / 2.0;
+    let centre = bar.x + bar.w / 2.0;
+    let left = bar.x + EDGE_GAP.min(bar.w / 10.0);
+    let right = bar.x + bar.w - EDGE_GAP.min(bar.w / 10.0);
+    let left_end = (centre - shutter / 2.0 - BUTTON_GAP).max(left);
+    let right_start = (centre + shutter / 2.0 + BUTTON_GAP).min(right);
+    let left_width = (left_end - left - BUTTON_GAP).max(0.0) / 2.0;
+    let left_width = left_width.min(SLOT_MAX);
+    let mode_x = left;
+    let timer_x = (left + left_width + BUTTON_GAP).min(left_end);
+    let export_width = (right - right_start).max(0.0).min(SLOT_MAX);
+    let export_x = right_start + ((right - right_start - export_width).max(0.0) / 2.0);
     match button {
-        Button::Mode => Rect { x: 12.0, y: bar.y + (bar.h - 28.0) / 2.0, w: slot_w, h: 28.0 },
-        Button::Timer => Rect { x: 12.0 + slot_w + 8.0, y: bar.y + (bar.h - 28.0) / 2.0, w: slot_w, h: 28.0 },
-        Button::Export => Rect { x: (bar.w - 12.0 - slot_w).max(0.0), y: bar.y + (bar.h - 28.0) / 2.0, w: slot_w, h: 28.0 },
-        Button::Shutter => Rect { x: bar.w / 2.0 - shutter / 2.0, y, w: shutter, h: shutter.min(bar.h) },
+        Button::Mode => Rect { x: mode_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0.min(bar.h) },
+        Button::Timer => Rect { x: timer_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0.min(bar.h) },
+        Button::Export => Rect { x: export_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: export_width, h: 28.0.min(bar.h) },
+        Button::Shutter => Rect { x: centre - shutter / 2.0, y, w: shutter, h: shutter.min(bar.h) },
     }
 }
 
@@ -520,6 +534,24 @@ mod tests {
         assert!((s.x + s.w / 2.0 - 600.0).abs() < 0.01);
         assert!(button_rect(bar, Button::Mode).x < s.x);
         assert!(button_rect(bar, Button::Export).x > s.x + s.w);
+    }
+
+    #[test]
+    fn controls_stay_inside_the_bar_and_do_not_overlap_at_compact_widths() {
+        for width in [160.0, 240.0, 360.0, 640.0] {
+            let bar = layout(width, 420.0).controls;
+            let mode = button_rect(bar, Button::Mode);
+            let timer = button_rect(bar, Button::Timer);
+            let shutter = button_rect(bar, Button::Shutter);
+            let export = button_rect(bar, Button::Export);
+            for r in [mode, timer, shutter, export] {
+                assert!(r.x >= bar.x && r.x + r.w <= bar.x + bar.w);
+                assert!(r.y >= bar.y && r.y + r.h <= bar.y + bar.h);
+            }
+            assert!(mode.x + mode.w <= timer.x);
+            assert!(timer.x + timer.w <= shutter.x);
+            assert!(shutter.x + shutter.w <= export.x);
+        }
     }
 
     #[test]
