@@ -80,9 +80,9 @@
   {
    "feature": "App Store interactions",
    "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
-   "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/subscription.rs, springboard/ui/src/product.rs",
+   "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/subscription.rs, springboard/ui/src/product.rs; tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (purchase.rs, subscription.rs, product.rs); not wired into the shell or apps, not tested on Midget. no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (purchase.rs, subscription.rs, product.rs) and headless tests of store failures, retries and subscription tier changes in parity_sdk-complete-27.rs; not wired into the shell or apps, not tested on Midget. no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
   },
   {
    "feature": "Storefront information",

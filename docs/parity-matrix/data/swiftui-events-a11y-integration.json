@@ -103,7 +103,7 @@
       "apple": "MapKit, QuickLook, WebKit, ShareLink views",
       "bifrost": "springboard/sdk/src/share.rs, springboard/sdk/src/webview.rs, springboard/sdk/src/peek.rs",
       "status": "partial",
-      "note": "share, web view and Quick Look exist; no map view"
+      "note": "share, web view and Quick Look exist. The map camera, zoom and coordinate model is in springboard/ui/src/mapview.rs and geo.rs, but no SDK map view wraps it yet; tile fetching lives in the maps app (apps/maps-desktop/src/tiles.rs), not in the SDK."
     },
     {
       "feature": "Previews in Xcode",
