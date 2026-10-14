@@ -28,7 +28,7 @@
       "area": "menu",
       "apple": "composer + button, drag in",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:413",
+      "bifrost": "springboard/apps/messages-desktop/src/window.rs:429",
       "note": "Any file via Attach File (pictures as pictures, others as file messages); dragging files in needs SDK drop events, which do not exist",
       "wire": "Accept any file in the picker (send a file message) and handle drop events"
     },
@@ -100,7 +100,7 @@
       "area": "menu",
       "apple": "Conversation > Delete",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:614",
+      "bifrost": "springboard/apps/messages-desktop/src/window.rs:600",
       "note": "Leave and forget after a confirmation, from the Conversation menu or the row context menu",
       "wire": "Room row context menu that leaves and forgets the room"
     },
@@ -109,7 +109,7 @@
       "area": "toolbar",
       "apple": "search field",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/model.rs:452",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:621",
       "note": "Search field filters rooms by name and loaded message text (Cmd+F); no server-side search",
       "wire": "Search field filtering rooms and loaded timeline text"
     },
@@ -118,7 +118,7 @@
       "area": "menu",
       "apple": "Tapback",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/model.rs:600",
+      "bifrost": "springboard/apps/messages-desktop/src/window.rs:545 (react); springboard/apps/messages-desktop/src/model.rs:38 (reaction_of)",
       "note": "Tapback list in the message context menu and chips under the bubble that toggle your own reaction; Show Reactions in the context menu lists who gave each emoji; no hover list; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Send and show reaction annotations on bubbles"
     },
@@ -127,7 +127,7 @@
       "area": "menu",
       "apple": "Reply",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:366",
+      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:334 (quote hit), springboard/apps/messages-desktop/src/draw.rs:683 (quoted line)",
       "note": "Reply in the message context menu; quoted line in the bubble; tapping the quoted line scrolls to the original message; no highlight of the original; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Reply relation in send, quoted header in bubble drawing"
     },
@@ -136,7 +136,7 @@
       "area": "menu",
       "apple": "Edit / Undo Send",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/model.rs:600",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:726 (begin_edit); springboard/apps/messages-desktop/src/window.rs:563 (unsend)",
       "note": "Edit and Undo Send in the context menu of own messages; Edit History in the context menu of an edited message lists the earlier versions seen since the app started; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Context menu on own bubbles: redact, and replace-edit"
     },
@@ -145,7 +145,7 @@
       "area": "integration",
       "apple": "encryption",
       "status": "gap",
-      "bifrost": "springboard/apps/messages-desktop/src/protocol.rs:66",
+      "bifrost": "springboard/apps/messages-desktop/src/protocol.rs:110",
       "note": "Not done: needs an Olm/Megolm implementation; encrypted events still show a placeholder",
       "wire": "Integrate an Olm/Megolm implementation for decrypt and encrypted send"
     },
@@ -154,7 +154,7 @@
       "area": "panel",
       "apple": "Info panel",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:847",
+      "bifrost": "springboard/apps/messages-desktop/src/draw.rs:429",
       "note": "Details panel with the first 8 members, the shared pictures by name (loaded messages only) and Rename; no avatars or picture thumbnails; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Info panel with members and rename"
     },
@@ -163,7 +163,7 @@
       "area": "menu",
       "apple": "Hide Alerts",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:485",
+      "bifrost": "springboard/apps/messages-desktop/src/window.rs:511",
       "note": "Hide Alerts skips notifications and the badge count; saved in the data directory",
       "wire": "Per-room mute flag that skips ctx.notify"
     },
@@ -172,7 +172,7 @@
       "area": "menu",
       "apple": "Pin",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/model.rs:523",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:565",
       "note": "Pinned rooms sort first in the order they were pinned, at most nine pins, Move Pin Up and Down in the Conversation menu and the row context menu; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Pinned rooms sort first"
     },
@@ -181,7 +181,7 @@
       "area": "settings",
       "apple": "Settings > Accounts",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/window.rs:690",
+      "bifrost": "springboard/apps/messages-desktop/src/window.rs:754",
       "note": "Settings panel (Cmd+,) shows account and homeserver; Sign Out ends the session and removes the saved login; one account only",
       "wire": "Settings window listing the account with Sign Out"
     },
@@ -190,7 +190,7 @@
       "area": "menu",
       "apple": "Conversation menu",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/model.rs:568",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:599",
       "note": "Mark as Unread / Read in the Conversation menu and context menu; stored on the account as room account data (m.marked_unread) and read back from the sync, so other clients show it; opening the room clears it; built on parity/team-d-messages; not yet verified on Midget",
       "wire": "Mark as Unread item"
     },
@@ -199,8 +199,8 @@
       "area": "menu",
       "apple": "Edit > Emoji & Symbols",
       "status": "partial",
-      "bifrost": "springboard/apps/messages-desktop/src/model.rs:588",
-      "note": "Emoji button and Edit > Emoji & Symbols open a 64-emoji grid with a search field (words or the emoji itself; Return picks the first) and the recently used emoji first, saved in the data directory; no categories or skin tones; built on parity/team-d-messages; not yet verified on Midget",
+      "bifrost": "springboard/apps/messages-desktop/src/model.rs:331 (emoji_in_group, emoji_choices); springboard/apps/messages-desktop/src/draw.rs (overlay_panel, group strip)",
+      "note": "Emoji button and Edit > Emoji & Symbols open a 64-emoji picker with a group strip (All, Faces, Hands, Nature, Food, Things, Signs), a search field across all groups (words or the emoji itself; Return picks the first) and the recently used emoji first within the group, saved in the data directory; no skin tones; tested headless in tests/parity_app-messages.rs; not yet verified on Midget",
       "wire": "Emoji button in the composer"
     },
     {

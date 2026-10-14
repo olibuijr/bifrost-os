@@ -791,6 +791,7 @@ impl MessagesWindow {
                 self.model.overlay = Overlay::None;
                 self.sign_out(ctx);
             }
+            (OverlayAction::EmojiGroup(group), Overlay::Emoji(_)) => self.model.emoji_group = group,
             (OverlayAction::Pick(i), Overlay::Emoji(target)) => {
                 self.model.overlay = Overlay::None;
                 if let Some(emoji) = self.model.emoji_choices().get(i).cloned() {
