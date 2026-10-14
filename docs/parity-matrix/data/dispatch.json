@@ -87,9 +87,9 @@
     {
       "feature": "Memory pressure source",
       "apple": "DispatchSource.makeMemoryPressureSource",
-      "bifrost": "springboard/sdk/src/dispatch.rs:748 (DispatchSource::memory_pressure), springboard/render/src/purgeable.rs:212 (on_memory_pressure)",
+      "bifrost": "springboard/sdk/src/dispatch.rs (DispatchSource::memory_pressure), springboard/render/src/purgeable.rs (on_memory_pressure, notify_pressure)",
       "status": "partial",
-      "note": "handler runs on the given queue; no cancel, so the handler lives for the process; it never fires without PSI"
+      "note": "Delivery to the handler on its queue, in order, and the cache purge per level are tested headless in springboard/sdk/tests/parity_sdk-tests-17.rs. Gap: there is no cancel, so a handler lives for the process, and the kernel source needs PSI, so it never fires without it."
     },
     {
       "feature": "Other dispatch sources (timer, read, write, signal, process, file system)",
