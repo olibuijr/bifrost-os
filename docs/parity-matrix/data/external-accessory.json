@@ -10,30 +10,30 @@
     {
       "feature": "Accessory manager and connect/disconnect notifications",
       "apple": "EAAccessoryManager (shared(), registerForLocalNotifications, EAAccessoryDidConnect, EAAccessoryDidDisconnect) https://developer.apple.com/documentation/externalaccessory/eaaccessorymanager",
-      "bifrost": "springboard/core/src/accessory_manager.rs (AccessoryManager",
+      "bifrost": "springboard/sdk/src/external_accessory.rs (AccessoryManager, register_for_notifications, take_events); springboard/core/src/accessory_manager.rs (AccessoryManager::sync); tests: springboard/sdk/tests/parity_sdk-complete-14.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps cannot subscribe to accessory attach or detach. The SDK's notification module (springboard/sdk/src/usernotif.rs) is for user notifications, not hardware events."
+      "note": "Apps register for connect and disconnect notifications and take them in order, and a registration that is cancelled drops the queue; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: no bus source drives attach and detach on a real device, which needs hardware and a Midget check."
     },
     {
       "feature": "Accessory object (identity and state)",
       "apple": "EAAccessory (name, manufacturer, modelNumber, serialNumber, protocolStrings, isConnected, connectionID) https://developer.apple.com/documentation/externalaccessory/eaaccessory",
       "bifrost": "springboard/sdk/src/external_accessory.rs (Accessory::from_core), springboard/core/src/accessory_manager.rs (Accessory identity fields)",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. Accessory::from_core builds the app view (identity, protocol strings, connection id, connected state) from the USB accessory manager record. Wired accessories are not modelled; no bus event feeds it."
+      "note": "Accessory::from_core builds the app view (identity, protocol strings, connection id, connected state) from the USB accessory manager record, tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: wired accessories are not modelled, and no bus event feeds the view yet, which needs hardware."
     },
     {
       "feature": "Protocol matching (declared protocols)",
       "apple": "UISupportedExternalAccessoryProtocols (Info.plist key); EASession(accessory:forProtocol:)",
-      "bifrost": "springboard/core/src/accessory_manager.rs (session",
+      "bifrost": "springboard/core/src/accessory_manager.rs (AccessoryManager::session); springboard/sdk/src/external_accessory.rs (accessories_for_protocol, session)",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No manifest key declares accessory protocols, and the sandbox has no accessory grant. The sandbox binds only /dev/snd and /dev/dri, so an app has no path to a serial or USB device."
+      "note": "Protocol strings match exactly, a session is refused for a disconnected accessory or an undeclared protocol, and the matches are listed in attach order; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: no manifest key declares accessory protocols and the sandbox grants no accessory device, so an app cannot reach hardware yet."
     },
     {
       "feature": "Data session streams",
       "apple": "EASession (inputStream, outputStream, protocolString, accessory) https://developer.apple.com/documentation/externalaccessory/easession",
-      "bifrost": "springboard/sdk/src/external_accessory.rs, springboard/sdk/src/stream.rs",
+      "bifrost": "springboard/sdk/src/external_accessory.rs (Session, input_stream, output_stream, receive, take_output), springboard/sdk/src/stream.rs; tests: springboard/sdk/tests/parity_sdk-complete-14.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-external-accessory, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing byte stream to an accessory. The PTY code serves the terminal app, not hardware."
+      "note": "A session carries bytes in both directions through its input and output streams, and closing refuses writes; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: the transport that moves bytes to and from a real accessory needs hardware."
     },
     {
       "feature": "Bluetooth picker and pairing UI",

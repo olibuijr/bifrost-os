@@ -12,7 +12,7 @@
       "apple": "IOUSBHostDevice, IOUSBHostObject",
       "bifrost": "springboard/sdk/src/usb_device.rs (plan_claim, ClaimPlan), springboard/core/src/usb_claim.rs, springboard/core/src/usb_descriptors.rs",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. An app can plan a claim (configuration and alternate-setting requests in order, and the pipes the interface opens). Nothing sends the requests; the sandbox binds no /dev/bus/usb."
+      "note": "An app can plan a claim (configuration and alternate-setting requests in order, and the pipes the interface opens), and the setup packets and descriptors are encoded and parsed in the inline tests of usb_claim.rs and usb_descriptors.rs. Gap: nothing sends the requests and the sandbox binds no /dev/bus/usb, which needs hardware and a Midget check."
     },
     {
       "feature": "Interface, pipe and stream I/O (control, bulk, interrupt, isochronous)",
