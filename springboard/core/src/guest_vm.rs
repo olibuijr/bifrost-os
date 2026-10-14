@@ -171,6 +171,25 @@ pub struct DirectoryShare {
     pub read_only: bool,
 }
 
+/// BifrOSt most scanouts on one graphics device. This is a project choice, not a documented framework limit.
+pub const MAX_SCANOUTS: usize = 4;
+
+/// BifrOSt largest scanout side in pixels. This is a project choice, not a documented framework limit.
+pub const MAX_SCANOUT_PIXELS: u32 = 8192;
+
+/// One display a guest's graphics device drives, in pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Scanout {
+    pub width: u32,
+    pub height: u32,
+}
+
+/// A paravirtualized graphics device. The guest sees each scanout as a display, and the host shows it in a view.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraphicsDevice {
+    pub scanouts: Vec<Scanout>,
+}
+
 /// One device in a guest configuration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Device {
@@ -178,6 +197,8 @@ pub enum Device {
     Entropy,
     /// Host-to-guest socket channel. A guest has at most one.
     Socket,
+    /// Graphics for the guest's displays. A guest has at most one.
+    Graphics(GraphicsDevice),
     /// A shared host directory. Tags must be unique.
     DirectoryShare(DirectoryShare),
     /// A disk image. A guest may have several.
@@ -198,6 +219,12 @@ pub enum ConfigError {
     BadShareTag,
     /// Two shares use the same tag.
     DuplicateShareTag,
+    /// A graphics device has no scanout.
+    NoScanout,
+    /// A graphics device has more than `MAX_SCANOUTS` scanouts.
+    TooManyScanouts,
+    /// A scanout has a zero side, or a side above `MAX_SCANOUT_PIXELS`.
+    BadScanoutSize,
 }
 
 /// The complete guest description a launcher receives.
@@ -234,6 +261,29 @@ impl GuestConfig {
         let sockets = self.devices.iter().filter(|d| matches!(d, Device::Socket)).count();
         if sockets > 1 {
             return Err(ConfigError::DuplicateDevice("socket"));
+        }
+        let graphics: Vec<&GraphicsDevice> = self
+            .devices
+            .iter()
+            .filter_map(|d| match d {
+                Device::Graphics(g) => Some(g),
+                _ => None,
+            })
+            .collect();
+        if graphics.len() > 1 {
+            return Err(ConfigError::DuplicateDevice("graphics"));
+        }
+        for device in graphics {
+            if device.scanouts.is_empty() {
+                return Err(ConfigError::NoScanout);
+            }
+            if device.scanouts.len() > MAX_SCANOUTS {
+                return Err(ConfigError::TooManyScanouts);
+            }
+            let size_ok = |px: u32| (1..=MAX_SCANOUT_PIXELS).contains(&px);
+            if device.scanouts.iter().any(|s| !size_ok(s.width) || !size_ok(s.height)) {
+                return Err(ConfigError::BadScanoutSize);
+            }
         }
 
         let mut tags: Vec<&str> = Vec::new();

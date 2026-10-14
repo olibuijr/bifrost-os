@@ -66,9 +66,9 @@
     {
       "feature": "AAC object types and AudioSpecificConfig",
       "apple": "MPEG4ObjectID",
-      "bifrost": "springboard/src/media/mp4.rs (asc_params, line 564, returns rate and channels); springboard/src/media/sbr.rs (SBR for HE-AAC)",
+      "bifrost": "springboard/src/media/mp4.rs (parse_asc, AudioSpecificConfig, object_type_name, asc_params); springboard/src/media/sbr.rs (supported, Sbr::process; SBR for HE-AAC)",
       "status": "partial",
-      "note": "Only the sample rate and channel count are read from the config. The object type is not exposed."
+      "note": "parse_asc reads the object type (with the 31 escape), the signalled sample rate (including the 24-bit form) and the channel count; object_type_name names AAC Main, LC, HE-AAC, HE-AAC v2 and USAC. The explicit SBR extension rate is not applied, so HE-AAC reports its core rate. Tests: an_aac_lc_config_names_its_object_type_rate_and_channels, an_he_aac_config_reports_the_sbr_object_type_and_its_core_rate, an_escaped_object_type_is_32_plus_its_six_bit_value, sbr_passes_the_core_through_when_the_block_holds_no_sbr_data (springboard/tests/parity_sdk-tests-10.rs). Not yet tested on Midget"
     },
     {
       "feature": "Packet descriptions and packet dependencies",

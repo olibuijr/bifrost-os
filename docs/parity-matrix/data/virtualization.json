@@ -45,9 +45,9 @@
     {
       "feature": "Graphics device for guests",
       "apple": "Graphics (virtio GPU configuration)",
-      "bifrost": "tools/arch-vm.sh uses virtio-gpu for the guest shell",
+      "bifrost": "springboard/core/src/guest_vm.rs (GraphicsDevice, Scanout, Device::Graphics, GuestConfig::validate); tools/arch-vm.sh uses virtio-gpu for the guest shell",
       "status": "partial",
-      "note": "Only the dev harness configures a virtio-gpu; no app-facing device configuration"
+      "note": "GuestConfig can describe a graphics device with one to four scanouts of one to 8192 pixels per side (BifrOSt limits), and validate refuses a device with no scanout, too many, a bad size or a second device. Tests: a_graphics_device_with_one_display_is_valid, a_graphics_device_may_drive_up_to_the_scanout_limit, a_display_side_must_be_between_one_and_the_pixel_limit (springboard/core/tests/parity_sdk-tests-10.rs). Nothing starts a guest from this model yet, and only the dev harness configures a virtio-gpu; not yet tested on Midget"
     },
     {
       "feature": "Network devices",

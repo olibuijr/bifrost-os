@@ -12,7 +12,7 @@
    "apple": "Product, Product.SubscriptionInfo, SubscriptionInfo",
    "bifrost": "springboard/src/shell/store/api.rs (StoreApp, parse_catalog, fetch); wired: springboard/src/shell/store/api.rs",
    "status": "partial",
-   "note": "StoreApp has id, name, version, size, sha256, category, changelog; no price, currency, product type or subscription fields Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "StoreApp carries the price (minor units and currency), age rating, product type (consumable, non-consumable, non-renewable, auto-renewable), screenshots, release notes and install kind; no subscription status or renewal info yet. Tests: entries_missing_a_required_field_or_with_a_bad_version_or_hash_are_skipped, a_paid_entry_carries_its_price_rating_product_type_and_screenshots, release_dates_read_as_today_yesterday_days_ago_or_a_full_date (springboard/tests/parity_sdk-tests-10.rs). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
   },
   {
    "feature": "Purchase flow",
