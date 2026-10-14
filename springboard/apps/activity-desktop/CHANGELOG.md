@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — 2026-10-14
+
+- Move process copying to Process > Copy so it no longer duplicates the shell's Edit menu.
+
 ## 0.7.0
 
 - The parity matrix rows for the Memory breakdown, the 12 hr Average, the GPU shares and Edit > Copy now cite the functions that do the work (draw_pressure, EnergyAverages, parse_pmon, copy_text and row_text). The Memory row's note lists the App, Kernel, Shared, Cached Files, Compressed and Swap Used line the footer shows. Behaviour is unchanged.

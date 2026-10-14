@@ -357,6 +357,7 @@ impl App for ActivityApp {
         }
         process.push(AppMenuItem::new(MENU_STOP, "Stop Background Task").key("cmd+.").enabled(m.job_running()));
         process.push(AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"));
+        process.push(AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected()));
 
         let mut view = vec![AppMenuItem::submenu("Filter Processes")];
         for (i, f) in Filter::ALL.iter().enumerate() {
@@ -386,7 +387,6 @@ impl App for ActivityApp {
                     AppMenuItem::new(MENU_CLOSE_REPORT, "Close Report").enabled(has_report),
                 ],
             },
-            AppMenu { title: "Edit".into(), items: vec![AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected())] },
             AppMenu { title: "View".into(), items: view },
             AppMenu { title: "Process".into(), items: process },
         ]

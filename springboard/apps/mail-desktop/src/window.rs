@@ -489,14 +489,13 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(mail.find.is_some()),
         AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(mail.find.is_some()),
     ];
-
     vec![
         AppMenu { title: "Message".into(), items: message },
         AppMenu { title: "Move".into(), items: moves },
         AppMenu { title: "Mailbox".into(), items: mailbox },
         AppMenu { title: "View".into(), items: view },
         AppMenu { title: "Format".into(), items: format },
-        AppMenu { title: "Edit".into(), items: edit },
+        AppMenu { title: "Writing".into(), items: edit },
     ]
 }
 

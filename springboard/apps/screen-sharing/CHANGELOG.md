@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 — 2026-10-14
+
+- Add the store icon asset.
+
 ## 0.1.0
 
 - New Screen Sharing app: type the address of a computer that serves VNC (RFB 3.3, 3.7 or 3.8) and Connect. The remote desktop shows scaled to fit or at actual size.

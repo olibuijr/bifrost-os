@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 — 2026-10-14
+
+- Add the store icon asset.
+
 ## 0.1.0 — 2026-10-13
 
 - First version. Plots equations written as `y = f(x)`, a bare `f(x)`, parametric pairs `x = X(t), y = Y(t)` and polar

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.1 — 2026-10-14
+
+- Move message-specific writing and search commands into a Writing menu to avoid duplicating the shell Edit menu.
+
 ## 0.12.0 — 2026-10-14
 
 Reminders:

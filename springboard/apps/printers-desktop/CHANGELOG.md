@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — 2026-10-14
+
+- Add the store icon and derive the initial layout from the host-provided window size.
+
 ## 0.7.0
 
 - New: a job waiting or held on another computer says so in the Status column ("Waiting on the other computer", "Held on the other computer").
