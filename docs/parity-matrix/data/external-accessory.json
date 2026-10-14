@@ -52,9 +52,9 @@
     {
       "feature": "Accessory input and media devices",
       "apple": "Not in the framework; closest analogue for hardware input is GameController and CoreMIDI (outside this matrix)",
-      "bifrost": "springboard/src/bare/input.rs (evdev discovery, shell only); springboard/src/media/v4l2.rs (V4L2 camera devices, shell only)",
-      "status": "os",
-      "note": "Input and camera devices are opened by the shell. An app that needs a generic accessory cannot get its device path or events through the SDK."
+      "bifrost": "springboard/sdk/src/external_accessory.rs (accessory registry, connect and disconnect, data sessions); springboard/sdk/src/hid_devices.rs (HID device matching and changes); springboard/ui/src/device_match.rs (capability filter); springboard/src/bare/input.rs (evdev discovery, shell only); springboard/src/media/v4l2.rs (V4L2 camera devices, shell only)",
+      "status": "partial",
+      "note": "Apps see connected accessories and HID devices by role and transport, and open data sessions over the protocols an accessory declares, all in tested pure models. Gap: the shell opens the devices and no transport moves bytes to them, and apps never receive raw input events."
     },
     {
       "feature": "USB and serial accessories",

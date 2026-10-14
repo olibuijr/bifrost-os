@@ -38,9 +38,9 @@
     {
       "feature": "Pairing, bonding and forgetting devices",
       "apple": "System pairing UI and bonding handled by Core Bluetooth; no direct pairing API for apps",
-      "bifrost": "springboard/src/bare/bluetooth.rs:466 (Cmd::Pair), springboard/src/bare/bluetooth.rs:487 (Cmd::Forget), springboard/src/bare/bluetooth.rs:290-295 (bluetooth.ini stores bond keys, pin length and audio flag)",
-      "status": "os",
-      "note": "Bonds persist across reboots in bluetooth.ini. Apple exposes encryption permissions through CBAttributePermissions; that path is missing."
+      "bifrost": "springboard/sdk/src/bluetooth_service.rs (pair and forget requests); springboard/sdk/src/bluetooth_devices.rs (DeviceList::forget, paired devices); springboard/src/bare/bluetooth.rs:466 (Cmd::Pair), springboard/src/bare/bluetooth.rs:487 (Cmd::Forget), springboard/src/bare/bluetooth.rs:290-295 (bluetooth.ini stores bond keys, pin length and audio flag)",
+      "status": "partial",
+      "note": "Apps send pair and forget requests to the shell and keep their own paired list, both tested inline in the SDK modules. Bonds persist across reboots in bluetooth.ini and stay in the shell. Gap: apps cannot read bond keys or require encryption on their own attributes, and the pairing prompts are the shell's."
     },
     {
       "feature": "Device list and Settings UI",
@@ -52,9 +52,9 @@
     {
       "feature": "Audio output routing",
       "apple": "Not part of Core Bluetooth; the system routes audio through AVAudioSession and AVRouting",
-      "bifrost": "springboard/src/media/route.rs:37 (bluetooth_sink), springboard/src/bare/bluetooth.rs:251 (Status::audio_sink)",
-      "status": "os",
-      "note": "The Bluetooth module does not carry audio (A2DP and SBC are outside it). Now Playing uses the sink name. Audio profiles belong to the audio daemon."
+      "bifrost": "springboard/sdk/src/audio_devices.rs (Change::Route and the output device); springboard/src/media/route.rs:37 (bluetooth_sink), springboard/src/bare/bluetooth.rs:251 (Status::audio_sink)",
+      "status": "partial",
+      "note": "Apps read the output route and the default output device through the audio devices client, and a Bluetooth sink appears as one of those devices. The Bluetooth module does not carry audio: A2DP and SBC sit outside it, and audio profiles belong to the audio daemon."
     },
     {
       "feature": "Peripheral role: advertising and local GATT server",
@@ -87,9 +87,9 @@
     {
       "feature": "Bluetooth Classic and BR/EDR support",
       "apple": "Core Bluetooth Classic guide (sampleCode); BR/EDR discovery and connection through the framework",
-      "bifrost": "springboard/src/bare/bluetooth.rs:1-8 (module header: mgmt socket, BR/EDR and LE bookkeeping in the kernel)",
-      "status": "os",
-      "note": "Classic devices pair and connect through the shell. Apps get no Classic channel API."
+      "bifrost": "springboard/sdk/src/bluetooth_devices.rs (RemoteDevice class of device); springboard/src/bare/bluetooth.rs:1-8 (module header: mgmt socket, BR/EDR and LE bookkeeping in the kernel)",
+      "status": "partial",
+      "note": "Apps see the class of device that a Classic inquiry reports for each remote device, tested inline in bluetooth_devices. Gap: there is no Classic channel API, so an app cannot open a BR/EDR connection; Classic devices pair and connect through the shell."
     },
     {
       "feature": "Channel Sounding (distance measurement)",

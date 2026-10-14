@@ -101,9 +101,9 @@
   {
    "feature": "Controls (ControlWidgetButton, ControlWidgetToggle, StaticControlConfiguration, ControlCenter)",
    "apple": "ControlWidgetButton, ControlWidgetToggle, AppIntentControlConfiguration, ControlCenter, ControlValueProvider",
-   "bifrost": "springboard/src/shell/control_center.rs (Airplane, volume, backlight, Rotation Lock toggles); springboard/src/shell/assistive_touch.rs (Action enum)",
-   "status": "os",
-   "note": "Control Center has fixed system toggles only. Apps cannot add controls, and there is no control value provider."
+   "bifrost": "springboard/ui/src/control_widget.rs (ControlRegistry: buttons and toggles, identifiers, toggle values, presses); springboard/src/shell/control_center.rs (Airplane, volume, backlight, Rotation Lock toggles); springboard/src/shell/assistive_touch.rs (Action enum)",
+   "status": "partial",
+   "note": "The control registry holds an app's buttons and toggles under unique identifiers, with their values and presses, tested headless in ui/tests/parity_sdk-os-09.rs. Gap: Control Center shows only its fixed toggles and does not read the registry, so apps cannot add controls to the panel yet."
   },
   {
    "feature": "Push-driven widget and control updates (WidgetPushHandler, ControlPushHandler, APNs)",
