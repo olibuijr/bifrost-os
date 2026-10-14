@@ -435,6 +435,13 @@ impl Reminders {
         let settings_path = path.with_file_name("settings.tsv");
         let attach_dir = path.with_file_name("attachments");
         let settings = settings::load(&settings_path);
+        let opts = Options {
+            default_list: settings.default_list,
+            sort: settings.sort,
+            hidden_smart: settings.hidden_smart,
+            ..Options::default()
+        };
+        let collapsed: HashSet<u64> = settings.collapsed.iter().copied().collect();
         let mut app = Self {
             w,
             x0: 0.0,
@@ -452,7 +459,7 @@ impl Reminders {
             wall,
             screen: Screen::Items,
             view: View::Smart(Smart::All),
-            opts: Options { default_list: settings.default_list, ..Options::default() },
+            opts,
             options_open: false,
             file_export: false,
             notice: None,
@@ -461,7 +468,7 @@ impl Reminders {
             rows: vec![],
             row_y: vec![],
             items_h: 0.0,
-            collapsed: HashSet::new(),
+            collapsed,
             collapsed_groups: HashSet::new(),
             today: local_day(wall.unix, wall.offset),
             editor: None,
@@ -631,7 +638,14 @@ impl Reminders {
         } else {
             self.collapsed.extend(organize::parent_ids(&self.data.items));
         }
+        self.save_collapsed();
         self.rebuild(ui);
+    }
+
+    /// Keeps the folded subtasks in the settings file, so they are still folded after a restart.
+    fn save_collapsed(&mut self) {
+        self.settings.collapsed = self.collapsed.iter().copied().collect();
+        self.save_settings();
     }
 
     /// Reminders > Mark Due Date As: the selected open reminder gets the day, keeping its time.
@@ -722,6 +736,8 @@ impl Reminders {
 
     pub fn set_sort(&mut self, ui: &Ui, sort: Sort) {
         self.opts.sort = sort;
+        self.settings.sort = sort;
+        self.save_settings();
         self.rebuild(ui);
     }
 
@@ -732,7 +748,8 @@ impl Reminders {
 
     pub fn toggle_smart(&mut self, smart: Smart) {
         self.opts.toggle_smart(smart);
-        self.dirty = true;
+        self.settings.hidden_smart = self.opts.hidden_smart;
+        self.save_settings();
     }
 
     /// Lists > Pin List / Unpin List: a pinned list has a tile beside the smart lists.
@@ -2120,10 +2137,7 @@ impl Reminders {
             }
             Target::Options => self.options_open = !self.options_open,
             Target::OptClose => self.options_open = false,
-            Target::OptSort(s) => {
-                self.opts.sort = s;
-                self.rebuild(ui);
-            }
+            Target::OptSort(s) => self.set_sort(ui, s),
             Target::OptGroup(g) => {
                 self.opts.group = g;
                 self.rebuild(ui);
@@ -2148,6 +2162,7 @@ impl Reminders {
                     if !self.collapsed.remove(&id) {
                         self.collapsed.insert(id);
                     }
+                    self.save_collapsed();
                     self.rebuild(ui);
                 }
             }

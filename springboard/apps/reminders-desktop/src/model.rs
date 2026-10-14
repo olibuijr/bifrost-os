@@ -570,6 +570,19 @@ impl Sort {
             Self::Created => "Creation Date",
         }
     }
+    /// The word the settings file stores this order as.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::Due => "due",
+            Self::Priority => "priority",
+            Self::Title => "title",
+            Self::Created => "created",
+        }
+    }
+    pub fn from_key(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|s| s.key() == text)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
