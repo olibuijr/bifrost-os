@@ -218,9 +218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs",
+   "status": "partial",
+   "note": "Intent world-clock-time (city time, shortcut in Search) declared in clock-desktop manifest.toml; built on os/team-l-04-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
@@ -239,8 +239,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Writing Tools is an Apple Intelligence model service; BifrOSt has spellcheck only (springboard/sdk/src/spellcheck.rs)",
    "rea": []
   },
   {

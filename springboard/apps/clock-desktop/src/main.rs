@@ -109,6 +109,15 @@ impl App for ClockApp {
         self.clock.as_ref().and_then(|c| c.next_wake(t, true))
     }
 
+    fn intents(&self) -> Vec<bifrost_app::intents::Intent> {
+        clock::intent::intents()
+    }
+
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, params: &Json) -> Result<bifrost_app::intents::IntentResult, bifrost_app::control::RpcError> {
+        let (unix, offset) = wall_time();
+        clock::intent::perform(id, params, unix, offset)
+    }
+
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
         self.clock.as_ref().map(|c| c.controls(&ctx.ui)).unwrap_or_default()
     }
