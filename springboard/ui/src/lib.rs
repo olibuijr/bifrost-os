@@ -1198,4 +1198,7 @@ pub mod auth_prompt;
 pub mod video_info;
 
 pub mod sk_action;
+pub mod markup_adornment;
+pub mod ax_ignored;
+pub mod dictation_entry;
 

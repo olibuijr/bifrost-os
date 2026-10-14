@@ -45,9 +45,9 @@
     {
       "feature": "Accessibility ignored cells (IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell)",
       "apple": "IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell (cells hidden from accessibility)",
-      "bifrost": "springboard/ui/src/ax.rs (AxText, role_name, Priority); springboard/src/shell/atspi/ (accessibility bridge)",
-      "status": "gap",
-      "note": "No Bluetooth picker UI exists in the SDK, and the accessibility element map (ui/src/ax.rs) has no ignored-element flag, so no cell can be hidden from assistive technology. The accessibility bridge exists for the shell, but nothing marks Bluetooth-specific cells as ignored."
+      "bifrost": "springboard/ui/src/ax_ignored.rs (CellKind::is_ignored, exposed, ignored_count)",
+      "status": "partial",
+      "note": "Image and text-field cells are ignored and filtered out of the exposed list, and tests in springboard/ui/tests/parity_sdk-gaps-03.rs cover it headless. Gap: the element map in ui/src/ax.rs has no ignored flag, the shell's accessibility bridge does not call this filter yet, and no Bluetooth picker cell is built on it."
     },
     {
       "feature": "Bluetooth power, scan and device state (framework enumerations, constants, functions, BluetoothKeyboardReturnType)",
