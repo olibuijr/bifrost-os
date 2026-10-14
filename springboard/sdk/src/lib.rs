@@ -86,6 +86,7 @@ pub mod keychain;
 pub mod keychain_groups;
 pub mod keychain_query;
 pub mod passwords;
+pub mod password_suggest;
 pub mod entropy;
 pub mod passkey;
 pub mod password_gen;
