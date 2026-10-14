@@ -59,9 +59,9 @@
     {
       "feature": "Route selection (AirPlay and nearby receivers)",
       "apple": "AVRoutePickerView, AVRoutePickerViewDelegate, AVRoutePickerViewButtonStyle",
-      "bifrost": "springboard/src/shell/pages.rs:598 (AirPlay & Handoff page), springboard/src/shell/settings.rs",
-      "status": "gap",
-      "note": "Settings page only; no route picker view. Deildu serves a LAN URL so an external TV can play the stream (springboard/CHANGELOG.md), which is not an AVRoutePicker equivalent."
+      "bifrost": "springboard/ui/src/route_picker.rs (destinations: picker rows), springboard/ui/src/route_auth.rs (RouteAuth: authorization and active state)",
+      "status": "partial",
+      "note": "Picker rows and route authorization are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (route_rows_list_local_outputs_first_then_receivers_sorted_ignoring_case, a_route_row_is_active_only_after_the_route_is_authorized_and_activated, the_routing_menu_sends_each_delegate_event_once). The button state is in ui/src/route_picker_view.rs, drawn nowhere. Not wired into the shell or apps: there is no receiver discovery and no AirPlay streaming."
     },
     {
       "feature": "Third-party casting and metadata identifiers",
