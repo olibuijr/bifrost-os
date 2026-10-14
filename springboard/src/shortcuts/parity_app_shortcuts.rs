@@ -208,9 +208,10 @@ fn every_starter_belongs_to_a_gallery_category() {
 }
 
 #[test]
-fn the_gallery_has_three_more_starters_than_before() {
-    assert_eq!(starters().len(), 10);
+fn the_gallery_has_fourteen_starters_and_keeps_the_first_ten_in_place() {
+    assert_eq!(starters().len(), 14);
     assert_eq!(starters()[7].shortcut.name, "Wind Down");
+    assert_eq!(starters()[10].shortcut.name, "Sign Off");
 }
 
 #[test]

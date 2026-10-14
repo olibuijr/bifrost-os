@@ -615,6 +615,68 @@ impl Daily {
     }
 }
 
+/// The lowest and highest charge, in percent, a battery automation can name.
+pub const MIN_BATTERY: u8 = 5;
+pub const MAX_BATTERY: u8 = 95;
+
+/// A personal automation: a condition that runs its shortcut by itself, besides its menu key and daily reminder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Automation {
+    /// runs when the app named `APP_CHOICES[i]` opens
+    AppOpens(usize),
+    /// runs each time the charge falls below this percent (`MIN_BATTERY` to `MAX_BATTERY`)
+    BatteryBelow(u8),
+}
+
+impl Automation {
+    /// The form stored in the list file: `open:N` for `APP_CHOICES[N]`, or `battery:P`.
+    fn encode(self) -> String {
+        match self {
+            Automation::AppOpens(i) => format!("open:{i}"),
+            Automation::BatteryBelow(p) => format!("battery:{p}"),
+        }
+    }
+
+    /// The automation a stored form names; `None` for an unknown kind or a value out of range.
+    fn decode(v: &str) -> Option<Automation> {
+        let (kind, n) = v.split_once(':')?;
+        let n: usize = n.parse().ok()?;
+        match kind {
+            "open" => (n < APP_CHOICES.len()).then_some(Automation::AppOpens(n)),
+            "battery" => u8::try_from(n).ok().filter(|p| (MIN_BATTERY..=MAX_BATTERY).contains(p)).map(Automation::BatteryBelow),
+            _ => None,
+        }
+    }
+}
+
+/// Something that can start an automation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Event<'a> {
+    /// the app with this name opened
+    AppOpened(&'a str),
+    /// the battery charge changed from `before` (`None` for the first reading) to `now`, in percent
+    BatteryLevel { before: Option<u8>, now: u8 },
+}
+
+/// Whether a change in the charge crosses below `level`: the charge was at or above it and is now below it. The first
+/// reading (`before` of `None`) crosses nothing.
+pub fn battery_fell_below(before: Option<u8>, now: u8, level: u8) -> bool {
+    before.is_some_and(|b| b >= level) && now < level
+}
+
+/// The positions in `list`, in list order, of the automations that `event` starts.
+pub fn due(list: &[Shortcut], event: Event) -> Vec<usize> {
+    list.iter()
+        .enumerate()
+        .filter(|(_, s)| match (s.automation, event) {
+            (Some(Automation::AppOpens(i)), Event::AppOpened(app)) => APP_CHOICES.get(i) == Some(&app),
+            (Some(Automation::BatteryBelow(level)), Event::BatteryLevel { before, now }) => battery_fell_below(before, now, level),
+            _ => false,
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Shortcut {
     pub name: String,
@@ -629,12 +691,14 @@ pub struct Shortcut {
     pub folder: usize,
     /// the digit (1 to `MAX_KEY`) that runs the shortcut from the Shortcuts menu with Control and Command; 0 for none
     pub key: u8,
+    /// a personal automation that runs the shortcut when its event happens; `None` for none
+    pub automation: Option<Automation>,
 }
 
 impl Shortcut {
-    /// A shortcut with no reminder, the plain glyph, no folder and no menu key.
+    /// A shortcut with no reminder, the plain glyph, no folder, no menu key and no automation.
     pub fn new(name: &str, color: usize, actions: Vec<Action>) -> Shortcut {
-        Shortcut { name: name.into(), color, actions, schedule: None, glyph: 0, folder: 0, key: 0 }
+        Shortcut { name: name.into(), color, actions, schedule: None, glyph: 0, folder: 0, key: 0, automation: None }
     }
 }
 
@@ -644,15 +708,19 @@ pub fn serialize(list: &[Shortcut]) -> String {
         let name: String = s.name.chars().filter(|c| !c.is_control()).collect();
         let acts: Vec<String> = s.actions.iter().map(Action::encode).collect();
         out += &format!("{name}\t{}\t{}", s.color, acts.join(";"));
-        let extra = s.glyph != 0 || s.folder != 0 || s.key != 0;
+        let extra = s.glyph != 0 || s.folder != 0 || s.key != 0 || s.automation.is_some();
         if s.schedule.is_some() || extra {
             out += &format!("\t{}", s.schedule.map(Daily::label).unwrap_or_default());
         }
         if extra {
             out += &format!("\t{}\t{}", s.glyph, s.folder);
         }
-        if s.key != 0 {
+        // the key is written as 0 when only an automation follows it, so the automation keeps its place
+        if s.key != 0 || s.automation.is_some() {
             out += &format!("\t{}", s.key);
+        }
+        if let Some(automation) = s.automation {
+            out += &format!("\t{}", automation.encode());
         }
         out.push('\n');
     }
@@ -670,7 +738,8 @@ pub fn parse(text: &str) -> Vec<Shortcut> {
             let glyph = f.next().and_then(|g| g.parse::<usize>().ok()).filter(|g| *g < GLYPHS.len()).unwrap_or(0);
             let folder = f.next().and_then(|g| g.parse::<usize>().ok()).filter(|g| *g <= FOLDERS.len()).unwrap_or(0);
             let key = f.next().and_then(|k| k.parse::<u8>().ok()).filter(|k| (1..=MAX_KEY).contains(k)).unwrap_or(0);
-            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule, glyph, folder, key })
+            let automation = f.next().and_then(Automation::decode);
+            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule, glyph, folder, key, automation })
         })
         .take(MAX_SHORTCUTS)
         .collect()
@@ -803,9 +872,9 @@ pub fn rename(list: &mut [Shortcut], i: usize, wanted: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// Adds a copy of shortcut `i` right after it, named "<name> Copy" (made unique) and without the daily reminder or the
-/// menu key, so the copy does not notify a second time or take a key from the original. Returns the copy's position, or
-/// `None` when `i` is out of range or the list is full.
+/// Adds a copy of shortcut `i` right after it, named "<name> Copy" (made unique) and without the daily reminder, the
+/// menu key or the automation, so the copy does not notify a second time, take a key from the original or run twice.
+/// Returns the copy's position, or `None` when `i` is out of range or the list is full.
 pub fn duplicate(list: &mut Vec<Shortcut>, i: usize) -> Option<usize> {
     if i >= list.len() || list.len() >= MAX_SHORTCUTS {
         return None;
@@ -814,6 +883,7 @@ pub fn duplicate(list: &mut Vec<Shortcut>, i: usize) -> Option<usize> {
     copy.name = unique_name(list, &format!("{} Copy", copy.name));
     copy.schedule = None;
     copy.key = 0;
+    copy.automation = None;
     list.insert(i + 1, copy);
     Some(i + 1)
 }
@@ -978,6 +1048,34 @@ pub fn starters() -> Vec<Starter> {
             3,
             vec![Action::LowPower(true), Action::RunScript("free -h".into()), Action::ShowResult("{Output}".into())],
         ),
+        mk("Copy a sign-off for a message.", "Everyday", "Sign Off", 2, 7, 1, vec![Action::CopyText("On my way".into())]),
+        mk(
+            "Show the date and time from the shell.",
+            "Tools",
+            "Date Check",
+            4,
+            3,
+            3,
+            vec![Action::RunScript("date".into()), Action::ShowResult("{Output}".into())],
+        ),
+        mk(
+            "Dim the screen and start a twenty-minute rest timer.",
+            "Focus",
+            "Eye Rest",
+            8,
+            11,
+            2,
+            vec![Action::Brightness(30), Action::Timer(20)],
+        ),
+        mk(
+            "Turn on Do Not Disturb and open Music.",
+            "Everyday",
+            "Listen Mode",
+            5,
+            4,
+            0,
+            vec![Action::Dnd(true), Action::OpenApp("Music".into())],
+        ),
     ]
 }
 
@@ -1001,8 +1099,9 @@ pub fn export(list: &[Shortcut]) -> String {
     format!("{EXPORT_HEADER}\n{}", serialize(list))
 }
 
-/// Adds the shortcuts of an export file to `list` under names no other shortcut has, without their reminders or menu
-/// keys. Returns how many were added. Fails for a file that is not an export, one with no shortcuts, or a full list.
+/// Adds the shortcuts of an export file to `list` under names no other shortcut has, without their reminders, menu
+/// keys or automations. Returns how many were added. Fails for a file that is not an export, one with no shortcuts, or a
+/// full list.
 pub fn import(list: &mut Vec<Shortcut>, text: &str) -> Result<usize, String> {
     if !text.starts_with(EXPORT_HEADER) {
         return Err("This is not a Shortcuts file.".into());
@@ -1019,6 +1118,7 @@ pub fn import(list: &mut Vec<Shortcut>, text: &str) -> Result<usize, String> {
         s.name = unique_name(list, &s.name);
         s.schedule = None;
         s.key = 0;
+        s.automation = None;
         list.push(s);
         added += 1;
     }

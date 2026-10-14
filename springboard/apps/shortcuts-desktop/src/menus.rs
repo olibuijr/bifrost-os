@@ -16,6 +16,7 @@ const RENAME: u32 = 6;
 const FIND: u32 = 7;
 const RUN: u32 = 8;
 const GALLERY: u32 = 9;
+const HELP: u32 = 10;
 /// The menu id of "Run" for shortcut number `i` is `RUN_BASE + i`.
 const RUN_BASE: u32 = 100;
 /// The most shortcuts the Shortcuts menu lists.
@@ -63,6 +64,7 @@ pub fn build(list: &[Shortcut], open: bool) -> Vec<AppMenu> {
             ],
         },
         AppMenu { title: "Shortcuts".into(), items: shortcuts },
+        AppMenu { title: "Help".into(), items: vec![AppMenuItem::new(HELP, "Shortcuts Help")] },
     ]
 }
 
@@ -78,6 +80,7 @@ pub fn command(id: u32) -> Option<Command> {
         FIND => Command::Find,
         RUN => Command::RunOpen,
         GALLERY => Command::Gallery,
+        HELP => Command::Help,
         id if id >= RUN_BASE && ((id - RUN_BASE) as usize) < MENU_RUNS => Command::Run((id - RUN_BASE) as usize),
         _ => return None,
     })
@@ -94,9 +97,19 @@ mod tests {
     }
 
     #[test]
-    fn the_menus_are_file_edit_and_shortcuts() {
+    fn the_menus_are_file_edit_shortcuts_and_help() {
         let titles: Vec<String> = build(&defaults(), false).into_iter().map(|m| m.title).collect();
-        assert_eq!(titles, vec!["File", "Edit", "Shortcuts"]);
+        assert_eq!(titles, vec!["File", "Edit", "Shortcuts", "Help"]);
+    }
+
+    #[test]
+    fn the_help_item_opens_the_help_panel_and_is_always_enabled() {
+        let menus = build(&[], false);
+        let help = &menus[3].items;
+        assert_eq!(help.len(), 1);
+        assert_eq!(help[0].title, "Shortcuts Help");
+        assert!(help[0].enabled);
+        assert_eq!(command(help[0].id), Some(Command::Help));
     }
 
     #[test]

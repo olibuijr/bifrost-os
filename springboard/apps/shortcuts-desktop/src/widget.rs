@@ -209,6 +209,18 @@ pub enum Command {
     Run(usize),
     Export,
     Import,
+    /// shows the help panel
+    Help,
+}
+
+/// The help panel: one row per task, in the order a first-time user needs them.
+fn help_snippet() -> Snippet {
+    Snippet::new("Shortcuts Help")
+        .row("Make", "Choose New Shortcut, then add steps from Add Action in the editor.")
+        .row("Run", "Run a shortcut from its tile, from the Shortcuts menu, or with Command-R in the editor.")
+        .row("Keys", "A shortcut with a menu key runs with Control-Command and its digit while the app is in front.")
+        .row("Share", "File > Export... writes a .shortcut file; File > Import Shortcuts... reads one.")
+        .row("Start", "Gallery adds a ready-made shortcut that you can change.")
 }
 
 enum Look {
@@ -487,6 +499,11 @@ impl Shortcuts {
             until: t + RESULT_MS,
         });
         self.dirty = true;
+    }
+
+    /// Shows the help panel the Help menu asks for.
+    pub fn show_help(&mut self) {
+        self.show_snippet(&help_snippet(), None, None, self.now);
     }
 
     /// The Login Items status the shell reported, or `None` when it has not answered.
@@ -1133,6 +1150,7 @@ impl Shortcuts {
             Command::Run(i) => self.run_all(i),
             Command::Export => self.queue_export(),
             Command::Import => self.import_request = true,
+            Command::Help => self.show_help(),
             Command::Duplicate | Command::Delete | Command::Rename | Command::RunOpen => {}
         }
         self.dirty = true;
@@ -2122,6 +2140,16 @@ mod tests {
         assert!(w.wants_keyboard());
         w.command(Command::Import);
         assert!(w.take_import_request());
+    }
+
+    #[test]
+    fn the_help_item_shows_the_help_panel_with_a_row_per_task() {
+        let mut w = window("help");
+        w.command(Command::Help);
+        let panel = w.result.as_ref().expect("the help panel is open");
+        assert_eq!(panel.title, "Shortcuts Help");
+        let captions: Vec<&str> = panel.rows.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(captions, vec!["Make", "Run", "Keys", "Share", "Start"]);
     }
 
     #[test]

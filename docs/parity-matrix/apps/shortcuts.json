@@ -37,8 +37,8 @@
    "area": "view",
    "apple": "editor",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1363",
-   "note": "Add and remove with steppers; move up and down arrows; a grip at the right edge of each plain step drags it to another row, and the step moves when released (touch, widget.rs:1363; model move_step, springboard/src/shortcuts.rs:834). Openers, Otherwise and the ends do not drag. No live preview of the moved row while dragging. Not yet checked on the lab machine.",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1401",
+   "note": "Add and remove with steppers; move up and down arrows; a grip at the right edge of each plain step drags it to another row, and the step moves when released (touch, widget.rs:1401; model move_step, springboard/src/shortcuts.rs:834). Openers, Otherwise and the ends do not drag. No live preview of the moved row while dragging. Not yet checked on the lab machine.",
    "wire": "A live preview of the moved row while it is dragged; dragging a whole block"
   },
   {
@@ -64,8 +64,8 @@
    "area": "view",
    "apple": "editor",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1256",
-   "note": "Every step passes its result on as {Output}; Set Variable names it ({Name}, flow in springboard/src/shortcuts/flow.rs). While a text step is typed into, a row per variable (Output, then the names Set Variable steps set; variable_names, springboard/src/shortcuts.rs:751) inserts {Name} into the text (widget.rs:1256). Variable chips drawn inside the text field are not done: tokens are typed text. Not yet checked on the lab machine.",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1274",
+   "note": "Every step passes its result on as {Output}; Set Variable names it ({Name}, flow in springboard/src/shortcuts/flow.rs). While a text step is typed into, a row per variable (Output, then the names Set Variable steps set; variable_names, springboard/src/shortcuts.rs:751) inserts {Name} into the text (widget.rs:1274). Variable chips drawn inside the text field are not done: tokens are typed text. Not yet checked on the lab machine.",
    "wire": "Variable chips drawn in the field instead of rows under the step; typed values (numbers, lists, files) beyond text"
   },
   {
@@ -91,8 +91,8 @@
    "area": "menu",
    "apple": "File / context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:949",
-   "note": "The Name row types a new name (Return saves, Escape cancels); Duplicate Shortcut in the editor and File > Duplicate Shortcut; delete in the editor and Shortcut > Delete Shortcut. A long press on a tile opens Run, Rename, Duplicate and Delete under it (choice_cells, widget.rs:949; choose, widget.rs:986). Not yet checked on the lab machine.",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:966",
+   "note": "The Name row types a new name (Return saves, Escape cancels); Duplicate Shortcut in the editor and File > Duplicate Shortcut; delete in the editor and Shortcut > Delete Shortcut. A long press on a tile opens Run, Rename, Duplicate and Delete under it (choice_cells, widget.rs:966; choose, widget.rs:1003). Not yet checked on the lab machine.",
    "wire": ""
   },
   {
@@ -100,7 +100,7 @@
    "area": "view",
    "apple": "sidebar folders",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:503",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:551",
    "note": "The Folder row types a folder name; the sidebar lists the folders in use with counts and filters the grid; a new shortcut joins the folder on screen. Moving by drag and nested folders are not done. Not yet checked on the lab machine.",
    "wire": "User-made folders: create, rename and delete (the three folders are fixed), and moving a tile by dragging it"
   },
@@ -108,10 +108,10 @@
    "feature": "Personal automations",
    "area": "view",
    "apple": "Automation",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not built: the shortcut model has no automation field and the app has no trigger code. The daily reminder is the only trigger (services.rs). An earlier note described an automation row that was never in the code.",
-   "wire": "Automations list with time, app-open and battery triggers"
+   "status": "partial",
+   "bifrost": "springboard/src/shortcuts.rs:624 (Automation, due, battery_fell_below); springboard/tests/parity_app-shortcuts.rs",
+   "note": "The shortcut model stores one automation per shortcut, an app opening or the charge falling below a level, in the list file; due returns the shortcuts that an app opening or a battery change starts, tested headless. Gap: the editor has no Automation row, and the app feeds no app-open or battery events to due, so an automation does not run on its own yet.",
+   "wire": "An Automation row in the editor's Details group (When App Opens, When Battery Is Low, with a stepper); the shell's battery reading and app-open events passed to shortcuts::due"
   },
   {
    "feature": "Open at login",
@@ -127,8 +127,8 @@
    "area": "settings",
    "apple": "Details > keyboard shortcut",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:24",
-   "note": "Each shortcut has its own menu key, 1 to 9 (Control and Command with the digit), chosen with the Menu Key row in the editor (set_key, springboard/src/shortcuts.rs:722; the first four shortcuts of a first launch hold keys 1 to 4); the app's Shortcuts menu lists every shortcut with its key and runs it while the app is in front (run_key, menus.rs:24). A system-wide hotkey needs shell hotkey registration, which is not done. Not yet checked on the lab machine.",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:25",
+   "note": "Each shortcut has its own menu key, 1 to 9 (Control and Command with the digit), chosen with the Menu Key row in the editor (set_key, springboard/src/shortcuts.rs:722; the first four shortcuts of a first launch hold keys 1 to 4); the app's Shortcuts menu lists every shortcut with its key and runs it while the app is in front (run_key, menus.rs:25). A system-wide hotkey needs shell hotkey registration, which is not done. Not yet checked on the lab machine.",
    "wire": "A shell hotkey registration that works while the app is not in front"
   },
   {
@@ -154,8 +154,8 @@
    "area": "toolbar",
    "apple": "search field",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:938",
-   "note": "A search field in the toolbar of the grid, the Add Action list and the gallery filters what is listed as you type: tiles by name, step or folder; built-in actions and intents by title; starters by name, line or heading (fits, widget.rs:938). Find focuses it on the grid; Escape clears it. Not yet checked on the lab machine.",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:955",
+   "note": "A search field in the toolbar of the grid, the Add Action list and the gallery filters what is listed as you type: tiles by name, step or folder; built-in actions and intents by title; starters by name, line or heading (fits, widget.rs:955). Find focuses it on the grid; Escape clears it. Not yet checked on the lab machine.",
    "wire": ""
   },
   {
@@ -172,18 +172,18 @@
    "area": "view",
    "apple": "Gallery",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:879",
-   "note": "A Gallery row in the sidebar lists ten starter shortcuts under three headings (Focus, Everyday, Tools), each with a line of its steps; the search narrows them; tapping one adds a copy. Not yet checked on the lab machine.",
-   "wire": "More starters beyond the ten listed"
+   "bifrost": "springboard/src/shortcuts.rs:949 (starters); springboard/tests/parity_app-shortcuts.rs",
+   "note": "A Gallery row in the sidebar lists fourteen starter shortcuts under three headings (Focus, Everyday, Tools), each with a line of its steps; the search narrows them; tapping one adds a copy. Not yet checked on the lab machine.",
+   "wire": ""
   },
   {
    "feature": "App menus",
    "area": "menu",
    "apple": "MainMenu",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:29",
-   "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find) and Shortcuts (Run, Gallery and one item per shortcut with its menu key) with key equivalents (build, menus.rs:29); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:949). Not yet checked on the lab machine.",
-   "wire": "Window and Help items"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:30 (build); springboard/apps/shortcuts-desktop/src/widget.rs:217 (help_snippet)",
+   "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find), Shortcuts (Run, Gallery and one item per shortcut with its menu key) and Help (Shortcuts Help, which opens a panel with one row per task) with key equivalents (build, menus.rs:30); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:966). Gap: no Window menu. Not yet checked on the lab machine.",
+   "wire": "A Window menu with the window commands"
   },
   {
    "feature": "Cloud sharing links",
