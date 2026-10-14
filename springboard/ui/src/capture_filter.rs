@@ -67,6 +67,27 @@ impl ContentFilter {
         }
     }
 
+    /// The same filter with the menu bar included or left out.
+    pub fn with_menu_bar(mut self, include: bool) -> Self {
+        self.include_menu_bar = include;
+        self
+    }
+
+    /// The same filter rendered at `scale` device pixels per point.
+    pub fn with_scale(mut self, scale: f32) -> Self {
+        self.point_pixel_scale = scale;
+        self
+    }
+
+    /// The device pixels per point the stream renders at. A zero, negative or non-finite scale is read as 1.
+    pub fn scale(&self) -> f32 {
+        if self.point_pixel_scale.is_finite() && self.point_pixel_scale > 0.0 {
+            self.point_pixel_scale
+        } else {
+            1.0
+        }
+    }
+
     /// The windows this filter captures, in the content's front-to-back order. A window scope yields that
     /// window if it exists. A display scope yields the windows whose largest overlap is that display and that
     /// the rule keeps.
