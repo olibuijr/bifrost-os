@@ -120,7 +120,8 @@ impl WmState {
         let presentation = PresentationState::new::<WmState>(&dh, 1);
         handle
             .insert_source(listening, |stream, _, state: &mut WmState| {
-                if let Err(e) = state.dh.insert_client(stream, Arc::new(ClientState::default())) {
+                let uid = peer_uid(&stream);
+                if let Err(e) = state.dh.insert_client(stream, Arc::new(ClientState { uid, ..ClientState::default() })) {
                     eprintln!("bifrost-wm: client refused: {e}");
                 }
             })
@@ -320,6 +321,15 @@ impl WmState {
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
+    /// The user id of the process behind the socket, read when it connected (`None`: unreadable, or not a socket
+    /// client). Global filters read it from here: they run with the backend's state lock held, and
+    /// `Client::get_credentials` takes that lock again.
+    pub uid: Option<u32>,
+}
+
+/// The user id of the process on the other end of `stream` (`SO_PEERCRED`).
+pub fn peer_uid(stream: &std::os::unix::net::UnixStream) -> Option<u32> {
+    smithay::reexports::rustix::net::sockopt::socket_peercred(stream).ok().map(|cred| cred.uid.as_raw())
 }
 
 impl ClientData for ClientState {

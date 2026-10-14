@@ -29,7 +29,10 @@ use smithay::{
     },
 };
 
-use crate::{state::WmState, wm::Rect};
+use crate::{
+    state::{ClientState, WmState},
+    wm::Rect,
+};
 
 /// Environment variable that selects the `Trust` policy.
 pub const POLICY_ENV: &str = "BIFROST_WM_INPUT_METHOD";
@@ -71,8 +74,11 @@ fn own_uid() -> Option<u32> {
 }
 
 /// The global filter of the privileged protocols: true for the clients `trust` admits.
-fn client_filter(dh: DisplayHandle, trust: Trust, own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
-    move |client: &Client| trust.admits(client.get_credentials(&dh).ok().map(|c| c.uid), own)
+///
+/// The user id comes from the client's own data (`ClientState::uid`, read when it connected). `Client::get_credentials`
+/// would deadlock: the backend runs global filters with its state lock held and that call takes the lock again.
+fn client_filter(trust: Trust, own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
+    move |client: &Client| trust.admits(client.get_data::<ClientState>().and_then(|state| state.uid), own)
 }
 
 /// Where a popup of `size` (w, h) goes for a text cursor at `cursor`, inside `bounds` (all output pixels): left edges
@@ -116,8 +122,8 @@ impl TextInputProtocols {
         let own = own_uid();
         TextInputProtocols {
             _text_input: Some(TextInputManagerState::new::<WmState>(dh)),
-            _input_method: Some(InputMethodManagerState::new::<WmState, _>(dh, client_filter(dh.clone(), trust, own))),
-            _virtual_keyboard: Some(VirtualKeyboardManagerState::new::<WmState, _>(dh, client_filter(dh.clone(), trust, own))),
+            _input_method: Some(InputMethodManagerState::new::<WmState, _>(dh, client_filter(trust, own))),
+            _virtual_keyboard: Some(VirtualKeyboardManagerState::new::<WmState, _>(dh, client_filter(trust, own))),
             popups: Vec::new(),
         }
     }
@@ -227,6 +233,13 @@ mod tests {
         for off in ["off", " OFF ", "0", "no", "false", "none"] {
             assert_eq!(Trust::parse(Some(off)), Trust::Off, "{off:?}");
         }
+    }
+
+    #[test]
+    fn the_user_of_a_socket_peer_is_read_from_the_socket() {
+        let (a, _b) = std::os::unix::net::UnixStream::pair().expect("socket pair");
+        assert!(own_uid().is_some());
+        assert_eq!(crate::state::peer_uid(&a), own_uid(), "both ends of the pair belong to this process");
     }
 
     #[test]
