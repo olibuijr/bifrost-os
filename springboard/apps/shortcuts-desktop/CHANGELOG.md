@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0 — 2026-10-14
+
+- Personal automations in the shortcut model: a shortcut can run when an app opens or when the battery charge falls below a level (5 to 95 percent). The automation is saved after the menu key in the list file; older versions read the file and ignore it. A battery change starts an automation only when the charge crosses below its level, so the first reading starts nothing. Duplicating a shortcut and importing one drop its automation.
+- Gallery: four more starters under the existing headings (Sign Off, Date Check, Eye Rest, Listen Mode), fourteen in all.
+- Help menu: Shortcuts Help opens the result panel with one row per task (make, run, menu keys, sharing, the gallery).
+- Not done: the Automation row in the editor, the battery reading and app-open events that would start an automation while the app runs, a Window menu, user-made folders, a custom colour, Choose from Menu, the Output step, Ask for Input and Get Contents of URL running in the app, live preview while dragging a step, drag-to-import of files, the share sheet, and a shell-wide hotkey.
+
 ## 1.9.0 — 2026-10-14
 
 - Editor: each plain step has a grip at its right edge. Drag the grip up or down and release to move the step to that row. Openers, Otherwise and the ends keep their place so blocks keep their shape. The step moves when released; a line marks where it lands.
