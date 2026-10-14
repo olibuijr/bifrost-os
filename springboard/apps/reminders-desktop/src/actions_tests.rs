@@ -695,7 +695,12 @@ fn import_reads_a_checklist_into_a_new_list_and_print_gives_it_back() {
     assert!(!app.import_checklist(&ui, "nothing to read here", "x"));
     assert_eq!(app.notice.as_deref(), Some("Nothing to import"));
     app.activate(&ui, Target::Smart(Smart::All), 5.0);
-    assert!(app.printable_list().is_none(), "a smart list is not printed");
+    let (name, body) = app.printable_list().unwrap();
+    assert_eq!(name, "All");
+    assert_eq!(body, "# All\n\n- [ ] Socks\n- [x] Wool (2026-10-08 09:05)\n- [ ] Shoes\n", "a smart list prints its rows flat");
+    assert!(app.can_print());
+    app.activate(&ui, Target::Smart(Smart::Today), 5.0);
+    assert_eq!(app.printable_list().unwrap().1, "# Today\n\n", "a smart list with no rows prints its title");
     assert_eq!(app.edit_titles().0, "Undo Import List");
     cleanup(&path);
 }

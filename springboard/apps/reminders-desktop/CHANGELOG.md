@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.16.0 — 2026-10-14
+
+- Settings: the all-day alert time offers every half hour from 6:00 to 20:00 (it offered ten fixed times).
+- File > Print List prints a smart list (Today, Scheduled, Flagged, All, Completed, or a custom smart list) as a flat Markdown checklist under its name. Search results are not printed yet.
+- File > Save List As... writes the list's Markdown checklist to a file chosen in the save panel, beside Export List.
+
 ## 1.15.0 — 2026-10-14
 
 - View > Sort By, View > Show Smart List and Hide All Subtasks are saved in `settings.tsv`: the sort order, the hidden smart list tiles and the folded subtasks are the same after a restart.
