@@ -33,7 +33,7 @@
       "apple": "CVPixelFormatDescription, CVPixelFormatType, CVPixelBufferIsPlanar, CVPixelBufferGetPlaneCount",
       "bifrost": "springboard/render/src/pixel_format.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-core-video, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. formats are DRM fourccs chosen internally; apps cannot register or query pixel format descriptions"
+      "note": "Fourcc parsing and printing, the format table, plane sizes and buffer lengths (NV12, NV16, RGBA, RGB565, odd sizes) are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Not wired into apps or the shell, not yet tested on Midget. Formats are DRM fourccs chosen internally; apps cannot register or query pixel format descriptions."
     },
     {
       "feature": "Display timing and vsync (CVDisplayLink, CVTime, CVTimeStamp)",

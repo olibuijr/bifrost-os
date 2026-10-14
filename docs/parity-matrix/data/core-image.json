@@ -122,16 +122,16 @@
     {
       "feature": "Halftone effects (dot, line, circular and hatched screens, CMYK halftone)",
       "apple": "CIDotScreen, CILineScreen, CICircularScreen, CIHatchedScreen, CICMYKHalftone",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs",
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs (screen, cmyk_halftone)",
       "status": "partial",
-      "note": "CPU dot, line, circular and hatched screens and CMYK halftone built with host unit tests; not yet tested on Midget."
+      "note": "CPU dot, line, circular and hatched screens and CMYK halftone are tested headless in springboard/render/tests/parity_sdk-tests-17.rs (dot period, grey coverage, red under CMYK). Not yet tested on Midget."
     },
     {
       "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
       "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs",
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile)",
       "status": "partial",
-      "note": "CPU kaleidoscope, op tile and affine tile built with host unit tests; perspective, triangle and parallelogram tiles are still missing. Not yet tested on Midget."
+      "note": "CPU kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Perspective, triangle and parallelogram tiles are still missing. Not yet tested on Midget."
     },
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
@@ -143,9 +143,9 @@
     {
       "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
       "apple": "CIAreaAverage, CIAreaHistogram, CIAreaMaximum, CIAreaMinimum, CIAreaMinMax, CIRowAverage, CIColumnAverage, CIKMeans",
-      "bifrost": "springboard/render/src/plane_stats.rs (row and column reductions, statistics)",
+      "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows, reduce_columns, statistics); springboard/render/src/filter.rs (histogram)",
       "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "note": "Row and column min, max, sum and mean, region mean, min and max, and the luma histogram are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Gap: single planes only (no colour area filters), no k-means; the per-shader list still awaits the macOS 27 inventory (docs/macos-os-inventory.md)."
     },
     {
       "feature": "Convolution filters (3x3 to 9x9, horizontal and vertical, RGB variants)",

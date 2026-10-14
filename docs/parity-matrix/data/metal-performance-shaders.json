@@ -59,9 +59,9 @@
   {
    "feature": "Integral images and statistics (mean, variance, min and max)",
    "apple": "MPSImageIntegral, MPSImageIntegralOfSquares, MPSImageStatisticsMean, MPSImageStatisticsMeanAndVariance, MPSImageStatisticsMinAndMax",
-   "bifrost": "springboard/render/src/plane_stats.rs (Integral",
+   "bifrost": "springboard/render/src/plane_stats.rs (Integral, statistics)",
    "status": "partial",
-   "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No image statistics API."
+   "note": "Integral images of values and of squares, and region mean, population variance, min and max, are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Not wired into apps or the shell, not yet tested on Midget; no image statistics API."
   },
   {
    "feature": "Scaling and resampling",
@@ -80,9 +80,9 @@
   {
    "feature": "Reduction filters (row and column min, max, sum, mean)",
    "apple": "MPSImageReduceRowMax and the other MPSImageReduce* classes",
-   "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows",
+   "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows, reduce_columns)",
    "status": "partial",
-   "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No reduction code."
+   "note": "Row and column min, max, sum and mean are tested headless in springboard/render/tests/parity_sdk-tests-17.rs, with sums that are not clamped to the byte range. Not wired into apps or the shell, not yet tested on Midget."
   },
   {
    "feature": "Euclidean distance transform, guided filter, keypoints",
