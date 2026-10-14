@@ -24,9 +24,9 @@
   {
    "feature": "Images and PDF: PDF rendering",
    "apple": "NSPDFImageRep, PDF content in NSImage",
-   "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs",
-   "status": "os",
-   "note": "PDF parser and page renderer lives inside the Books shell engine; apps get no SDK API"
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs (open a PDF for pages, size and a rasterised page; writer); springboard/ui/src/pdfpage.rs (page boxes, rotation, aspect-fit); springboard/src/shell/books/engine/pdf/mod.rs",
+   "status": "partial",
+   "note": "Apps can open a PDF to read its page count, page sizes and rasterised pages through the SDK, and the page geometry is tested in pdfpage. Gap: text extraction and annotation editing stay in the PDF app, and the Books engine keeps its own parser."
   },
   {
    "feature": "Images and PDF: file and app icons",
@@ -66,9 +66,9 @@
   {
    "feature": "Drawing: GPU/Metal-style compositing",
    "apple": "CALayer-backed drawing, Metal presentation",
-   "bifrost": "springboard/src/gpu/wl.rs, docs/gpu-first.md",
-   "status": "os",
-   "note": "GPU Wayland presenter in the shell; apps do not get a GPU drawing API"
+   "bifrost": "springboard/sdk/src/gpu_layer.rs (drawable layer for apps, from bifrost_ui::drawable_layer); springboard/ui/src/drawable_layer.rs (DrawableLayer: drawables, present, recycle); springboard/src/gpu/wl.rs, docs/gpu-first.md",
+   "status": "partial",
+   "note": "Apps get a drawable layer that hands presented frames to the shell and converts them to images, tested inline in the drawable_layer model. Gap: apps have no GPU command or shader API, and the presenter that scans frames out stays in the shell."
   },
   {
    "feature": "Color: semantic system colours",

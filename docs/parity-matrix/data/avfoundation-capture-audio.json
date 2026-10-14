@@ -10,16 +10,16 @@
     {
       "feature": "Capture setup (devices, sessions, inputs)",
       "apple": "AVCaptureSession, AVCaptureDevice, AVCaptureDeviceInput, discovery",
-      "bifrost": "springboard/src/media/v4l2.rs (probe, Device::open, format enumeration); wired: springboard/src/shell/camera/mod.rs; springboard/src/shell/camera/devices.rs (camera_ids)",
-      "status": "os",
-      "note": "V4L2 probing exists in the shell only; no session/input/output model and no SDK access for apps Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/ui/src/capture_session.rs (CaptureSession); springboard/ui/src/video_device.rs (select_device, plan_stream); springboard/src/media/v4l2.rs (probe, Device::open, format enumeration); wired: springboard/src/shell/camera/mod.rs; springboard/src/shell/camera/devices.rs (camera_ids)",
+      "status": "partial",
+      "note": "CaptureSession models one usable video input, the frame size, the plan made on start and the lock while running, tested headless in ui/tests/parity_sdk-os-09.rs. Gap: no app can open a device, the Camera app runs its own V4L2 path, and there are no audio inputs or session outputs; verify on Midget."
     },
     {
       "feature": "Photo capture",
       "apple": "AVCapturePhotoOutput, Live Photos, photo settings",
-      "bifrost": "springboard/src/shell/camera/mod.rs, springboard/src/shell/camera/jpeg.rs",
-      "status": "os",
-      "note": "Camera app takes JPEGs with EXIF, self-timer, square crop; no app-facing photo output, no Live Photos, RAW or settings objects"
+      "bifrost": "springboard/ui/src/photo_capture.rs (PhotoSettings, plan); springboard/src/shell/camera/mod.rs, springboard/src/shell/camera/jpeg.rs",
+      "status": "partial",
+      "note": "PhotoSettings checks the format, JPEG quality, self-timer delay and square crop, tested headless in ui/tests/parity_sdk-os-09.rs. Gap: no app-facing photo output takes a picture, and there are no EXIF, Live Photo or RAW settings; the Camera app does the capture"
     },
     {
       "feature": "Audio and video capture (movie files, sample buffers)",
@@ -66,9 +66,9 @@
     {
       "feature": "Audio session and routing",
       "apple": "AVAudioSession-style categories, AVRouteDetector, output routes",
-      "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/audio/alsa/src/ctl.rs",
-      "status": "os",
-      "note": "Speaker/headphone route, volume memory and ALSA mixer in the shell; no app-facing session categories or route change notifications"
+      "bifrost": "springboard/sdk/src/audio_session.rs (categories, activation, interruptions, route changes); springboard/sdk/src/audio_devices.rs (output route and volume events); springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/audio/alsa/src/ctl.rs",
+      "status": "partial",
+      "note": "Apps declare a session category, activate it and receive interruption and route-change events in the audio_session model, with its rules tested inline. Gap: audiod does not yet arbitrate sessions, so the shell still routes the speaker and the ALSA mixer alone"
     },
     {
       "feature": "Speech synthesis",

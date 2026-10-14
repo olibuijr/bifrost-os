@@ -38,9 +38,9 @@
     {
       "feature": "Kernel USB enumeration and system visibility",
       "apple": "IOUSBHost (underlies the framework, per the landing page)",
-      "bifrost": "springboard/src/bare/app_policy.rs:245 (binds /sys and /run/udev read-only into the app sandbox); springboard/src/installer/plan.rs:186 (raises the USB interrupt thread priority)",
-      "status": "os",
-      "note": "Linux udev and sysfs run on the system and the sandbox can read them. Apps get no SDK API for this, and the sandbox binding is read-only."
+      "bifrost": "springboard/sdk/src/accessory_access.rs (AccessoryManager, MatchingCriteria, attach and detach events); springboard/ui/src/device_browser.rs (USB device snapshots, add and remove events); springboard/src/bare/app_policy.rs:245 (binds /sys and /run/udev read-only into the app sandbox); springboard/src/installer/plan.rs:186 (raises the USB interrupt thread priority)",
+      "status": "partial",
+      "note": "Apps match accessories by criteria and receive attach and detach events, and the device browser reports which USB devices came and went, both tested inline in their pure models. Gap: the sandbox binds no USB device nodes, so no app reaches a real accessory, and the shell supplies the bus snapshots."
     },
     {
       "feature": "Permission and access grant for USB devices",

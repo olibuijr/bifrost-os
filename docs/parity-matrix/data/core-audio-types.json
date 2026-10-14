@@ -94,9 +94,9 @@
     {
       "feature": "Audio service boundary",
       "apple": "Not part of the framework (Core Audio HAL and AudioUnit)",
-      "bifrost": "springboard/audiod/src/main.rs (the audio service owns the speaker and microphone); springboard/src/media/capture.rs (ALSA capture to S16 WAV)",
-      "status": "os",
-      "note": "The service and its wire protocol exist, but the SDK exposes no Core Audio types or audio API to apps. Apps reach audio only through the service."
+      "bifrost": "springboard/sdk/src/audio_format.rs (StreamFormat, pcm16, duration_ms); springboard/ui/src/pcm_convert.rs (sample formats and rate conversion); springboard/audiod/src/main.rs (the audio service owns the speaker and microphone); springboard/src/media/capture.rs (ALSA capture to S16 WAV)",
+      "status": "partial",
+      "note": "Apps describe a stream with the stream format type and convert sample formats and rates with the PCM model, both tested inline. Gap: the SDK exposes no buffer or render callback, and apps reach the speaker and microphone only through the audio service."
     }
   ],
   "gaps": [

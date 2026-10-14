@@ -31,9 +31,9 @@
     {
       "feature": "Playback engine",
       "apple": "No direct Media Toolbox counterpart (playback goes through AVFoundation and Core Media)",
-      "bifrost": "springboard/src/media/player.rs (Player::open_with, open_parts), springboard/src/media/audioplayer.rs, springboard/sdk/src/widgets.rs (Player view, line 842)",
-      "status": "os",
-      "note": "The shell plays audio and video. The SDK Player is a drawing control, not a playback engine, so apps cannot drive a player through an SDK call."
+      "bifrost": "springboard/ui/src/av_player.rs (player item, rate, seek, time observers); springboard/ui/src/av_queue_player.rs; springboard/sdk/src/audio_player_control.rs (pan, rate, timed fade); springboard/src/media/player.rs (Player::open_with, open_parts), springboard/src/media/audioplayer.rs, springboard/sdk/src/widgets.rs (Player view, line 842)",
+      "status": "partial",
+      "note": "The playback model (items, rate, seeking, observers, queue) is tested headless in ui/tests/av_playback.rs, driven by a caller clock and silent until play. Gap: the shell's decoder and audio output do not run it, so an app cannot start sound through the SDK and the Player view stays a drawing control."
     },
     {
       "feature": "Localized media type and subtype names",

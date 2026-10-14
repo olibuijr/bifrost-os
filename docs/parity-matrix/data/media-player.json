@@ -108,9 +108,9 @@
     {
       "feature": "Now Playing sessions and focus",
       "apple": "MPNowPlayingSession, MPNowPlayingInfoCenter multi-player handling",
-      "bifrost": "springboard/src/svc.rs (one queue, one speaker: latest player wins), springboard/docs/services.md",
-      "status": "os",
-      "note": "the audio service arbitrates which app plays; apps do not register as now-playing sessions"
+      "bifrost": "springboard/sdk/src/now_playing.rs (publish, clear, transport commands); springboard/ui/src/media_session.rs (session, content, playback, command table); springboard/ui/src/playback_arbiter.rs (which participant may play); springboard/src/shell/services/now_playing.rs (newest session on the tile); springboard/src/svc.rs (one queue, one speaker: latest player wins), springboard/docs/services.md",
+      "status": "partial",
+      "note": "Apps publish a session to Control Center, which shows the newest one, and receive its transport commands; the session and arbitration rules are tested in their models. Gap: the audio service still decides which app plays, and the shell does not yet apply the arbiter to the session it shows."
     },
     {
       "feature": "External player items",
