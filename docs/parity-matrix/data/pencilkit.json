@@ -94,16 +94,16 @@
   {
    "feature": "Pressure, tilt and stylus input",
    "apple": "PKStrokePoint force, altitude, azimuth",
-   "bifrost": "springboard/ui/src/drawing.rs (StrokePoint force",
+   "bifrost": "springboard/ui/src/drawing.rs (StrokePoint, pressure_width); springboard/ui/tests/parity_sdk-complete-15.rs",
    "status": "partial",
-   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Markup and Freeform handle only position on touch events. Stroke width is fixed per tool, not driven by pressure."
+   "note": "The stylus force sets each point's width through pressure_width, and a point's opacity scales its paint, both tested headless in springboard/ui/tests/parity_sdk-complete-15.rs. Gap: tilt (azimuth, altitude) does not change the rendered mark, and Markup and Freeform still send only position on touch events, so the shell has no pressure to pass on yet."
   },
   {
    "feature": "Rendering to an image",
    "apple": "PKDrawing.image(from:scale:)",
    "bifrost": "springboard/ui/src/drawing.rs (Drawing::image, Raster); springboard/src/shell/markup.rs (Done saves the marked-up PNG over the capture); springboard/apps/freeform-desktop/src/freeform.rs (saves a PNG); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (render, encode)",
    "status": "partial",
-   "note": "Drawing::image renders the strokes to a raster at a chosen scale with source-over blending, verified pixel by pixel headless in springboard/ui/tests/parity_sdk-tests-02.rs. Per-point opacity, pressure and marker blend modes are not rendered yet, and no SDK call exposes the render. Both editors write PNG files. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "Drawing::image renders the strokes to a raster at a chosen scale with source-over blending, pressure-scaled width and per-point opacity, verified pixel by pixel headless in springboard/ui/tests/parity_sdk-tests-02.rs and springboard/ui/tests/parity_sdk-complete-15.rs. Marker blend modes are not rendered yet, and no SDK call exposes the render. Both editors write PNG files. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
   },
   {
    "feature": "Backward-compatible ink types (PKContentVersion)",
