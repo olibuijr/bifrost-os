@@ -733,6 +733,8 @@ pub mod list_content;
 pub mod reserved_region;
 pub mod ubiquitous_store;
 pub mod gamepad;
+pub mod game_input;
+pub mod web_gamepad;
 pub mod controller_motion;
 pub mod racing_wheel;
 pub mod virtual_controller;

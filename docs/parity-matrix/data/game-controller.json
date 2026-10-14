@@ -31,9 +31,9 @@
     {
       "feature": "Keyboard and mouse as game input",
       "apple": "GCKeyboard, GCMouse",
-      "bifrost": "springboard/src/shell/hwkeys.rs (hardware-keyboard shortcuts); springboard/src/shell/evkeys.rs (evdev key to character); springboard/src/bare/input.rs (pointer decoding)",
-      "status": "os",
-      "note": "The shell reads keyboards and mice itself for its own shortcuts. Apps get no GCKeyboard or GCMouse style profile in the SDK."
+      "bifrost": "springboard/ui/src/game_input.rs (KeyboardProfile, MouseProfile); springboard/src/shell/hwkeys.rs (hardware-keyboard shortcuts, read separately by the shell)",
+      "status": "partial",
+      "note": "KeyboardProfile and MouseProfile turn evdev key and relative records into edges, a held set, per-frame motion and wheel steps, with release on focus loss; headless tests in ui/tests/parity_sdk-rest-09.rs. Gap: the shell's event loop does not feed these models and the SDK has no app-facing profile yet; checking a real keyboard and mouse needs the lab machine."
     },
     {
       "feature": "Haptics and rumble",
@@ -73,9 +73,9 @@
     {
       "feature": "Gamepad input in web content",
       "apple": "Not part of Game Controller (web Gamepad API)",
-      "bifrost": "springboard/apps/browser/engine/Cargo.toml (Servo gamepad feature flag; no BifrOSt code routes controller events into web content)",
-      "status": "gap",
-      "note": "Downgraded from partial: the browser engine is built with Servo's gamepad feature, but the manifest flag is the only evidence, no BifrOSt code routes controller events into web content, and nothing is tested. Confirm on Midget with a controller before the row counts as built."
+      "bifrost": "springboard/ui/src/web_gamepad.rs (snapshot, standard_button); springboard/apps/browser/engine/Cargo.toml (Servo gamepad feature flag)",
+      "status": "partial",
+      "note": "snapshot lays a controller's state out in the web standard mapping (17 buttons, 4 axes) with slot and name checks, tested in ui/tests/parity_sdk-rest-09.rs. Gap: no code passes the snapshot to the browser engine, so page scripts still see no gamepads; confirm on Midget with a controller once the engine is wired."
     }
   ],
   "gaps": [

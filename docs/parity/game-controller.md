@@ -68,3 +68,13 @@ These tests were written but not run in this pass: the stage that builds and tes
 - No controller Home button settings and no controller page in Settings.
 - Web Gamepad API status is unverified: the browser engine enables Servo's gamepad feature, but whether it receives
   evdev controller events was not checked.
+
+## Keyboard, mouse and web gamepad input (sdk-rest-09)
+
+- `springboard/ui/src/game_input.rs`: `KeyboardProfile` and `MouseProfile` turn evdev key and relative records into
+  edges, a held set, per-frame motion and wheel steps, and a release on focus loss. Tested headless in
+  `springboard/ui/tests/parity_sdk-rest-09.rs`.
+- `springboard/ui/src/web_gamepad.rs`: `snapshot` lays a controller state out in the web standard mapping (17 buttons,
+  4 axes). Tested headless in the same file.
+- Needs the lab machine: the shell event loop does not feed the keyboard and mouse models yet, and the browser engine
+  does not receive the gamepad snapshot. Confirm both on Midget with a real keyboard, mouse and controller.
