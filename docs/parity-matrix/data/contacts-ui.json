@@ -31,9 +31,9 @@
     {
       "feature": "Contact search and store access",
       "apple": "CNContactStore-backed UI (implicit in the framework's contact views)",
-      "bifrost": "springboard/sdk/src/contacts.rs (access, request, fetch, save); springboard/src/shell/services/contacts.rs (contacts service: per-app grant, fetch by keys and query); springboard/src/shell/contactstore.rs (search at line 126, used by the Search panel)",
+      "bifrost": "springboard/sdk/src/contacts.rs (access, request, fetch, save); springboard/src/shell/services/contacts.rs (contacts service: per-app grant, fetch by keys and query); springboard/src/shell/contactstore.rs (search at line 126, used by the contacts service fetch)",
       "status": "partial",
-      "note": "Apps read and save contacts through the contacts service, behind a per-app grant (every contact, a picked set read-only, or none). The Search panel searches the same store in the shell."
+      "note": "Apps read and save contacts through the contacts service, behind a per-app grant (every contact, a picked set read-only, or none). The SDK decoders, status names and typed errors are tested headless in springboard/sdk/tests/parity_sdk-tests-03b.rs, and the grant and fetch rules in springboard/tests/parity_sdk-tests-03.rs. The Contacts app filters its list with the same search rule (springboard/apps/contacts-desktop/src/contacts.rs:383)."
     },
     {
       "feature": "Sharing a contact as a card",

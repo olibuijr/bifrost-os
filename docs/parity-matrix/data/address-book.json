@@ -19,14 +19,14 @@
       "apple": "ABMultiValue, ABMutableMultiValue, ABMultiValueAdd, ABMultiValueCopyLabelAtIndex, ABCopyLocalizedPropertyOrLabel",
       "bifrost": "springboard/src/shell/contactstore.rs (Contact.labels, LABELS); wired: springboard/apps/contacts-desktop/src/extras.rs; src/contacts.rs (card rows for extra values)",
       "status": "partial",
-      "note": "One phone, one email and one address per contact; no primary value and no arbitrary number of entries Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The store keeps one phone, one email and one address per contact, with label indexes. More phones and emails, URLs, a birthday and dates come from the contacts sidecar and are returned labeled by the SDK and the contacts service, tested headless in springboard/tests/parity_sdk-tests-03.rs (sidecar round trip, labeled fetch). Gap: the Contacts app still edits one value of each, with no primary value and no arbitrary number of entries. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Search",
       "apple": "ABSearchElement, ABCopyArrayOfMatchingRecords, ABSearchElementCreateWithConjunction, ABPersonCreateSearchElement",
-      "bifrost": "springboard/src/shell/contactstore.rs (search, substring match over name, phone, email, notes, company, address); wired: springboard/apps/contacts-desktop/src/contacts.rs (list_hits, used by rebuild)",
+      "bifrost": "springboard/src/shell/contactstore.rs (search, substring match over name, phone, email, notes, company, address); wired: springboard/apps/contacts-desktop/src/contacts.rs (list_hits)",
       "status": "partial",
-      "note": "Only a single text query; no property-scoped or compound search elements Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The case-insensitive substring match over name, phone, email, notes, company and address is tested headless in springboard/tests/parity_sdk-tests-03.rs (search). Gap: only a single text query; no property-scoped or compound search elements. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "People picker and person view",
