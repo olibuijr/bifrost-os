@@ -5,7 +5,7 @@
 //! captions from `springboard::media::subtitles` and the trim range from the shared recording model.
 
 use bifrost_app::controls::recording::Trim;
-use bifrost_app::kit::ui::CELL_RADIUS_PT;
+use bifrost_app::kit::ui::{CELL_RADIUS_PT, SPACE_L};
 use bifrost_app::kit::{pack, rgba, Event, Image, Surface, Ui, Weight};
 use springboard::deildu::play::{mime_for, PlayState, Player};
 use springboard::deildu::player_view::{Outcome, PlayerView};
@@ -183,7 +183,7 @@ impl Movie {
         if text == self.caption {
             return false;
         }
-        let max = (self.view.size().0 as f32 - ui.pt(80.0)).max(0.0);
+        let max = (self.view.size().0 as f32 - 2.0 * ui.pt(SPACE_L)).max(0.0);
         self.caption_lines = match text.as_deref() {
             Some(t) => t.lines().map(|line| ui.text(&ui.fit(line, CAPTION_PT, max), CAPTION_PT, Weight::Semibold, WHITE)).collect(),
             None => Vec::new(),

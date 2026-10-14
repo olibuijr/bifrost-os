@@ -957,7 +957,12 @@ impl Podcasts {
 
     /// The sidebar column width in pixels.
     fn side(&self, ui: &Ui) -> f32 {
-        ui.pt(SIDEBAR_W)
+        ui.pt(self.side_pt(ui))
+    }
+
+    /// Keep the stock sidebar width on desktop, but let content take over on compact windows.
+    fn side_pt(&self, ui: &Ui) -> f32 {
+        SIDEBAR_W.min((self.w as f32 / ui.pt(1.0)) * 0.4).max(0.0)
     }
 
     fn content_w(&self, ui: &Ui) -> f32 {
@@ -1836,7 +1841,7 @@ impl Podcasts {
 
     /// The unified toolbar (`NativeToolbar`): the title, then the actions for the current screen.
     fn bar(&self, ui: &Ui) -> Toolbar {
-        let room = (self.w as f32 / ui.s - SIDEBAR_W - 220.0).max(40.0);
+        let room = (self.w as f32 / ui.pt(1.0) - self.side_pt(ui) - 220.0).max(0.0);
         let title_w = (ui.measure(&self.title(), MAC_TITLE3_PT, Weight::Bold) / ui.s + 4.0).min(room);
         let panel = matches!(self.view, View::Settings | View::ShowSettings(_) | View::Detail(..));
         let mut items = Vec::new();
@@ -1864,7 +1869,7 @@ impl Podcasts {
 
     /// The toolbar rectangle in points.
     fn bar_bounds(&self, ui: &Ui) -> Rect {
-        let x = SIDEBAR_W + widgets::TOOLBAR_GAP_PT + SPACE_XS;
+        let x = self.side_pt(ui) + widgets::TOOLBAR_GAP_PT + SPACE_XS;
         let h = widgets::CAPSULE_PT;
         Rect { x, y: (UNIFIED_BAR_PT - h) / 2.0, w: (self.w as f32 / ui.s - x - SPACE_L).max(0.0), h }
     }
@@ -1901,7 +1906,7 @@ impl Podcasts {
     }
 
     fn sidebar_bounds(&self, ui: &Ui) -> Rect {
-        Rect { x: 0.0, y: 0.0, w: SIDEBAR_W, h: self.h as f32 / ui.s }
+        Rect { x: 0.0, y: 0.0, w: self.side_pt(ui), h: self.h as f32 / ui.s }
     }
 
     /// The toolbar buttons as semantic controls, so the shell does not treat them as the window's drag band.
@@ -2927,7 +2932,8 @@ impl Podcasts {
         s.fill_rect((x0 - 1.0).max(0.0) as usize, 0, 1, self.h as usize, SEPARATOR_C.now());
         let w_pt = self.w as f32 / ui.s;
         s.fill_rect(x0 as usize, 0, cw as usize, ui.pt(UNIFIED_BAR_PT) as usize, CONTENT_BG.now());
-        widgets::toolbar_band(s, ui, Rect { x: SIDEBAR_W, y: 0.0, w: w_pt - SIDEBAR_W, h: UNIFIED_BAR_PT });
+        let side = self.side_pt(ui);
+        widgets::toolbar_band(s, ui, Rect { x: side, y: 0.0, w: w_pt - side, h: UNIFIED_BAR_PT });
         let pressed_bar = match self.pressed {
             Some(Target::Add) => Some(BAR_ADD),
             Some(Target::Remove) => Some(BAR_REMOVE),

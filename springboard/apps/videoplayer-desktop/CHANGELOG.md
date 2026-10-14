@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 — 2026-10-14
+
+- Size notice and subtitle text margins from shared spacing tokens so captions remain readable across window scales.
+
 ## 0.2.3 — 2026-10-14
 
 - Size notices to the available window width, use shared corner-radius tokens, and position captions relative to the viewport.

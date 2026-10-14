@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.4 — 2026-10-14
+
+- Scale the magnifier handle to the shared legacy-control radius.
+
+## 0.11.3 — 2026-10-14
+
+- Resolve Preview sidebars, controls and placeholders with appearance-aware semantic color pairs.
+
 ## 0.11.2 — 2026-10-14
 
 - Move Preview's document-editing commands into its own app menu instead of duplicating the shell Edit menu.

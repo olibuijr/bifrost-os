@@ -900,13 +900,13 @@ fn draw_sheet(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
             continue;
         }
         if i == scene.view.page {
-            s.fill_rrect((x + pad / 2) as f32, (y + pad / 2) as f32, (sheet.cell_w - pad) as f32, (sheet.cell_h - pad) as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+            s.fill_rrect((x + pad / 2) as f32, (y + pad / 2) as f32, (sheet.cell_w - pad) as f32, (sheet.cell_h - pad) as f32, ui.pt(ui::SPACE_S), ui::SELECTION.now());
         }
         let (bw, bh) = doc.thumb_box(i).unwrap_or((THUMB_W, (THUMB_W as f32 * 1.3) as usize));
         let top = y + ui.pt(ui::SPACE_L) as i32;
         match doc.thumb(i) {
             Some(t) => s.blit(&t, x + (sheet.cell_w - t.w as i32) / 2, top, 255, 255),
-            None => fill(s, x + (sheet.cell_w - bw as i32) / 2, top, bw as i32, bh as i32, ui::FILL),
+            None => fill(s, x + (sheet.cell_w - bw as i32) / 2, top, bw as i32, bh as i32, ui::CARD_BG.now()),
         }
         let text = format!("{}", i + 1);
         let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
@@ -976,22 +976,23 @@ fn draw_color_panel(s: &mut Surface, ui: &Ui, lay: &Layout, sliders: &[Slider]) 
         return;
     }
     let (x, top) = (lay.w - w, lay.bar);
-    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_BG.now());
     fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
     let pad = ui.pt(ui::SPACE_S) as i32;
     let (tx, tw) = slider_track(ui, lay);
     for (i, slider) in sliders.iter().enumerate() {
         let (row_top, row_h) = slider_row(ui, lay, i);
-        let name = ui.text(slider.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let name = ui.text(slider.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL.now());
         s.blit_colored(&name, x + pad, row_top, ui::LABEL_2.now(), 255);
         let readout = format!("{:.2}", slider.value);
-        let value = ui.text(&readout, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let value = ui.text(&readout, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL.now());
         s.blit_colored(&value, x + w - pad - value.w as i32, row_top, ui::LABEL_2.now(), 255);
         let ty = row_top + row_h * 2 / 3;
-        fill(s, tx, ty, tw, 2, ui::FILL);
+        fill(s, tx, ty, tw, 2, ui::TRACK_C.now());
         let t = if slider.max > slider.min { (slider.value - slider.min) / (slider.max - slider.min) } else { 0.0 };
         let kx = tx as f32 + t.clamp(0.0, 1.0) * tw as f32;
-        s.fill_rrect(kx - 6.0, (ty - 5) as f32, 12.0, 12.0, 6.0, ui::TINT);
+        let radius = ui.pt(ui::CELL_RADIUS_PT);
+        s.fill_rrect(kx - radius, ty as f32 - radius, 2.0 * radius, 2.0 * radius, radius, ui::TINT);
     }
 }
 
@@ -1003,21 +1004,21 @@ fn draw_export_panel(s: &mut Surface, ui: &Ui, lay: &Layout, panel: &export_pane
         return;
     }
     let (x, top) = (lay.w - w, lay.bar);
-    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_BG.now());
     fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
     let pad = ui.pt(ui::SPACE_S) as i32;
     for (y, title) in &panel.headings {
-        let img = ui.text(title, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let img = ui.text(title, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL.now());
         s.blit_colored(&img, x + pad, *y, ui::LABEL_2.now(), 255);
     }
     for b in &panel.buttons {
         let (background, text) = match (b.enabled, b.active) {
-            (false, _) => (ui::FILL, ui::LABEL_2.now()),
+            (false, _) => (ui::FIELD_BG.now(), ui::LABEL_2.now()),
             (true, true) => (ui::TINT, ui::WHITE),
-            (true, false) => (ui::FILL, ui::LABEL.now()),
+            (true, false) => (ui::FIELD_BG.now(), ui::LABEL.now()),
         };
         s.fill_rrect(b.x as f32, b.y as f32, b.w as f32, b.h as f32, ui.pt(ui::SPACE_S), background);
-        let img = ui.text(b.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let img = ui.text(b.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, text);
         let tx = b.x + (b.w - img.w as i32) / 2;
         let ty = b.y + (b.h - img.h as i32) / 2;
         s.blit_colored(&img, tx, ty, text, 255);
@@ -1032,19 +1033,19 @@ fn draw_signature_panel(s: &mut Surface, ui: &Ui, lay: &Layout, library: &[Signa
         return;
     }
     let (x, top) = (lay.w - w, lay.bar);
-    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_BG.now());
     fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
     let metrics = export_metrics(ui, lay);
     if library.is_empty() {
         let lines = ["No saved signatures.", "Draw one with the Sign tool, then choose Save Signature."];
         for (i, line) in lines.iter().enumerate() {
             let text = fit_text(ui, line, ui::MAC_FOOTNOTE_PT, (w - 2 * metrics.pad).max(0) as f32);
-            let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+            let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL.now());
             s.blit_colored(&img, x + metrics.pad, top + metrics.pad + i as i32 * (img.h as i32 + metrics.gap), ui::LABEL_2.now(), 255);
         }
     }
     for cell in signature_panel::cells(&metrics, library.len()) {
-        s.fill_rrect(cell.x as f32, cell.y as f32, cell.w as f32, cell.h as f32, ui.pt(ui::SPACE_S), ui::FILL);
+        s.fill_rrect(cell.x as f32, cell.y as f32, cell.w as f32, cell.h as f32, ui.pt(ui::SPACE_S), ui::CARD_BG.now());
         for stroke in signature_panel::strokes_in(&library[cell.index], &cell) {
             draw_path(s, &stroke, ui::LABEL.now());
         }
@@ -1058,7 +1059,7 @@ fn draw_inspector(s: &mut Surface, ui: &Ui, lay: &Layout, rows: &[(String, Strin
         return;
     }
     let (x, top) = (lay.w - w, lay.bar);
-    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_BG.now());
     fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
     let pad = ui.pt(ui::SPACE_S) as i32;
     let mut y = top + pad;
@@ -1066,11 +1067,11 @@ fn draw_inspector(s: &mut Surface, ui: &Ui, lay: &Layout, rows: &[(String, Strin
         if y > lay.h {
             break;
         }
-        let name = ui.text(label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let name = ui.text(label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL.now());
         s.blit_colored(&name, x + pad, y, ui::LABEL_2.now(), 255);
         y += name.h as i32;
         let text = fit_text(ui, value, ui::MAC_BODY_PT, (w - 2 * pad).max(0) as f32);
-        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
         s.blit_colored(&img, x + pad, y, ui::LABEL.now(), 255);
         y += img.h as i32 + pad;
     }
@@ -1156,7 +1157,7 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     if lay.side <= 0 {
         return;
     }
-    fill(s, 0, lay.bar, lay.side, lay.h - lay.bar, ui::SIDEBAR_FILL);
+    fill(s, 0, lay.bar, lay.side, lay.h - lay.bar, ui::SIDEBAR_BG.now());
     let Some(doc) = scene.doc else { return };
     match scene.side {
         Side::Pages => draw_pages(s, ui, lay, scene, doc),
@@ -1175,10 +1176,10 @@ fn draw_items(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, items: &[(S
             continue;
         }
         if *page == Some(scene.view.page) {
-            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SELECTION.now());
         }
         let text = fit_text(ui, text, ui::MAC_BODY_PT, (lay.side - 2 * pad).max(0) as f32);
-        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        let img = ui.text(&text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
         s.blit_colored(&img, pad, y + (h - img.h as i32) / 2, ui::LABEL.now(), 255);
     }
 }
@@ -1192,7 +1193,7 @@ fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
             continue;
         }
         if i == scene.view.page {
-            s.fill_rrect(pad as f32 / 2.0, (y + pad / 2) as f32, (lay.side - pad) as f32, (h - pad) as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+            s.fill_rrect(pad as f32 / 2.0, (y + pad / 2) as f32, (lay.side - pad) as f32, (h - pad) as f32, ui.pt(ui::SPACE_S), ui::SELECTION.now());
         }
         // only the thumbnails of visible rows are drawn; each is kept after its first draw
         let (bw, bh) = doc.thumb_box(i).unwrap_or((THUMB_W, (THUMB_W as f32 * 1.3) as usize));
@@ -1203,7 +1204,7 @@ fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
             }
             None => {
                 let x = (lay.side - bw as i32) / 2;
-                fill(s, x, y + pad, bw as i32, bh as i32, ui::FILL);
+                fill(s, x, y + pad, bw as i32, bh as i32, ui::CARD_BG.now());
             }
         }
         let box_h = bh as i32;
@@ -1225,7 +1226,7 @@ fn draw_outline(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Doc
         }
         let here = item.page.and_then(|p| doc.display_of(p)) == Some(scene.view.page);
         if here {
-            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
+            s.fill_rrect(pad as f32 / 2.0, y as f32, (lay.side - pad) as f32, h as f32, ui.pt(ui::SPACE_S), ui::SELECTION.now());
         }
         let x = pad + indent * item.level as i32;
         let text = fit_text(ui, &item.title, ui::MAC_BODY_PT, (lay.side - x - pad).max(0) as f32);
@@ -1267,9 +1268,9 @@ fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
         };
         let color = if active { ui::TINT } else { ui::LABEL.now() };
         if active {
-            s.fill_rrect(x as f32, (y - 4) as f32, w as f32, (lay.bar - 2 * y + 8) as f32, ui.pt(ui::SPACE_S), ui::FILL);
+            s.fill_rrect(x as f32, (y - 4) as f32, w as f32, (lay.bar - 2 * y + 8) as f32, ui.pt(ui::SPACE_S), ui::CONTROL_PRESSED.now());
         }
-        let img = ui.text(action.label(), ui::MAC_BODY_PT, Weight::Regular, ui::WHITE);
+        let img = ui.text(action.label(), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
         let tx = x + (w - ui.measure(action.label(), ui::MAC_BODY_PT, Weight::Regular) as i32) / 2;
         s.blit_colored(&img, tx, y, color, 255);
     }
