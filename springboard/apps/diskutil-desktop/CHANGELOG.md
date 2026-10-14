@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- File > Open Disk Image attaches the chosen image read-only, as its menu name says. File > Open Disk Image for Writing attaches it with read and write access.
+- Mount, Unmount and Eject in the File menu and the toolbar use the same rules, so a command is enabled in one exactly when it is enabled in the other.
+- Software RAID arrays (md devices) are listed in the sidebar, so an array the RAID Assistant made can be selected. The RAID Assistant never offers an array as a member.
+
 ## 0.6.0
 
 - Form sheets with text fields, choices and lists, in the sheet style of the other dialogs.
