@@ -40,8 +40,8 @@
    "role": "Siri wave and design library effects",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Siri wave animation archive shader; BifrOSt has no Siri wave visual. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "The assistant wave design archive has no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },

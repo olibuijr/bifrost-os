@@ -292,8 +292,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Photogrammetry reconstruction is a service that BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +355,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Photogrammetry texturing is a service that BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },

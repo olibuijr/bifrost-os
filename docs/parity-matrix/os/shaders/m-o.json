@@ -145,8 +145,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "A binary shader archive of the reference renderer; BifrOSt has no archive format for it.",
    "rea": [],
    "method": "assessed"
   },
@@ -229,8 +229,8 @@
    "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "XR and spatial computing: BifrOSt has no XR compositor, so this module has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -292,8 +292,8 @@
    "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "GPU developer debugging tooling is not part of BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +355,8 @@
    "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "GPU developer tooling for indirect command buffers is not part of BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -418,8 +418,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "A MaterialX node library needs a material graph compiler, which BifrOSt does not have.",
    "rea": [],
    "method": "assessed"
   }
