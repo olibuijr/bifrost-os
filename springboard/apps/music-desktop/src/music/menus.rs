@@ -77,6 +77,8 @@ pub enum Command {
     Rate(u8),
     Show(Place),
     SortBy(SortKey),
+    /// View > Sort Songs By > Descending: reverse the order the key gives
+    SortDescending,
     /// show or hide the lyrics on the Now Playing sheet
     Lyrics,
     /// Song > Get Info: edit the playing song's title, artist and album
@@ -101,6 +103,7 @@ const GET_INFO: u32 = 25;
 const RATE_BASE: u32 = 30;
 const SHOW_BASE: u32 = 40;
 const SORT_BASE: u32 = 60;
+const SORT_DESCENDING: u32 = 70;
 const ADD_TO_BASE: u32 = 1000;
 /// The highest rating a Rate command carries.
 const RATE_MAX: u8 = 5;
@@ -127,6 +130,7 @@ impl Command {
             Command::Rate(n) => RATE_BASE + u32::from(n.min(RATE_MAX)),
             Command::Show(p) => SHOW_BASE + Place::ALL.iter().position(|q| *q == p).unwrap_or(0) as u32,
             Command::SortBy(k) => SORT_BASE + SortKey::ALL.iter().position(|q| *q == k).unwrap_or(0) as u32,
+            Command::SortDescending => SORT_DESCENDING,
             Command::AddTo(i) => ADD_TO_BASE + i as u32,
         }
     }
@@ -149,6 +153,7 @@ impl Command {
             Command::Favourite,
             Command::Lyrics,
             Command::GetInfo,
+            Command::SortDescending,
         ];
         if let Some(c) = fixed.into_iter().find(|c| c.id() == id) {
             return Some(c);
@@ -182,13 +187,14 @@ pub struct MenuState {
     pub playlists: Vec<String>,
     pub place: Place,
     pub sort: SortKey,
+    pub descending: bool,
     pub lyrics_shown: bool,
     pub has_lyrics: bool,
 }
 
 impl Default for MenuState {
     fn default() -> Self {
-        MenuState { has_track: false, playing: false, live: false, has_song: false, shuffle: false, repeat: false, rating: 0, favourite: false, playlists: Vec::new(), place: Place::Songs, sort: SortKey::Title, lyrics_shown: false, has_lyrics: false }
+        MenuState { has_track: false, playing: false, live: false, has_song: false, shuffle: false, repeat: false, rating: 0, favourite: false, playlists: Vec::new(), place: Place::Songs, sort: SortKey::Title, descending: false, lyrics_shown: false, has_lyrics: false }
     }
 }
 
@@ -239,6 +245,8 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
     view.push(AppMenuItem::separator());
     view.push(AppMenuItem::submenu("Sort Songs By"));
     view.extend(SortKey::ALL.iter().map(|k| item(Command::SortBy(*k), k.label(), "").depth(1).checked(*k == s.sort)));
+    view.push(AppMenuItem::separator().depth(1));
+    view.push(item(Command::SortDescending, "Descending", "").depth(1).checked(s.descending));
     vec![
         AppMenu { title: "File".into(), items: vec![item(Command::Import, "Import\u{2026}", "cmd+o"), AppMenuItem::separator(), item(Command::NewFolder, "New Playlist Folder", "")] },
         AppMenu { title: "Song".into(), items: song_items },
@@ -267,7 +275,7 @@ mod tests {
         cmds.extend((0..=RATE_MAX).map(Command::Rate));
         cmds.extend(Place::ALL.map(Command::Show));
         cmds.extend(SortKey::ALL.map(Command::SortBy));
-        cmds.extend([Command::AddTo(0), Command::AddTo(7), Command::AddTo(250)]);
+        cmds.extend([Command::SortDescending, Command::AddTo(0), Command::AddTo(7), Command::AddTo(250)]);
         for c in &cmds {
             assert_eq!(Command::from_id(c.id()), Some(*c), "{c:?}");
         }
@@ -336,7 +344,9 @@ mod tests {
         let checked: Vec<&str> = view.iter().filter(|i| i.checked).map(|i| i.title.as_str()).collect();
         assert_eq!(checked, ["Favourite Songs", "Show Lyrics", "Plays"]);
         let sorts = view.iter().filter(|i| i.id != 0 && i.depth == 1).count();
-        assert_eq!(sorts, SortKey::ALL.len());
+        assert_eq!(sorts, SortKey::ALL.len() + 1, "every order, then Descending");
+        let descending = build(&MenuState { descending: true, ..full() }).remove(3).items;
+        assert!(descending.iter().find(|i| i.id == SORT_DESCENDING).unwrap().checked);
         let no_lyrics = build(&MenuState::default()).remove(3).items;
         assert!(!no_lyrics.iter().find(|i| i.id == LYRICS).unwrap().enabled);
     }

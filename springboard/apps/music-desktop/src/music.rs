@@ -332,6 +332,8 @@ pub struct Music {
     /// Songs tab: the order and filter shown (ids into the library)
     view: Vec<usize>,
     sort: SortKey,
+    /// the Songs list runs the sort backwards (View > Sort Songs By > Descending)
+    descending: bool,
     search: String,
     searching: bool,
     /// what is queued, in play order; empty while a station plays
@@ -486,6 +488,7 @@ impl Music {
             seed: 0x5EED,
             view: Vec::new(),
             sort: SortKey::Title,
+            descending: false,
             search: String::new(),
             searching: false,
             queue: UpNext::default(),
@@ -723,7 +726,7 @@ impl Music {
     }
 
     fn rebuild_view(&mut self) {
-        self.view = browse::view_with(&self.library.songs, &self.search, self.sort, self.scope, &self.stats);
+        self.view = browse::view_in_order(&self.library.songs, &self.search, self.sort, self.descending, self.scope, &self.stats);
     }
 
     /// Points the Songs list at `scope`. Entering a recent list opens it in its own order; leaving one returns to Title.
@@ -1876,6 +1879,7 @@ impl Music {
             playlists: self.playlists.lists().iter().map(|l| l.name.clone()).collect(),
             place: self.place(),
             sort: self.sort,
+            descending: self.descending,
             lyrics_shown: self.lyrics_on,
             has_lyrics: self.lyrics.is_some(),
         }
@@ -1918,6 +1922,13 @@ impl Music {
                     self.show_place(Place::Songs);
                 }
                 self.sort = key;
+                self.refilter();
+            }
+            Command::SortDescending => {
+                if self.tab != Tab::Songs || self.page() != Page::Root {
+                    self.show_place(Place::Songs);
+                }
+                self.descending = !self.descending;
                 self.refilter();
             }
             Command::Lyrics => {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.0 — 2026-10-14
+
+- View > Sort Songs By > Descending reverses the order of any sort key in the Songs list. A recent list keeps its
+  newest songs in either order. The order is `browse::view_in_order`, tested headless in `tests/parity_app-music_w10.rs`.
+- The View menu carries the Descending item with its checked state, and `Command::SortDescending` is in the menu ids.
+
 ## 1.9.0 — 2026-10-14
 
 - Playlist folders can be renamed and deleted in the model. A renamed folder keeps its playlists, and a deleted folder

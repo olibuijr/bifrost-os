@@ -131,6 +131,16 @@ pub fn view_with(songs: &[Song], query: &str, sort: SortKey, scope: Scope, stats
     ids
 }
 
+/// `view_with`, reversed when `descending`: the same songs in the opposite order of `sort`. A recent list keeps its
+/// newest `RECENT_LIMIT` songs whichever way it is sorted, because the cap is applied before the order.
+pub fn view_in_order(songs: &[Song], query: &str, sort: SortKey, descending: bool, scope: Scope, stats: &Stats) -> Vec<usize> {
+    let mut ids = view_with(songs, query, sort, scope, stats);
+    if descending {
+        ids.reverse();
+    }
+    ids
+}
+
 /// Sorts `ids` by `sort`; ties fall back to the title, then the path.
 fn order(songs: &[Song], ids: &mut [usize], sort: SortKey, stats: &Stats) {
     let title = |s: &Song| (sort_key(&s.title), s.path.clone());
