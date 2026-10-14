@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5 — 2026-10-14
+
+- Stage archive creation and extraction in hidden sibling paths, publishing complete outputs atomically without replacing existing files or folders.
+
 ## 0.2.4 — 2026-10-14
 
 - Use the appearance-aware separator color in the progress bar.
