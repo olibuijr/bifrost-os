@@ -12,21 +12,21 @@
       "apple": "WeatherService, WeatherQuery, WeatherMetadata",
       "bifrost": "springboard/src/shell/weather/data.rs (forecast_url, fetch_forecast, FORECAST_API)",
       "status": "partial",
-      "note": "Fetch and parse exist, but only inside the Weather app's data module; no SDK type exposes a weather request to other apps. Data source is Open-Meteo, not Apple's service."
+      "note": "The forecast request, the per-place cache and the offline read are tested headless in springboard/tests/parity_sdk-tests-21.rs, and a failed air-quality host does not fail the forecast. Gap: the code lives in the Weather app's data module, no SDK type exposes a weather request, and the data source is not the reference service."
     },
     {
       "feature": "Current conditions",
       "apple": "CurrentWeather, WeatherCondition",
       "bifrost": "springboard/src/shell/weather/data.rs (Current, Sky::from_code)",
       "status": "partial",
-      "note": "Temperature, apparent temperature, humidity, wind speed, condition code and day flag are parsed. Condition is mapped to a local Sky enum from WMO codes."
+      "note": "Temperature, apparent temperature, humidity, wind, condition code and day flag are parsed from the current block, and the WMO code to Sky mapping is tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: the condition text is the local Sky label, not the service's."
     },
     {
       "feature": "Wind",
       "apple": "Wind (speed, direction, gust)",
-      "bifrost": "springboard/src/shell/weather/data.rs (Current.wind_kmh)",
+      "bifrost": "springboard/src/shell/weather/data.rs (Current.wind_kmh, Current.wind_dir, Current.wind_gust_kmh)",
       "status": "partial",
-      "note": "Speed only. No direction or gust fields are requested or stored."
+      "note": "Speed, direction in degrees and gusts are requested and parsed; the direction wraps into one turn and a missing reading is calm, tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: no compass label and no beaufort scale."
     },
     {
       "feature": "Precipitation",
@@ -47,14 +47,14 @@
       "apple": "UVIndex",
       "bifrost": "springboard/src/shell/weather/data.rs (Day.uv from uv_index_max)",
       "status": "partial",
-      "note": "Daily peak only, used by the Weather detail pane. No current or hourly UV."
+      "note": "The daily peak is read from uv_index_max, and a day without it reads as zero; tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: no current or hourly UV index."
     },
     {
       "feature": "Hourly and daily forecasts",
       "apple": "Forecast, HourWeather, DayWeather, DayPartForecast",
       "bifrost": "springboard/src/shell/weather/data.rs (Hour, Day, parse_forecast); springboard/apps/weather-desktop/src/weather.rs (HOURLY_TOP, DAILY_TOP)",
       "status": "partial",
-      "note": "Hourly temperature and code, and 10 daily max, min, code, UV, sunrise and sunset. No day-part forecasts."
+      "note": "The 24 hours from the current hour and 10 days are built with rain, snow, visibility and pressure, tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: no day-part forecasts."
     },
     {
       "feature": "Minute forecast",
@@ -75,7 +75,7 @@
       "apple": "SunEvents, MoonEvents, MoonPhase",
       "bifrost": "springboard/src/shell/weather/data.rs (Day.sunrise, Day.sunset)",
       "status": "partial",
-      "note": "Sunrise and sunset only. No dawn, dusk, moonrise, moonset or moon phase."
+      "note": "Each day's sunrise and sunset clock times, and the sunrise or sunset that falls in an hour, are tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: no dawn, dusk, moonrise, moonset or moon phase."
     },
     {
       "feature": "Historical statistics and comparisons",
