@@ -1,6 +1,6 @@
 //! The `calendar` service: the person's events, for the apps whose manifest declares the `calendars` permission. It is
-//! the read side of EventKit (`EKEventStore` events in a date range); the store is the shared calendar file the
-//! Calendar app writes, `shell::calendar::store`.
+//! the read side of the event store (events in a date range); the store is the shared calendar file the Calendar app
+//! writes, `shell::calendar::store`.
 //!
 //! Times are local, floating civil times written `YYYY-MM-DDTHH:MM` (no time zone).
 //!
