@@ -52,6 +52,9 @@ mod layer_views;
 mod keyanim;
 mod overlay;
 mod scroll;
+mod picker;
+mod content_unavailable;
+mod large_content;
 pub use keyanim::ViewState;
 pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
 pub use app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
@@ -64,6 +67,9 @@ pub use layer_views::{EmitterView, GradientView, ReplicaSource, ReplicatorView, 
 pub use context::with_context;
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
 pub use overlay::{Columns, Grid, ViewThatFits, ZStack};
+pub use picker::PickerView;
+pub use content_unavailable::ContentUnavailableView;
+pub use large_content::LargeContentView;
 
 /// What a text-editing view tells the shell about itself while it is first responder (`NativeTextInputClient`,
 /// `NativeTextInput`): the text around the caret, the caret rectangle in window points `(x, y, w, h)` and the traits.
@@ -263,6 +269,13 @@ pub trait View: 'static {
     fn ax_set_value(&mut self, _value: &str) -> bool {
         false
     }
+    /// True when the view wants to see every pointer event of its subtree before the subtree does (a long-press
+    /// recogniser around a control). It never stops an event: [`View::observe_pointer`] only watches.
+    fn observes_pointer(&self) -> bool {
+        false
+    }
+    /// A pointer event (window points, translated like `handle` sees it) from a view below this one; see `observes_pointer`.
+    fn observe_pointer(&mut self, _ev: &ViewEvent) {}
     /// Frame time in seconds (called by `Window::tick` before drawing); mark the view dirty to animate.
     fn tick(&mut self, _t: f64) {}
     /// True while the view advances on `tick` by itself (a fling, a spinner), so the window asks for the next wake.
@@ -528,6 +541,16 @@ pub(super) fn image_key(img: &Image) -> u64 {
 pub(super) fn blit(c: &mut dyn Canvas, img: &Image, x: i32, y: i32) {
     let dst = RectF::new(x as f32, y as f32, img.w as f32, img.h as f32);
     c.image(ImageRef { id: image_key(img), image: img }, dst, 1.0);
+}
+
+/// `ev` moved by the content offset `(ox, oy)` of its path, as a view at the end of that path sees it.
+fn offset_event(ev: &ViewEvent, ox: f32, oy: f32) -> ViewEvent {
+    match ev {
+        ViewEvent::Pointer(Event::Down(x, y)) => ViewEvent::Pointer(Event::Down(x + ox, y + oy)),
+        ViewEvent::Pointer(Event::Move(x, y)) => ViewEvent::Pointer(Event::Move(x + ox, y + oy)),
+        ViewEvent::Pointer(Event::Up(x, y)) => ViewEvent::Pointer(Event::Up(x + ox, y + oy)),
+        other => other.clone(),
+    }
 }
 
 /// The device-pixel rectangle covering `r`, as a canvas rectangle.
@@ -805,7 +828,29 @@ impl<S: Responder> Window<S> {
     /// Delivers `ev`; true when a new frame is needed. Pointer: the deepest view under the pointer (which becomes first
     /// responder if it accepts), bubbling to ancestors; Move and Up go to the view that took the Down. Keys: first
     /// responder and outwards, then Tab and Shift-Tab move the focus. Queued control actions are sent afterwards.
+    /// Offers a pointer event to the views on its path that observe pointers, outermost first (see `observes_pointer`).
+    fn observe(&mut self, ev: &ViewEvent) {
+        let mut p = Vec::new();
+        let on_path = match ev {
+            ViewEvent::Pointer(Event::Down(x, y)) => pick(self.root(), *x, *y, &mut p),
+            _ => self.tracking.is_some_and(|id| path_to(self.root(), id, &mut p)),
+        };
+        if !on_path {
+            return;
+        }
+        for depth in 0..=p.len() {
+            let (ox, oy) = path_offset(self.root(), &p[..depth]);
+            let v = at_mut(self.root.as_mut(), &p[..depth]);
+            if v.observes_pointer() {
+                v.observe_pointer(&offset_event(ev, ox, oy));
+            }
+        }
+    }
+
     pub fn event(&mut self, ev: &ViewEvent, state: &mut S) -> bool {
+        if matches!(ev, ViewEvent::Pointer(_) | ViewEvent::Cancel) {
+            self.observe(ev);
+        }
         match ev {
             ViewEvent::Pointer(Event::Down(x, y)) => {
                 let mut p = Vec::new();
