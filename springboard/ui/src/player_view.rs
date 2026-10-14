@@ -1,5 +1,6 @@
 //! `AVPlayerView` and the declarative `VideoPlayer(player:videoOverlay:)` as pure state: the controls style, the chrome that
-//! style shows, the layout of that chrome, hit-testing and time labels. The view drives a `PlayerHandle` (the app's
+//! style shows, the layout of that chrome, hit-testing and time labels. `PlayerViewController` owns a view and reports
+//! its full-screen stages to a delegate. The view drives a `PlayerHandle` (the app's
 //! existing player) and decodes nothing. Nothing is drawn here.
 use crate::media_time::MediaTime;
 use crate::Rect;
@@ -226,6 +227,69 @@ pub struct VideoPlayer<O> {
 impl<O> VideoPlayer<O> {
     pub fn new(video_overlay: Option<O>) -> Self {
         VideoPlayer { view: PlayerView::new(), video_overlay }
+    }
+}
+
+/// The delegate of a `PlayerViewController`. Full-screen changes arrive as a will stage, the change, then a did stage.
+pub trait PlayerViewDelegate {
+    fn will_begin_full_screen(&mut self) {}
+    fn did_begin_full_screen(&mut self) {}
+    fn will_end_full_screen(&mut self) {}
+    fn did_end_full_screen(&mut self) {}
+}
+
+/// The player controller: owns a `PlayerView` and reports its full-screen changes to a delegate.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PlayerViewController {
+    pub view: PlayerView,
+}
+
+impl PlayerViewController {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn is_full_screen(&self) -> bool {
+        self.view.is_full_screen()
+    }
+
+    /// Moves to full screen or back, reporting the stages around the change. Returns false and reports nothing when the
+    /// view is already in the requested state.
+    pub fn set_full_screen(&mut self, on: bool, delegate: &mut dyn PlayerViewDelegate) -> bool {
+        if self.view.full_screen == on {
+            return false;
+        }
+        if on {
+            delegate.will_begin_full_screen();
+        } else {
+            delegate.will_end_full_screen();
+        }
+        self.view.full_screen = on;
+        if on {
+            delegate.did_begin_full_screen();
+        } else {
+            delegate.did_end_full_screen();
+        }
+        true
+    }
+
+    /// Applies a tap. The full-screen button goes through `set_full_screen`; every other hit is handled by the view.
+    pub fn tap(
+        &mut self,
+        bounds: Rect,
+        x: f32,
+        y: f32,
+        player: &mut dyn PlayerHandle,
+        delegate: &mut dyn PlayerViewDelegate,
+    ) -> Option<Hit> {
+        match self.view.hit_test(bounds, x, y, player.duration_seconds())? {
+            Hit::FullScreenToggle => {
+                let on = !self.is_full_screen();
+                self.set_full_screen(on, delegate);
+                Some(Hit::FullScreenToggle)
+            }
+            _ => self.view.tap(bounds, x, y, player),
+        }
     }
 }
 

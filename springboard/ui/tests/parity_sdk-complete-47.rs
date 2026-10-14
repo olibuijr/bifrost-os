@@ -2,6 +2,8 @@
 //! the player controller model. Nothing is decoded from a file, no device is opened and no clock is read.
 
 use bifrost_ui::pcm_convert::{convert_bytes, decode, encode, ConvertError, Depth, PcmFormat};
+use bifrost_ui::player_view::{Chrome, Hit, PlayerHandle, PlayerViewController, PlayerViewDelegate};
+use bifrost_ui::Rect;
 
 fn f32_bytes(samples: &[f32]) -> Vec<u8> {
     samples.iter().flat_map(|f| f.to_le_bytes()).collect()
@@ -112,4 +114,136 @@ fn zero_rates_and_zero_channels_are_refused() {
 fn an_empty_block_converts_to_nothing() {
     let out = convert_bytes(&[], format(48_000, 2, Depth::S16), format(44_100, 1, Depth::U8)).unwrap();
     assert!(out.is_empty());
+}
+
+#[derive(Default)]
+struct StageLog {
+    stages: Vec<&'static str>,
+}
+
+impl PlayerViewDelegate for StageLog {
+    fn will_begin_full_screen(&mut self) {
+        self.stages.push("will begin");
+    }
+    fn did_begin_full_screen(&mut self) {
+        self.stages.push("did begin");
+    }
+    fn will_end_full_screen(&mut self) {
+        self.stages.push("will end");
+    }
+    fn did_end_full_screen(&mut self) {
+        self.stages.push("did end");
+    }
+}
+
+/// A player that is always 100 seconds long and starts paused.
+#[derive(Default)]
+struct PausedPlayer {
+    playing: bool,
+}
+
+impl PlayerHandle for PausedPlayer {
+    fn is_playing(&self) -> bool {
+        self.playing
+    }
+    fn play(&mut self) {
+        self.playing = true;
+    }
+    fn pause(&mut self) {
+        self.playing = false;
+    }
+    fn current_seconds(&self) -> f64 {
+        0.0
+    }
+    fn duration_seconds(&self) -> f64 {
+        100.0
+    }
+    fn seek_seconds(&mut self, _seconds: f64) {}
+}
+
+const BOUNDS: Rect = Rect { x: 0.0, y: 0.0, w: 600.0, h: 400.0 };
+
+fn centre_of(controller: &PlayerViewController, chrome: Chrome) -> (f32, f32) {
+    let (_, r) = controller.view.layout(BOUNDS).into_iter().find(|(c, _)| *c == chrome).expect("chrome is laid out");
+    (r.x + r.w / 2.0, r.y + r.h / 2.0)
+}
+
+fn controller_with_toggle() -> PlayerViewController {
+    let mut controller = PlayerViewController::new();
+    controller.view.shows_full_screen_toggle_button = true;
+    controller
+}
+
+#[test]
+fn a_controller_starts_windowed() {
+    assert!(!PlayerViewController::new().is_full_screen());
+}
+
+#[test]
+fn entering_full_screen_reports_the_will_and_did_stages_in_order() {
+    let mut controller = PlayerViewController::new();
+    let mut log = StageLog::default();
+    assert!(controller.set_full_screen(true, &mut log));
+    assert!(controller.is_full_screen());
+    assert_eq!(log.stages, vec!["will begin", "did begin"]);
+}
+
+#[test]
+fn leaving_full_screen_reports_the_will_and_did_end_stages() {
+    let mut controller = PlayerViewController::new();
+    let mut log = StageLog::default();
+    controller.set_full_screen(true, &mut log);
+    log.stages.clear();
+    assert!(controller.set_full_screen(false, &mut log));
+    assert!(!controller.is_full_screen());
+    assert_eq!(log.stages, vec!["will end", "did end"]);
+}
+
+#[test]
+fn asking_for_the_current_state_changes_nothing_and_reports_nothing() {
+    let mut controller = PlayerViewController::new();
+    let mut log = StageLog::default();
+    assert!(!controller.set_full_screen(false, &mut log));
+    assert!(log.stages.is_empty());
+    controller.set_full_screen(true, &mut log);
+    log.stages.clear();
+    assert!(!controller.set_full_screen(true, &mut log));
+    assert!(log.stages.is_empty());
+}
+
+#[test]
+fn tapping_the_full_screen_button_toggles_and_reports_each_change() {
+    let mut controller = controller_with_toggle();
+    let mut player = PausedPlayer::default();
+    let mut log = StageLog::default();
+    let (x, y) = centre_of(&controller, Chrome::FullScreenToggle);
+    assert_eq!(controller.tap(BOUNDS, x, y, &mut player, &mut log), Some(Hit::FullScreenToggle));
+    assert!(controller.is_full_screen());
+    assert_eq!(log.stages, vec!["will begin", "did begin"]);
+    assert_eq!(controller.tap(BOUNDS, x, y, &mut player, &mut log), Some(Hit::FullScreenToggle));
+    assert!(!controller.is_full_screen());
+    assert_eq!(log.stages, vec!["will begin", "did begin", "will end", "did end"]);
+}
+
+#[test]
+fn tapping_play_on_the_controller_leaves_full_screen_alone() {
+    let mut controller = controller_with_toggle();
+    let mut player = PausedPlayer::default();
+    let mut log = StageLog::default();
+    let (x, y) = centre_of(&controller, Chrome::PlayPause);
+    assert_eq!(controller.tap(BOUNDS, x, y, &mut player, &mut log), Some(Hit::PlayPause));
+    assert!(player.playing);
+    assert!(!controller.is_full_screen());
+    assert!(log.stages.is_empty());
+}
+
+#[test]
+fn a_hidden_full_screen_button_cannot_be_tapped_on_the_controller() {
+    let mut controller = PlayerViewController::new();
+    let mut player = PausedPlayer::default();
+    let mut log = StageLog::default();
+    let hit = controller.tap(BOUNDS, 590.0, 380.0, &mut player, &mut log);
+    assert_ne!(hit, Some(Hit::FullScreenToggle));
+    assert!(!controller.is_full_screen());
+    assert!(log.stages.is_empty());
 }
