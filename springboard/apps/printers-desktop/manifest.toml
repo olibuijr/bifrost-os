@@ -1,6 +1,6 @@
 id = "is.olibuijr.printers.desktop"
 name = "Print Center"
-version = "0.4.0"
+version = "0.5.0"
 exec = "bifrost-printers"
 icon = "icon.png"
 min_shell = "0.6.5"
@@ -52,3 +52,17 @@ title = "Print File"
 description = "Sends a document to a printer."
 shortcut = false
 params = ["path:string", "printer:entity(Printer)?"]
+
+[[intent]]
+id = "hold-job"
+title = "Hold Job"
+description = "Holds a job in a printer's queue so it is not printed until it is released."
+shortcut = false
+params = ["job:entity(Job)", "printer:entity(Printer)?"]
+
+[[intent]]
+id = "release-job"
+title = "Release Job"
+description = "Lets a held job in a printer's queue print."
+shortcut = false
+params = ["job:entity(Job)", "printer:entity(Printer)?"]
