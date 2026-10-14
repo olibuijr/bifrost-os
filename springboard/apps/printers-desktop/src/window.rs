@@ -327,8 +327,18 @@ impl PrintCenter {
     }
 
     fn send(&mut self, request: Request) {
+        if let Request::Act { printer, action: Action::CancelJob(id) } = &request {
+            self.model.mark_canceling(printer, *id);
+        }
         self.link.send(request);
         self.in_flight += 1;
+    }
+
+    /// Asks the device of the selected printer for its options, for the info pane. A pool has no device of its own.
+    fn request_options(&mut self) {
+        if let Some(printer) = self.model.selected_printer().filter(|p| !p.is_class).map(|p| p.name.clone()) {
+            self.send(Request::Options { printer });
+        }
     }
 
     /// Lists the printers, and the queue of the selected one.
@@ -375,7 +385,10 @@ impl PrintCenter {
     fn apply_pane(&mut self) {
         match self.model.pane() {
             Pane::Discover => self.discover.restart(),
-            Pane::Info => self.load_fields(),
+            Pane::Info => {
+                self.load_fields();
+                self.request_options();
+            }
             Pane::Queue | Pane::Help => {}
         }
         if self.model.pane() != Pane::Discover {
@@ -728,6 +741,9 @@ impl PrintCenter {
                 }
                 self.sync_fields();
                 self.list();
+                if self.model.pane() == Pane::Info {
+                    self.request_options();
+                }
                 true
             }
             Target::Found(i) => {
@@ -796,7 +812,7 @@ impl PrintCenter {
             B_INFO => self.toggle_pane(Pane::Info),
             B_SAVE => self.save_details(),
             B_SHARE => {
-                let shared = self.model.selected_printer().filter(|p| !p.is_class).map(|p| !p.shared);
+                let shared = self.model.selected_printer().filter(|p| !p.is_class && !model::forwards_to_queue(p)).map(|p| !p.shared);
                 if let Some(shared) = shared {
                     self.act(Action::SetShared(shared));
                 }
@@ -832,13 +848,13 @@ impl PrintCenter {
                     self.list();
                 }
                 let Some(p) = self.model.selected_printer() else { return Vec::new() };
-                let (resume, default_enabled, pool, shared) = (model::toggle(p).1 == "Resume", !p.is_default, p.is_class, p.shared);
+                let (resume, default_enabled, pool, shared, remote) = (model::toggle(p).1 == "Resume", !p.is_default, p.is_class, p.shared, model::forwards_to_queue(p));
                 let mut items = vec![
                     item(B_PAUSE, if resume { "Resume Printer" } else { "Pause Printer" }, true),
                     item(B_DEFAULT, "Set as Default Printer", default_enabled),
                     item(B_INFO, "Printer Info", true),
                 ];
-                if !pool {
+                if !pool && !remote {
                     items.push(item(B_SHARE, if shared { "Stop Sharing" } else { "Share Printer" }, true));
                 }
                 items.push(item(B_DELETE, if pool { "Remove Printer Pool…" } else { "Remove Printer…" }, true));
@@ -866,7 +882,7 @@ impl PrintCenter {
                     AppMenuItem::new(B_PAUSE, if resume { "Resume Printer" } else { "Pause Printer" }).enabled(printer.is_some()),
                     AppMenuItem::new(B_DEFAULT, "Set as Default Printer").enabled(printer.is_some_and(|p| !p.is_default)),
                     AppMenuItem::new(B_INFO, "Printer Info").key("cmd+i").checked(self.model.show_info).enabled(printer.is_some()),
-                    AppMenuItem::new(B_SHARE, if shared { "Stop Sharing" } else { "Share Printer" }).enabled(printer.is_some_and(|p| !p.is_class)),
+                    AppMenuItem::new(B_SHARE, if shared { "Stop Sharing" } else { "Share Printer" }).enabled(printer.is_some_and(|p| !p.is_class && !model::forwards_to_queue(p))),
                     AppMenuItem::separator(),
                     AppMenuItem::new(B_DELETE, "Remove Printer…").enabled(printer.is_some()),
                     AppMenuItem::separator(),
@@ -1177,7 +1193,7 @@ mod tests {
         let s = w.save_rect();
         assert_eq!(w.hit_body(s.x + 4.0, s.y + 4.0), Target::Save);
         assert!(w.activate(Target::Save));
-        assert_eq!(w.in_flight, 1);
+        assert_eq!(w.in_flight, 2, "the options were asked when the pane opened, and the save is sent");
         assert!(w.key(27));
         assert_eq!(w.focus, None);
         assert!(!w.key(8));
@@ -1325,6 +1341,32 @@ mod tests {
         assert_eq!(w.print_reader_on("Lab".into(), "b.pdf", &mut std::io::Cursor::new(Vec::new())), Err("\"b.pdf\" is empty".to_string()));
         assert!(w.print_path_on("Lab", "/no/such/file.pdf").unwrap_err().starts_with("Could not open \"file.pdf\""));
         assert_eq!(w.in_flight, 1);
+    }
+
+    #[test]
+    fn the_info_pane_asks_the_device_for_its_options_once_it_is_shown() {
+        let mut w = window();
+        w.toolbar_action(B_INFO);
+        assert_eq!(w.in_flight, 1, "the options are asked when the pane opens");
+        w.model.apply(Reply::Options {
+            printer: "Office".into(),
+            options: Some(model::Options { paper: "Letter".into(), two_sided: false, color: true }),
+        });
+        assert_eq!(w.model.options_for("Office").map(|o| o.paper.as_str()), Some("Letter"));
+        w.toolbar_action(B_INFO);
+        w.toolbar_action(B_INFO);
+        assert_eq!(w.in_flight, 2, "each opening asks again");
+    }
+
+    #[test]
+    fn a_queue_that_forwards_to_another_computer_is_not_offered_for_sharing() {
+        let mut w = window();
+        w.model.printers[0].device_uri = "ipp://front.local:631/printers/Front".into();
+        w.toolbar_action(B_SHARE);
+        assert_eq!(w.in_flight, 0, "a remote queue is not shared from here");
+        assert!(find_item(&w.menus(), B_SHARE).is_some_and(|i| !i.enabled));
+        let labels: Vec<String> = w.context_items(Target::Printer(0)).into_iter().map(|i| i.label).collect();
+        assert!(!labels.iter().any(|l| l.contains("Sharing") || l.contains("Share")), "{labels:?}");
     }
 
     #[test]

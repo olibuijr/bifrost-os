@@ -100,7 +100,7 @@ fn jobs(p: &PrintCenter) -> Json {
                     ("id", Json::Num(f64::from(j.id))),
                     ("name", text(&j.name)),
                     ("owner", text(&j.user)),
-                    ("status", Json::Str(model::job_status_text(j))),
+                    ("status", Json::Str(p.model.job_status(j))),
                     ("pages", Json::Num(f64::from(j.pages.max(0)))),
                 ])
             })
