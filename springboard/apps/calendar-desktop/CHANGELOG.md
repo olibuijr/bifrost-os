@@ -9,6 +9,7 @@
 - Settings > Default Calendar: the calendar new events go to.
 - File > New Calendar Subscription... opens a sheet with an address field, filled from the pasteboard. Return subscribes; an address that is refused keeps the sheet open with the reason.
 - Search matches the location and the notes of saved events as well as their titles.
+- View > Refresh Calendars (Cmd+R) reads the CalDAV calendars now instead of at the next 15-minute interval.
 - The event form scrolls when its pickers make it taller than the window.
 
 ## 1.13.0 — 2026-10-13

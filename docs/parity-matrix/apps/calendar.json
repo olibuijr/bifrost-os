@@ -194,8 +194,8 @@
    "area": "integration",
    "apple": "PreferencesPanel.nib Accounts; CalDAVCalendarInspector.nib; View > Refresh Calendars",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:345",
-   "note": "Read-only import from Internet Accounts; no write-back, no per-account calendars, no Refresh command",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:226",
+   "note": "CalDAV calendars are read in the background and imported into the store. View > Refresh Calendars (Cmd+R) starts a read now (springboard/sdk/src/dav_sync.rs refresh). Not yet verified on Midget. Left: writing local saves and deletes back with PUT and DELETE, and one calendar per account in the calendar list.",
    "wire": "Push local saves/deletes with dav_sync PUT/DELETE, keep each account as its own calendar in the sidebar, add Refresh Calendars (cmd+r) to View."
   },
   {

@@ -1636,10 +1636,12 @@ pub enum Command {
     QuickEvent,
     /// File > New Calendar...: a line sheet names the calendar (the app shows nothing else; see `perform`).
     NewCalendar,
+    /// View > Refresh Calendars: the CalDAV calendars are read now (the app asks `dav_sync` to start).
+    RefreshCalendars,
 }
 
 impl Command {
-    pub const ALL: [Command; 27] = [
+    pub const ALL: [Command; 28] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1667,6 +1669,7 @@ impl Command {
         Command::Subscribe,
         Command::QuickEvent,
         Command::NewCalendar,
+        Command::RefreshCalendars,
     ];
 
     pub fn id(self) -> u32 {
@@ -1706,6 +1709,7 @@ impl Command {
             Command::Subscribe => "New Calendar Subscription...",
             Command::QuickEvent => "Quick Event...",
             Command::NewCalendar => "New Calendar...",
+            Command::RefreshCalendars => "Refresh Calendars",
         }
     }
 
@@ -1725,6 +1729,7 @@ impl Command {
             Command::Search => "cmd+f",
             Command::Print => "cmd+p",
             Command::QuickEvent => "cmd+shift+n",
+            Command::RefreshCalendars => "cmd+r",
             _ => "",
         }
     }
@@ -1806,7 +1811,7 @@ impl Calendar {
             Command::Search => Target::SearchField,
             Command::QuickEvent => Target::QuickOpen,
             // the app shows the panels and passes the file's text to `import_file` / reads `archive_text`
-            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print | Command::Subscribe | Command::NewCalendar => return false,
+            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print | Command::Subscribe | Command::NewCalendar | Command::RefreshCalendars => return false,
         };
         self.activate(ui, target, t);
         true

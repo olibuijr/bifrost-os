@@ -196,7 +196,7 @@ impl App for CalendarApp {
             // merges into the shell's View menu
             AppMenu {
                 title: "View".into(),
-                items: vec![item(Command::ZoomIn), item(Command::ZoomOut)],
+                items: vec![item(Command::ZoomIn), item(Command::ZoomOut), AppMenuItem::separator(), item(Command::RefreshCalendars)],
             },
             AppMenu { title: "Settings".into(), items: settings_items(c) },
         ]
@@ -221,6 +221,11 @@ impl App for CalendarApp {
             return self.cal.as_mut().is_some_and(|c| c.delete_calendar(cal));
         }
         let Some(cmd) = Command::from_id(id) else { return false };
+        // the CalDAV sync runs on its own thread; asking for a refresh only makes the next poll start it now
+        if cmd == Command::RefreshCalendars {
+            self.dav.refresh();
+            return true;
+        }
         let t = bifrost_app::proto::sys::now_ms();
         match &mut self.cal {
             // the address on the pasteboard is where the sheet starts; Done subscribes to it
