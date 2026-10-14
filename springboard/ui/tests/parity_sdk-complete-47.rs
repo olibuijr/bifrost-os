@@ -3,6 +3,7 @@
 
 use bifrost_ui::pcm_convert::{convert_bytes, decode, encode, ConvertError, Depth, PcmFormat};
 use bifrost_ui::player_view::{Chrome, Hit, PlayerHandle, PlayerViewController, PlayerViewDelegate};
+use bifrost_ui::web_extension::{Exchange, ExchangeError, Extension, HostPattern, Kind, Message, Registry};
 use bifrost_ui::Rect;
 
 fn f32_bytes(samples: &[f32]) -> Vec<u8> {
@@ -114,6 +115,100 @@ fn zero_rates_and_zero_channels_are_refused() {
 fn an_empty_block_converts_to_nothing() {
     let out = convert_bytes(&[], format(48_000, 2, Depth::S16), format(44_100, 1, Depth::U8)).unwrap();
     assert!(out.is_empty());
+}
+
+fn reader_registry(enabled: bool) -> Registry {
+    let pattern = HostPattern::parse("https://*.example.com").unwrap();
+    let extension = Extension::new("com.example.reader", "Reader", Kind::WebExtension, vec![pattern]).unwrap();
+    let mut registry = Registry::new();
+    registry.install(extension).unwrap();
+    registry.set_enabled("com.example.reader", enabled).unwrap();
+    registry
+}
+
+fn answer(text: &str) -> Message {
+    Message::new("answer").unwrap().with("text", text).unwrap()
+}
+
+#[test]
+fn a_page_request_to_an_allowed_extension_gets_an_id_and_the_next_id_follows() {
+    let registry = reader_registry(true);
+    let mut exchange = Exchange::new();
+    assert_eq!(exchange.request(&registry, "com.example.reader", "https://news.example.com/a"), Ok(0));
+    assert_eq!(exchange.request(&registry, "com.example.reader", "https://example.com/b"), Ok(1));
+    assert_eq!(exchange.pending_count(), 2);
+}
+
+#[test]
+fn a_request_is_refused_for_a_disabled_extension_an_unlisted_page_or_an_unknown_extension() {
+    let disabled = reader_registry(false);
+    let mut exchange = Exchange::new();
+    assert_eq!(
+        exchange.request(&disabled, "com.example.reader", "https://example.com/"),
+        Err(ExchangeError::NotAllowed)
+    );
+    let enabled = reader_registry(true);
+    assert_eq!(
+        exchange.request(&enabled, "com.example.reader", "http://example.com/"),
+        Err(ExchangeError::NotAllowed),
+        "the scheme is not in the permission"
+    );
+    assert_eq!(
+        exchange.request(&enabled, "com.example.other", "https://example.com/"),
+        Err(ExchangeError::NotAllowed)
+    );
+    assert_eq!(exchange.pending_count(), 0);
+}
+
+#[test]
+fn the_extension_that_got_a_request_answers_it_once() {
+    let registry = reader_registry(true);
+    let mut exchange = Exchange::new();
+    let id = exchange.request(&registry, "com.example.reader", "https://example.com/").unwrap();
+    let reply = exchange.reply(&registry, "com.example.reader", id, answer("done")).unwrap();
+    assert_eq!(reply.name(), "answer");
+    assert_eq!(reply.value("text"), Some("done"));
+    assert_eq!(exchange.pending_count(), 0);
+    assert_eq!(
+        exchange.reply(&registry, "com.example.reader", id, answer("again")),
+        Err(ExchangeError::NoSuchRequest)
+    );
+}
+
+#[test]
+fn a_reply_from_another_extension_is_refused_and_the_request_stays_open() {
+    let registry = reader_registry(true);
+    let mut exchange = Exchange::new();
+    let id = exchange.request(&registry, "com.example.reader", "https://example.com/").unwrap();
+    assert_eq!(exchange.reply(&registry, "com.example.other", id, answer("x")), Err(ExchangeError::WrongSender));
+    assert_eq!(exchange.pending_count(), 1);
+    assert!(exchange.reply(&registry, "com.example.reader", id, answer("ok")).is_ok());
+}
+
+#[test]
+fn a_reply_after_the_extension_was_disabled_is_refused_and_closes_the_request() {
+    let mut registry = reader_registry(true);
+    let mut exchange = Exchange::new();
+    let id = exchange.request(&registry, "com.example.reader", "https://example.com/").unwrap();
+    registry.set_enabled("com.example.reader", false).unwrap();
+    assert_eq!(
+        exchange.reply(&registry, "com.example.reader", id, answer("late")),
+        Err(ExchangeError::NotAllowed)
+    );
+    assert_eq!(exchange.pending_count(), 0);
+}
+
+#[test]
+fn a_cancelled_request_cannot_be_answered() {
+    let registry = reader_registry(true);
+    let mut exchange = Exchange::new();
+    let id = exchange.request(&registry, "com.example.reader", "https://example.com/").unwrap();
+    assert!(exchange.cancel(id));
+    assert!(!exchange.cancel(id), "a request is cancelled once");
+    assert_eq!(
+        exchange.reply(&registry, "com.example.reader", id, answer("x")),
+        Err(ExchangeError::NoSuchRequest)
+    );
 }
 
 #[derive(Default)]
