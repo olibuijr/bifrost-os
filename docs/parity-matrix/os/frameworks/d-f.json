@@ -984,8 +984,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Private DVD playback backend of the public DVDPlayback framework, which is n/a in this shard: optical disc playback and DVD menus have no BifrOSt media path and no package in the runtime set.",
    "rea": [],
    "method": "assessed"
   },
