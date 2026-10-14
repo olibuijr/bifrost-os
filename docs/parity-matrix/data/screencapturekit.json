@@ -24,9 +24,9 @@
     {
       "feature": "Filter what a stream captures (SCContentFilter)",
       "apple": "SCContentFilter",
-      "bifrost": "springboard/ui/src/capture_filter.rs",
+      "bifrost": "springboard/ui/src/capture_filter.rs (ContentFilter, Rule, captured); springboard/sdk/tests/parity_sdk-complete-29.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-window or per-app filter exists for app-facing capture."
+      "note": "The filter covers one window, or one display with a rule over its windows (include or exclude windows, include or exclude apps, with exceptions), and reports its menu bar flag and a scale that reads zero, negative or non-finite values as 1; all of it is tested headless. Gap: the shell's capture stream does not read the filter yet, so it is not applied to a live capture, which needs the lab machine."
     },
     {
       "feature": "Single-frame screenshots (SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput)",
