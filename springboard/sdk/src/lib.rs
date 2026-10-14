@@ -308,6 +308,7 @@ pub mod hotspot_configuration;
 pub mod accessory_hotspot;
 pub mod hotspot_helper;
 pub mod vpn_configuration;
+pub mod vpn_intents;
 pub mod wifi_accessory_browser;
 pub mod compression;
 pub mod video_compression;
