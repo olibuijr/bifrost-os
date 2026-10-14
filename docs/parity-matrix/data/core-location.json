@@ -73,9 +73,9 @@
     {
       "feature": "Location metadata in photos (not Core Location)",
       "apple": "No direct equivalent in Core Location; photo GPS is read through ImageIO",
-      "bifrost": "springboard/src/shell/photos/exif.rs:110 (format_gps), springboard/src/shell/photos/exif.rs:324 (read_gps)",
+      "bifrost": "springboard/src/shell/photos/exif.rs:115 (format_gps), springboard/src/shell/photos/exif.rs:330 (read_gps)",
       "status": "partial",
-      "note": "Photos reads GPS tags from JPEG EXIF and formats them as coordinates. It is read-only, has no SDK API and does not write GPS tags."
+      "note": "Photos reads GPS tags from JPEG EXIF and formats them as coordinates. It is read-only, has no SDK API and does not write GPS tags. Headless tests in springboard/tests/parity_sdk-tests-07.rs: headless_gps_is_formatted_as_unsigned_degrees_with_hemisphere_letters, headless_gps_tags_are_read_from_the_jpeg_and_signed_by_their_references, headless_out_of_range_gps_is_dropped, headless_reader_rejects_non_jpeg_bytes_and_keeps_the_file_size_fallback, headless_capture_date_and_exposure_are_formatted_for_the_info_sheet."
     },
     {
       "feature": "Errors and diagnostics",
