@@ -154,3 +154,7 @@ pub mod reachability;
 pub mod vlan_plan;
 pub mod frame_metrics;
 pub mod csv;
+pub mod link_index;
+pub mod cache_purge;
+pub mod swap_plan;
+pub mod ambient_light;
