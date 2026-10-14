@@ -9,6 +9,7 @@ Source of the Apple macOS 27 SDK vs BifrOSt matrix. The generated page is `docs/
 | `data/<slug>.json` | One framework (or one part of AppKit, Foundation, SwiftUI, AVFoundation): status, summary, feature rows, gaps, REA evidence id |
 | `apps/<slug>.json` | One reference app's feature inventory against its BifrOSt app: rows `feature, area, apple, status, bifrost, note, wire` (`bifrost pc parity apps`) |
 | `os/<category>/*.json` | The OS layer: every component of the reference OS 27 image (26A434) in ten categories (`apps`, `assets`, `cli`, `daemons`, `drivers`, `frameworks`, `input-methods`, `settings`, `shaders`, `system-ui`), each with a BifrOSt counterpart and status. Written by `bifrost pc os-inventory` from the reference file index, then reviewed (below) |
+| `ipados/index.json`, `ipados/data/<slug>.json` | The second reference platform, the tablet: every framework the official documentation lists with tablet availability (`refresh-index --platform ipados`; rows carry `ipados_since` and, when the framework is also on the desktop, `macos_since`), and the assessment files for frameworks that exist only there. Same row format as `data/` |
 | `related.json`, `themes.json` | Nearest frameworks and clustered gap themes, written by `related` and `themes` |
 | `agent-brief.md` | The brief agents follow to fill or refresh a data file (official docs via `tools/parity/docc.py`, REA via `tools/parity/rea-page.sh`) |
 
@@ -28,6 +29,28 @@ Snapshot, 2026-10-13: 246 frameworks and parts assessed (185 with built work, 61
 
 When a feature ships, edit its row in `data/<slug>.json` (status, BifrOSt path, note), run `bifrost pc parity check` and
 `build`, and update the published database (see the skill).
+
+## Tablet platform (`--platform ipados`)
+
+`status`, `coverage`, `show`, `gaps`, `check` and `refresh-index` take `--platform macos|ipados` (default `macos`; `build`, `apps`,
+`db-export` and the semantic commands stay macOS only). The tablet side is stored apart in `ipados/`, so the macOS matrix, its
+`check` and `build` are not touched.
+
+- `refresh-index --platform ipados` re-reads the official documentation index and writes `ipados/index.json`. A page that lists
+  the tablet without a version gets the phone version.
+- A framework that is in the tablet index and has a macOS assessment reuses those rows by reference: no file is needed, the
+  rows are read from `data/` at load time (split frameworks such as AppKit parts and SwiftUI parts keep their parts).
+  `status --platform ipados` shows how many frameworks reuse macOS rows and how many have their own file.
+- To change what the tablet says about a shared framework, add `ipados/data/<slug>.json`. Without a `reuse` key it replaces the
+  macOS rows. With `"reuse": "macos"` (or `"macos:<slug>"`, or `{"platform": "macos", "slug": "<slug>"}`) it extends them: the
+  file's rows replace macOS rows of the same `feature` name and any other rows are added; `status`, `bifrost`, `summary`,
+  `rea_evidence`, `gaps` and `doc` are taken from the file when present, else from the macOS assessment.
+- A framework that exists only on the tablet gets its own `ipados/data/<slug>.json` (same format as `data/`). Until it does,
+  `check --platform ipados` lists it under "not assessed" and exits 1.
+- `check --platform ipados` also fails for a data file that matches no index row and for cited repo paths that do not exist (rows
+  reused from macOS are checked by the macOS `check`).
+
+Tests: `python3 -m unittest discover -s tools/parity` (`test_platform.py` covers the tablet platform).
 
 ## App inventories (`apps`)
 
