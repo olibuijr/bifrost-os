@@ -64,6 +64,8 @@ pub mod gamma_fade;
 pub mod video_transfer;
 pub mod block_motion;
 pub mod kernel;
+pub mod gaussian_filter;
+pub mod lanczos;
 
 #[cfg(test)]
 mod tests {
