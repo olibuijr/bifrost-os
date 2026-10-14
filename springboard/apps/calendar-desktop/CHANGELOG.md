@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.16.0 — 2026-10-14
+
+- Day and Week: grab the top or bottom edge of a timed event and drag it to resize the event. The start or the end snaps to
+  quarter hours, the block keeps at least 15 minutes, and it never ends after midnight. The event is saved when the pointer
+  is released.
+
 ## 1.15.0 — 2026-10-14
 
 - Event > Quick Event: a note after "note:" or "notes:" in the sentence becomes the event's notes, and the preview has a
