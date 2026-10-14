@@ -40,7 +40,7 @@
       "apple": "CommunicationLimits, CommunicationLimitsButton",
       "bifrost": "springboard/src/shell/screentime/config.rs (set_limit, limit_mins)",
       "status": "partial",
-      "note": "Per-app daily time limits exist. They limit app use, not who a child may message, and there is no app-facing API for communication limits."
+      "note": "Per-app daily time limits and Downtime exist in the shell's Screen Time settings, tested headless in springboard/tests/parity_sdk-tests-10-w7.rs. They limit app use, not who a child may message, and there is no app-facing API for communication limits."
     },
     {
       "feature": "Permission button UI (PermissionButton)",
