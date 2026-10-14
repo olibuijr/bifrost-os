@@ -12,7 +12,7 @@
       "apple": "PaperMarkupViewController, MarkupEditViewController, MarkupToolbarViewController",
       "bifrost": "springboard/src/shell/markup.rs (Markup struct, touch, draw); opened from springboard/src/shell/mod.rs:3782 and :3801",
       "status": "os",
-      "note": "Shell-only editor for screenshot captures. Apps get no view controller or SDK type for it."
+      "note": "Shell-only editor for screenshot captures. Left as os in sdk-rest-02: the interactive canvas needs pointer input and drawing from the shell's touch handler in springboard/src/shell/markup.rs, which is not split into a pure model yet. The element model (bifrost_ui::markup) and the non-interactive canvas (springboard/sdk/src/markup.rs) exist."
     },
     {
       "feature": "Freehand drawing tools",
