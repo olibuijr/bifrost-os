@@ -118,6 +118,7 @@ pub mod keyed_archive;
 pub mod value_types;
 pub mod colorsync;
 pub mod decimal;
+pub mod random;
 pub mod csv_writer;
 pub mod accounts;
 pub mod testing;

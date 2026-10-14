@@ -73,9 +73,9 @@
   {
    "feature": "Randomization",
    "apple": "GKRandomSource, GKARC4RandomSource, GKMersenneTwisterRandomSource, GKRandomDistribution, GKGaussianDistribution, GKShuffledDistribution",
-   "bifrost": "springboard/sdk/src/testing.rs:52 (seed(), PINNED_SEED); springboard/apps/games-desktop/src/games.rs:150 (xorshift rand); springboard/apps/games-desktop/src/solitaire.rs:73 (deal from seed); springboard/apps/music-desktop/src/music/upnext.rs:19 (shuffle_slice, Fisher-Yates)",
+   "bifrost": "springboard/sdk/src/random.rs (Source, Algorithm, Mt19937); springboard/core/src/random.rs (RandomDistribution, GaussianDistribution, ShuffledDistribution, shuffle); springboard/sdk/src/testing.rs:52 (seed(), PINNED_SEED); springboard/apps/games-desktop/src/games.rs:150 (xorshift rand over bifrost_core::random); springboard/apps/music-desktop/src/music/upnext.rs:19 (shuffle_slice, Fisher-Yates)",
    "status": "partial",
-   "note": "A seeded source exists only as a test-kit helper. Apps can take seed() and build their own xorshift. There is no SDK random source, no distribution API (uniform ranges, Gaussian, shuffled bag), and no generator choice. Each app repeats the same xorshift in its own code."
+   "note": "An app picks xorshift, SplitMix or Mersenne Twister with one SDK call and draws uniform ranges, Gaussian values, shuffled bags and shuffles from it; the rules are tested headless in tests/parity_sdk-complete-32.rs. Gap: ARC4 (GKARC4RandomSource) is not offered, because it is a broken cipher that no game needs, and the GameplayKit type names are not mirrored; nothing here needs hardware, and the lab machine only confirms that seeded deals match on Midget."
   },
   {
    "feature": "Xcode and SpriteKit integration",
