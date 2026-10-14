@@ -606,9 +606,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "process accounting (acct) is not in the Arch repositories; needs packaging or a BifrOSt tool",
+   "bifrost": "springboard/cmd/src/lastcomm.rs; springboard/cmd/src/bin/lastcomm.rs",
+   "status": "partial",
+   "note": "BifrOSt parses and reports Linux acct_v3 records from /var/account/pacct. The OS does not enable process accounting or create the file, and user names and rotated logs are not handled.",
    "rea": [],
    "method": "assessed"
   },
