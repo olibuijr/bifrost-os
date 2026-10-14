@@ -59,9 +59,9 @@
     {
       "feature": "Sandbox access to udev data for apps",
       "apple": "Not part of the framework (system-level device data)",
-      "bifrost": "springboard/src/bare/app_policy.rs:245 (bubblewrap binds /sys and /run/udev read-only, try-bind)",
-      "status": "os",
-      "note": "The sandbox exposes device data to apps read-only, but no SDK API wraps it."
+      "bifrost": "springboard/sdk/src/udev.rs (read, read_in, DbId, Record); springboard/core/src/udev_db.rs (parse_record); springboard/src/bare/app_policy.rs:367 (bubblewrap binds /sys and /run/udev read-only, try-bind)",
+      "status": "partial",
+      "note": "The udev database record of a device (properties, symlinks, tags, malformed lines, missing records) is read and checked headless in sdk/tests/parity_sdk-rest-13.rs. Gap: the sandbox mounts /run/udev only for native apps, no record has been read on Midget, and apps must poll because there is no change feed."
     }
   ],
   "gaps": [

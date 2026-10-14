@@ -45,9 +45,9 @@
     {
       "feature": "Metal command-buffer encoding of scaler passes",
       "apple": "encode(commandBuffer:) on each effect; MTL4FX* protocols",
-      "bifrost": "springboard/src/gpu/wl.rs:147 (Presenter), docs/gpu-first.md (one render pass per present, GLES)",
-      "status": "os",
-      "note": "The presenter runs GLES render passes, not Metal. Apps get no SDK API for GPU passes. Metal itself is Apple-only, so the API shape is n/a; the concept of GPU passes is os-level."
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (RenderPass, the checked pass model apps describe their passes with); springboard/src/gpu/wl.rs:147 (Presenter, GLES passes), docs/gpu-first.md",
+      "status": "n/a",
+      "note": "Metal command buffers and the MTL4FX encode protocols exist only on Apple's GPU drivers, so encoding a scaler into a Metal command buffer cannot exist on an Arch Linux system. The GPU passes that remain are the presenter's GLES render passes (one per present), which stay inside the shell, and apps describe their own passes with the checked RenderPass model."
     },
     {
       "feature": "Reduced-resolution GPU work with linear upscale",
