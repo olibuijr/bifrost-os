@@ -307,6 +307,7 @@ pub mod speech_recognizer;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;
 pub mod focus_filter;
+pub mod pointer_focus;
 pub mod gamepad_service;
 pub mod distributed;
 pub mod observable;
