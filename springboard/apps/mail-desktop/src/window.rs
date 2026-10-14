@@ -5,6 +5,8 @@
 use crate::accounts;
 use crate::attachments;
 use crate::body::Attachment;
+use crate::draw::open_has_others;
+use crate::pdf;
 use crate::category::Category;
 use crate::draw::Rect;
 use crate::findbar::{self, FindBar};
@@ -20,7 +22,7 @@ use crate::rules::{self, Action};
 use crate::schedule::{self, Queued, Reminder};
 use crate::search::Query;
 use crate::spelling;
-use crate::state::{is_multiline, Compose, Filter, Mail, Notice, Prompt, PromptKind, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
+use crate::state::{is_multiline, is_yes, Compose, Filter, Mail, Notice, Prompt, PromptKind, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
 use crate::sync::{self, Change, Event};
 use crate::transport;
 use bifrost_app::contacts::{self, Key as ContactKey, SaveRequest};
@@ -115,6 +117,9 @@ pub const MENU_NEXT_MISSPELLING: u32 = 71;
 pub const MENU_CORRECT_SPELLING: u32 = 72;
 pub const MENU_ACTIVITY: u32 = 73;
 pub const MENU_CHECK_CONNECTION: u32 = 74;
+pub const MENU_PASTE_MATCH: u32 = 75;
+pub const MENU_EXPORT_PDF: u32 = 76;
+pub const MENU_ALL_HEADERS: u32 = 77;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -204,6 +209,8 @@ enum DocTask {
     Save { name: String, bytes: Vec<u8> },
     /// Mailbox > Import Mailbox: the file chosen is read as a mailbox file.
     ImportMbox,
+    /// Message > Save Attachments: the folder chosen gets every file of the message.
+    SaveFolder { files: Vec<Attachment> },
 }
 
 /// Where a press started. Only the two panes scroll; the rest is chrome.
@@ -308,7 +315,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
     let mut message = vec![
         AppMenuItem::new(MENU_NEW, "New Message").key("cmd+n"),
         AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
-        AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open),
+        AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open_has_others(mail)),
         AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
         AppMenuItem::new(MENU_FORWARD_ATTACHMENT, "Forward as Attachment").enabled(loaded),
         AppMenuItem::new(MENU_REDIRECT, "Redirect...").enabled(loaded),
@@ -349,6 +356,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_REMOVE_ATTACHMENTS, "Remove Attachments").enabled(open_has_files(mail)),
         AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(open_has_files(mail)),
         AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
+        AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").enabled(loaded),
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open),
     ]);
@@ -412,6 +420,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_SHOW_SIDEBAR, if mail.show_sidebar { "Hide Sidebar" } else { "Show Sidebar" }).key("cmd+ctrl+s"),
         AppMenuItem::new(MENU_SHOW_FAVORITES, if mail.prefs.show_favorites { "Hide Favorites Bar" } else { "Show Favorites Bar" }),
         AppMenuItem::new(MENU_RAW_SOURCE, "Raw Source").key("cmd+alt+u").checked(mail.show_raw).enabled(open),
+        AppMenuItem::new(MENU_ALL_HEADERS, "All Headers").checked(mail.prefs.all_headers).enabled(open),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Sort By"),
     ];
@@ -468,6 +477,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
     let marked = compose.is_some_and(|c| !c.misspelled.is_empty());
     let edit = vec![
         AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open),
+        AppMenuItem::new(MENU_PASTE_MATCH, "Paste and Match Style").enabled(compose_open),
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_CHECK_SPELLING, "Check Spelling").enabled(compose_open),
         AppMenuItem::new(MENU_NEXT_MISSPELLING, "Next Misspelling").enabled(marked),
@@ -1041,6 +1051,15 @@ impl MailWindow {
                 self.save_prefs();
             }
             MENU_PASTE_QUOTE => return self.paste_quoted(),
+            // a plain paste already takes the style of the text typed so far, which is what this command means
+            MENU_PASTE_MATCH => return self.paste(),
+            MENU_EXPORT_PDF => self.export_pdf(ctx),
+            MENU_ALL_HEADERS => {
+                self.mail.prefs.all_headers = !self.mail.prefs.all_headers;
+                self.laid = None;
+                self.reader_scroll = Scroller::new();
+                self.save_prefs();
+            }
             MENU_MUTE => self.toggle_mute(),
             MENU_SHOW_SIDEBAR => self.mail.show_sidebar = !self.mail.show_sidebar,
             MENU_RAW_SOURCE => {
@@ -1527,6 +1546,7 @@ impl MailWindow {
             DocumentEvent::Opened(doc) => match self.docs.remove(&doc.request) {
                 Some(DocTask::Attach) => self.attach_documents(ctx, vec![doc]),
                 Some(DocTask::ImportMbox) => self.import_document(ctx, doc),
+                Some(DocTask::SaveFolder { files }) => self.save_folder(ctx, doc, files),
                 Some(other) => {
                     self.docs.insert(doc.request, other);
                     return false;
@@ -1557,6 +1577,17 @@ impl MailWindow {
                 Some(DocTask::Save { name, bytes }) if code == DocErrorCode::Unsupported => {
                     self.save_in_data_dir(&name, &bytes);
                     self.start_next_save(ctx);
+                }
+                Some(DocTask::SaveFolder { files }) if code == DocErrorCode::Unsupported => {
+                    // no folder panel: each file goes to the data directory
+                    for file in &files {
+                        self.save_in_data_dir(&file.name, &file.bytes);
+                    }
+                }
+                Some(DocTask::SaveFolder { .. }) => {
+                    if code != DocErrorCode::Cancelled {
+                        self.mail.status = format!("The folder could not be chosen ({code:?})");
+                    }
                 }
                 Some(DocTask::Save { .. }) => {
                     // the user cancelled one file: the ones still waiting are dropped with it
@@ -1740,7 +1771,9 @@ impl MailWindow {
         let Some(original) = self.mail.row(uid).map(|r| r.summary.clone()) else { return };
         let Some(raw) = self.mail.bodies.get(&uid) else { return };
         let text = crate::body::readable(raw);
-        self.mail.open_forward(&original, &text);
+        // the files of the original go along; the message being forwarded keeps its own copies
+        let files = self.mail.attachments.get(&uid).cloned().unwrap_or_default();
+        self.mail.open_forward_with(&original, &text, files);
     }
 
     /// True when the open message carries files.
@@ -1748,18 +1781,62 @@ impl MailWindow {
         open_has_files(&self.mail)
     }
 
-    /// Message > Save Attachments: each file of the open message gets its own save panel, one after the other.
+    /// Message > Save Attachments: one folder panel for the files of the open message (a tap on one file saves it alone).
     fn save_attachments(&mut self, ctx: &Ctx) {
         let Some(uid) = self.mail.open else { return };
-        let files: Vec<(String, Vec<u8>)> = match self.mail.attachments.get(&uid) {
-            Some(files) if !files.is_empty() => files.iter().map(|a| (a.name.clone(), a.bytes.clone())).collect(),
+        let files: Vec<Attachment> = match self.mail.attachments.get(&uid) {
+            Some(files) if !files.is_empty() => files.clone(),
             _ => {
                 self.mail.status = "This message has no attachments".into();
                 return;
             }
         };
-        self.save_queue.extend(files);
-        self.start_next_save(ctx);
+        // one folder panel for every file of the message; the files keep their names
+        let options = OpenOptions { files: false, directories: true, create_directories: true, title: "Save Attachments".into(), ..OpenOptions::default() };
+        let request = ctx.open_panel(&options);
+        self.docs.insert(request, DocTask::SaveFolder { files });
+    }
+
+    /// The folder the user chose for Save Attachments. The panel gives a handle to the folder, and its path is read back
+    /// from that handle, so each file is written by name into the folder.
+    fn save_folder(&mut self, ctx: &Ctx, doc: bifrost_app::Document, files: Vec<Attachment>) {
+        let folder = std::fs::read_link(format!("/proc/self/fd/{}", doc.file.as_raw_fd()));
+        self.mail.status = match folder {
+            Ok(folder) => match attachments::save_all(&folder, &files) {
+                Ok(count) => format!("Saved {count} file{} in {}", if count == 1 { "" } else { "s" }, folder.display()),
+                Err(e) => format!("The files could not be saved: {e}"),
+            },
+            Err(e) => format!("The folder could not be used: {e}"),
+        };
+        ctx.release_document(doc.grant);
+    }
+
+    /// Message > Export as PDF: the subject and the readable text of the open message, saved through the save panel.
+    fn export_pdf(&mut self, ctx: &Ctx) {
+        let Some(uid) = self.mail.open else { return };
+        let (Some(raw), Some(subject)) = (self.mail.bodies.get(&uid), self.mail.row(uid).map(|r| r.summary.subject.clone())) else {
+            self.mail.status = "Wait for the message to load".into();
+            return;
+        };
+        let text = crate::body::readable(raw);
+        let title = if subject.trim().is_empty() { "Message".to_string() } else { subject.clone() };
+        let bytes = pdf::render(&title, &text);
+        self.queue_save(ctx, crate::export::pdf_name(&subject), bytes);
+    }
+
+    /// Open Quickly and the match list: shows the mailbox named.
+    fn go_to_mailbox(&mut self, name: &str) {
+        self.mail.close_sheet();
+        self.mail.show_mailbox(name);
+        self.list_scroll = Scroller::new();
+        self.refresh_selected();
+    }
+
+    /// The filter chip in the toolbar: each tap moves to the next filter, and All takes the chip away.
+    fn cycle_filter(&mut self) {
+        let at = Filter::ALL.iter().position(|f| *f == self.mail.filter).unwrap_or(0);
+        self.mail.filter = Filter::ALL[(at + 1) % Filter::ALL.len()];
+        self.list_scroll = Scroller::new();
     }
 
     /// A tap on a file named in the open message: the save panel for that file.
@@ -1870,7 +1947,9 @@ impl MailWindow {
         let Some(uid) = self.mail.open else { return };
         let original = self.mail.row(uid).map(|r| r.summary.clone());
         if let Some(original) = original {
-            self.mail.open_compose(Some(&original));
+            // with the quoting setting on, the reply starts with the text of the original (once it has loaded)
+            let quoted = if self.mail.prefs.quote_replies { self.mail.bodies.get(&uid).map(|raw| crate::body::readable(raw)) } else { None };
+            self.mail.open_reply(&original, quoted.as_deref());
         }
     }
 
@@ -1909,12 +1988,7 @@ impl MailWindow {
                 Err(e) => self.mail.status = e,
             },
             Some(Sheet::Quickly(form)) => match self.mail.quickly_matches(form.value("Go to mailbox")).into_iter().next() {
-                Some(name) => {
-                    self.mail.close_sheet();
-                    self.mail.show_mailbox(&name);
-                    self.list_scroll = Scroller::new();
-                    self.refresh_selected();
-                }
+                Some(name) => self.go_to_mailbox(&name),
                 None => self.mail.status = "No mailbox matches".into(),
             },
             Some(Sheet::Search(form)) => {
@@ -2399,7 +2473,7 @@ impl MailWindow {
 
     /// True when the field that takes typed text is not for typing: the From picker (a tap changes it) and the activity list.
     fn focus_is_picker(&self) -> bool {
-        self.mail.sheet.as_ref().map(Sheet::form).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| f.label == "From" || f.label == "Activity"))
+        self.mail.sheet.as_ref().map(Sheet::form).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| f.label == "From" || f.label == "Activity" || f.choice))
     }
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
@@ -2432,6 +2506,7 @@ impl MailWindow {
                 crate::draw::Button::ReplyAll => self.reply_all(),
                 crate::draw::Button::Archive => self.move_open(&ARCHIVE_NAMES, "Archive"),
                 crate::draw::Button::Trash => self.move_open(&TRASH_NAMES, "Trash"),
+                crate::draw::Button::Filter => self.cycle_filter(),
             },
             crate::draw::Hit::Side(side) => match side {
                 crate::draw::Side::Account(index) => {
@@ -2465,10 +2540,29 @@ impl MailWindow {
             crate::draw::Hit::FindPrevious => self.step_match(false),
             crate::draw::Hit::FindNext => self.step_match(true),
             crate::draw::Hit::FindDone => self.mail.find = None,
+            crate::draw::Hit::Choice(index) => {
+                let name = crate::draw::choices_of(&self.mail).get(index).cloned();
+                match name {
+                    Some(name) => self.go_to_mailbox(&name),
+                    None => return false,
+                }
+            }
             crate::draw::Hit::Field(index) => {
-                let from_picker = self.mail.sheet.as_ref().map(Sheet::form).and_then(|form| form.fields.get(index)).is_some_and(|f| f.label == "From");
+                let (from_picker, choice) = self
+                    .mail
+                    .sheet
+                    .as_ref()
+                    .map(Sheet::form)
+                    .and_then(|form| form.fields.get(index))
+                    .map_or((false, false), |f| (f.label == "From", f.choice));
                 if let Some(form) = self.form_mut() {
                     form.focus_on(index);
+                }
+                if choice {
+                    // a yes or no field flips with each click
+                    if let Some(field) = self.form_mut().and_then(|form| form.fields.get_mut(index)) {
+                        field.value = if is_yes(&field.value) { "no".to_string() } else { "yes".to_string() };
+                    }
                 }
                 if from_picker {
                     let choices = self.mail.from_choices();

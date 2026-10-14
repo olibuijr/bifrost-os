@@ -27,6 +27,8 @@ pub struct Summary {
     pub automatic: bool,
     /// The media type of the message itself in lower case (`multipart/mixed`), empty when it names none.
     pub content_type: String,
+    /// The priority the sender set (`X-Priority`, or `Importance` when that is absent). Normal when neither says so.
+    pub priority: Priority,
 }
 
 /// Unfolds and splits a header block into `(lowercase name, value)` pairs. Stops at the first empty line.
@@ -83,6 +85,7 @@ impl Summary {
             precedence: get("precedence").unwrap_or_default().to_ascii_lowercase(),
             automatic: get("auto-submitted").is_some_and(|v| !v.trim().eq_ignore_ascii_case("no")),
             content_type: get("content-type").and_then(|v| v.split(';').next()).unwrap_or_default().trim().to_ascii_lowercase(),
+            priority: priority_of(get("x-priority"), get("importance")),
         }
     }
 
@@ -90,6 +93,21 @@ impl Summary {
     /// A guess made from the headers alone; the files themselves are known once the message is loaded.
     pub fn may_have_files(&self) -> bool {
         self.content_type == "multipart/mixed" || self.content_type.starts_with("application/")
+    }
+}
+
+/// The priority a message's headers give: `X-Priority` 1 or 2 is high and 4 or 5 is low, and `Importance` is used when
+/// `X-Priority` is absent or unclear. Anything else is normal.
+pub fn priority_of(x_priority: Option<&str>, importance: Option<&str>) -> Priority {
+    match x_priority.and_then(|v| v.trim().chars().next()) {
+        Some('1' | '2') => return Priority::High,
+        Some('4' | '5') => return Priority::Low,
+        _ => {}
+    }
+    match importance.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+        Some("high") => Priority::High,
+        Some("low") => Priority::Low,
+        _ => Priority::Normal,
     }
 }
 
@@ -515,6 +533,19 @@ mod tests {
     use super::*;
 
     const RAW: &str = "Message-ID: <abc@mail.example>\r\nIn-Reply-To: <root@mail.example>\r\nReferences: <root@mail.example>\r\n <mid@x>\r\nSubject: =?UTF-8?B?RnVuZHVyIMOhIG1vcmd1bg==?=\r\nFrom: Ana <ana@example.com>\r\n\r\nbody <nope@x>";
+
+    #[test]
+    fn the_priority_comes_from_x_priority_then_importance() {
+        assert_eq!(priority_of(Some("1 (Highest)"), None), Priority::High);
+        assert_eq!(priority_of(Some("2"), Some("low")), Priority::High, "X-Priority wins over Importance");
+        assert_eq!(priority_of(Some("5 (Lowest)"), None), Priority::Low);
+        assert_eq!(priority_of(Some("3"), Some("high")), Priority::Normal, "3 is normal and says nothing more");
+        assert_eq!(priority_of(None, Some(" High ")), Priority::High);
+        assert_eq!(priority_of(None, Some("low")), Priority::Low);
+        assert_eq!(priority_of(None, None), Priority::Normal);
+        let high = Summary::from_headers("X-Priority: 1 (Highest)\r\nSubject: Now\r\n\r\nbody");
+        assert_eq!(high.priority, Priority::High);
+    }
 
     #[test]
     fn parses_headers_with_folding_and_encoded_subjects() {
