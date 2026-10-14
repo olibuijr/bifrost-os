@@ -1,391 +1,391 @@
 {
- "app": "Notes",
- "bifrost_app": "notes-desktop",
- "evidence": [
-  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/System/Applications/Notes.app/Contents/Info.plist",
-  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/MainMenu.loctable",
-  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/Settings.loctable",
-  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/SmartFolder*FilterView.loctable",
-  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/ICMAttachmentBrowserController.loctable"
- ],
- "features": [
-  {
-   "feature": "New note",
-   "area": "menu",
-   "apple": "MainMenu: File > New Note; toolbar compose",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:222",
-   "note": "Cmd+N and toolbar compose button",
-   "wire": ""
-  },
-  {
-   "feature": "Folders: new, rename, delete",
-   "area": "menu",
-   "apple": "MainMenu: File > New Folder; folder list context menu",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1456",
-   "note": "From the list title menu",
-   "wire": ""
-  },
-  {
-   "feature": "Delete note, Recently Deleted, recover, erase",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Delete; Recently Deleted folder header",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1503",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Pin note",
-   "area": "menu",
-   "apple": "MainMenu: File > Pin Note",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1473",
-   "note": "Also swipe to pin",
-   "wire": ""
-  },
-  {
-   "feature": "Duplicate note",
-   "area": "menu",
-   "apple": "MainMenu: File > Duplicate Note",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1300",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Import to Notes (text, HTML, RTF/RTFD, archive, other note apps, Markdown)",
-   "area": "document",
-   "apple": "Info.plist CFBundleDocumentTypes; File > Import to Notes, Import Markdown; ICMImportNotesAccessoryView",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/import.rs:1",
-   "note": "HTML and RTF now convert to Markdown via the open panel. Remaining: folder import, archive/other-app formats, a skipped-files sheet (skips are logged only).",
-   "wire": "Extend the import in main.rs:146 to accept public.html, public.rtf and a folder import; convert HTML/RTF to Markdown in a new notes/import.rs (strip tags, map bold/italic/lists/headings), and show an import summary sheet listing skipped files (the error log panel)."
-  },
-  {
-   "feature": "Export / share as Markdown, text, PDF",
-   "area": "menu",
-   "apple": "MainMenu: File > Export as PDF, Share",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1476",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Print",
-   "area": "menu",
-   "apple": "MainMenu: File > Print; PrintAccessory panel",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:229",
-   "note": "Print works; no print accessory options (include attachments)",
-   "wire": "Add a print options accessory in the print path in main.rs (toggle: print attachments) and pass it to notes/pdf.rs."
-  },
-  {
-   "feature": "Find, find next/previous, find and replace in note",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Find submenu",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1605",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Search the note list",
-   "area": "toolbar",
-   "apple": "MainMenu: Edit > Find > Search Note List; toolbar search",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs:151",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Paragraph styles: Title, Heading, Subheading, Body, Monostyled, Block Quote",
-   "area": "menu",
-   "apple": "MainMenu: Format > Title/Heading/Subheading/Body/Monostyled/Block Quote",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1479",
-   "note": "Title/Heading/Subheading/Body only, from the More menu",
-   "wire": "Add md::Block::Mono and md::Block::Quote (fenced line / \"> \" prefix) to the markdown classifier, render them (mono font, quote bar) in the editor, and add both to the Aa style popover and a Format app menu in main.rs main_menu."
-  },
-  {
-   "feature": "Character styles: bold, italic, underline, strikethrough, highlight, text colour",
-   "area": "menu",
-   "apple": "MainMenu: Format > Font > Bold/Italic/Underline/Strikethrough; Highlight",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:119",
-   "note": "Bold, italic, inline code buttons only",
-   "wire": "Add Fmt::Strike (~~), Fmt::Underline and Fmt::Highlight (==) to FMT_BUTTONS and the md renderer; wire Cmd+B/I/U and Cmd+Shift+X chords in main.rs and a Format menu."
-  },
-  {
-   "feature": "Lists: bulleted, dashed, numbered, checklist",
-   "area": "toolbar",
-   "apple": "MainMenu: Format > Bulleted/Dashed/Numbered List, Checklist; toolbar checklist",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs:146",
-   "note": "No dashed list",
-   "wire": "Add md::Block::Dashed and a Dashed List item in the style popover and Format menu."
-  },
-  {
-   "feature": "Checklist: mark all, unmark all, move ticked to bottom, automatic sorting",
-   "area": "menu",
-   "apple": "MainMenu: Format > Checklist More; Settings: Automatically sort ticked items",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/lists.rs:44",
-   "note": "Mark All Checked / Unmark All in the editor More menu and the Format menu. Remaining: automatic sorting setting.",
-   "wire": "Add Act::CheckAll / Act::UncheckAll in open_editor_menu (notes/mod.rs:1469) flipping every Check block in the note."
-  },
-  {
-   "feature": "Indentation: increase, decrease, move list item up/down",
-   "area": "menu",
-   "apple": "MainMenu: Format > Indentation; Format > Move Item",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/lists.rs:68",
-   "note": "Indent, outdent and move line up/down from the Format menu and editor More menu. Remaining: Tab / Shift+Tab in the editor key handler.",
-   "wire": "Tab / Shift+Tab on a list line in the editor key handler adds/removes indent; Ctrl+Cmd+Up/Down swaps the line with its neighbour; add Format menu items."
-  },
-  {
-   "feature": "Tables: insert, add/delete rows and columns, convert to text",
-   "area": "menu",
-   "apple": "MainMenu: Format > Table, Convert to Text",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/table.rs:75",
-   "note": "Add/delete rows and columns and convert to text, in the editor More menu while the caret is in a table. Remaining: nothing known.",
-   "wire": "Add a table context menu when the caret is in a pipe table: add row above/below, column left/right, delete row/column, convert to text; pure functions on the table text in a new notes/table.rs."
-  },
-  {
-   "feature": "Attachments: photo, sketch, any file, audio recording",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Attach File, Record Audio; Window > Photo Browser",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1484",
-   "note": "Photo and sketch only",
-   "wire": "Add Attach File... (open panel, any type) storing the file beside the note via notes/attach.rs and rendering a file chip; audio recording through the shell audio capture service later."
-  },
-  {
-   "feature": "Attachment browser",
-   "area": "view",
-   "apple": "MainMenu: View > Show Attachment Browser; ICMAttachmentBrowserController",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "New View::Attachments grid listing every file from folders::attachments (notes/folders.rs:71) across notes; click opens the owning note; reach it from the View menu and sidebar."
-  },
-  {
-   "feature": "Rename attachment, attachment view size (small/large)",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Rename Attachment; View > Attachment View",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Context menu on an image in the editor: Rename (rewrites the markdown reference and file) and Small/Large toggle stored per note."
-  },
-  {
-   "feature": "Sort notes by Date Edited / Created / Title, newest or oldest first",
-   "area": "menu",
-   "apple": "MainMenu: View > Sort By; Settings: Sort notes by",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs:120",
-   "note": "Newest/Oldest First and A-Z/Z-A in the list menu, saved in Prefs. Remaining: a View menu entry.",
-   "wire": "Add a direction flag to Prefs (notes/store.rs:187) and Newest First / Oldest First items in open_list_menu."
-  },
-  {
-   "feature": "Group notes by date",
-   "area": "view",
-   "apple": "MainMenu: View > Group by Date; Settings: Group notes by date",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Section the note list into Today / Previous 7 Days / Previous 30 Days / month headers when sorted by date; Prefs flag + list menu toggle."
-  },
-  {
-   "feature": "Gallery view",
-   "area": "view",
-   "apple": "MainMenu: View > as Gallery; ICMNoteGridController",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a list/gallery mode to Prefs and a grid renderer of note thumbnails (first image or text preview); toggle from View menu and the list toolbar."
-  },
-  {
-   "feature": "Smart folders with user filters (tags, dates, attachments, checklists, folders, pinned, locked)",
-   "area": "panel",
-   "apple": "SmartFolder*FilterView; File > New Smart Folder",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/smart.rs:28",
-   "note": "Four built-in smart folders; no user-defined filters",
-   "wire": "Add a New Smart Folder sheet building a filter (all/any of: tag, created/edited range, has attachments, has checklist, folder, pinned) saved in prefs; extend smart.rs to evaluate saved filters."
-  },
-  {
-   "feature": "Tags: inline #tags, tag browser, tag filter",
-   "area": "view",
-   "apple": "TagCollectionViewItem; TagSelectionDetailHeaderCellView; View > Use Tags",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Tags in text are not parsed",
-   "wire": "Parse #words in notes/store.rs, add a Tags section to the sidebar (chrome.rs:233) with a tag chip grid; selecting tags filters the list."
-  },
-  {
-   "feature": "Locked notes (password)",
-   "area": "settings",
-   "apple": "MainMenu: File > Lock Note, Close All Locked Notes; Settings: Locked notes password",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Lock Note action encrypting the note file with a password (shell keychain service), lock icon in the list, unlock sheet; Settings section to set/reset the password."
-  },
-  {
-   "feature": "Shared notes, collaboration, mentions, activity",
-   "area": "integration",
-   "apple": "File > Manage Shared Note; Show Note Activity; Settings: mention notifications",
-   "status": "n/a",
-   "bifrost": "",
-   "note": "Needs the vendor cloud account and collaboration service",
-   "wire": ""
-  },
-  {
-   "feature": "Accounts and default account",
-   "area": "settings",
-   "apple": "Settings: Default account; File > Accounts",
-   "status": "n/a",
-   "bifrost": "",
-   "note": "Tied to the vendor cloud accounts; BifrOSt has one local store",
-   "wire": ""
-  },
-  {
-   "feature": "Quick Note (menu bar) and resume last Quick Note",
-   "area": "integration",
-   "apple": "Settings: Always resume to last Quick Note",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:135",
-   "note": "New Quick Note exists; no resume option",
-   "wire": "Add a resume_quick pref and reopen the last quick note id from the status item handler in main.rs."
-  },
-  {
-   "feature": "Links: add link, smart links",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Add Link; Substitutions > Smart Links",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:432",
-   "note": "Links detected and tappable; no Add Link dialog",
-   "wire": "Add Link... (Cmd+K) sheet that wraps the selection as [text](url) in the editor."
-  },
-  {
-   "feature": "Spelling and grammar",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Spelling and Grammar",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1028",
-   "note": "Manual check only; no check-while-typing toggle",
-   "wire": "Add a check-while-typing pref that runs the parity.rs checker on edit and underlines words; Edit menu toggle."
-  },
-  {
-   "feature": "Copy as Markdown, paste as Markdown, paste and match style",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Copy as Markdown, Paste as Markdown",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/system.rs:27",
-   "note": "Copy puts Markdown and RTF on the pasteboard; no explicit paste variants",
-   "wire": "Add Edit menu items Copy as Markdown / Paste as Markdown / Paste and Match Style in main_menu, the last stripping formatting."
-  },
-  {
-   "feature": "Collapsible sections under headings",
-   "area": "view",
-   "apple": "MainMenu: View > Collapse/Expand Section, All Sections",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Disclosure triangle beside heading lines in the editor; fold state per note; View menu Collapse All / Expand All."
-  },
-  {
-   "feature": "Settings window: default text size, dark note background, new notes start with, group by date",
-   "area": "settings",
-   "apple": "Settings.loctable General pane",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Sort and checked-to-bottom live in menus only",
-   "wire": "Add a Settings pane (app settings hook) with text size, start style (Title/Heading/Body), dark background toggle, sort and group options, writing Prefs."
-  },
-  {
-   "feature": "Open note in separate window, float on top",
-   "area": "menu",
-   "apple": "Window > Float on Top; SingleNoteWindow",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Double-click a note opens a second window bound to that note id; Window menu Float on Top."
-  },
-  {
-   "feature": "Note count in sidebar",
-   "area": "view",
-   "apple": "View > Show Note Count",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs:233",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Open by URL (links to a note)",
-   "area": "integration",
-   "apple": "Info.plist CFBundleURLTypes; NSUserActivityTypes edit-note activity",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Register a notes URL scheme in the app manifest and open the note id from the URL in the restore/open handler."
-  },
-  {
-   "feature": "Shortcuts intents: new note, create, search, open note/folder",
-   "area": "intent",
-   "apple": "NSUserActivityTypes note and folder intents",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:288",
-   "note": "Create/new/search exist; no open note or open folder",
-   "wire": "Add open-note and open-folder intents in main.rs intents() calling restore with the view."
-  },
-  {
-   "feature": "Widget and search index",
-   "area": "integration",
-   "apple": "Spotlight / widget",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:79",
-   "note": "Recent notes widget and quick-search index",
-   "wire": ""
-  },
-  {
-   "feature": "Recent notes menu",
-   "area": "menu",
-   "apple": "MainMenu: File > Recent Notes",
-   "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:265",
-   "note": "Note > Recent Notes submenu opens the chosen note.",
-   "wire": "Add a Recent Notes submenu in main_menu built from recent_titles."
-  },
-  {
-   "feature": "Math results (calculations in text)",
-   "area": "menu",
-   "apple": "MainMenu: Edit > Math Results",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Evaluate lines ending with \"=\" via a small expression parser and show the result inline; Edit menu toggle."
-  },
-  {
-   "feature": "Undo and redo",
-   "area": "menu",
-   "apple": "Edit > Undo/Redo",
-   "status": "parity",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:233",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Speech (start/stop speaking)",
-   "area": "menu",
-   "apple": "Edit > Speech",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Edit > Speech items sending the selection to the shell speech service."
-  }
- ]
+  "app": "Notes",
+  "bifrost_app": "notes-desktop",
+  "evidence": [
+    "~/.local/share/paperclip-ops/ref-extract/notes-reminders/System/Applications/Notes.app/Contents/Info.plist",
+    "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/MainMenu.loctable",
+    "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/Settings.loctable",
+    "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/SmartFolder*FilterView.loctable",
+    "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Notes.app/Contents/Resources/ICMAttachmentBrowserController.loctable"
+  ],
+  "features": [
+    {
+      "feature": "New note",
+      "area": "menu",
+      "apple": "MainMenu: File > New Note; toolbar compose",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:222",
+      "note": "Cmd+N and toolbar compose button",
+      "wire": ""
+    },
+    {
+      "feature": "Folders: new, rename, delete",
+      "area": "menu",
+      "apple": "MainMenu: File > New Folder; folder list context menu",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1456",
+      "note": "From the list title menu",
+      "wire": ""
+    },
+    {
+      "feature": "Delete note, Recently Deleted, recover, erase",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Delete; Recently Deleted folder header",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1503",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Pin note",
+      "area": "menu",
+      "apple": "MainMenu: File > Pin Note",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1473",
+      "note": "Also swipe to pin",
+      "wire": ""
+    },
+    {
+      "feature": "Duplicate note",
+      "area": "menu",
+      "apple": "MainMenu: File > Duplicate Note",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1300",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Import to Notes (text, HTML, RTF/RTFD, archive, other note apps, Markdown)",
+      "area": "document",
+      "apple": "Info.plist CFBundleDocumentTypes; File > Import to Notes, Import Markdown; ICMImportNotesAccessoryView",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/import.rs:1",
+      "note": "HTML and RTF now convert to Markdown via the open panel. Remaining: folder import, archive/other-app formats, a skipped-files sheet (skips are logged only).",
+      "wire": "Extend the import in main.rs:146 to accept public.html, public.rtf and a folder import; convert HTML/RTF to Markdown in a new notes/import.rs (strip tags, map bold/italic/lists/headings), and show an import summary sheet listing skipped files (the error log panel)."
+    },
+    {
+      "feature": "Export / share as Markdown, text, PDF",
+      "area": "menu",
+      "apple": "MainMenu: File > Export as PDF, Share",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1476",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Print",
+      "area": "menu",
+      "apple": "MainMenu: File > Print; PrintAccessory panel",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:229",
+      "note": "Print works; no print accessory options (include attachments)",
+      "wire": "Add a print options accessory in the print path in main.rs (toggle: print attachments) and pass it to notes/pdf.rs."
+    },
+    {
+      "feature": "Find, find next/previous, find and replace in note",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Find submenu",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1605",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Search the note list",
+      "area": "toolbar",
+      "apple": "MainMenu: Edit > Find > Search Note List; toolbar search",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs:151",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Paragraph styles: Title, Heading, Subheading, Body, Monostyled, Block Quote",
+      "area": "menu",
+      "apple": "MainMenu: Format > Title/Heading/Subheading/Body/Monostyled/Block Quote",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:163",
+      "note": "Format menu: Title, Heading, Subheading, Body, Monostyled (` ``` ` line) and Block Quote (`> ` line with a bar), also in the editor More menu. Remaining: the lead has not checked the drawing on the lab machine.",
+      "wire": "Add md::Block::Mono and md::Block::Quote (fenced line / \"> \" prefix) to the markdown classifier, render them (mono font, quote bar) in the editor, and add both to the Aa style popover and a Format app menu in main.rs main_menu."
+    },
+    {
+      "feature": "Character styles: bold, italic, underline, strikethrough, highlight, text colour",
+      "area": "menu",
+      "apple": "MainMenu: Format > Font > Bold/Italic/Underline/Strikethrough; Highlight",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:163",
+      "note": "Format menu Bold, Italic, Underline (Cmd+U), Strikethrough (Shift+Cmd+X), Highlight and Monospaced; drawn in the editor and carried into the RTF copy. Remaining: text colour.",
+      "wire": "Add Fmt::Strike (~~), Fmt::Underline and Fmt::Highlight (==) to FMT_BUTTONS and the md renderer; wire Cmd+B/I/U and Cmd+Shift+X chords in main.rs and a Format menu."
+    },
+    {
+      "feature": "Lists: bulleted, dashed, numbered, checklist",
+      "area": "toolbar",
+      "apple": "MainMenu: Format > Bulleted/Dashed/Numbered List, Checklist; toolbar checklist",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:163",
+      "note": "Dashed List (en dash marker) in the Format menu and the editor More menu; Enter continues it. Remaining: nothing known beyond lab-machine checking.",
+      "wire": "Add md::Block::Dashed and a Dashed List item in the style popover and Format menu."
+    },
+    {
+      "feature": "Checklist: mark all, unmark all, move ticked to bottom, automatic sorting",
+      "area": "menu",
+      "apple": "MainMenu: Format > Checklist More; Settings: Automatically sort ticked items",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:206",
+      "note": "Mark All Checked, Unmark All and Move Checked Items to Bottom in the Format menu; the automatic-sorting setting is a checkable item in the Organize menu. Remaining: a Settings window pane.",
+      "wire": "Add Act::CheckAll / Act::UncheckAll in open_editor_menu (notes/mod.rs:1469) flipping every Check block in the note."
+    },
+    {
+      "feature": "Indentation: increase, decrease, move list item up/down",
+      "area": "menu",
+      "apple": "MainMenu: Format > Indentation; Format > Move Item",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/lists.rs:68",
+      "note": "Indent, outdent and move line up/down from the Format menu and editor More menu. Remaining: Tab / Shift+Tab in the editor key handler.",
+      "wire": "Tab / Shift+Tab on a list line in the editor key handler adds/removes indent; Ctrl+Cmd+Up/Down swaps the line with its neighbour; add Format menu items."
+    },
+    {
+      "feature": "Tables: insert, add/delete rows and columns, convert to text",
+      "area": "menu",
+      "apple": "MainMenu: Format > Table, Convert to Text",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/table.rs:75",
+      "note": "Add/delete rows and columns and convert to text, in the editor More menu while the caret is in a table. Remaining: nothing known.",
+      "wire": "Add a table context menu when the caret is in a pipe table: add row above/below, column left/right, delete row/column, convert to text; pure functions on the table text in a new notes/table.rs."
+    },
+    {
+      "feature": "Attachments: photo, sketch, any file, audio recording",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Attach File, Record Audio; Window > Photo Browser",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1484",
+      "note": "Photo and sketch only",
+      "wire": "Add Attach File... (open panel, any type) storing the file beside the note via notes/attach.rs and rendering a file chip; audio recording through the shell audio capture service later."
+    },
+    {
+      "feature": "Attachment browser",
+      "area": "view",
+      "apple": "MainMenu: View > Show Attachment Browser; ICMAttachmentBrowserController",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "New View::Attachments grid listing every file from folders::attachments (notes/folders.rs:71) across notes; click opens the owning note; reach it from the View menu and sidebar."
+    },
+    {
+      "feature": "Rename attachment, attachment view size (small/large)",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Rename Attachment; View > Attachment View",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Context menu on an image in the editor: Rename (rewrites the markdown reference and file) and Small/Large toggle stored per note."
+    },
+    {
+      "feature": "Sort notes by Date Edited / Created / Title, newest or oldest first",
+      "area": "menu",
+      "apple": "MainMenu: View > Sort By; Settings: Sort notes by",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:206",
+      "note": "Sort By and Order are in the Organize menu with check marks, as well as in the list menu. Remaining: a literal View menu entry (the shell owns View).",
+      "wire": "Add a direction flag to Prefs (notes/store.rs:187) and Newest First / Oldest First items in open_list_menu."
+    },
+    {
+      "feature": "Group notes by date",
+      "area": "view",
+      "apple": "MainMenu: View > Group by Date; Settings: Group notes by date",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:754",
+      "note": "Group by Date (Organize menu and list menu): Today, Yesterday, Previous 7 Days, Previous 30 Days, then months and years, as list section headers (store.rs date_group). Remaining: lab-machine check of the header drawing.",
+      "wire": "Section the note list into Today / Previous 7 Days / Previous 30 Days / month headers when sorted by date; Prefs flag + list menu toggle."
+    },
+    {
+      "feature": "Gallery view",
+      "area": "view",
+      "apple": "MainMenu: View > as Gallery; ICMNoteGridController",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Add a list/gallery mode to Prefs and a grid renderer of note thumbnails (first image or text preview); toggle from View menu and the list toolbar."
+    },
+    {
+      "feature": "Smart folders with user filters (tags, dates, attachments, checklists, folders, pinned, locked)",
+      "area": "panel",
+      "apple": "SmartFolder*FilterView; File > New Smart Folder",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/smart.rs:150",
+      "note": "File > New Smart Folder (list menu, Organize menu): a one-line definition with tag, edited, created, folder, attachments, checklist and pinned conditions, all-of or any-of, saved beside the notes and listed in the sidebar. Remaining: a filter-builder sheet instead of the typed definition, and a locked-notes condition.",
+      "wire": "Add a New Smart Folder sheet building a filter (all/any of: tag, created/edited range, has attachments, has checklist, folder, pinned) saved in prefs; extend smart.rs to evaluate saved filters."
+    },
+    {
+      "feature": "Tags: inline #tags, tag browser, tag filter",
+      "area": "view",
+      "apple": "TagCollectionViewItem; TagSelectionDetailHeaderCellView; View > Use Tags",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs:379",
+      "note": "Inline #tags are parsed; the sidebar has a Tags section with counts and the list menu lists tags; selecting one filters the list. Remaining: a tag chip grid in the list, and multi-tag selection.",
+      "wire": "Parse #words in notes/store.rs, add a Tags section to the sidebar (chrome.rs:233) with a tag chip grid; selecting tags filters the list."
+    },
+    {
+      "feature": "Locked notes (password)",
+      "area": "settings",
+      "apple": "MainMenu: File > Lock Note, Close All Locked Notes; Settings: Locked notes password",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Lock Note action encrypting the note file with a password (shell keychain service), lock icon in the list, unlock sheet; Settings section to set/reset the password."
+    },
+    {
+      "feature": "Shared notes, collaboration, mentions, activity",
+      "area": "integration",
+      "apple": "File > Manage Shared Note; Show Note Activity; Settings: mention notifications",
+      "status": "n/a",
+      "bifrost": "",
+      "note": "Needs the vendor cloud account and collaboration service",
+      "wire": ""
+    },
+    {
+      "feature": "Accounts and default account",
+      "area": "settings",
+      "apple": "Settings: Default account; File > Accounts",
+      "status": "n/a",
+      "bifrost": "",
+      "note": "Tied to the vendor cloud accounts; BifrOSt has one local store",
+      "wire": ""
+    },
+    {
+      "feature": "Quick Note (menu bar) and resume last Quick Note",
+      "area": "integration",
+      "apple": "Settings: Always resume to last Quick Note",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1291",
+      "note": "Settings > Resume Last Quick Note: the menu bar extra reopens the last quick note id (stored beside the notes) instead of making a new one.",
+      "wire": "Add a resume_quick pref and reopen the last quick note id from the status item handler in main.rs."
+    },
+    {
+      "feature": "Links: add link, smart links",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Add Link; Substitutions > Smart Links",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1929",
+      "note": "Cmd+K, the Format/Insert menu and the editor More menu ask for an address in a prompt over the editor and wrap the selection as [text](address). Remaining: a proper sheet with a separate title field, and smart-link substitution.",
+      "wire": "Add Link... (Cmd+K) sheet that wraps the selection as [text](url) in the editor."
+    },
+    {
+      "feature": "Spelling and grammar",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Spelling and Grammar",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1028",
+      "note": "Manual check only; no check-while-typing toggle",
+      "wire": "Add a check-while-typing pref that runs the parity.rs checker on edit and underlines words; Edit menu toggle."
+    },
+    {
+      "feature": "Copy as Markdown, paste as Markdown, paste and match style",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Copy as Markdown, Paste as Markdown",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:194",
+      "note": "Insert menu: Copy as Markdown, Paste as Markdown (HTML or RTF from the pasteboard converted by import.rs) and Paste and Match Style (plain text).",
+      "wire": "Add Edit menu items Copy as Markdown / Paste as Markdown / Paste and Match Style in main_menu, the last stripping formatting."
+    },
+    {
+      "feature": "Collapsible sections under headings",
+      "area": "view",
+      "apple": "MainMenu: View > Collapse/Expand Section, All Sections",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Disclosure triangle beside heading lines in the editor; fold state per note; View menu Collapse All / Expand All."
+    },
+    {
+      "feature": "Settings window: default text size, dark note background, new notes start with, group by date",
+      "area": "settings",
+      "apple": "Settings.loctable General pane",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:223",
+      "note": "Settings menu (the app has no settings window hook yet): text size, the style a new note starts in, Math Results and Resume Last Quick Note, saved in Prefs; Group by Date and sorting are in the Organize menu. Remaining: a real Settings window and the dark note background.",
+      "wire": "Add a Settings pane (app settings hook) with text size, start style (Title/Heading/Body), dark background toggle, sort and group options, writing Prefs."
+    },
+    {
+      "feature": "Open note in separate window, float on top",
+      "area": "menu",
+      "apple": "Window > Float on Top; SingleNoteWindow",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Double-click a note opens a second window bound to that note id; Window menu Float on Top."
+    },
+    {
+      "feature": "Note count in sidebar",
+      "area": "view",
+      "apple": "View > Show Note Count",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs:233",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Open by URL (links to a note)",
+      "area": "integration",
+      "apple": "Info.plist CFBundleURLTypes; NSUserActivityTypes edit-note activity",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:567",
+      "note": "The manifest declares the notes scheme; notes://note/<id> and notes://folder/<name> open the note or folder (notes/url.rs); Insert > Copy Link to Note puts the link on the pasteboard. Remaining: lab-machine check of scheme dispatch.",
+      "wire": "Register a notes URL scheme in the app manifest and open the note id from the URL in the restore/open handler."
+    },
+    {
+      "feature": "Shortcuts intents: new note, create, search, open note/folder",
+      "area": "intent",
+      "apple": "NSUserActivityTypes note and folder intents",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:496",
+      "note": "Open Note and Open Folder intents added (manifest and intents()).",
+      "wire": "Add open-note and open-folder intents in main.rs intents() calling restore with the view."
+    },
+    {
+      "feature": "Widget and search index",
+      "area": "integration",
+      "apple": "Spotlight / widget",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:79",
+      "note": "Recent notes widget and quick-search index",
+      "wire": ""
+    },
+    {
+      "feature": "Recent notes menu",
+      "area": "menu",
+      "apple": "MainMenu: File > Recent Notes",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:265",
+      "note": "Note > Recent Notes submenu opens the chosen note.",
+      "wire": "Add a Recent Notes submenu in main_menu built from recent_titles."
+    },
+    {
+      "feature": "Math results (calculations in text)",
+      "area": "menu",
+      "apple": "MainMenu: Edit > Math Results",
+      "status": "partial",
+      "bifrost": "springboard/apps/notes-desktop/src/notes/math.rs:122",
+      "note": "A line ending in = gets its result: Enter at the end of the line (Settings > Math Results) or Insert > Calculate Math Results; + - * / % ^, parentheses, pi and sqrt. Remaining: unit and currency conversion, variables.",
+      "wire": "Evaluate lines ending with \"=\" via a small expression parser and show the result inline; Edit menu toggle."
+    },
+    {
+      "feature": "Undo and redo",
+      "area": "menu",
+      "apple": "Edit > Undo/Redo",
+      "status": "parity",
+      "bifrost": "springboard/apps/notes-desktop/src/main.rs:233",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Speech (start/stop speaking)",
+      "area": "menu",
+      "apple": "Edit > Speech",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Edit > Speech items sending the selection to the shell speech service."
+    }
+  ]
 }

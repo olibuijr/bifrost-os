@@ -1,6 +1,6 @@
 id = "is.olibuijr.notes.desktop"
 name = "Notes"
-version = "1.16.0"
+version = "1.17.0"
 exec = "bifrost-notes"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -8,6 +8,7 @@ summary = "Notes with folders, Markdown, checklists, attachments and search."
 category = "Productivity"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
+schemes = ["notes"]
 window = "full-size"
 
 [[intent]]
@@ -30,6 +31,20 @@ title = "Search Notes"
 description = "Lists the notes that contain the query."
 shortcut = false
 params = ["query:string"]
+
+[[intent]]
+id = "open-note"
+title = "Open Note"
+description = "Opens the note with the given id."
+shortcut = false
+params = ["id:string"]
+
+[[intent]]
+id = "open-folder"
+title = "Open Folder"
+description = "Shows the notes of a folder."
+shortcut = false
+params = ["name:string"]
 
 [[log.subsystem]]
 id = "is.olibuijr.notes"

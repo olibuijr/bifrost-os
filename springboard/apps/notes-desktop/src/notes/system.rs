@@ -45,6 +45,8 @@ fn line_rtf(line: &str) -> String {
     let mut out = String::new();
     match info.block {
         md::Block::Bullet => out.push_str(&escape("\u{2022} ")),
+        md::Block::Dashed => out.push_str(&escape("\u{2013} ")),
+        md::Block::Quote => out.push_str(&escape("\u{201c} ")),
         md::Block::Numbered(n) => out.push_str(&escape(&format!("{n}. "))),
         md::Block::Check(done) => out.push_str(&escape(if done { "[x] " } else { "[ ] " })),
         _ => {}
@@ -61,12 +63,18 @@ fn line_rtf(line: &str) -> String {
         if span.style == md::Style::Italic {
             out.push_str("\\i ");
         }
-        if span.style == md::Style::Code {
+        if span.style == md::Style::Code || info.block == md::Block::Mono {
             out.push_str("\\f1 ");
+        }
+        match span.style {
+            md::Style::Strike => out.push_str("\\strike "),
+            md::Style::Underline => out.push_str("\\ul "),
+            md::Style::Highlight => out.push_str("\\highlight1 "),
+            _ => {}
         }
         out.push_str(&escape(&text));
         // close only what this run opened; the space ends the last control word
-        let close = [(bold, "\\b0"), (span.style == md::Style::Italic, "\\i0"), (span.style == md::Style::Code, "\\f0")];
+        let close = [(bold, "\\b0"), (span.style == md::Style::Italic, "\\i0"), (span.style == md::Style::Code || info.block == md::Block::Mono, "\\f0"), (span.style == md::Style::Strike, "\\strike0"), (span.style == md::Style::Underline, "\\ulnone"), (span.style == md::Style::Highlight, "\\highlight0")];
         let closers: String = close.iter().filter(|(on, _)| *on).map(|(_, w)| *w).collect();
         if !closers.is_empty() {
             out.push_str(&closers);

@@ -13,7 +13,9 @@
 pub mod attach;
 pub mod folders;
 pub mod import;
+mod link;
 mod lists;
+pub mod math;
 mod table;
 mod chrome;
 pub mod icon;
@@ -26,6 +28,7 @@ mod pdf;
 mod picker;
 pub mod store;
 pub mod system;
+pub mod url;
 
 pub use icon::icon;
 
@@ -129,6 +132,10 @@ pub enum View {
     Trash,
     /// A smart folder: the notes its predicate picks out (outside the bin).
     Smart(smart::Smart),
+    /// The notes with this `#tag` (lower case), outside the bin.
+    Tag(String),
+    /// A smart folder the user defined, by name.
+    Custom(String),
 }
 
 /// A formatting button: inline emphasis or a list style for the paragraphs.
@@ -137,6 +144,10 @@ pub enum Fmt {
     Bold,
     Italic,
     Code,
+    Strike,
+    Underline,
+    Highlight,
+    Dashed,
     Bullet,
     Number,
     Check,
@@ -187,6 +198,22 @@ enum Act {
     MoveLineDown,
     /// Format > Table commands at the caret
     Table(table::Op),
+    /// Format > Font: strike-through, underline and highlight (and the other inline styles)
+    Inline(Fmt),
+    /// Edit > Math Results: writes the result after every line that ends in `=`
+    SolveMath,
+    /// Edit > Add Link: asks for an address and wraps the selection
+    AddLink,
+    /// File > New Smart Folder
+    NewSmartFolder,
+    DeleteSmartFolder,
+    /// View > Group by Date
+    GroupByDate(bool),
+    /// Settings
+    SetTextSize(store::TextSize),
+    SetStartStyle(store::StartStyle),
+    ToggleMathResults,
+    ToggleResumeQuick,
 }
 
 /// Find > Replace: the replacement text being typed in the replace card over the editor.
@@ -210,9 +237,21 @@ struct Menu {
     y: f32,
 }
 
-/// The folder-name prompt: `old` is the folder being renamed.
+/// What the one-line prompt asks for.
+#[derive(Clone, Debug, PartialEq)]
+enum Purpose {
+    /// a folder name (`Naming::old` is the folder being renamed)
+    Folder,
+    /// a smart folder definition: `Name | tag:work pinned` (see `smart::Filter::parse`)
+    SmartFolder,
+    /// the address of a link wrapped around this range (char indices) of the open note
+    Link(Range<usize>),
+}
+
+/// The one-line prompt over the list (a folder name, a smart folder definition) or the editor (a link address).
 struct Naming {
     old: Option<String>,
+    purpose: Purpose,
     field: TextField,
 }
 
@@ -310,6 +349,12 @@ pub struct Notes {
     appearance: u32,
     view: View,
     prefs: store::Prefs,
+    /// the smart folders the user defined
+    filters: Vec<smart::Filter>,
+    /// every `#tag` with its note count, rebuilt with the list
+    tag_index: Vec<(String, usize)>,
+    /// `(first shown row, label)` of each list section header (Pinned, date groups)
+    headers: Vec<(usize, String)>,
     menu: Option<Menu>,
     /// the Photos picker sheet
     picker: Option<picker::Picker>,
@@ -418,6 +463,9 @@ impl Notes {
             appearance: LABEL.now(),
             view: View::All,
             prefs,
+            filters: smart::load(&dir),
+            tag_index: vec![],
+            headers: vec![],
             menu: None,
             picker: None,
             sketch: None,
@@ -466,6 +514,7 @@ impl Notes {
         };
         n.search.focused = false;
         n.editor.set_markdown(ui, true);
+        n.apply_text_size(ui);
         n.sync_width(ui);
         n.rebuild(ui, 0.0);
         n
@@ -537,6 +586,8 @@ impl Notes {
             View::Folder(f) => format!("folder:{f}"),
             View::Trash => "trash".to_string(),
             View::Smart(s) => format!("smart:{}", s.key()),
+            View::Tag(t) => format!("tag:{t}"),
+            View::Custom(name) => format!("custom:{name}"),
         };
         format!("notes_screen={screen}\nnotes_count={}\nnotes_shown={}\nnotes_keyboard={}\nnotes_pinned={}\nnotes_pin_error={}\nnotes_view={view}\nnotes_folders={}\nnotes_sort={}\n", self.notes.len(), self.shown.len(), self.keyboard.shown(), self.notes.iter().filter(|n| self.is_pinned(&n.id)).count(), self.pin_error.is_some(), self.folders.len(), self.prefs.sort.label())
     }
@@ -571,6 +622,18 @@ impl Notes {
             View::All => true,
             View::Folder(f) => searching || loc == f,
             View::Smart(s) => s.matches(&self.notes[i], self.is_pinned(&self.notes[i].id), cutoff),
+            View::Tag(_) | View::Custom(_) => self.in_user_view(&self.notes[i], &self.view),
+        }
+    }
+
+    /// Whether a note belongs to a tag view or a smart folder the user defined (both read the note's text).
+    pub(super) fn in_user_view(&self, note: &Note, view: &View) -> bool {
+        match view {
+            View::Tag(t) => store::tags(&note.text).contains(t),
+            View::Custom(name) => self.filters.iter().find(|f| f.name == *name).is_some_and(|f| {
+                f.matches(note, &smart::Context { pinned: self.is_pinned(&note.id), folder: self.loc_of(&note.id), now: self.wall.now(self.now_t) })
+            }),
+            _ => false,
         }
     }
 
@@ -608,7 +671,18 @@ impl Notes {
                 self.view = View::All;
             }
         }
+        if let View::Custom(name) = &self.view {
+            if !self.filters.iter().any(|f| f.name == *name) {
+                self.view = View::All;
+            }
+        }
         self.rebuild(ui, t);
+        // a tag nobody uses any more has no list to show
+        let unused_tag = matches!(&self.view, View::Tag(tag) if !self.tag_index.iter().any(|(name, _)| name == tag));
+        if unused_tag {
+            self.view = View::All;
+            self.rebuild(ui, t);
+        }
     }
 
     fn view_title(&self) -> String {
@@ -617,6 +691,8 @@ impl Notes {
             View::Folder(f) => f.clone(),
             View::Trash => "Recently Deleted".to_string(),
             View::Smart(s) => s.label().to_string(),
+            View::Tag(t) => format!("#{t}"),
+            View::Custom(name) => name.clone(),
         }
     }
 
@@ -640,6 +716,8 @@ impl Notes {
         self.shown = ranked.into_iter().filter(|&i| self.visible(i, searching, cutoff)).collect();
         self.shown_pinned = self.shown.iter().filter(|&&i| self.is_pinned(&self.notes[i].id)).count();
         let now = self.wall.now(t);
+        self.tag_index = store::tag_counts(self.notes.iter().filter(|n| self.loc_of(&n.id) != folders::TRASH));
+        self.headers = self.section_headers(now);
         let text_w = self.list_px(ui).1 - 2.0 * ui.pt(SPACE_S + SPACE_L);
         self.appearance = LABEL.now();
         self.rows = self
@@ -663,6 +741,42 @@ impl Notes {
         self.reveal = None;
         self.fit_scroll(ui);
         self.dirty = true;
+    }
+
+    /// Lays the editor out at the text size setting.
+    fn apply_text_size(&mut self, ui: &Ui) {
+        let k = self.prefs.text_size.factor();
+        self.editor.set_sizes(ui, BODY_PT * k, TITLE_PT * k);
+    }
+
+    /// The list's section headers as `(first shown row, label)`: Pinned, then either "Notes" or, when the list is
+    /// grouped by date, one header per date group.
+    fn section_headers(&self, now: i64) -> Vec<(usize, String)> {
+        let (pins, n) = (self.shown_pinned, self.shown.len());
+        let mut out = vec![];
+        if pins > 0 {
+            out.push((0, "Pinned".to_string()));
+        }
+        if self.prefs.group_by_date && self.prefs.sort != store::SortKey::Title {
+            let rest: Vec<&Note> = self.shown[pins.min(n)..].iter().map(|&i| &self.notes[i]).collect();
+            let stamp: fn(&Note) -> i64 = if self.prefs.sort == store::SortKey::DateCreated { store::created } else { store::modified_of };
+            for (k, label) in store::date_sections(&rest, now, self.wall.offset, stamp) {
+                out.push((pins + k, label));
+            }
+        } else if pins > 0 && pins < n {
+            out.push((pins, "Notes".to_string()));
+        }
+        out
+    }
+
+    /// Points of section headers above shown row `i`.
+    fn header_space(&self, i: usize) -> f32 {
+        let k = self.headers.iter().filter(|(start, _)| *start <= i).count();
+        if k == 0 {
+            0.0
+        } else {
+            SECTION_PT * k as f32 + SECTION_GAP_PT * (k - 1) as f32
+        }
     }
 
     fn kb_top(&self, ui: &Ui) -> f32 {
@@ -713,8 +827,7 @@ impl Notes {
     fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
         let (lx, lw) = self.list_px(ui);
         let m = ui.pt(SPACE_S);
-        let pins = self.shown_pins();
-        let section = if pins > 0 { SECTION_PT + if i >= pins { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
+        let section = self.header_space(i);
         (lx + m, ui.pt(list_top_pt() + section + ROW_PT * i as f32) - self.list_scroll.offset(), lw - 2.0 * m, ui.pt(ROW_PT))
     }
 
@@ -856,8 +969,7 @@ impl Notes {
     /// Keeps the scroll range in step with the content.
     fn fit_scroll(&mut self, ui: &Ui) {
         let bottom = self.content_bottom(ui);
-        let pins = self.shown_pins();
-        let section = if pins > 0 { SECTION_PT + if pins < self.shown.len() { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
+        let section = if self.shown.is_empty() { 0.0 } else { self.header_space(self.shown.len() - 1) };
         let (list_h, text_h) = (ui.pt(list_top_pt() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L), ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0));
         self.list_scroll.set_max(list_h - bottom);
         self.scroll.set_max(text_h - bottom);
@@ -922,23 +1034,74 @@ impl Notes {
         self.editing().is_some_and(|n| self.loc_of(&n.id) != folders::TRASH)
     }
 
-    /// A Format menu command by name: "check-all", "uncheck-all", "indent", "outdent", "move-up", "move-down".
-    /// False when the name is unknown or no editable note is open.
-    pub fn format_command(&mut self, ui: &Ui, name: &str, t: f64) -> bool {
-        if !self.can_format() {
-            return false;
-        }
-        let act = match name {
+    /// A menu command by name. The editor commands (paragraph styles, fonts, lists, indentation, checklist, Add Link,
+    /// Math Results) need an editable note; the list and settings commands (sorting, grouping, smart folders, text
+    /// size, new-note style) work anywhere. False when the name is unknown or the command does not apply.
+    pub fn command(&mut self, ui: &Ui, name: &str, t: f64) -> bool {
+        use md::Block;
+        let editor = match name {
+            "title" => Act::Style(Block::Title),
+            "heading" => Act::Style(Block::Heading),
+            "subheading" => Act::Style(Block::Subheading),
+            "body" => Act::Style(Block::Body),
+            "mono" => Act::Style(Block::Mono),
+            "quote" => Act::Style(Block::Quote),
+            "bullet" => Act::Style(Block::Bullet),
+            "dashed" => Act::Style(Block::Dashed),
+            "numbered" => Act::Style(Block::Numbered(1)),
+            "check" => Act::Style(Block::Check(false)),
+            "bold" => Act::Inline(Fmt::Bold),
+            "italic" => Act::Inline(Fmt::Italic),
+            "underline" => Act::Inline(Fmt::Underline),
+            "strike" => Act::Inline(Fmt::Strike),
+            "highlight" => Act::Inline(Fmt::Highlight),
+            "code" => Act::Inline(Fmt::Code),
             "check-all" => Act::CheckAll,
             "uncheck-all" => Act::UncheckAll,
+            "check-bottom-now" => Act::SortCheckedNow,
             "indent" => Act::Indent,
             "outdent" => Act::Outdent,
             "move-up" => Act::MoveLineUp,
             "move-down" => Act::MoveLineDown,
-            _ => return false,
+            "add-link" => Act::AddLink,
+            "math" => Act::SolveMath,
+            "duplicate" => Act::Duplicate,
+            _ => {
+                let act = match name {
+                    "sort-edited" => Act::Sort(store::SortKey::DateEdited),
+                    "sort-created" => Act::Sort(store::SortKey::DateCreated),
+                    "sort-title" => Act::Sort(store::SortKey::Title),
+                    "order-natural" => Act::SortReverse(false),
+                    "order-reverse" => Act::SortReverse(true),
+                    "group-date" => Act::GroupByDate(!self.prefs.group_by_date),
+                    "checked-bottom" => Act::ToggleCheckedBottom,
+                    "new-smart" => Act::NewSmartFolder,
+                    "delete-smart" if matches!(self.view, View::Custom(_)) => Act::DeleteSmartFolder,
+                    "new-folder" => Act::NewFolder,
+                    "math-results" => Act::ToggleMathResults,
+                    "resume-quick" => Act::ToggleResumeQuick,
+                    "size-small" => Act::SetTextSize(store::TextSize::Small),
+                    "size-medium" => Act::SetTextSize(store::TextSize::Medium),
+                    "size-large" => Act::SetTextSize(store::TextSize::Large),
+                    "start-title" => Act::SetStartStyle(store::StartStyle::Title),
+                    "start-heading" => Act::SetStartStyle(store::StartStyle::Heading),
+                    "start-subheading" => Act::SetStartStyle(store::StartStyle::Subheading),
+                    _ => return false,
+                };
+                self.run(ui, act, t);
+                return true;
+            }
         };
-        self.run(ui, act, t);
+        if !self.can_format() {
+            return false;
+        }
+        self.run(ui, editor, t);
         true
+    }
+
+    /// The Format menu's name for [`Notes::command`] (kept for the callers that predate the other menus).
+    pub fn format_command(&mut self, ui: &Ui, name: &str, t: f64) -> bool {
+        self.command(ui, name, t)
     }
 
     /// Index into `shown` of the arrow-selected row.
@@ -1112,7 +1275,8 @@ impl Notes {
             self.close_note(ui, t);
         }
         let id = self.fresh_id(t);
-        self.notes.insert(0, Note { id: id.clone(), text: String::new(), modified: self.wall.now(t) });
+        let seed = self.prefs.start_style.seed().to_string();
+        self.notes.insert(0, Note { id: id.clone(), text: seed, modified: self.wall.now(t) });
         if let View::Folder(f) = &self.view {
             self.loc.insert(id.clone(), f.clone());
         }
@@ -1120,6 +1284,72 @@ impl Notes {
         self.rebuild(ui, t);
         let i = self.notes.iter().position(|note| note.id == id).unwrap();
         self.open_note(ui, i, true, t);
+    }
+
+    /// New Quick Note (the menu bar extra). With "resume last Quick Note" on and the last quick note still around,
+    /// that note opens instead of a new one. Returns the id of the note shown.
+    pub fn quick_note(&mut self, ui: &Ui, t: f64) -> Option<String> {
+        if self.prefs.resume_quick {
+            if let Some(id) = store::load_quick(&self.dir) {
+                if self.loc_of(&id) != folders::TRASH && self.show_note(ui, &id, t) {
+                    return Some(id);
+                }
+            }
+        }
+        self.new_note(ui, t);
+        let id = self.editing().map(|n| n.id.clone())?;
+        if let Err(error) = store::save_quick(&self.dir, &id) {
+            self.notice = Some(format!("Unable to save settings: {error}"));
+        }
+        Some(id)
+    }
+
+    /// Opens a folder by name in the list (a `notes://folder/...` link or the Open Folder intent); false when there
+    /// is no such folder.
+    pub fn open_folder(&mut self, ui: &Ui, name: &str, t: f64) -> bool {
+        if !self.folders.iter().any(|f| f == name) {
+            return false;
+        }
+        self.show_view(ui, View::Folder(name.to_string()), t);
+        true
+    }
+
+    /// Opens what a `notes:` link points at.
+    pub fn open_link(&mut self, ui: &Ui, link: &url::Link, t: f64) -> bool {
+        match link {
+            url::Link::Note(id) => self.show_note(ui, id, t),
+            url::Link::Folder(name) => self.open_folder(ui, name, t),
+        }
+    }
+
+    /// The `notes:` link of the open note (Copy Link to Note).
+    pub fn note_link(&self) -> Option<String> {
+        self.editing().map(|n| url::note_url(&n.id))
+    }
+
+    /// Edit > Paste as Markdown: converts the pasteboard's HTML or RTF (`name` is a file name hint such as
+    /// `paste.html`) to Markdown and puts it at the caret. False when no note is being edited or nothing converted.
+    pub fn paste_markdown(&mut self, ui: &Ui, name: &str, bytes: &[u8], t: f64) -> bool {
+        if !self.can_format() {
+            return false;
+        }
+        let md_text = import::to_markdown(name, bytes);
+        if md_text.trim().is_empty() {
+            return false;
+        }
+        self.editor.replace_selection(ui, &md_text, t);
+        self.changed(ui, t);
+        true
+    }
+
+    /// Edit > Paste and Match Style: the plain text at the caret, with none of the source's formatting.
+    pub fn paste_plain(&mut self, ui: &Ui, text: &str, t: f64) -> bool {
+        if !self.can_format() || text.is_empty() {
+            return false;
+        }
+        self.editor.replace_selection(ui, &text.replace("\r\n", "\n"), t);
+        self.changed(ui, t);
+        true
     }
 
     /// A new note holding `text` (File > Import: a text file chosen in the open panel). It is saved at once and opens
@@ -1254,7 +1484,7 @@ impl Notes {
     fn close_note(&mut self, ui: &Ui, t: f64) {
         if let Screen::Editor(i) = self.screen {
             self.save(t, true);
-            if self.notes[i].text.trim().is_empty() {
+            if store::is_blank(&self.notes[i].text) {
                 self.erase(i);
             }
         }
@@ -1468,19 +1698,23 @@ impl Notes {
         let text = self.editor.text().to_string();
         let sel = self.editor.selection().unwrap_or(self.editor.caret()..self.editor.caret());
         match f {
-            Fmt::Bold | Fmt::Italic | Fmt::Code => {
+            Fmt::Bold | Fmt::Italic | Fmt::Code | Fmt::Strike | Fmt::Underline | Fmt::Highlight => {
                 let marker = match f {
                     Fmt::Bold => "**",
                     Fmt::Italic => "*",
+                    Fmt::Strike => "~~",
+                    Fmt::Underline => "++",
+                    Fmt::Highlight => "==",
                     _ => "`",
                 };
                 let r = md::toggle_wrap(&text, sel, marker);
                 self.editor.replace_range(ui, r.range, &r.with, t, false);
                 self.editor.select(r.select);
             }
-            Fmt::Bullet | Fmt::Number | Fmt::Check => {
+            Fmt::Bullet | Fmt::Number | Fmt::Check | Fmt::Dashed => {
                 let block = match f {
                     Fmt::Bullet => md::Block::Bullet,
+                    Fmt::Dashed => md::Block::Dashed,
                     Fmt::Number => md::Block::Numbered(1),
                     _ => md::Block::Check(false),
                 };
@@ -1533,6 +1767,20 @@ impl Notes {
             let current = self.view == view;
             items.push((format!("{}\t{}", s.label(), self.count_in(&view)), Act::View(view), current));
         }
+        for f in &self.filters {
+            let view = View::Custom(f.name.clone());
+            let current = self.view == view;
+            items.push((format!("{}\t{}", f.name, self.count_in(&view)), Act::View(view), current));
+        }
+        for (tag, count) in self.tag_index.iter().take(5) {
+            let view = View::Tag(tag.clone());
+            let current = self.view == view;
+            items.push((format!("#{tag}\t{count}"), Act::View(view), current));
+        }
+        items.push(("New Smart Folder...".to_string(), Act::NewSmartFolder, false));
+        if matches!(self.view, View::Custom(_)) {
+            items.push(("Delete Smart Folder".to_string(), Act::DeleteSmartFolder, false));
+        }
         items.push(("New Folder".to_string(), Act::NewFolder, false));
         if matches!(self.view, View::Folder(_)) {
             items.push(("Rename Folder".to_string(), Act::RenameFolder, false));
@@ -1544,6 +1792,7 @@ impl Notes {
         let (natural, reversed) = self.prefs.sort.directions();
         items.push((natural.to_string(), Act::SortReverse(false), !self.prefs.reverse));
         items.push((reversed.to_string(), Act::SortReverse(true), self.prefs.reverse));
+        items.push(("Group by Date".to_string(), Act::GroupByDate(!self.prefs.group_by_date), self.prefs.group_by_date));
         items.push(("Move Checked to Bottom".to_string(), Act::ToggleCheckedBottom, self.prefs.checked_to_bottom));
         let (mx, my, mw, mh) = self.title_rect(ui);
         self.show_menu(ui, items, mx + mw - ui.pt(MENU_W_PT), my + mh + ui.pt(SPACE_XS));
@@ -1563,6 +1812,10 @@ impl Notes {
             ("Heading".to_string(), Act::Style(md::Block::Heading), false),
             ("Subheading".to_string(), Act::Style(md::Block::Subheading), false),
             ("Body".to_string(), Act::Style(md::Block::Body), false),
+            ("Monostyled".to_string(), Act::Style(md::Block::Mono), false),
+            ("Block Quote".to_string(), Act::Style(md::Block::Quote), false),
+            ("Dashed List".to_string(), Act::Style(md::Block::Dashed), false),
+            ("Add Link...".to_string(), Act::AddLink, false),
             ("Move Checked to Bottom".to_string(), Act::SortCheckedNow, false),
             ("Photo from Library".to_string(), Act::ChoosePhoto, false),
             ("Attach Latest Photo".to_string(), Act::AttachPhoto, false),
@@ -1620,12 +1873,24 @@ impl Notes {
     }
 
     fn start_naming(&mut self, ui: &Ui, old: Option<String>, t: f64) {
-        let mut field = TextField::new(ui, "Folder Name", MAC_BODY_PT, false, 40);
-        field.set_text(ui, &old.clone().unwrap_or_else(|| folders::unique_name(&self.folders, "New Folder")));
+        let initial = old.clone().unwrap_or_else(|| folders::unique_name(&self.folders, "New Folder"));
+        self.start_prompt(ui, Purpose::Folder, old, &initial, t);
+    }
+
+    /// Opens the one-line prompt for `purpose` with `initial` in the field.
+    fn start_prompt(&mut self, ui: &Ui, purpose: Purpose, old: Option<String>, initial: &str, t: f64) {
+        let (placeholder, max) = match purpose {
+            Purpose::Folder => ("Folder Name", 40),
+            Purpose::SmartFolder => ("Name | tag:work edited:7 pinned", 200),
+            Purpose::Link(_) => ("Web Address", 400),
+        };
+        let mut field = TextField::new(ui, placeholder, MAC_BODY_PT, false, max);
+        field.set_text(ui, initial);
         field.focused = true;
-        self.naming = Some(Naming { old, field });
+        self.naming = Some(Naming { old, purpose, field });
         self.searching = false;
         self.search.focused = false;
+        self.editor.focused = false;
         self.keyboard.set_shown(!self.hw_kb, t);
     }
 
@@ -1639,6 +1904,11 @@ impl Notes {
         let Some(naming) = self.naming.take() else { return };
         self.keyboard.set_shown(false, t);
         let name = naming.field.text().to_string();
+        match &naming.purpose {
+            Purpose::Folder => {}
+            Purpose::SmartFolder => return self.commit_smart_folder(ui, &name, t),
+            Purpose::Link(range) => return self.commit_link(ui, range.clone(), &name, t),
+        }
         let result = match &naming.old {
             None => folders::create(&self.dir, &name),
             Some(old) => folders::rename(&self.dir, old, &name),
@@ -1652,6 +1922,41 @@ impl Notes {
                 self.reload(ui, t);
             }
             Err(error) => self.notice = Some(format!("Unable to save folder: {error}")),
+        }
+    }
+
+    /// Saves the smart folder a definition describes and shows it; a definition that does not parse is reported.
+    fn commit_smart_folder(&mut self, ui: &Ui, definition: &str, t: f64) {
+        match smart::Filter::parse(definition) {
+            Ok(mut filter) => {
+                let taken: Vec<String> = self.filters.iter().map(|f| f.name.clone()).collect();
+                filter.name = folders::unique_name(&taken, &filter.name);
+                self.notice = None;
+                self.view = View::Custom(filter.name.clone());
+                self.filters.push(filter);
+                self.save_filters();
+                self.reload(ui, t);
+            }
+            Err(word) if word.is_empty() => self.notice = Some("A smart folder needs at least one condition".to_string()),
+            Err(word) => self.notice = Some(format!("Unknown condition {word}; use tag:, edited:, created:, folder:, attachments, checklist, pinned")),
+        }
+    }
+
+    /// Wraps `range` of the open note (the selection when the prompt opened) as a link to `address`.
+    fn commit_link(&mut self, ui: &Ui, range: Range<usize>, address: &str, t: f64) {
+        let len = self.editor.text().chars().count();
+        let range = range.start.min(len)..range.end.min(len);
+        let shown: String = self.editor.text().chars().skip(range.start).take(range.len()).collect();
+        match link::markdown(&shown, address) {
+            Some(md_link) => {
+                self.notice = None;
+                let end = range.start + md_link.chars().count();
+                self.editor.replace_range(ui, range, &md_link, t, false);
+                self.editor.set_caret(end);
+                self.editor.focused = true;
+                self.changed(ui, t);
+            }
+            None => self.notice = Some("Enter a web address without spaces".to_string()),
         }
     }
 
@@ -1881,6 +2186,80 @@ impl Notes {
             Act::CheckSpelling => self.check_note(ui),
             Act::Replace => self.start_replacing(ui, t),
             Act::ChoosePhoto => self.picker = Some(picker::Picker::open(ui.pt(PICK_THUMB_PT) as usize)),
+            Act::Inline(f) => self.apply_fmt(ui, f, t),
+            Act::SolveMath => {
+                let new = math::solve_all(self.editor.text());
+                let caret = self.editor.caret();
+                self.rewrite(ui, &new, caret, t);
+            }
+            Act::AddLink => {
+                if self.can_format() {
+                    let caret = self.editor.caret();
+                    let sel = self.editor.selection().unwrap_or(caret..caret);
+                    self.start_prompt(ui, Purpose::Link(sel), None, "", t);
+                }
+            }
+            Act::NewSmartFolder => self.start_prompt(ui, Purpose::SmartFolder, None, "", t),
+            Act::DeleteSmartFolder => {
+                if let View::Custom(name) = self.view.clone() {
+                    self.filters.retain(|f| f.name != name);
+                    self.save_filters();
+                    self.view = View::All;
+                    self.reload(ui, t);
+                }
+            }
+            Act::GroupByDate(on) => {
+                self.prefs.group_by_date = on;
+                self.save_prefs();
+                self.rebuild(ui, t);
+            }
+            Act::SetTextSize(size) => {
+                self.prefs.text_size = size;
+                self.save_prefs();
+                self.apply_text_size(ui);
+                self.fit_scroll(ui);
+            }
+            Act::SetStartStyle(style) => {
+                self.prefs.start_style = style;
+                self.save_prefs();
+            }
+            Act::ToggleMathResults => {
+                self.prefs.math_results = !self.prefs.math_results;
+                self.save_prefs();
+            }
+            Act::ToggleResumeQuick => {
+                self.prefs.resume_quick = !self.prefs.resume_quick;
+                self.save_prefs();
+            }
+        }
+    }
+
+    fn save_filters(&mut self) {
+        if let Err(error) = smart::save(&self.dir, &self.filters) {
+            self.notice = Some(format!("Unable to save smart folders: {error}"));
+        }
+    }
+
+    /// Whether a menu command is on (the check mark beside it in the Note, Format and Settings menus).
+    pub fn command_checked(&self, name: &str) -> bool {
+        let p = &self.prefs;
+        match name {
+            "sort-edited" => p.sort == store::SortKey::DateEdited,
+            "sort-created" => p.sort == store::SortKey::DateCreated,
+            "sort-title" => p.sort == store::SortKey::Title,
+            "order-natural" => !p.reverse,
+            "order-reverse" => p.reverse,
+            "group-date" => p.group_by_date,
+            "checked-bottom" => p.checked_to_bottom,
+            "math-results" => p.math_results,
+            "resume-quick" => p.resume_quick,
+            "size-small" => p.text_size == store::TextSize::Small,
+            "size-medium" => p.text_size == store::TextSize::Medium,
+            "size-large" => p.text_size == store::TextSize::Large,
+            "start-title" => p.start_style == store::StartStyle::Title,
+            "start-heading" => p.start_style == store::StartStyle::Heading,
+            "start-subheading" => p.start_style == store::StartStyle::Subheading,
+            _ => false,
         }
     }
 
@@ -2197,12 +2576,32 @@ impl Notes {
                     self.save(t, true);
                     return;
                 }
+                if out == Out::Enter && self.prefs.math_results {
+                    self.solve_caret_line(ui, t);
+                }
                 if self.editor.edit(ui, &out, t) {
                     self.changed(ui, t);
                 } else {
                     self.show_caret(ui);
                 }
             }
+        }
+    }
+
+    /// Math Results: Enter at the end of a line that ends in `=` writes the result after the sign first.
+    fn solve_caret_line(&mut self, ui: &Ui, t: f64) {
+        let text = self.editor.text().to_string();
+        let caret = self.editor.caret();
+        let (line, _) = lists::line_col(&text, caret);
+        let Some(current) = text.split('\n').nth(line) else { return };
+        let start = lists::line_start(&text, line);
+        let end = start + current.chars().count();
+        if caret != end {
+            return;
+        }
+        if let Some(solved) = math::solve_line(current) {
+            self.editor.replace_range(ui, start..end, &solved, t, false);
+            self.editor.set_caret(start + solved.chars().count());
         }
     }
 
@@ -2227,6 +2626,12 @@ impl Notes {
             (Screen::Editor(_), 44, true) => Target::Redo,
             (Screen::Editor(_), 48, false) => Target::Fmt(Fmt::Bold),
             (Screen::Editor(_), 23, false) => Target::Fmt(Fmt::Italic),
+            (Screen::Editor(_), 22, false) => Target::Fmt(Fmt::Underline),
+            (Screen::Editor(_), 45, true) => Target::Fmt(Fmt::Strike),
+            (Screen::Editor(_), 37, false) if self.can_format() => {
+                self.run(ui, Act::AddLink, t);
+                return true;
+            }
             _ => return false,
         };
         self.activate(ui, target, 0.0, 0.0, t);
@@ -2558,6 +2963,8 @@ impl Notes {
         let mut e = TextArea::new(ui, self.editor_w.max(1.0), BODY_PT, TITLE_PT, LABEL.now(), YELLOW);
         e.set_detect_links(true);
         e.set_markdown(ui, true);
+        let k = self.prefs.text_size.factor();
+        e.set_sizes(ui, BODY_PT * k, TITLE_PT * k);
         e.set_text(ui, &text);
         e.set_caret(caret);
         e.focused = focused;
@@ -2573,20 +2980,17 @@ impl Notes {
         let bottom = self.content_bottom(ui);
         let rh = ui.pt(ROW_PT);
         let n = self.shown.len();
-        let pins = self.shown_pins();
         let open = self.editing().map(|note| note.id.clone());
         let selected = self.selected_index();
         let rects: Vec<_> = (0..n).map(|i| self.row_rect(ui, i)).collect();
         let places: Vec<String> = (0..n).map(|i| self.loc_of(&self.notes[self.shown[i]].id).to_string()).collect();
         let pinned: Vec<bool> = (0..n).map(|i| self.is_pinned(&self.notes[self.shown[i]].id)).collect();
         let mut content = s.rows(ui.pt(nav_bottom_pt()) as usize, bottom as usize);
-        if pins > 0 {
-            for (label, row) in [("Pinned", 0), ("Notes", pins)] {
-                if row < n {
-                    let (rx, ry, ..) = rects[row];
-                    let img = self.labels.get(ui, label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
-                    content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
-                }
+        for (row, label) in self.headers.clone() {
+            if row < n {
+                let (rx, ry, ..) = rects[row];
+                let img = self.labels.get(ui, &label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
+                content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
             }
         }
         for i in 0..n {
@@ -2649,7 +3053,7 @@ impl Notes {
                 }
             }
             let next_open = i + 1 < n && open.as_deref() == Some(self.notes[self.shown[i + 1]].id.as_str());
-            if i + 1 < n && i + 1 != pins && !is_open && !next_open {
+            if i + 1 < n && !self.headers.iter().any(|(start, _)| *start == i + 1) && !is_open && !next_open {
                 content.fill_rrect(rx + ui.pt(SPACE_L), ry + rh - 1.0, rw - ui.pt(SPACE_L), 1.0, 0.0, SEPARATOR_C.now());
             }
         }
@@ -2728,19 +3132,24 @@ impl Notes {
 
     /// The folder-name prompt at the top of the list column.
     fn draw_naming(&mut self, s: &mut Surface, ui: &Ui) {
-        let (lx, lw) = self.list_px(ui);
+        let (lx, lw) = if matches!(self.naming.as_ref().map(|n| &n.purpose), Some(Purpose::Link(_))) { self.ed_px(ui) } else { self.list_px(ui) };
         let Some(naming) = &self.naming else { return };
         let pad = ui.pt(SPACE_S);
         let (x, y, w, h) = (lx + pad, ui.pt(nav_bottom_pt()) + pad, lw - 2.0 * pad, ui.pt(56.0));
         s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
         s.stroke_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), 1.0, SEPARATOR_C.now());
-        let label = if naming.old.is_some() { "Rename Folder" } else { "New Folder" };
+        let (label, placeholder) = match (&naming.purpose, naming.old.is_some()) {
+            (Purpose::Folder, true) => ("Rename Folder", "Folder Name"),
+            (Purpose::Folder, false) => ("New Folder", "Folder Name"),
+            (Purpose::SmartFolder, _) => ("New Smart Folder", "Name | tag:work edited:7 pinned"),
+            (Purpose::Link(_), _) => ("Add Link", "Web Address"),
+        };
         let mut field = bifrost_app::controls::TextField::new();
         field.push_str(naming.field.text());
         let img = self.labels.get(ui, label, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now());
         s.blit(img, (x + ui.pt(SPACE_S)) as i32, (y + ui.pt(SPACE_XS)) as i32, 255, 255);
         let r = chrome::pt_rect(ui, (x + ui.pt(SPACE_S), y + ui.pt(SPACE_L + SPACE_XS), w - ui.pt(SPACE_L), ui.pt(SPACE_XXL)));
-        bifrost_app::widgets::text_field(s, ui, &field, r, "Folder Name", true);
+        bifrost_app::widgets::text_field(s, ui, &field, r, placeholder, true);
     }
 
     /// The open menu: the kit's `NativeMenu` drawing on the popover material.
@@ -4016,6 +4425,212 @@ mod tests {
         n.touch(&ui, Event::Up(w - 5.0, 10.0), 2320.0);
         assert!(n.sketch.is_none());
         assert_eq!(n.editing().unwrap().text, format!("Plan\n![image]({id}-1.png)\n"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn format_commands_apply_paragraph_and_inline_styles() {
+        let ui = ui();
+        let dir = scratch("styles");
+        let mut n = seeded(&ui, &dir);
+        n.compose(&ui, 100.0);
+        n.editor.set_text(&ui, "Plan\nalpha beta");
+        n.changed(&ui, 110.0);
+        assert!(n.command(&ui, "quote", 120.0));
+        assert!(n.editor.text().ends_with("\n> alpha beta"), "got {:?}", n.editor.text());
+        assert!(n.command(&ui, "mono", 130.0));
+        assert!(n.editor.text().ends_with("\n``` alpha beta"));
+        assert!(n.command(&ui, "dashed", 140.0));
+        assert!(n.editor.text().ends_with("\n\u{2013} alpha beta"));
+        assert!(n.command(&ui, "body", 150.0));
+        assert_eq!(n.editor.text(), "Plan\nalpha beta");
+        n.editor.select(5..10);
+        assert!(n.command(&ui, "strike", 160.0));
+        assert_eq!(n.editor.text(), "Plan\n~~alpha~~ beta");
+        assert!(n.command(&ui, "strike", 170.0), "a second use unwraps the selection");
+        assert_eq!(n.editor.text(), "Plan\nalpha beta");
+        assert!(!n.command(&ui, "no-such-command", 180.0));
+        n.close_note(&ui, 190.0);
+        assert!(!n.command(&ui, "bold", 200.0), "the editor commands need an open note");
+        assert!(n.command(&ui, "group-date", 210.0), "the list commands do not");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn add_link_wraps_the_selection_and_refuses_a_bad_address() {
+        let ui = ui();
+        let dir = scratch("add-link");
+        let mut n = seeded(&ui, &dir);
+        n.compose(&ui, 100.0);
+        n.editor.set_text(&ui, "Plan\nsee docs");
+        n.changed(&ui, 110.0);
+        n.editor.select(9..13);
+        assert!(n.command(&ui, "add-link", 120.0));
+        assert!(matches!(n.naming.as_ref().map(|p| &p.purpose), Some(Purpose::Link(_))));
+        n.naming.as_mut().unwrap().field.set_text(&ui, "a b");
+        n.commit_name(&ui, 130.0);
+        assert_eq!(n.editor.text(), "Plan\nsee docs");
+        assert!(n.notice.is_some());
+        n.editor.select(9..13);
+        n.run(&ui, Act::AddLink, 140.0);
+        n.naming.as_mut().unwrap().field.set_text(&ui, "example.com");
+        n.commit_name(&ui, 150.0);
+        assert_eq!(n.editor.text(), "Plan\nsee [docs](https://example.com)");
+        assert!(n.naming.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn math_results_are_written_on_enter_or_by_command() {
+        let ui = ui();
+        let dir = scratch("math");
+        let mut n = seeded(&ui, &dir);
+        n.compose(&ui, 100.0);
+        n.editor.set_text(&ui, "Plan\n12 * 4 =");
+        n.changed(&ui, 110.0);
+        n.key(&ui, Out::Enter, 120.0);
+        assert_eq!(n.editor.text(), "Plan\n12 * 4 = 48\n");
+        n.editor.set_text(&ui, "Plan\n2+2 =\n3*3 =");
+        n.changed(&ui, 130.0);
+        n.run(&ui, Act::SolveMath, 140.0);
+        assert_eq!(n.editor.text(), "Plan\n2+2 = 4\n3*3 = 9");
+        n.run(&ui, Act::ToggleMathResults, 150.0);
+        assert!(!n.prefs.math_results);
+        n.editor.set_text(&ui, "Plan\n1+1 =");
+        n.key(&ui, Out::Enter, 160.0);
+        assert_eq!(n.editor.text(), "Plan\n1+1 =\n", "with Math Results off Enter only breaks the line");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tags_list_in_the_sidebar_and_filter_the_list() {
+        let ui = ui();
+        let dir = scratch("tags");
+        store::save(&dir, &Note { id: "1".into(), text: "Groceries\nmilk".into(), modified: 0 }).unwrap();
+        store::save(&dir, &Note { id: "3".into(), text: "Trip #travel plans".into(), modified: 0 }).unwrap();
+        let mut n = app(&ui, &dir);
+        assert_eq!(n.tag_index, vec![("travel".to_string(), 1)]);
+        assert_eq!(n.row_view(chrome::TAG_ROW), Some(View::Tag("travel".into())));
+        assert_eq!(n.count_in(&View::Tag("travel".into())), 1);
+        n.show_view(&ui, View::Tag("travel".into()), 1.0);
+        assert_eq!(n.listed().iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec!["3"]);
+        assert_eq!(n.view_title(), "#travel");
+        n.open_list_menu(&ui);
+        assert!(n.menu.as_ref().unwrap().items.iter().any(|(l, a, on)| l.starts_with("#travel") && *a == Act::View(View::Tag("travel".into())) && *on));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_user_smart_folder_is_defined_listed_and_deleted() {
+        let ui = ui();
+        let dir = scratch("smart-user");
+        store::save(&dir, &Note { id: "1".into(), text: "Groceries\nmilk".into(), modified: 0 }).unwrap();
+        store::save(&dir, &Note { id: "3".into(), text: "Trip #travel plans".into(), modified: 0 }).unwrap();
+        let mut n = app(&ui, &dir);
+        n.run(&ui, Act::NewSmartFolder, 1.0);
+        n.naming.as_mut().unwrap().field.set_text(&ui, "Travel | tag:travel");
+        n.commit_name(&ui, 2.0);
+        assert_eq!(n.view, View::Custom("Travel".into()));
+        assert_eq!(n.listed().iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec!["3"]);
+        assert_eq!(smart::load(&dir).len(), 1, "the folder is saved");
+        assert_eq!(n.row_view(chrome::CUSTOM_ROW), Some(View::Custom("Travel".into())));
+        assert_eq!(app(&ui, &dir).filters.len(), 1, "and survives a restart");
+
+        n.run(&ui, Act::NewSmartFolder, 3.0);
+        n.naming.as_mut().unwrap().field.set_text(&ui, "color:red");
+        n.commit_name(&ui, 4.0);
+        assert!(n.notice.as_deref().is_some_and(|m| m.contains("color:red")));
+        assert_eq!(n.filters.len(), 1);
+
+        n.run(&ui, Act::DeleteSmartFolder, 5.0);
+        assert!(n.filters.is_empty() && smart::load(&dir).is_empty());
+        assert_eq!(n.view, View::All);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn grouping_by_date_adds_section_headers_under_the_pinned_one() {
+        let ui = ui();
+        let dir = scratch("group-date");
+        let mut n = seeded(&ui, &dir);
+        assert!(n.headers.is_empty());
+        n.run(&ui, Act::GroupByDate(true), 1.0);
+        assert_eq!(n.headers, vec![(0, "Today".to_string()), (1, "Previous 7 Days".to_string())]);
+        assert!(app(&ui, &dir).prefs().group_by_date, "the setting is saved");
+        n.set_pinned(&ui, "2", true, 2.0);
+        assert_eq!(n.headers, vec![(0, "Pinned".to_string()), (1, "Today".to_string())]);
+        assert_eq!(n.header_space(1), 2.0 * SECTION_PT + SECTION_GAP_PT);
+        n.run(&ui, Act::GroupByDate(false), 3.0);
+        assert_eq!(n.headers, vec![(0, "Pinned".to_string()), (1, "Notes".to_string())]);
+        draw(&mut n, &ui, 4.0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn quick_note_resumes_the_last_one_when_asked() {
+        let ui = ui();
+        let dir = scratch("quick");
+        let mut n = seeded(&ui, &dir);
+        n.prefs.resume_quick = true;
+        let first = n.quick_note(&ui, 1.0).unwrap();
+        n.editor.set_text(&ui, "Quick thing");
+        n.changed(&ui, 2.0);
+        n.close_note(&ui, 3.0);
+        assert_eq!(n.quick_note(&ui, 10.0), Some(first.clone()), "the same note opens again");
+        n.prefs.resume_quick = false;
+        let third = n.quick_note(&ui, 20.0).unwrap();
+        assert_ne!(first, third);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn links_and_intents_open_notes_and_folders() {
+        let ui = ui();
+        let dir = scratch("open-links");
+        let mut n = seeded(&ui, &dir);
+        folders::create(&dir, "Work").unwrap();
+        n.reload(&ui, 0.0);
+        assert!(n.open_folder(&ui, "Work", 1.0));
+        assert_eq!(n.view, View::Folder("Work".into()));
+        assert!(!n.open_folder(&ui, "Nope", 2.0));
+        assert!(n.open_link(&ui, &url::parse("notes://note/1").unwrap(), 3.0));
+        assert_eq!(n.editing().unwrap().id, "1");
+        assert_eq!(n.note_link().as_deref(), Some("notes://note/1"));
+        assert!(!n.open_link(&ui, &url::Link::Note("missing".into()), 4.0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn text_size_and_the_new_note_style_are_settings() {
+        let ui = ui();
+        let dir = scratch("settings");
+        let mut n = seeded(&ui, &dir);
+        n.run(&ui, Act::SetTextSize(store::TextSize::Large), 1.0);
+        n.run(&ui, Act::SetStartStyle(store::StartStyle::Heading), 2.0);
+        let reread = app(&ui, &dir).prefs();
+        assert_eq!((reread.text_size, reread.start_style), (store::TextSize::Large, store::StartStyle::Heading));
+        assert!(n.command_checked("size-large") && !n.command_checked("size-small") && n.command_checked("start-heading"));
+        n.compose(&ui, 3.0);
+        assert_eq!(n.editor.text(), "## ", "a new note starts in the chosen style");
+        n.close_note(&ui, 4.0);
+        assert_eq!(n.notes.len(), 2, "a note holding only the style marker is dropped like an empty one");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn paste_converts_rich_text_or_keeps_plain_text() {
+        let ui = ui();
+        let dir = scratch("paste");
+        let mut n = seeded(&ui, &dir);
+        assert!(!n.paste_plain(&ui, "x", 1.0), "nothing to paste into without an open note");
+        n.compose(&ui, 100.0);
+        n.editor.set_text(&ui, "Plan\n");
+        n.changed(&ui, 110.0);
+        assert!(n.paste_markdown(&ui, "paste.html", b"<p>Hello <b>world</b></p>", 120.0));
+        assert!(n.editor.text().contains("Hello **world**"), "got {:?}", n.editor.text());
+        assert!(n.paste_plain(&ui, " tail\r\nmore", 130.0));
+        assert!(n.editor.text().ends_with(" tail\nmore"));
+        assert!(!n.paste_markdown(&ui, "paste.html", b"<p></p>", 140.0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

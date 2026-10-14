@@ -43,6 +43,9 @@ const ROW_BIN: u32 = 101;
 const FOLDER_ROW: u32 = 200;
 /// The smart folder rows (`smart::Smart::ALL` in order), above any folder row.
 const SMART_ROW: u32 = 900;
+/// The user's smart folders (`Notes::filters` in order), then the tags (`Notes::tag_index` in order).
+pub(super) const CUSTOM_ROW: u32 = 1500;
+pub(super) const TAG_ROW: u32 = 3000;
 
 /// The pixel rect of a kit rect.
 pub(super) fn px(ui: &Ui, r: Rect) -> (f32, f32, f32, f32) {
@@ -224,6 +227,7 @@ impl Notes {
                 View::Trash => loc == folders::TRASH,
                 View::Folder(f) => loc == f,
                 View::Smart(s) => loc != folders::TRASH && s.matches(n, self.is_pinned(&n.id), cutoff),
+                View::Tag(_) | View::Custom(_) => loc != folders::TRASH && self.in_user_view(n, view),
             }
         }).count() as u32
     }
@@ -239,12 +243,23 @@ impl Notes {
         for (i, s) in Smart::ALL.into_iter().enumerate() {
             items.push(SidebarItem::row(SMART_ROW + i as u32, s.label()).with_symbol(s.symbol()).with_count(self.count_in(&View::Smart(s))));
         }
+        for (i, f) in self.filters.iter().enumerate() {
+            items.push(SidebarItem::row(CUSTOM_ROW + i as u32, &f.name).with_symbol("folder").with_count(self.count_in(&View::Custom(f.name.clone()))));
+        }
+        if !self.tag_index.is_empty() {
+            items.push(SidebarItem::header("Tags"));
+            for (i, (tag, count)) in self.tag_index.iter().enumerate() {
+                items.push(SidebarItem::row(TAG_ROW + i as u32, &format!("#{tag}")).with_symbol("tag").with_count(*count as u32));
+            }
+        }
         let mut list = SourceList::new(items, SIDE_ROW_PT, SIDE_HEADER_PT);
         list.set_selected(Some(match &self.view {
             View::All => ROW_ALL,
             View::Trash => ROW_BIN,
             View::Folder(f) => self.folders.iter().position(|x| x == f).map_or(ROW_ALL, |i| FOLDER_ROW + i as u32),
             View::Smart(s) => SMART_ROW + Smart::ALL.iter().position(|x| x == s).unwrap_or(0) as u32,
+            View::Custom(name) => self.filters.iter().position(|f| f.name == *name).map_or(ROW_ALL, |i| CUSTOM_ROW + i as u32),
+            View::Tag(t) => self.tag_index.iter().position(|(x, _)| x == t).map_or(ROW_ALL, |i| TAG_ROW + i as u32),
         }));
         list
     }
@@ -263,6 +278,8 @@ impl Notes {
             ROW_ALL => Some(View::All),
             ROW_BIN => Some(View::Trash),
             id if (SMART_ROW..SMART_ROW + Smart::ALL.len() as u32).contains(&id) => Smart::ALL.get((id - SMART_ROW) as usize).map(|s| View::Smart(*s)),
+            id if (CUSTOM_ROW..TAG_ROW).contains(&id) => self.filters.get((id - CUSTOM_ROW) as usize).map(|f| View::Custom(f.name.clone())),
+            id if id >= TAG_ROW => self.tag_index.get((id - TAG_ROW) as usize).map(|(t, _)| View::Tag(t.clone())),
             id => self.folders.get(id.checked_sub(FOLDER_ROW)? as usize).map(|f| View::Folder(f.clone())),
         }
     }

@@ -42,6 +42,8 @@ fn view_key(view: &notes::View) -> String {
         notes::View::Trash => "trash".into(),
         notes::View::Folder(f) => format!("folder:{f}"),
         notes::View::Smart(s) => format!("smart:{}", s.key()),
+        notes::View::Tag(t) => format!("tag:{t}"),
+        notes::View::Custom(name) => format!("custom:{name}"),
     }
 }
 
@@ -51,6 +53,12 @@ fn view_from_key(key: &str) -> notes::View {
         k => {
             if let Some(s) = k.strip_prefix("smart:").and_then(notes::smart::Smart::from_key) {
                 return notes::View::Smart(s);
+            }
+            if let Some(t) = k.strip_prefix("tag:") {
+                return notes::View::Tag(t.to_string());
+            }
+            if let Some(name) = k.strip_prefix("custom:") {
+                return notes::View::Custom(name.to_string());
             }
             k.strip_prefix("folder:").map_or(notes::View::All, |f| notes::View::Folder(f.to_string()))
         }
@@ -125,15 +133,127 @@ const MENU_DELETE: u32 = 2;
 const MENU_IMPORT: u32 = 3;
 const MENU_FIND: u32 = 4;
 const MENU_PRINT: u32 = 5;
-/// Format menu ids (command names for `Notes::format_command`)
-const FORMAT_ITEMS: [(u32, &str, &str, &str); 6] = [
-    (10, "Increase Indent", "cmd+]", "indent"),
-    (11, "Decrease Indent", "cmd+[", "outdent"),
-    (12, "Move Line Up", "ctrl+cmd+up", "move-up"),
-    (13, "Move Line Down", "ctrl+cmd+down", "move-down"),
-    (14, "Mark All Checked", "", "check-all"),
-    (15, "Unmark All", "", "uncheck-all"),
+
+/// One entry of the Format, Insert, Organize and Settings menus. `cmd` is the name `Notes::command` runs (or one of the
+/// few commands this file runs itself, which need the pasteboard); `editor` marks entries that need an open note.
+struct Entry {
+    id: u32,
+    title: &'static str,
+    key: &'static str,
+    cmd: &'static str,
+    depth: u8,
+    editor: bool,
+}
+
+const SEPARATOR: &str = "<separator>";
+const SUBMENU: &str = "<submenu>";
+
+const fn item(id: u32, title: &'static str, key: &'static str, cmd: &'static str, editor: bool) -> Entry {
+    Entry { id, title, key, cmd, depth: 0, editor }
+}
+const fn child(id: u32, title: &'static str, cmd: &'static str) -> Entry {
+    Entry { id, title, key: "", cmd, depth: 1, editor: false }
+}
+const fn sub(title: &'static str) -> Entry {
+    Entry { id: 0, title, key: "", cmd: SUBMENU, depth: 0, editor: false }
+}
+const SEP: Entry = Entry { id: 0, title: "", key: "", cmd: SEPARATOR, depth: 0, editor: false };
+
+/// Format: paragraph styles, lists, fonts, indentation and the checklist commands.
+const FORMAT_MENU: [Entry; 27] = [
+    item(20, "Title", "cmd+shift+t", "title", true),
+    item(21, "Heading", "cmd+shift+h", "heading", true),
+    item(22, "Subheading", "cmd+shift+j", "subheading", true),
+    item(23, "Body", "cmd+shift+b", "body", true),
+    item(24, "Monostyled", "cmd+shift+m", "mono", true),
+    item(25, "Block Quote", "cmd+'", "quote", true),
+    SEP,
+    item(26, "Bulleted List", "cmd+shift+7", "bullet", true),
+    item(27, "Dashed List", "cmd+shift+8", "dashed", true),
+    item(28, "Numbered List", "cmd+shift+9", "numbered", true),
+    item(29, "Checklist", "cmd+shift+l", "check", true),
+    SEP,
+    item(30, "Bold", "", "bold", true),
+    item(31, "Italic", "", "italic", true),
+    item(32, "Underline", "", "underline", true),
+    item(33, "Strikethrough", "", "strike", true),
+    item(34, "Highlight", "", "highlight", true),
+    item(35, "Monospaced", "", "code", true),
+    SEP,
+    item(10, "Increase Indent", "cmd+]", "indent", true),
+    item(11, "Decrease Indent", "cmd+[", "outdent", true),
+    item(12, "Move Line Up", "ctrl+cmd+up", "move-up", true),
+    item(13, "Move Line Down", "ctrl+cmd+down", "move-down", true),
+    SEP,
+    item(14, "Mark All Checked", "", "check-all", true),
+    item(15, "Unmark All", "", "uncheck-all", true),
+    item(16, "Move Checked Items to Bottom", "", "check-bottom-now", true),
 ];
+
+/// Insert and the pasteboard commands of the Edit family.
+const INSERT_MENU: [Entry; 8] = [
+    item(40, "Add Link...", "", "add-link", true),
+    item(41, "Calculate Math Results", "", "math", true),
+    SEP,
+    item(42, "Copy as Markdown", "", "copy-md", true),
+    item(43, "Paste as Markdown", "", "paste-md", true),
+    item(44, "Paste and Match Style", "", "paste-plain", true),
+    SEP,
+    item(45, "Copy Link to Note", "", "copy-link", true),
+];
+
+/// Organize: how the list is ordered and grouped, folders and smart folders.
+const ORGANIZE_MENU: [Entry; 13] = [
+    sub("Sort By"),
+    child(60, "Date Edited", "sort-edited"),
+    child(61, "Date Created", "sort-created"),
+    child(62, "Title", "sort-title"),
+    sub("Order"),
+    child(63, "Newest First or A to Z", "order-natural"),
+    child(64, "Oldest First or Z to A", "order-reverse"),
+    item(65, "Group by Date", "", "group-date", false),
+    item(66, "Move Checked Items to Bottom Automatically", "", "checked-bottom", false),
+    SEP,
+    item(67, "New Folder", "cmd+shift+n", "new-folder", false),
+    item(68, "New Smart Folder...", "", "new-smart", false),
+    item(69, "Delete Smart Folder", "", "delete-smart", false),
+];
+
+/// Settings: text size, the style a new note starts in, math results and Quick Note.
+const SETTINGS_MENU: [Entry; 11] = [
+    sub("Text Size"),
+    child(80, "Small", "size-small"),
+    child(81, "Default", "size-medium"),
+    child(82, "Large", "size-large"),
+    sub("New Notes Start With"),
+    child(83, "Title", "start-title"),
+    child(84, "Heading", "start-heading"),
+    child(85, "Subheading", "start-subheading"),
+    SEP,
+    item(86, "Math Results", "", "math-results", false),
+    item(87, "Resume Last Quick Note", "", "resume-quick", false),
+];
+
+/// The menu items of `entries` for the current state of the notes.
+fn menu_items(entries: &[Entry], n: &notes::Notes) -> Vec<AppMenuItem> {
+    entries
+        .iter()
+        .map(|e| match e.cmd {
+            SEPARATOR => AppMenuItem::separator(),
+            SUBMENU => AppMenuItem::submenu(e.title),
+            cmd => {
+                let enabled = if cmd == "delete-smart" { matches!(n.view(), notes::View::Custom(_)) } else { !e.editor || n.can_format() };
+                let item = AppMenuItem::new(e.id, e.title).enabled(enabled).checked(n.command_checked(cmd)).depth(e.depth);
+                if e.key.is_empty() { item } else { item.key(e.key) }
+            }
+        })
+        .collect()
+}
+
+/// The command a menu id stands for.
+fn command_of(id: u32) -> Option<&'static str> {
+    FORMAT_MENU.iter().chain(INSERT_MENU.iter()).chain(ORGANIZE_MENU.iter()).chain(SETTINGS_MENU.iter()).find(|e| e.id == id && e.id != 0).map(|e| e.cmd)
+}
 /// Recent Notes entries are `MENU_RECENT + position`
 const MENU_RECENT: u32 = 100;
 /// how many notes the Recent Notes submenu lists
@@ -230,11 +350,6 @@ impl App for NotesApp {
         let Some(n) = &self.notes else { return Vec::new() };
         // "Note" is the app's own menu: File, Edit, View, Window and Help are the shell's, so none is repeated.
         // Undo and Redo are the shell's Edit commands (`commands` and `Input::Command`), not items here.
-        let mut format = Vec::new();
-        for (id, title, key, _) in FORMAT_ITEMS {
-            let item = AppMenuItem::new(id, title).enabled(n.can_format());
-            format.push(if key.is_empty() { item } else { item.key(key) });
-        }
         let mut recent = vec![AppMenuItem::submenu("Recent Notes")];
         let notes_recent = n.recent(RECENT_MENU_COUNT);
         if notes_recent.is_empty() {
@@ -258,7 +373,11 @@ impl App for NotesApp {
             .into_iter()
             .chain(recent)
             .collect(),
-        }, AppMenu { title: "Format".into(), items: format }]
+        },
+        AppMenu { title: "Format".into(), items: menu_items(&FORMAT_MENU, n) },
+        AppMenu { title: "Insert".into(), items: menu_items(&INSERT_MENU, n) },
+        AppMenu { title: "Organize".into(), items: menu_items(&ORGANIZE_MENU, n) },
+        AppMenu { title: "Settings".into(), items: menu_items(&SETTINGS_MENU, n) }]
     }
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
@@ -276,7 +395,8 @@ impl App for NotesApp {
         if self.quick.as_ref().map(|q| q.id()) != Some(item) || id != QUICK_NEW {
             return false;
         }
-        self.menu_action(ctx, MENU_NEW)
+        let now = bifrost_app::proto::sys::now_ms();
+        self.notes.as_mut().is_some_and(|n| n.quick_note(&ctx.ui, now).is_some())
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -312,9 +432,37 @@ impl App for NotesApp {
                 }
                 None => false,
             },
-            _ if FORMAT_ITEMS.iter().any(|f| f.0 == id) => {
-                let name = FORMAT_ITEMS.iter().find(|f| f.0 == id).map_or("", |f| f.3);
-                n.format_command(&ctx.ui, name, now)
+            _ if command_of(id).is_some() => {
+                let name = command_of(id).unwrap_or("");
+                match name {
+                    "copy-md" => {
+                        if let Some(md) = n.selected_markdown().or_else(|| n.editing().map(|note| note.text.clone())) {
+                            system::copy(ctx, &md);
+                        }
+                        false
+                    }
+                    "paste-md" => {
+                        let board = bifrost_app::pasteboard::NativePasteboard::general();
+                        if let Some(html) = board.data("public.html") {
+                            n.paste_markdown(&ctx.ui, "paste.html", &html, now)
+                        } else if let Some(rtf) = board.data("public.rtf") {
+                            n.paste_markdown(&ctx.ui, "paste.rtf", &rtf, now)
+                        } else {
+                            board.string().is_some_and(|text| n.paste_plain(&ctx.ui, &text, now))
+                        }
+                    }
+                    "paste-plain" => {
+                        let text = bifrost_app::pasteboard::NativePasteboard::general().string().unwrap_or_default();
+                        n.paste_plain(&ctx.ui, &text, now)
+                    }
+                    "copy-link" => {
+                        if let Some(link) = n.note_link() {
+                            bifrost_app::pasteboard::NativePasteboard::general().set_string(ctx, &link);
+                        }
+                        false
+                    }
+                    _ => n.command(&ctx.ui, name, now),
+                }
             }
             MENU_FIND => {
                 n.find(&ctx.ui, now);
@@ -330,6 +478,8 @@ impl App for NotesApp {
             Intent::new("create-note", "Create Note", "Creates a note with the given text and opens it.")
                 .param(Param::new("text", "Text", ParamType::String).optional()),
             Intent::new("search-notes", "Search Notes", "Lists the notes that contain the query.").param(Param::new("query", "Query", ParamType::String)),
+            Intent::new("open-note", "Open Note", "Opens the note with the given id.").param(Param::new("id", "Note", ParamType::String)),
+            Intent::new("open-folder", "Open Folder", "Shows the notes of a folder.").param(Param::new("name", "Folder", ParamType::String)),
         ]
     }
 
@@ -342,6 +492,22 @@ impl App for NotesApp {
                 let text = params.get("text").and_then(Json::as_str).unwrap_or("");
                 let note = n.import_note(&ctx.ui, text, now);
                 Ok(IntentResult::value(Json::Str(note)).with_dialog("Created a note"))
+            }
+            "open-note" => {
+                let id = intents::str_param(params, "id")?;
+                let (Some(ctx), Some(n)) = (ctx, self.notes.as_mut()) else { return Err(intents::failed("Notes is not running yet")) };
+                if !n.show_note(&ctx.ui, id, now) {
+                    return Err(intents::failed("There is no note with that id"));
+                }
+                Ok(IntentResult::value(Json::Str(id.into())).with_dialog("Opened the note"))
+            }
+            "open-folder" => {
+                let name = intents::str_param(params, "name")?;
+                let (Some(ctx), Some(n)) = (ctx, self.notes.as_mut()) else { return Err(intents::failed("Notes is not running yet")) };
+                if !n.open_folder(&ctx.ui, name, now) {
+                    return Err(intents::failed("There is no folder with that name"));
+                }
+                Ok(IntentResult::value(Json::Str(name.into())).with_dialog("Opened the folder"))
             }
             "search-notes" => {
                 let query = intents::str_param(params, "query")?;
@@ -397,6 +563,11 @@ impl App for NotesApp {
                 }
                 true
             }
+            // a `notes:` link opened from anywhere: the note or folder it names
+            Input::Open(path) => match notes::url::parse(&path) {
+                Some(link) => n.open_link(&ctx.ui, &link, bifrost_app::proto::sys::now_ms()),
+                None => false,
+            },
             // the shell's Edit > Undo and Redo: the editor's own undo and redo, as the Cmd+Z chords are
             Input::Command(command) => {
                 let mods = match command {

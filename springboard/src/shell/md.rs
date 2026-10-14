@@ -23,6 +23,12 @@ pub enum Block {
     Numbered(u32),
     /// `- [ ] ` (false) or `- [x] ` (true)
     Check(bool),
+    /// `– ` (an en dash and a space): the dashed list
+    Dashed,
+    /// a monostyled line, marked by a leading three-backtick fence and a space
+    Mono,
+    /// `> `: a block quote line
+    Quote,
 }
 
 impl Block {
@@ -56,6 +62,15 @@ pub fn classify(line: &str) -> LineInfo {
     if starts("# ") {
         return info(Block::Title, 2, 0);
     }
+    if starts("``` ") {
+        return LineInfo { block: Block::Mono, prefix: 4, indent: 0 };
+    }
+    if starts("> ") {
+        return LineInfo { block: Block::Quote, prefix: 2, indent: 0 };
+    }
+    if starts("\u{2013} ") {
+        return info(Block::Dashed, 2, indent);
+    }
     if starts("- [ ] ") {
         return info(Block::Check(false), 6, indent);
     }
@@ -80,6 +95,12 @@ pub enum Style {
     Bold,
     Italic,
     Code,
+    /// `~~text~~`
+    Strike,
+    /// `++text++`
+    Underline,
+    /// `==text==`
+    Highlight,
 }
 
 /// A run of chars (indices within the line) with one style. `marker` spans
@@ -111,6 +132,9 @@ pub fn spans(line: &str, start: usize) -> Vec<Span> {
             '`' => (1, Style::Code),
             '*' if chars.get(i + 1) == Some(&'*') => (2, Style::Bold),
             '*' if chars.get(i + 1).is_some_and(|c| *c != ' ' && *c != '*') => (1, Style::Italic),
+            '~' if chars.get(i + 1) == Some(&'~') => (2, Style::Strike),
+            '+' if chars.get(i + 1) == Some(&'+') => (2, Style::Underline),
+            '=' if chars.get(i + 1) == Some(&'=') => (2, Style::Highlight),
             _ => {
                 i += 1;
                 continue;
@@ -150,7 +174,10 @@ pub fn continue_list(line: &str) -> Continue {
     let empty = chars[info.prefix.min(chars.len())..].iter().all(|c| c.is_whitespace());
     let pad = " ".repeat(info.indent);
     match info.block {
-        Block::Bullet | Block::Check(_) | Block::Numbered(_) if empty => Continue::End(chars.len()),
+        Block::Bullet | Block::Check(_) | Block::Numbered(_) | Block::Dashed | Block::Quote | Block::Mono if empty => Continue::End(chars.len()),
+        Block::Dashed => Continue::Marker(format!("{pad}\u{2013} ")),
+        Block::Quote => Continue::Marker("> ".into()),
+        Block::Mono => Continue::Marker("``` ".into()),
         Block::Bullet => Continue::Marker(format!("{pad}{} ", chars[info.indent])),
         Block::Check(_) => Continue::Marker(format!("{pad}- [ ] ")),
         Block::Numbered(n) => Continue::Marker(format!("{pad}{}. ", n + 1)),
@@ -202,6 +229,9 @@ pub fn set_block(line: &str, block: Block) -> String {
         Block::Bullet => "- ".into(),
         Block::Numbered(_) => "1. ".into(),
         Block::Check(_) => "- [ ] ".into(),
+        Block::Dashed => "\u{2013} ".into(),
+        Block::Mono => "``` ".into(),
+        Block::Quote => "> ".into(),
     };
     format!("{prefix}{content}")
 }
@@ -296,6 +326,7 @@ pub fn to_plain(text: &str) -> String {
             match info.block {
                 Block::Check(done) => format!("{} {body}", if done { "[x]" } else { "[ ]" }),
                 Block::Bullet => format!("\u{2022} {body}"),
+                Block::Dashed => format!("\u{2013} {body}"),
                 Block::Numbered(n) => format!("{n}. {body}"),
                 _ => body,
             }
@@ -447,6 +478,41 @@ mod tests {
         assert_eq!(image_ref("![x](a/b.png)"), None);
         assert_eq!(image_ref("text ![x](a.png)"), None);
         assert_eq!(image_ref("![x]()"), None);
+    }
+
+    #[test]
+    fn dashed_mono_and_quote_lines_are_blocks() {
+        assert_eq!(classify("\u{2013} item"), LineInfo { block: Block::Dashed, prefix: 2, indent: 0 });
+        assert_eq!(classify("  \u{2013} nested"), LineInfo { block: Block::Dashed, prefix: 4, indent: 2 });
+        assert_eq!(classify("``` let x = 1;"), LineInfo { block: Block::Mono, prefix: 4, indent: 0 });
+        assert_eq!(classify("> said"), LineInfo { block: Block::Quote, prefix: 2, indent: 0 });
+        assert_eq!(classify(">no space").block, Block::Body);
+        assert_eq!(classify("```rust").block, Block::Body, "a bare fence is not a monostyled line");
+    }
+
+    #[test]
+    fn the_new_blocks_toggle_continue_and_export() {
+        assert_eq!(set_block("hello", Block::Dashed), "\u{2013} hello");
+        assert_eq!(set_block("\u{2013} hello", Block::Dashed), "hello");
+        assert_eq!(set_block("- hello", Block::Quote), "> hello");
+        assert_eq!(set_block("## hello", Block::Mono), "``` hello");
+        assert_eq!(continue_list("\u{2013} a"), Continue::Marker("\u{2013} ".into()));
+        assert_eq!(continue_list("> a"), Continue::Marker("> ".into()));
+        assert_eq!(continue_list("> "), Continue::End(2));
+        assert_eq!(continue_list("``` "), Continue::End(4));
+        assert_eq!(to_plain("\u{2013} a\n> b\n``` c"), "\u{2013} a\nb\nc");
+    }
+
+    #[test]
+    fn strike_underline_and_highlight_spans() {
+        let s = spans("a ~~b~~ ++c++ ==d==", 0);
+        let styles: Vec<Style> = s.iter().filter(|x| !x.marker && x.style != Style::Plain).map(|x| x.style).collect();
+        assert_eq!(styles, vec![Style::Strike, Style::Underline, Style::Highlight]);
+        let total: usize = s.iter().map(|x| x.range.len()).sum();
+        assert_eq!(total, "a ~~b~~ ++c++ ==d==".chars().count());
+        for line in ["~~open", "a == b", "1 ++ 2"] {
+            assert!(spans(line, 0).iter().all(|x| x.style == Style::Plain), "{line}");
+        }
     }
 
     #[test]

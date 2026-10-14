@@ -196,6 +196,90 @@ pub fn step_match(current: usize, count: usize, delta: i32) -> usize {
     (current as i64 + delta as i64).rem_euclid(count as i64) as usize
 }
 
+/// The editor's text size (Settings > General).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TextSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl TextSize {
+    pub const ALL: [TextSize; 3] = [TextSize::Small, TextSize::Medium, TextSize::Large];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TextSize::Small => "Small",
+            TextSize::Medium => "Default",
+            TextSize::Large => "Large",
+        }
+    }
+
+    /// The factor applied to the editor's body and title sizes.
+    pub fn factor(self) -> f32 {
+        match self {
+            TextSize::Small => 0.9,
+            TextSize::Medium => 1.0,
+            TextSize::Large => 1.2,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            TextSize::Small => "small",
+            TextSize::Medium => "medium",
+            TextSize::Large => "large",
+        }
+    }
+
+    fn parse(s: &str) -> Option<TextSize> {
+        Self::ALL.into_iter().find(|k| k.name() == s)
+    }
+}
+
+/// The style the first line of a new note starts in (Settings > General: new notes start with).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum StartStyle {
+    #[default]
+    Title,
+    Heading,
+    Subheading,
+}
+
+impl StartStyle {
+    pub const ALL: [StartStyle; 3] = [StartStyle::Title, StartStyle::Heading, StartStyle::Subheading];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            StartStyle::Title => "Title",
+            StartStyle::Heading => "Heading",
+            StartStyle::Subheading => "Subheading",
+        }
+    }
+
+    /// The text a new note starts with: the style's marker, or nothing for the title.
+    pub fn seed(self) -> &'static str {
+        match self {
+            StartStyle::Title => "",
+            StartStyle::Heading => "## ",
+            StartStyle::Subheading => "### ",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            StartStyle::Title => "title",
+            StartStyle::Heading => "heading",
+            StartStyle::Subheading => "subheading",
+        }
+    }
+
+    fn parse(s: &str) -> Option<StartStyle> {
+        Self::ALL.into_iter().find(|k| k.name() == s)
+    }
+}
+
 /// List settings persisted beside the notes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Prefs {
@@ -204,31 +288,158 @@ pub struct Prefs {
     pub checked_to_bottom: bool,
     /// flips the sort key's order (oldest first, Z to A)
     pub reverse: bool,
+    /// View > Group by Date: Today, Yesterday, Previous 7 Days, ... headers when the list is sorted by date
+    pub group_by_date: bool,
+    pub text_size: TextSize,
+    pub start_style: StartStyle,
+    /// Edit > Math Results: Enter after a line ending in `=` writes the result
+    pub math_results: bool,
+    /// Settings: New Quick Note reopens the last quick note instead of making another
+    pub resume_quick: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, reverse: false }
+        Prefs {
+            sort: SortKey::DateEdited,
+            checked_to_bottom: false,
+            reverse: false,
+            group_by_date: false,
+            text_size: TextSize::Medium,
+            start_style: StartStyle::Title,
+            math_results: true,
+            resume_quick: false,
+        }
     }
 }
 
 const PREFS_FILE: &str = ".springboard-notes-prefs";
 
 pub fn load_prefs(dir: &Path) -> Prefs {
+    parse_prefs(&std::fs::read_to_string(dir.join(PREFS_FILE)).unwrap_or_default())
+}
+
+/// The settings in the prefs file's `key=value` lines; unknown keys and bad values keep the default.
+pub fn parse_prefs(text: &str) -> Prefs {
     let mut p = Prefs::default();
-    for line in std::fs::read_to_string(dir.join(PREFS_FILE)).unwrap_or_default().lines() {
+    for line in text.lines() {
         match line.split_once('=') {
             Some(("sort", v)) => p.sort = SortKey::parse(v.trim()).unwrap_or_default(),
             Some(("checked_to_bottom", v)) => p.checked_to_bottom = v.trim() == "1",
             Some(("reverse", v)) => p.reverse = v.trim() == "1",
+            Some(("group_by_date", v)) => p.group_by_date = v.trim() == "1",
+            Some(("text_size", v)) => p.text_size = TextSize::parse(v.trim()).unwrap_or_default(),
+            Some(("start_style", v)) => p.start_style = StartStyle::parse(v.trim()).unwrap_or_default(),
+            Some(("math_results", v)) => p.math_results = v.trim() == "1",
+            Some(("resume_quick", v)) => p.resume_quick = v.trim() == "1",
             _ => {}
         }
     }
     p
 }
 
+pub fn format_prefs(p: Prefs) -> String {
+    format!(
+        "sort={}\nchecked_to_bottom={}\nreverse={}\ngroup_by_date={}\ntext_size={}\nstart_style={}\nmath_results={}\nresume_quick={}\n",
+        p.sort.name(),
+        p.checked_to_bottom as u8,
+        p.reverse as u8,
+        p.group_by_date as u8,
+        p.text_size.name(),
+        p.start_style.name(),
+        p.math_results as u8,
+        p.resume_quick as u8
+    )
+}
+
 pub fn save_prefs(dir: &Path, p: Prefs) -> io::Result<()> {
-    springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), format!("sort={}\nchecked_to_bottom={}\nreverse={}\n", p.sort.name(), p.checked_to_bottom as u8, p.reverse as u8))
+    springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), format_prefs(p))
+}
+
+const QUICK_FILE: &str = ".springboard-notes-quick";
+
+/// The id of the last Quick Note, if one was made.
+pub fn load_quick(dir: &Path) -> Option<String> {
+    let id = std::fs::read_to_string(dir.join(QUICK_FILE)).ok()?.trim().to_string();
+    (!id.is_empty()).then_some(id)
+}
+
+pub fn save_quick(dir: &Path, id: &str) -> io::Result<()> {
+    springboard::shell::fsutil::write_atomic(&dir.join(QUICK_FILE), id)
+}
+
+/// Whether a note holds nothing worth keeping: only whitespace, or just the heading marker a new note was seeded with.
+pub fn is_blank(text: &str) -> bool {
+    matches!(text.trim(), "" | "#" | "##" | "###")
+}
+
+/// The `#tags` in a note, lower-cased, sorted, without duplicates. A tag is `#` after the start of a line or a
+/// space, then letters, digits, `_` or `-`, with at least one letter; a heading marker (`# `) and monostyled lines
+/// are not tags.
+pub fn tags(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for line in text.lines() {
+        if line.starts_with("``` ") {
+            continue;
+        }
+        let chars: Vec<char> = line.chars().collect();
+        for (i, &c) in chars.iter().enumerate() {
+            if c != '#' || (i > 0 && !chars[i - 1].is_whitespace()) {
+                continue;
+            }
+            let name: String = chars[i + 1..].iter().take_while(|c| c.is_alphanumeric() || **c == '_' || **c == '-').collect();
+            if name.chars().any(char::is_alphabetic) {
+                out.push(name.to_lowercase());
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Every tag used by `notes` with the number of notes that use it, sorted by name.
+pub fn tag_counts<'a>(notes: impl Iterator<Item = &'a Note>) -> Vec<(String, usize)> {
+    let mut counts: std::collections::BTreeMap<String, usize> = Default::default();
+    for n in notes {
+        for t in tags(&n.text) {
+            *counts.entry(t).or_default() += 1;
+        }
+    }
+    counts.into_iter().collect()
+}
+
+/// The last-change time of a note, for [`date_sections`].
+pub fn modified_of(note: &Note) -> i64 {
+    note.modified
+}
+
+/// The list section a note edited at `modified` falls in when grouped by date: Today, Yesterday, Previous 7 Days,
+/// Previous 30 Days, then the month name within the current year and the year before that.
+pub fn date_group(modified: i64, now: i64, offset: i32) -> String {
+    let (m, n) = (civil(modified, offset), civil(now, offset));
+    let days_ago = (now + offset as i64).div_euclid(86_400) - (modified + offset as i64).div_euclid(86_400);
+    match days_ago {
+        ..=0 => "Today".to_string(),
+        1 => "Yesterday".to_string(),
+        2..=7 => "Previous 7 Days".to_string(),
+        8..=30 => "Previous 30 Days".to_string(),
+        _ if m.year == n.year => MONTHS[m.month as usize - 1].to_string(),
+        _ => m.year.to_string(),
+    }
+}
+
+/// `(first row, label)` of each section of `notes` (already in list order) when grouped by date. Consecutive notes
+/// with the same label share a header.
+pub fn date_sections(notes: &[&Note], now: i64, offset: i32, stamp: fn(&Note) -> i64) -> Vec<(usize, String)> {
+    let mut out: Vec<(usize, String)> = vec![];
+    for (i, n) in notes.iter().enumerate() {
+        let label = date_group(stamp(n), now, offset);
+        if out.last().map(|(_, l)| l) != Some(&label) {
+            out.push((i, label));
+        }
+    }
+    out
 }
 
 /// Writes the note as `<title>.md` under `<dir>/.export` for sharing and
@@ -653,5 +864,67 @@ mod tests {
         assert_eq!(std::fs::read_to_string(marker).unwrap(), "future format");
         assert_eq!(load(&dir)[0].text, n.text);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prefs_round_trip_and_unknown_values_keep_defaults() {
+        let p = Prefs { sort: SortKey::Title, checked_to_bottom: true, reverse: true, group_by_date: true, text_size: TextSize::Large, start_style: StartStyle::Heading, math_results: false, resume_quick: true };
+        assert_eq!(parse_prefs(&format_prefs(p)), p);
+        assert_eq!(parse_prefs("text_size=huge\nstart_style=\nnonsense"), Prefs::default());
+        assert_eq!(parse_prefs(""), Prefs::default());
+    }
+
+    #[test]
+    fn a_seed_marker_alone_is_a_blank_note() {
+        for text in ["", "  \n", "## ", "# ", "###"] {
+            assert!(is_blank(text), "{text:?}");
+        }
+        assert!(!is_blank("## Plans"));
+        assert!(!is_blank("#tag"));
+    }
+
+    #[test]
+    fn start_style_seeds_a_new_note() {
+        assert_eq!(StartStyle::Title.seed(), "");
+        assert_eq!(StartStyle::Heading.seed(), "## ");
+        assert_eq!(StartStyle::Subheading.seed(), "### ");
+        assert!(TextSize::Large.factor() > TextSize::Medium.factor() && TextSize::Medium.factor() > TextSize::Small.factor());
+    }
+
+    #[test]
+    fn tags_are_hash_words_outside_headings_and_code() {
+        assert_eq!(tags("Plan #Work and #home-1\n# Title\n#2024 #x_y"), vec!["home-1", "work", "x_y"]);
+        assert_eq!(tags("no tag\nissue#12 mid#word"), Vec::<String>::new());
+        assert_eq!(tags("``` #notatag\n#real"), vec!["real"]);
+        assert_eq!(tags("#a #A #a"), vec!["a"], "case is folded and duplicates dropped");
+    }
+
+    #[test]
+    fn tag_counts_count_notes_not_uses() {
+        let a = note("1", "#x #x", 0);
+        let b = note("2", "#x #y", 0);
+        assert_eq!(tag_counts([&a, &b].into_iter()), vec![("x".to_string(), 2), ("y".to_string(), 1)]);
+    }
+
+    #[test]
+    fn date_groups_follow_the_calendar() {
+        let day = 86_400;
+        let now = 1_790_000_000; // 21 September 2026
+        assert_eq!(date_group(now - 60, now, 0), "Today");
+        assert_eq!(date_group(now - day, now, 0), "Yesterday");
+        assert_eq!(date_group(now - 5 * day, now, 0), "Previous 7 Days");
+        assert_eq!(date_group(now - 20 * day, now, 0), "Previous 30 Days");
+        assert_eq!(date_group(now - 60 * day, now, 0), "July");
+        assert_eq!(date_group(now - 500 * day, now, 0), "2025");
+    }
+
+    #[test]
+    fn date_sections_open_a_header_when_the_label_changes() {
+        let day = 86_400;
+        let now = 1_790_000_000;
+        let (a, b, c, d) = (note("a", "", now), note("b", "", now - 10), note("c", "", now - day), note("d", "", now - 20 * day));
+        let sections = date_sections(&[&a, &b, &c, &d], now, 0, modified_of);
+        assert_eq!(sections, vec![(0, "Today".to_string()), (2, "Yesterday".to_string()), (3, "Previous 30 Days".to_string())]);
+        assert!(date_sections(&[], now, 0, modified_of).is_empty());
     }
 }

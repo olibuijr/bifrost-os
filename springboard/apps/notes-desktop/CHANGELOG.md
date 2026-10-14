@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.17.0 — 2026-10-13
+
+- Format menu: Title, Heading, Subheading, Body, Monostyled and Block Quote; Bulleted, Dashed, Numbered and Checklist; Bold, Italic, Underline, Strikethrough, Highlight and Monospaced (markers `**`, `*`, `++`, `~~`, `==`, backticks). Cmd+U underlines and Shift+Cmd+X strikes through. The editor draws the strike, underline and highlight, the quote bar and the monostyled colour, and the RTF copy carries them.
+- Insert menu: Add Link (Cmd+K) asks for an address and wraps the selection as a Markdown link; Calculate Math Results writes the result after every line that ends in `=`, and Enter at the end of such a line does the same while Settings > Math Results is on (notes/math.rs); Copy as Markdown, Paste as Markdown (HTML or RTF on the pasteboard) and Paste and Match Style; Copy Link to Note.
+- `#tags` in the text are listed with their note counts in the sidebar and the list menu, and a tag filters the list.
+- File > New Smart Folder: a one-line definition such as `Work | tag:work edited:7 any` (tag, edited, created, folder, attachments, checklist, pinned; all-of or any-of) makes a smart folder of your own, saved beside the notes and listed in the sidebar (notes/smart.rs).
+- Organize menu: sort key and direction, Group by Date (Today, Yesterday, Previous 7 Days, Previous 30 Days, then months and years), Move Checked Items to Bottom, New Folder, New Smart Folder.
+- Settings menu: text size (Small, Default, Large), the style a new note starts in, Math Results, and Resume Last Quick Note for the menu bar extra.
+- `notes://note/<id>` and `notes://folder/<name>` links open a note or a folder; the Open Note and Open Folder intents do the same.
+- Not in this version: attachments other than pictures and the attachment browser, locked notes, collapsible sections, Gallery view, a separate note window, check-spelling-while-typing, Speech, a print accessory, and a dark note background.
+
 ## 1.16.0 — 2026-10-13
 
 - Import to Notes also reads HTML and RTF files, converting headings, emphasis, lists and paragraphs to Markdown (notes/import.rs); a file with no text is skipped and logged.
