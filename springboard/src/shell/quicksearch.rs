@@ -560,7 +560,7 @@ impl QuickSearch {
             return;
         }
         self.mac = mac;
-        self.field = if mac { TextField::new(ui, "Search Search", MAC_LARGE_TITLE_PT, false, QUERY_MAX) } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
+        self.field = if mac { TextField::new(ui, "Spotlight Search", MAC_LARGE_TITLE_PT, false, QUERY_MAX) } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
         self.search_imgs.clear();
     }
 
@@ -1484,7 +1484,12 @@ impl Shell {
 
     /// Cmd/Meta+Space: opens Search fully from the home screen, and on the desktop over any app (Golden Gate).
     pub(super) fn open_quicksearch_hw(&mut self, t: f64) {
-        if (self.screen != Screen::Home && !self.desk_active()) || self.quicksearch.active() {
+        if self.quicksearch.active() {
+            self.quicksearch.hide();
+            self.dirty = true;
+            return;
+        }
+        if self.screen != Screen::Home && !self.desk_active() {
             return;
         }
         let range = self.ui.pt(REVEAL_PT);
