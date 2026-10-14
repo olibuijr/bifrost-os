@@ -114,6 +114,22 @@ pub fn annotation_summary(marks: &[Mark]) -> String {
     }
 }
 
+/// One row per mark, in document order: its kind as the label, and its page (and text, for a note or text box) as the
+/// value, so the Inspector lists the markup itself and not only the counts.
+pub fn annotation_rows(marks: &[Mark]) -> Vec<(String, String)> {
+    marks
+        .iter()
+        .map(|m| {
+            let value = if m.text.trim().is_empty() {
+                format!("Page {}", m.page + 1)
+            } else {
+                format!("Page {}: {}", m.page + 1, m.text.trim())
+            };
+            (m.kind.label().to_string(), value)
+        })
+        .collect()
+}
+
 /// The live part of the Inspector's rows.
 pub struct Shown<'a> {
     pub pages: usize,
@@ -152,6 +168,7 @@ pub fn rows(facts: &Facts, shown: &Shown) -> Vec<(String, String)> {
         out.push(("Dimensions".into(), format!("{w} x {h} pixels")));
     }
     out.push(("Annotations".into(), annotation_summary(shown.marks)));
+    out.extend(annotation_rows(shown.marks));
     if shown.bookmarks > 0 {
         out.push(("Bookmarks".into(), shown.bookmarks.to_string()));
     }
@@ -192,6 +209,28 @@ mod tests {
         assert_eq!(annotation_summary(&[]), "None");
         let marks = [mark(MarkKind::Highlight), mark(MarkKind::Note), mark(MarkKind::Highlight), mark(MarkKind::Strike)];
         assert_eq!(annotation_summary(&marks), "2 highlights, 1 note, 1 strike-through");
+    }
+
+    #[test]
+    fn each_mark_is_listed_with_its_page_and_text() {
+        let mut note = mark(MarkKind::Note);
+        note.page = 2;
+        note.text = "  check the total  ".into();
+        let mut highlight = mark(MarkKind::Highlight);
+        highlight.page = 0;
+        let rows = annotation_rows(&[highlight, note]);
+        assert_eq!(rows[0], ("Highlight".to_string(), "Page 1".to_string()));
+        assert_eq!(rows[1], ("Note".to_string(), "Page 3: check the total".to_string()));
+        assert!(annotation_rows(&[]).is_empty());
+    }
+
+    #[test]
+    fn the_inspector_rows_hold_the_markup_list_after_the_count() {
+        let marks = [mark(MarkKind::Underline)];
+        let shown = Shown { pages: 1, is_pdf: true, size: None, marks: &marks, bookmarks: 0, info: &[], encrypted: false };
+        let rows = super::rows(&Facts { name: "c.pdf".into(), kind: "PDF document", ..Facts::default() }, &shown);
+        let at = rows.iter().position(|(l, _)| l == "Annotations").unwrap();
+        assert_eq!(rows[at + 1], ("Underline".to_string(), "Page 1".to_string()));
     }
 
     #[test]

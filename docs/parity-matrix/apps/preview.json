@@ -114,8 +114,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Copy, Select All; Tools > Text Selection",
    "status": "partial",
-   "bifrost": "springboard/ui/src/pdfselect.rs",
-   "note": "Audit 2026-10-13: kit model ui/src/pdfselect.rs (host tests) selects text in a PDF; Preview does not use it yet.",
+   "bifrost": "springboard/apps/preview-desktop/src/main.rs:1002 (Edit > Copy, Select All)",
+   "note": "Edit > Copy (Cmd+C) puts the page's text on the clipboard, or only the selected lines, and Edit > Select All (Cmd+A) selects the page. Copy works by line: the text layer has no word positions, so word selection is not built. Not tested on Midget.",
    "wire": "Add a text-selection tool over pdfselect and Edit > Copy to the clipboard; Tool::Text in tool_items."
   },
   {
@@ -123,8 +123,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Rectangular Selection, Crop",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (crop, selection_px); springboard/apps/preview-desktop/src/main.rs:2050 (Tools menu)",
+   "note": "Tools > Select drags out a rectangle (Tool::Select) and Tools > Crop (Cmd+K) keeps the selection of a picture through picture_tools::crop; the model is tested. A PDF crop box is not written yet. Not tested on Midget.",
    "wire": "Add Tool::Select drawing a Norm rect in canvas.rs; Tools > Crop calls picture_tools::crop (picture) or sets the PDF crop box on save."
   },
   {
@@ -132,8 +132,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Find, Find Next/Previous; PVSearchPanel.nib, PVSidebarSearchResults.nib",
    "status": "partial",
-   "bifrost": "springboard/ui/src/pdfselect.rs, springboard/ui/src/textfind.rs",
-   "note": "Audit 2026-10-13: kit models ui/src/pdfselect.rs and textfind.rs (host tests) find text; Preview does not use them yet.",
+   "bifrost": "springboard/apps/preview-desktop/src/find.rs; springboard/apps/preview-desktop/src/main.rs:981 (Edit > Find)",
+   "note": "Edit > Find (Cmd+F) searches the PDF text on the worker (find.rs find_job) and lists the hits in the Search sidebar; Find Next and Find Previous step through them. The kit models in ui/src/pdfselect.rs and textfind.rs are not used. Not tested on Midget.",
    "wire": "Add a toolbar search field, run pdfselect find in the pdfjob.rs worker, list hits in a Side::Search sidebar."
   },
   {
@@ -150,8 +150,8 @@
    "area": "menu",
    "apple": "MainMenu.nib View > Zoom to Selection",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (zoom_to_selection); springboard/apps/preview-desktop/src/main.rs:973 (View > Zoom to Selection)",
+   "note": "View > Zoom to Selection fits the selection through picture_tools::zoom_to_selection, which is tested, and centres the view on it. Not tested on Midget.",
    "wire": "After the selection tool exists, call picture_tools::zoom_to_selection and pan to the returned centre; View menu."
   },
   {
@@ -168,8 +168,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Flip Horizontal/Vertical",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (flipped, Flip); springboard/apps/preview-desktop/src/main.rs:2050 (Tools menu)",
+   "note": "Tools > Flip Horizontal and Flip Vertical mirror a picture and its markup through picture_tools::flipped; the flip is one undo step and is tested in picture_tools. Not tested on Midget.",
    "wire": "Add flip flags beside turns in model.rs and apply picture_tools::flipped in canvas::picture_for and export::finish; Tools menu items."
   },
   {
@@ -195,8 +195,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Remove Background",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (remove_background); springboard/apps/preview-desktop/src/main.rs:2050 (Tools menu)",
+   "note": "Tools > Remove Background clears the background that reaches a picture's edge through picture_tools::remove_background, and it can be undone. The model is tested; it runs on the window, not a worker. Not tested on Midget.",
    "wire": "Run picture_tools::remove_background on the document worker from Tools > Remove Background."
   },
   {
@@ -204,8 +204,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Mask",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (instant_alpha); springboard/apps/preview-desktop/src/main.rs:2050 (Tools menu)",
+   "note": "The Alpha tool in Tools clears the connected region of one colour at a click through picture_tools::instant_alpha, and PNG export keeps the transparency. The model is tested. Not tested on Midget.",
    "wire": "Add a mask tool in Tools that calls picture_tools::instant_alpha at the clicked pixel with a tolerance slider; save as PNG."
   },
   {
@@ -231,8 +231,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Annotate > Text",
    "status": "partial",
-   "bifrost": "springboard/ui/src/pdfannot.rs",
-   "note": "Audit 2026-10-13: kit model ui/src/pdfannot.rs (host tests) describes annotations; Preview does not use it yet.",
+   "bifrost": "springboard/apps/preview-desktop/src/pdfmarks.rs:181 (FreeText); springboard/apps/preview-desktop/src/main.rs:2050 (Tools > Text Box)",
+   "note": "Tools > Text Box (Tool::Text) places a text box at a click and takes the typed text; it is saved into the PDF as a FreeText annotation in Helvetica. Text boxes are not burned into exported pictures yet. Not tested on Midget.",
    "wire": "Add a Text mark kind with inline editing; write it as a free-text annotation via pdfannot in pdfmarks.rs."
   },
   {
@@ -240,8 +240,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Annotate > Signature",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/main.rs:445",
-   "note": "Tools > Save Signature keeps the page's drawn strokes in a library of nine (signature.rs, data folder); Tools > Insert Signature places one centred at 30% of the page width, as one undo step. No signature picker panel yet",
+   "bifrost": "springboard/apps/preview-desktop/src/signature_panel.rs; springboard/apps/preview-desktop/src/main.rs:445",
+   "note": "Tools > Save Signature keeps the page's drawn strokes in a library of nine (signature.rs, data folder). Tools > Show Signatures opens a picker on the right (signature_panel.rs) where a click places one as one undo step; Insert Signature in the Tools menu places one at 30% of the page width. Not tested on Midget.",
    "wire": "Store captured signatures in data_dir and offer a signature picker in the Sign tool"
   },
   {
@@ -249,8 +249,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Redact",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (redact); springboard/apps/preview-desktop/src/main.rs:2050 (Tools menu)",
+   "note": "The Redact tool paints a black box over a picture through picture_tools::redact; the box is burned into saved and exported pictures. It is offered for pictures only: the text under a box in a PDF would stay. Not tested on Midget.",
    "wire": "Add a Redact tool: picture_tools::redact for pictures, and a page-content removal pass in pdfmarks.rs for PDFs."
   },
   {
@@ -258,8 +258,8 @@
    "area": "panel",
    "apple": "MainMenu.nib Tools > Show Inspector; PVInspector*.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/inspector.rs:123",
-   "note": "Tools > Show Inspector (Cmd+I): name, kind, size, pages or pixels, annotation counts, bookmarks and JPEG EXIF rows. No keywords, no encryption info; built on parity/team-d-preview; not yet verified on Midget",
+   "bifrost": "springboard/apps/preview-desktop/src/inspector.rs:119 (annotation_rows); springboard/apps/preview-desktop/src/inspector.rs:159 (rows)",
+   "note": "Tools > Show Inspector (Cmd+I) lists name, kind, size, pages or pixels, a count of the markup and one row per mark with its page and note text (inspector::annotation_rows, tested), bookmarks, a PDF's title, author, subject, keywords and password status, and JPEG EXIF rows. Not yet verified on Midget",
    "wire": "Add an annotation list to the Inspector"
   },
   {
@@ -267,8 +267,8 @@
    "area": "menu",
    "apple": "MainMenu.nib Tools > Show Magnifier",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (magnifier_source); springboard/apps/preview-desktop/src/main.rs:950 (Tools > Show Magnifier)",
+   "note": "Tools > Show Magnifier (Hide Magnifier when on) draws a lens at the pointer over the picture, with the lens source from picture_tools::magnifier_source, which is tested. Not tested on Midget.",
    "wire": "Draw a lens at the pointer from picture_tools::magnifier_source when toggled; Tools menu."
   },
   {
@@ -312,8 +312,8 @@
    "area": "view",
    "apple": "MainMenu.nib View > Contact Sheet",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (contact_sheet); springboard/apps/preview-desktop/src/main.rs:965 (View > Contact Sheet)",
+   "note": "View > Contact Sheet (Cmd+2) shows every page in a grid laid out by picture_tools::contact_sheet, which is tested; a short press on a page opens it. Not tested on Midget.",
    "wire": "Add a grid mode in canvas.rs using picture_tools::contact_sheet over the page sizes; click opens the page."
   },
   {
@@ -339,8 +339,8 @@
    "area": "view",
    "apple": "MainMenu.nib View > Slideshow",
    "status": "partial",
-   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/preview-desktop/src/picture_tools.rs (slideshow_next, slideshow_prev); springboard/apps/preview-desktop/src/main.rs:969 (View > Slideshow)",
+   "note": "View > Slideshow (Shift+Cmd+F) shows the pages one after another without the toolbar and sidebar; the stepping is picture_tools::slideshow_next and slideshow_prev, which are tested. Not tested on Midget.",
    "wire": "Full-screen page cycling with arrow keys using slideshow_next/prev; View menu."
   },
   {
