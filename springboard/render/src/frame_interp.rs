@@ -86,6 +86,52 @@ pub fn interpolate(
     Ok(out)
 }
 
+/// The stream side of the interpolator: it holds the last two frames a presenter rendered, so each new frame gives
+/// the pair that the frames in between are built from. Scene cuts are the caller's to report with [`reset`].
+///
+/// [`reset`]: FrameInterpolator::reset
+#[derive(Debug)]
+pub struct FrameInterpolator {
+    width: usize,
+    height: usize,
+    previous: Option<Vec<[f32; 3]>>,
+    current: Option<Vec<[f32; 3]>>,
+}
+
+impl FrameInterpolator {
+    /// An interpolator for frames of `width` by `height` pixels. A zero dimension is refused.
+    pub fn new(width: usize, height: usize) -> Result<Self, FrameError> {
+        if width == 0 || height == 0 {
+            return Err(FrameError::ZeroSize);
+        }
+        Ok(FrameInterpolator { width, height, previous: None, current: None })
+    }
+
+    /// Takes the next rendered frame. The frame that was current becomes the previous one.
+    pub fn push(&mut self, frame: Vec<[f32; 3]>) -> Result<(), FrameError> {
+        if frame.len() != self.width * self.height {
+            return Err(FrameError::LengthMismatch);
+        }
+        self.previous = self.current.replace(frame);
+        Ok(())
+    }
+
+    /// The frame at time `t` between the previous frame (t = 0) and the current one (t = 1). `None` until two frames
+    /// have been pushed since the last reset.
+    pub fn between(&self, t: f32, motion: Option<&[[f32; 2]]>) -> Result<Option<Vec<[f32; 3]>>, FrameError> {
+        match (&self.previous, &self.current) {
+            (Some(a), Some(b)) => interpolate(a, b, motion, self.width, self.height, t).map(Some),
+            _ => Ok(None),
+        }
+    }
+
+    /// Forgets both held frames, as at a scene cut: the next frame starts a new pair.
+    pub fn reset(&mut self) {
+        self.previous = None;
+        self.current = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

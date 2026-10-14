@@ -3,9 +3,10 @@
 //! counts a flash for every reversal after the first. When more than `MAX_FLASHES_PER_SECOND` flashes fall in any
 //! one-second window, the sequence is flagged and, with dimming on, the output luminance is scaled down by
 //! `DIM_FACTOR`. This is the SDK side of the flashing-lights setting (the enabled flag) and of the processor that
-//! reads a framebuffer. Gaps: no framebuffer capture (the caller supplies the samples), no change notification, and
-//! the flash count is a simplified reversal count, not the full pair-of-transitions rule of the photosensitivity
-//! guidelines.
+//! reads a framebuffer. [`frame_luminance`] turns one frame of pixels into one luminance sample, and
+//! [`FlashingLights::analyse_change`] reports when the flagged state changes. Gaps: the framebuffer itself is read by
+//! the caller (this module holds no capture), and the flash count is a simplified reversal count, not the full
+//! pair-of-transitions rule of the photosensitivity guidelines.
 
 /// The smallest luminance swing (0.0 to 1.0 scale) that counts as one change of state.
 pub const SWING: f64 = 0.10;
@@ -101,6 +102,33 @@ pub fn exceeds_limit(flash_times: &[u64]) -> bool {
     false
 }
 
+/// The relative luminance (0.0 black to 1.0 white, from the sRGB channels as the WCAG 2.x definition gives it) of one
+/// `0xAARRGGBB` pixel. The alpha byte is ignored.
+pub fn pixel_luminance(pixel: u32) -> f64 {
+    let linear = |c: u32| {
+        let c = f64::from(c) / 255.0;
+        if c <= 0.03928 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let r = linear((pixel >> 16) & 0xFF);
+    let g = linear((pixel >> 8) & 0xFF);
+    let b = linear(pixel & 0xFF);
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/// The mean relative luminance of a frame of `0xAARRGGBB` pixels, the value one [`Sample`] carries. `None` for an empty
+/// frame, because an empty frame has no luminance to report.
+pub fn frame_luminance(pixels: &[u32]) -> Option<f64> {
+    if pixels.is_empty() {
+        return None;
+    }
+    let sum: f64 = pixels.iter().map(|&p| pixel_luminance(p)).sum();
+    Some(sum / pixels.len() as f64)
+}
+
 /// The flashing light setting and the state of the last analysed sequence.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FlashingLights {
@@ -128,6 +156,14 @@ impl FlashingLights {
     pub fn analyse(&mut self, samples: &[Sample]) -> bool {
         self.flagged = exceeds_limit(&flashes(samples));
         self.flagged
+    }
+
+    /// Analyses a sample series like [`FlashingLights::analyse`] and reports the change: `Some(flag)` when the flagged
+    /// state differs from the previous analysis, `None` when it stayed the same.
+    pub fn analyse_change(&mut self, samples: &[Sample]) -> Option<bool> {
+        let before = self.flagged;
+        let now = self.analyse(samples);
+        (now != before).then_some(now)
     }
 
     /// Whether the last analysed sequence was flagged.

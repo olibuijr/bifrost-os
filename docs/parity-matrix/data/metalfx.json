@@ -38,9 +38,9 @@
     {
       "feature": "Frame interpolation (MTLFXFrameInterpolator)",
       "apple": "MTLFXFrameInterpolator, MTLFXFrameInterpolatorDescriptor, MTL4FXFrameInterpolator (macOS 26)",
-      "bifrost": "springboard/render/src/frame_interp.rs",
+      "bifrost": "springboard/render/src/frame_interp.rs (interpolate, FrameInterpolator)",
       "status": "partial",
-      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame generation anywhere in the shell or the GPU presenter."
+      "note": "The CPU interpolator builds the frame between two rendered frames, with or without a motion field, and FrameInterpolator holds the frame stream with scene-cut resets; all of it is tested headless in springboard/render/tests/parity_sdk-complete-40.rs. Gap: no shell or GPU presenter calls it, so the frame rate is not raised on Midget."
     },
     {
       "feature": "Metal command-buffer encoding of scaler passes",

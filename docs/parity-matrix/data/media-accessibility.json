@@ -45,9 +45,9 @@
     {
       "feature": "Flashing lights detection and dimming",
       "apple": "MADimFlashingLightsEnabled, kMADimFlashingLightsChangedNotification, MAFlashingLightsProcessor",
-      "bifrost": "springboard/ui/src/flashing_lights.rs; wired: springboard/ui/src/flashing_lights.rs (model); springboard/src/shell/accessibility/mod.rs (setting); springboard/src/shell/services/accessibility_display.rs (service); springboard/sdk/src/accessibility_display.rs (SDK)",
+      "bifrost": "springboard/ui/src/flashing_lights.rs (pixel_luminance, frame_luminance, FlashingLights::analyse_change); wired: springboard/src/shell/accessibility/mod.rs (setting); springboard/src/shell/services/accessibility_display.rs (service); springboard/sdk/src/accessibility_display.rs (SDK)",
       "status": "partial",
-      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No flashing-light code in springboard/src or springboard/render/src. The 'flash' hits are the screenshot shutter (springboard/src/shell/screenshot.rs) and are unrelated. The magnifier (springboard/src/shell/magnifier.rs) has no photosensitivity filter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "The model reads a frame of pixels as one luminance sample, finds flashes, flags a sequence over the limit, dims only while the setting is on, and reports when the flag changes; all of it is tested headless in springboard/ui/tests/parity_sdk-complete-40.rs. Gap: no shell processor samples the framebuffer yet, and the flash count is a reversal count rather than the full pair-of-transitions rule, so the lab machine must still check it on Midget."
     },
     {
       "feature": "Music Haptics",

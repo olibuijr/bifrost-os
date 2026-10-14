@@ -52,9 +52,9 @@
   {
    "feature": "OpenType layout (kerning, ligatures, contextual forms)",
    "apple": "CTTypesetter shaping via GSUB and GPOS, kCTFontOpenTypeFeatureTag",
-   "bifrost": "springboard/render/src/kern.rs",
+   "bifrost": "springboard/render/src/shape_ot.rs (OtLayout, Features); springboard/render/src/kern.rs (Kern); springboard/render/src/font.rs (shaping of text runs)",
    "status": "partial",
-   "note": "Wave 3 (w3-core-text, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No GPOS and no kern table reader. Plain text is laid out by summing advances, so pairs are not kerned. No OpenType feature selection."
+   "note": "GSUB ligatures and contextual substitutions, GPOS pair and class kerning, the legacy kern table as a fallback, and user feature settings are read and applied to text runs in font.rs, tested headless in shape_ot and kern unit tests and springboard/render/tests/parity_sdk-complete-40.rs. Gap: no lab check of these on real fonts on Midget, and the shaping is not exposed as a typesetter API that apps can call."
   },
   {
    "feature": "Attributed string styling",

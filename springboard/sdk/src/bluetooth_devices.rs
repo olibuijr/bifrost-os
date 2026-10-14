@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use bifrost_core::bt_address::{BdAddr, ClassOfDevice, MajorClass};
+use bifrost_core::bt_address::{BdAddr, ClassOfDevice, DeviceKind, MajorClass};
 
 /// One remote device. The address is its identity.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,6 +55,25 @@ impl RemoteDevice {
     /// The major device class, when the class of device is known.
     pub fn major_class(&self) -> Option<MajorClass> {
         self.class.map(|c| c.major())
+    }
+
+    /// What kind of device this is, in the words the Bluetooth page uses ("Headset", "Keyboard"). A device whose class
+    /// is unknown reads "Unknown"; a class that names no kind reads "Device".
+    pub fn type_label(&self) -> &'static str {
+        match self.class.map(|c| c.kind()) {
+            None => "Unknown",
+            Some(DeviceKind::Computer) => "Computer",
+            Some(DeviceKind::Phone) => "Phone",
+            Some(DeviceKind::Headset) => "Headset",
+            Some(DeviceKind::HandsFree) => "Hands-Free",
+            Some(DeviceKind::Microphone) => "Microphone",
+            Some(DeviceKind::Loudspeaker) => "Speaker",
+            Some(DeviceKind::Headphones) => "Headphones",
+            Some(DeviceKind::Keyboard) => "Keyboard",
+            Some(DeviceKind::Pointer) => "Pointing Device",
+            Some(DeviceKind::KeyboardAndPointer) => "Keyboard and Pointing Device",
+            Some(DeviceKind::Other) => "Device",
+        }
     }
 }
 

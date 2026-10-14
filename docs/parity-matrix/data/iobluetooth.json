@@ -24,9 +24,9 @@
     {
       "feature": "Remote device model (name, class, paired, connected)",
       "apple": "IOBluetoothDevice, IOBluetoothDeviceRef, IOBluetoothObject",
-      "bifrost": "springboard/sdk/src/bluetooth_devices.rs; wired: springboard/src/bare/bluetooth.rs (Device.class, type_label); springboard/src/shell/pages.rs (BluetoothDetail Type row)",
+      "bifrost": "springboard/sdk/src/bluetooth_devices.rs (RemoteDevice::type_label); wired: springboard/src/bare/bluetooth.rs (Device.class, type_label); springboard/src/shell/pages.rs (BluetoothDetail Type row)",
       "status": "partial",
-      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A device list exists in the shell's Status. No app API. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The SDK model gives a name or address label, the paired and connected filters, forgetting, and the kind label from the class of device (type_label), tested headless in springboard/sdk/tests/parity_sdk-complete-40.rs. Gap: the shell keeps its own device table and no app can read this list yet; the lab machine must confirm the Type row on Midget."
     },
     {
       "feature": "Pairing (Just Works, user confirm, timeout)",
