@@ -1,6 +1,7 @@
 //! Line-level list commands on a note's Markdown: mark or unmark every checklist item, indent and outdent a list
 //! line, and move a line up or down past its neighbour. All are pure functions of the text, so the editor wires them
 //! through one undoable rewrite.
+#![allow(dead_code)] // wired by the editor once the Format menu uses the shared list commands
 use springboard::shell::md;
 
 /// Spaces one indent level adds to a list line.

@@ -26,6 +26,10 @@ mod parity;
 mod pdf;
 mod picker;
 pub mod store;
+mod lists;
+mod tags;
+mod grouping;
+mod lock;
 pub mod system;
 
 pub use icon::icon;

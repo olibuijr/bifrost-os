@@ -23,6 +23,7 @@ pub mod stars;
 pub mod stats;
 pub mod system;
 pub mod tempo;
+pub mod equalizer;
 pub mod upnext;
 
 use bifrost_app::layout::{top_inset, UNIFIED_BAR_PT};
