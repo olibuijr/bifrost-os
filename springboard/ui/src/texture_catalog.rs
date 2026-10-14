@@ -1,5 +1,5 @@
-//! Named image catalog with scale variants, as a pure model of the reference image-by-name lookup (`UIImage(named:)` and an
-//! asset catalog's 1x, 2x and 3x sets). Each name maps to one file per display scale. `resolve` picks the file for the
+//! Named image catalog with scale variants: a pure model of an image lookup by name, with one file per display scale
+//! (1x, 2x and 3x sets, as an asset catalog holds them). Each name maps to one file per display scale. `resolve` picks the file for the
 //! screen's scale: the smallest variant whose scale is at least the requested one, so a picture is scaled down rather than
 //! up, and the largest variant when every variant is smaller. No file is read here; the caller loads the path it gets back.
 

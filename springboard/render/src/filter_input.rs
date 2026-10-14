@@ -1,4 +1,4 @@
-//! Filter input checks against the catalogue: the rules `CIFilter.setValue(_:forKey:)` applies before a filter runs. A filter
+//! Filter input checks against the catalogue: the rules a filter object applies to a value before the filter runs. A filter
 //! name and key must be catalogued, the value must be finite, and it must lie in the attribute's range. `resolve_inputs`
 //! fills every attribute a filter has, using the given values where they are present and the defaults elsewhere, so a
 //! renderer receives a complete input list. Pure: no pixels are touched.

@@ -1,4 +1,4 @@
-//! A render view as a pure model (`MTKView`): the drawable size that follows the view's bounds and content scale, the timed
+//! A GPU-backed render view as a pure model: the drawable size that follows the view's bounds and content scale, the timed
 //! or on-demand render loop behind it (`render_loop::RenderLoop`), and the drawable-size changes that a delegate must hear
 //! about. The model creates no GPU object and calls no delegate. The caller reports bounds and times, and runs its draw
 //! callback when `frame` returns a request.

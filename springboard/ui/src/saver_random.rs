@@ -1,4 +1,4 @@
-//! Seeded random source for screen saver motion. The `SSRandom...` helpers take unit values that the caller samples; this
+//! Seeded random source for screen saver motion. The random-value helpers take unit values that the caller samples; this
 //! module supplies those values from a seed, so a saver's motion can be replayed exactly. The generator is SplitMix64: it
 //! keeps no OS entropy and no clock, and two sources with the same seed give the same sequence.
 
@@ -33,19 +33,19 @@ impl SaverRandom {
         (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
     }
 
-    /// `SSRandomIntBetween` with the next unit value.
+    /// The integer helper with the next unit value.
     pub fn next_int_between(&mut self, a: i32, b: i32) -> i32 {
         let u = self.next_unit();
         ss_random_int_between(u, a, b)
     }
 
-    /// `SSRandomFloatBetween` with the next unit value.
+    /// The float helper with the next unit value.
     pub fn next_float_between(&mut self, a: f32, b: f32) -> f32 {
         let u = self.next_unit();
         ss_random_float_between(u, a, b)
     }
 
-    /// `SSRandomPointForSizeWithinRect` with two unit values, one for each axis.
+    /// The point helper with two unit values, one for each axis.
     pub fn next_point_within(&mut self, size: (f32, f32), rect: Rect) -> (f32, f32) {
         let ux = self.next_unit();
         let uy = self.next_unit();
