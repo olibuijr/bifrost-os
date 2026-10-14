@@ -8,6 +8,7 @@ use bifrost_core::disk_commands::Command;
 use bifrost_core::disk_format::{self, Personality};
 use bifrost_core::disk_image::{self, BlockSize};
 use bifrost_core::disk_run;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::fs::File;
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::FileExt;
@@ -234,8 +235,9 @@ where
     F: FnOnce() -> Result<(), String> + Send + 'static,
 {
     let (tx, rx) = channel();
-    std::thread::spawn(move || {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let _ = tx.send(job());
+        DispatchQueue::main().async_(|| {});
     });
     rx
 }

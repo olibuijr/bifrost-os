@@ -11,10 +11,12 @@
 mod model;
 
 use bifrost_app::keychain::Error as KeychainError;
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::Rect;
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{clipboard, Damage, Surface};
 use bifrost_app::passwords::{kind_of, name_of, Kind};
-use bifrost_app::{keychain_groups, passwords, App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{keychain_groups, passwords, widgets, App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use model::{Entry, Item};
 use std::collections::HashMap;
@@ -73,6 +75,26 @@ impl PasswordsApp {
     /// The items the list shows now: the current tab, filtered by the search, in order.
     fn shown(&self) -> Vec<Item> {
         model::filter(&self.items, self.tab, &self.query).into_iter().cloned().collect()
+    }
+
+    /// The filtered password rows, with their current selection, for the shared source-list widget.
+    fn source_list(&self) -> (Vec<Item>, SourceList) {
+        let shown = self.shown();
+        let rows = shown.iter().enumerate().map(|(i, item)| {
+            let symbol = match item.kind {
+                Kind::Login => "person.crop.circle",
+                Kind::SecureNote => "doc",
+                Kind::Certificate => "checkmark.circle",
+            };
+            SidebarItem::row(i as u32, item.name()).with_symbol(symbol).with_subtitle(subtitle(item))
+        }).collect();
+        let mut list = SourceList::new(rows, ROW_PT - 16.0, 22.0);
+        list.two_line_h = ROW_PT;
+        let selected = self.selected.as_ref().and_then(|(service, account)| {
+            shown.iter().position(|item| item.service == *service && item.account == *account)
+        });
+        list.set_selected(selected.map(|i| i as u32));
+        (shown, list)
     }
 
     fn select(&mut self, service: String, account: String) {
@@ -226,12 +248,12 @@ impl App for PasswordsApp {
                         self.set_tab(kind);
                         return true;
                     }
-                    if y < HEADER_PT {
-                        return false;
-                    }
-                    let index = ((y - HEADER_PT) / ROW_PT).floor() as usize;
-                    if let Some(item) = self.shown().get(index).cloned() {
-                        self.select(item.service, item.account);
+                    let (shown, list) = self.source_list();
+                    let bounds = Rect { x: 0.0, y: HEADER_PT, w: LIST_PT, h: ctx.cfg.h as f32 / ctx.ui.s - HEADER_PT };
+                    if let Some(index) = list.hit(bounds, 0.0, x, y).map(|i| i as usize) {
+                        if let Some(item) = shown.get(index) {
+                            self.select(item.service.clone(), item.account.clone());
+                        }
                         return true;
                     }
                     return false;
@@ -389,37 +411,25 @@ impl App for PasswordsApp {
             let on = kind == self.tab;
             let colour = if on { ui::LABEL.now() } else { ui::LINK };
             if on {
-                s.fill_rect(p(x), p(TABS_Y_PT), p(width), p(TABS_H_PT), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(x), p(TABS_Y_PT), p(width), p(TABS_H_PT), ui::ROW_PRESSED.now());
             }
             let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, colour);
             s.blit_colored(&img, pi(x + 6.0), pi(TABS_Y_PT + 5.0), colour, 255);
         }
         let search = if self.query.is_empty() { "Search".to_string() } else { self.query.clone() };
         let search_colour = if self.query.is_empty() { ui::LABEL_2.now() } else { ui::LABEL.now() };
-        s.fill_rect(p(PAD_PT), p(SEARCH_Y_PT), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::SEPARATOR);
+        s.fill_rect(p(PAD_PT), p(SEARCH_Y_PT), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::FIELD_BG.now());
         let img = ui.text(&ui.fit(&search, ui::MAC_BODY_PT, ui.pt(LIST_PT - 4.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, search_colour);
         s.blit_colored(&img, pi(PAD_PT + 8.0), pi(SEARCH_Y_PT + 5.0), search_colour, 255);
-        let shown = self.shown();
-        for (i, item) in shown.iter().enumerate() {
-            let y = HEADER_PT + i as f32 * ROW_PT;
-            if y > h as f32 / scale {
-                break;
-            }
-            let selected = self.selected.as_ref().is_some_and(|(service, account)| *service == item.service && *account == item.account);
-            if selected {
-                s.fill_rect(p(6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT - 4.0), ui::SIDEBAR_SELECTED);
-            }
-            let img = ui.text(&ui.fit(item.name(), ui::MAC_BODY_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, pi(PAD_PT), pi(y + 5.0), ui::LABEL.now(), 255);
-            let img = ui.text(&ui.fit(subtitle(item), ui::MAC_FOOTNOTE_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, pi(PAD_PT), pi(y + 24.0), ui::LABEL_2.now(), 255);
-        }
+        let (shown, list) = self.source_list();
+        let bounds = Rect { x: 0.0, y: HEADER_PT, w: LIST_PT, h: h as f32 / scale - HEADER_PT };
+        widgets::source_list(s, ui, bounds, &list, 0.0, None);
         if shown.is_empty() {
             let text = if self.items.iter().any(|i| i.kind == self.tab) { "No Matches" } else { empty_text(self.tab) };
             let img = ui.text(text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
             s.blit_colored(&img, pi(PAD_PT), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
         }
-        s.fill_rect(p(LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR);
+        s.fill_rect(p(LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR_C.now());
         // detail column
         let px = LIST_PT + PAD_PT;
         match &self.selected {

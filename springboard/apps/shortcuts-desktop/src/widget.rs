@@ -30,7 +30,7 @@ use std::path::PathBuf;
 const RESULT_W: f32 = 360.0;
 const RESULT_MAX_ROWS: usize = 8;
 /// The result panel's corner radius (points): grouped cards are 13 pt (owner decision, 2026-10-09).
-const RESULT_RADIUS_PT: f32 = 13.0;
+const RESULT_RADIUS_PT: f32 = CARD_RADIUS_PT;
 /// How long a result panel stays when nobody dismisses it, in milliseconds.
 const RESULT_MS: f64 = 8000.0;
 

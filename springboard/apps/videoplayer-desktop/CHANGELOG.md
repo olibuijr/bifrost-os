@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.4 — 2026-10-14
+
+- Size notice and subtitle text margins from shared spacing tokens so captions remain readable across window scales.
+
+## 0.2.3 — 2026-10-14
+
+- Size notices to the available window width, use shared corner-radius tokens, and position captions relative to the viewport.
+
+## 0.2.2 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.2.1 — 2026-10-14
+
+- Add the Video Player store icon.
+
 ## 0.2.0 — 2026-10-13
 
 - Open Movie intent (`open-movie`, parameter `path`): the shell hands the Video Player a movie file by path. The shell uses it to open a finished screen recording, which the player plays like a movie from the open panel.

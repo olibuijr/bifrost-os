@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.1.1 — 2026-10-14
+
+- Add the Bluetooth File Exchange store icon.
+
 ## 0.1.0
 
 - First version. A device list from the shell's Bluetooth service (paired devices first, Scan for nearby ones, Pair for

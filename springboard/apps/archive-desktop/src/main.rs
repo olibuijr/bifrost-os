@@ -6,6 +6,7 @@
 mod archive;
 
 use archive::{Op, Outcome};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, Ctx, Input};
@@ -87,7 +88,7 @@ impl ArchiveApp {
         let result = Arc::new(Mutex::new(None));
         let (d, t, r) = (done.clone(), total.clone(), result.clone());
         let (op, path) = (req.op, req.path.clone());
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let mut progress = |a: u64, b: u64| {
                 d.store(a, Ordering::Relaxed);
                 t.store(b, Ordering::Relaxed);
@@ -172,7 +173,7 @@ impl App for ArchiveApp {
             s.blit_colored(&img, pi(PAD_PT), pi(y), ui::LABEL.now(), 255);
             y += ROW_PT;
             let bar_w = (width_pt * scale) as usize;
-            s.fill_rect(p(PAD_PT), p(y), bar_w, p(BAR_PT), ui::SEPARATOR);
+            s.fill_rect(p(PAD_PT), p(y), bar_w, p(BAR_PT), ui::SEPARATOR_C.now());
             let fill = (bar_w as f32 * self.fraction()) as usize;
             s.fill_rect(p(PAD_PT), p(y), fill, p(BAR_PT), ui::LINK);
             y += BAR_PT + 10.0;

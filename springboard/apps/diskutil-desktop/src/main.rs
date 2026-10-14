@@ -172,9 +172,6 @@ impl App for DiskUtility {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        if self.job.is_some() {
-            return Some(t + 0.25);
-        }
         if self.last_refresh.is_finite() {
             Some(self.last_refresh + REFRESH_S)
         } else {

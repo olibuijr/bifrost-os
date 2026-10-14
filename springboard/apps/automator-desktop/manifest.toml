@@ -1,6 +1,6 @@
 id = "is.olibuijr.automator.desktop"
 name = "Automator"
-version = "0.1.0"
+version = "0.1.2"
 exec = "bifrost-automator"
 icon = "icon.png"
 min_shell = "0.4.84"

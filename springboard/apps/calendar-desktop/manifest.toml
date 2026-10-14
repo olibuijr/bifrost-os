@@ -1,6 +1,6 @@
 id = "is.olibuijr.calendar.desktop"
 name = "Calendar"
-version = "1.16.0"
+version = "1.16.1"
 exec = "bifrost-calendar"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -8,8 +8,7 @@ summary = "Month, week and day calendar with events, repeats, alerts, search, ho
 category = "Productivity"
 kind = "system-app"
 architecture = "x86_64-linux"
-permissions = ["storage", "documents", "notifications", "keychain"]
-keychain_groups = ["is.bifrost.passwords"]
+permissions = ["storage", "documents", "notifications"]
 window = "full-size"
 handles = ["public.calendar-event:default"]
 schemes = ["webcal", "webcals"]

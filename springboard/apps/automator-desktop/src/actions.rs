@@ -4,6 +4,7 @@
 
 use crate::imageio::{self, Format};
 use crate::model::{LogLine, Kind, Step, Value};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -316,7 +317,7 @@ fn run_script(step: &Step, input: &Value) -> Result<Value, String> {
     // the input is written on its own thread, so a script that writes a lot before it reads cannot block the run
     let input_text = input.text();
     let feeder = child.stdin.take().map(|mut stdin| {
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let _ = stdin.write_all(input_text.as_bytes());
         })
     });

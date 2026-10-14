@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.4 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.5.3 — 2026-10-14
+
+- Export the Dictionary icon at the store's required 180 × 180 size.
+
+## 0.5.2 — 2026-10-14
+
+- Run printing on the shared utility queue and declare sudden termination safe when the app configures.
+
+## 0.5.1 — 2026-10-14
+
+- Use the shared extra-small spacing token for suggestion label fitting.
+
 ## 0.5.0
 
 - The model is a library target (`src/lib.rs`), so its behaviour is tested through the public API in `tests/parity_app-dictionary.rs`: history, scope, preferences, text size, find, cross-reference words, settings drag order, the copy and print text, the folder URL and the dict: and x-dictionary: URLs.

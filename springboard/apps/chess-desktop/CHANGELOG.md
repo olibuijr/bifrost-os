@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 — 2026-10-14
+
+- Add the generated app compliance harness.
+
 ## 0.1.0
 
 - First version: a chess board with the full rules (castling, en passant, promotion, check, checkmate, stalemate,

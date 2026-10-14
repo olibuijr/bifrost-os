@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.2 — 2026-10-14
+
+- Let the source-list sidebar shrink with compact windows while retaining its desktop width.
+
+## 1.12.1 — 2026-10-14
+
+- Use shared spacing values in the episode list, transcript rows, chapter indicator, and notes view.
+
 ## 1.12.0 — 2026-10-14
 
 - Episode menu: Mark All as Played (or Mark All as Unplayed, when every episode of the show is played) marks every
