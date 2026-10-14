@@ -3,16 +3,16 @@
   "doc": "https://developer.apple.com/documentation/appkit",
   "macos_since": "10.0",
   "status": "partial",
-  "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs",
-  "summary": "Semantic colours, a colour panel, PNG/JPEG decoding, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. There is no NSImage-like object model, no Bezier path or gradient API for apps, no colour spaces or colour lists, and no print sheet.",
+  "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs, springboard/sdk/src/image_object.rs, springboard/sdk/src/color_list.rs",
+  "summary": "Semantic colours, a colour panel, colour spaces and conversions, colour lists, PNG/JPEG decoding, an NSImage-style object with representations, template flag and resizable caps, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. There is no NSImage drawing in the kit, no colour picker that uses colour lists, and no print sheet.",
   "rea_evidence": "ev_c13e34ac0a796f139c7afc1ac6d88343b2a61a27ec40e0a76c53e92c372eebaf",
   "features": [
     {
       "feature": "Images and PDF: image objects and representations",
       "apple": "NSImage, NSImageRep, NSBitmapImageRep, NSPDFImageRep (https://developer.apple.com/documentation/appkit/images-and-pdf)",
-      "bifrost": "springboard/render/src/gfx.rs (Image), springboard/render/src/imgdec.rs, springboard/sdk/src/image_source.rs (representation)",
+      "bifrost": "springboard/render/src/gfx.rs (Image), springboard/render/src/imgdec.rs, springboard/sdk/src/image_source.rs (representation), springboard/sdk/src/image_object.rs (ImageObject, ImageRep)",
       "status": "partial",
-      "note": "PNG and JPEG decode into a raw pixel Image; image_source::representation(image, FileType::Png|Jpeg, props) encodes a bitmap (JPEG compression factor, transparent pixels flattened for JPEG); host tests only, no representation classes, no TIFF/GIF/WebP/HEIC encode through it, no multi-rep images, no template or resizable images; verify on Midget for parity."
+      "note": "ImageObject (sdk/src/image_object.rs) holds bitmap and vector representations, picks the best one for a target size and scale, keeps a point size, a template flag and cap insets, computes nine-slice layouts and reads the size of encoded bytes; image_source::representation encodes a bitmap (JPEG compression factor, transparent pixels flattened for JPEG). Host tests only; not yet used by the kit's image widgets or the shell. No representation classes per codec (no TIFF/GIF/WebP/HEIC rep), no template tint when drawn, no named image catalogue; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
     },
     {
       "feature": "Images and PDF: symbol images",
@@ -75,7 +75,7 @@
       "apple": "NSColor named colours, systemRed..systemGray, labelColor, controlAccentColor",
       "bifrost": "springboard/render/src/ui.rs (mod system), docs/bifrost-ui.md section NSColor semantic colours",
       "status": "partial",
-      "note": "most named colours as light/dark Pairs; user accent colour not wired; windowFrameColor, findHighlightColor, shadowColor missing"
+      "note": "most named colours as light/dark Pairs; windowFrameColor, findHighlightColor and shadowColor added (WINDOW_FRAME, FIND_HIGHLIGHT, SHADOW; findHighlight values are an approximation to confirm on Midget); user accent colour not wired; remaining NSColor names missing built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
     },
     {
       "feature": "Color: colour panel",
@@ -87,9 +87,9 @@
     {
       "feature": "Color: colour spaces and lists",
       "apple": "NSColorSpace, NSColorList, NSColorPicker, colour sampler",
-      "bifrost": "springboard/render/src/bezier.rs, springboard/render/src/gradient.rs",
+      "bifrost": "springboard/sdk/src/graphics_color.rs, springboard/sdk/src/color_list.rs (ColorList, ColorLists)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. colours are sRGB-style packed u32; ICC handling exists only for PDF images in the Books engine, no app API; no eyedropper"
+      "note": "Colour spaces and conversions are in graphics_color (bifrost_render::cg::color, ICC profiles for apps). ColorList and ColorLists add NSColorList: ordered named colours with a registry by name. Host tests only; no colour well or picker that uses the lists, and no eyedropper; verify on Midget for parity. built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
     },
     {
       "feature": "Printing: print info and operation",
@@ -130,9 +130,9 @@
   "gaps": [
     "Shell-drawn print sheet and page layout panel (print.rs has no run_modal)",
     "Public Bezier path, gradient and shadow drawing API",
-    "NSImage-style object model with representations, template images and more formats",
+    "NSImage drawing in the kit, per-codec representation classes and template tinting",
     "SDK access to PDF rendering (currently inside the Books shell engine)",
-    "Colour spaces, colour lists, colour well and picker modes",
+    "Colour well and picker modes that use colour lists",
     "User accent colour feeding controlAccentColor; remaining NSColor names",
     "Symbol catalogue beyond the 59 procedural glyphs"
   ]
