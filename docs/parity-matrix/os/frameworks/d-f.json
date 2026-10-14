@@ -5731,7 +5731,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Only Info.plist and version.plist were extracted (com.apple.FusionTracker 1.0), with no binary or symbols, so its purpose cannot be determined from the reference image; left os until the binary is extracted.",
    "rea": [],
    "method": "assessed"
   },
@@ -5752,7 +5752,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Bundle holds only an Espresso recognition model (recognition.espresso.net, weights and shape) and no code, so the recognizer it serves is not named; left os.",
    "rea": [],
    "method": "assessed"
   }
