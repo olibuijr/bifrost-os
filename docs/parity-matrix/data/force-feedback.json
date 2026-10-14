@@ -33,7 +33,7 @@
       "apple": "FFDeviceEscape, FFEffectEscape, FFEFFESCAPE, FFCommandFlag",
       "bifrost": "springboard/core/src/ff_escape.rs (Escape, EscapeError, encode, decode)",
       "status": "partial",
-      "note": "built on parity/team-k-force-feedback; not yet verified on Midget. Frame model only: a BifrOSt framing of the command code and payload, with a 4096-byte payload limit. No driver accepts the frame yet, so no escape reaches a device"
+      "note": "Frame model: a BifrOSt framing of the command code and payload with a 4096-byte payload limit, which encodes, decodes and splits several frames from one reply buffer (headless tests in springboard/core/tests/parity_sdk-complete-36.rs). Gap: no driver accepts the frame yet, so no escape reaches a device, and it is not verified on Midget."
     },
     {
       "feature": "Cooperative level and coordinate system",

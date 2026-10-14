@@ -10,9 +10,9 @@
     {
       "feature": "File descriptors (open, read, write, seek, close, duplicate)",
       "apple": "FileDescriptor, FileDescriptor.AccessMode, OpenOptions, SeekOrigin, DuplicateOptions, PipeOptions (https://developer.apple.com/documentation/system/filedescriptor)",
-      "bifrost": "springboard/sdk/src/runtime.rs:373 (takes ownership of a received descriptor as a File); springboard/proto/src/sys.rs:91 (Owned fd wrapper)",
+      "bifrost": "springboard/sdk/src/file_descriptor.rs (FileDescriptor, Access, OpenFlags); springboard/sdk/src/runtime.rs:373 (takes ownership of a received descriptor as a File); springboard/proto/src/sys.rs:91 (Owned fd wrapper)",
       "status": "partial",
-      "note": "Apps get raw descriptors through document grants and shared memory, and they can use Rust std::fs. There is no typed SDK FileDescriptor with open options, positional read and write, or pipe creation."
+      "note": "A typed FileDescriptor opens with an access mode and flags, reads and writes at the position or at an offset, seeks, duplicates and refuses I/O that its access mode forbids (headless tests in springboard/sdk/tests/parity_sdk-complete-36.rs). Gap: there is no pipe creation and no typed wrapper for a received descriptor, and the descriptor is not verified on Midget."
     },
     {
       "feature": "Document grants (user-chosen file access without a path)",
