@@ -1198,4 +1198,7 @@ pub mod auth_prompt;
 pub mod video_info;
 
 pub mod sk_action;
+pub mod help_menu;
+pub mod scene_handoff;
+pub mod photo_adjustment;
 
