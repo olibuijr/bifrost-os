@@ -66,9 +66,9 @@
   {
    "feature": "System update download with size and hash check",
    "apple": "not part of the framework; closest system-side analogue",
-   "bifrost": "springboard/src/shell/update.rs (download(), springboard.part, verify then rename), springboard/updated/src",
-   "status": "os",
-   "note": "system only"
+   "bifrost": "springboard/sdk/src/background_download.rs (DownloadSpec, stage: size and SHA-256 check, .part staging, rename); springboard/src/shell/update.rs (download(), springboard.part, verify then rename), springboard/updated/src",
+   "status": "partial",
+   "note": "DownloadSpec and stage give apps the shell's size, digest and .part sequence for payloads they supply, tested headless in springboard/sdk/tests/parity_sdk-os-03.rs. Gap: the SDK performs no transfer and has no background scheduling or resume."
   },
   {
    "feature": "File sharing staging",

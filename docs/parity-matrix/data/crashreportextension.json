@@ -17,9 +17,9 @@
     {
       "feature": "Crash reason (CrashedProcess.reason, CrashReason)",
       "apple": "CrashedProcess.reason, CrashReason",
-      "bifrost": "springboard/src/shell/diag.rs (CrashEntry signature, from crash.log); springboard/apps/console-desktop/src/model.rs (parse_coredump_list: SIG mapped to Fault)",
-      "status": "os",
-      "note": "The reason is recorded by the shell and by systemd-coredump, but apps get it only through the Console and dev tooling, not through the SDK."
+      "bifrost": "springboard/sdk/src/crash_report.rs (CrashReason, ProcessCrash::reason); springboard/src/shell/diag.rs (CrashEntry signature, from crash.log); springboard/apps/console-desktop/src/model.rs (parse_coredump_list: SIG mapped to Fault)",
+      "status": "partial",
+      "note": "The SDK's ProcessCrash carries the reason text and CrashReason displays it, tested headless in springboard/sdk/tests/parity_sdk-os-03.rs. Gap: the shell does not pass a crashed app's reason to an app's reporter, so the reason reaches an app only when the caller builds the record."
     },
     {
       "feature": "Binary images and symbolication (binaryImages, symbolicateAddress(es), SymbolicatedFrame)",
