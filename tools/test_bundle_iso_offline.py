@@ -40,8 +40,10 @@ class OfflineBundleTests(unittest.TestCase):
             member.size = len(data)
             tf.addfile(member, io.BytesIO(data))
         with tempfile.TemporaryDirectory() as pool:
-            open(os.path.join(pool, "bifrost.db"), "wb").write(database.getvalue())
-            open(os.path.join(pool, filename), "wb").write(b"package")
+            with open(os.path.join(pool, "bifrost.db"), "wb") as f:
+                f.write(database.getvalue())
+            with open(os.path.join(pool, filename), "wb") as f:
+                f.write(b"package")
             with mock.patch.object(bundle, "POOL", pool), \
                  mock.patch.object(bundle, "committed_version", return_value="0.8.0"):
                 self.assertEqual(bundle.shell_package(), os.path.join(pool, filename))
@@ -87,12 +89,18 @@ class OfflineBundleTests(unittest.TestCase):
             dest = os.path.join(parent, "offline")
             os.mkdir(dest)
             sentinel = os.path.join(dest, "keep")
-            open(sentinel, "w").write("unmanaged")
-            with mock.patch.object(bundle, "package_closure", return_value=[]), \
+            with open(sentinel, "w") as f:
+                f.write("unmanaged")
+            with mock.patch.object(bundle, "package_closure") as closure, \
                  mock.patch.object(bundle, "shell_package", return_value="unused"), \
-                 mock.patch.object(bundle, "app_package", return_value=("id", "1", "unused")):
+                 mock.patch.object(bundle, "app_package", return_value=("id", "1", "unused")), \
+                 mock.patch.object(bundle.subprocess, "run") as repo_add, \
+                 mock.patch.object(bundle.shutil, "copyfile") as copy:
                 with self.assertRaises(RuntimeError):
                     bundle.build(dest)
+                closure.assert_not_called()
+                repo_add.assert_not_called()
+                copy.assert_not_called()
             self.assertTrue(os.path.isfile(sentinel))
 
 
