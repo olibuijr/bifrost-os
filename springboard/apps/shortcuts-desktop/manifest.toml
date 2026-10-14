@@ -1,6 +1,6 @@
 id = "is.olibuijr.shortcuts.desktop"
 name = "Shortcuts"
-version = "1.11.1"
+version = "1.11.2"
 exec = "bifrost-shortcuts"
 icon = "icon.png"
 min_shell = "0.4.84"

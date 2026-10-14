@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.1 — 2026-10-14
+
+- Place Copy Expression and Copy Last Result in the Calculator menu rather than duplicating the shell Edit menu.
+
 ## 1.11.0 — 2026-10-14
 
 - Programmer readout: the value's ASCII code (0 to 127) follows the Unicode code point and the character, for example

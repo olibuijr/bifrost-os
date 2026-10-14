@@ -1,5 +1,5 @@
-//! The app's menus and the window commands they send. File holds New, Duplicate, Import, Export and Delete; Edit holds
-//! Rename and Find; Shortcuts holds Run, the Gallery and one item per shortcut, each with its menu key (Control and
+//! The app's menus and the window commands they send. File holds New, Duplicate, Import, Export and Delete; Shortcuts holds
+//! Rename, Find, Run, the Gallery and one item per shortcut, each with its menu key (Control and
 //! Command with a digit) when it has one, which runs it while the app is in front. Window holds All Shortcuts and, in the
 //! editor, Previous and Next Shortcut.
 
@@ -33,6 +33,9 @@ pub fn run_key(key: u8) -> Option<String> {
 /// The menus for a list, with the items that need an open shortcut enabled only when `open` is true.
 pub fn build(list: &[Shortcut], open: bool) -> Vec<AppMenu> {
     let mut shortcuts = vec![
+        AppMenuItem::new(RENAME, "Rename").enabled(open),
+        AppMenuItem::new(FIND, "Find").key("cmd+f"),
+        AppMenuItem::separator(),
         AppMenuItem::new(RUN, "Run").key("cmd+r").enabled(open),
         AppMenuItem::new(GALLERY, "Gallery").key("cmd+g"),
     ];
@@ -57,14 +60,6 @@ pub fn build(list: &[Shortcut], open: bool) -> Vec<AppMenu> {
                 AppMenuItem::new(EXPORT, "Export...").key("cmd+e"),
                 AppMenuItem::separator(),
                 AppMenuItem::new(DELETE, "Delete Shortcut").enabled(open),
-            ],
-        },
-        AppMenu {
-            title: "Edit".into(),
-            items: vec![
-                AppMenuItem::new(RENAME, "Rename").enabled(open),
-                AppMenuItem::separator(),
-                AppMenuItem::new(FIND, "Find").key("cmd+f"),
             ],
         },
         AppMenu { title: "Shortcuts".into(), items: shortcuts },
@@ -113,16 +108,16 @@ mod tests {
     }
 
     #[test]
-    fn the_menus_are_file_edit_shortcuts_window_and_help() {
+    fn the_menus_are_file_shortcuts_window_and_help() {
         let titles: Vec<String> = build(&defaults(), false).into_iter().map(|m| m.title).collect();
-        assert_eq!(titles, vec!["File", "Edit", "Shortcuts", "Window", "Help"]);
+        assert_eq!(titles, vec!["File", "Shortcuts", "Window", "Help"]);
     }
 
     #[test]
     fn the_window_items_move_between_shortcuts_only_in_the_editor() {
         for open in [false, true] {
             let menus = build(&defaults(), open);
-            let window = &menus[3].items;
+            let window = &menus[2].items;
             assert_eq!(window[0].title, "All Shortcuts");
             assert!(window[0].enabled);
             assert_eq!(window[0].key, "cmd+1");
@@ -139,7 +134,7 @@ mod tests {
     #[test]
     fn the_help_item_opens_the_help_panel_and_is_always_enabled() {
         let menus = build(&[], false);
-        let help = &menus[4].items;
+        let help = &menus[3].items;
         assert_eq!(help.len(), 1);
         assert_eq!(help[0].title, "Shortcuts Help");
         assert!(help[0].enabled);
@@ -204,7 +199,7 @@ mod tests {
     fn the_run_items_list_the_shortcuts_and_stop_at_the_menu_limit() {
         let list = keyed();
         let menus = build(&list, false);
-        let runs: Vec<&AppMenuItem> = menus[2].items.iter().filter(|i| i.title.starts_with("Run S")).collect();
+        let runs: Vec<&AppMenuItem> = menus[1].items.iter().filter(|i| i.title.starts_with("Run S")).collect();
         assert_eq!(runs.len(), MENU_RUNS);
         assert_eq!(runs[0].title, "Run S0");
         assert_eq!(runs[0].key, "ctrl+cmd+1");
@@ -218,12 +213,13 @@ mod tests {
     #[test]
     fn an_empty_list_has_no_separator_before_the_run_items() {
         let menus = build(&[], false);
-        assert_eq!(menus[2].items.len(), 2);
-        assert!(menus[2].items.iter().all(|i| !i.separator));
+        assert_eq!(menus[1].items.len(), 5);
+        assert!(menus[1].items.iter().any(|i| i.title == "Rename"));
+        assert!(menus[1].items.iter().any(|i| i.title == "Find"));
     }
 
     #[test]
-    fn the_file_and_edit_commands_map_to_the_window_commands() {
+    fn the_file_and_shortcuts_commands_map_to_the_window_commands() {
         assert_eq!(command(NEW), Some(Command::New));
         assert_eq!(command(IMPORT), Some(Command::Import));
         assert_eq!(command(EXPORT), Some(Command::Export));

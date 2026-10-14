@@ -30,7 +30,7 @@ const FRAME_REQUIRED: bool = true;
 /// Fraction of 1/4-size pixels allowed to differ from the golden (static UI).
 const MAX_DIFF_FRAC: f64 = 0.002;
 /// Check ids (render, chrome, labels, menus, snapshot) that fail today; printed instead of failed. Delete an id when fixed.
-const KNOWN_GAPS: &[&str] = &["menus"];
+const KNOWN_GAPS: &[&str] = &[];
 // ---- end per-app ----
 
 const SIZE_PT: (u32, u32) = (1200, 780);

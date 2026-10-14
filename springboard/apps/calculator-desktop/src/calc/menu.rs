@@ -72,7 +72,7 @@ impl Calculator {
         let rpn = self.rpn_active();
         vec![
             AppMenu {
-                title: "Edit".into(),
+                title: "Calculator".into(),
                 items: vec![
                     AppMenuItem::new(MENU_COPY_EXPRESSION, "Copy Expression").key("cmd+shift+c").enabled(self.expression_for_copy(ui).is_some()),
                     AppMenuItem::new(MENU_COPY_RESULT, "Copy Last Result").key("cmd+alt+c").enabled(!self.store.is_empty()),

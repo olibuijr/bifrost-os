@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.2 — 2026-10-14
+
+- Move Rename and Find into the Shortcuts app menu instead of duplicating the shell Edit menu.
+
 ## 1.11.1 — 2026-10-14
 
 - Use the shared grouped-card radius token for the result panel.

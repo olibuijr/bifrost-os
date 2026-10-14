@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 — 2026-10-14
+
+- Use the appearance-aware separator color in the progress bar.
+
 ## 0.2.3 — 2026-10-14
 
 - Add the generated app compliance harness.

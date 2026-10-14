@@ -248,8 +248,9 @@ impl Files {
     fn spawn_list(&mut self, addr: String, url: FtpUrl) {
         let (tx, rx) = mpsc::channel();
         let for_thread = url.clone();
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let _ = tx.send(fetch(&for_thread));
+            DispatchQueue::main().async_(|| {});
         });
         self.fx.server.job = Some(Job { addr, url, rx });
         self.set_server_message("Connecting…".to_string());

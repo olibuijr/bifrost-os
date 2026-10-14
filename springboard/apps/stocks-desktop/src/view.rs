@@ -7,12 +7,12 @@ use crate::data;
 use crate::feed::Feed;
 use crate::model::{self, Bar};
 use crate::state::{now_unix, Stocks};
-use bifrost_app::kit::appearance::Pair;
 use bifrost_app::kit::ui::{
     CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT,
-    MAC_TITLE3_PT, SEPARATOR_C, SPACE_L, SPACE_M, SPACE_XL, SPACE_XXL, SYSTEM_GREEN, SYSTEM_RED,
+    MAC_TITLE3_PT, ROW_PRESSED, SEPARATOR_C, SPACE_L, SPACE_M, SPACE_XL, SPACE_XXL, SYSTEM_GREEN, SYSTEM_RED,
 };
-use bifrost_app::kit::{pack, Surface, TextCache, Ui, Weight};
+use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
+use bifrost_app::controls::prefs_layout::m::CARD_RADIUS;
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 
 /// Points: the side margin of the column.
@@ -30,7 +30,7 @@ const BUTTON_PT: f32 = 36.0;
 const CHART_PT: f32 = 300.0;
 const GAP_PT: f32 = 12.0;
 /// Points: the corner radius of the cards.
-const RADIUS_PT: f32 = 10.0;
+const RADIUS_PT: f32 = CARD_RADIUS;
 
 /// A pixel rectangle: x, y, width, height.
 pub type Rect = (f32, f32, f32, f32);
@@ -114,7 +114,7 @@ pub fn hit(s: &Stocks, ui: &Ui, x: f32, y: f32) -> Option<Hit> {
 }
 
 /// A colour that stands for a selected row: a fixed tone for both appearances.
-const SELECTED: Pair = Pair::new(pack(58, 58, 62, 255), pack(226, 226, 232, 255));
+const SELECTED: bifrost_app::kit::appearance::Pair = ROW_PRESSED;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Align {

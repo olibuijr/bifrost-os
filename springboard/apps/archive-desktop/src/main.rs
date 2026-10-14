@@ -173,7 +173,7 @@ impl App for ArchiveApp {
             s.blit_colored(&img, pi(PAD_PT), pi(y), ui::LABEL.now(), 255);
             y += ROW_PT;
             let bar_w = (width_pt * scale) as usize;
-            s.fill_rect(p(PAD_PT), p(y), bar_w, p(BAR_PT), ui::SEPARATOR);
+            s.fill_rect(p(PAD_PT), p(y), bar_w, p(BAR_PT), ui::SEPARATOR_C.now());
             let fill = (bar_w as f32 * self.fraction()) as usize;
             s.fill_rect(p(PAD_PT), p(y), fill, p(BAR_PT), ui::LINK);
             y += BAR_PT + 10.0;

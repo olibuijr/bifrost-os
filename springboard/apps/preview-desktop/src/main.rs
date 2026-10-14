@@ -2144,7 +2144,7 @@ impl App for Viewer {
         vec![
             AppMenu { title: "File".into(), items: file_items },
             AppMenu {
-                title: "Edit".into(),
+                title: "Preview".into(),
                 items: vec![
                     item(Action::Undo, self.history.can_undo(), false),
                     item(Action::Redo, self.history.can_redo(), false),

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.2 — 2026-10-14
+
+- Move Preview's document-editing commands into its own app menu instead of duplicating the shell Edit menu.
+
 ## 0.11.1 — 2026-10-14
 
 - Add the generated app compliance harness.
