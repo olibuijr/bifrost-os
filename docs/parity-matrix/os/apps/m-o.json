@@ -187,8 +187,8 @@
    "role": "no migration assistant. Build: copy accounts, apps and files from another machine or backup; share steps with setup-assistant",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no migration assistant. Build: copy accounts, apps and files from another machine or backup; share steps with setup-assistant",
+   "status": "n/a",
+   "note": "Moves accounts and files from another machine over the reference vendor migration protocol, which is tied to that vendor accounts and devices. BifrOSt account restore belongs to the bifrost-cloud service, outside this repo.",
    "rea": [],
    "method": "assessed"
   }

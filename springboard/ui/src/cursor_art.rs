@@ -113,6 +113,7 @@ fn design(kind: Kind) -> (Vec<Op>, P) {
     match kind {
         Kind::Arrow => pointer(vec![]),
         Kind::IBeam => centred(vec![Op::Add(rect(11.0, 4.0, 13.0, 20.0)), Op::Add(rect(8.0, 3.0, 16.0, 5.0)), Op::Add(rect(8.0, 19.0, 16.0, 21.0))]),
+        Kind::VerticalIBeam => centred(vec![Op::Add(rect(4.0, 11.0, 20.0, 13.0)), Op::Add(rect(3.0, 8.0, 5.0, 16.0)), Op::Add(rect(19.0, 8.0, 21.0, 16.0))]),
         Kind::Crosshair => centred(vec![Op::Add(rect(11.0, 3.0, 13.0, 21.0)), Op::Add(rect(3.0, 11.0, 21.0, 13.0))]),
         Kind::OpenHand => (hand(&[5.0, 3.0, 4.0, 6.0], 9.0), (12.0, 12.0)),
         Kind::ClosedHand => (hand(&[9.0, 8.0, 8.5, 10.0], 10.0), (12.0, 13.0)),

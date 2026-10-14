@@ -59,8 +59,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Part of the reference game translation layer, which runs translated game binaries. BifrOSt runs native Linux apps and has no layer for foreign game binaries, so there is no counterpart.",
    "rea": []
   },
   {
@@ -259,8 +259,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Extension point of the reference game translation layer. BifrOSt has no such layer, so there is no counterpart.",
    "rea": []
   },
   {
@@ -279,8 +279,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "Extension point of the reference game translation layer. BifrOSt has no such layer, so there is no counterpart.",
    "rea": []
   },
   {
