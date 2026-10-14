@@ -18,8 +18,8 @@
       "feature": "AppKit updates",
       "apple": "What's new article",
       "bifrost": "docs/bifrost-ui.md (Apple-parity sections)",
-      "status": "gap",
-      "note": "Not a feature: the row only points at the Apple-parity notes in docs/bifrost-ui.md, and no code or test backs it, so it stays a gap until a concrete framework update is built"
+      "status": "n/a",
+      "note": "The reference is Apple's release-notes article for AppKit: a vendor publication with no runtime behaviour, so there is no framework capability to mirror. BifrOSt's counterpart is its own release notes in CHANGELOG.md, written by the release process."
     },
     {
       "feature": "Protecting the user's privacy",

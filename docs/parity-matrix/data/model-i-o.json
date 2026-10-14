@@ -94,9 +94,9 @@
     {
       "feature": "Sharing buffers with the GPU framework",
       "apple": "interop with MetalKit, GLKit and SceneKit (framework overview)",
-      "bifrost": "springboard/src/gpu/egl.rs (OpenGL ES through EGL on Linux)",
-      "status": "gap",
-      "note": "MetalKit, GLKit and SceneKit are Apple-only; the Linux GL path has no 3D consumer"
+      "bifrost": "springboard/sdk/src/buffer_share.rs (BufferLayout, choose_import_format); springboard/gpu/src/dmabuf.rs (DmaBufFormat); springboard/sdk/tests/parity_sdk-rest-15.rs",
+      "status": "partial",
+      "note": "The layout of a buffer shared with the GPU (size, pixel format, row stride, exact length) and the fourcc and modifier pair a device imports it with are tested headless. Gap: no export or import call is wired to a device, and no 3D consumer exists on Linux, so the lab machine must confirm the dma-buf round trip."
     }
   ],
   "gaps": [

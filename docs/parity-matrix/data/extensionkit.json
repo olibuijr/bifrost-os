@@ -59,9 +59,9 @@
     {
       "feature": "Process isolation for third-party app code",
       "apple": "Extension processes launched and sandboxed by the system (ExtensionFoundation runtime)",
-      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox); springboard/src/bare/app_manager.rs (cgroups)",
+      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox); springboard/src/bare/app_manager.rs (cgroups); springboard/sdk/src/system/app_sandbox.rs (read-only grant query)",
       "status": "os",
-      "note": "The OS sandboxes apps, but no SDK API lets an app load another app's extension process."
+      "note": "The shell builds the bubblewrap sandbox and the cgroup limits at launch, and an app can read its granted capabilities through system::app_sandbox. Blocker for an SDK surface: starting third-party code in its own sandboxed process needs an out-of-process extension host protocol in the shell (privileged launch, identity drop), which is not built."
     }
   ],
   "gaps": [
