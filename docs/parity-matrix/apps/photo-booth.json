@@ -109,8 +109,8 @@
    "area": "menu",
    "apple": "Edit > Auto Flip",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/warp.rs (flip_horizontal); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::grab)",
-   "note": "Edit > Auto Flip is remembered and applied in grab, so stills, burst shots, clip frames and the viewfinder match; the item has no key equivalent.",
+   "bifrost": "springboard/apps/photobooth-desktop/src/menu.rs (menus); springboard/apps/photobooth-desktop/src/warp.rs (flip_horizontal); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::grab)",
+   "note": "Edit > Auto Flip (cmd+shift+m) is remembered and applied in grab, so stills, burst shots, clip frames and the viewfinder match; the key equivalent is tested in menu.rs, and the flip is not yet checked on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -119,7 +119,7 @@
    "apple": "View > Full Screen",
    "status": "partial",
    "bifrost": "springboard/apps/photobooth-desktop/src/model.rs (layout_full_screen); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::set_full_screen)",
-   "note": "View > Full Screen Viewfinder (cmd+ctrl+f) hides the bars so the picture fills the window, and the layout is tested in model.rs; the window itself goes full screen only through the shell's shortcut because an app cannot request it, and the mode is not yet checked on Midget.",
+   "note": "View > Full Screen Viewfinder (cmd+shift+f; cmd+ctrl+f is the shell's window shortcut and never reaches the app) hides the bars so the picture fills the window, and the layout is tested in model.rs; the window itself goes full screen only through the shell's shortcut because an app cannot request it, and the mode is not yet checked on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -127,8 +127,8 @@
    "area": "menu",
    "apple": "Camera menu",
    "status": "partial",
-   "bifrost": "springboard/apps/photobooth-desktop/src/menu.rs (menus, decode); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::select_camera); springboard/apps/photobooth-desktop/src/model.rs (camera_retry_due)",
-   "note": "The Camera menu lists every probed device and checks the one in use, and the list is read again every 2 s while no camera is open, so a camera plugged in later appears. Choosing a camera while one is open does not rescan the list, and the menu is not yet checked on Midget.",
+   "bifrost": "springboard/apps/photobooth-desktop/src/menu.rs (menus, decode); springboard/apps/photobooth-desktop/src/main.rs (PhotoBooth::select_camera); springboard/apps/photobooth-desktop/src/model.rs (camera_retry_due, position_of_camera)",
+   "note": "The Camera menu lists every probed device and checks the one in use, and the list is read again every 2 s while no camera is open, so a camera plugged in later appears. Choosing a camera reads the list again first and reports one that was unplugged since the menu opened; the device lookup is tested in model.rs, and the menu is not yet checked on Midget.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
@@ -146,7 +146,7 @@
    "apple": "MainMenu",
    "status": "partial",
    "bifrost": "springboard/apps/photobooth-desktop/src/menu.rs (menus, decode)",
-   "note": "File, Edit, View (with Backdrop and Distortion Strength submenus) and Camera menus, with key equivalents for Take Photo, Export, Show Library, Undo Delete, Delete, Slideshow and Full Screen Viewfinder; there is no Window or Help menu.",
+   "note": "File, Edit, View (with Backdrop and Distortion Strength submenus) and Camera menus, with key equivalents for Take Photo, Export, Show Library, Undo Delete, Delete, Slideshow, Auto Flip and Full Screen Viewfinder (the menus are tested in menu.rs); there is no Window or Help menu.",
    "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {

@@ -281,6 +281,11 @@ pub fn camera_retry_due(last_read: f64, now: f64) -> bool {
     now - last_read >= CAMERA_RETRY_MS
 }
 
+/// The position of the camera at device node `chosen` in a freshly read list, or none once it has been unplugged.
+pub fn position_of_camera(chosen: &str, listed: &[&str]) -> Option<usize> {
+    listed.iter().position(|path| *path == chosen)
+}
+
 /// The first of `stem.ext`, `stem 2.ext`, `stem 3.ext`... that `exists` does not report as taken.
 pub fn free_name_with(exists: impl Fn(&str) -> bool, stem: &str, ext: &str) -> String {
     let mut name = format!("{stem}.{ext}");
@@ -565,6 +570,14 @@ mod tests {
         assert!(!camera_retry_due(1000.0, 1000.0 + CAMERA_RETRY_MS - 1.0));
         assert!(camera_retry_due(1000.0, 1000.0 + CAMERA_RETRY_MS));
         assert!(camera_retry_due(0.0, 1_000_000.0));
+    }
+
+    #[test]
+    fn a_chosen_camera_is_found_only_while_it_is_still_listed() {
+        let listed = ["/dev/video0", "/dev/video2"];
+        assert_eq!(position_of_camera("/dev/video2", &listed), Some(1));
+        assert_eq!(position_of_camera("/dev/video1", &listed), None);
+        assert_eq!(position_of_camera("/dev/video0", &[]), None);
     }
 
     #[test]

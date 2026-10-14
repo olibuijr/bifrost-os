@@ -92,11 +92,12 @@ pub fn menus(s: &MenuState) -> Vec<AppMenu> {
         AppMenuItem::separator(),
         AppMenuItem::new(DELETE, "Delete").key("cmd+backspace").enabled(s.selected),
         AppMenuItem::separator(),
-        AppMenuItem::new(AUTO_FLIP, "Auto Flip").checked(s.auto_flip),
+        AppMenuItem::new(AUTO_FLIP, "Auto Flip").key("cmd+shift+m").checked(s.auto_flip),
     ];
     let mut view = vec![
         AppMenuItem::new(SLIDESHOW, "Slideshow").key("cmd+shift+p").enabled(s.has_captures).checked(s.slideshow),
-        AppMenuItem::new(FULL_SCREEN, "Full Screen Viewfinder").key("cmd+ctrl+f").checked(s.full_screen),
+        // cmd+ctrl+f is the shell's window full screen shortcut and never reaches the app, so this command uses cmd+shift+f
+        AppMenuItem::new(FULL_SCREEN, "Full Screen Viewfinder").key("cmd+shift+f").checked(s.full_screen),
         AppMenuItem::new(SCREEN_FLASH, "Screen Flash").checked(s.screen_flash),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Backdrop"),
@@ -287,7 +288,17 @@ mod tests {
         let m = menus(&s);
         assert_eq!(find(&m, "Show Photo Booth Library").key, "cmd+shift+l");
         assert_eq!(find(&m, "Slideshow").key, "cmd+shift+p");
-        assert_eq!(find(&m, "Full Screen Viewfinder").key, "cmd+ctrl+f");
+        assert_eq!(find(&m, "Full Screen Viewfinder").key, "cmd+shift+f");
+        assert_eq!(find(&m, "Auto Flip").key, "cmd+shift+m");
+    }
+
+    #[test]
+    fn no_command_takes_the_shells_window_full_screen_key() {
+        let none: Vec<String> = Vec::new();
+        let m = menus(&state(&none));
+        for item in m.iter().flat_map(|m| m.items.iter()) {
+            assert_ne!(item.key, "cmd+ctrl+f", "{} takes the shell's window shortcut", item.title);
+        }
     }
 
     #[test]

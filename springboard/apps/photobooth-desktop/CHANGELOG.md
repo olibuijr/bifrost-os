@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Choosing a camera in the Camera menu reads the camera list again first. A camera unplugged since the menu opened is
+  reported in the status line instead of opened, and the choice is matched by its device node, not its position.
+- Edit > Auto Flip has a key equivalent, cmd+shift+m.
+- View > Full Screen Viewfinder moved from cmd+ctrl+f to cmd+shift+f: the shell takes cmd+ctrl+f for window full screen
+  before the app's menus see it.
+- Still missing: an in-app Trash view, photo and movie backdrops, full screen for the window itself (no app-level window
+  API), a Window or Help menu, slideshow transitions other than the fade, and lab checks of Screen Flash, Backdrops,
+  Full Screen Viewfinder and the Camera menu on Midget.
+
 ## 0.4.0
 
 - Delete moves the capture into the desktop Trash folder (`$XDG_DATA_HOME/Trash`, or `~/.local/share/Trash`) with the
