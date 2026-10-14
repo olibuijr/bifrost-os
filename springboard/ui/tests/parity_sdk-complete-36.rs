@@ -1,8 +1,10 @@
-//! Parity sdk-complete-36: headless tests for the default calling app settings and routing, and for the audio
-//! parameter table of a render unit. Nothing here starts a call or touches an audio device.
+//! Parity sdk-complete-36: headless tests for the default calling app settings and routing, the audio parameter
+//! table of a render unit, and the throughput and time estimate of a unit of work. Nothing here starts a call,
+//! touches an audio device or reads a clock.
 
 use bifrost_ui::audio_parameters::{ParameterError, ParameterTable};
 use bifrost_ui::call_apps::{AppError, CallRoute, CallingApps};
+use bifrost_ui::progress_rate::ProgressRate;
 
 fn two_apps() -> CallingApps {
     let mut apps = CallingApps::new();
@@ -139,4 +141,51 @@ fn parameters_keep_their_definition_order() {
     table.define(3, "pan", -1.0, 1.0, 0.0).unwrap();
     let ids: Vec<u32> = table.parameters().iter().map(|p| p.id).collect();
     assert_eq!(ids, vec![7, 3]);
+}
+
+#[test]
+fn a_rate_needs_two_samples_at_different_times() {
+    let mut rate = ProgressRate::new();
+    assert_eq!(rate.throughput(), None);
+    assert!(rate.record(0.0, 0));
+    assert_eq!(rate.throughput(), None, "one sample gives no rate");
+    assert!(rate.record(4.0, 40));
+    assert_eq!(rate.throughput(), Some(10.0));
+}
+
+#[test]
+fn the_estimate_is_the_remaining_units_at_the_average_rate() {
+    let mut rate = ProgressRate::new();
+    rate.record(0.0, 0);
+    rate.record(10.0, 25);
+    assert_eq!(rate.throughput(), Some(2.5));
+    assert_eq!(rate.estimated_remaining_secs(100), Some(30.0));
+}
+
+#[test]
+fn finished_work_has_no_time_left() {
+    let mut rate = ProgressRate::new();
+    rate.record(0.0, 0);
+    rate.record(2.0, 10);
+    assert_eq!(rate.estimated_remaining_secs(10), Some(0.0));
+    assert_eq!(rate.estimated_remaining_secs(8), Some(0.0), "past the total still leaves no time");
+}
+
+#[test]
+fn no_estimate_while_no_work_has_been_done() {
+    let mut rate = ProgressRate::new();
+    rate.record(0.0, 0);
+    rate.record(5.0, 0);
+    assert_eq!(rate.throughput(), Some(0.0));
+    assert_eq!(rate.estimated_remaining_secs(50), None, "a stalled job has no finishing time");
+}
+
+#[test]
+fn a_sample_that_goes_back_in_time_or_in_units_is_refused() {
+    let mut rate = ProgressRate::new();
+    rate.record(3.0, 30);
+    assert!(!rate.record(2.0, 40), "time must not go backwards");
+    assert!(!rate.record(4.0, 20), "completed units must not go backwards");
+    assert!(!rate.record(3.0, 30), "a sample at the same time is not a new rate");
+    assert_eq!(rate.throughput(), None);
 }

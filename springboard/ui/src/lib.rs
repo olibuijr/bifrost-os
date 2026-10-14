@@ -891,6 +891,7 @@ pub mod notifservice;
 pub mod notifcomm;
 pub mod notifdelivery;
 pub mod progress;
+pub mod progress_rate;
 pub mod privacy;
 pub mod relations;
 pub mod model_store;
