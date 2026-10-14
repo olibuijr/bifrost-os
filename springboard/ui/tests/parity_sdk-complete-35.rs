@@ -281,3 +281,75 @@ fn the_plain_constructor_still_builds_linear_keys_with_no_easing() {
     let keys = Keyframes::new(bifrost_ui::sk_action::Interpolation::Linear, vec![(0.0, 0.0), (2.0, 4.0)]).unwrap();
     assert!(near(keys.value_at(1.0), 2.0));
 }
+
+// --- call_ui: ringing cards on screen and waiting ----------------------------------------------------------------------
+
+mod call_cards {
+    use bifrost_ui::call::{CallAction, CallCenter, Handle};
+    use bifrost_ui::call_ui::{CallUpdate, CardButton, CardStack, IncomingCard};
+
+    fn card(center: &CallCenter, id: u64, number: &str) -> IncomingCard {
+        let call = center.call(id).unwrap();
+        IncomingCard::for_call(call, &CallUpdate::new(Handle::Phone(number.to_string())), false).unwrap()
+    }
+
+    #[test]
+    fn the_oldest_ringing_card_is_on_screen_and_the_rest_wait_behind_it() {
+        let mut center = CallCenter::new();
+        let first = center.report_incoming(Handle::Phone("5550001".into())).unwrap();
+        let second = center.report_incoming(Handle::Phone("5550002".into())).unwrap();
+        let mut stack = CardStack::new();
+        assert!(stack.push(card(&center, first, "5550001")));
+        assert!(stack.push(card(&center, second, "5550002")));
+        assert_eq!(stack.on_screen().map(|c| c.call_id), Some(first));
+        let waiting: Vec<u64> = stack.waiting().iter().map(|c| c.call_id).collect();
+        assert_eq!(waiting, vec![second]);
+    }
+
+    #[test]
+    fn a_card_for_a_call_already_held_is_refused() {
+        let mut center = CallCenter::new();
+        let id = center.report_incoming(Handle::Phone("5550003".into())).unwrap();
+        let mut stack = CardStack::new();
+        assert!(stack.push(card(&center, id, "5550003")));
+        assert!(!stack.push(card(&center, id, "5550003")));
+        assert!(stack.waiting().is_empty());
+    }
+
+    #[test]
+    fn a_button_press_sends_its_request_for_the_card_on_screen() {
+        let mut center = CallCenter::new();
+        let first = center.report_incoming(Handle::Phone("5550004".into())).unwrap();
+        let second = center.report_incoming(Handle::Phone("5550005".into())).unwrap();
+        let mut stack = CardStack::new();
+        stack.push(card(&center, first, "5550004"));
+        stack.push(card(&center, second, "5550005"));
+        assert_eq!(stack.press(CardButton::Answer), Some((first, CallAction::Answer)));
+        assert_eq!(stack.press(CardButton::Decline), Some((first, CallAction::End)));
+        assert_eq!(stack.on_screen().map(|c| c.call_id), Some(first), "a press leaves the card until it is pruned");
+    }
+
+    #[test]
+    fn pruning_removes_cards_whose_calls_were_answered_elsewhere() {
+        let mut center = CallCenter::new();
+        let first = center.report_incoming(Handle::Phone("5550006".into())).unwrap();
+        let second = center.report_incoming(Handle::Phone("5550007".into())).unwrap();
+        let mut stack = CardStack::new();
+        stack.push(card(&center, first, "5550006"));
+        stack.push(card(&center, second, "5550007"));
+        center.perform(first, CallAction::Answer).unwrap();
+        assert_eq!(stack.prune(&center), 1);
+        assert_eq!(stack.on_screen().map(|c| c.call_id), Some(second));
+        assert_eq!(stack.prune(&center), 0);
+    }
+
+    #[test]
+    fn an_empty_stack_has_nothing_on_screen_and_no_press_request() {
+        let center = CallCenter::new();
+        let mut stack = CardStack::new();
+        assert!(stack.on_screen().is_none());
+        assert!(stack.waiting().is_empty());
+        assert_eq!(stack.press(CardButton::Answer), None);
+        assert_eq!(stack.prune(&center), 0);
+    }
+}
