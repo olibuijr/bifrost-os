@@ -52,23 +52,23 @@
   {
    "feature": "Media playback (AVPlayer, AVPlayerItem, AVQueuePlayer)",
    "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, interstitials",
-   "bifrost": "springboard/src/media/player.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs",
-   "status": "os",
-   "note": "Play, pause, seek, buffering and A/V sync work, but only through the shell (Deildu, Files video); apps get no SDK player. No looper, interstitials or rate control"
+   "bifrost": "springboard/src/media/player.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs; springboard/ui/src/av_player.rs (Player, PlayerItem); springboard/ui/src/av_queue_player.rs (QueuePlayer, looper)",
+   "status": "partial",
+   "note": "The player model (items, rate, time control status, seeking, clock, queue and looper) is tested headless in springboard/ui/tests/parity_sdk-os-10.rs. Gap: the shell's players do not use this model yet, apps get no player object, and there are no interstitials."
   },
   {
    "feature": "Video decoding",
    "apple": "AVPlayerItemVideoOutput, VideoToolbox-backed decode",
-   "bifrost": "springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs",
-   "status": "os",
-   "note": "VA-API hardware decode with libavcodec fallback; no frame-output API for apps"
+   "bifrost": "springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs; springboard/sdk/src/video_decode.rs (choose, Preference)",
+   "status": "partial",
+   "note": "The decoder choice (hardware when the probe decodes the codec, software otherwise, or hardware required) is tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: the shell does not feed its probe into this choice yet, and there is no frame-output API for apps."
   },
   {
    "feature": "Audio output and routing",
    "apple": "AVPlayer audio, AVAudioSession-style routing",
-   "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/audio/alsa/src/ctl.rs",
-   "status": "os",
-   "note": "audiod and mixer own output and routing; no app-facing session API"
+   "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/audio/alsa/src/ctl.rs; springboard/sdk/src/audio_session.rs (SessionHub, route changes)",
+   "status": "partial",
+   "note": "Route state and route-change events for apps are the session model in springboard/sdk/src/audio_session.rs, tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: audiod and the mixer do not post to this model yet, so apps get no route changes from the headphone jack."
   },
   {
    "feature": "Now Playing and remote commands",

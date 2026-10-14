@@ -45,9 +45,9 @@
     {
       "feature": "Sign-in and account creation prompts",
       "apple": "Account sign-in sheets and the 'create account in app' flow of requestAccessToAccounts",
-      "bifrost": "springboard/src/shell/login.rs (desktop sign-in: password field, authentication through privd, lockout)",
-      "status": "os",
-      "note": "Desktop login only. There is no sheet an app can present to add a third-party account."
+      "bifrost": "springboard/src/shell/login.rs (desktop sign-in: password field, authentication through privd, lockout); springboard/sdk/src/sign_in.rs (callback scheme, one-time code lookup)",
+      "status": "partial",
+      "note": "The app-facing sign-in helpers (callback scheme and one-time code lookup) are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: no sheet lets an app create an account or add a third-party one."
     },
     {
       "feature": "Secure secret storage used for credentials",

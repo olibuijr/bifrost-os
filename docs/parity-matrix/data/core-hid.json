@@ -31,9 +31,9 @@
     {
       "feature": "Reading element values and input reports",
       "apple": "HIDElement.Value, HIDElementUpdate, HIDDeviceClient input callbacks",
-      "bifrost": "springboard/src/bare/input.rs (Decoder at line 63 turns evdev records into touch and key events)",
-      "status": "os",
-      "note": "The values stay inside the shell. Apps get key and touch events through the window system, not HID values."
+      "bifrost": "springboard/src/bare/input.rs (Decoder at line 63 turns evdev records into touch and key events); springboard/ui/src/hid_report.rs (ReportDescriptor::parse, Element::value, set_value)",
+      "status": "partial",
+      "note": "Report descriptors parse into fields, and field values are read and written in a payload, tested headless in springboard/ui/tests/parity_sdk-os-10.rs. Gap: the shell reads evdev events, not HID input reports, so no app receives report values."
     },
     {
       "feature": "Sending output reports to a device",
@@ -45,16 +45,16 @@
     {
       "feature": "Exclusive device ownership",
       "apple": "No direct counterpart; the framework's client model mediates access",
-      "bifrost": "springboard/src/bare/input.rs (Device::open, EVIOCGRAB ioctl at ~line 143; InputSet.exclusive)",
-      "status": "os",
-      "note": "The shell grabs its own input devices, never power buttons or lids. Apps have no way to grab a device."
+      "bifrost": "springboard/src/bare/input.rs (Device::open, EVIOCGRAB ioctl at ~line 143; InputSet.exclusive; Roles::grabbable); springboard/sdk/src/input_grab.rs (may_grab)",
+      "status": "partial",
+      "note": "The grab rule is tested headless in springboard/sdk/tests/parity_sdk-os-10.rs: apps are refused, and the shell is refused for power buttons and lid switches. Gap: no app can ask for a grab, and the rule is applied only in the shell's input set."
     },
     {
       "feature": "Virtual HID devices (HIDVirtualDevice, delegate, properties)",
       "apple": "HIDVirtualDevice, HIDVirtualDeviceDelegate, HIDVirtualDevice.Properties",
-      "bifrost": "springboard/mcp/src/keys.rs (Keyboard::open, uinput keyboard for agent control); springboard/src/bare/input.rs (Device::virtual_device at line 152, a placeholder with fd -1)",
-      "status": "os",
-      "note": "The uinput keyboard is agent tooling, not an SDK API. It emulates a keyboard only, with no custom report descriptor and no delegate. The virtual_device constructor is a no-hardware stub for tests and headless runs."
+      "bifrost": "springboard/mcp/src/keys.rs (Keyboard::open, uinput keyboard for agent control); springboard/src/bare/input.rs (Device::virtual_device at line 152, a placeholder with fd -1); springboard/sdk/src/hid_virtual.rs (KeyboardReport, VirtualKeyboard, BOOT_KEYBOARD_DESCRIPTOR)",
+      "status": "partial",
+      "note": "Keyboard reports (modifiers, up to six keys, validation) and the boot keyboard descriptor are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: no virtual device is created from this model, and custom report descriptors, properties and the delegate are not built."
     },
     {
       "feature": "Discovery from the command line",
