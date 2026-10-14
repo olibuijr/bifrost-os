@@ -69,10 +69,9 @@ Input::QuickAction(pick) => match pick.kind.as_str() {
 
 - Desktop (pointer and keyboard): a secondary click on an app's Dock icon opens the Dock's menu. The app's quick
   actions come first, then its own Dock menu items. Choosing one delivers `Input::QuickAction`.
-- Tablet: the static and dynamic items are stored and delivered in the same way, and the Dock menu code is the same
-  shared code. Touch reaches the Dock menu the same way it reaches other menus. The Home Screen long press on an app
-  icon still starts edit mode, and it does not show the quick actions yet. Drawing a Home Screen menu for touch is
-  the next step, and it is not done.
+- Tablet: the model, the service and the protocol work the same on the tablet, and the app receives the choice in the same
+  way. The tablet draws no Dock menu, so a quick action cannot be chosen there yet. The Home Screen long press on an app
+  icon still starts edit mode and does not show the quick actions. Drawing a menu for touch on the Home Screen is the next step.
 
 ## Not yet done
 

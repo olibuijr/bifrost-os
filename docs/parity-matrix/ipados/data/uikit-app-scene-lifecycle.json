@@ -117,7 +117,7 @@
    "apple": "UIApplicationShortcutItem, Home Screen quick actions",
    "bifrost": "springboard/ui/src/quick_actions.rs, springboard/sdk/src/quick_actions.rs, springboard/sdk/src/runtime.rs, springboard/proto/src/lib.rs, springboard/src/shell/quick_actions.rs, springboard/src/shell/services/quick_actions.rs, springboard/src/shell/desktop_bar.rs",
    "status": "partial",
-   "note": "built on parity/team-p-quick-actions; not yet verified on the tablet. Static [[quick_action]] manifest items and dynamic items from the SDK are shown in the Dock's menu (touch and secondary click) and delivered as Input::QuickAction; the Home Screen icon long press still starts edit mode on the tablet"
+   "note": "built on parity/team-p-quick-actions; not yet verified on the tablet. Static [[quick_action]] manifest items and dynamic items from the SDK are shown in the Dock's menu on the desktop form factor (secondary click) and delivered as Input::QuickAction; the tablet draws no Dock menu and its Home Screen icon long press still starts edit mode"
   }
  ],
  "gaps": [
