@@ -117,6 +117,7 @@ const M_EP_DETAILS: u32 = 57;
 const M_EP_UP: u32 = 58;
 const M_EP_DOWN: u32 = 59;
 const M_CLEAR_QUEUE: u32 = 60;
+const M_SHOW_PLAYED: u32 = 61;
 const POLL_MS: f64 = 250.0;
 const FEED_LIMIT: usize = 8 << 20;
 const EPISODE_LIMIT: usize = 160 << 20;
@@ -1312,6 +1313,18 @@ impl Podcasts {
         self.dirty = true;
     }
 
+    /// Marks every episode of the show on screen played, or unplayed when they are all played already.
+    fn mark_show_played(&mut self) {
+        let View::Episodes(si) = self.view else { return };
+        let Some(show) = self.shows.get(si) else { return };
+        let urls: Vec<&str> = show.episodes.iter().map(|e| e.url.as_str()).collect();
+        let played = !urls.iter().all(|u| self.library.is_played(u));
+        self.library.set_all_played(urls, played);
+        self.save_library();
+        self.rebuild();
+        self.dirty = true;
+    }
+
     // search, transcripts, files ---------------------------------------
 
     fn run_search(&mut self) {
@@ -1479,6 +1492,12 @@ impl Podcasts {
         let (downloaded, played, queued) = url.as_deref().map_or((false, false, false), |u| (self.store.downloaded(u), self.library.is_played(u), self.library.in_queue(u)));
         let playing = self.playing.is_some();
         let has_queue = !self.library.queue().is_empty();
+        let show = match self.view {
+            View::Episodes(si) => self.shows.get(si),
+            _ => None,
+        };
+        let show_has_eps = show.is_some_and(|s| !s.episodes.is_empty());
+        let show_all_played = show.is_some_and(|s| s.episodes.iter().all(|e| self.library.is_played(&e.url)));
         let st = self.prefs.settings;
         let file = AppMenu {
             title: "File".into(),
@@ -1541,6 +1560,7 @@ impl Podcasts {
                 AppMenuItem::new(M_CLEAR_QUEUE, "Clear Up Next").enabled(has_queue),
                 AppMenuItem::separator(),
                 AppMenuItem::new(M_EP_PLAYED, if played { "Mark as Unplayed" } else { "Mark as Played" }).key("cmd+shift+u").enabled(has_ep),
+                AppMenuItem::new(M_SHOW_PLAYED, if show_all_played { "Mark All as Unplayed" } else { "Mark All as Played" }).enabled(show_has_eps),
             ],
         };
         vec![file, view, AppMenu { title: "Controls".into(), items: controls }, episode]
@@ -1612,6 +1632,7 @@ impl Podcasts {
             M_EP_DETAILS => self.episode_action(EpAction::Details),
             M_EP_UP => self.episode_action(EpAction::MoveUp),
             M_EP_DOWN => self.episode_action(EpAction::MoveDown),
+            M_SHOW_PLAYED => self.mark_show_played(),
             _ => {
                 if let Some(i) = id.checked_sub(M_RATE).map(|i| i as usize).filter(|&i| i < transport::RATES.len()) {
                     self.rate = transport::RATES[i];
