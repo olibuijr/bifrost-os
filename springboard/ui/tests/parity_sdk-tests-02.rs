@@ -330,3 +330,257 @@ fn headless_values_order_by_kind_then_by_value() {
     assert_eq!(Field::Text("Banana".into()).order(&Field::Text("apple".into())), Ordering::Greater);
     assert_eq!(Field::Text("a".into()).order(&Field::Text("A".into())), Ordering::Greater);
 }
+
+// Drawings (bifrost_ui::drawing): strokes, points, inks, the stroke eraser, the text form and the rendered raster.
+// Headless: the model lives in memory and the raster is checked pixel by pixel, without any display.
+
+use bifrost_ui::drawing::{union, Drawing, DrawingError, Ink, InkKind, Raster, Stroke, StrokePoint};
+use bifrost_ui::undo::UndoManager;
+use bifrost_ui::Rect;
+
+fn pen(color: u32, width: f32) -> Ink {
+    Ink { kind: InkKind::Pen, color, width }
+}
+
+fn line(ink: Ink, points: &[(f32, f32)]) -> Stroke {
+    Stroke { ink, points: points.iter().map(|&(x, y)| StrokePoint::at(x, y)).collect() }
+}
+
+fn canvas(w: f32, h: f32) -> Rect {
+    Rect { x: 0.0, y: 0.0, w, h }
+}
+
+#[test]
+fn headless_a_stroke_length_and_bounds_come_from_its_points() {
+    let s = line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (3.0, 4.0), (3.0, 10.0)]);
+    assert_eq!(s.length(), 11.0);
+    assert_eq!(s.bounds(), Some(Rect { x: 0.0, y: 0.0, w: 3.0, h: 10.0 }));
+    assert_eq!(line(pen(0, 1.0), &[]).bounds(), None);
+}
+
+#[test]
+fn headless_a_point_without_stylus_data_has_neutral_readings() {
+    assert_eq!(
+        StrokePoint::at(1.0, 2.0),
+        StrokePoint { x: 1.0, y: 2.0, time_offset: 0.0, size: (0.0, 0.0), opacity: 1.0, force: 0.0, azimuth: 0.0, altitude: 0.0 }
+    );
+}
+
+#[test]
+fn headless_slicing_a_stroke_interpolates_its_new_ends() {
+    let s = line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0)]);
+    let xs: Vec<f32> = s.slice(0.25, 0.75).points.iter().map(|p| p.x).collect();
+    assert_eq!(xs, vec![2.5, 7.5]);
+    assert!(s.slice(0.5, 0.5).points.is_empty());
+    assert_eq!(s.slice(-1.0, 2.0), s.slice(0.0, 1.0));
+    let bent = line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (4.0, 0.0), (4.0, 4.0)]);
+    assert_eq!(bent.slice(0.0, 1.0).points.len(), 3);
+}
+
+#[test]
+fn headless_resampling_spaces_points_evenly_by_length() {
+    let s = line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0)]);
+    let xs: Vec<f32> = s.resampled(5).points.iter().map(|p| p.x).collect();
+    assert_eq!(xs, vec![0.0, 2.5, 5.0, 7.5, 10.0]);
+    assert!(s.resampled(0).points.is_empty());
+    assert_eq!(s.resampled(1).points, vec![StrokePoint::at(0.0, 0.0)]);
+    let still = line(pen(0, 1.0), &[(3.0, 3.0), (3.0, 3.0)]);
+    assert!(still.resampled(3).points.iter().all(|p| p.x == 3.0 && p.y == 3.0));
+}
+
+#[test]
+fn headless_blending_two_strokes_mixes_colour_width_and_switches_kind_at_halfway() {
+    let a = line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0)]);
+    let b = line(Ink { kind: InkKind::Marker, color: 0xff00_ff00, width: 6.0 }, &[(0.0, 0.0), (10.0, 0.0)]);
+    let half = Stroke::blend(&a, &b, 0.5);
+    assert_eq!(half.ink, Ink { kind: InkKind::Marker, color: 0xff00_8000, width: 4.0 });
+    let early = Stroke::blend(&a, &b, 0.25);
+    assert_eq!(early.ink.kind, InkKind::Pen);
+    assert_eq!(early.ink.width, 3.0);
+    assert_eq!(Stroke::blend(&a, &b, 2.0).ink, b.ink);
+}
+
+#[test]
+fn headless_blending_two_empty_strokes_keeps_no_points() {
+    let a = line(pen(0xff00_0000, 2.0), &[]);
+    let b = line(Ink { kind: InkKind::Pencil, color: 0xff00_ff00, width: 6.0 }, &[]);
+    let blended = Stroke::blend(&a, &b, 0.8);
+    assert!(blended.points.is_empty());
+    assert_eq!(blended.ink.kind, InkKind::Pencil);
+}
+
+#[test]
+fn headless_ink_kinds_round_trip_through_the_text_form() {
+    let mut d = Drawing::new();
+    d.push(line(Ink { kind: InkKind::Marker, color: 0xff00_ff00, width: 6.0 }, &[(0.0, 0.0), (1.5, 2.0)]));
+    let text = d.to_text();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "bifrost-drawing 1",
+            "stroke marker ff00ff00 6",
+            "point 0 0 0 0 0 1 0 0 0",
+            "point 1.5 2 0 0 0 1 0 0 0",
+        ]
+    );
+    assert_eq!(Drawing::from_text(&text), Ok(d));
+    let pencil = Drawing::from_text("bifrost-drawing 1\nstroke pencil ff000000 2").unwrap();
+    assert_eq!(pencil.strokes()[0].ink.kind, InkKind::Pencil);
+}
+
+#[test]
+fn headless_malformed_drawing_text_names_the_bad_line() {
+    assert_eq!(Drawing::from_text("hello"), Err(DrawingError::BadHeader));
+    assert_eq!(
+        Drawing::from_text("bifrost-drawing 1\nstroke ink 00000000 1"),
+        Err(DrawingError::Line { line: 2, reason: "unknown ink kind" })
+    );
+    assert_eq!(
+        Drawing::from_text("bifrost-drawing 1\npoint 0 0 0 0 0 1 0 0 0"),
+        Err(DrawingError::Line { line: 2, reason: "point before any stroke" })
+    );
+    assert_eq!(
+        Drawing::from_text("bifrost-drawing 1\nstroke pen ff000000 2\npoint NaN 0 0 0 0 1 0 0 0"),
+        Err(DrawingError::Line { line: 3, reason: "bad number in point" })
+    );
+}
+
+#[test]
+fn headless_the_eraser_removes_whole_strokes_that_pass_within_its_radius() {
+    let mut d = Drawing::from_strokes(vec![
+        line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0)]),
+        line(pen(0xff00_0000, 2.0), &[(20.0, 0.0), (20.0, 10.0)]),
+    ]);
+    assert_eq!(d.erase_strokes_at(5.0, 1.0, 2.0), 1);
+    assert_eq!(d.strokes().len(), 1);
+    assert_eq!(d.strokes()[0].points[0].x, 20.0);
+    assert_eq!(d.erase_strokes_at(5.0, 50.0, 1.0), 0);
+}
+
+#[test]
+fn headless_the_eraser_counts_a_stroke_exactly_on_its_radius_and_a_dot_too() {
+    let mut edge = Drawing::from_strokes(vec![line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0)])]);
+    assert_eq!(edge.erase_strokes_at(5.0, 2.0, 2.0), 1);
+    let mut dot = Drawing::from_strokes(vec![line(pen(0xff00_0000, 2.0), &[(7.0, 7.0)])]);
+    assert_eq!(dot.erase_strokes_at(7.0, 8.0, 1.0), 1);
+    assert!(dot.is_empty());
+}
+
+#[test]
+fn headless_the_eraser_takes_the_whole_stroke_and_ignores_bad_input() {
+    let long = line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0), (20.0, 0.0)]);
+    let mut d = Drawing::from_strokes(vec![long]);
+    assert_eq!(d.erase_strokes_at(10.0, 0.5, 0.5), 1);
+    assert!(d.is_empty());
+    let mut kept = Drawing::from_strokes(vec![line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0)])]);
+    assert_eq!(kept.erase_strokes_at(5.0, 0.0, -1.0), 0);
+    assert_eq!(kept.erase_strokes_at(f32::NAN, 0.0, 1.0), 0);
+    assert_eq!(kept.strokes().len(), 1);
+}
+
+#[test]
+fn headless_drawing_bounds_and_union_cover_every_point() {
+    let d = Drawing::from_strokes(vec![
+        line(pen(0, 1.0), &[(1.0, 1.0), (4.0, 2.0)]),
+        line(pen(0, 1.0), &[(0.0, 5.0)]),
+    ]);
+    assert_eq!(d.bounds(), Some(Rect { x: 0.0, y: 1.0, w: 4.0, h: 4.0 }));
+    assert_eq!(Drawing::new().bounds(), None);
+    assert_eq!(
+        union(Rect { x: 0.0, y: 0.0, w: 2.0, h: 2.0 }, Rect { x: 1.0, y: 1.0, w: 4.0, h: 1.0 }),
+        Rect { x: 0.0, y: 0.0, w: 5.0, h: 2.0 }
+    );
+}
+
+#[test]
+fn headless_an_empty_drawing_renders_a_blank_raster_of_the_rect_size() {
+    let r = Drawing::new().image(canvas(4.0, 3.0), 1.0);
+    assert_eq!(r, Raster { width: 4, height: 3, pixels: vec![0; 12] });
+}
+
+#[test]
+fn headless_scale_multiplies_the_pixel_size_and_rounds_up() {
+    let r = Drawing::new().image(canvas(2.25, 1.0), 2.0);
+    assert_eq!((r.width, r.height, r.pixels.len()), (5, 2, 10));
+}
+
+#[test]
+fn headless_an_empty_rect_bad_scale_or_huge_raster_gives_an_empty_raster() {
+    let d = Drawing::from_strokes(vec![line(pen(0xffff_0000, 2.0), &[(0.0, 0.0), (2.0, 2.0)])]);
+    assert_eq!(d.image(canvas(0.0, 4.0), 1.0), Raster::default());
+    assert_eq!(d.image(canvas(4.0, 4.0), 0.0), Raster::default());
+    assert_eq!(d.image(canvas(4.0, 4.0), f32::NAN), Raster::default());
+    assert_eq!(d.image(canvas(1.0e6, 1.0e6), 1.0), Raster::default());
+}
+
+#[test]
+fn headless_a_stroke_paints_its_width_around_its_segment_in_pixels() {
+    let d = Drawing::from_strokes(vec![line(pen(0xffff_0000, 2.0), &[(1.0, 2.0), (3.0, 2.0)])]);
+    let r = d.image(canvas(4.0, 4.0), 1.0);
+    assert_eq!((r.width, r.height), (4, 4));
+    let at = |x: usize, y: usize| r.pixels[y * r.width + x];
+    assert_eq!(at(1, 1), 0xffff_0000);
+    assert_eq!(at(2, 1), 0xffff_0000);
+    assert_eq!(at(2, 2), 0xffff_0000);
+    assert_eq!(at(2, 0), 0);
+    assert_eq!(at(2, 3), 0);
+    assert_eq!(at(0, 0), 0);
+}
+
+#[test]
+fn headless_a_translucent_ink_blends_over_the_empty_canvas_at_its_alpha() {
+    let d = Drawing::from_strokes(vec![line(pen(0x80ff_0000, 2.0), &[(1.0, 2.0), (3.0, 2.0)])]);
+    let r = d.image(canvas(4.0, 4.0), 1.0);
+    assert_eq!(r.pixels[4 + 2], 0x80ff_0000);
+}
+
+#[test]
+fn headless_later_strokes_paint_over_earlier_ones() {
+    let d = Drawing::from_strokes(vec![
+        line(pen(0xffff_0000, 2.0), &[(1.0, 2.0), (3.0, 2.0)]),
+        line(pen(0xff00_00ff, 2.0), &[(1.0, 2.0), (3.0, 2.0)]),
+    ]);
+    let r = d.image(canvas(4.0, 4.0), 1.0);
+    assert_eq!(r.pixels[4 + 2], 0xff00_00ff);
+}
+
+#[test]
+fn headless_an_erase_on_a_drawing_undoes_and_redoes_through_the_undo_manager() {
+    let mut drawing = Drawing::from_strokes(vec![line(pen(0xff00_0000, 2.0), &[(0.0, 0.0), (10.0, 0.0)])]);
+    let before = drawing.strokes()[0].clone();
+    let mut undo: UndoManager<Drawing> = UndoManager::new(10);
+    assert_eq!(drawing.erase_strokes_at(5.0, 0.0, 1.0), 1);
+    let restore = before.clone();
+    undo.register(
+        "Erase",
+        move |d: &mut Drawing| d.push(restore.clone()),
+        |d: &mut Drawing| {
+            d.erase_strokes_at(5.0, 0.0, 1.0);
+        },
+    );
+    assert!(undo.can_undo());
+    assert!(!undo.can_redo());
+    assert_eq!(undo.undo(&mut drawing), Some("Erase".to_string()));
+    assert_eq!(drawing.strokes(), std::slice::from_ref(&before));
+    assert!(undo.can_redo());
+    assert_eq!(undo.redo(&mut drawing), Some("Erase".to_string()));
+    assert!(drawing.is_empty());
+}
+
+#[test]
+fn headless_a_new_edit_after_an_undo_clears_the_redo_history() {
+    let mut drawing = Drawing::new();
+    let mut undo: UndoManager<Drawing> = UndoManager::new(10);
+    undo.register("Draw", |d: &mut Drawing| {
+        d.erase_strokes_at(0.0, 0.0, 1.0);
+    }, |d: &mut Drawing| d.push(line(pen(0, 1.0), &[(0.0, 0.0)])));
+    drawing.push(line(pen(0, 1.0), &[(0.0, 0.0)]));
+    assert_eq!(undo.undo(&mut drawing), Some("Draw".to_string()));
+    assert!(undo.can_redo());
+    undo.register("Draw", |d: &mut Drawing| {
+        d.erase_strokes_at(0.0, 0.0, 1.0);
+    }, |d: &mut Drawing| d.push(line(pen(0, 1.0), &[(0.0, 0.0)])));
+    assert!(!undo.can_redo());
+    assert_eq!(undo.steps(), 1);
+}
