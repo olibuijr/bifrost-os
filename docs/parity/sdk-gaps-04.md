@@ -22,8 +22,8 @@ steps the scene returns, then encodes its own draw commands for a render pass. `
 scene time as of the last update. A pass is refused before the first update after a presentation, after a dismissal,
 and when the scene has no area in device pixels.
 
-- Wired: the scene loop is used by the game scenes. The hand-off is not used by the GPU presenter
-  (`springboard/src/gpu/`) or by the SDK yet.
+- Wired: nothing yet. The scene loop it wraps has no caller outside this hand-off, and the GPU presenter
+  (`springboard/src/gpu/`) does not take a render pass.
 - Needs: an SDK entry point that gives an app its hand-off, and a presenter path that accepts an app's render pass.
   There is no second GPU pipeline; the presenter is Linux GPU code (`docs/gpu-first.md`).
 
