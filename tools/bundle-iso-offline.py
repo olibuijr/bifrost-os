@@ -46,8 +46,8 @@ def shell_package():
         raise RuntimeError(f"missing local BifrOSt repository database: {dbpath}")
     records = pc_mirror.parse_db(open(dbpath, "rb").read())
     record = records.get("springboard-shell")
-    if not record or not re.fullmatch(re.escape(base) + r"\.\d+", record["version"]):
-        raise RuntimeError(f"repository shell version must match committed Cargo version {base}.<epoch>")
+    if not record or not re.fullmatch(re.escape(base) + r"\.\d+-[A-Za-z0-9._+]+", record["version"]):
+        raise RuntimeError(f"repository shell version must match committed Cargo version {base}.<epoch>-<pkgrel>")
     filename = record["filename"]
     if not pc_mirror.filename_matches("springboard-shell", record["version"], filename):
         raise RuntimeError(f"repository shell filename/version mismatch: {filename}")
@@ -107,7 +107,9 @@ def checked_destination(dest):
     dest = os.path.abspath(dest)
     out_root = os.path.realpath(os.path.join(ROOT, "out"))
     parent = os.path.realpath(os.path.dirname(dest))
-    if parent != out_root and not parent.startswith(out_root + os.sep):
+    resolved = os.path.realpath(dest)
+    if os.path.islink(dest) or (parent != out_root and not parent.startswith(out_root + os.sep)) \
+            or (os.path.lexists(dest) and resolved != dest):
         raise RuntimeError(f"bundle destination must be inside generated out/: {dest}")
     return dest
 

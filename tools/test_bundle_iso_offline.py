@@ -1,7 +1,9 @@
 import hashlib
 import importlib.util
+import io
 import json
 import os
+import tarfile
 import tempfile
 import unittest
 from unittest import mock
@@ -17,6 +19,32 @@ class OfflineBundleTests(unittest.TestCase):
     def test_destination_must_be_in_generated_out_tree(self):
         with self.assertRaises(RuntimeError):
             bundle.checked_destination("/tmp/offline")
+
+    def test_destination_parent_symlink_cannot_escape_generated_tree(self):
+        with tempfile.TemporaryDirectory() as outside:
+            with tempfile.TemporaryDirectory(dir=os.path.join(bundle.ROOT, "out")) as parent:
+                link = os.path.join(parent, "escape")
+                os.symlink(outside, link)
+                with self.assertRaises(RuntimeError):
+                    bundle.checked_destination(os.path.join(link, "offline"))
+
+    def test_shell_version_accepts_epoch_and_arch_pkgrel_from_repository_db(self):
+        version = "0.8.0.1791902403-1"
+        filename = f"springboard-shell-{version}-x86_64.pkg.tar.zst"
+        desc = ("%NAME%\nspringboard-shell\n\n%VERSION%\n" + version +
+                "\n\n%FILENAME%\n" + filename + "\n")
+        database = io.BytesIO()
+        with tarfile.open(fileobj=database, mode="w:gz") as tf:
+            data = desc.encode()
+            member = tarfile.TarInfo("springboard-shell/desc")
+            member.size = len(data)
+            tf.addfile(member, io.BytesIO(data))
+        with tempfile.TemporaryDirectory() as pool:
+            open(os.path.join(pool, "bifrost.db"), "wb").write(database.getvalue())
+            open(os.path.join(pool, filename), "wb").write(b"package")
+            with mock.patch.object(bundle, "POOL", pool), \
+                 mock.patch.object(bundle, "committed_version", return_value="0.8.0"):
+                self.assertEqual(bundle.shell_package(), os.path.join(pool, filename))
 
     def test_bundle_manifest_hashes_exact_copied_payloads(self):
         with tempfile.TemporaryDirectory(dir=os.path.join(bundle.ROOT, "out")) as parent:
