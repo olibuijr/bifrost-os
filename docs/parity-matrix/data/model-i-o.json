@@ -52,9 +52,9 @@
     {
       "feature": "Lights",
       "apple": "MDLLight, MDLAreaLight, MDLPhotometricLight, MDLPhysicallyPlausibleLight, MDLLightProbe",
-      "bifrost": "springboard/ui/src/scene_light.rs",
+      "bifrost": "springboard/ui/src/scene_light.rs; springboard/ui/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. name match only"
+      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; headless tests in springboard/ui/tests/parity_sdk-tests-04.rs cover the point, spot, directional and ambient falloff and the types left uncomputed. Not wired into apps or the shell, not yet tested on the VM or Midget. Name match only"
     },
     {
       "feature": "Cameras",

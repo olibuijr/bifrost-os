@@ -45,9 +45,9 @@
     {
       "feature": "Notification list in the system column",
       "apple": "Not part of this framework. Apple's user-facing Notification Center is system UI; apps post notifications through UserNotifications.",
-      "bifrost": "springboard/src/shell/notify/center.rs (column of glass cards, one per app, clear per app or all); springboard/src/shell/notify/mod.rs (Notification Center in the notification store); springboard/sdk/src/usernotif.rs (app-facing UNUserNotificationCenter-style API)",
+      "bifrost": "springboard/src/shell/notify/center.rs (column of glass cards, one per app, clear per app or all); springboard/src/shell/notify/mod.rs (Notification Center in the notification store); springboard/sdk/src/usernotif.rs (app-facing UNUserNotificationCenter-style API); springboard/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "The column and delivery exist and apps can post through usernotif. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework."
+      "note": "The column and delivery exist and apps can post through usernotif. The store behind the column (grouping per app, clear per app or all, the 50-entry limit) and the sheet's hidden state are tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards and the swipe gestures are not tested. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework."
     },
     {
       "feature": "Widgets in the column layout",

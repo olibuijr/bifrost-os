@@ -18,8 +18,8 @@
       "feature": "AppKit updates",
       "apple": "What's new article",
       "bifrost": "docs/bifrost-ui.md (Apple-parity sections)",
-      "status": "partial",
-      "note": "Parity tracked per feature, not per release"
+      "status": "gap",
+      "note": "Not a feature: the row only points at the Apple-parity notes in docs/bifrost-ui.md, and no code or test backs it, so it stays a gap until a concrete framework update is built"
     },
     {
       "feature": "Protecting the user's privacy",
