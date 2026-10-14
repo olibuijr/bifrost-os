@@ -81,6 +81,7 @@ pub mod auth_callback_routes;
 pub mod session_events;
 pub mod tunnel;
 pub mod vpn_manager;
+pub mod vpn_profiles;
 pub mod proxy;
 pub mod rfcomm_frame;
 pub mod sdp_element;
