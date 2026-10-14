@@ -38,9 +38,9 @@
     {
       "feature": "Extents and blockmaps",
       "apple": "FSExtentPacker, FSExtentType, FSBlockmapFlags, FSMetadataRange, FSCompleteIOFlags",
-      "bifrost": "Linux kernel file systems (no BifrOSt SDK surface)",
-      "status": "os",
-      "note": "Extent mapping happens in the Linux kernel file systems. No app-facing API exists."
+      "bifrost": "springboard/sdk/src/extent_map.rs (ExtentMap::new, ExtentMap::locate); the Linux kernel file systems allocate the extents",
+      "status": "partial",
+      "note": "Extent packing, overlap refusal and the file-offset to disk-offset lookup are tested headless in tests/parity_sdk-os-02.rs. Gap: the kernel file systems do the allocation, and no call yet reads a real file's extents from the kernel."
     },
     {
       "feature": "Errors and logging",

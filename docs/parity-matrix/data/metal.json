@@ -10,9 +10,9 @@
     {
       "feature": "Device and GPU enumeration",
       "apple": "MTLDevice, MTLCreateSystemDefaultDevice",
-      "bifrost": "springboard/src/gpu/desktop.rs (GBM device on a render node)",
-      "status": "os",
-      "note": "opened by the presenter only; no app-facing device object; one render node"
+      "bifrost": "springboard/sdk/src/gpu_device.rs (GpuInventory, RenderNode::from_entry_name); springboard/src/gpu/desktop.rs (GBM device on a render node)",
+      "status": "partial",
+      "note": "Render node names, the default device (the lowest node) and its device path are tested headless in tests/parity_sdk-os-02.rs. Gap: apps get no device object, and the shell still opens its own node without this model."
     },
     {
       "feature": "Command queue and work submission",
@@ -24,16 +24,16 @@
     {
       "feature": "Drawables and onscreen presentation",
       "apple": "CAMetalLayer, CAMetalDrawable, MTKView",
-      "bifrost": "springboard/src/gpu/wl.rs (create_surface, owe), springboard/src/gpu/desktop.rs (dma-buf buffers)",
-      "status": "os",
-      "note": "external Wayland apps use dma-buf buffers; built-in apps still submit SHM (docs/wayland-desktop.md)"
+      "bifrost": "springboard/sdk/src/drawable_pool.rs (DrawablePool); springboard/src/gpu/wl.rs (create_surface, owe), springboard/src/gpu/desktop.rs (dma-buf buffers)",
+      "status": "partial",
+      "note": "The drawable pool (two or three drawables, take, present, release, abandon, resize only while idle) is tested headless in tests/parity_sdk-os-02.rs. Gap: no application surface is connected to the pool, and built-in apps still submit SHM buffers (docs/wayland-desktop.md)."
     },
     {
       "feature": "Render passes and draw calls",
       "apple": "MTLRenderCommandEncoder, MTLRenderPipelineState",
-      "bifrost": "springboard/src/gpu/egl.rs, springboard/src/gpu/quad.rs, springboard/src/gpu/batch.rs",
-      "status": "os",
-      "note": "fixed compositor pipelines (quad, glass, shadow); no app pipeline state objects"
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (RenderPass, FixedPipeline); springboard/src/gpu/egl.rs, springboard/src/gpu/quad.rs, springboard/src/gpu/batch.rs",
+      "status": "partial",
+      "note": "Pass descriptions are checked headless in tests/parity_sdk-os-02.rs: one to eight colour attachments with load and store actions, one target size, and the three fixed pipelines chosen by name. Gap: apps cannot submit draw calls, and the presenter does not take its passes from this model yet."
     },
     {
       "feature": "Shader functions and libraries",
@@ -87,16 +87,16 @@
     {
       "feature": "Materials: blur and glass compositing",
       "apple": "MetalFX and Core Image style effects on the GPU",
-      "bifrost": "springboard/render/src/glass.rs (dual-Kawase blur), springboard/src/gpu/wl.rs (glass composite)",
-      "status": "os",
-      "note": "computed once per wallpaper and used by the shell only; not exposed to apps"
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (blur_divisor, blur_plan); springboard/render/src/glass.rs (dual-Kawase blur), springboard/src/gpu/wl.rs (glass composite)",
+      "status": "partial",
+      "note": "The blur divisor for each radius, the working size and the full-size fallback for small targets are tested headless in tests/parity_sdk-os-02.rs, with the shell's thresholds. Gap: apps cannot run the glass composite, and the shell does not read its divisor from this model."
     },
     {
       "feature": "Hardware video frames",
       "apple": "CVPixelBuffer and Metal texture interop",
-      "bifrost": "springboard/src/gpu/nv12.rs, springboard/src/media",
-      "status": "os",
-      "note": "NV12 import and hardware decode feed the media path; no app-facing texture API"
+      "bifrost": "springboard/sdk/src/pixel_buffer.rs (Layout, PixelFormat); springboard/src/gpu/nv12.rs, springboard/src/media",
+      "status": "partial",
+      "note": "BGRA and NV12 layouts (plane sizes, row padding, total size, byte addressing) are tested headless in tests/parity_sdk-os-02.rs. Gap: decoding stays in the media layer, and apps get no frame or texture handle."
     },
     {
       "feature": "HDR presentation",

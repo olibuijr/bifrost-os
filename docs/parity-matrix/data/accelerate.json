@@ -87,16 +87,16 @@
     {
       "feature": "Audio DSP (biquad filters, spectrogram)",
       "apple": "Biquadratic IIR filters, audio spectrogram sample (vDSP plus vImage)",
-      "bifrost": "springboard/audiod (playback service), springboard/src/media/audioplayer.rs, biquad filter chain in springboard/apps/daw/src/devices/inst/zones/mod.rs",
-      "status": "os",
-      "note": "Audio playback runs in the system daemon. Biquad filtering exists only inside the DAW instrument. No DSP filter API for apps."
+      "bifrost": "springboard/sdk/src/biquad.rs (Design, Coefficients, Biquad); springboard/audiod (playback service), springboard/src/media/audioplayer.rs, biquad filter chain in springboard/apps/daw/src/devices/inst/zones/mod.rs",
+      "status": "partial",
+      "note": "Low-pass, high-pass and peaking sections with cookbook coefficients, their magnitude response and block processing are tested headless in tests/parity_sdk-os-02.rs. Gap: no spectrogram, and the playback service does not run these filters for apps."
     },
     {
       "feature": "Core Video pixel buffer interop",
       "apple": "Core Video interoperability with vImage pixel buffers",
-      "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (hardware decode), springboard/src/media/convert.rs (frame conversion)",
-      "status": "os",
-      "note": "Video frames are converted in the media layer. Apps get no pixel buffer API."
+      "bifrost": "springboard/sdk/src/pixel_buffer.rs (Layout::offset_of); springboard/src/media/hwdec/ffmpeg.rs (hardware decode), springboard/src/media/convert.rs (frame conversion)",
+      "status": "partial",
+      "note": "Plane addressing for the BGRA and NV12 layouts is tested headless in tests/parity_sdk-os-02.rs. Gap: no pixel buffer object is tied to the hardware decoder, so apps cannot take decoded frames."
     },
     {
       "feature": "Numerical quadrature",
