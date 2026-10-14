@@ -86,6 +86,8 @@ struct State {
     bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool, mat_manager:Option<mat_manager::BifrostMaterialManagerV1>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     cursor_manager: Option<cursor_manager::WpCursorShapeManagerV1>, cursor_device: Option<cursor_device::WpCursorShapeDeviceV1>, pointer: Option<wl_pointer::WlPointer>, cursor_serial:u32,
+    /// the seat's keyboard: one object only, or every capability change would add one and each key would arrive again
+    keyboard: Option<wl_keyboard::WlKeyboard>,
     /// the seat's touch device (bound when the seat reports touch) and the fingers on it
     touch: Option<wl_touch::WlTouch>, fingers: touch_model::Translator,
     lock_manager:Option<lock_manager::ExtSessionLockManagerV1>, output:Option<wl_output::WlOutput>, lock:Option<Lock>, lock_wanted:bool, redraw:bool, refresh:u32,
@@ -870,7 +872,14 @@ impl Dispatch<wl_seat::WlSeat, ()> for State {
                 if let Some(manager)=&s.cursor_manager { s.cursor_device=Some(manager.get_pointer(&pointer,q,())); }
                 s.pointer=Some(pointer);
             }
-            if c.contains(wl_seat::Capability::Keyboard) { seat.get_keyboard(q,()); }
+            if c.contains(wl_seat::Capability::Keyboard) {
+                // the seat repeats its capabilities whenever one changes (touch, a plugged keyboard): bind the keyboard once,
+                // a second object delivered every key twice
+                if s.keyboard.is_none() { s.keyboard=Some(seat.get_keyboard(q,())); }
+            } else if let Some(keyboard)=s.keyboard.take() {
+                for code in s.keys.drain() { s.inputs.push(Event::Key {code,down:false}); }
+                if keyboard.version()>=3 { keyboard.release(); }
+            }
             if c.contains(wl_seat::Capability::Touch) {
                 if s.touch.is_none() { s.touch=Some(seat.get_touch(q,())); }
             } else if let Some(touch)=s.touch.take() {
