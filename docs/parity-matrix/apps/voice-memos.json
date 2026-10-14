@@ -19,8 +19,8 @@
    "area": "toolbar",
    "apple": "pause while recording",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:696",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:717",
+   "note": "Pause closes the part being written and resume opens the next; the parts join when the take ends. Not yet verified on Midget.",
    "wire": "Check on Midget: a take paused and resumed with the audio service joins into one recording; the service itself has no pause, so each pause closes a part"
   },
   {
@@ -73,8 +73,8 @@
    "area": "view",
    "apple": "sidebar Recently Deleted",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1138",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1163",
+   "note": "Delete moves to the hidden .deleted folder; Recover and Delete Forever in the Recently Deleted view; purged after 30 days at launch. Not yet verified on Midget.",
    "wire": "Check on Midget: delete, Recently Deleted row, Recover and Delete Forever; recordings are removed after 30 days"
   },
   {
@@ -91,8 +91,8 @@
    "area": "menu",
    "apple": "Edit > Replace",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1050",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1075",
+   "note": "Pick a span with the trim handles and record over it; the result is saved as a copy with the span replaced. Not yet verified on Midget.",
    "wire": "Check on Midget: pick a span, record over it; the result is saved as a new copy, not over the original"
   },
   {
@@ -126,10 +126,10 @@
    "feature": "Playback speed",
    "area": "settings",
    "apple": "playback options",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Rate control in the transport passed to the audio player"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/speed.rs",
+   "note": "Recording > Playback Speed offers 0.5x to 2x; the audio service plays at the chosen speed and the position counts in memo time. Pitch follows the speed. Not yet verified on Midget.",
+   "wire": "Check on Midget: pick 2x while a memo plays, the position keeps counting in memo time, and Music plays at normal speed after Voice Memos stops."
   },
   {
    "feature": "Notes per memo",
@@ -145,8 +145,8 @@
    "area": "menu",
    "apple": "File > Share",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/main.rs:209",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/main.rs:200",
+   "note": "Recording > Export asks for a place through the save panel and writes the WAV on SaveTo. Not yet verified on Midget.",
    "wire": "Check on Midget: Recording > Export opens the save panel and the file is written"
   },
   {
@@ -154,8 +154,8 @@
    "area": "menu",
    "apple": "File > New Folder",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1005",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1210",
+   "note": "New Folder, Move to Folder and Delete Folder, with a row per folder in the sidebar. No drag onto a folder yet. Not yet verified on Midget.",
    "wire": "Check on Midget: New Folder, Move to Folder, folder rows and Delete Folder; no drag onto a folder yet"
   },
   {
@@ -163,8 +163,8 @@
    "area": "menu",
    "apple": "Favorite",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1171",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1196",
+   "note": "Favourite flag in a sidecar file, the Favourites row and the star button. Not yet verified on Midget.",
    "wire": "Check on Midget: the star button and Favourite menu item, the Favourites row"
   },
   {
@@ -172,8 +172,8 @@
    "area": "toolbar",
    "apple": "search field",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:560",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:581",
+   "note": "The sidebar search field narrows the list by title and notes (every word must match). Not yet verified on Midget.",
    "wire": "Check on Midget: typing in the sidebar search field narrows the list by title and notes"
   },
   {
@@ -182,7 +182,7 @@
    "apple": "Transcript",
    "status": "gap",
    "bifrost": "",
-   "note": "",
+   "note": "Not built: the tree has no local speech recogniser, and a C engine is ruled out by the no-new-C-dependencies rule.",
    "wire": "Local speech-to-text stored in a sidecar and shown in the notes pane"
   },
   {
@@ -190,8 +190,8 @@
    "area": "settings",
    "apple": "Settings",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:468",
-   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:489",
+   "note": "Recording > Input chooses the input device. Sample rate and quality options and a settings window are not built. Not yet verified on Midget.",
    "wire": "Sample rate and quality need a format option in the audio service; there is no settings window"
   },
   {

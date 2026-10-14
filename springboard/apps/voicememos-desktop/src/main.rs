@@ -4,6 +4,7 @@
 
 mod enhance;
 mod services;
+mod speed;
 mod store;
 mod voicememos;
 
@@ -152,6 +153,7 @@ impl App for VoiceMemosApp {
         let folders: Vec<String> = m.map(|m| m.folders().to_vec()).unwrap_or_default();
         let current = m.map(|m| m.selected_folder().to_string()).unwrap_or_default();
         let inputs = m.map(|m| m.input_choices()).unwrap_or_default();
+        let rate = m.map_or(speed::NORMAL, |m| m.playback_rate());
 
         let mut recording_items = vec![
             AppMenuItem::new(voicememos::MENU_PAUSE, if paused { "Resume Recording" } else { "Pause Recording" }).enabled(recording),
@@ -166,7 +168,12 @@ impl App for VoiceMemosApp {
             AppMenuItem::new(voicememos::MENU_EXPORT, "Export\u{2026}").key("cmd+shift+e").enabled(on),
             AppMenuItem::separator(),
             AppMenuItem::new(voicememos::MENU_SKIP, "Skip Silence").checked(skip).enabled(on),
+            AppMenuItem::separator(),
+            AppMenuItem::submenu("Playback Speed"),
         ];
+        for (n, step) in speed::RATES.iter().enumerate() {
+            recording_items.push(AppMenuItem::new(voicememos::MENU_RATE + n as u32, speed::label(*step)).checked(speed::is_step(rate, n)).depth(1));
+        }
         if !inputs.is_empty() {
             recording_items.push(AppMenuItem::separator());
             recording_items.push(AppMenuItem::submenu("Input"));

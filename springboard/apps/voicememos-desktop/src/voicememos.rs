@@ -23,6 +23,7 @@ use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 use crate::services::{self, Ask, Want};
+use crate::speed;
 use bifrost_app::audio_devices;
 use bifrost_app::privacy_permissions;
 use bifrost_app::controls::capture_access::Status;
@@ -100,6 +101,8 @@ pub const MENU_DELETE_FOLDER: u32 = 12;
 pub const MENU_MOVE: u32 = 100;
 /// The input device submenu: `MENU_INPUT + n` is input `n` of the list.
 pub const MENU_INPUT: u32 = 300;
+/// The Playback Speed submenu: `MENU_RATE + n` is step `n` of `speed::RATES`.
+pub const MENU_RATE: u32 = 400;
 /// Line height of the notes text (points), about 1.3 times the body size.
 const NOTES_LINE_PT: f32 = 17.0;
 /// Corner radius of the rename field card (prefs layout card radius, points).
@@ -351,6 +354,8 @@ pub struct VoiceMemos {
     spans: Vec<(f64, f64)>,
     /// playback does not look for silence before this position: a skip is in flight
     skip_guard: f64,
+    /// the playback speed (times normal) from the Playback Speed menu; the service plays at it while this app plays
+    rate: f32,
 }
 
 impl VoiceMemos {
@@ -414,6 +419,7 @@ impl VoiceMemos {
             skip_silence: false,
             spans: Vec::new(),
             skip_guard: 0.0,
+            rate: speed::NORMAL,
         };
         app.reload();
         app
@@ -461,6 +467,21 @@ impl VoiceMemos {
         self.input_id = id;
         self.input_name = name;
         self.inputs = listing.devices.iter().filter(|d| d.input).map(|d| (d.id.clone(), d.name.clone())).collect();
+    }
+
+    /// The playback speed the Playback Speed menu shows as checked.
+    pub fn playback_rate(&self) -> f32 {
+        self.rate
+    }
+
+    /// Chooses a playback speed (step `n` of `speed::RATES`). A song that is playing changes speed at once; the speed
+    /// is kept for the next playback.
+    fn choose_rate(&mut self, n: usize) {
+        let Some(rate) = speed::RATES.get(n).copied() else { return };
+        self.rate = rate;
+        if self.playing.is_some() {
+            self.audio.set_rate(rate);
+        }
     }
 
     /// Chooses the input device for recording (the Recording menu's Input submenu). The shell reports the change and
@@ -843,6 +864,8 @@ impl VoiceMemos {
         let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
         let start = self.position_ms;
         self.stop_playback();
+        // the speed goes first, so the song opens at it
+        self.audio.set_rate(self.rate);
         let track = Track { id: 0, path: memo.path.to_string_lossy().into_owned(), url: None };
         if !self.audio.play_queue(vec![track], 0, false, 0) {
             self.error = "Cannot play: the audio service is not running".into();
@@ -868,6 +891,8 @@ impl VoiceMemos {
     fn stop_playback(&mut self) {
         if self.playing.take().is_some() {
             self.audio.stop();
+            // the service is shared with the other audio apps: they play at normal speed
+            self.audio.set_rate(speed::NORMAL);
             self.publish_playback();
         }
         self.spans.clear();
@@ -1312,6 +1337,7 @@ impl VoiceMemos {
                 }
             }
             n if (MENU_INPUT..MENU_INPUT + 100).contains(&n) => self.choose_input((n - MENU_INPUT) as usize),
+            n if (MENU_RATE..MENU_RATE + 100).contains(&n) => self.choose_rate((n - MENU_RATE) as usize),
             _ => return false,
         }
         self.dirty = true;
@@ -2431,6 +2457,17 @@ mod tests {
         let kept = &app.memos[app.selected.unwrap()];
         assert_eq!(kept.duration_ms, 250);
         assert!(kept.title.ends_with(" trimmed"), "{}", kept.title);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn the_playback_speed_menu_chooses_the_speed_of_the_next_playback() {
+        let (mut app, ui) = app("speed");
+        assert_eq!(app.playback_rate(), speed::NORMAL);
+        assert!(app.menu(&ui, MENU_RATE + 5));
+        assert_eq!(app.playback_rate(), 1.75);
+        assert!(app.menu(&ui, MENU_RATE + 99));
+        assert_eq!(app.playback_rate(), 1.75, "a step past the list changes nothing");
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 

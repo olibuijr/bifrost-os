@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.0 — 2026-10-14
+
+- Playback speed: Recording > Playback Speed plays a memo at 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x or 2x. The audio
+  service plays at the chosen speed (the pitch follows it), and the position counts in memo time. Playback returns to
+  normal speed when Voice Memos stops, so the other audio apps are not affected.
+- Transcription and recording quality options are still not in this version.
+
 ## 1.8.0 — 2026-10-13
 
 - Search: a search field under the sidebar title narrows the list by title and notes (every word must match).
