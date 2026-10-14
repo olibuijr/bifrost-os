@@ -24,9 +24,9 @@
     {
       "feature": "Bluetooth MIDI peripheral picker and advertising",
       "apple": "CABTLEMIDIWindowController, CABTMIDICentralViewController, CABTMIDILocalPeripheralViewController",
-      "bifrost": "springboard/ui/src/midi_ble_picker.rs",
+      "bifrost": "springboard/ui/src/midi_ble_picker.rs (MidiPicker, MidiAdvertiser::scan_response); springboard/ui/src/midi_ble.rs (BLE MIDI packets); tests: springboard/ui/tests/parity_sdk-complete-13.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-04, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Bluetooth module lists audio profiles (A2DP sink/source, headset) and has no MIDI service UUID handling or BLE MIDI peripheral. Bluetooth audio streaming itself is out of the module (bluetooth.rs:18)."
+      "note": "The MIDI service UUID, the advertisement and scan response that complete a shortened name, the picker's list and selection, and BLE MIDI packet encoding are tested headless (parity_sdk-complete-13.rs and the picker's unit tests). Gap: the GATT connection and the peripheral role need the Bluetooth radio, so they are checked only on the lab machine, and the picker is not wired into apps or the shell."
     },
     {
       "feature": "Network audio device browser",

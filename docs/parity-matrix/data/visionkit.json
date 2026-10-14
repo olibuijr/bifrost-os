@@ -38,9 +38,9 @@
     {
       "feature": "Subject lifting and background removal",
       "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
-      "bifrost": "springboard/ui/src/subject_lift.rs",
+      "bifrost": "springboard/ui/src/subject_lift.rs (segment_background, Interaction::lift); tests: springboard/ui/tests/parity_sdk-complete-13.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (subject_lift.rs); not wired into the shell or apps, not tested on Midget. No subject segmentation found in the repo, including PhotoCraft and the render crate."
+      "note": "Subject lists, hit testing, highlights and cutouts are tested headless, and a colour-key segmenter lifts a subject off a plain backdrop (background_removal_* in ui/tests/parity_sdk-complete-13.rs). Gap: there is no learned segmentation model for busy scenes, and the module is not wired into the shell or apps, so it is not yet checked on Midget."
     },
     {
       "feature": "Visual Look Up",
