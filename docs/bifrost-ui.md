@@ -3036,7 +3036,8 @@ matrix rows can become parity.
   and the destination answer (copy, then link, then move); `DraggingItem` carries pasteboard types and an
   `NSFilePromiseProvider`-style `PromisedFile` written on drop.
 - Gaps, recorded: the shell does not yet forward wheel, hover or magnify/rotate events to apps, and the retained view kit is
-  not yet wired to `drag_session`. Magnify and rotate models exist in `ui::gesture`. Needs a Midget check before parity.
+  not yet wired to `drag_session`. Magnify and rotate models exist in `ui::gesture`; `ui::trackpad_gesture::TwoFinger` runs both on one two-finger touch and
+  returns Began, Changed and Ended events (`lift` ends them). Needs a Midget check before parity.
 
 ## InputMethodKit: language methods, input sources, client protocol (sprint 9)
 
