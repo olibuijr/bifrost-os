@@ -65,7 +65,7 @@ pub(crate) fn is_file_part(headers: &[(String, String)]) -> bool {
 
 /// The file name of a part: the `filename` of its Content-Disposition, else the `name` of its Content-Type. Encoded
 /// words are decoded.
-fn file_name(headers: &[(String, String)]) -> Option<String> {
+pub(crate) fn file_name(headers: &[(String, String)]) -> Option<String> {
     ["content-disposition", "content-type"]
         .iter()
         .find_map(|header| {
