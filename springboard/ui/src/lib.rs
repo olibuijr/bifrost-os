@@ -1151,3 +1151,5 @@ pub mod media_picker;
 pub mod map_snapshot;
 pub mod audio_settings;
 pub mod touch;
+pub mod auth_prompt;
+pub mod video_info;

@@ -49,3 +49,10 @@ actions, observation). Caller ID and blocking and the default calling app stay `
 ## Verification
 
 Not built or run in this stage, per the stage rules. The name guard `python3 tools/check-names.py` passes.
+
+## Incoming call UI row (review of parity/team-a-03)
+
+The branch first added a second incoming-call prompt to `call.rs`. It duplicated `springboard/ui/src/call_ui.rs`
+(`CallUpdate`, `IncomingCard`, `presentation`), which already holds the banner and full-screen card with answer and
+decline requests, so the duplicate was removed. The "Incoming call UI" row now cites `call_ui.rs` and is `partial`: the
+shell draws no call card and the row is not verified on Midget.
