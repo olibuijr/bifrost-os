@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.12.0 — 2026-10-14
+
+Reminders:
+
+- Message > Ignore Follow-Up drops the reminders of the open message, so it does not come back on its own. The item is
+  offered only while a reminder is waiting for the message.
+
+Reading:
+
+- Mail Settings has a "Bold unread messages" switch (on by default). Unread senders are drawn in semibold and read ones
+  in regular type; with the switch off every sender is regular.
+
+Removing attachments:
+
+- Message > Remove Attachments leaves a line "[Attachment removed: name]" where each file was, so the text still says
+  what the message carried.
+
+Parity records:
+
+- The mail matrix rows cite the modules the window calls (schedule, findbar, category, prefs, mime). The header-block
+  models in organize.rs are not called by the window yet and are still covered by the headless tests.
+
 ## 0.11.0 — 2026-10-14
 
 Testing and parity records (no change in the window):

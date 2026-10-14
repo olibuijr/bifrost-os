@@ -2,7 +2,7 @@
 //! [`crate::body::attachments`] would list are cut out of the MIME tree; everything else (headers, text and HTML
 //! alternatives, nested multiparts) stays as it was.
 
-use crate::body::{boundary, content_type, is_file_part, split_head, split_parts};
+use crate::body::{boundary, content_type, file_name, is_file_part, split_head, split_parts};
 use crate::message::parse_headers;
 
 /// The result of cutting the files out of one message.
@@ -23,7 +23,8 @@ fn cut(raw: &str) -> (&str, &str) {
     (&raw[..head_len + separator.len()], body)
 }
 
-/// The message with every file part removed. A multipart left with no part gets one empty text part, so it stays valid.
+/// The message with every file part removed. Each file leaves a text note in its place that names it, so the reader still
+/// shows what was there. A multipart left with no part gets one empty text part, so it stays valid.
 pub fn strip_attachments(raw: &str) -> Stripped {
     let mut removed = 0;
     let text = match strip_entity(raw, &mut removed) {
@@ -51,6 +52,13 @@ fn is_content_header(line: &str) -> bool {
     lower.starts_with("content-") || line.starts_with(' ') || line.starts_with('\t')
 }
 
+/// The text part that takes the place of a removed file: a plain note with the file's name.
+fn removed_note(file: &str) -> String {
+    let (head, _) = cut(file);
+    let name = file_name(&parse_headers(head)).unwrap_or_else(|| "file".to_string());
+    format!("Content-Type: text/plain; charset=UTF-8\r\n\r\n[Attachment removed: {name}]\r\n")
+}
+
 /// One entity (a message or a part) without its files. None when the entity is itself a file.
 fn strip_entity(entity: &str, removed: &mut usize) -> Option<String> {
     let (head, body) = cut(entity);
@@ -59,8 +67,9 @@ fn strip_entity(entity: &str, removed: &mut usize) -> Option<String> {
     if let (true, Some(delim)) = (kind.starts_with("multipart/"), boundary(&headers)) {
         let mut kept: Vec<String> = Vec::new();
         for part in split_parts(body, &delim) {
-            if let Some(text) = strip_entity(part, removed) {
-                kept.push(text);
+            match strip_entity(part, removed) {
+                Some(text) => kept.push(text),
+                None => kept.push(removed_note(part)),
             }
         }
         if kept.is_empty() {
@@ -102,6 +111,7 @@ mod tests {
         assert_eq!(readable(&out.raw), "See the file");
         assert!(out.raw.starts_with("From: ana@example.com\r\nSubject: Skjal\r\n"));
         assert!(!out.raw.contains("aGk="));
+        assert!(out.raw.contains("[Attachment removed: skjal.pdf]"), "the file's place keeps a note with its name");
         assert!(out.raw.ends_with("--B--\r\n"));
     }
 
@@ -130,6 +140,7 @@ mod tests {
         assert!(attachments(&out.raw).is_empty());
         assert_eq!(readable(&out.raw), "plain text");
         assert!(out.raw.contains("<p>html</p>"));
+        assert!(out.raw.contains("[Attachment removed: a.png]") && out.raw.contains("[Attachment removed: n.txt]"));
     }
 
     #[test]

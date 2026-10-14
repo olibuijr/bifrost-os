@@ -2,6 +2,7 @@
 //! Remind Me times. No test opens a window, reads a mailbox or touches the network.
 
 use bifrost_mail::mbox;
+use bifrost_mail::schedule::{Queue, Reminder};
 use bifrost_mail::organize::{categorize, due_reminders, due_sends, find_in_body, remind_time, Category, Remind, Scheduled};
 use bifrost_mail::signature;
 
@@ -130,4 +131,33 @@ fn a_reply_stays_primary_even_with_a_transaction_subject() {
 fn bulk_mail_with_a_sale_subject_is_a_promotion() {
     let raw = "Subject: 50% off today\nFrom: news@x.is\nList-Unsubscribe: <mailto:u@x.is>\n";
     assert_eq!(categorize(raw), Category::Promotions);
+}
+
+fn reminder(account: &str, message_id: &str, due: i64) -> Reminder {
+    Reminder { account: account.into(), mailbox: "INBOX".into(), message_id: message_id.into(), subject: "Fundur".into(), due }
+}
+
+#[test]
+fn ignoring_a_follow_up_drops_only_that_message_of_that_account() {
+    let mut queue = Queue::default();
+    queue.reminders = vec![reminder("work", "<a@x>", 100), reminder("work", "<b@x>", 200), reminder("home", "<a@x>", 300)];
+    assert_eq!(queue.drop_reminders("work", "<a@x>"), 1);
+    assert_eq!(queue.reminders, vec![reminder("work", "<b@x>", 200), reminder("home", "<a@x>", 300)]);
+}
+
+#[test]
+fn ignoring_a_message_without_a_reminder_drops_nothing() {
+    let mut queue = Queue::default();
+    queue.reminders = vec![reminder("work", "<a@x>", 100)];
+    assert_eq!(queue.drop_reminders("work", "<zz@x>"), 0);
+    assert_eq!(queue.reminders.len(), 1);
+}
+
+#[test]
+fn the_remaining_reminders_still_come_due_in_order() {
+    let mut queue = Queue::default();
+    queue.reminders = vec![reminder("work", "<a@x>", 100), reminder("work", "<b@x>", 50), reminder("work", "<c@x>", 70)];
+    queue.drop_reminders("work", "<c@x>");
+    let due: Vec<i64> = queue.take_due_reminders(1000).iter().map(|r| r.due).collect();
+    assert_eq!(due, vec![50, 100]);
 }

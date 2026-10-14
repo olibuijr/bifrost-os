@@ -709,8 +709,9 @@ impl MailWindow {
             let date = short_date(&r.summary.date);
             let date_w = ui.measure(&date, MAC_FOOTNOTE_PT, Weight::Regular);
             let name_max = (right - text_x - date_w - inset).max(0.0);
-            let name = fit(ui, display_name(&r.summary.from), MAC_BODY_PT, Weight::Semibold, name_max);
-            put(s, &mut self.labels, ui, &name, MAC_BODY_PT, Weight::Semibold, c_name, text_x, y + row * 0.14);
+            let name_weight = if self.mail.prefs.bold_unread && !r.flags.contains(Flag::Seen) { Weight::Semibold } else { Weight::Regular };
+            let name = fit(ui, display_name(&r.summary.from), MAC_BODY_PT, name_weight, name_max);
+            put(s, &mut self.labels, ui, &name, MAC_BODY_PT, name_weight, c_name, text_x, y + row * 0.14);
             put(s, &mut self.labels, ui, &date, MAC_FOOTNOTE_PT, Weight::Regular, c_date, right - date_w, y + row * 0.16);
             let base = if r.summary.subject.is_empty() { "(no subject)" } else { r.summary.subject.as_str() };
             let label = if line.thread > 1 { format!("({}) {base}", line.thread) } else { base.to_string() };

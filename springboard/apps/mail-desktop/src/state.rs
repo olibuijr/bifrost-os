@@ -1225,6 +1225,13 @@ impl Mail {
         Ok(())
     }
 
+    /// True when message `uid` has a reminder waiting in the queue for the shown account.
+    pub fn has_reminder(&self, uid: u32) -> bool {
+        let Some(message_id) = self.row(uid).and_then(|r| r.summary.message_id.as_deref()) else { return false };
+        let Some(account) = self.current().map(|a| a.id.as_str()) else { return false };
+        self.queue.reminders.iter().any(|r| r.account == account && r.message_id == message_id)
+    }
+
     /// Message > Redirect: asks who should get the open message.
     pub fn open_redirect(&mut self) {
         self.open_prompt(PromptKind::Redirect, vec![Field::new("To", "name@example.com, other@example.com", "")]);
@@ -1269,6 +1276,7 @@ impl Mail {
                 Field::new("Undo send (seconds)", "0 sends at once", &delay),
                 Field::yes_no("Quote the original in replies", self.prefs.quote_replies),
                 Field::yes_no("Plain text messages only", self.prefs.plain_text),
+                Field::yes_no("Bold unread messages", self.prefs.bold_unread),
             ],
         );
         Ok(())
@@ -1374,6 +1382,9 @@ impl Mail {
         }
         if form.fields.iter().any(|f| f.label == "Plain text messages only") {
             self.prefs.plain_text = is_yes(form.value("Plain text messages only"));
+        }
+        if form.fields.iter().any(|f| f.label == "Bold unread messages") {
+            self.prefs.bold_unread = is_yes(form.value("Bold unread messages"));
         }
         Ok(())
     }

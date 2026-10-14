@@ -1,6 +1,6 @@
 //! Signatures: one per account, appended to a new message after the standard `-- ` delimiter line, and placed above
-//! the quoted text in a reply. Pure functions over the compose body.
-#![allow(dead_code)] // wired by the compose and mailbox UI in the next step
+//! the quoted text in a reply. Pure functions over the compose body. The send path adds the signature with
+//! `state::with_signature`, which keeps a quoted `-- ` line of the original from hiding the account's signature.
 
 /// The delimiter line before a signature: two hyphens and a space.
 pub const DELIMITER: &str = "-- ";
