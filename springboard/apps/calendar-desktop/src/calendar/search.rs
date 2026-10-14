@@ -1,6 +1,7 @@
 //! Case-insensitive event search: every whitespace-separated term must occur
 //! in at least one of the event's text fields.
 use super::ics::IcsEvent;
+use super::quick::parse_date;
 use super::store::CalendarEvent;
 use super::Date;
 
@@ -13,7 +14,43 @@ pub struct Hit {
     pub location: String,
 }
 
-/// An empty query matches nothing.
+/// The days a query is limited to: `from:2026-10-01` is the first day and `to:2026-10-31` the last, both inclusive. Either
+/// may be left out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Range {
+    pub from: Option<Date>,
+    pub to: Option<Date>,
+}
+
+impl Range {
+    /// Whether `day` lies in the range (every day does when neither end is set).
+    pub fn contains(&self, day: Date) -> bool {
+        self.from.is_none_or(|f| day >= f) && self.to.is_none_or(|t| day <= t)
+    }
+
+    fn is_set(&self) -> bool {
+        self.from.is_some() || self.to.is_some()
+    }
+}
+
+/// Splits a query into its date range and the words left for matching. A `from:` or `to:` word with a date that does not
+/// read as one stays a word.
+pub fn split_range(query: &str) -> (Range, String) {
+    let mut range = Range::default();
+    let mut terms = vec![];
+    for word in query.split_whitespace() {
+        if let Some(day) = word.strip_prefix("from:").and_then(parse_date) {
+            range.from = Some(day);
+        } else if let Some(day) = word.strip_prefix("to:").and_then(parse_date) {
+            range.to = Some(day);
+        } else {
+            terms.push(word);
+        }
+    }
+    (range, terms.join(" "))
+}
+
+/// An empty query matches nothing. A query that is only a date range matches every event in the range.
 pub fn matches(query: &str, fields: &[&str]) -> bool {
     let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     if terms.is_empty() {
@@ -26,10 +63,19 @@ pub fn matches(query: &str, fields: &[&str]) -> bool {
 /// Hits from stored events and rich (imported) events, de-duplicated by
 /// date, time and title, ordered by date then time.
 pub fn search(query: &str, store: &[CalendarEvent], rich: &[IcsEvent]) -> Vec<Hit> {
+    let (range, terms) = split_range(query);
+    // with no words left, a date range alone selects its events; with no range and no words, nothing
+    let matches_text = |fields: &[&str]| {
+        if terms.is_empty() {
+            range.is_set()
+        } else {
+            matches(&terms, fields)
+        }
+    };
     // a saved event matches on its title, its location and its notes
     let mut hits: Vec<Hit> = store
         .iter()
-        .filter(|e| matches(query, &[e.title.as_str(), e.location.as_str(), e.notes.as_str()]))
+        .filter(|e| range.contains(e.date) && matches_text(&[e.title.as_str(), e.location.as_str(), e.notes.as_str()]))
         .map(|e| Hit {
             date: e.date,
             minute: e.minute,
@@ -39,7 +85,7 @@ pub fn search(query: &str, store: &[CalendarEvent], rich: &[IcsEvent]) -> Vec<Hi
         })
         .collect();
     for e in rich {
-        if !matches(query, &[e.summary.as_str(), e.location.as_str(), e.notes.as_str()]) {
+        if !range.contains(e.start.date) || !matches_text(&[e.summary.as_str(), e.location.as_str(), e.notes.as_str()]) {
             continue;
         }
         if let Some(h) = hits

@@ -125,6 +125,12 @@ impl Calendar {
         (gut, (self.w as f32 - gut - ui.pt(SPACE_S)) / n)
     }
 
+    /// The minutes a timed event fills in the grid: its saved travel time comes before its start (`extras.rs`).
+    pub(super) fn grid_span(&self, e: &CalendarEvent) -> (u32, u32) {
+        let travel = self.extras.events.get(&e.id).map_or(0, |x| u32::from(x.travel));
+        layout::travel_span(u32::from(e.minute), u32::from(e.duration), travel)
+    }
+
     /// Screen rectangles `(id, x, y, w, h)` of every event in the grid.
     pub(super) fn time_rects(&self, ui: &Ui) -> Vec<(u64, f32, f32, f32, f32)> {
         let (gut, col_w) = self.col_geometry(ui);
@@ -141,10 +147,7 @@ impl Calendar {
                 let (x, w) = layout::slot_x(slot, x0, col_w, ui.pt(SPACE_XXS));
                 out.push((e.id, x, top + ui.pt(SPACE_XXS), w, ui.pt(ALLDAY_H - 4.0)));
             }
-            let spans: Vec<(u32, u32)> = timed
-                .iter()
-                .map(|e| (e.minute as u32, (e.minute as u32 + e.duration as u32).min(1440)))
-                .collect();
+            let spans: Vec<(u32, u32)> = timed.iter().map(|e| self.grid_span(e)).collect();
             for ((e, span), slot) in timed.iter().zip(&spans).zip(layout::layout(&spans, 30)) {
                 let (x, w) = layout::slot_x(slot, x0, col_w, ui.pt(SPACE_XXS));
                 let y = layout::minute_y(span.0 as f32, hours_top, hh);

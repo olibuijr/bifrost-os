@@ -18,6 +18,7 @@ pub fn preview(q: &Quick, shown: Date) -> Vec<(&'static str, String)> {
         ("Day", date_title(q.date.unwrap_or(shown))),
         ("Time", time_label(q.minute.unwrap_or(9 * 60))),
         ("Place", q.location.clone().unwrap_or_else(|| "None".to_string())),
+        ("Notes", q.notes.clone().unwrap_or_else(|| "None".to_string())),
     ]
 }
 
@@ -86,8 +87,8 @@ impl Calendar {
             date: q.date.unwrap_or(self.selected),
             minute: q.minute,
             minutes: None,
-            location: q.location.unwrap_or_default(),
-            notes: String::new(),
+            location: q.location.clone().unwrap_or_default(),
+            notes: q.notes.clone().unwrap_or_default(),
             all_day: false,
         };
         match self.create_event(new) {
@@ -124,7 +125,7 @@ impl Calendar {
         if let Some(error) = self.error.clone() {
             self.centre(s, ui, &error, MAC_BODY_PT, Weight::Semibold, LABEL.now(), w / 2.0, ui.pt(y));
         } else {
-            let hint = "Day names, dates, times and an address are read from the sentence";
+            let hint = "Day names, dates, times, an address and a note after \"note:\" are read from the sentence";
             self.centre(s, ui, hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), w / 2.0, ui.pt(y));
         }
     }
@@ -162,6 +163,7 @@ mod tests {
         assert_eq!(rows[2], ("Time", "12:30".to_string()));
         assert_eq!(rows[3].0, "Place");
         assert!(rows[3].1.contains("Laugavegur"));
+        assert_eq!(rows[4], ("Notes", "None".to_string()));
         let bare = preview(&quick::parse("Dentist", d(10, 13)), d(10, 9));
         assert_eq!(bare[1].1, "Friday, October 9, 2026", "the shown day");
         assert_eq!(bare[2].1, "09:00");
