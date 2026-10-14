@@ -159,8 +159,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no headphone settings page",
+   "status": "n/a",
+   "note": "Spatial Audio, head tracking and similar features run in Apple headphone firmware; BifrOSt's Bluetooth pages cover the device itself",
    "rea": []
   },
   {

@@ -118,6 +118,9 @@ pub mod rotate;
 pub mod settings;
 pub mod settings_load;
 pub mod settings_search;
+// the settings App Intents catalogue; Search does not list it yet, so unused items are expected for now
+#[allow(dead_code)]
+pub mod settings_intents;
 pub mod screensaver;
 pub mod storage;
 pub mod storage_page;
