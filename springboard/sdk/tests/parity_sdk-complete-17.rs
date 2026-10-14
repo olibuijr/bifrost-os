@@ -5,6 +5,10 @@
 //! asset directory; nothing draws, reads a device or depends on the host's load.
 
 use bifrost_app::font_descriptor::UserFonts;
+use bifrost_app::midi::endpoints::ObjectId;
+use bifrost_app::midi::events::MidiEvent;
+use bifrost_app::midi::hub::Hub;
+use bifrost_app::midi::ump::{from_midi1, to_midi1, words_for_type, Ump};
 use bifrost_app::font_substitution::{candidates, cascade_list, class_of_family, substitute, with_design, FamilyClass, SystemDesign};
 use bifrost_app::process_info::{parse_low_power, thermal_state_for, ActivityOptions, ActivityTracker, SuddenTermination, ThermalState, TripPoint};
 use bifrost_app::workspace::{icon_for_content_type, icon_for_file, notification_name};
@@ -246,4 +250,98 @@ fn a_file_name_gets_the_icon_of_its_extension() {
     assert_eq!(icon_for_file("holiday.png"), "photo");
     assert_eq!(icon_for_file("notes.txt"), "doc.text");
     assert_eq!(icon_for_file("README"), "doc", "a name without an extension gets the plain document glyph");
+}
+
+// midi: the routing hub that apps and the MIDI server share, and the UMP packets it carries
+
+#[test]
+fn an_event_from_a_connected_source_reaches_the_listening_app() {
+    let mut hub = Hub::new();
+    let (client, src, _dst) = hub.create_app("Sequencer");
+    assert!(hub.registry.connect_source(client, src));
+    assert_eq!(hub.send_from_source(src, 100, Ump::one(0x2090_3C64)), 1);
+    assert_eq!(hub.pending(client), 1);
+    let got = hub.drain_inbox(client, 100);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].host_ns, 100);
+    assert_eq!(got[0].source, src);
+    assert_eq!(got[0].packet, Ump::one(0x2090_3C64));
+}
+
+#[test]
+fn an_app_that_is_not_connected_to_a_source_queues_nothing() {
+    let mut hub = Hub::new();
+    let (client, src, _dst) = hub.create_app("Sequencer");
+    assert_eq!(hub.send_from_source(src, 100, Ump::one(1)), 0);
+    assert_eq!(hub.pending(client), 0);
+}
+
+#[test]
+fn events_leave_in_timestamp_order_and_equal_stamps_keep_their_arrival_order() {
+    let mut hub = Hub::new();
+    let (client, src, _dst) = hub.create_app("Sequencer");
+    hub.registry.connect_source(client, src);
+    hub.send_from_source(src, 30, Ump::one(1));
+    hub.send_from_source(src, 10, Ump::one(2));
+    hub.send_from_source(src, 30, Ump::one(3));
+    let packets: Vec<u32> = hub.drain_inbox(client, 30).iter().map(|t| t.packet.words[0]).collect();
+    assert_eq!(packets, vec![2, 1, 3]);
+}
+
+#[test]
+fn draining_stops_at_the_given_time_and_keeps_later_events_queued() {
+    let mut hub = Hub::new();
+    let (client, src, _dst) = hub.create_app("Sequencer");
+    hub.registry.connect_source(client, src);
+    hub.send_from_source(src, 10, Ump::one(1));
+    hub.send_from_source(src, 50, Ump::one(2));
+    assert_eq!(hub.drain_inbox(client, 20).len(), 1);
+    assert_eq!(hub.pending(client), 1, "the event at 50 waits");
+}
+
+#[test]
+fn a_disposed_app_has_no_inbox_and_cannot_be_disposed_twice() {
+    let mut hub = Hub::new();
+    let (client, src, _dst) = hub.create_app("Sequencer");
+    hub.registry.connect_source(client, src);
+    hub.send_from_source(src, 10, Ump::one(1));
+    assert!(hub.dispose_app(client));
+    assert_eq!(hub.pending(client), 0);
+    assert!(!hub.dispose_app(client));
+}
+
+#[test]
+fn a_destination_takes_what_is_sent_to_it_with_its_sender() {
+    let mut hub = Hub::new();
+    let (_client, src, dst) = hub.create_app("Sequencer");
+    assert!(hub.send_to_destination(src, dst, 5, Ump::one(7)));
+    let got = hub.take_destination(dst, 5);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].source, src);
+    assert_eq!(got[0].packet.words[0], 7);
+    assert!(hub.take_destination(dst, 5).is_empty(), "taking removes the events");
+}
+
+#[test]
+fn an_untracked_destination_refuses_events() {
+    let mut hub = Hub::new();
+    let (_client, src, _dst) = hub.create_app("Sequencer");
+    assert!(!hub.send_to_destination(src, ObjectId(9999), 1, Ump::one(1)));
+}
+
+#[test]
+fn a_midi_one_channel_note_becomes_one_type_two_packet_and_back() {
+    let event = MidiEvent::NoteOn { channel: 0, key: 60, velocity: 100 };
+    let packet = from_midi1(0, event);
+    assert_eq!(packet, Ump::one(0x2090_3C64));
+    assert_eq!(packet.message_type(), 2);
+    assert_eq!(to_midi1(&packet), Some(event));
+}
+
+#[test]
+fn packet_sizes_follow_the_message_type() {
+    assert_eq!(words_for_type(2), 1, "channel voice messages are one word");
+    assert_eq!(words_for_type(4), 2, "MIDI 2.0 channel voice messages are two words");
+    assert_eq!(words_for_type(0xB), 3);
+    assert_eq!(words_for_type(0xF), 4);
 }
