@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
    "rea": []
   },
   {
@@ -78,9 +78,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "settings App Intents catalogue (open-pane intents) in springboard/src/shell/settings_intents.rs; not yet listed in Search or served on the agent socket; built on os/team-m-02-settings; not yet verified on Midget",
    "rea": []
   },
   {
