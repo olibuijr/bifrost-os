@@ -58,8 +58,8 @@
    "area": "window",
    "apple": "Shell > Close Tab, Close Other Tabs",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/menus.rs:153",
-   "note": "Close tab (cmd+W confirms while a job runs) and Reopen Closed Tab in the More menu; no Close Other Tabs.",
+   "bifrost": "springboard/src/shell/terminal/menus.rs:238",
+   "note": "Close tab (cmd+W confirms while a job runs), Close Other Tabs (More menu and File menu; tabs running a job stay open) and Reopen Closed Tab in the More menu.",
    "wire": "Add Close Other Tabs to the More menu list (view.rs MENU) and terminal_menu_action."
   },
   {
@@ -102,9 +102,9 @@
    "feature": "x-man-page URL and man page services",
    "area": "shell",
    "apple": "x-man-page scheme; Open man Page, Search man Page Index services",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No man page entry points.",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/menus.rs:251",
+   "note": "Open man page for selection (More menu) opens man in a new tab from the selection's first word. No x-man-page scheme and no Services entries yet.",
    "wire": "Add Open man Page (selection) and the x-man-page scheme: spawn man in a new tab; wire to a selection context item."
   },
   {
@@ -202,8 +202,8 @@
    "area": "edit",
    "apple": "Edit > Copy, Paste, Select All; paste selection, paste escaped text",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/input.rs:19",
-   "note": "Copy, Paste and Select All; paste turns newlines to spaces in panels only. No Paste Escaped or Paste Selection.",
+   "bifrost": "springboard/src/shell/terminal/menus.rs:240",
+   "note": "Copy, Paste, Select All and Paste Escaped Text (More menu, shell metacharacters escaped). Paste turns newlines to spaces in panels only. No Paste Selection.",
    "wire": "Add Paste Escaped Text and Paste Selection to the More menu and the edit shortcuts."
   },
   {
@@ -291,9 +291,9 @@
    "feature": "Edit Title and tab title",
    "area": "window",
    "apple": "Shell > Edit Title",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Tab title follows the program title only.",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/title.rs:7",
+   "note": "Edit Title (More menu) names the front tab; an empty name restores the automatic title. The control socket reports the name. No Show Inspector field yet.",
    "wire": "Add Edit Title to the More menu that overrides the tab title (term.title in layout.rs)."
   },
   {
@@ -336,9 +336,9 @@
    "feature": "Terminal help",
    "area": "menu",
    "apple": "Help > Terminal Help",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No help.",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/help.rs:26",
+   "note": "Terminal Help (More menu) lists the Terminal's keyboard shortcuts in a read-only panel. No help book.",
    "wire": "Add a Help menu item that opens a short Terminal help page."
   },
   {
