@@ -905,6 +905,7 @@ pub mod ml_update;
 pub mod ml_runtime;
 pub mod model_assets;
 pub mod model_specialization;
+pub mod model_compile;
 pub mod work_stream;
 pub mod postal;
 pub mod recordsearch;

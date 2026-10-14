@@ -58,6 +58,35 @@ pub fn hlg_decode(code: f64) -> f64 {
     }
 }
 
+/// Tone maps a luminance from a source mastered to `source_peak` nits onto a display with `display_peak` nits, with the
+/// BT.2390 EETF (ITU-R BT.2390, section 5.4.2) applied in the PQ domain. Luminance below the knee passes unchanged; above
+/// it a Hermite spline rolls off so that the source peak lands on the display peak. A display at least as bright as the
+/// source keeps the luminance. The input is clamped to 0..=`source_peak`. None unless both peaks are finite and positive.
+pub fn tone_map_nits(nits: f64, source_peak: f64, display_peak: f64) -> Option<f64> {
+    if !source_peak.is_finite() || !display_peak.is_finite() || source_peak <= 0.0 || display_peak <= 0.0 {
+        return None;
+    }
+    let x = nits.clamp(0.0, source_peak);
+    if display_peak >= source_peak {
+        return Some(x);
+    }
+    let source_code = pq_encode(source_peak);
+    let max_lum = pq_encode(display_peak) / source_code;
+    let e1 = pq_encode(x) / source_code;
+    let knee = (1.5 * max_lum - 0.5).clamp(0.0, 1.0);
+    let e2 = if e1 <= knee { e1 } else { bt2390_spline(e1, knee, max_lum) };
+    Some(pq_decode(e2 * source_code))
+}
+
+/// The BT.2390 roll-off above the knee `ks`, for an input `e` in `ks..=1` and a target maximum `max_lum`. It is
+/// the identity at the knee and maps 1 to `max_lum`.
+fn bt2390_spline(e: f64, ks: f64, max_lum: f64) -> f64 {
+    let t = (e - ks) / (1.0 - ks);
+    let t2 = t * t;
+    let t3 = t2 * t;
+    (2.0 * t3 - 3.0 * t2 + 1.0) * ks + (t3 - 2.0 * t2 + t) * (1.0 - ks) + (-2.0 * t3 + 3.0 * t2) * max_lum
+}
+
 /// Extended range headroom of a display: the reference white (SDR white, 1.0) and the peak it can show.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EdrHeadroom {

@@ -47,6 +47,11 @@ impl SwitchState {
         self.is_on(SW_HEADPHONE_INSERT) || self.is_on(SW_MICROPHONE_INSERT)
     }
 
+    /// The device is in tablet mode when the tablet mode switch is on (the keyboard is folded away).
+    pub fn tablet_mode(self) -> bool {
+        self.is_on(SW_TABLET_MODE)
+    }
+
     /// Replaces the bitmap with `bits` and returns the switches that changed, in code order.
     /// An unchanged bitmap returns no edges.
     pub fn update(&mut self, bits: u32) -> Vec<SwitchEdge> {
@@ -65,6 +70,36 @@ impl SwitchState {
 /// The new state of `code` in an edge list, if that switch changed.
 pub fn edge_for(edges: &[SwitchEdge], code: u16) -> Option<bool> {
     edges.iter().find(|e| e.code == code).map(|e| e.on)
+}
+
+/// The switches an observer asked for, as a bit set over the switch codes. An observer receives only the edges of
+/// the switches it watches, so a headset observer is not woken by a lid change.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SwitchWatch {
+    mask: u32,
+}
+
+impl SwitchWatch {
+    /// A watch for the listed codes. Codes above 31 are not switches and are left out.
+    pub fn new(codes: &[u16]) -> SwitchWatch {
+        let mask = codes.iter().filter(|&&code| code < 32).fold(0u32, |mask, &code| mask | (1u32 << code));
+        SwitchWatch { mask }
+    }
+
+    /// A watch for every switch.
+    pub fn all() -> SwitchWatch {
+        SwitchWatch { mask: u32::MAX }
+    }
+
+    /// Whether this watch includes the switch `code`.
+    pub fn watches(self, code: u16) -> bool {
+        code < 32 && (self.mask >> code) & 1 != 0
+    }
+
+    /// The edges of the watched switches, in the order given.
+    pub fn select(self, edges: &[SwitchEdge]) -> Vec<SwitchEdge> {
+        edges.iter().copied().filter(|e| self.watches(e.code)).collect()
+    }
 }
 
 #[cfg(test)]
