@@ -135,6 +135,43 @@ pub fn move_to(path: &Path, dir: &Path) -> std::io::Result<PathBuf> {
     Ok(target)
 }
 
+/// Groups of pictures whose files are byte for byte the same, each group in the order given and with at least two
+/// members. Files are told apart by size first; only those that share a size are read and hashed.
+pub fn duplicate_groups(photos: &[Photo]) -> Vec<Vec<PathBuf>> {
+    use std::collections::BTreeMap;
+    let mut by_size: BTreeMap<u64, Vec<&Photo>> = BTreeMap::new();
+    for p in photos {
+        by_size.entry(p.size).or_default().push(p);
+    }
+    let mut groups: Vec<Vec<PathBuf>> = Vec::new();
+    for (_, same) in by_size.into_iter().filter(|(size, list)| *size > 0 && list.len() > 1) {
+        let mut by_hash: BTreeMap<[u8; 32], Vec<PathBuf>> = BTreeMap::new();
+        for p in same {
+            if let Some(hash) = hash_file(&p.path) {
+                by_hash.entry(hash).or_default().push(p.path.clone());
+            }
+        }
+        groups.extend(by_hash.into_values().filter(|list| list.len() > 1));
+    }
+    groups.sort();
+    groups
+}
+
+/// The SHA-256 of a file's contents; None when it cannot be read.
+fn hash_file(path: &Path) -> Option<[u8; 32]> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut hash = crate::shell::sha256::Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).ok()?;
+        if n == 0 {
+            return Some(hash.finish());
+        }
+        hash.update(&buf[..n]);
+    }
+}
+
 /// A calendar date and time of day.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Date {
@@ -311,6 +348,31 @@ pub(crate) mod tests {
         let east = sections(&photos, 3600);
         assert_eq!(east.iter().map(|s| s.len).collect::<Vec<_>>(), [1, 2]);
         assert!(sections(&[], 0).is_empty());
+    }
+
+    #[test]
+    fn duplicates_are_files_with_the_same_bytes() {
+        let dir = scratch("dupes");
+        picture(&dir.join("a.png"), 100);
+        std::fs::copy(dir.join("a.png"), dir.join("a copy.png")).unwrap();
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::copy(dir.join("a.png"), dir.join("sub/same.png")).unwrap();
+        // same size as a.png but other bytes
+        let mut other = std::fs::read(dir.join("a.png")).unwrap();
+        let last = other.len() - 1;
+        other[last] ^= 0xff;
+        std::fs::write(dir.join("c.png"), other).unwrap();
+        // a different picture altogether
+        std::fs::write(dir.join("d.png"), crate::cg::imageio::tests::png_bytes(5, 5, [1, 2, 3, 255])).unwrap();
+        let photos = scan(&[dir.clone()]);
+        assert_eq!(photos.len(), 5);
+        let groups = duplicate_groups(&photos);
+        assert_eq!(groups.len(), 1);
+        let mut names: Vec<String> = groups[0].iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        names.sort();
+        assert_eq!(names, ["a copy.png", "a.png", "same.png"]);
+        assert!(duplicate_groups(&[]).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

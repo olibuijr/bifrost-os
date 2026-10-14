@@ -8,16 +8,24 @@
 //! whose results arrive through a pipe the shell polls, like Deildu.
 
 pub mod albums;
+pub mod dupes;
 pub mod edit;
+pub mod entry;
 pub mod exif;
+mod extras;
+pub mod export;
 pub mod grid;
 pub mod import;
 pub mod library;
+pub mod link;
+pub mod memories;
+pub mod meta;
 pub mod models;
 pub mod recipe;
 pub mod slideshow;
 pub mod stars;
 pub mod thumbs;
+pub mod undo;
 pub mod viewer;
 pub mod zoom;
 #[cfg(test)]
@@ -28,6 +36,7 @@ mod sort_tests;
 use crate::layout::in_rect as within;
 use super::cache::TextCache;
 use super::glyphs;
+use super::keyboard::Out;
 use super::prefs::Prefs;
 use super::clock::tz::unix_now;
 use super::ui::{home_zone, Ui, Weight, BLACK, CELL, EMPTY_STATE_GRAY, SECONDARY, SEPARATOR, WHITE};
@@ -42,6 +51,8 @@ use albums::Selection;
 use bifrost_ui::photo_caching::{Key as PreKey, Manager as PreheatCache};
 use bifrost_ui::photo_smart_albums::SmartAlbum;
 use edit::{Aspect, Edit, Filter};
+use entry::{Entry, Purpose};
+use extras::paste_edits;
 use grid::Grid;
 use library::{civil, sections, Photo, Section};
 use std::collections::HashSet;
@@ -49,6 +60,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thumbs::{DiskCache, MemCache};
 use slideshow::Slideshow;
+use undo::{Change, Stack, Step};
 use viewer::{Action, Viewer};
 
 pub const BLUE: u32 = pack(10, 132, 255, 255);
@@ -71,6 +83,8 @@ const ZOOMS: [usize; 4] = [8, 5, 3, 2];
 /// The level the grid starts at (index into `ZOOMS`).
 const ZOOM_DEFAULT: usize = 1;
 const WORKERS: usize = 2;
+/// How long a line of news stays up, in ms.
+const NOTE_MS: f64 = 6000.0;
 /// Screen-fitted pictures kept decoded: the current one and its neighbours,
 /// never more than `FULL_MAX` whatever their size (keeps memory use bounded).
 const FULL_BUDGET: usize = 4 * 1200 * 1920 * 4;
@@ -169,7 +183,63 @@ pub enum Target {
     EditPane(EditPane),
     /// a button of the Tools page
     EditTool(Tool),
+    /// the Tools page's Copy Edits and Paste Edits
+    EditCopy,
+    EditPaste,
     Slide(Slider),
+    /// the picker's More row, the rows of its page and a tap outside it
+    More,
+    MoreCancel,
+    SearchOpen,
+    SearchClear,
+    KeywordsOpen,
+    /// a keyword of the Keyword Manager: search by it, or rename it
+    KeywordUse(usize),
+    KeywordRename(usize),
+    ImportOpen,
+    UndoLast,
+    RedoLast,
+    RenameAlbum,
+    AddKeywordOpen,
+    PasteEdits,
+    MergeDuplicates,
+    /// the More page's Play Slideshow row, and its Memories switch
+    PlayAlbum,
+    MemoriesToggle,
+    /// the More page's rows for smart albums: save the search as one, change the rules of one, delete one
+    SaveSmart,
+    EditRules,
+    DeleteSmart,
+    /// the Info sheet's Edit Details row, and a row of the Details sheet
+    InfoDetails,
+    Detail(DetailRow),
+    /// the share sheet's Export row, and a row of the export sheet
+    SheetExport,
+    Export(ExportRow),
+}
+
+/// The rows of the export sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExportRow {
+    Kind,
+    Quality,
+    Size,
+    Details,
+    /// writes the file
+    Go,
+}
+
+/// The rows of the Details sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DetailRow {
+    Title,
+    Caption,
+    Keywords,
+    Place,
+    Taken,
+    CopyPlace,
+    /// puts a `photos://` link to the picture on the pasteboard
+    CopyLink,
 }
 
 /// The edit mode's tool pages: a tab row picks one, and its sliders fill the rows below.
@@ -305,12 +375,28 @@ pub enum Album {
     Trash,
     /// photos hidden from All Photos; listed in the picker once there is one
     Hidden,
+    /// pictures whose files are the same bytes; listed in the picker once there are any
+    Duplicates,
     /// a user album: index into the album list
     User(u8),
+    /// a smart album: the slot of its saved rules
+    Smart(u8),
+    /// a memory: index into the month clusters
+    Memory(u8),
 }
 
 /// At most this many user albums.
 const MAX_USER_ALBUMS: usize = 8;
+/// At most this many smart albums.
+const MAX_SMART_ALBUMS: usize = 8;
+
+/// A smart album: a name, the rules it was saved with (a search, see `meta::Query`) and the photos that match them.
+struct SmartEntry {
+    slot: u8,
+    name: String,
+    rules: String,
+    photos: Vec<Photo>,
+}
 
 impl Album {
 
@@ -322,7 +408,10 @@ impl Album {
             Self::Screenshots => "Screenshots",
             Self::Trash => "Recently Deleted",
             Self::Hidden => "Hidden",
+            Self::Duplicates => "Duplicates",
             Self::User(_) => "Album",
+            Self::Smart(_) => "Smart Album",
+            Self::Memory(_) => "Memory",
         }
     }
 }
@@ -332,6 +421,18 @@ enum Sheet {
     Share,
     Delete,
     Info,
+    /// title, caption, keywords, place and capture time, opened from Info
+    Details,
+    /// kind, quality, size and details of an exported copy, opened from the share sheet
+    Export,
+}
+
+/// A touch that began on the text card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EntryPress {
+    Keyboard,
+    Cancel,
+    Done,
 }
 
 /// The edit mode: the screen-fitted source, the settings and the preview.
@@ -353,7 +454,11 @@ impl Editor {
 }
 
 enum Done {
-    Scan { gen: u64, all: Vec<Photo>, trash: Vec<Photo> },
+    Scan { gen: u64, all: Vec<Photo>, trash: Vec<Photo>, dupes: Vec<Vec<PathBuf>> },
+    /// an import finished: what it copied, or why it could not run
+    Imported { report: Result<import::Report, String> },
+    /// an export finished: the file it wrote in Files, or why it could not
+    Exported { name: String, result: Result<PathBuf, String> },
     Thumb { key: String, image: Option<Image> },
     /// a thumbnail job that found its cell off screen and did nothing
     ThumbSkipped { key: String },
@@ -381,6 +486,10 @@ pub struct Photos {
     screenshots: Vec<Photo>,
     /// user albums: name and members, by `ua.<i>.` prefs
     user_albums: Vec<(String, Vec<Photo>)>,
+    /// smart albums, by `sa.<slot>.` prefs
+    smart_albums: Vec<SmartEntry>,
+    /// the busiest months, newest first, offered as albums (see `memories.rs`)
+    memories: Vec<(String, Vec<Photo>)>,
     /// the current album after the date filter: what the grid and viewer index
     view: Vec<Photo>,
     /// the active month filter: its title and `[start, end)` in Unix seconds
@@ -388,6 +497,38 @@ pub struct Photos {
     selection: Selection,
     /// the first tap on a permanent multi-delete asks to confirm
     confirm_purge: bool,
+    /// the text card on screen, the photo it is about, the finger on it and why it refused the text
+    entry: Option<Entry>,
+    entry_photo: Option<Photo>,
+    entry_press: Option<EntryPress>,
+    entry_error: Option<&'static str>,
+    /// the search in force (empty = none), what it parsed to and what it was before the card opened
+    search: String,
+    search_before: String,
+    query: meta::Query,
+    /// the time of the last touch or tick, in ms, for the caret and the note
+    now: f64,
+    /// groups of identical files from the last scan, and the visible photos that have a twin
+    dupe_groups: Vec<Vec<PathBuf>>,
+    duplicates: Vec<Photo>,
+    /// what Undo and Redo step through
+    stack: Stack,
+    /// the edit copied in the editor, for Paste Edits
+    edit_clip: Option<Edit>,
+    /// a link that arrived while the library was still being read; it is followed once the scan lands
+    pending_link: Option<link::Link>,
+    /// a physical keyboard does the typing: the text card raises no on-screen keyboard
+    hardware_keyboard: bool,
+    /// what the export sheet has chosen
+    export: export::Options,
+    /// the picker's second page is open
+    more_menu: bool,
+    /// the Keyword Manager is open, with its rows and scroll
+    keywords_open: bool,
+    keywords: Vec<(String, usize)>,
+    kw_scroll: Scroller,
+    /// a line of news (an import report) and when it goes away, in ms
+    note: Option<(String, f64)>,
     /// rows of the info sheet
     info: Vec<(String, String)>,
     editor: Option<Editor>,
@@ -479,10 +620,32 @@ impl Photos {
             recents: vec![],
             screenshots: vec![],
             user_albums: vec![],
+            smart_albums: vec![],
+            memories: vec![],
             view: vec![],
             filter: None,
             selection: Selection::default(),
             confirm_purge: false,
+            entry: None,
+            entry_photo: None,
+            entry_press: None,
+            entry_error: None,
+            search: String::new(),
+            search_before: String::new(),
+            query: meta::Query::default(),
+            now: 0.0,
+            dupe_groups: vec![],
+            duplicates: vec![],
+            stack: Stack::default(),
+            edit_clip: None,
+            pending_link: None,
+            hardware_keyboard: false,
+            export: export::Options::default(),
+            more_menu: false,
+            keywords_open: false,
+            keywords: vec![],
+            kw_scroll: Scroller::new(),
+            note: None,
             info: vec![],
             editor: None,
             album: Album::All,
@@ -523,6 +686,7 @@ impl Photos {
             data,
         };
         p.newest_first = p.prefs.get("sort") == Some("newest");
+        p.export = export::Options::load(&p.prefs);
         if let Some(c) = p.prefs.get_parsed::<usize>("cols").filter(|c| ZOOMS.contains(c)) {
             p.cols = c;
         }
@@ -557,7 +721,18 @@ impl Photos {
 
     /// When `tick` next needs to run without input.
     pub fn next_wake(&self) -> Option<f64> {
-        self.viewer.as_ref().and_then(Viewer::next_wake)
+        let mut due = self.viewer.as_ref().and_then(Viewer::next_wake);
+        if let Some(e) = &self.entry {
+            let blink = if e.keyboard.animating() { Some(self.now) } else { e.field.next_wake(self.now) };
+            due = earliest(due, blink);
+        }
+        if let Some((_, until)) = &self.note {
+            due = earliest(due, Some(*until));
+        }
+        if self.keywords_open && self.kw_scroll.animating() {
+            due = earliest(due, Some(self.now));
+        }
+        due
     }
 
     /// The photos of the current album, in grid order.
@@ -570,11 +745,14 @@ impl Photos {
         match album {
             Album::All => &self.visible,
             Album::Hidden => &self.hidden,
+            Album::Duplicates => &self.duplicates,
             Album::Recents => &self.recents,
             Album::Favorites => &self.favorites,
             Album::Screenshots => &self.screenshots,
             Album::Trash => &self.trash,
             Album::User(i) => self.user_albums.get(i as usize).map_or(&[][..], |u| &u.1),
+            Album::Smart(slot) => self.smart_albums.iter().find(|a| a.slot == slot).map_or(&[][..], |a| &a.photos),
+            Album::Memory(i) => self.memories.get(i as usize).map_or(&[][..], |m| &m.1),
         }
     }
 
@@ -584,8 +762,13 @@ impl Photos {
         if !self.hidden.is_empty() {
             v.push(Album::Hidden);
         }
+        if !self.duplicates.is_empty() {
+            v.push(Album::Duplicates);
+        }
         let names: Vec<(usize, String)> = self.user_albums.iter().enumerate().map(|(i, u)| (i, u.0.clone())).collect();
         v.extend(albums::album_order(&names, self.albums_by_name()).into_iter().map(|i| Album::User(i as u8)));
+        v.extend(self.smart_albums.iter().map(|a| Album::Smart(a.slot)));
+        v.extend((0..self.memories.len()).map(|i| Album::Memory(i as u8)));
         v
     }
 
@@ -608,6 +791,44 @@ impl Photos {
         v.extend([Target::SortOrder, Target::AlbumSort, Target::ShowSeconds]);
         if matches!(self.album, Album::User(_)) {
             v.push(Target::DeleteAlbum);
+        }
+        v.push(Target::More);
+        v
+    }
+
+    /// The rows of the picker's second page, top to bottom.
+    fn more_rows(&self) -> Vec<Target> {
+        let mut v = vec![Target::SearchOpen];
+        if !self.search.is_empty() {
+            v.push(Target::SearchClear);
+        }
+        if !self.view.is_empty() && self.album != Album::Trash {
+            v.push(Target::PlayAlbum);
+        }
+        v.extend([Target::KeywordsOpen, Target::ImportOpen, Target::MemoriesToggle]);
+        if self.stack.undo_label().is_some() {
+            v.push(Target::UndoLast);
+        }
+        if self.stack.redo_label().is_some() {
+            v.push(Target::RedoLast);
+        }
+        if matches!(self.album, Album::User(_)) {
+            v.push(Target::RenameAlbum);
+        }
+        if !self.search.is_empty() && self.smart_albums.len() < MAX_SMART_ALBUMS {
+            v.push(Target::SaveSmart);
+        }
+        if matches!(self.album, Album::Smart(_)) {
+            v.extend([Target::EditRules, Target::DeleteSmart]);
+        }
+        if self.selection.active && !self.selection.is_empty() {
+            v.push(Target::AddKeywordOpen);
+            if self.edit_clip.is_some() {
+                v.push(Target::PasteEdits);
+            }
+        }
+        if self.album == Album::Duplicates {
+            v.push(Target::MergeDuplicates);
         }
         v
     }
@@ -636,6 +857,8 @@ impl Photos {
     fn album_title(&self, album: Album) -> String {
         match album {
             Album::User(i) => self.user_albums.get(i as usize).map_or_else(|| album.title().to_string(), |u| u.0.clone()),
+            Album::Smart(slot) => self.smart_albums.iter().find(|a| a.slot == slot).map_or_else(|| album.title().to_string(), |a| a.name.clone()),
+            Album::Memory(i) => self.memories.get(i as usize).map_or_else(|| album.title().to_string(), |m| format!("Memory: {}", m.0)),
             _ => album.title().to_string(),
         }
     }
@@ -666,6 +889,8 @@ impl Photos {
     pub fn select_album(&mut self, ui: &Ui, album: Album) {
         self.album = album;
         self.album_menu = false;
+        self.more_menu = false;
+        self.keywords_open = false;
         self.selection.end();
         self.confirm_purge = false;
         self.editor = None;
@@ -703,6 +928,47 @@ impl Photos {
         self.scroll.jump_to(if self.album == Album::Trash { 0.0 } else { f32::MAX });
     }
 
+    /// The search in force; empty when there is none.
+    pub fn search(&self) -> &str {
+        &self.search
+    }
+
+    /// Searches the current album for `text` (see `meta::Query`); empty text ends the search.
+    pub fn set_search(&mut self, ui: &Ui, text: &str) {
+        self.search = text.trim().to_string();
+        self.query = meta::Query::parse(&self.search, self.offset, unix_now());
+        self.selection.end();
+        self.viewer = None;
+        self.sheet = None;
+        self.rebuild(ui);
+        self.scroll.jump_to(if self.album == Album::Trash { 0.0 } else { f32::MAX });
+    }
+
+    /// The photos of `photos` that the search in force matches.
+    fn search_filter(&self, photos: Vec<Photo>, query: &meta::Query) -> Vec<Photo> {
+        let members: Vec<(&str, HashSet<&Path>)> = self.user_albums.iter().map(|(name, list)| (name.as_str(), list.iter().map(|p| p.path.as_path()).collect())).collect();
+        let shots: HashSet<&Path> = self.screenshots.iter().map(|p| p.path.as_path()).collect();
+        photos
+            .into_iter()
+            .filter(|p| {
+                let name = p.name();
+                let details = meta::details(&self.prefs, &p.path);
+                let albums: Vec<String> = members.iter().filter(|(_, set)| set.contains(p.path.as_path())).map(|(album, _)| album.to_string()).collect();
+                let subject = meta::Subject {
+                    name: &name,
+                    taken: p.mtime,
+                    favourite: self.is_favourite(p),
+                    edited: self.recipe(p).is_some(),
+                    screenshot: shots.contains(p.path.as_path()),
+                    rating: self.rating(p),
+                    albums: &albums,
+                    details: &details,
+                };
+                query.matches(&subject, self.offset)
+            })
+            .collect()
+    }
+
     /// The month filter's next state: the newest month present, then older
     /// ones, then none.
     fn cycle_filter(&mut self, ui: &Ui) {
@@ -730,7 +996,7 @@ impl Photos {
             (Some(_), None) => "viewer",
             (None, _) => "grid",
         };
-        format!("photos_screen={screen}\nphotos_album={:?}\nphotos_count={}\nphotos_trash={}\nphotos_cols={}\nphotos_thumbs={}\nphotos_pending={}\nphotos_favorites={}\nphotos_album_count={}\nphotos_scanning={}\nphotos_filter={}\nphotos_selected={}\n", self.album, self.all.len(), self.trash.len(), self.cols, self.thumbs.len(), self.thumb_pending.len(), self.favorites.len(), self.photos().len(), u8::from(self.scanning), self.filter.as_ref().map_or("", |f| f.0.as_str()), self.selection.len())
+        format!("photos_screen={screen}\nphotos_album={:?}\nphotos_count={}\nphotos_trash={}\nphotos_cols={}\nphotos_thumbs={}\nphotos_pending={}\nphotos_favorites={}\nphotos_album_count={}\nphotos_scanning={}\nphotos_filter={}\nphotos_selected={}\nphotos_search={}\nphotos_duplicates={}\n", self.album, self.all.len(), self.trash.len(), self.cols, self.thumbs.len(), self.thumb_pending.len(), self.favorites.len(), self.photos().len(), u8::from(self.scanning), self.filter.as_ref().map_or("", |f| f.0.as_str()), self.selection.len(), self.search, self.duplicates.len())
     }
 
     pub fn is_favourite(&self, p: &Photo) -> bool {
@@ -744,7 +1010,11 @@ impl Photos {
         self.gen += 1;
         let (gen, dirs, pictures, offset) = (self.gen, self.dirs.clone(), self.pictures.clone(), self.offset);
         self.scanning = true;
-        self.pool.spawn(move || Done::Scan { gen, all: library::scan_at(&dirs, offset), trash: library::scan_trash(&pictures, offset) });
+        self.pool.spawn(move || {
+            let all = library::scan_at(&dirs, offset);
+            let dupes = library::duplicate_groups(&all);
+            Done::Scan { gen, all, trash: library::scan_trash(&pictures, offset), dupes }
+        });
     }
 
     /// Sets the local zone offset (section titles follow it).
@@ -763,7 +1033,10 @@ impl Photos {
         let (hidden, visible): (Vec<Photo>, Vec<Photo>) = self.all.iter().cloned().partition(|p| self.is_hidden(p));
         self.hidden = hidden;
         self.visible = visible;
-        if self.album == Album::Hidden && self.hidden.is_empty() {
+        let present: HashSet<PathBuf> = self.visible.iter().map(|p| p.path.clone()).collect();
+        let twins: HashSet<PathBuf> = dupes::members(&self.dupe_groups, &present).into_iter().flatten().collect();
+        self.duplicates = self.visible.iter().filter(|p| twins.contains(&p.path)).cloned().collect();
+        if (self.album == Album::Hidden && self.hidden.is_empty()) || (self.album == Album::Duplicates && self.duplicates.is_empty()) {
             self.album = Album::All;
         }
         self.favorites = models::smart_album(SmartAlbum::Favourites, &self.visible, |p| self.is_favourite(p), now);
@@ -777,13 +1050,36 @@ impl Photos {
             .collect();
         self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.visible, |p| self.is_favourite(p), now);
         self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.visible, |p| self.is_favourite(p), now);
+        self.smart_albums = (0..MAX_SMART_ALBUMS)
+            .filter_map(|slot| {
+                let name = self.prefs.get(&format!("sa.{slot}.name")).filter(|n| !n.is_empty())?.to_string();
+                let rules = self.prefs.get(&format!("sa.{slot}.q")).unwrap_or("").to_string();
+                let query = meta::Query::parse(&rules, self.offset, now);
+                let photos = if query.is_empty() { Vec::new() } else { self.search_filter(self.visible.clone(), &query) };
+                Some(SmartEntry { slot: slot as u8, name, rules, photos })
+            })
+            .collect();
+        let shots: HashSet<PathBuf> = self.screenshots.iter().map(|p| p.path.clone()).collect();
+        let candidates: Vec<Photo> = self.visible.iter().filter(|p| !shots.contains(&p.path)).cloned().collect();
+        self.memories = if self.prefs.get("memories") == Some("0") { Vec::new() } else { memories::clusters(&candidates, self.offset, memories::MIN_PHOTOS, memories::MAX_MEMORIES) };
+        if let Album::Smart(slot) = self.album {
+            if !self.smart_albums.iter().any(|a| a.slot == slot) {
+                self.album = Album::All;
+            }
+        }
+        if let Album::Memory(i) = self.album {
+            if self.memories.get(i as usize).is_none() {
+                self.album = Album::All;
+            }
+        }
         let view = {
             let base = self.album_list(self.album);
             let filtered = match &self.filter {
                 Some((_, range)) => albums::in_range(base, *range),
                 None => base.to_vec(),
             };
-            models::by_date(&filtered, self.newest_first)
+            let searched = if self.query.is_empty() { filtered } else { self.search_filter(filtered, &self.query) };
+            models::by_date(&searched, self.newest_first)
         };
         self.view = view;
         self.selection.retain_in(&self.view);
@@ -1057,7 +1353,7 @@ impl Photos {
         for done in self.pool.drain() {
             changed = true;
             match done {
-                Done::Scan { gen, all, trash } => {
+                Done::Scan { gen, all, trash, dupes } => {
                     if gen != self.gen {
                         continue;
                     }
@@ -1065,6 +1361,9 @@ impl Photos {
                     let anchor = self.viewer_anchor();
                     self.all = all;
                     self.trash = trash;
+                    self.dupe_groups = dupes;
+                    meta::apply_taken(&self.prefs, &mut self.all);
+                    meta::apply_taken(&self.prefs, &mut self.trash);
                     self.purge_expired();
                     self.recent.retain(|r| !self.all.iter().any(|p| p.path == r.path));
                     for r in self.recent.clone() {
@@ -1076,6 +1375,9 @@ impl Photos {
                     if !self.started {
                         self.started = true;
                         self.scroll.jump_to(f32::MAX);
+                    }
+                    if let Some(l) = self.pending_link.take() {
+                        self.follow_link(ui, l);
                     }
                 }
                 Done::Thumb { key, image } => {
@@ -1096,6 +1398,22 @@ impl Photos {
                         self.full.insert(&key, img);
                     }
                 }
+                Done::Imported { report } => {
+                    let text = match report {
+                        Ok(r) if r.copied + r.skipped + r.failed == 0 => "Nothing to import: no pictures in that folder.".to_string(),
+                        Ok(r) => format!("Imported {} {}, {} already in the library{}.", r.copied, if r.copied == 1 { "photo" } else { "photos" }, r.skipped, if r.failed > 0 { format!(", {} failed", r.failed) } else { String::new() }),
+                        Err(e) => format!("Could not import: {e}"),
+                    };
+                    self.note = Some((text, self.now + NOTE_MS));
+                    self.rescan();
+                }
+                Done::Exported { name, result } => {
+                    let text = match result {
+                        Ok(path) => format!("Exported {} to Files.", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
+                        Err(e) => format!("Could not export {name}: {e}"),
+                    };
+                    self.note = Some((text, self.now + NOTE_MS));
+                }
                 Done::Wallpaper { id, ok } => {
                     if ok {
                         self.effects.push(Effect::Wallpaper(id));
@@ -1112,6 +1430,23 @@ impl Photos {
     /// Advances scrolling, paging and the tap timer; asks for pictures that
     /// came into view. True when the screen changed.
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
+        self.now = t;
+        if self.note.as_ref().is_some_and(|(_, until)| t >= *until) {
+            self.note = None;
+            self.dirty = true;
+        }
+        if self.keywords_open {
+            self.dirty |= self.kw_scroll.tick(t);
+        }
+        if let Some(e) = self.entry.as_mut() {
+            let typed = e.keyboard.tick(t);
+            e.field.tick(ui, t);
+            for out in typed {
+                self.entry_key(ui, out, t);
+            }
+            // the caret blinks and the keyboard slides
+            self.dirty = true;
+        }
         if let Some(sh) = &mut self.slideshow {
             sh.tick(t);
             self.request_full();
@@ -1141,7 +1476,7 @@ impl Photos {
 
     /// Nothing to show in All Photos: bifrost 15's "Library" with its empty state.
     fn blank_library(&self) -> bool {
-        self.album == Album::All && self.filter.is_none() && !self.selection.active && !self.scanning && self.photos().is_empty()
+        self.album == Album::All && self.filter.is_none() && self.search.is_empty() && !self.selection.active && !self.scanning && self.photos().is_empty()
     }
 
     /// The empty library's Open Camera button (x, y, w, h), centred on the screen.
@@ -1193,12 +1528,17 @@ impl Photos {
         let anchor = match sheet {
             Sheet::Share => Target::Share,
             Sheet::Delete => Target::Delete,
-            Sheet::Info => Target::Info,
+            Sheet::Info | Sheet::Details => Target::Info,
+            Sheet::Export => Target::Share,
         };
         let cx = self.bar_buttons().iter().find(|(t, _)| *t == anchor).map_or(self.w as f32 / 2.0, |(_, x)| *x);
         let rows = sheet_rows(sheet) as f32;
-        if sheet == Sheet::Info {
-            let (iw, ih) = self.info_size(ui);
+        if matches!(sheet, Sheet::Info | Sheet::Details | Sheet::Export) {
+            let (iw, ih) = match sheet {
+                Sheet::Info => self.info_size(ui),
+                Sheet::Details => self.details_size(ui),
+                _ => self.export_size(ui),
+            };
             return ((self.w as f32 - iw) / 2.0, self.bar_top(ui) - ih - ui.pt(12.0), iw, ih);
         }
         let (sw, sh) = (ui.pt(SHEET_W_PT), ui.pt(SHEET_ROW_PT * rows));
@@ -1207,6 +1547,17 @@ impl Photos {
     }
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        if self.keywords_open {
+            return Some(self.keywords_hit(ui, x, y));
+        }
+        if self.more_menu {
+            for (k, t) in self.more_rows().into_iter().enumerate() {
+                if within(x, y, self.more_row(ui, k)) {
+                    return Some(t);
+                }
+            }
+            return Some(Target::MoreCancel);
+        }
         if self.album_menu {
             for album in self.menu_albums() {
                 if within(x, y, self.album_row(ui, album)) {
@@ -1263,6 +1614,12 @@ impl Photos {
             return Some(self.grid.hit(x, y - content_top(ui) + self.scroll.offset()).map_or(Target::Content, Target::Cell));
         };
         if let Some(sheet) = self.sheet {
+            if sheet == Sheet::Details {
+                return Some(self.details_hit(ui, x, y));
+            }
+            if sheet == Sheet::Export {
+                return Some(self.export_hit(ui, x, y));
+            }
             if sheet == Sheet::Info {
                 let rated = 2 * usize::from(self.info_has_rating());
                 if self.info_has_rating() {
@@ -1273,11 +1630,15 @@ impl Photos {
                     if within(x, y, self.info_hide_row(ui)) {
                         return Some(Target::InfoHide);
                     }
+                    if within(x, y, self.info_details_row(ui)) {
+                        return Some(Target::InfoDetails);
+                    }
                 }
                 if self.info_revert {
                     let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
                     let row = ui.pt(INFO_ROW_PT);
-                    if within(x, y, (sx, sy + row * (self.info.len() + 1 + rated) as f32, sw, row)) {
+                    let details = usize::from(self.info_has_rating());
+                    if within(x, y, (sx, sy + row * (self.info.len() + 1 + rated + details) as f32, sw, row)) {
                         return Some(Target::InfoRevert);
                     }
                 }
@@ -1295,7 +1656,8 @@ impl Photos {
                 (Sheet::Share, 2) => Target::SheetFiles,
                 (Sheet::Share, 3) => Target::SheetNearby,
                 (Sheet::Share, 4) => Target::SheetDuplicate,
-                (Sheet::Share, 5) | (Sheet::Delete, 0) => Target::SheetAction,
+                (Sheet::Share, 5) => Target::SheetExport,
+                (Sheet::Share, 6) | (Sheet::Delete, 0) => Target::SheetAction,
                 _ => Target::SheetCancel,
             });
         }
@@ -1317,8 +1679,38 @@ impl Photos {
         Some(Target::Photo)
     }
 
+    /// The grid's scroll, or the Keyword Manager's while it is open.
+    fn scroll_down(&mut self, y: f32, t: f64) {
+        if self.keywords_open {
+            self.kw_scroll.down(y, t);
+        } else {
+            self.scroll.down(y, t);
+        }
+    }
+
+    /// Moves the scroll with the finger; true once it is dragging.
+    fn scroll_move(&mut self, y: f32, t: f64) -> bool {
+        let scroll = if self.keywords_open { &mut self.kw_scroll } else { &mut self.scroll };
+        scroll.moved(y, t);
+        scroll.dragging()
+    }
+
+    /// Lifts the finger off the scroll; true when it was a tap.
+    fn scroll_up(&mut self, y: f32, t: f64) -> bool {
+        if self.keywords_open {
+            self.kw_scroll.up(y, t)
+        } else {
+            self.scroll.up(y, t)
+        }
+    }
+
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
         self.dirty = true;
+        self.now = t;
+        if self.entry.is_some() {
+            self.entry_touch(ui, ev, t);
+            return;
+        }
         let (x, y) = match ev {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             Event::Power | Event::Wake | Event::VolumeUp | Event::VolumeDown | Event::Screenshot => return,
@@ -1332,8 +1724,8 @@ impl Photos {
                             v.down(x, y, t);
                         }
                     }
-                    Some(Target::Content | Target::Cell(_)) => {
-                        self.scroll.down(y, t);
+                    Some(Target::Content | Target::Cell(_) | Target::KeywordUse(_) | Target::KeywordRename(_)) => {
+                        self.scroll_down(y, t);
                         self.scrolling = true;
                     }
                     Some(Target::Slide(slider)) => self.set_slider(ui, slider, x),
@@ -1347,11 +1739,8 @@ impl Photos {
                     }
                 } else if let Some(Target::Slide(slider)) = self.pressed {
                     self.set_slider(ui, slider, x);
-                } else if self.scrolling {
-                    self.scroll.moved(y, t);
-                    if self.scroll.dragging() {
-                        self.pressed = None;
-                    }
+                } else if self.scrolling && self.scroll_move(y, t) {
+                    self.pressed = None;
                 }
             }
             Event::Up(..) | Event::Power | Event::Wake | Event::VolumeUp | Event::VolumeDown | Event::Screenshot => {
@@ -1362,7 +1751,7 @@ impl Photos {
                     }
                     return;
                 }
-                let tap = if std::mem::take(&mut self.scrolling) { self.scroll.up(y, t) } else { true };
+                let tap = if std::mem::take(&mut self.scrolling) { self.scroll_up(y, t) } else { true };
                 if tap {
                     if let Some(p) = pressed.filter(|&p| Some(p) == self.hit(ui, x, y)) {
                         self.activate(ui, p, t);
@@ -1385,6 +1774,10 @@ impl Photos {
                 }
             }
             Target::OpenCamera => self.camera_req = true,
+            Target::Filter if !self.search.is_empty() => {
+                let text = self.search.clone();
+                self.open_entry(ui, Purpose::Search, &text, None, t);
+            }
             Target::Filter => self.cycle_filter(ui),
             Target::SelectAll => {
                 let all = self.view.clone();
@@ -1422,6 +1815,14 @@ impl Photos {
                 if let Some(p) = self.viewing().cloned() {
                     let head = read_head(&p.path);
                     self.info = exif::describe(&p.name(), p.size, p.mtime, self.offset, &head);
+                    // a corrected capture time shows instead of the one in the file
+                    if meta::details(&self.prefs, &p.path).taken.is_some() {
+                        let d = civil(p.mtime, self.offset);
+                        let shown = format!("{}, {}", library::day_title(&d), library::time_title(&d));
+                        if let Some(row) = self.info.iter_mut().find(|(label, _)| label == "Date") {
+                            row.1 = shown;
+                        }
+                    }
                     // Recently Deleted photos have no revert: their edit left with them
                     self.info_revert = self.album != Album::Trash && self.recipe(&p).is_some();
                     self.sheet = Some(Sheet::Info);
@@ -1430,14 +1831,20 @@ impl Photos {
             Target::Rate(n) => {
                 if let Some(p) = self.viewing().cloned() {
                     let next = stars::after_tap(self.rating(&p), n);
-                    self.set_rating(&p, next);
+                    self.rate_photo(&p, next);
                 }
             }
+            Target::InfoDetails => self.sheet = Some(Sheet::Details),
+            Target::SheetExport => self.sheet = Some(Sheet::Export),
+            Target::Export(row) => self.activate_export(row),
+            Target::Detail(row) => self.activate_detail(ui, row, t),
             Target::InfoHide => {
                 if let Some(p) = self.viewing().cloned() {
                     let anchor = self.viewer_anchor();
                     let on = !self.is_hidden(&p);
+                    let before = self.pref_now(&format!("hide:{}", p.path.display()));
                     self.set_hidden(&p, on);
+                    self.record(if on { "Hide Photo" } else { "Unhide Photo" }, vec![before]);
                     self.sheet = None;
                     self.rebuild(ui);
                     // the photo has left this album's grid (or come back to it): the viewer lands on its neighbour
@@ -1452,7 +1859,9 @@ impl Photos {
                 self.info_revert = false;
                 self.sheet = None;
                 if let Some(p) = self.viewing().cloned() {
+                    let before = self.pref_now(&format!("edit:{}", p.path.display()));
                     self.set_recipe(&p, Edit::default());
+                    self.record("Revert to Original", vec![before]);
                     self.invalidate(&p);
                 }
             }
@@ -1497,6 +1906,17 @@ impl Photos {
                     ed.refresh();
                 }
             }
+            Target::EditCopy => {
+                if let Some(ed) = &self.editor {
+                    self.edit_clip = Some(ed.edit);
+                }
+            }
+            Target::EditPaste => {
+                if let (Some(clip), Some(ed)) = (self.edit_clip, self.editor.as_mut()) {
+                    ed.edit = paste_edits(clip, ed.edit);
+                    ed.refresh();
+                }
+            }
             Target::EditTool(tool) => {
                 if let Some(ed) = &mut self.editor {
                     tool.apply(&mut ed.edit);
@@ -1510,7 +1930,9 @@ impl Photos {
             }
             Target::EditSave => {
                 if let Some(ed) = self.editor.take() {
+                    let before = self.pref_now(&format!("edit:{}", ed.photo.path.display()));
                     self.set_recipe(&ed.photo, ed.edit);
+                    self.record("Edit", vec![before]);
                     self.invalidate(&ed.photo);
                     self.dirty = true;
                 }
@@ -1518,6 +1940,74 @@ impl Photos {
             Target::Slide(_) => {}
             Target::Album => {
                 self.album_menu = true;
+            }
+            Target::More => {
+                self.album_menu = false;
+                self.more_menu = true;
+            }
+            Target::MoreCancel => {
+                self.more_menu = false;
+                self.keywords_open = false;
+            }
+            Target::SearchOpen => {
+                let text = self.search.clone();
+                self.open_entry(ui, Purpose::Search, &text, None, t);
+            }
+            Target::SearchClear => {
+                self.more_menu = false;
+                self.set_search(ui, "");
+            }
+            Target::KeywordsOpen => self.open_keywords(ui),
+            Target::KeywordUse(i) => {
+                if let Some((name, _)) = self.keywords.get(i).cloned() {
+                    self.keywords_open = false;
+                    self.set_search(ui, &format!("#{}", name.replace(' ', "_")));
+                }
+            }
+            Target::KeywordRename(i) => {
+                if let Some((name, _)) = self.keywords.get(i).cloned() {
+                    self.open_entry(ui, Purpose::RenameKeyword(name.clone()), &name, None, t);
+                }
+            }
+            Target::ImportOpen => {
+                let home = std::env::var("HOME").unwrap_or_default();
+                let downloads = Path::new(&home).join("Downloads");
+                let start = if downloads.is_dir() { downloads } else { PathBuf::from(home) };
+                self.open_entry(ui, Purpose::ImportFolder, &start.display().to_string(), None, t);
+            }
+            Target::UndoLast => self.undo(ui),
+            Target::RedoLast => self.redo(ui),
+            Target::RenameAlbum => {
+                if let Album::User(slot) = self.album {
+                    let name = self.album_title(self.album);
+                    self.open_entry(ui, Purpose::RenameAlbum(slot), &name, None, t);
+                }
+            }
+            Target::AddKeywordOpen => self.open_entry(ui, Purpose::AddKeyword, "", None, t),
+            Target::PasteEdits => self.paste_to_selection(ui),
+            Target::MergeDuplicates => self.merge_duplicates(ui),
+            Target::SaveSmart => {
+                let slot = (0..MAX_SMART_ALBUMS).find(|slot| self.prefs.get(&format!("sa.{slot}.name")).is_none_or(str::is_empty));
+                if let Some(slot) = slot {
+                    self.open_entry(ui, Purpose::SmartName(slot as u8), &format!("Smart Album {}", slot + 1), None, t);
+                }
+            }
+            Target::EditRules => {
+                if let Album::Smart(slot) = self.album {
+                    let rules = self.smart_albums.iter().find(|a| a.slot == slot).map(|a| a.rules.clone()).unwrap_or_default();
+                    self.open_entry(ui, Purpose::SmartRules(slot), &rules, None, t);
+                }
+            }
+            Target::DeleteSmart => self.delete_smart(ui),
+            Target::PlayAlbum => {
+                self.more_menu = false;
+                self.start_slideshow(self.photos().to_vec(), 0, t);
+            }
+            Target::MemoriesToggle => {
+                let on = self.prefs.get("memories") == Some("0");
+                self.pref_set("memories", if on { "1" } else { "0" });
+                self.more_menu = false;
+                self.rebuild(ui);
             }
             Target::ChooseAlbum(album) => self.select_album(ui, album),
             Target::AlbumCancel => self.album_menu = false,
@@ -1559,7 +2049,9 @@ impl Photos {
                     };
                     if let Some(i) = target {
                         self.rebuild(ui);
+                        let before = self.pref_now(&format!("ua.{i}.p:{}", p.path.display()));
                         self.toggle_in_album(i, &p);
+                        self.record("Album", vec![before]);
                         self.rebuild(ui);
                         self.restore_viewer(anchor);
                     }
@@ -1624,7 +2116,7 @@ impl Photos {
                     match sheet {
                         Some(Sheet::Share) => self.set_wallpaper(&photo),
                         Some(Sheet::Delete) => self.delete(ui, &photo),
-                        Some(Sheet::Info) | None => {}
+                        Some(Sheet::Info | Sheet::Details | Sheet::Export) | None => {}
                     }
                 }
             }
@@ -1635,7 +2127,9 @@ impl Photos {
                     }
                     let anchor = self.viewer_anchor();
                     let on = !self.is_favourite(&p);
+                    let before = self.pref_now(&format!("fav:{}", p.path.display()));
                     self.write_favourite(&p, on);
+                    self.record("Favorite", vec![before]);
                     self.rebuild(ui);
                     self.restore_viewer(anchor);
                 }
@@ -1656,39 +2150,43 @@ impl Photos {
         self.dirty = true;
     }
 
-    /// Moves a photo to the trash, or deletes a trashed one for good. True
-    /// when the library changed (the caller rebuilds and rescans).
-    fn remove_one(&mut self, p: &Photo) -> bool {
-        match self.album {
-            Album::Trash => {
-                let ok = std::fs::remove_file(&p.path).is_ok();
-                if ok {
-                    self.trash.retain(|q| q.path != p.path);
-                    self.write_favourite(p, false);
-                    self.forget_deleted(p);
-                }
-                ok
+    /// Moves a photo to Recently Deleted; the photo as it is there. None when it could not move.
+    fn trash_one(&mut self, p: &Photo) -> Option<Photo> {
+        let t = library::move_to(&p.path, &self.pictures.join(library::TRASH)).ok().and_then(|t| Photo::from_path_at(t, self.offset))?;
+        self.move_favourite(p, &t);
+        self.pref_set(&format!("del:{}", t.path.display()), &unix_now().to_string());
+        self.all.retain(|q| q.path != p.path);
+        self.recent.retain(|q| q.path != p.path);
+        self.trash.push(t.clone());
+        Some(t)
+    }
+
+    /// Moves a photo to the trash, or deletes a trashed one for good. None when it failed; otherwise the library
+    /// changed (the caller rebuilds and rescans), and the photo is given as it is in Recently Deleted when it went
+    /// there.
+    fn remove_one(&mut self, p: &Photo) -> Option<Option<Photo>> {
+        if self.album == Album::Trash {
+            let ok = std::fs::remove_file(&p.path).is_ok();
+            if ok {
+                self.trash.retain(|q| q.path != p.path);
+                self.write_favourite(p, false);
+                self.forget_deleted(p);
             }
-            _ => match library::move_to(&p.path, &self.pictures.join(library::TRASH)).ok().and_then(|t| Photo::from_path_at(t, self.offset)) {
-                Some(t) => {
-                    self.move_favourite(p, &t);
-                    self.pref_set(&format!("del:{}", t.path.display()), &unix_now().to_string());
-                    self.all.retain(|q| q.path != p.path);
-                    self.recent.retain(|q| q.path != p.path);
-                    self.trash.push(t);
-                    true
-                }
-                None => false,
-            },
+            return ok.then_some(None);
         }
+        self.trash_one(p).map(Some)
     }
 
     fn delete(&mut self, ui: &Ui, p: &Photo) {
-        if self.remove_one(p) {
-            self.after_removal(ui);
-            self.rescan();
-        } else {
-            eprintln!("photos: could not delete {}", p.path.display());
+        match self.remove_one(p) {
+            Some(trashed) => {
+                if let Some(t) = trashed {
+                    self.record("Delete", vec![Change::Trash { path: t.path, trashed: false }]);
+                }
+                self.after_removal(ui);
+                self.rescan();
+            }
+            None => eprintln!("photos: could not delete {}", p.path.display()),
         }
     }
 
@@ -1700,12 +2198,20 @@ impl Photos {
     /// Deletes the selection (to Recently Deleted, or for good in it).
     fn delete_selected(&mut self, ui: &Ui) {
         let mut removed = 0;
+        let mut trashed = Vec::new();
         for p in self.selected_photos() {
-            if self.remove_one(&p) {
-                removed += 1;
-            } else {
-                eprintln!("photos: could not delete {}", p.path.display());
+            match self.remove_one(&p) {
+                Some(t) => {
+                    removed += 1;
+                    trashed.extend(t.map(|t| Change::Trash { path: t.path, trashed: false }));
+                }
+                None => eprintln!("photos: could not delete {}", p.path.display()),
             }
+        }
+        if trashed.len() > 1 {
+            self.record(&format!("Delete {} Photos", trashed.len()), trashed);
+        } else {
+            self.record("Delete", trashed);
         }
         self.selection.end();
         self.confirm_purge = false;
@@ -1715,8 +2221,8 @@ impl Photos {
         }
     }
 
-    /// Moves a trashed photo back to the library. True when it moved.
-    fn recover_one(&mut self, p: &Photo) -> bool {
+    /// Moves a trashed photo back to the library; the photo as it is there. None when it could not move.
+    fn recover_photo(&mut self, p: &Photo) -> Option<Photo> {
         match library::move_to(&p.path, &self.pictures).ok().and_then(|t| Photo::from_path_at(t, self.offset)) {
             Some(back) => {
                 self.move_favourite(p, &back);
@@ -1724,14 +2230,19 @@ impl Photos {
                 self.trash.retain(|q| q.path != p.path);
                 let at = self.all.partition_point(|q| (q.mtime, &q.path) <= (back.mtime, &back.path));
                 self.all.insert(at, back.clone());
-                self.recent.push(back);
-                true
+                self.recent.push(back.clone());
+                Some(back)
             }
             None => {
                 eprintln!("photos: could not recover {}", p.path.display());
-                false
+                None
             }
         }
+    }
+
+    /// Moves a trashed photo back to the library. True when it moved.
+    fn recover_one(&mut self, p: &Photo) -> bool {
+        self.recover_photo(p).is_some()
     }
 
     fn recover_selected(&mut self, ui: &Ui) {
@@ -1796,6 +2307,7 @@ impl Photos {
             row if pane == EditPane::Tools => match row {
                 3 => [Tool::RotateLeft, Tool::FlipHorizontal, Tool::FlipVertical].get((x / (w / 3.0)) as usize).map(|&t| Target::EditTool(t)),
                 4 => Some(Target::EditTool(Tool::AutoEnhance)),
+                5 => Some(if x < w / 2.0 { Target::EditCopy } else { Target::EditPaste }),
                 _ => None,
             },
             row => pane.sliders().get(row - 3).map(|&s| Target::Slide(s)),
@@ -1841,7 +2353,14 @@ impl Photos {
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
         let revert = usize::from(self.info_revert);
-        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + 2 * usize::from(self.info_has_rating()) + revert) as f32)
+        let rows = self.info.len() + 1 + 3 * usize::from(self.info_has_rating()) + revert;
+        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * rows as f32)
+    }
+
+    /// The Info sheet's Edit Details row (x, y, w, h), under the Hide Photo row.
+    fn info_details_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (x, y, w, h) = self.info_hide_row(ui);
+        (x, y + h, w, h)
     }
 
     /// The Info sheet's Hide Photo row (x, y, w, h), under the rating row.
@@ -1914,7 +2433,7 @@ impl Photos {
         s.blit(img, x as i32, cy as i32 - h / 2, 255, 255);
     }
 
-    pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
+    pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.dirty = false;
         s.fill_rect(0, 0, self.w as usize, self.h as usize, BLACK);
         if self.slideshow.is_some() {
@@ -1925,6 +2444,10 @@ impl Photos {
             self.draw_viewer(s, ui);
         } else {
             self.draw_grid(s, ui);
+        }
+        self.draw_note(s, ui);
+        if self.entry.is_some() {
+            self.draw_entry(s, ui, t);
         }
     }
 
@@ -2007,6 +2530,7 @@ impl Photos {
             } else {
                 let cy = (top + bottom) / 2.0;
                 let (title, hint) = match (self.album, &self.filter) {
+                    _ if !self.search.is_empty() => ("No Results", "Nothing matches your search. Tap the title to change it."),
                     (_, Some(_)) => ("No Photos", "Nothing matches the date filter. Tap the title to change it."),
                     (Album::All, _) => ("No Photos", "Screenshots and pictures you save appear here."),
                     (Album::Recents, _) => ("No Recent Photos", "Pictures from the last 30 days appear here."),
@@ -2014,7 +2538,10 @@ impl Photos {
                     (Album::Screenshots, _) => ("No Screenshots", "Screenshots you take appear here."),
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
                     (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
+                    (Album::Duplicates, _) => ("No Duplicates", "Pictures that are the same file appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
+                    (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
+                    (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
                 };
                 self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
                 self.label(s, ui, hint, 15.0, Weight::Regular, SECONDARY, cx, cy + ui.pt(14.0));
@@ -2033,7 +2560,14 @@ impl Photos {
         } else {
             self.filter.as_ref().map_or_else(|| if blank { "Library".to_string() } else { self.album_title(self.album) }, |f| f.0.clone())
         };
-        let title_color = if self.selection.active { dim_blue(self.pressed, Target::SelectAll) } else if self.filter.is_some() { BLUE } else { WHITE };
+        let title = if !self.selection.active && !self.search.is_empty() {
+            let shown: String = self.search.chars().take(18).collect();
+            format!("Search: {shown}{}", if self.search.chars().count() > 18 { "…" } else { "" })
+        } else {
+            title
+        };
+        let searching = !self.selection.active && !self.search.is_empty();
+        let title_color = if self.selection.active { dim_blue(self.pressed, Target::SelectAll) } else if self.filter.is_some() || searching { BLUE } else { WHITE };
         self.label(s, ui, &title, 17.0, Weight::Semibold, title_color, self.w as f32 / 2.0, mid);
         if blank {
             let tint = if pressed == Some(Target::Album) { rgba(10, 132, 255, 140) } else { BLUE };
@@ -2066,6 +2600,12 @@ impl Photos {
         }
         if self.album_menu {
             self.draw_albums(s, ui);
+        }
+        if self.more_menu {
+            self.draw_more(s, ui);
+        }
+        if self.keywords_open {
+            self.draw_keywords(s, ui);
         }
     }
 
@@ -2144,6 +2684,7 @@ impl Photos {
                 Target::SortOrder => ("Sort by Date", WHITE, if self.newest_first { "Newest" } else { "Oldest" }.to_string()),
                 Target::AlbumSort => ("Sort Albums", WHITE, if self.albums_by_name() { "By Name" } else { "Custom" }.to_string()),
                 Target::ShowSeconds => ("Slideshow Slide", WHITE, format!("{} s", self.show_seconds())),
+                Target::More => ("More", BLUE, String::new()),
                 _ => ("Delete Album", RED, String::new()),
             };
             self.label_left(s, ui, title, 17.0, Weight::Regular, color, x + ui.pt(16.0), cy);
@@ -2285,8 +2826,14 @@ impl Photos {
             let color = if self.pressed == Some(Target::InfoHide) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, if hidden { "Unhide Photo" } else { "Hide Photo" }, 15.0, Weight::Regular, color, x + w / 2.0, cy);
         }
+        if rated == 2 {
+            let cy = y + row * (rows.len() + 3) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let color = if self.pressed == Some(Target::InfoDetails) { crate::gfx::scale(BLUE, 140) } else { BLUE };
+            self.label(s, ui, "Edit Details", 15.0, Weight::Regular, color, x + w / 2.0, cy);
+        }
         if self.info_revert {
-            let cy = y + row * (rows.len() + 1 + rated) as f32 + row / 2.0;
+            let cy = y + row * (rows.len() + 1 + rated + usize::from(rated == 2)) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             let color = if self.pressed == Some(Target::InfoRevert) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, "Revert to Original", 15.0, Weight::Regular, color, x + w / 2.0, cy);
@@ -2351,9 +2898,13 @@ impl Photos {
             let auto = Tool::AutoEnhance;
             let color = if auto.is_on(&cur) { BLUE } else { WHITE };
             self.label(s, ui, auto.label(), 15.0, if auto.is_on(&cur) { Weight::Semibold } else { Weight::Regular }, tint(Target::EditTool(auto), color), w / 2.0, panel + row * 4.5);
+            // the edit to carry to other photos
+            let clip_color = if self.edit_clip.is_some() { BLUE } else { SECONDARY };
+            self.label(s, ui, "Copy Edits", 15.0, Weight::Regular, tint(Target::EditCopy, BLUE), w / 4.0, panel + row * 5.5);
+            self.label(s, ui, "Paste Edits", 15.0, Weight::Regular, tint(Target::EditPaste, clip_color), w * 3.0 / 4.0, panel + row * 5.5);
             // the histogram fills the rows below the buttons
             if let Some(ed) = &self.editor {
-                let (hx, hy, hw, hh) = (m, panel + row * 5.0 + ui.pt(6.0), w - 2.0 * m, row * 3.0 - ui.pt(12.0));
+                let (hx, hy, hw, hh) = (m, panel + row * 6.0 + ui.pt(6.0), w - 2.0 * m, row * 2.0 - ui.pt(12.0));
                 s.fill_rrect(hx, hy, hw, hh, flat(ui), rgba(255, 255, 255, 20));
                 for (bx, h) in histogram_columns(&ed.hist, hw as usize / 2).into_iter().enumerate() {
                     let bar = (h * hh) as usize;
@@ -2403,6 +2954,9 @@ impl Photos {
                         let _ = self.pref_set(&format!("{key}:{to}"), &v);
                     }
                 }
+                // the title, caption, keywords, place and corrected time come along too
+                let writes = meta::transfer_writes(&self.prefs, &p.path, &copy, true);
+                self.write_prefs(&writes);
                 self.rescan();
             }
             Err(e) => eprintln!("photos: could not duplicate {}: {e}", p.name()),
@@ -2472,6 +3026,12 @@ impl Photos {
         if sheet == Sheet::Info {
             return self.draw_info(s, ui);
         }
+        if sheet == Sheet::Details {
+            return self.draw_details(s, ui);
+        }
+        if sheet == Sheet::Export {
+            return self.draw_export(s, ui);
+        }
         let (x, y, w, h) = self.sheet_rect(ui, sheet);
         let r = ui.pt(13.0);
         s.fill_rrect(x, y, w, h, r, SHEET);
@@ -2482,7 +3042,7 @@ impl Photos {
         let (action, color) = match (sheet, self.album) {
             (Sheet::Share, _) => ("Set as Wallpaper", BLUE),
             (Sheet::Delete, Album::Trash) => ("Delete Permanently", RED),
-            (Sheet::Delete | Sheet::Info, _) => ("Delete Photo", RED),
+            (Sheet::Delete | Sheet::Info | Sheet::Details | Sheet::Export, _) => ("Delete Photo", RED),
         };
         let pressed = self.pressed;
         let dim = |c: u32, t: Target| if pressed == Some(t) { crate::gfx::scale(c, 140) } else { c };
@@ -2490,13 +3050,22 @@ impl Photos {
         let row = h / rows as f32;
         let mut at = y + row / 2.0;
         if sheet == Sheet::Share {
-            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby), ("Duplicate", Target::SheetDuplicate)] {
+            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby), ("Duplicate", Target::SheetDuplicate), ("Export Copy", Target::SheetExport)] {
                 self.label(s, ui, text, 20.0, Weight::Regular, dim(BLUE, t), cx, at);
                 at += row;
             }
         }
         self.label(s, ui, action, 20.0, Weight::Regular, dim(color, Target::SheetAction), cx, at);
         self.label(s, ui, "Cancel", 20.0, Weight::Semibold, dim(BLUE, Target::SheetCancel), cx, at + row);
+    }
+}
+
+/// The earlier of two optional times.
+fn earliest(a: Option<f64>, b: Option<f64>) -> Option<f64> {
+    match (a, b) {
+        (Some(x), Some(y)) => Some(x.min(y)),
+        (x, None) => x,
+        (None, y) => y,
     }
 }
 
@@ -2516,10 +3085,10 @@ pub fn histogram_columns(bins: &[u32; edit::HISTOGRAM_BINS], columns: usize) -> 
 }
 
 /// Rows in a sheet: the share sheet lists Slideshow, Copy, Save to Files,
-/// Send Nearby, Duplicate, Set as Wallpaper and Cancel.
+/// Send Nearby, Duplicate, Export Copy, Set as Wallpaper and Cancel.
 fn sheet_rows(sheet: Sheet) -> usize {
     if sheet == Sheet::Share {
-        7
+        8
     } else {
         2
     }
@@ -2767,10 +3336,10 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
         assert_eq!(p.sheet, Some(Sheet::Info));
         assert!(p.info_revert, "an edited photo offers Revert to Original");
-        // the Revert row sits under the detail rows
+        // the Revert row sits under the detail rows, the rating, Hide Photo and Edit Details rows
         let (sx, sy, sw, _) = p.sheet_rect(&ui, Sheet::Info);
         let row = ui.pt(INFO_ROW_PT);
-        let y = sy + row * (p.info.len() + 1) as f32 + row / 2.0;
+        let y = sy + row * (p.info.len() + 1 + 3) as f32 + row / 2.0;
         tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
         assert!(p.recipe(&photo).is_none(), "the saved edit is dropped");
         assert!(original.exists(), "the original is never changed");
@@ -2901,7 +3470,7 @@ mod tests {
         assert_eq!(p.sheet, Some(Sheet::Share));
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 5.5 / 7.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 6.5 / 8.0, 1100.0);
         pump_until(&mut p, &ui, |p| !p.effects.is_empty());
         assert_eq!(p.take_effects(), vec![Effect::Wallpaper("custom-1".into())]);
         let raw = std::fs::read(dir.join("wallpapers/custom-1.raw")).unwrap();
@@ -2925,7 +3494,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 7.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 8.0, 1100.0);
         assert_eq!(p.sheet, None);
         pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 2);
         let copy = dir.join("Pictures/IMG_0000 2.png");
@@ -2995,7 +3564,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 7.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 8.0, 1100.0);
         assert_eq!(p.sheet, None);
         assert_eq!(p.take_share(), p.photos().first().map(|q| q.path.clone()));
         assert_eq!(p.take_share(), None);
@@ -3010,7 +3579,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 14.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 16.0, 1100.0);
         assert!(p.slideshow.is_some());
         p.activate(&ui, Target::ShowPlay, 1200.0);
         assert!(p.slideshow.as_ref().unwrap().paused);

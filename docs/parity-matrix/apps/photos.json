@@ -51,8 +51,8 @@
    "area": "toolbar",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Select All / Deselect All",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:1348",
-   "note": "Select All / Deselect All: tap the selection title (Selection::toggle_all, albums.rs); select_range is modelled and tested but no shift-range gesture and no menu item or cmd+A (the built-in app has no key path)",
+   "bifrost": "springboard/src/shell/photos/extras.rs:33",
+   "note": "Select All / Deselect All: tap the selection title (Selection::toggle_all, albums.rs); a physical keyboard's Select All selects the grid; select_range is modelled and tested but no shift-range gesture and no menu item. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add select_all/deselect_all on the selection state in mod.rs and expose Edit > Select All (cmd+A) / Deselect All (cmd+shift+A) through the shell app menu while Photos is frontmost"
   },
   {
@@ -86,9 +86,9 @@
    "feature": "Smart Albums with rule conditions",
    "area": "panel",
    "apple": "File > New Smart Album; IPXSmartAlbumEditorView.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1053",
+   "note": "A search can be saved as a smart album (More > Save Search as Smart Album). It lists every photo that matches its rules as the library changes (date, favourite, edited, file type, rating, keyword, file name), its rules can be edited as text and it can be deleted, with Undo. Rules are the search words, not condition rows in an editor sheet. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a smart album model (conditions on date, favourite, file type, keyword, filename) in albums.rs, evaluated in album_list (mod.rs:491); an editor sheet with condition rows reachable from the album menu"
   },
   {
@@ -96,8 +96,8 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit Title; Sort > By Custom Order / By Name",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:616",
-   "note": "Album picker rows: Delete Album (later albums move down, albums.rs delete_album_writes) and Sort Albums (creation order or by name, albums.rs album_order), tested. Rename needs a text field in the touch shell and is not done.",
+   "bifrost": "springboard/src/shell/photos/extras.rs:350",
+   "note": "Album picker rows: Delete Album (later albums move down, albums.rs delete_album_writes), Sort Albums (creation order or by name, albums.rs album_order) and More > Rename Album, which types the new name into the text card (undoable). Tested. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add rename (TextField) and delete rows to the album menu plus sort by name; persist in albums.rs"
   },
   {
@@ -114,8 +114,8 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Filter By",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:581",
-   "note": "cycle_filter via title tap; set_date_query (mod.rs:559) has no UI caller; no kind filters",
+   "bifrost": "springboard/src/shell/photos/meta.rs:284",
+   "note": "The search card filters by date (a day, month or year typed in the field) and by kind (kind:png, is:favorite, is:edited, is:screenshot, rating:3); the title tap still cycles the months. There is no Filter By submenu in the shell View menu. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a date field that calls set_date_query, and a Filter By submenu (favorites, edited, photos, videos) in the shell View menu"
   },
   {
@@ -176,36 +176,36 @@
    "feature": "Edit title, caption, keywords",
    "area": "panel",
    "apple": "IPXMetadataEditorTitle/Caption ViewController, IPXMetadataKeywordTokensController.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Info is read-only",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/extras.rs:457",
+   "note": "Info > Edit Details opens a Details sheet; each row edits its field in the text card. The values are kept beside the edit recipe in photos.ini (meta.rs), not in the picture file, travel with Duplicate and are searched. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add editable title/caption/keywords rows to the Info sheet, persisted in a sidecar next to the edit recipe (recipe.rs) and included in search"
   },
   {
    "feature": "Keyword Manager",
    "area": "panel",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Window > Keyword Manager; IPXKeywordsManager.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/extras.rs:628",
+   "note": "Album picker > More > Keywords lists every keyword with its photo count (scrolls); a tap searches by it and Rename (an empty name deletes) changes it on every photo. More > Add Keyword to Selection tags the selected photos. Tested in meta.rs and extras.rs. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "After keywords exist, add a keyword list panel to create/rename/delete keywords and apply them to the selection"
   },
   {
    "feature": "Adjust Date and Time",
    "area": "panel",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Adjust Date and Time; IPXAdjustAssetsDateTimeViewController.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/extras.rs:422",
+   "note": "Edit Details > Date and Time takes a date, a time or both; the photo is re-sorted at once and an empty entry restores the time of the file. The corrected time is kept in photos.ini (meta.rs apply_taken) and the picture file is not changed. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a date picker sheet from Info that writes an override capture date to the sidecar and re-sorts (library.rs)"
   },
   {
    "feature": "Assign / hide / copy location",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Location; IPXMetadataPlacesViewController.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "GPS shown only from exif",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/extras.rs:503",
+   "note": "Edit Details > Location names a place (searchable), and Copy Location puts the place or the EXIF position on the pasteboard. Hide Location is not done: sharing and exporting still carry the position the file has. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a place field and Hide Location toggle to the Info sheet (sidecar); Copy Location to the pasteboard"
   },
   {
@@ -230,9 +230,9 @@
    "feature": "Memories and memory movies",
    "area": "view",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > New Memory Movie; IPXMemoriesBrowserViews.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/memories.rs:13",
+   "note": "Months with at least five pictures (screenshots left out) are offered as albums named 'Memory: <month>', newest six first; More > Play Slideshow plays the open album with the chosen slide length. No music, no movie, no title cards. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Build a Memories collection from date clusters (library.rs month grouping) that plays the slideshow with music"
   },
   {
@@ -284,9 +284,9 @@
    "feature": "Copy / Paste edits",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Copy Edits / Paste Edits",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1909",
+   "note": "The editor's Tools page has Copy Edits and Paste Edits (the look is copied; rotation, crop and flips of the target stay), and More > Paste Edits to Selection applies the copied look to the selected photos (undoable, extras.rs paste_edits). Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Keep the current recipe (recipe.rs) in a Photos clipboard and apply it to the selection"
   },
   {
@@ -295,7 +295,7 @@
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Duplicate",
    "status": "partial",
    "bifrost": "springboard/src/shell/photos/library.rs:72",
-   "note": "Share sheet > Duplicate copies the file as 'name 2.ext' and carries the edit and rating (mod.rs:2330); no Image menu item",
+   "note": "Share sheet > Duplicate copies the file as 'name 2.ext' and carries the edit, the rating and now the title, caption, keywords, place and corrected time; no Image menu item. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Copy the file with a numbered suffix in the library dir and rescan"
   },
   {
@@ -312,8 +312,8 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Star Rating",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/stars.rs:1",
-   "note": "five-star row in the Info sheet (tap the same star to clear), stored in photos.ini; no keys 0-5 in the viewer, no menu, no rating filter",
+   "bifrost": "springboard/src/shell/photos/extras.rs:22",
+   "note": "Five-star row in the Info sheet (tap the same star to clear), keys 0 to 5 rate the open photo from a physical keyboard, rating:N in the search filters by it, and the change can be undone. Stored in photos.ini. No menu and no rating filter control. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a rating to the sidecar, keys 0-5 in the viewer, and a rating row in Info"
   },
   {
@@ -329,9 +329,9 @@
    "feature": "Duplicates and bursts",
    "area": "panel",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Merge Duplicates; IPXBurstSecondaryToolbarViewController.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/library.rs:140",
+   "note": "A scan hashes the files that share a size (library.rs duplicate_groups); the picker lists a Duplicates album once there are any, and More > Merge Duplicates keeps the best copy (edited, rated, favourite, oldest), folds the marks and keywords of the others into it and moves the rest to Recently Deleted (undoable, dupes.rs). Bursts are not grouped. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Detect duplicate files by hash in library.rs; add a Duplicates collection with Merge"
   },
   {
@@ -357,8 +357,8 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Import; IPXImportDuplicatePanelController.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/import.rs:24",
-   "note": "import() copies new files but nothing in the UI calls it",
+   "bifrost": "springboard/src/shell/photos/extras.rs:313",
+   "note": "Album picker > More > Import from Folder takes a folder path in the text card and copies its pictures into Pictures on a worker thread (import.rs); a note reports how many were copied and how many the library already had. No folder chooser and no review sheet. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add File > Import... opening the shell open panel for a folder, calling import::import into the library dir and showing the Report (copied/skipped)"
   },
   {
@@ -366,8 +366,8 @@
    "area": "panel",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Export Photos; IPXExportViewController.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:1400",
-   "note": "Save to Files copies the original only",
+   "bifrost": "springboard/src/shell/photos/export.rs:226",
+   "note": "Share sheet > Export Copy opens a sheet for the format (JPEG or PNG), JPEG quality, longest side (full, 2048, 1024, 512) and whether the title, caption, keywords and place go into the file. The edited picture is written to Files on a worker thread (export.rs). No file naming option. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add an export sheet with kind (JPEG/PNG/TIFF), quality, size, include location/metadata and file naming"
   },
   {
@@ -401,18 +401,18 @@
    "feature": "Undo / Redo",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Undo / Redo",
-   "status": "gap",
-   "bifrost": "",
-   "note": "edits can only cancel or revert",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/extras.rs:157",
+   "note": "Undo and Redo step through favourites, ratings, hiding, saved edits, album membership, album names, details, keywords, smart albums, paste edits, merging duplicates and deleting (undo.rs, 50 steps). They are rows on the album picker's More page and answer the Undo and Redo keys of a physical keyboard; the shell Edit menu does not list them for this app. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add an undo stack for delete, favourite, album and edit-save; wire the shell Edit menu"
   },
   {
    "feature": "Search",
    "area": "toolbar",
    "apple": "sidebar Search",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:937",
+   "note": "Album picker > More > Search opens a text card with the on-screen or a physical keyboard; the grid follows the typing. Words match file name, album, date, title, caption, place and keywords (meta.rs Query); #keyword, is:favorite, is:edited, is:screenshot, kind:png and rating:3 narrow it, and a typed date or month filters by date. It is a card in the album picker, not a field in the toolbar. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a toolbar search field matching filename, album, date and keywords, feeding set_filter (mod.rs:570)"
   },
   {
@@ -438,8 +438,8 @@
    "area": "settings",
    "apple": "IPXGeneralPreferences.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/library.rs:8",
-   "note": "library dir fixed to ~/Pictures; no settings pane",
+   "bifrost": "springboard/src/shell/photos/mod.rs:2006",
+   "note": "More page rows: a Memories on/off switch (photos.ini), Play Slideshow, and the slide length, sort order and album order rows of the picker. The library folder is still ~/Pictures and there is no settings pane. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a Photos settings pane for library folder, autoplay videos, show memories, reset suggestions"
   },
   {
@@ -509,9 +509,9 @@
    "feature": "URL scheme handler",
    "area": "integration",
    "apple": "Info.plist CFBundleURLSchemes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/link.rs:21",
+   "note": "The photos scheme is registered for the app (defaultapps.rs). photos://photo/<path> shows a picture, photos://album/<name> opens an album and photos://search/<text> searches; a link that arrives during the first scan waits for it, and Edit Details > Copy Link puts a photo link on the pasteboard. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Register a URL scheme in the app catalog so links open a photo or album via show() (mod.rs:787)"
   },
   {
