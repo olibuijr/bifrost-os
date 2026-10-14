@@ -73,9 +73,9 @@
   {
    "feature": "vCard serialization",
    "apple": "CNContactVCardSerialization",
-   "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu; wired: springboard/apps/contacts-desktop/src/exchange.rs (export writes extra values and addresses); springboard/ui/src/contact_vcard.rs: serialize (3.0 and 4.0) and contacts(); folding, escaping, TYPE params, item-group custom labels, PHOTO base64, RFC 6350 fixture test. Host tests only; the Contacts app export still uses ui/src/vcard.rs.",
+   "bifrost": "springboard/ui/src/contact_vcard.rs (serialize, contacts); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu; wired: springboard/apps/contacts-desktop/src/exchange.rs (export writes extra values and addresses); springboard/ui/src/contact_vcard.rs: serialize (3.0 and 4.0) and contacts(); folding, escaping, TYPE params, item-group custom labels, PHOTO base64, RFC 6350 fixture test. Host tests only; the Contacts app export still uses ui/src/vcard.rs.",
    "status": "partial",
-   "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Writing both versions and reading cards back are tested headless (headless_vcard_* in ui/tests). The Contacts app and Share export; there is no import UI. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Predefined display preferences",
