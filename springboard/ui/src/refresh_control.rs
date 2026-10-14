@@ -1,4 +1,4 @@
-//! Pull to refresh for a scroll view (UIKit's `UIRefreshControl`).
+//! Pull to refresh for a scroll view.
 //!
 //! Pure model. The scroll view reports its offset and whether a finger or pointer still drags it. A pull past the
 //! top (a negative offset) arms the control once it passes the threshold, and releasing the drag while armed starts

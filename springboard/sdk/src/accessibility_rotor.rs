@@ -1,5 +1,5 @@
 //! Custom rotors for apps: named lists of elements the screen reader steps through ("Unread", "Errors"), beside the standard
-//! rotors. Mirrors `UIAccessibilityCustomRotor`. An app declares its rotors with [`Ctx::set_custom_rotors`]; each item is a
+//! rotors. An app declares its custom rotors with [`Ctx::set_custom_rotors`]; each item is a
 //! `Node::id` the app reported in `controls`, in the order the user should reach them. The shell keeps the last list, cleaned
 //! to the caps in `bifrost_ui::ax_rotor`, and the screen reader walks it.
 

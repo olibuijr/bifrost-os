@@ -67,6 +67,7 @@ impl Link {
     /// The replies that arrived since the last call.
     pub fn drain(&self) -> Vec<Reply> {
         self.replies.lock().map(|mut queue| queue.drain(..).collect()).unwrap_or_default()
+    }
 }
 
 /// The folder the signed-in person keeps their files in, from $HOME.

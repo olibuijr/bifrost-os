@@ -1,7 +1,7 @@
-//! Spotlight indexing of intent entities (`IndexedEntity`, `hideInSpotlight`).
+//! Search indexing of intent entities (`IndexedEntity`, hidden-from-search state).
 //!
 //! An app lists its entities (notes, folders, people) with [`IndexedEntity`] and calls [`index`]: each visible entity
-//! becomes a Core Search item in the domain `entity.<type>`, so Search finds it without launching the app. An entity
+//! becomes a local search item in the domain `entity.<type>`, so Search finds it without launching the app. An entity
 //! marked with [`IndexedEntity::hide_in_spotlight`] is never indexed, and is removed when an earlier index call had
 //! added it. The item's identifier is `<type>/<id>`; opening the result follows the same path as any Core Search item
 //! (see [`crate::quicksearch`]).
@@ -16,7 +16,7 @@ pub struct IndexedEntity {
     pub entity: Entity,
     /// Extra words the entity is found by, besides its title and subtitle.
     pub keywords: Vec<String>,
-    /// `hideInSpotlight`: the entity is not indexed.
+    /// The entity is not included in local search results.
     pub hidden: bool,
 }
 

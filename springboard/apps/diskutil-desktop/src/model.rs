@@ -68,6 +68,7 @@ pub fn format_size(bytes: u64) -> String {
     }
     let mut value = bytes as f64 / 1000.0;
     let mut unit = 0;
+    // compliance-allow: LAY-03 Decimal bytes-per-unit threshold for capacity formatting, not window size.
     while value >= 1000.0 && unit + 1 < UNITS.len() {
         value /= 1000.0;
         unit += 1;

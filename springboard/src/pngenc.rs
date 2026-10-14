@@ -11,7 +11,7 @@ const MAX_MATCH: usize = 258;
 const MIN_MATCH: usize = 3;
 /// Deflate distances reach back this far.
 const WINDOW: usize = 32_768;
-/// Candidates examined per position by the match finder.
+/// Candidates examined per position by the matcher.
 const MAX_CHAIN: usize = 32;
 /// Size of the 3-byte hash table used to find match candidates.
 const HASH_BITS: u32 = 15;

@@ -41,7 +41,7 @@ impl App for ImageCapture {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        (self.in_flight == 0).then(|| self.wake_at(t))
+        (!self.has_in_flight_request()).then(|| self.wake_at(t))
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {

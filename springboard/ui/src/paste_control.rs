@@ -1,4 +1,4 @@
-//! Paste control (`UIPasteControl`): a button the person taps to place pasteboard contents into the app. The tap is the
+//! Paste control: a button the person taps to place pasteboard contents into the app. The tap is the
 //! consent, so the paste reads the pasteboard without an access prompt, and the control is enabled only while the
 //! pasteboard holds something it accepts.
 //!
@@ -10,7 +10,7 @@ use crate::uttype;
 
 pub const DEFAULT_LABEL: &str = "Paste";
 
-/// What the button shows (`UIPasteControl.Configuration` display choices).
+/// What the button shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Display {
     IconAndLabel,

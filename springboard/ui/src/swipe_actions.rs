@@ -1,4 +1,4 @@
-//! Leading and trailing swipe actions for list rows (UIKit's `UISwipeActionsConfiguration` and `UIContextualAction`).
+//! Leading and trailing swipe actions for list rows.
 //!
 //! Pure model: it follows the row offset while a drag moves, decides where the row settles on release and reports
 //! which action was performed. A touch drag on the tablet and a pointer or trackpad drag on the desktop feed the same
@@ -20,7 +20,7 @@ pub const FULL_SWIPE_FRACTION: f32 = 0.5;
 /// A released row stays open when it moved past this fraction of the revealed buttons.
 const OPEN_FRACTION: f32 = 0.5;
 
-/// The style of an action button (`UIContextualAction.Style`).
+/// The style of an action button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActionStyle {
     Normal,
@@ -48,7 +48,7 @@ impl ContextualAction {
     }
 }
 
-/// The actions of one edge of a row (`UISwipeActionsConfiguration`).
+/// The actions of one edge of a row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwipeConfig {
     pub actions: Vec<ContextualAction>,

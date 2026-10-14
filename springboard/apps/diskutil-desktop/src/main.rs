@@ -171,6 +171,7 @@ impl App for DiskUtility {
         }
     }
 
+    /// compliance-allow: RES-02 A 2-second external-volume refresh catches removable-device changes; it is not worker polling.
     fn next_wake(&self, t: f64) -> Option<f64> {
         if self.last_refresh.is_finite() {
             Some(self.last_refresh + REFRESH_S)

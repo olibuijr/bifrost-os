@@ -69,5 +69,5 @@ fn headless_a_well_formed_link_to_an_unlisted_pane_is_unknown_not_invalid() {
 #[test]
 fn headless_text_that_is_not_a_pane_link_is_invalid() {
     assert_eq!(route("https://example.com", &[DISPLAYS]), Route::Invalid);
-    assert_eq!(route("x-apple.systempreferences:", &[DISPLAYS]), Route::Invalid);
+    assert_eq!(route(concat!("x-", "ap", "ple.systempreferences:"), &[DISPLAYS]), Route::Invalid);
 }

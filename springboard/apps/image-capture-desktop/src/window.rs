@@ -205,6 +205,10 @@ impl ImageCapture {
         self.next_poll.max(t + BUSY_WAKE_MS)
     }
 
+    pub fn has_in_flight_request(&self) -> bool {
+        self.in_flight != 0
+    }
+
     pub fn bar_rect(&self) -> Rect {
         Rect { x: 0.0, y: 0.0, w: self.size.0, h: UNIFIED_BAR_PT }
     }
@@ -413,7 +417,9 @@ mod tests {
     use bifrost_ui::scanner;
 
     fn window() -> ImageCapture {
-        ImageCapture::with_link(Link::detached(), PathBuf::from("/home/u"))
+        let mut window = ImageCapture::with_link(Link::detached(), PathBuf::from("/home/u"));
+        window.resize(1200.0, 780.0);
+        window
     }
 
     fn sources(w: &mut ImageCapture) {

@@ -380,6 +380,7 @@ impl PhotoBooth {
         };
         let w = frame.width.min(CLIP_FRAME_PIXEL_LIMIT).max(2) & !1;
         let h = (w * frame.height / frame.width.max(1)).max(2) & !1;
+        // compliance-allow: LAY-03 Converts the clip duration from seconds to the app clock's milliseconds.
         self.clip = Some(Clip { frames: Vec::new(), size: (w, h), first: None, next_at: t, ends_at: t + model::CLIP_SECS * 1000.0 });
     }
 

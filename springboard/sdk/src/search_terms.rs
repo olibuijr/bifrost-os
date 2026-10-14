@@ -3,7 +3,7 @@
 //! The index holds the words of each item's title, description and keywords. Words are lowercase runs of letters
 //! and digits (the same split as [`crate::spellcheck::words`]). A multi-word query matches the items that contain
 //! every word. Prefix lookups serve type-ahead. The index is in memory and built by the app from its own items;
-//! the shell's Core Spotlight store is not read here.
+//! the shell's local search store is not read here.
 //!
 //! ```ignore
 //! let mut terms = TermIndex::new();

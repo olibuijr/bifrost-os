@@ -1,4 +1,4 @@
-//! `UISpringLoadedInteraction` for BifrOSt apps: attach a handler to a drag target, feed it the drag updates, and the
+//! Spring-loaded drag interaction for BifrOSt apps: attach a handler to a drag target, feed it the drag updates, and the
 //! handler runs once when a resting drag has spring-loaded the target (see `bifrost_ui::spring_load` for the model).
 //!
 //! An app that handles `dnd::Event::Dest` calls [`SpringLoadedInteraction::drag_updated`] for every `Entered` and `Updated`

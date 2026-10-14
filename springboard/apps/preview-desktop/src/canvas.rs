@@ -8,6 +8,7 @@ use crate::find::Hit;
 use crate::signature::Signature;
 use crate::signature_panel;
 use crate::model::{self, Adjust, Mark, MarkKind, Norm, Slider, View, HIGHLIGHT, MARK_BLUE};
+use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{rgba, Image, Surface};
@@ -498,22 +499,62 @@ impl Layout {
     }
 }
 
-/// The toolbar buttons that fit the window: each with its x and width. Buttons past the right edge
-/// are left out; every action is still in the menus.
-pub fn buttons(ui: &Ui, lay: &Layout) -> Vec<(Action, i32, i32)> {
-    let pad = ui.pt(ui::SPACE_S);
-    let gap = ui.pt(ui::SPACE_XS);
-    let mut x = lay.side as f32 + pad;
-    let mut out = Vec::new();
-    for action in Action::toolbar().iter().copied() {
-        let w = ui.measure(action.label(), ui::MAC_BODY_PT, Weight::Regular) + 2.0 * pad;
-        if x + w > lay.w as f32 - pad {
-            break;
-        }
-        out.push((action, x as i32, w as i32));
-        x += w + gap;
+/// The shared Golden Gate toolbar model and the exact layout used to draw it and publish its controls.
+pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side) -> (Toolbar, ToolbarLayout) {
+    let mut items: Vec<ToolbarItem> = Action::toolbar()
+        .iter()
+        .copied()
+        .map(|action| {
+            let symbol = match action {
+                Action::Previous => Some("chevron.left"),
+                Action::Next => Some("chevron.right"),
+                Action::ZoomOut => Some("magnifyingglass"),
+                Action::ZoomIn => Some("plus"),
+                Action::RotateRight => Some("arrow.clockwise"),
+                Action::UseTool(Tool::Note) => Some("square.and.pencil"),
+                Action::UseTool(Tool::Sign) => Some("pencil"),
+                Action::ShowPages => Some("rectangle.grid.1x2"),
+                Action::ShowOutline => Some("list.bullet"),
+                _ => None,
+            };
+            let mut item = symbol.map_or_else(
+                || ToolbarItem::button(action.id(), action.label()),
+                |symbol| ToolbarItem::icon(action.id(), action.label(), symbol),
+            );
+            let group = match action {
+                Action::Previous | Action::Next => Some(1),
+                Action::ZoomOut | Action::ZoomIn => Some(2),
+                _ => None,
+            };
+            if let Some(group) = group {
+                item = item.in_group(group);
+            }
+            let selected = match action {
+                Action::UseTool(selected) => selected == tool,
+                Action::ShowPages => side == Side::Pages,
+                Action::ShowOutline => side == Side::Outline,
+                _ => false,
+            };
+            item.enabled(open).selected(selected)
+        })
+        .collect();
+    let scale = ui.pt(1.0).max(0.001);
+    let bounds = bifrost_app::controls::Rect {
+        x: lay.side as f32 / scale,
+        y: 0.0,
+        w: (lay.w - lay.side).max(0) as f32 / scale,
+        h: lay.bar.max(0) as f32 / scale,
+    };
+    // Preserve the old narrow-window behavior: actions that do not fit remain available from the menus, rather than
+    // exposing the kit's overflow affordance without an app-specific overflow menu.
+    let full = Toolbar::new(items.clone());
+    let first = widgets::toolbar_layout(ui, bounds, &full);
+    if !first.overflow.is_empty() {
+        items = items.into_iter().filter(|item| !first.overflow.contains(&item.id)).collect();
     }
-    out
+    let bar = Toolbar::new(items);
+    let layout = widgets::toolbar_layout(ui, bounds, &bar);
+    (bar, layout)
 }
 
 /// The thumbnail rows in content coordinates: (top, height) for each page, with the gap before.
@@ -577,7 +618,7 @@ pub fn side_items(doc: &Document, side: Side, found: &[Hit]) -> Vec<(String, Opt
 
 /// Shared source-list rows for the text-based sidebar modes. Page thumbnails retain their variable-height gallery
 /// rows; outline, markup, bookmark and search entries use the Golden Gate source-list widget and hit model.
-fn source_list(ui: &Ui, doc: &Document, side: Side, found: &[Hit], current_page: usize) -> SourceList {
+fn source_list(doc: &Document, side: Side, found: &[Hit], current_page: usize) -> SourceList {
     let (entries, symbol): (Vec<(String, Option<usize>, Option<String>)>, &str) = match side {
         Side::Outline => (
             doc.outline
@@ -611,7 +652,7 @@ fn source_list(ui: &Ui, doc: &Document, side: Side, found: &[Hit], current_page:
 /// Hit-tests a text-based sidebar using the same shared source-list model used to draw it.
 pub fn source_list_hit(ui: &Ui, lay: &Layout, doc: &Document, side: Side, found: &[Hit], current_page: usize, scroll: f32, x: f32, y: f32) -> Option<usize> {
     let scale = ui.pt(1.0).max(0.001);
-    let list = source_list(ui, doc, side, found, current_page);
+    let list = source_list(doc, side, found, current_page);
     let bounds = bifrost_app::controls::Rect {
         x: 0.0,
         y: lay.bar as f32 / scale,
@@ -689,11 +730,11 @@ pub fn sidebar_hit(lay: &Layout, rows: &[(i32, i32)], scroll: f32, x: f32, y: f3
 }
 
 /// The toolbar action under a point, if any.
-pub fn button_hit(ui: &Ui, lay: &Layout, x: f32, y: f32) -> Option<Action> {
-    if y < 0.0 || y >= lay.bar as f32 {
-        return None;
-    }
-    buttons(ui, lay).into_iter().find(|(_, bx, bw)| x >= *bx as f32 && x < (bx + bw) as f32).map(|(a, _, _)| a)
+pub fn button_hit(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side, x: f32, y: f32) -> Option<Action> {
+    let (bar, layout) = toolbar(ui, lay, open, tool, side);
+    let scale = ui.pt(1.0).max(0.001);
+    let id = layout.hit(x / scale, y / scale)?;
+    bar.items.iter().find(|item| item.id == id && item.enabled).and_then(|item| Action::from_id(item.id))
 }
 
 /// Where the picture sits on the canvas: its top-left and its drawn size, after the pan is clamped.
@@ -1224,7 +1265,7 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
                 w: lay.side as f32 / scale,
                 h: (lay.h - lay.bar) as f32 / scale,
             };
-            let list = source_list(ui, doc, side, scene.found, scene.view.page);
+            let list = source_list(doc, side, scene.found, scene.view.page);
             widgets::source_list(s, ui, bounds, &list, scene.view.sidebar_scroll / scale, None);
         }
     }
@@ -1283,24 +1324,25 @@ fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     if lay.bar <= 0 {
         return;
     }
-    fill(s, 0, 0, lay.w, lay.bar, ui::CONTENT_BG.now());
-    fill(s, 0, lay.bar - 1, lay.w, 1, ui::SEPARATOR_C.now());
-    let y = (lay.bar - ui.pt(ui::MAC_BODY_PT * 1.5) as i32) / 2;
-    for (action, x, w) in buttons(ui, lay) {
-        let active = match action {
-            Action::UseTool(t) => t == scene.tool,
-            Action::ShowPages => scene.side == Side::Pages,
-            Action::ShowOutline => scene.side == Side::Outline,
-            _ => false,
-        };
-        let color = if active { ui::TINT } else { ui::LABEL.now() };
-        if active {
-            s.fill_rrect(x as f32, (y - 4) as f32, w as f32, (lay.bar - 2 * y + 8) as f32, ui.pt(ui::SPACE_S), ui::CONTROL_PRESSED.now());
-        }
-        let img = ui.text(action.label(), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-        let tx = x + (w - ui.measure(action.label(), ui::MAC_BODY_PT, Weight::Regular) as i32) / 2;
-        s.blit_colored(&img, tx, y, color, 255);
-    }
+    let scale = ui.pt(1.0).max(0.001);
+    widgets::toolbar_band(
+        s,
+        ui,
+        bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: lay.w as f32 / scale, h: lay.bar as f32 / scale },
+    );
+    let (bar, _) = toolbar(ui, lay, scene.doc.is_some(), scene.tool, scene.side);
+    widgets::toolbar(
+        s,
+        ui,
+        bifrost_app::controls::Rect {
+            x: lay.side as f32 / scale,
+            y: 0.0,
+            w: (lay.w - lay.side).max(0) as f32 / scale,
+            h: lay.bar as f32 / scale,
+        },
+        &bar,
+        None,
+    );
 }
 
 fn centred_text(s: &mut Surface, ui: &Ui, text: &str, lay: &Layout, color: u32) {

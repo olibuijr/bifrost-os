@@ -35,7 +35,7 @@ pub const B_RESET: u32 = 5;
 pub const B_EXPORT: u32 = 6;
 
 /// Sidebar row ids are `ROW_BASE + row id`, so they never meet the toolbar ids.
-const ROW_BASE: u32 = 100;
+pub const ROW_BASE: u32 = 100;
 /// The zoom factor of one press of a zoom button.
 const ZOOM_STEP: f64 = 1.25;
 
@@ -257,7 +257,7 @@ impl Grapher {
     }
 
     /// The action of a completed tap. True when the window needs a new frame.
-    fn activate(&mut self, ui: &Ui, dir: &Path, target: Target) -> bool {
+    pub fn activate(&mut self, ui: &Ui, dir: &Path, target: Target) -> bool {
         match target {
             Target::Nothing | Target::Plot => false,
             Target::Row(id) => self.model.select(id),

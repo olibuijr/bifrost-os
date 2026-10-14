@@ -1,4 +1,4 @@
-//! Pointer lock (`UIPointerLockState`): a scene can capture the pointer. While its lock is held and the scene is the key
+//! Pointer lock: a scene can capture the pointer. While its lock is held and the scene is the key
 //! scene, the cursor is hidden and motion is reported as relative deltas, so a game or a drawing surface can keep
 //! moving past the screen edges. Pure model: the compositor reports which scene is key, the scene asks for and
 //! releases the lock, and raw motion goes through `motion`, which returns the delta to deliver when the lock is held.

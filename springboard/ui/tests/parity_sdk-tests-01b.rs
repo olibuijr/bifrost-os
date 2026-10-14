@@ -350,7 +350,7 @@ fn headless_compose_sheet_an_empty_or_cancelled_post_reports_cancelled() {
     assert_eq!(ComposeDraft::new().dismiss(true), ComposeResult::Cancelled);
 }
 
-// ---- swiftui-app-data: search field geometry (bifrost_ui::search) ----
+// ---- shared app data: search field geometry (bifrost_ui::search) ----
 
 use bifrost_ui::search::{hits_clear, layout as search_layout, GLYPH_PT, INSET_PT};
 use bifrost_ui::Rect;
@@ -381,7 +381,7 @@ fn headless_search_field_with_text_shows_clear_and_narrows_the_text() {
     assert!(!hits_clear(FIELD, false, 290.0, 24.0), "nothing to clear");
 }
 
-// ---- swiftui-app-data: toolbars with groups and overflow (bifrost_ui::nav) ----
+// ---- shared app data: toolbars with groups and overflow (bifrost_ui::nav) ----
 
 use bifrost_ui::nav::{Toolbar, ToolbarItem, ToolbarKind};
 
@@ -446,7 +446,7 @@ fn headless_toolbar_menu_anchor_sits_below_the_button() {
     assert_eq!(layout.menu_anchor(99, 4.0), None);
 }
 
-// ---- swiftui-events-a11y-integration: accessibility fundamentals (bifrost_ui::ax) ----
+// ---- shared events and accessibility integration: fundamentals (bifrost_ui::ax) ----
 
 use bifrost_ui::ax::{role_name, Announcements, Map, Politeness, Priority};
 use bifrost_ui::Role;

@@ -3,7 +3,7 @@
 //! The keys read are `IMKControllerClass` (a string, required), `IMKDelegateClass` (a string, optional) and
 //! `IMKModeDictionary` (a dictionary from mode id to a settings dictionary, in document order, so the first mode is
 //! the default). A mode's label is the `label` string of its settings when present, otherwise the mode id. Other keys
-//! are ignored. The label key is a BifrOSt choice, not an Apple key.
+//! are ignored. The label key is a BifrOSt choice, not a platform key.
 //!
 //! Pure model: the property list is parsed by `bifrost_core::plist`; nothing reads a bundle from disk here.
 //!

@@ -1,5 +1,5 @@
-//! Named colour lists (`NSColorList`): an ordered set of colours, each under a key, that an app can build, edit and
-//! look up by name. [`ColorLists`] is the set of lists an app has registered (`NSColorList.availableColorLists`).
+//! Named colour lists: an ordered set of colours, each under a key, that an app can build, edit and
+//! look up by name. [`ColorLists`] is the set of lists an app has registered.
 //!
 //! ```ignore
 //! let mut brand = ColorList::new("Brand");
@@ -15,7 +15,7 @@
 
 use crate::graphics_color::Color;
 
-/// One named list of colours (`NSColorList`).
+/// One named list of colours.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColorList {
     name: String,
@@ -158,8 +158,8 @@ mod tests {
     fn keys_keep_first_insertion_order() {
         let mut list = ColorList::new("Brand");
         assert!(list.set_color("Zebra", red()));
-        assert!(list.set_color("Apple", blue()));
-        assert_eq!(list.keys(), vec!["Zebra", "Apple"]);
+    assert!(list.set_color("Azure", blue()));
+    assert_eq!(list.keys(), vec!["Zebra", "Azure"]);
     }
 
     #[test]

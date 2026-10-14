@@ -108,5 +108,5 @@ fn shell_roles_are_mapped_and_platform_services_are_classified() {
         assert_eq!(status_of(n), "n/a", "{n} is a vendor cloud service with no BifrOSt counterpart");
     }
     assert_eq!(status_of("com.apple.ScreenTimeAgent"), "partial", "Screen Time usage and limits are mapped in the shell");
-    assert_eq!(status_of("com.apple.MemorySlotNotification"), "n/a", "Apple-only memory slot hardware");
+    assert_eq!(status_of("com.apple.MemorySlotNotification"), "n/a", "platform-specific memory slot hardware");
 }

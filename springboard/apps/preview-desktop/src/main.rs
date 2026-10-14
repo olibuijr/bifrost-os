@@ -25,6 +25,7 @@ mod printjob;
 mod recents;
 mod signature;
 
+use bifrost_app::controls::{Node, Role};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::proto::DocMode;
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
@@ -1602,7 +1603,7 @@ impl Viewer {
             self.slide_by(1);
             return true;
         }
-        if let Some(action) = canvas::button_hit(ui, lay, x, y) {
+        if let Some(action) = canvas::button_hit(ui, lay, self.doc.is_some(), self.tool, self.side, x, y) {
             return self.act(ui, lay, action);
         }
         // the signature picker takes the clicks on its side; a click on a signature places it on the shown page
@@ -2274,12 +2275,33 @@ impl App for Viewer {
                 None => false,
             },
             Input::Key(key) => self.key(ctx, key),
+            Input::Activate(id) => self.track(|viewer| viewer.menu_action(ctx, id as u32)),
             Input::Touch { kind, x, y, .. } => {
                 let (w, h) = self.size(ctx);
                 self.touch(&ctx.ui, w, h, kind, x, y)
             }
             _ => false,
         }
+    }
+
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        let lay = self.layout(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, self.doc.is_some(), self.tool, self.side);
+        layout
+            .visible
+            .into_iter()
+            .filter_map(|(id, bounds)| {
+                let item = bar.items.iter().find(|item| item.id == id)?;
+                Some(Node {
+                    id: id as u64,
+                    role: Role::Button,
+                    label: item.label.clone(),
+                    value: String::new(),
+                    bounds,
+                    enabled: item.enabled,
+                })
+            })
+            .collect()
     }
 
     /// The answer to the open panel: the chosen file is copied into the app's data folder and opened from there.

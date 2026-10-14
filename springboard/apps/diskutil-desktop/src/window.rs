@@ -677,6 +677,7 @@ mod tests {
 
     fn one_stick() -> DiskUtility {
         let mut w = DiskUtility::new();
+        w.size = (1200.0, 780.0);
         w.nodes = vec![
             Node { name: "sdb".into(), removable: true, size: 8_000_000_000, ..Node::default() },
             Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), ..Node::default() },

@@ -99,6 +99,7 @@ fn paint_form(labels: &mut TextCache, s: &mut Surface, ui: &Ui, form: &Form, par
                     let boxed = Rect { x: line.x, y: line.y + (LIST_ROW_PT - 14.0) / 2.0, w: 14.0, h: 14.0 };
                     if on.get(k).copied().unwrap_or(false) {
                         fill(s, ui, boxed, 3.0, LINK);
+                        // compliance-allow: COL-03 WHITE is the checkmark on the LINK accent, not a panel fill.
                         fill(s, ui, Rect { x: boxed.x + 5.0, y: boxed.y + 5.0, w: 4.0, h: 4.0 }, 1.0, WHITE);
                     } else {
                         fill(s, ui, boxed, 3.0, SEPARATOR_C.now());

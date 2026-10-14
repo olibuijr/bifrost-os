@@ -86,10 +86,10 @@ impl Job {
         let shared = progress.clone();
         DispatchQueue::global(Qos::Utility).async_(move || {
             let outcome = if shared.cancelled() { Outcome::Cancelled } else { work(&shared) };
-            // the window may have been closed meanwhile; nobody is waiting then
-            DispatchQueue::main().async_(move || {
-                let _ = tx.send(outcome);
-            });
+            // The channel is safe to publish from the worker; queue a separate no-op to wake the window loop.
+            // Requiring the main queue to drain before the result becomes observable can strand a completed job.
+            let _ = tx.send(outcome);
+            DispatchQueue::main().async_(|| {});
         });
         Job { kind, label: label.to_string(), progress, rx }
     }

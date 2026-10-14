@@ -21,7 +21,7 @@ pub const MAX_ID: usize = 64;
 /// Longest title or detail of a restriction, in bytes.
 pub const MAX_TEXT: usize = 160;
 
-/// One app-defined restriction (`UIGuidedAccessRestrictionDelegate`): an identifier the app knows it by, the title and
+/// One app-defined guided-access restriction: an identifier the app knows it by, the title and
 /// description the session options show, and whether the restriction is allowed (`true`) or denied (`false`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuidedRestriction {

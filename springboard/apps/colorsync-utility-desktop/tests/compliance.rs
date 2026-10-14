@@ -22,7 +22,7 @@ const BIN: &str = env!("CARGO_BIN_EXE_bifrost-colour-utility");
 const BIN_NAME: &str = "bifrost-colour-utility";
 const APP_ID: &str = "is.olibuijr.colour-utility.desktop";
 const SNAP_NAME: &str = "colorsync-utility-desktop";
-const EXPECT_SIDEBAR: bool = false;  // source_list in the source
+const EXPECT_SIDEBAR: bool = true;  // source_list in the source
 const EXPECT_TOOLBAR: bool = false;  // widgets::toolbar in the source
 const EXPECT_SEARCH: bool = false;  // search_field in the source
 /// An app must draw a frame on start.

@@ -258,6 +258,8 @@ impl App for PasswordsApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        // Keychain edits persist as they are made, and CSV export replaces its destination atomically.
+        ctx.enable_sudden_termination();
         if !self.listed {
             self.listed = true;
             self.ask_list(ctx);

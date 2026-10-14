@@ -129,6 +129,11 @@ impl App for ArchiveApp {
         "is.olibuijr.archive.desktop"
     }
 
+    fn configure(&mut self, ctx: &Ctx) {
+        // Archive jobs publish only complete staged outputs; the window itself has no unsaved state.
+        ctx.enable_sudden_termination();
+    }
+
     fn event(&mut self, _ctx: &Ctx, ev: Input) -> bool {
         let Input::Open(path) = ev else { return false };
         match request_for(Path::new(&path)) {

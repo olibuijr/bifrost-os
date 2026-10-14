@@ -142,7 +142,7 @@ fn compare(have: &MetadataValue, op: MetadataOp, want: &MetadataValue) -> bool {
     }
 }
 
-/// One sort key of a query (`NSSortDescriptor` over a metadata attribute). Items are ordered by the first key, ties
+/// One sort key of a query over a metadata attribute. Items are ordered by the first key, ties
 /// by the next key, and finally by path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MetadataSortDescriptor {

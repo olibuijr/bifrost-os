@@ -568,6 +568,7 @@ impl EnergyAverages {
 /// An energy score for one process: its CPU share plus its disk traffic. Activity Monitor's Energy column is
 /// not public; this is a heuristic that ranks the same busy processes first (one MiB/s of disk weighs as 2 %).
 pub fn energy(p: &ProcSample) -> f64 {
+    // compliance-allow: LAY-03 Converts byte rates to MiB/s; these are unit factors, not screen dimensions.
     p.cpu as f64 + (p.read_bps + p.write_bps) / (1024.0 * 1024.0) * 2.0
 }
 
@@ -828,6 +829,7 @@ pub fn bytes(n: u64) -> String {
     }
     let mut v = n as f64;
     let mut i = 0;
+    // compliance-allow: LAY-03 Binary bytes-per-unit threshold for readable sizes, not window geometry.
     while v >= 1024.0 && i < UNITS.len() - 1 {
         v /= 1024.0;
         i += 1;

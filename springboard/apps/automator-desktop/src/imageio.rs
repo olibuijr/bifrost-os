@@ -33,8 +33,11 @@ impl Format {
 /// Decodes the picture in `path`.
 pub fn decode_file(path: &Path) -> Result<Image, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let source = ImageSource::new(&bytes).map_err(|e| format!("{} is not a readable picture ({e:?})", path.display()))?;
-    source.decode().map_err(|e| format!("{} could not be decoded ({e:?})", path.display()))
+    let source = ImageSource::new(&bytes)
+        .map_err(|e| format!("{} is not a readable picture ({e:?})", path.display()))?;
+    source
+        .decode()
+        .map_err(|e| format!("{} could not be decoded ({e:?})", path.display()))
 }
 
 /// The picture as the bytes of a file in `format`.
@@ -48,7 +51,13 @@ pub fn encode(image: &Image, format: Format) -> Result<Vec<u8>, String> {
 /// One premultiplied pixel as straight RGBA bytes.
 fn unpremultiply(p: u32) -> [u8; 4] {
     let (r, g, b, a) = (p & 0xff, (p >> 8) & 0xff, (p >> 16) & 0xff, p >> 24);
-    let straight = |c: u32| if a == 0 { 0 } else { ((c * 255 + a / 2) / a).min(255) as u8 };
+    let straight = |c: u32| {
+        if a == 0 {
+            0
+        } else {
+            ((c * 255 + a / 2) / a).min(255) as u8
+        }
+    };
     [straight(r), straight(g), straight(b), a as u8]
 }
 
@@ -133,9 +142,18 @@ mod tests {
         let bytes = encode(&sample(), Format::Bmp).unwrap();
         assert_eq!(&bytes[0..2], b"BM");
         assert_eq!(bytes.len(), 54 + 2 * 2 * 4);
-        assert_eq!(u32::from_le_bytes([bytes[10], bytes[11], bytes[12], bytes[13]]), 54);
-        assert_eq!(i32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]), 2);
-        assert_eq!(i32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]), 2);
+        assert_eq!(
+            u32::from_le_bytes([bytes[10], bytes[11], bytes[12], bytes[13]]),
+            54
+        );
+        assert_eq!(
+            i32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]),
+            2
+        );
+        assert_eq!(
+            i32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]),
+            2
+        );
         // bottom-up: the first stored pixel is the bottom-left one, blue (BGRA: b=255, g=0, r=0)
         assert_eq!(&bytes[54..58], &[0xff, 0x00, 0x00, 0xff]);
     }

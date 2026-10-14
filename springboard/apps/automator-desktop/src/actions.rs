@@ -3,10 +3,9 @@
 //! Move, Resize and Convert steps, and only where the step says so. A target that already exists is never replaced.
 
 use crate::imageio::{self, Format};
-use crate::model::{LogLine, Kind, Step, Value};
-use bifrost_app::dispatch::{DispatchQueue, Qos};
+use crate::model::{Kind, LogLine, Step, Value};
 use std::fs;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -50,11 +49,15 @@ fn folder(text: &str) -> PathBuf {
 }
 
 fn file_name_of(path: &Path) -> String {
-    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 fn stem_of(path: &Path) -> String {
-    path.file_stem().map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned())
+    path.file_stem()
+        .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned())
 }
 
 /// Whether a file name matches a Find pattern: empty matches everything, `*.ext` matches an extension, and any other
@@ -83,7 +86,12 @@ fn find(step: &Step) -> Result<Value, String> {
     Ok(Value::Paths(found))
 }
 
-fn collect(dir: &Path, pattern: &str, recursive: bool, out: &mut Vec<PathBuf>) -> Result<(), String> {
+fn collect(
+    dir: &Path,
+    pattern: &str,
+    recursive: bool,
+    out: &mut Vec<PathBuf>,
+) -> Result<(), String> {
     let entries = fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -106,7 +114,9 @@ fn collect(dir: &Path, pattern: &str, recursive: bool, out: &mut Vec<PathBuf>) -
 pub fn new_name(template: &str, path: &Path, n: usize) -> String {
     let stem = stem_of(path);
     let ext = path.extension().map(|e| e.to_string_lossy().into_owned());
-    let mut name = template.replace("{name}", &stem).replace("{n}", &n.to_string());
+    let mut name = template
+        .replace("{name}", &stem)
+        .replace("{n}", &n.to_string());
     match &ext {
         Some(ext) if template.contains("{ext}") => name = name.replace("{ext}", ext),
         Some(ext) => name = format!("{name}.{ext}"),
@@ -147,7 +157,12 @@ fn rename(step: &Step, input: &Value, log: &mut dyn FnMut(LogLine)) -> Result<Va
     Ok(Value::Paths(out))
 }
 
-fn copy_or_move(step: &Step, input: &Value, mv: bool, log: &mut dyn FnMut(LogLine)) -> Result<Value, String> {
+fn copy_or_move(
+    step: &Step,
+    input: &Value,
+    mv: bool,
+    log: &mut dyn FnMut(LogLine),
+) -> Result<Value, String> {
     let action = if mv { "Move" } else { "Copy" };
     let files = need_files(input, action)?;
     let dest = folder(step.value(0));
@@ -160,7 +175,9 @@ fn copy_or_move(step: &Step, input: &Value, mv: bool, log: &mut dyn FnMut(LogLin
         if !path.is_file() {
             return Err(format!("{} is not a file", path.display()));
         }
-        let name = path.file_name().ok_or_else(|| format!("{} has no file name", path.display()))?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| format!("{} has no file name", path.display()))?;
         let target = dest.join(name);
         if target == *path {
             out.push(target);
@@ -175,7 +192,11 @@ fn copy_or_move(step: &Step, input: &Value, mv: bool, log: &mut dyn FnMut(LogLin
             fs::copy(path, &target).map_err(|e| format!("{}: {e}", path.display()))?;
         }
         let verb = if mv { "Moved" } else { "Copied" };
-        log(LogLine::info(format!("{verb} {} to {}", file_name_of(path), dest.display())));
+        log(LogLine::info(format!(
+            "{verb} {} to {}",
+            file_name_of(path),
+            dest.display()
+        )));
         out.push(target);
     }
     Ok(Value::Paths(out))
@@ -204,14 +225,20 @@ fn transform(step: &Step, input: &Value) -> Result<Value, String> {
         }
         "unique lines" => {
             let mut seen = std::collections::HashSet::new();
-            lines.into_iter().filter(|l| seen.insert(l.clone())).collect()
+            lines
+                .into_iter()
+                .filter(|l| seen.insert(l.clone()))
+                .collect()
         }
         "replace" => {
             let find = step.value(1);
             if find.is_empty() {
                 return Err("the Replace operation needs text to find".into());
             }
-            lines.iter().map(|l| l.replace(find, step.value(2))).collect()
+            lines
+                .iter()
+                .map(|l| l.replace(find, step.value(2)))
+                .collect()
         }
         other => return Err(format!("unknown operation {other}")),
     };
@@ -239,7 +266,10 @@ pub fn fit(src_w: usize, src_h: usize, w: u32, h: u32) -> (usize, usize) {
 }
 
 fn parse_size(text: &str, label: &str) -> Result<u32, String> {
-    let value: u32 = text.trim().parse().map_err(|_| format!("{label} must be a whole number of pixels"))?;
+    let value: u32 = text
+        .trim()
+        .parse()
+        .map_err(|_| format!("{label} must be a whole number of pixels"))?;
     if value > MAX_SIDE {
         return Err(format!("{label} is larger than {MAX_SIDE} pixels"));
     }
@@ -268,12 +298,23 @@ fn resize(step: &Step, input: &Value, log: &mut dyn FnMut(LogLine)) -> Result<Va
         let image = imageio::decode_file(path)?;
         let (tw, th) = fit(image.w, image.h, w, h);
         if tw as u32 > MAX_SIDE || th as u32 > MAX_SIDE {
-            return Err(format!("{} would be larger than {MAX_SIDE} pixels", path.display()));
+            return Err(format!(
+                "{} would be larger than {MAX_SIDE} pixels",
+                path.display()
+            ));
         }
         let scaled = image.resized(tw, th);
-        let target = beside(path, &format!("{}-{tw}x{th}", stem_of(path)), Format::Png.extension())?;
-        fs::write(&target, imageio::encode(&scaled, Format::Png)?).map_err(|e| format!("{}: {e}", target.display()))?;
-        log(LogLine::info(format!("{} at {tw} x {th}", file_name_of(&target))));
+        let target = beside(
+            path,
+            &format!("{}-{tw}x{th}", stem_of(path)),
+            Format::Png.extension(),
+        )?;
+        fs::write(&target, imageio::encode(&scaled, Format::Png)?)
+            .map_err(|e| format!("{}: {e}", target.display()))?;
+        log(LogLine::info(format!(
+            "{} at {tw} x {th}",
+            file_name_of(&target)
+        )));
         out.push(target);
     }
     Ok(Value::Paths(out))
@@ -281,19 +322,31 @@ fn resize(step: &Step, input: &Value, log: &mut dyn FnMut(LogLine)) -> Result<Va
 
 fn convert(step: &Step, input: &Value, log: &mut dyn FnMut(LogLine)) -> Result<Value, String> {
     let files = need_files(input, "Convert")?;
-    let format = Format::from_name(step.value(0)).ok_or_else(|| format!("unknown image format {}", step.value(0)))?;
+    let format = Format::from_name(step.value(0))
+        .ok_or_else(|| format!("unknown image format {}", step.value(0)))?;
     let mut out = Vec::with_capacity(files.len());
     for path in &files {
-        let already = path.extension().is_some_and(|e| e.eq_ignore_ascii_case(format.extension()));
+        let already = path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case(format.extension()));
         if already {
-            log(LogLine::info(format!("{} is already {}", file_name_of(path), format.extension())));
+            log(LogLine::info(format!(
+                "{} is already {}",
+                file_name_of(path),
+                format.extension()
+            )));
             out.push(path.clone());
             continue;
         }
         let image = imageio::decode_file(path)?;
         let target = beside(path, &stem_of(path), format.extension())?;
-        fs::write(&target, imageio::encode(&image, format)?).map_err(|e| format!("{}: {e}", target.display()))?;
-        log(LogLine::info(format!("{} as {}", file_name_of(&target), format.extension())));
+        fs::write(&target, imageio::encode(&image, format)?)
+            .map_err(|e| format!("{}: {e}", target.display()))?;
+        log(LogLine::info(format!(
+            "{} as {}",
+            file_name_of(&target),
+            format.extension()
+        )));
         out.push(target);
     }
     Ok(Value::Paths(out))
@@ -306,27 +359,32 @@ fn run_script(step: &Step, input: &Value) -> Result<Value, String> {
     if script.is_empty() {
         return Err("the script is empty".into());
     }
-    let mut child = Command::new("sh")
+    // A file-backed stdin avoids a second worker/thread and cannot fill up while the script is producing output.
+    // `tempfile()` creates an anonymous private file; after the child inherits it as stdin, this handle can close.
+    let mut stdin =
+        tempfile::tempfile().map_err(|e| format!("could not prepare script input: {e}"))?;
+    stdin
+        .write_all(input.text().as_bytes())
+        .map_err(|e| format!("could not prepare script input: {e}"))?;
+    stdin
+        .seek(SeekFrom::Start(0))
+        .map_err(|e| format!("could not prepare script input: {e}"))?;
+    let child = Command::new("sh")
         .arg("-c")
         .arg(script)
-        .stdin(Stdio::piped())
+        .stdin(Stdio::from(stdin))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("could not start the shell: {e}"))?;
-    // the input is written on its own thread, so a script that writes a lot before it reads cannot block the run
-    let input_text = input.text();
-    let feeder = child.stdin.take().map(|mut stdin| {
-        DispatchQueue::global(Qos::Utility).async_(move || {
-            let _ = stdin.write_all(input_text.as_bytes());
-        })
-    });
-    let output = child.wait_with_output().map_err(|e| format!("the script did not finish: {e}"))?;
-    if let Some(feeder) = feeder {
-        let _ = feeder.join();
-    }
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("the script did not finish: {e}"))?;
     if !output.status.success() {
-        let code = output.status.code().map_or_else(|| "a signal".to_string(), |c| c.to_string());
+        let code = output
+            .status
+            .code()
+            .map_or_else(|| "a signal".to_string(), |c| c.to_string());
         let error = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if error.is_empty() {
             format!("the script exited with {code}")
@@ -334,7 +392,9 @@ fn run_script(step: &Step, input: &Value) -> Result<Value, String> {
             format!("the script exited with {code}: {error}")
         });
     }
-    Ok(Value::Text(String::from_utf8_lossy(&output.stdout).into_owned()))
+    Ok(Value::Text(
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+    ))
 }
 
 #[cfg(test)]
@@ -343,7 +403,11 @@ mod tests {
 
     /// A clean folder for one test, under the crate's target directory (never the system temp folder).
     fn scratch(name: &str) -> PathBuf {
-        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/automator-tests")).join(name);
+        let dir = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/target/automator-tests"
+        ))
+        .join(name);
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -384,15 +448,32 @@ mod tests {
         fs::write(root.join("b.txt"), b"x").unwrap();
         fs::write(root.join("sub/c.png"), b"x").unwrap();
         let folder_text = root.display().to_string();
-        let flat = run(&step(Kind::Find, &[&folder_text, "*.png", "no"]), Value::Empty, &mut quiet).unwrap();
+        let flat = run(
+            &step(Kind::Find, &[&folder_text, "*.png", "no"]),
+            Value::Empty,
+            &mut quiet,
+        )
+        .unwrap();
         assert_eq!(flat, Value::Paths(vec![root.join("a.png")]));
-        let deep = run(&step(Kind::Find, &[&folder_text, "*.png", "yes"]), Value::Empty, &mut quiet).unwrap();
-        assert_eq!(deep, Value::Paths(vec![root.join("a.png"), root.join("sub/c.png")]));
+        let deep = run(
+            &step(Kind::Find, &[&folder_text, "*.png", "yes"]),
+            Value::Empty,
+            &mut quiet,
+        )
+        .unwrap();
+        assert_eq!(
+            deep,
+            Value::Paths(vec![root.join("a.png"), root.join("sub/c.png")])
+        );
     }
 
     #[test]
     fn find_reports_a_missing_folder() {
-        let result = run(&step(Kind::Find, &["/no/such/automator/folder", "", "no"]), Value::Empty, &mut quiet);
+        let result = run(
+            &step(Kind::Find, &["/no/such/automator/folder", "", "no"]),
+            Value::Empty,
+            &mut quiet,
+        );
         assert!(result.unwrap_err().contains("/no/such/automator/folder"));
     }
 
@@ -402,13 +483,25 @@ mod tests {
         fs::write(root.join("first.jpg"), b"1").unwrap();
         fs::write(root.join("second.jpg"), b"2").unwrap();
         let input = Value::Paths(vec![root.join("first.jpg"), root.join("second.jpg")]);
-        let renamed = run(&step(Kind::Rename, &["holiday-{n}"]), input.clone(), &mut quiet).unwrap();
-        assert_eq!(renamed, Value::Paths(vec![root.join("holiday-1.jpg"), root.join("holiday-2.jpg")]));
+        let renamed = run(
+            &step(Kind::Rename, &["holiday-{n}"]),
+            input.clone(),
+            &mut quiet,
+        )
+        .unwrap();
+        assert_eq!(
+            renamed,
+            Value::Paths(vec![root.join("holiday-1.jpg"), root.join("holiday-2.jpg")])
+        );
         assert!(root.join("holiday-2.jpg").exists());
         assert!(!root.join("first.jpg").exists());
         // a second run against a target that exists is refused and nothing is replaced
         fs::write(root.join("again.jpg"), b"3").unwrap();
-        let clash = run(&step(Kind::Rename, &["again"]), Value::Paths(vec![root.join("holiday-1.jpg")]), &mut quiet);
+        let clash = run(
+            &step(Kind::Rename, &["again"]),
+            Value::Paths(vec![root.join("holiday-1.jpg")]),
+            &mut quiet,
+        );
         assert!(clash.unwrap_err().contains("already exists"));
         assert_eq!(fs::read(root.join("again.jpg")).unwrap(), b"3");
     }
@@ -416,7 +509,10 @@ mod tests {
     #[test]
     fn rename_needs_files() {
         let result = run(&step(Kind::Rename, &["x-{n}"]), Value::Empty, &mut quiet);
-        assert_eq!(result.unwrap_err(), "Rename needs files from the step before it");
+        assert_eq!(
+            result.unwrap_err(),
+            "Rename needs files from the step before it"
+        );
     }
 
     #[test]
@@ -441,25 +537,42 @@ mod tests {
 
     #[test]
     fn copy_needs_a_destination() {
-        let result = run(&step(Kind::Copy, &[""]), Value::Paths(vec![PathBuf::from("/x/a")]), &mut quiet);
+        let result = run(
+            &step(Kind::Copy, &[""]),
+            Value::Paths(vec![PathBuf::from("/x/a")]),
+            &mut quiet,
+        );
         assert!(result.unwrap_err().contains("destination"));
     }
 
     #[test]
     fn transform_operations() {
         let input = Value::Text("b\na\nb\n  c  ".into());
-        let t = |op: &str| run(&step(Kind::Transform, &[op]), input.clone(), &mut quiet).unwrap().text();
+        let t = |op: &str| {
+            run(&step(Kind::Transform, &[op]), input.clone(), &mut quiet)
+                .unwrap()
+                .text()
+        };
         assert_eq!(t("upper"), "B\nA\nB\n  C  ");
         assert_eq!(t("trim"), "b\na\nb\nc");
         assert_eq!(t("sort lines"), "  c  \na\nb\nb");
         assert_eq!(t("unique lines"), "b\na\n  c  ");
-        let replaced = run(&step(Kind::Transform, &["replace", "b", "beta"]), input, &mut quiet).unwrap();
+        let replaced = run(
+            &step(Kind::Transform, &["replace", "b", "beta"]),
+            input,
+            &mut quiet,
+        )
+        .unwrap();
         assert_eq!(replaced.text(), "beta\na\nbeta\n  c  ");
     }
 
     #[test]
     fn transform_replace_needs_text_to_find() {
-        let result = run(&step(Kind::Transform, &["replace", "", "x"]), Value::Text("a".into()), &mut quiet);
+        let result = run(
+            &step(Kind::Transform, &["replace", "", "x"]),
+            Value::Text("a".into()),
+            &mut quiet,
+        );
         assert!(result.is_err());
     }
 
@@ -493,19 +606,44 @@ mod tests {
         let root = scratch("resize-bad");
         let bad = root.join("note.png");
         fs::write(&bad, b"definitely not a picture").unwrap();
-        let result = run(&step(Kind::Resize, &["10", "0"]), Value::Paths(vec![bad]), &mut quiet);
+        let result = run(
+            &step(Kind::Resize, &["10", "0"]),
+            Value::Paths(vec![bad]),
+            &mut quiet,
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn script_reads_input_and_its_output_is_the_result() {
-        let out = run(&step(Kind::RunScript, &["tr a-z A-Z"]), Value::Text("abc".into()), &mut quiet).unwrap();
+        let out = run(
+            &step(Kind::RunScript, &["tr a-z A-Z"]),
+            Value::Text("abc".into()),
+            &mut quiet,
+        )
+        .unwrap();
         assert_eq!(out, Value::Text("ABC".into()));
     }
 
     #[test]
+    fn script_reads_large_input_without_a_feeder_thread() {
+        let input = "input-data-".repeat(32 * 1024);
+        let out = run(
+            &step(Kind::RunScript, &["cat"]),
+            Value::Text(input.clone()),
+            &mut quiet,
+        )
+        .unwrap();
+        assert_eq!(out, Value::Text(input));
+    }
+
+    #[test]
     fn script_failure_is_an_error_with_its_message() {
-        let result = run(&step(Kind::RunScript, &["echo broken >&2; exit 3"]), Value::Empty, &mut quiet);
+        let result = run(
+            &step(Kind::RunScript, &["echo broken >&2; exit 3"]),
+            Value::Empty,
+            &mut quiet,
+        );
         let error = result.unwrap_err();
         assert!(error.contains("exited with 3"), "{error}");
         assert!(error.contains("broken"), "{error}");

@@ -192,9 +192,10 @@ fn spawn_load() -> Receiver<(Report, Extras)> {
     bifrost_app::dispatch::DispatchQueue::global(bifrost_app::dispatch::Qos::Utility).async_(move || {
         let report = Report::collect(&Roots::system());
         let extras = Extras::collect();
-        bifrost_app::dispatch::DispatchQueue::main().async_(move || {
-            let _ = tx.send((report, extras)); // the window may have cancelled and gone on
-        });
+        // Publish independently of the UI queue; poll_load owns the receiver and safely ignores a cancelled read.
+        // The no-op wake still makes an otherwise idle window take the result promptly.
+        let _ = tx.send((report, extras));
+        bifrost_app::dispatch::DispatchQueue::main().async_(|| {});
     });
     rx
 }
@@ -1192,6 +1193,7 @@ mod tests {
     #[test]
     fn scroll_stops_at_the_ends() {
         let mut w = SysInfo::new();
+        w.size = (1200.0, 780.0);
         w.report = Report::default();
         assert!(!w.scroll_by(-10.0), "already at the top");
         assert_eq!(w.max_scroll(), 0.0, "a short list does not scroll");
@@ -1207,6 +1209,7 @@ mod tests {
 
     fn loaded() -> SysInfo {
         let mut w = SysInfo::new();
+        w.size = (1200.0, 780.0);
         w.extras = Extras { hostname: "midget".into(), modules: vec![crate::extras::Module { name: "snd".into(), size_bytes: 2048, used_by: 1 }], ..Default::default() };
         w
     }

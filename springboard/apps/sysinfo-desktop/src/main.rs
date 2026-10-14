@@ -42,7 +42,8 @@ impl App for SysInfo {
 
     fn configure(&mut self, ctx: &Ctx) {
         ctx.enable_sudden_termination(); // keeps no unsaved state: the facts are read again on every launch
-        self.size = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        let scale = ctx.ui.pt(1.0);
+        self.size = (ctx.cfg.w as f32 / scale, ctx.cfg.h as f32 / scale);
         if !self.started {
             if let Some(text) = ctx.defaults().string(COLLAPSED_KEY) {
                 self.set_collapsed_text(&text);

@@ -250,7 +250,7 @@ impl App for VideoPlayerApp {
     fn configure(&mut self, ctx: &Ctx) {
         self.w = ctx.cfg.w as i32;
         self.h = ctx.cfg.h as i32;
-        self.empty = Some(ctx.ui.text("Open a movie from the Movie menu.", EMPTY_PT, Weight::Regular, ui::WHITE));
+        self.empty = Some(ctx.ui.text("Open a movie from the Movie menu.", EMPTY_PT, Weight::Regular, ui::LABEL.now()));
         if let Some(m) = &mut self.movie {
             m.set_size(self.w, self.h);
         }

@@ -80,6 +80,10 @@ pub struct BluetoothExchange {
 }
 
 impl BluetoothExchange {
+    pub fn worker_wake_fd(&self) -> Option<i32> {
+        self.link.wake_fd()
+    }
+
     pub fn new() -> BluetoothExchange {
         let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
         BluetoothExchange {

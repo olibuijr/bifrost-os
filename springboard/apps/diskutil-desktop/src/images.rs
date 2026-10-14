@@ -150,6 +150,7 @@ pub fn convert_command(src: &str, dst: &str, format: ImageFormat) -> Command {
 
 /// Whether the first bytes of an image hold an ext2, ext3 or ext4 superblock (its magic number at byte 1080).
 pub fn is_ext_image(head: &[u8]) -> bool {
+    // compliance-allow: LAY-03 1080 is the ext superblock byte offset, not display geometry.
     head.len() >= 1082 && head[1080] == 0x53 && head[1081] == 0xEF
 }
 
@@ -173,6 +174,7 @@ pub fn resize_plan(path: &str, old: u64, new: u64, ext: bool) -> Result<Vec<Comm
     }
     // resize2fs insists on a check that has just run; -p repairs only what is safe, and -f checks a clean file system too
     let check = Command { program: "e2fsck", args: vec!["-f".to_string(), "-p".to_string(), path.to_string()] };
+    // compliance-allow: LAY-03 Converts the byte size to 1 KiB blocks for the filesystem tool.
     let resize = Command { program: "resize2fs", args: vec![path.to_string(), format!("{}K", new / 1024)] };
     Ok(if grow { vec![truncate, check, resize] } else { vec![check, resize, truncate] })
 }

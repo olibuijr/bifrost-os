@@ -1,5 +1,5 @@
 //! Guided Access for apps: a single-app session the user starts from the shell, with app-defined restrictions. Mirrors
-//! `UIAccessibility.requestGuidedAccessSession` and the `UIGuidedAccessRestrictionDelegate` callbacks.
+//! the guided-access request and restriction callbacks.
 //!
 //! An app calls [`Ctx::request_guided_access`] with its restrictions; the shell starts the session only when the user has
 //! turned Guided Access on in Settings > Accessibility. The answer and every later change arrive at the `App` through

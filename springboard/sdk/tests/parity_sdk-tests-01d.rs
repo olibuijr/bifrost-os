@@ -1,4 +1,4 @@
-//! Headless tests for the SDK models behind the parity rows: Core Spotlight indexing and search, the index ledger,
+//! Headless tests for the SDK models behind the parity rows: local search indexing, the index ledger,
 //! notifications, menu-bar extras, local authentication, sharing, the preview panel, thumbnail requests, the notify bus
 //! and the keychain. Everything runs on the host with an in-memory `Ctx` (no shell, no display, no network) and
 //! asserts on the messages the SDK queues for the shell and on the values the models return.
@@ -48,7 +48,7 @@ fn search_items_or_panic<'a>(q: &str, items: &'a [CSSearchableItem]) -> Vec<&'a 
     bifrost_app::quicksearch::search_items(&SearchQuery::new(q), items).expect("a non-empty query runs")
 }
 
-// --- Core Spotlight: searchable items and attribute sets --------------------------------------------------------------
+// --- Local search: searchable items and attribute sets ----------------------------------------------------------------
 
 #[test]
 fn attribute_set_builder_records_each_attribute_it_is_given() {
@@ -134,7 +134,7 @@ fn an_item_ranks_a_title_match_above_a_keyword_match() {
     assert_eq!(found("milk", &items), ["title", "keyword"]);
 }
 
-// --- Core Spotlight: indexing, errors and deletes ---------------------------------------------------------------------
+// --- Local search: indexing, errors and deletes ------------------------------------------------------------------------
 
 #[test]
 fn index_checked_refuses_bad_identifiers_and_sends_the_rest() {
@@ -225,7 +225,7 @@ fn an_open_result_carries_the_action_type_and_the_item_identifier() {
     assert_eq!(activity.domain_identifier, "notes");
 }
 
-// --- Core Spotlight: the index ledger (acknowledged writes) -----------------------------------------------------------
+// --- Local search: the index ledger (acknowledged writes) --------------------------------------------------------------
 
 fn item(id: &str) -> CSSearchableItem {
     CSSearchableItem::new(id, "notes", CSSearchableItemAttributeSet::new("Milk"))

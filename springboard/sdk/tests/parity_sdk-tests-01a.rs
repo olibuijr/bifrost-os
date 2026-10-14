@@ -1,4 +1,4 @@
-//! Parity sdk-tests-01a: headless tests for the SDK models behind the QuickLook, keychain, Spotlight, workspace and
+//! Parity sdk-tests-01a: headless tests for the SDK models behind preview, keychain, search, workspace and
 //! thumbnail APIs. Each test runs the pure part of a module through its public API and asserts concrete values. None
 //! opens a socket, reads the clock or needs a display.
 

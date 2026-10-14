@@ -1,4 +1,4 @@
-//! Text drag and drop customization for a text view (`UITextDragDelegate`, `UITextDropDelegate`): which parts of the
+//! Text drag and drop customization for a text view: which parts of the
 //! view may be dragged, whether it takes drops, whether a drag inside the view moves the text, and what a drop does to the
 //! text. Plain functions over the text and byte ranges, so a text view (or a text field) calls them from its drag handler
 //! and applies the result with its own edit path.

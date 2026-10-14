@@ -423,6 +423,7 @@ mod tests {
         let mut f = Fixture::new(w, h, px).unwrap();
         f.at = Some(at);
         let mut m = ColorMeter::new(Box::new(f));
+        m.size = (1000.0, 640.0);
         m.refresh();
         m
     }

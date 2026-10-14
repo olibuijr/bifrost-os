@@ -1562,8 +1562,7 @@ impl Calculator {
         if self.store.is_empty() {
             items.push(SidebarItem::row(u32::MAX, "No Recent Calculations").disabled());
         } else {
-            for index in 0..self.store.len() {
-                let entry = &self.store[index];
+            for (index, entry) in self.store.entries().iter().enumerate() {
                 let expression = localize_with(&pretty(&entry.expression), locale, thousands);
                 let result = localize_with(&entry.result, locale, thousands);
                 let mut row = SidebarItem::row(ID_HISTORY + index as u32, &expression).with_subtitle(&result);

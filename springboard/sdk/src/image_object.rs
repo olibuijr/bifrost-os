@@ -1,9 +1,9 @@
-//! `NSImage` as an object: a named image with one or more representations (`NSImageRep`), a point size, a template
+//! An image object: a named image with one or more representations, a point size, a template
 //! flag, and resizable cap insets.
 //!
-//! Each representation is either a bitmap with pixel dimensions (`NSBitmapImageRep`) or a vector representation that
+//! Each representation is either a bitmap with pixel dimensions or a vector representation that
 //! scales to any size (`NSPDFImageRep` and similar). [`ImageObject::best_rep`] picks the representation to draw for a
-//! target size and display scale the way `NSImage` does: a vector representation wins, otherwise the smallest bitmap
+//! target size and display scale consistently: a vector representation wins, otherwise the smallest bitmap
 //! that is still at least as large as the target in pixels, falling back to the largest bitmap.
 //!
 //! [`ImageObject::resizable_slices`] gives the nine-slice layout of a resizable image (`resizingMode = .stretch` with
@@ -23,7 +23,7 @@ use crate::graphics_imageio;
 /// A rectangle as (x, y, width, height), y growing downwards.
 pub type Rect = (f32, f32, f32, f32);
 
-/// Cap insets of a resizable image, in points (`NSEdgeInsets` order: top, left, bottom, right).
+/// Cap insets of a resizable image, in points (top, left, bottom, right).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CapInsets {
     pub top: f32,
@@ -48,7 +48,7 @@ pub enum RepKind {
     Vector,
 }
 
-/// One representation of an image (`NSImageRep`): its kind and its size in points.
+/// One representation of an image: its kind and its size in points.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ImageRep {
     pub kind: RepKind,
@@ -66,7 +66,7 @@ impl ImageRep {
         Some(ImageRep { kind: RepKind::Bitmap { pixel_width, pixel_height }, size })
     }
 
-    /// A bitmap shown at 72 points per inch, so one pixel is one point (the default of `NSBitmapImageRep`).
+/// A bitmap shown at 72 points per inch, so one pixel is one point by default.
     pub fn bitmap_at_72_dpi(pixel_width: u32, pixel_height: u32) -> Option<ImageRep> {
         ImageRep::bitmap(pixel_width, pixel_height, (pixel_width as f32, pixel_height as f32))
     }
@@ -109,7 +109,7 @@ impl ImageRep {
     }
 }
 
-/// An image object (`NSImage`).
+/// An image object.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ImageObject {
     name: Option<String>,
@@ -125,7 +125,7 @@ impl ImageObject {
         ImageObject::default()
     }
 
-    /// An empty image with a name, as `NSImage(named:)` looks images up by name.
+/// An empty image with a name; named images are looked up by that name.
     pub fn named(name: impl Into<String>) -> Self {
         ImageObject { name: Some(name.into()), ..ImageObject::default() }
     }
@@ -169,7 +169,7 @@ impl ImageObject {
         &self.reps
     }
 
-    /// The representation to draw at `target` points on a display with `scale` pixels per point (`NSImage` picks
+/// The representation to draw at `target` points on a display with `scale` pixels per point (the resolver picks
     /// the best representation for the drawing context). A vector representation is preferred. Otherwise the
     /// smallest bitmap with at least `target * scale` pixels in each direction is chosen, or the largest bitmap when
     /// none is big enough. Ties keep the earlier representation. `None` when there are no representations.

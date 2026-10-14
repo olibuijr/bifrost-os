@@ -1,4 +1,4 @@
-//! Spring-loaded interaction (`UISpringLoadedInteraction`): a drag that rests over a target for a while activates it once.
+//! Spring-loaded interaction: a drag that rests over a target for a while activates it once.
 //! The target is any id the app chooses (a button, a folder row, a tab). The behavior decides per target whether it may
 //! spring-load (`allowed`), the effect reads [`SpringLoad::progress`] to draw the hover ramp, and the activation is
 //! reported once per hover: moving to another target restarts the timer, and leaving the target cancels it.

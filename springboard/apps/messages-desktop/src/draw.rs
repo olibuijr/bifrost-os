@@ -7,7 +7,7 @@ use crate::protocol::Body;
 use crate::window::MessagesWindow;
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
-use bifrost_app::controls::Rect as KRect;
+use bifrost_app::controls::{Node, Rect as KRect, Role};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
 use bifrost_app::kit::{colors, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
@@ -285,6 +285,33 @@ impl Layout {
 }
 
 impl MessagesWindow {
+    /// The visible room list and search field, in window points, for accessibility and window dragging.
+    pub fn controls(&self, ui: &Ui) -> Vec<Node> {
+        let layout = self.layout(ui);
+        let scale = ui.pt(1.0);
+        let points = |r: Rect| KRect { x: r[0] / scale, y: r[1] / scale, w: r[2] / scale, h: r[3] / scale };
+        let side = layout.sidebar();
+        let search = layout.search_field();
+        vec![
+            Node {
+                id: 0x4d53_4701,
+                role: Role::List,
+                label: "Conversations".into(),
+                value: String::new(),
+                bounds: points(side),
+                enabled: true,
+            },
+            Node {
+                id: 0x4d53_4702,
+                role: Role::TextField,
+                label: "Search conversations".into(),
+                value: self.model.search.clone(),
+                bounds: points(search),
+                enabled: true,
+            },
+        ]
+    }
+
     fn room_source_list(&self, lay: &Layout) -> SourceList {
         let rooms = self.model.visible_rooms();
         let items = rooms.iter().enumerate().map(|(i, room)| {

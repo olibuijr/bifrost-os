@@ -1,6 +1,12 @@
 # BifrOSt changelog
 
-## Unreleased
+## 0.8.0 — 2026-10-14
+
+- App isolation: camera permission is limited to Photo Booth and supported capture devices; screen sampling is limited to Color Meter and requires the existing privacy consent. Undeclared or unauthorized capabilities remain denied.
+- App safety: Archive stages complete outputs before publishing them without replacing existing files; Passwords exports through an owner-only temporary file and refuses incomplete keychain imports. Both apps now declare safe termination.
+- App compliance: repaired lifecycle, worker wake, layout and annotation findings across the reviewed apps; added executable-target validation so incomplete Screenshot packaging is reported rather than published.
+- Preview: replaced its custom toolbar drawing with grouped Golden Gate kit controls, including accessible button nodes; the page-thumbnail gallery remains custom because its rows vary with document page sizes.
+- Release metadata: aligned the Keyboard system manifest with app version 1.1.3.
 
 - Photos: album folders have a tested model (names, one folder per album, slots kept in step when an album is deleted, stored under uf.<n> in photos.ini). The picker does not show folders yet.
 - Terminal: Edit Title for a tab, Allow Mouse Reporting, Search the Web and Open man Page for the selection, Save Selected Text, and Use Selection for Find (Cmd+E).

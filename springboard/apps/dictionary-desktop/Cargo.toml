@@ -7,3 +7,6 @@ edition = "2021"
 bifrost-app = { path = "../../sdk" }
 bifrost-core = { path = "../../core" }
 bifrost-ui = { path = "../../ui" }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

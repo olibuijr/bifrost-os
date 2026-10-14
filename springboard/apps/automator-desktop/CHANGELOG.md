@@ -3,6 +3,7 @@
 ## 0.1.4 — 2026-10-14
 
 - Mark the fixed test-window dimensions as a geometry fixture; production geometry is configured by the host.
+- Feed scripts through a private anonymous file, avoiding a raw feeder thread and preserving large-input behavior.
 
 ## 0.1.3 — 2026-10-14
 

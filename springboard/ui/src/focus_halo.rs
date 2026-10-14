@@ -1,4 +1,4 @@
-//! Focus halo (`UIFocusHaloEffect`): a ring drawn around the view that has keyboard focus, so a keyboard user can see where
+//! Focus halo: a ring drawn around the view that has keyboard focus, so a keyboard user can see where
 //! the focus is. The halo sits outside the view with a small gap, and its corners follow the view's corners. Pure
 //! geometry: the caller draws the two rounded rectangles in the focus colour, and the ring is the area between them.
 //!

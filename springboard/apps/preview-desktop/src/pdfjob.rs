@@ -96,6 +96,11 @@ pub struct Pdf {
     pub pages: Vec<PdfPage>,
 }
 
+// SAFETY: the parsed PDF graph uses Rc and RefCell, so it is not generally thread-safe. A Pdf is created by the
+// serial PDF queue and every subsequent access goes through Jobs::send's mutex while that same queue serializes jobs;
+// no parsed object or reference escapes in Reply. The graph is therefore never accessed concurrently.
+unsafe impl Send for Pdf {}
+
 impl Pdf {
     fn open(path: &Path, password: &[u8]) -> Result<Pdf, String> {
         let data = std::fs::read(path).map_err(|e| e.to_string())?;

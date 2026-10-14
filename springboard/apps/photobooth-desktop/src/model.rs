@@ -269,9 +269,9 @@ pub fn button_rect(bar: Rect, button: Button) -> Rect {
     let export_width = (right - right_start).max(0.0).min(SLOT_MAX);
     let export_x = right_start + ((right - right_start - export_width).max(0.0) / 2.0);
     match button {
-        Button::Mode => Rect { x: mode_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0.min(bar.h) },
-        Button::Timer => Rect { x: timer_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0.min(bar.h) },
-        Button::Export => Rect { x: export_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: export_width, h: 28.0.min(bar.h) },
+        Button::Mode => Rect { x: mode_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0_f32.min(bar.h) },
+        Button::Timer => Rect { x: timer_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0_f32.min(bar.h) },
+        Button::Export => Rect { x: export_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: export_width, h: 28.0_f32.min(bar.h) },
         Button::Shutter => Rect { x: centre - shutter / 2.0, y, w: shutter, h: shutter.min(bar.h) },
     }
 }

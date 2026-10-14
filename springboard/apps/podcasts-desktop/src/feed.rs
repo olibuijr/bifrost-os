@@ -202,6 +202,7 @@ pub fn rfc2822_ts(raw: &str) -> Option<i64> {
         .position(|m| mon.to_ascii_lowercase().starts_with(m))? as i64
         + 1;
     let (day, year): (i64, i64) = (day.parse().ok()?, year.parse().ok()?);
+    // compliance-allow: LAY-03 Converts media timestamps from milliseconds to seconds, not screen dimensions.
     let mut clock = rest.first().map_or(Some(0), |t| clock_ms(t).map(|ms| (ms / 1000) as i64))?;
     if let Some(zone) = rest.get(1) {
         if let (Some(sign), true) = (zone.chars().next().filter(|c| *c == '+' || *c == '-'), zone.len() == 5) {

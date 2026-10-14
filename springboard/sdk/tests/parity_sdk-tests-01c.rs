@@ -1,4 +1,4 @@
-//! Quick Look preview models and system thumbnail answers through the public API of `bifrost_app`. Headless: the panel
+//! File preview models and system thumbnail answers through the public API of `bifrost_app`. Headless: the panel
 //! and view are pure state, and the thumbnail answers are decoded from JSON bodies; nothing is sent to a shell.
 
 use bifrost_app::peek::{ItemState, PreviewDataSource, PreviewItem, PreviewPanel, PreviewView, ViewStyle, MAX_ITEMS};

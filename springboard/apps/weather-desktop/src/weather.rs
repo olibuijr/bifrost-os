@@ -46,7 +46,6 @@ use bifrost_app::kit::ui::SYSTEM_ORANGE as ORANGE;
 use bifrost_app::kit::ui::SYSTEM_YELLOW as YELLOW;
 use bifrost_app::kit::ui::SYSTEM_RED as RED;
 use bifrost_app::kit::ui::SYSTEM_PURPLE as PURPLE;
-use bifrost_app::kit::ui::SYSTEM_INDIGO as INDIGO;
 use bifrost_app::kit::ui::SYSTEM_TEAL as TEAL;
 /// The content starts under the unified toolbar band (full-size window).
 fn nav_bottom_pt() -> f32 { UNIFIED_BAR_PT }
@@ -1639,7 +1638,7 @@ impl Weather {
             Some(air) => {
                 let value = format!("{}", air.aqi);
                 let after = card_x + ui.pt(SPACE_L) + ui.measure(&value, MAC_LARGE_TITLE_PT, Weight::Medium) + ui.pt(SPACE_S);
-            let bands = [GREEN, YELLOW, ORANGE, RED, PURPLE, INDIGO];
+            let bands = [GREEN, YELLOW, ORANGE, RED, PURPLE, bifrost_app::kit::ui::system::SYSTEM_INDIGO.now()];
                 self.put(&mut c, ui, &value, MAC_LARGE_TITLE_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 44.0));
                 // the band's colour as a dot before its word
                 let dot = ui.pt(SPACE_S);

@@ -524,7 +524,7 @@ pub trait App {
     fn ax_text(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxText> {Vec::new()}
     /// `accessibilityTitle` and `accessibilityHelp` of elements (`Node::label` is `accessibilityLabel`). Sent only when they change.
     fn ax_meta(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxMeta> {Vec::new()}
-    /// Guided Access started or ended, or the user changed one of the app's restrictions (`UIGuidedAccessRestrictionDelegate`).
+    /// Guided access started or ended, or the user changed one of the app's restrictions.
     /// True when the app needs a new frame. The default ignores it.
     fn guided_access(&mut self, _ctx: &Ctx, _change: guided_access::GuidedAccessChange) -> bool {
         false

@@ -15,7 +15,14 @@ pub const UNTITLED: &str = "Untitled Workflow";
 pub const MAX_FIELDS: usize = 3;
 
 const YES_NO: &[&str] = &["no", "yes"];
-const TEXT_OPS: &[&str] = &["upper", "lower", "trim", "sort lines", "unique lines", "replace"];
+const TEXT_OPS: &[&str] = &[
+    "upper",
+    "lower",
+    "trim",
+    "sort lines",
+    "unique lines",
+    "replace",
+];
 const IMAGE_FORMATS: &[&str] = &["png", "bmp"];
 
 /// The actions in the library, in library order.
@@ -100,24 +107,63 @@ impl Kind {
     pub fn fields(self) -> &'static [Field] {
         match self {
             Kind::Find => &[
-                Field { label: "Folder", choices: &[] },
-                Field { label: "Name contains", choices: &[] },
-                Field { label: "Subfolders", choices: YES_NO },
+                Field {
+                    label: "Folder",
+                    choices: &[],
+                },
+                Field {
+                    label: "Name contains",
+                    choices: &[],
+                },
+                Field {
+                    label: "Subfolders",
+                    choices: YES_NO,
+                },
             ],
-            Kind::Rename => &[Field { label: "Name", choices: &[] }],
-            Kind::Copy | Kind::Move => &[Field { label: "Destination", choices: &[] }],
+            Kind::Rename => &[Field {
+                label: "Name",
+                choices: &[],
+            }],
+            Kind::Copy | Kind::Move => &[Field {
+                label: "Destination",
+                choices: &[],
+            }],
             Kind::Transform => &[
-                Field { label: "Operation", choices: TEXT_OPS },
-                Field { label: "Find", choices: &[] },
-                Field { label: "Replace with", choices: &[] },
+                Field {
+                    label: "Operation",
+                    choices: TEXT_OPS,
+                },
+                Field {
+                    label: "Find",
+                    choices: &[],
+                },
+                Field {
+                    label: "Replace with",
+                    choices: &[],
+                },
             ],
-            Kind::Combine => &[Field { label: "Separator", choices: &[] }],
+            Kind::Combine => &[Field {
+                label: "Separator",
+                choices: &[],
+            }],
             Kind::Resize => &[
-                Field { label: "Width", choices: &[] },
-                Field { label: "Height", choices: &[] },
+                Field {
+                    label: "Width",
+                    choices: &[],
+                },
+                Field {
+                    label: "Height",
+                    choices: &[],
+                },
             ],
-            Kind::Convert => &[Field { label: "Format", choices: IMAGE_FORMATS }],
-            Kind::RunScript => &[Field { label: "Script", choices: &[] }],
+            Kind::Convert => &[Field {
+                label: "Format",
+                choices: IMAGE_FORMATS,
+            }],
+            Kind::RunScript => &[Field {
+                label: "Script",
+                choices: &[],
+            }],
         }
     }
 
@@ -129,6 +175,7 @@ impl Kind {
             Kind::Copy | Kind::Move => vec![String::new()],
             Kind::Transform => vec!["upper".into(), String::new(), String::new()],
             Kind::Combine => vec![", ".into()],
+            // compliance-allow: LAY-03 This is the default output width for a Resize workflow action, not app geometry.
             Kind::Resize => vec!["1024".into(), "0".into()],
             Kind::Convert => vec!["png".into()],
             Kind::RunScript => vec!["cat".into()],
@@ -161,7 +208,10 @@ pub struct Step {
 impl Step {
     /// A step of `kind` with its default values.
     pub fn new(kind: Kind, home: &str) -> Step {
-        Step { kind, values: kind.defaults(home) }
+        Step {
+            kind,
+            values: kind.defaults(home),
+        }
     }
 
     /// The value of field `i`, or "" when the step has no such field.
@@ -171,12 +221,18 @@ impl Step {
 
     /// Moves a choice field to its next choice (wrapping). A free text field is left as it is.
     pub fn cycle(&mut self, i: usize) {
-        let Some(field) = self.kind.fields().get(i).copied() else { return };
+        let Some(field) = self.kind.fields().get(i).copied() else {
+            return;
+        };
         if field.choices.is_empty() {
             return;
         }
         let current = self.value(i);
-        let at = field.choices.iter().position(|c| *c == current).unwrap_or(field.choices.len() - 1);
+        let at = field
+            .choices
+            .iter()
+            .position(|c| *c == current)
+            .unwrap_or(field.choices.len() - 1);
         let next = field.choices[(at + 1) % field.choices.len()];
         if let Some(slot) = self.values.get_mut(i) {
             *slot = next.to_string();
@@ -221,7 +277,12 @@ impl Value {
         match self {
             Value::Empty => Vec::new(),
             Value::Paths(paths) => paths.clone(),
-            Value::Text(text) => text.lines().map(str::trim).filter(|l| !l.is_empty()).map(PathBuf::from).collect(),
+            Value::Text(text) => text
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(PathBuf::from)
+                .collect(),
         }
     }
 
@@ -268,7 +329,10 @@ pub struct Workflow {
 
 impl Default for Workflow {
     fn default() -> Self {
-        Workflow { name: UNTITLED.into(), steps: Vec::new() }
+        Workflow {
+            name: UNTITLED.into(),
+            steps: Vec::new(),
+        }
     }
 }
 
@@ -281,7 +345,10 @@ impl Workflow {
             .map(|s| {
                 Json::Obj(vec![
                     ("action".into(), Json::Str(s.kind.slug().into())),
-                    ("values".into(), Json::Arr(s.values.iter().map(|v| Json::Str(v.clone())).collect())),
+                    (
+                        "values".into(),
+                        Json::Arr(s.values.iter().map(|v| Json::Str(v.clone())).collect()),
+                    ),
                 ])
             })
             .collect();
@@ -304,11 +371,21 @@ impl Workflow {
         if doc.get("version").and_then(Json::number) != Some(VERSION) {
             return Err("this workflow was saved by a newer version of Automator".into());
         }
-        let name = doc.get("name").and_then(Json::as_str).unwrap_or(UNTITLED).to_string();
-        let items = doc.get("steps").and_then(Json::as_array).ok_or("the workflow has no steps list")?;
+        let name = doc
+            .get("name")
+            .and_then(Json::as_str)
+            .unwrap_or(UNTITLED)
+            .to_string();
+        let items = doc
+            .get("steps")
+            .and_then(Json::as_array)
+            .ok_or("the workflow has no steps list")?;
         let mut steps = Vec::with_capacity(items.len());
         for item in items {
-            let slug = item.get("action").and_then(Json::as_str).ok_or("a step has no action")?;
+            let slug = item
+                .get("action")
+                .and_then(Json::as_str)
+                .ok_or("a step has no action")?;
             let kind = Kind::from_slug(slug).ok_or_else(|| format!("unknown action {slug}"))?;
             let mut values = kind.defaults("");
             if let Some(stored) = item.get("values").and_then(Json::as_array) {
@@ -333,11 +410,17 @@ pub struct LogLine {
 
 impl LogLine {
     pub fn info(text: impl Into<String>) -> LogLine {
-        LogLine { error: false, text: text.into() }
+        LogLine {
+            error: false,
+            text: text.into(),
+        }
     }
 
     pub fn error(text: impl Into<String>) -> LogLine {
-        LogLine { error: true, text: text.into() }
+        LogLine {
+            error: true,
+            text: text.into(),
+        }
     }
 }
 
@@ -350,7 +433,12 @@ pub fn execute(steps: &[Step], log: &mut dyn FnMut(LogLine)) -> Result<Value, St
     let total = steps.len();
     let mut value = Value::Empty;
     for (i, step) in steps.iter().enumerate() {
-        log(LogLine::info(format!("Step {} of {}: {}", i + 1, total, step.kind.title())));
+        log(LogLine::info(format!(
+            "Step {} of {}: {}",
+            i + 1,
+            total,
+            step.kind.title()
+        )));
         match actions::run(step, value, &mut *log) {
             Ok(next) => {
                 log(LogLine::info(format!("Output: {}", next.summary())));
@@ -373,7 +461,12 @@ mod tests {
     #[test]
     fn every_kind_has_a_default_for_each_field() {
         for kind in KINDS {
-            assert_eq!(kind.defaults("/home/u").len(), kind.fields().len(), "{:?}", kind);
+            assert_eq!(
+                kind.defaults("/home/u").len(),
+                kind.fields().len(),
+                "{:?}",
+                kind
+            );
             assert!(kind.fields().len() <= MAX_FIELDS);
         }
     }
@@ -401,7 +494,10 @@ mod tests {
 
     #[test]
     fn summary_lists_non_empty_fields() {
-        let step = Step { kind: Kind::Find, values: vec!["/x".into(), String::new(), "yes".into()] };
+        let step = Step {
+            kind: Kind::Find,
+            values: vec!["/x".into(), String::new(), "yes".into()],
+        };
         assert_eq!(step.summary(), "Folder: /x; Subfolders: yes");
     }
 
@@ -411,7 +507,10 @@ mod tests {
         assert_eq!(paths.lines(), vec!["/a/b.txt", "/a/c.txt"]);
         assert_eq!(paths.text(), "/a/b.txt\n/a/c.txt\n");
         let text = Value::Text("  /x/one.png \n\n/x/two.png\n".into());
-        assert_eq!(text.paths(), vec![PathBuf::from("/x/one.png"), PathBuf::from("/x/two.png")]);
+        assert_eq!(
+            text.paths(),
+            vec![PathBuf::from("/x/one.png"), PathBuf::from("/x/two.png")]
+        );
         assert_eq!(Value::Empty.paths(), Vec::<PathBuf>::new());
         assert_eq!(Value::Empty.summary(), "nothing");
         assert_eq!(paths.summary(), "2 files");
@@ -426,7 +525,11 @@ mod tests {
         find.values[2] = "yes".into();
         let workflow = Workflow {
             name: "Resize shots".into(),
-            steps: vec![find, Step::new(Kind::Resize, "/"), Step::new(Kind::RunScript, "/")],
+            steps: vec![
+                find,
+                Step::new(Kind::Resize, "/"),
+                Step::new(Kind::RunScript, "/"),
+            ],
         };
         let text = workflow.to_file();
         assert_eq!(Workflow::from_file(&text), Ok(workflow));
@@ -439,16 +542,26 @@ mod tests {
             Workflow::from_file(r#"{"format":"other","version":1,"steps":[]}"#),
             Err("not an Automator workflow file".into())
         );
-        assert!(Workflow::from_file(r#"{"format":"automator-workflow","version":2,"steps":[]}"#).is_err());
-        let unknown = r#"{"format":"automator-workflow","version":1,"steps":[{"action":"fly","values":[]}]}"#;
-        assert_eq!(Workflow::from_file(unknown), Err("unknown action fly".into()));
+        assert!(
+            Workflow::from_file(r#"{"format":"automator-workflow","version":2,"steps":[]}"#)
+                .is_err()
+        );
+        let unknown =
+            r#"{"format":"automator-workflow","version":1,"steps":[{"action":"fly","values":[]}]}"#;
+        assert_eq!(
+            Workflow::from_file(unknown),
+            Err("unknown action fly".into())
+        );
     }
 
     #[test]
     fn short_value_lists_are_filled_with_defaults() {
         let text = r#"{"format":"automator-workflow","version":1,"name":"x","steps":[{"action":"find","values":["/only"]}]}"#;
         let workflow = Workflow::from_file(text).unwrap();
-        assert_eq!(workflow.steps[0].values, vec!["/only".to_string(), String::new(), "no".to_string()]);
+        assert_eq!(
+            workflow.steps[0].values,
+            vec!["/only".to_string(), String::new(), "no".to_string()]
+        );
     }
 
     #[test]
@@ -462,7 +575,10 @@ mod tests {
     #[test]
     fn a_failing_step_stops_the_run_and_is_logged() {
         // Rename needs files from the step before it; the first step has none.
-        let steps = vec![Step::new(Kind::Rename, "/"), Step::new(Kind::Transform, "/")];
+        let steps = vec![
+            Step::new(Kind::Rename, "/"),
+            Step::new(Kind::Transform, "/"),
+        ];
         let mut lines = Vec::new();
         let result = execute(&steps, &mut |l| lines.push(l));
         assert_eq!(result, Err("stopped at step 1".into()));

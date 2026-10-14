@@ -26,6 +26,7 @@ mod xml;
 mod zipdoc;
 
 use bifrost_app::controls::undo::ChangeCount;
+use bifrost_app::controls::{Node, Role};
 use bifrost_app::document::{is_menu_id, item, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::pasteboard::NativePasteboard;
@@ -1890,6 +1891,21 @@ impl App for TextEditApp {
             let id = self.docs.new_document();
             self.apply_new_defaults(id);
         }
+    }
+
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        view::toolbar(&ctx.ui, &self.status())
+            .into_iter()
+            .enumerate()
+            .map(|(index, button)| Node {
+                id: 0x5445_0000 + index as u64,
+                role: Role::Button,
+                label: button.label,
+                value: if button.active { "selected".into() } else { String::new() },
+                bounds: button.rect,
+                enabled: button.enabled,
+            })
+            .collect()
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {

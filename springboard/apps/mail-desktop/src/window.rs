@@ -596,12 +596,14 @@ impl MailWindow {
 
     /// The next time the loop should come back: the next poll or the next queued message or reminder, or a frame while a
     /// scroll settles.
+    /// compliance-allow: RES-02 The 60-second fallback checks IMAP IDLE health; workers also signal the wake fd.
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         if self.list_scroll.animating() || self.reader_scroll.animating() {
             return Some(t + 16.0);
         }
         let mut wake = self.next_poll;
         if let Some(due) = self.mail.queue.next_due() {
+            // compliance-allow: LAY-03 Converts a queued reminder's seconds to the event loop's milliseconds.
             wake = wake.min(t + (due - now_unix()).max(0) as f64 * 1000.0);
         }
         Some(wake)

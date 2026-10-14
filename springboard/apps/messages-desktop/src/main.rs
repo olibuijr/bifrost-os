@@ -31,6 +31,10 @@ impl App for MessagesApp {
         Commands(Command::Paste.bit())
     }
 
+    fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
+        self.window.as_ref().map_or_else(Vec::new, |messages| messages.controls(&ctx.ui))
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         let Some(messages) = &mut self.window else { return false };
         match ev {

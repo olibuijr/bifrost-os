@@ -166,8 +166,8 @@ impl AutoFill {
 mod tests {
     use super::*;
 
-    fn row(service: &str, account: &str, modified: u64) -> Row {
-        Row { service: service.into(), account: account.into(), modified }
+    fn row(service: &str, account: &str, modified: u64) -> keychain::Row {
+        keychain::Row { service: service.into(), account: account.into(), modified }
     }
 
     #[test]
