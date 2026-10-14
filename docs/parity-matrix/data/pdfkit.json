@@ -47,7 +47,7 @@
       "apple": "PDFPage draw(with:to:), transformContext(for:), thumbnail, display boxes, rotation",
       "bifrost": "springboard/ui/src/pdfpage.rs; springboard/render/src/cg/pdf/interpret.rs, draw.rs; springboard/apps/preview-desktop/src/document.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No page rasterisation or drawing into a context. Books draws reflowed content, and JPEG 2000, CCITT and JBIG2 images are not shown round 75, host only: engine renders pages; no SDK PDF page API."
+      "note": "Offscreen page rasterisation in the engine is tested headless in springboard/render/tests/parity_sdk-tests-03.rs (a_filled_rectangle_is_rasterised_into_an_offscreen_picture, an_offscreen_picture_keeps_the_page_aspect_inside_the_requested_box); page geometry in springboard/ui/src/pdfpage.rs is tested in springboard/ui/tests/parity_sdk-tests-03.rs. Not built: drawing a PDF page into an app-provided context (no PDFPage draw API) and page thumbnails. JPEG 2000, CCITT and JBIG2 images are not shown; there is no SDK PDF page API."
     },
     {
       "feature": "PDFPage: page image and PDF creation",
@@ -94,9 +94,9 @@
     {
       "feature": "Printing PDF documents",
       "apple": "NSPrintOperation with PDFDocument printing (PDFDocument drawing into print context)",
-      "bifrost": "springboard/ui/src/print.rs (PrintOperation::new(file).to(Destination::Printer(..)).run() submits with lp), docs/bifrost-ui.md:1322-1333 (Printing section)",
+      "bifrost": "springboard/ui/src/print.rs (PrintOperation::new, PrintOperation::document, document_format)",
       "status": "partial",
-      "note": "The file is sent to CUPS as is. No page-level pagination, no print sheet, and no page range applied to PDF pages. Whether the Midget image ships CUPS is unchecked"
+      "note": "A PDF file job sends the file's own bytes with the application/pdf format, and a file job is named after its file: a_pdf_file_job_sends_the_file_bytes_unchanged and a_file_job_is_named_after_its_file_and_a_missing_file_is_refused in springboard/ui/tests/parity_sdk-tests-03.rs. Submission to CUPS (PrintOperation::run) is not covered; there is no page-level pagination or page range for PDF content (see docs/bifrost-ui.md:1322-1333); whether the Midget image ships CUPS is unchecked."
     },
     {
       "feature": "Page overlay and markup mode",

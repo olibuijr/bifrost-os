@@ -2,6 +2,8 @@
 //! extraction, the outline, cross-reference repair, and writing documents. Every test works on bytes in memory: no
 //! display, no device, no network, and no clock. Each assertion checks a concrete value.
 use bifrost_render::cg::pdf::doc::Doc;
+use bifrost_render::cg::pdf::draw::{fit_size, render_page};
+use bifrost_render::gfx::rgba;
 use bifrost_render::cg::pdf::extract::{Extractor, Piece};
 use bifrost_render::cg::pdf::obj::Obj;
 use bifrost_render::cg::pdf::page::{self, pages, PageBox};
@@ -231,4 +233,41 @@ fn the_document_information_dictionary_is_read_as_text() {
     assert_eq!(info.producer, "test");
     assert_eq!(info.creation_date, "D:20260101120000");
     assert_eq!(info.subject, "");
+}
+
+// --- rasterising pages into an offscreen picture -------------------------------------------------------------------
+
+/// A one-page document whose 100 by 100 point page fills its left half with red.
+fn left_half_red() -> Vec<u8> {
+    let content = "1 0 0 rg 0 0 50 100 re f";
+    let stream = format!("<< /Length {} >>\nstream\n{}\nendstream", content.len(), content);
+    build(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R >>",
+            stream.as_str(),
+        ],
+        "",
+        None,
+    )
+}
+
+#[test]
+fn a_filled_rectangle_is_rasterised_into_an_offscreen_picture() {
+    let doc = Doc::open(left_half_red()).unwrap();
+    let all = pages(&doc);
+    let img = render_page(&doc, &all[0], 100, 100).unwrap();
+    assert_eq!((img.w, img.h), (100, 100));
+    assert_eq!(img.px[50 * 100 + 10], rgba(255, 0, 0, 255));
+    assert_eq!(img.px[50 * 100 + 90], rgba(255, 255, 255, 255));
+}
+
+#[test]
+fn an_offscreen_picture_keeps_the_page_aspect_inside_the_requested_box() {
+    let doc = Doc::open(left_half_red()).unwrap();
+    let all = pages(&doc);
+    assert_eq!(fit_size(&all[0], 50, 25), Some((25, 25)));
+    assert_eq!(fit_size(&all[0], 40, 80), Some((40, 40)));
+    assert!(render_page(&doc, &all[0], 0, 10).is_none());
 }
