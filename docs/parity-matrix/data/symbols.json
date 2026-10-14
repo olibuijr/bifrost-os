@@ -75,7 +75,7 @@
       "apple": "Not part of the Symbols framework; the effects are the symbol-specific layer",
       "bifrost": "springboard/sdk/src/view/animation.rs (Window::animate interpolates frame, opacity, background); springboard/ui/src/anim.rs (Animation, Curve)",
       "status": "partial",
-      "note": "the animation system exists and retargets mid-flight, but it animates whole views and cannot reach individual symbol layers, so it is a base for symbol effects rather than one"
+      "note": "the animation system exists and retargets mid-flight (a_retargeted_spring_keeps_its_speed, headless_swatch_settles_on_the_new_frame_when_the_animation_ends in springboard/sdk/src/view/animation.rs), but it animates whole views and cannot reach individual symbol layers, so it is a base for symbol effects rather than one"
     }
   ],
   "gaps": [
