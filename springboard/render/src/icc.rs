@@ -2,11 +2,16 @@
 //!
 //! `Profile::parse` checks the 128-byte header, the `acsp` magic and the tag table, and rejects any tag whose data
 //! would run past the declared size of the profile. `Profile::description` returns the text of the description tag in
-//! its version 2 form (`desc`) or its version 4 form (`mluc`, UTF-16BE). `Devices` records the profile of each display,
-//! printer, scanner and camera, with an optional custom profile that overrides the default. Profiles are read here,
-//! never converted: transforms, rendering intents and black point compensation live in `colorspace`.
+//! its version 2 form (`desc`) or its version 4 form (`mluc`, UTF-16BE). `Profile::matrix_shaper` reads the colorants
+//! (`rXYZ`, `gXYZ`, `bXYZ`) and tone curves (`rTRC`, `gTRC`, `bTRC`) of an RGB matrix-shaper profile and converts
+//! colours from it into a named working space. `Profile::vcgt` reads the video card gamma table of a display profile.
+//! `Devices` records the profile of each display, printer, scanner and camera, with an optional custom profile that
+//! overrides the default. Profiles that use lookup tables are not converted; rendering intents and black point
+//! compensation live in `rendering_intent`.
 
 use std::collections::BTreeMap;
+
+use super::colorspace::{self, Mat3, Space};
 
 /// The fixed part of the header, in bytes.
 const HEADER_LEN: usize = 128;
@@ -104,8 +109,7 @@ impl Profile {
     /// the bytes the profile was parsed from.
     pub fn description(&self, data: &[u8]) -> Option<String> {
         let tag = self.tags.iter().find(|t| t.signature == "desc")?;
-        let start = tag.offset as usize;
-        let body = data.get(start..start + tag.size as usize)?;
+        let body = tag_body(data, tag)?;
         let kind = body.get(0..4)?;
         if kind == b"desc" {
             // Version 2: count (bytes, including the terminating NUL) at +8, the ASCII text from +12.
@@ -127,6 +131,264 @@ impl Profile {
             None
         }
     }
+}
+
+impl Profile {
+    /// The matrix-shaper model of an RGB profile: its three colorants and three tone curves. None when the profile is
+    /// not in the RGB colour space or lacks one of the six tags, or when one of them is malformed.
+    pub fn matrix_shaper(&self, data: &[u8]) -> Option<MatrixShaper> {
+        if self.header.color_space != "RGB " {
+            return None;
+        }
+        let tags = &self.tags;
+        let r = parse_xyz(data, find_tag(tags, "rXYZ")?)?;
+        let g = parse_xyz(data, find_tag(tags, "gXYZ")?)?;
+        let b = parse_xyz(data, find_tag(tags, "bXYZ")?)?;
+        let curves = [
+            parse_curve(data, find_tag(tags, "rTRC")?)?,
+            parse_curve(data, find_tag(tags, "gTRC")?)?,
+            parse_curve(data, find_tag(tags, "bTRC")?)?,
+        ];
+        let colorants = [[r[0], g[0], b[0]], [r[1], g[1], b[1]], [r[2], g[2], b[2]]];
+        Some(MatrixShaper { colorants, curves })
+    }
+
+    /// The video card gamma table (`vcgt`) of a display profile, when it has a well-formed one.
+    pub fn vcgt(&self, data: &[u8]) -> Option<Vcgt> {
+        let tag = find_tag(&self.tags, "vcgt")?;
+        parse_vcgt(tag_body(data, tag)?)
+    }
+}
+
+fn find_tag<'a>(tags: &'a [Tag], sig: &str) -> Option<&'a Tag> {
+    tags.iter().find(|t| t.signature == sig)
+}
+
+/// The bytes of a tag's data, when they lie inside `data`.
+fn tag_body<'a>(data: &'a [u8], tag: &Tag) -> Option<&'a [u8]> {
+    let start = tag.offset as usize;
+    data.get(start..start + tag.size as usize)
+}
+
+/// Reads an XYZ tag (type `XYZ `) holding one colour.
+fn parse_xyz(data: &[u8], tag: &Tag) -> Option<[f64; 3]> {
+    let body = tag_body(data, tag)?;
+    if body.get(0..4)? != b"XYZ " {
+        return None;
+    }
+    Some([s15(body, 8)?, s15(body, 12)?, s15(body, 16)?])
+}
+
+/// Reads a tone curve tag: `curv` (identity, a gamma or a sampled table) or `para` (a parametric function).
+fn parse_curve(data: &[u8], tag: &Tag) -> Option<Curve> {
+    let body = tag_body(data, tag)?;
+    match body.get(0..4)? {
+        b"curv" => match be_u32(body, 8)? as usize {
+            0 => Some(Curve::Identity),
+            // A single entry is a gamma in unsigned 8.8 fixed point.
+            1 => Some(Curve::Gamma(be_u16(body, 12)? as f64 / 256.0)),
+            n => {
+                let table = (0..n).map(|i| be_u16(body, 12 + 2 * i).map(|v| v as f64 / 65535.0)).collect::<Option<Vec<_>>>()?;
+                Some(Curve::Table(table))
+            }
+        },
+        b"para" => {
+            let kind = be_u16(body, 8)?;
+            let count = match kind {
+                0 => 1,
+                1 => 3,
+                2 => 4,
+                3 => 5,
+                4 => 7,
+                _ => return None,
+            };
+            let params = (0..count).map(|i| s15(body, 12 + 4 * i)).collect::<Option<Vec<_>>>()?;
+            Some(Curve::Parametric { kind, params })
+        }
+        _ => None,
+    }
+}
+
+/// Reads a `vcgt` tag. Type 0 holds a table of one or three channels with one-byte or two-byte entries; type 1 holds
+/// a gamma, minimum and maximum for each of the three channels.
+fn parse_vcgt(body: &[u8]) -> Option<Vcgt> {
+    if body.get(0..4)? != b"vcgt" {
+        return None;
+    }
+    match be_u32(body, 8)? {
+        0 => {
+            let channels = be_u16(body, 12)? as usize;
+            let entries = be_u16(body, 14)? as usize;
+            let size = be_u16(body, 16)? as usize;
+            if (channels != 1 && channels != 3) || entries == 0 {
+                return None;
+            }
+            let mut at = 18;
+            let mut planes = Vec::with_capacity(channels);
+            for _ in 0..channels {
+                let mut plane = Vec::with_capacity(entries);
+                for _ in 0..entries {
+                    let v = match size {
+                        1 => *body.get(at)? as f64 / 255.0,
+                        2 => be_u16(body, at)? as f64 / 65535.0,
+                        _ => return None,
+                    };
+                    plane.push(v);
+                    at += size;
+                }
+                planes.push(plane);
+            }
+            let mut it = planes.into_iter();
+            let r = it.next()?;
+            let (g, b) = if channels == 3 { (it.next()?, it.next()?) } else { (r.clone(), r.clone()) };
+            Some(Vcgt::Table([r, g, b]))
+        }
+        1 => {
+            let mut channels = [(0.0, 0.0, 0.0); 3];
+            for (i, slot) in channels.iter_mut().enumerate() {
+                let base = 12 + 12 * i;
+                *slot = (s15(body, base)?, s15(body, base + 4)?, s15(body, base + 8)?);
+            }
+            Some(Vcgt::Formula(channels))
+        }
+        _ => None,
+    }
+}
+
+/// Evaluates a sampled curve at `x` (0..=1) by linear interpolation between its entries.
+fn interpolate(table: &[f64], x: f64) -> f64 {
+    match table.len() {
+        0 => x,
+        1 => table[0],
+        n => {
+            let pos = x.clamp(0.0, 1.0) * (n - 1) as f64;
+            let i = (pos.floor() as usize).min(n - 2);
+            let f = pos - i as f64;
+            table[i] * (1.0 - f) + table[i + 1] * f
+        }
+    }
+}
+
+/// Evaluates an ICC parametric curve of function type `kind` (0 to 4) at `x`. Missing parameters count as zero.
+fn parametric(kind: u16, p: &[f64], x: f64) -> f64 {
+    let at = |i: usize| p.get(i).copied().unwrap_or(0.0);
+    let (g, a, b, c, d, e, f) = (at(0), at(1), at(2), at(3), at(4), at(5), at(6));
+    let power = (a * x + b).max(0.0).powf(g);
+    let y = match kind {
+        0 => x.powf(g),
+        1 => power,
+        2 => power + c,
+        3 => {
+            if x >= d {
+                power
+            } else {
+                c * x
+            }
+        }
+        4 => {
+            if x >= d {
+                power + e
+            } else {
+                c * x + f
+            }
+        }
+        _ => x,
+    };
+    y.clamp(0.0, 1.0)
+}
+
+/// A tone curve of a matrix-shaper profile. Input and output are nominally 0..=1.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Curve {
+    /// The encoded value is the linear value.
+    Identity,
+    /// A power curve, `y = x^gamma`.
+    Gamma(f64),
+    /// Samples spread evenly over 0..=1, interpolated linearly between them.
+    Table(Vec<f64>),
+    /// An ICC parametric curve of function type `kind` with its parameters.
+    Parametric { kind: u16, params: Vec<f64> },
+}
+
+impl Curve {
+    /// The curve's output for an encoded input, clamped to 0..=1.
+    pub fn eval(&self, x: f64) -> f64 {
+        let x = x.clamp(0.0, 1.0);
+        match self {
+            Curve::Identity => x,
+            Curve::Gamma(g) => x.powf(*g),
+            Curve::Table(t) => interpolate(t, x),
+            Curve::Parametric { kind, params } => parametric(*kind, params, x),
+        }
+    }
+}
+
+/// The model of an RGB matrix-shaper profile: colorants relative to the D50 connection space and one tone curve per
+/// channel. Converting a colour decodes it through the curves and maps the linear result through the colorants.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MatrixShaper {
+    /// Row-major; column 0 is the red colorant, column 1 green, column 2 blue, as XYZ.
+    colorants: Mat3,
+    curves: [Curve; 3],
+}
+
+impl MatrixShaper {
+    /// Encoded profile RGB (0..=1) to XYZ relative to the D50 connection space.
+    pub fn to_xyz_d50(&self, rgb: [f64; 3]) -> [f64; 3] {
+        let lin = [0, 1, 2].map(|i| self.curves[i].eval(rgb[i]));
+        colorspace::apply(self.colorants, lin)
+    }
+
+    /// Converts encoded profile RGB to the working space `to`, returned encoded. Colours outside the target gamut come
+    /// out below 0 or above 1.
+    pub fn convert(&self, rgb: [f64; 3], to: Space) -> [f64; 3] {
+        let lin = colorspace::apply(colorspace::from_xyz_d50(to), self.to_xyz_d50(rgb));
+        lin.map(|c| to.from_linear(c))
+    }
+}
+
+/// A video card gamma table from a `vcgt` tag, one curve per channel (red, green, blue).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Vcgt {
+    /// Sampled ramps over 0..=1, normalised to 0..=1.
+    Table([Vec<f64>; 3]),
+    /// A formula per channel: `min + (max - min) * x^gamma`, as (gamma, min, max).
+    Formula([(f64, f64, f64); 3]),
+}
+
+impl Vcgt {
+    /// The output of one channel (0 red, 1 green, 2 blue; larger values count as blue) for an input in 0..=1.
+    pub fn eval(&self, channel: usize, x: f64) -> f64 {
+        let x = x.clamp(0.0, 1.0);
+        let c = channel.min(2);
+        match self {
+            Vcgt::Table(planes) => interpolate(&planes[c], x),
+            Vcgt::Formula(f) => {
+                let (gamma, min, max) = f[c];
+                (min + (max - min) * x.powf(gamma)).clamp(0.0, 1.0)
+            }
+        }
+    }
+
+    /// `n` evenly spaced 16-bit samples of one channel, the form a hardware gamma ramp takes.
+    pub fn ramp(&self, channel: usize, n: usize) -> Vec<u16> {
+        (0..n)
+            .map(|i| {
+                let x = if n > 1 { i as f64 / (n - 1) as f64 } else { 0.0 };
+                (self.eval(channel, x) * 65535.0).round() as u16
+            })
+            .collect()
+    }
+}
+
+fn be_u16(data: &[u8], at: usize) -> Option<u16> {
+    let bytes: [u8; 2] = data.get(at..at + 2)?.try_into().ok()?;
+    Some(u16::from_be_bytes(bytes))
+}
+
+/// A signed 15.16 fixed-point number.
+fn s15(data: &[u8], at: usize) -> Option<f64> {
+    Some(be_u32(data, at)? as i32 as f64 / 65536.0)
 }
 
 fn be_u32(data: &[u8], at: usize) -> Option<u32> {
@@ -383,6 +645,192 @@ mod tests {
         devices.register(DeviceClass::Camera, "cam", "Sensor").unwrap();
         assert_eq!(devices.set_custom(DeviceClass::Camera, "cam", Some("")), Err(DeviceError::EmptyProfile));
         assert_eq!(devices.register(DeviceClass::Camera, "cam2", ""), Err(DeviceError::EmptyProfile));
+    }
+
+    fn close(a: [f64; 3], b: [f64; 3], tol: f64) -> bool {
+        (0..3).all(|i| (a[i] - b[i]).abs() <= tol)
+    }
+
+    /// A signed 15.16 fixed-point value as four bytes.
+    fn s15_bytes(v: f64) -> [u8; 4] {
+        ((v * 65536.0).round() as i32).to_be_bytes()
+    }
+
+    /// An `XYZ ` tag holding one colour.
+    fn xyz_tag(x: f64, y: f64, z: f64) -> Vec<u8> {
+        let mut v = b"XYZ ".to_vec();
+        v.extend_from_slice(&[0; 4]);
+        for c in [x, y, z] {
+            v.extend_from_slice(&s15_bytes(c));
+        }
+        v
+    }
+
+    /// A `para` tag of the given function type.
+    fn para_tag(kind: u16, params: &[f64]) -> Vec<u8> {
+        let mut v = b"para".to_vec();
+        v.extend_from_slice(&[0; 4]);
+        v.extend_from_slice(&kind.to_be_bytes());
+        v.extend_from_slice(&[0; 2]);
+        for p in params {
+            v.extend_from_slice(&s15_bytes(*p));
+        }
+        v
+    }
+
+    /// The sRGB transfer curve as ICC parametric function type 3.
+    fn srgb_para() -> Vec<u8> {
+        para_tag(3, &[2.4, 1.0 / 1.055, 0.055 / 1.055, 1.0 / 12.92, 0.04045])
+    }
+
+    /// The sRGB profile's colorants (relative to D50) with its transfer curve on each channel.
+    fn srgb_profile() -> Vec<u8> {
+        build(
+            "mntr",
+            "RGB ",
+            &[
+                ("rXYZ", xyz_tag(0.4360747, 0.2225045, 0.0139322)),
+                ("gXYZ", xyz_tag(0.3850649, 0.7168786, 0.0971045)),
+                ("bXYZ", xyz_tag(0.1430804, 0.0606169, 0.7141733)),
+                ("rTRC", srgb_para()),
+                ("gTRC", srgb_para()),
+                ("bTRC", srgb_para()),
+            ],
+        )
+    }
+
+    #[test]
+    fn an_srgb_matrix_profile_converts_white_to_white() {
+        let data = srgb_profile();
+        let shaper = Profile::parse(&data).unwrap().matrix_shaper(&data).unwrap();
+        let white = shaper.convert([1.0, 1.0, 1.0], Space::Srgb);
+        assert!(close(white, [1.0, 1.0, 1.0], 2e-3), "{white:?}");
+    }
+
+    #[test]
+    fn an_srgb_matrix_profile_reproduces_srgb_midgrey() {
+        let data = srgb_profile();
+        let shaper = Profile::parse(&data).unwrap().matrix_shaper(&data).unwrap();
+        let grey = shaper.convert([0.5, 0.5, 0.5], Space::Srgb);
+        assert!(close(grey, [0.5, 0.5, 0.5], 2e-3), "{grey:?}");
+    }
+
+    #[test]
+    fn an_srgb_profile_to_display_p3_matches_the_colorspace_transform() {
+        use crate::colorspace::Transform;
+        let data = srgb_profile();
+        let shaper = Profile::parse(&data).unwrap().matrix_shaper(&data).unwrap();
+        let want = Transform::new(Space::Srgb, Space::DisplayP3).apply([1.0, 0.0, 0.0]);
+        let got = shaper.convert([1.0, 0.0, 0.0], Space::DisplayP3);
+        assert!(close(got, want, 5e-3), "got {got:?}, want {want:?}");
+    }
+
+    #[test]
+    fn identity_curves_give_the_d50_white_as_xyz() {
+        let data = build(
+            "mntr",
+            "RGB ",
+            &[
+                ("rXYZ", xyz_tag(0.4360747, 0.2225045, 0.0139322)),
+                ("gXYZ", xyz_tag(0.3850649, 0.7168786, 0.0971045)),
+                ("bXYZ", xyz_tag(0.1430804, 0.0606169, 0.7141733)),
+                ("rTRC", vec![b'c', b'u', b'r', b'v', 0, 0, 0, 0, 0, 0, 0, 0]),
+                ("gTRC", vec![b'c', b'u', b'r', b'v', 0, 0, 0, 0, 0, 0, 0, 0]),
+                ("bTRC", vec![b'c', b'u', b'r', b'v', 0, 0, 0, 0, 0, 0, 0, 0]),
+            ],
+        );
+        let shaper = Profile::parse(&data).unwrap().matrix_shaper(&data).unwrap();
+        assert_eq!(shaper.curves, [Curve::Identity, Curve::Identity, Curve::Identity]);
+        let xyz = shaper.to_xyz_d50([1.0, 1.0, 1.0]);
+        assert!(close(xyz, [0.9642, 1.0, 0.8249], 2e-3), "{xyz:?}");
+    }
+
+    #[test]
+    fn a_profile_without_colorants_or_in_another_space_is_not_a_matrix_shaper() {
+        let only_red = build("mntr", "RGB ", &[("rXYZ", xyz_tag(0.4, 0.2, 0.01)), ("rTRC", srgb_para())]);
+        assert!(Profile::parse(&only_red).unwrap().matrix_shaper(&only_red).is_none());
+        let grey = build("mntr", "GRAY", &[("kTRC", srgb_para())]);
+        assert!(Profile::parse(&grey).unwrap().matrix_shaper(&grey).is_none());
+    }
+
+    #[test]
+    fn a_curv_tag_reads_identity_gamma_and_sampled_forms() {
+        let mut gamma = b"curv".to_vec();
+        gamma.extend_from_slice(&[0; 4]);
+        gamma.extend_from_slice(&1u32.to_be_bytes());
+        gamma.extend_from_slice(&563u16.to_be_bytes());
+        let tag = Tag { signature: "rTRC".into(), offset: 0, size: gamma.len() as u32 };
+        assert_eq!(parse_curve(&gamma, &tag), Some(Curve::Gamma(563.0 / 256.0)));
+
+        let mut table = b"curv".to_vec();
+        table.extend_from_slice(&[0; 4]);
+        table.extend_from_slice(&3u32.to_be_bytes());
+        for v in [0u16, 32768, 65535] {
+            table.extend_from_slice(&v.to_be_bytes());
+        }
+        let tag = Tag { signature: "rTRC".into(), offset: 0, size: table.len() as u32 };
+        let curve = parse_curve(&table, &tag).unwrap();
+        assert!((curve.eval(0.25) - 0.25).abs() < 1e-3);
+        assert!((curve.eval(0.75) - 0.75).abs() < 1e-3);
+    }
+
+    #[test]
+    fn the_parametric_srgb_curve_matches_the_published_values() {
+        let data = srgb_para();
+        let tag = Tag { signature: "rTRC".into(), offset: 0, size: data.len() as u32 };
+        let curve = parse_curve(&data, &tag).unwrap();
+        assert!((curve.eval(0.5) - 0.2140).abs() < 1e-3, "{}", curve.eval(0.5));
+        assert!((curve.eval(0.02) - 0.02 / 12.92).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_parametric_tag_with_the_wrong_parameter_count_is_refused() {
+        let data = para_tag(3, &[2.4, 1.0]);
+        let tag = Tag { signature: "rTRC".into(), offset: 0, size: data.len() as u32 };
+        assert_eq!(parse_curve(&data, &tag), None);
+    }
+
+    /// A `vcgt` table tag: three channels, two entries each, two-byte entries.
+    fn vcgt_table(channels: u16, entries: &[u16]) -> Vec<u8> {
+        let mut v = b"vcgt".to_vec();
+        v.extend_from_slice(&[0; 4]);
+        v.extend_from_slice(&0u32.to_be_bytes());
+        v.extend_from_slice(&channels.to_be_bytes());
+        v.extend_from_slice(&((entries.len() / channels as usize) as u16).to_be_bytes());
+        v.extend_from_slice(&2u16.to_be_bytes());
+        for e in entries {
+            v.extend_from_slice(&e.to_be_bytes());
+        }
+        v
+    }
+
+    #[test]
+    fn a_vcgt_table_gives_a_16_bit_ramp_per_channel() {
+        // Red 0 to 65535, green 0 to 32768, blue 0 to 65535, each over two entries.
+        let data = vcgt_table(3, &[0, 65535, 0, 32768, 0, 65535]);
+        let vcgt = parse_vcgt(&data).unwrap();
+        assert_eq!(vcgt.ramp(0, 3), vec![0, 32768, 65535]);
+        assert_eq!(vcgt.ramp(1, 3), vec![0, 16384, 32768]);
+        assert_eq!(vcgt.ramp(2, 2), vec![0, 65535]);
+    }
+
+    #[test]
+    fn a_vcgt_formula_with_unit_gamma_is_a_straight_ramp() {
+        let mut data = b"vcgt".to_vec();
+        data.extend_from_slice(&[0; 4]);
+        data.extend_from_slice(&1u32.to_be_bytes());
+        for _ in 0..3 {
+            data.extend_from_slice(&s15_bytes(1.0));
+            data.extend_from_slice(&s15_bytes(0.0));
+            data.extend_from_slice(&s15_bytes(1.0));
+        }
+        let vcgt = parse_vcgt(&data).unwrap();
+        assert_eq!(vcgt.ramp(2, 3), vec![0, 32768, 65535]);
+    }
+
+    #[test]
+    fn a_vcgt_with_a_bad_channel_count_is_refused() {
+        assert!(parse_vcgt(&vcgt_table(2, &[0, 1, 2, 3])).is_none());
     }
 
     #[test]

@@ -107,6 +107,7 @@ pub mod dispatch_time;
 pub mod timer_source;
 pub mod keyed_archive;
 pub mod value_types;
+pub mod colorsync;
 pub mod decimal;
 pub mod csv_writer;
 pub mod accounts;

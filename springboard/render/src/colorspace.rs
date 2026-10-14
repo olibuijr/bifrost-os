@@ -113,7 +113,8 @@ fn mul(a: Mat3, b: Mat3) -> Mat3 {
     r
 }
 
-fn apply(m: Mat3, v: [f64; 3]) -> [f64; 3] {
+/// Applies a 3x3 matrix to a column vector.
+pub fn apply(m: Mat3, v: [f64; 3]) -> [f64; 3] {
     [0, 1, 2].map(|i| m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2])
 }
 
@@ -176,6 +177,14 @@ pub fn matrix(from: Space, to: Space) -> Mat3 {
 /// to the source white.
 pub fn matrix_absolute(from: Space, to: Space) -> Mat3 {
     mul(inverse(rgb_to_xyz(to)), rgb_to_xyz(from))
+}
+
+/// Matrix from XYZ relative to the D50 connection space of ICC profiles to linear RGB of `to`. The white point is
+/// adapted from D50 to the space's own white, so the D50 white maps to RGB (1, 1, 1). This is the step that lets a
+/// matrix-shaper profile (see `icc::MatrixShaper`) convert into any named space.
+pub fn from_xyz_d50(to: Space) -> Mat3 {
+    let (_, to_white) = to.chromaticities();
+    mul(inverse(rgb_to_xyz(to)), adaptation(D50, to_white))
 }
 
 /// A conversion between two working spaces, with its matrix computed once.
@@ -300,6 +309,16 @@ mod tests {
         let raw = p3_to_srgb.apply([1.0, 0.0, 0.0]);
         assert!(raw[1] < 0.0 && raw[2] < 0.0, "expected out-of-gamut green and blue, got {raw:?}");
         assert_eq!(p3_to_srgb.apply_u8([255, 0, 0]), [255, 0, 0]);
+    }
+
+    #[test]
+    fn the_d50_white_maps_to_white_in_every_space() {
+        // The D50 white of the ICC connection space, as XYZ with Y = 1.
+        let d50_white = [0.9642, 1.0, 0.8249];
+        for space in Space::ALL {
+            let lin = apply(from_xyz_d50(space), d50_white);
+            assert!(close(lin, [1.0, 1.0, 1.0], 2e-3), "{:?}: {lin:?}", space);
+        }
     }
 
     #[test]

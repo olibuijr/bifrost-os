@@ -22,37 +22,37 @@ modules, Supporting types and conventions).
   Nothing outside its tests calls it yet. Built on parity/team-a-09; not yet verified on Midget.
 - Both modules are registered in `springboard/render/src/lib.rs`, one line each. Both have unit tests covering
   the matrix math, transfer curves, white-point mapping, round trips, gamut clamping, buffer sizes and byte order.
+- `springboard/render/src/icc.rs` (extended): `Profile::matrix_shaper` reads the colorants (`rXYZ`, `gXYZ`, `bXYZ`) and
+  tone curves (`rTRC`, `gTRC`, `bTRC`: `curv` identity, gamma and sampled forms, `para` function types 0 to 4) of an RGB
+  matrix-shaper profile into `MatrixShaper`. `MatrixShaper::convert` takes encoded profile colours into any named space
+  through the D50 connection space. `Profile::vcgt` reads a display's video card gamma table (`vcgt`, table and formula
+  forms) and `Vcgt::ramp` samples it as 16-bit ramps. The header, tag table and description parsing from earlier rounds
+  are unchanged; the description reader now shares the tag-body helper.
+- `springboard/render/src/colorspace.rs` (extended): `from_xyz_d50(space)` maps the ICC D50 connection space into a named
+  space, adapting the white point with Bradford. `apply` is public for the same callers.
+- `springboard/sdk/src/colorsync.rs`: the app-facing module `bifrost_app::colorsync`. `ProfileConverter::open` takes the
+  bytes of an RGB matrix-shaper profile and a destination `Space`; `apply_u8` and `apply` convert colours. `gamma_ramps`
+  returns a display profile's gamma table as three 16-bit ramps. Errors are `ColorError` (not a profile, not a matrix
+  shaper, no gamma table). Registered in `springboard/sdk/src/lib.rs` by one line.
+- The HDR models (`hdr_transfer.rs`, `hdr_metadata.rs`) already in the tree are listed in the matrix row for HDR; this
+  round did not change them.
+- Built on parity/team-j-colorsync; not yet verified on Midget. The unit tests were written but not run (the lead builds).
+
 
 Pure std: no crates, no `unsafe`, no hardware, no services.
 
-## Official API names mirrored
-
-| BifrOSt | Apple reference |
-|---|---|
-| `colorspace::Transform` | ColorSyncTransform (colour transforms, `ColorSyncTransformConvert` by matrix only) |
-| `colorspace::Space::DisplayP3`, `AdobeRgb`, `RommRgb`, `Srgb` | kColorSyncDisplayP3Profile, kColorSyncAdobeRGB1998Profile, kColorSyncROMMRGBProfile, kColorSyncSRGBProfile |
-| `pixel_layout::Layout`, `Depth`, `Alpha` | ColorSyncDataLayout, ColorSyncDataDepth, ColorSyncAlphaInfo |
-| `cg::color::RenderingIntent` (`rendering_intent::Intent`), `rendering_intent::BlackPoints` | Rendering intents, black point compensation |
-
-The names are only the concepts. The Apple symbols are not used in code (owner rule).
-
-## REA evidence
-
-- `ev_bf6c8801f818b6f862c7df1df543d68614564c66b383f0c8bf3ca9b3b53923c8`: rendered landing page of the ColorSync
-  framework (topics, Color conversion, Profile and HDR metadata, System color management).
-- DocC structure: `python3 -I tools/parity/docc.py colorsync` (same topic list).
-
 ## Remaining gaps
 
-- No ICC profile parser and no profile-table transform. `ColorSyncTransformCreate` and `ColorSyncTransformConvert`
-  have no equivalent beyond the published-primaries matrix.
-- PDF `ICCBased` images are still drawn by component count (`springboard/src/shell/books/engine/pdf/image.rs`);
-  the working spaces are not applied to them.
-- Decoded JPEG and PNG stay sRGB (`springboard/render/src/imgdec.rs`); wide-gamut input is not tagged.
-- No display profile or gamma ramp: `springboard/src/bare/kms.rs` reads `gamma_size` only.
-- Rendering intents and black point compensation exist as models (`rendering_intent.rs`), but an ICC profile's
-  own intent tables are not read, and no image path applies them yet.
-- No HDR pipeline (PQ, HLG, extended range, Headroom Adaptive Gain Curve metadata).
+- No lookup-table ICC transforms (A2B, B2A, mft and mAB tags) and no profile-to-profile pipeline; `ColorSyncTransformCreate`
+  and `ColorSyncTransformConvert` have only the matrix path.
+- No profile creation, tag writing or embedding (`ColorSyncMutableProfile`, `ColorSyncProfileCopyData`).
+- Decoded JPEG and PNG stay sRGB (`springboard/render/src/imgdec.rs`), and PDF `ICCBased` images are still drawn by
+  component count (`springboard/render/src/cg/pdf/image.rs`); the working spaces are not applied to images yet.
+- No display path to the hardware: `springboard/src/bare/kms.rs` reads `gamma_size` only, and `Vcgt` is not loaded into
+  the CRTC. Night Shift does not read the display profile.
+- Rendering intents and black point compensation exist as models (`rendering_intent.rs`), but an ICC profile's own
+  intent tables are not read, and no image path applies them yet.
+- No HAGC (SMPTE ST 2094-50) metadata; the PQ and HLG curves (`hdr_transfer.rs`) and EDR headroom are not wired into video
+  output, and `nv12.rs` selects Rec.601 or Rec.709 by frame height only.
 - Colour management modules (CMM plug-ins) remain `n/a`.
-- No app-facing SDK wrapper: `springboard/sdk/src` does not expose `colorspace` or `pixel_layout` yet.
 - Tests were written but not run in this round (the build and test stage runs them).
