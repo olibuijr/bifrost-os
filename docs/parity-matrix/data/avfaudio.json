@@ -17,9 +17,9 @@
     {
       "feature": "Audio application and recording permission",
       "apple": "AVAudioApplication: requestRecordPermission, recordPermission, input mute state",
-      "bifrost": "springboard/proto/src/svc.rs (Cmd::RecordStart, Cmd::RecordStop); springboard/apps/voicememos-desktop/src/voicememos.rs:208; springboard/sdk/src/audio_application.rs (bifrost_app::audio_application::AudioApplication, pure model)",
+      "bifrost": "springboard/proto/src/svc.rs (Cmd::RecordStart, Cmd::RecordStop); springboard/apps/voicememos-desktop/src/voicememos.rs:208; springboard/sdk/src/audio_application.rs (bifrost_app::audio_application::AudioApplication, pure model); springboard/sdk/tests/parity_sdk-complete-29.rs",
       "status": "partial",
-      "note": "recording is gated by an explicit user tap in the app (verified on Midget 0.7.25 by 8 tests). The pure model adds the one-time permission request (ask only while undetermined), the denied state changed through settings, and the input mute state with change events; built on parity/team-n-avfaudio; not yet verified on Midget, not yet fed by audiod"
+      "note": "recording is gated by an explicit user tap in the app (verified on Midget 0.7.25 by 8 tests). The pure model asks for the permission only while it is undetermined, keeps a refusal until settings change it, and queues one event per input mute change; all of it is tested headless. Gap: the shell's prompt and mute switch do not feed the model, so the live permission check needs the lab machine and audiod."
     },
     {
       "feature": "Audio interruptions",
@@ -45,9 +45,9 @@
     {
       "feature": "Basic playback (AVAudioPlayer)",
       "apple": "AVAudioPlayer: play, pause, stop, volume, pan, rate, loops, currentTime, duration",
-      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_at, draw_volume); rate and pan not wired; springboard/sdk/src/audio_player_control.rs (bifrost_app::audio_player_control::PlayerControl, pure model)",
+      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/audioplayer.rs (Track::file, Track::live); springboard/sdk/src/lib.rs:88; springboard/proto/src/svc.rs (Cmd::PlayQueue, Play, Pause, SeekMs, SetVolume); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_at, draw_volume); rate and pan not wired; springboard/sdk/src/audio_player_control.rs (bifrost_app::audio_player_control::PlayerControl, pure model); springboard/sdk/tests/parity_sdk-complete-29.rs",
       "status": "partial",
-      "note": "queue, transport, seek, volume and mute reach apps; no pan, rate or per-player fade Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity.; pan (-1 to 1), rate (0.5 to 2.0) and timed volume fades are modelled in audio_player_control.rs; built on parity/team-n-avfaudio; not yet verified on Midget or applied by audiod"
+      "note": "queue, transport, seek, volume and mute reach apps; the player model clamps pan (-1 to 1) and rate (0.5 to 2.0), runs linear volume fades and cancels them on a direct volume set, and is tested headless. Gap: audiod does not apply pan, rate or fades yet, and the UI wires only volume, so the playback check needs the lab machine."
     },
     {
       "feature": "Basic recording (AVAudioRecorder)",
@@ -80,9 +80,9 @@
     {
       "feature": "Mixing and volume control",
       "apple": "AVAudioMixing, volume and pan on players and mixer nodes",
-      "bifrost": "springboard/audio/alsa/src/ctl.rs; springboard/src/media/volume.rs; springboard/proto/src/svc.rs (SetVolume, SetMuted); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_rect, volume_at, set_volume, draw_volume)",
+      "bifrost": "springboard/audio/alsa/src/ctl.rs; springboard/src/media/volume.rs; springboard/proto/src/svc.rs (SetVolume, SetMuted); wired: springboard/apps/voicememos-desktop/src/voicememos.rs (volume_rect, volume_at, set_volume, draw_volume); springboard/ui/src/playback_arbiter.rs (Arbiter, mix); springboard/sdk/tests/parity_sdk-complete-29.rs",
       "status": "partial",
-      "note": "one system volume and mute for the playback service; springboard/ui/src/playback_arbiter.rs models per-source volume and pan with a clamped mix, not yet in audiodWired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "One system volume and mute serve the playback service, and the arbiter mixes registered per-source volume and pan into one stereo block with a full-scale clamp, tested headless. Gap: the mix is not in audiod, so sources do not share one output path yet, and the mixed output needs the lab machine to hear."
     },
     {
       "feature": "Playback via video pipeline (AVPlayer-adjacent audio out)",
