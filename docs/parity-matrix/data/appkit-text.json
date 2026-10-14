@@ -24,9 +24,9 @@
   {
    "feature": "Text Display: multi-line text view widget",
    "apple": "NSTextView, NSScrollView text container",
-   "bifrost": "springboard/ui/src/textview.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (notes card: draw_notes, notes_key, notes_place) on bifrost_app::controls::textview::TextView; sidecar in src/store.rs; springboard/ui/src/text_layout_manager.rs (layout, selection navigation)",
+   "bifrost": "springboard/ui/src/textview.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (notes card: draw_notes, notes_key, notes_place) on bifrost_app::controls::textview::TextView; sidecar in src/store.rs; springboard/ui/src/text_layout_manager.rs (layout, selection navigation); tests: springboard/ui/tests/parity_sdk-tests-06.rs",
    "status": "partial",
-   "note": "TextView adds isRichText, allowsUndo, usesFindBar, incremental find, next, previous, replace and replace all (one undo step), and a spelling hook; typing coalesces into one undo step. Host unit and integration tests (springboard/ui/tests/text_view.rs); not yet drawn by a shell widget or checked on Midget, so the row stays partial."
+   "note": "TextView adds isRichText, allowsUndo, usesFindBar, incremental find, next, previous, replace and replace all (one undo step), and a spelling hook; typing coalesces into one undo step. Host unit and integration tests (springboard/ui/tests/text_view.rs) cover those, and ui/tests/parity_sdk-tests-06.rs headless tests cover wrapping, line lookup, hit testing, goal columns, highlights, scrolling to the caret and the find bar flags. Not yet drawn by a shell widget or checked on Midget, so the row stays partial."
   },
   {
    "feature": "Text Display: spell checking",

@@ -59,9 +59,9 @@
   {
    "feature": "ColorSync Manager (profiles, transforms, CMM)",
    "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
-   "bifrost": "springboard/render/src/icc.rs, springboard/render/src/colorspace.rs",
+   "bifrost": "springboard/render/src/icc.rs, springboard/render/src/colorspace.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (icc.rs, colorspace.rs); not wired into the shell or apps, not tested on Midget. PDF ICC-based images decode, but there is no profile or transform API and no display profile handling for apps."
+   "note": "Headless tests in render/tests/parity_sdk-tests-06.rs cover profile parsing and matrix-shaper conversion (the_colorants_of_a_white_rgb_profile...), tone curves, device profiles, video card gamma tables and the working-space transforms (an_srgb_red_is_a_less_saturated_red_in_display_p3). Gap: not wired into the shell or apps, no profile creation or lookup-table transforms, and not tested on Midget. PDF ICC-based images decode, but there is no profile or transform API for apps."
   },
   {
    "feature": "Speech Synthesis Manager",

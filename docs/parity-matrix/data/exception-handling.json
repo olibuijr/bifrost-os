@@ -52,9 +52,9 @@
     {
       "feature": "Crash record surfaced to the user and developer",
       "apple": "Crash reports from the system (outside this framework)",
-      "bifrost": "springboard/sdk/src/exception_handler.rs",
+      "bifrost": "springboard/sdk/src/exception_handler.rs; tests: springboard/sdk/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-exception-handling, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Diagnostics list crash.log entries and coredumpctl output; there is no in-app crash reporter API"
+      "note": "The failure monitor is tested headless in sdk/tests/parity_sdk-tests-06.rs: the bit layout, log and handle decisions per kind (a_monitored_kind_is_logged...), delegate refusals, the halt mask, and crash record reading with newest-first order and a sixty character signature (crash_records_list_the_newest_crash_first...). Gap: not wired into apps or the shell and not tested on the VM or Midget; diagnostics list crash.log entries and coredumpctl output, and there is no in-app crash reporter API."
     },
     {
       "feature": "Unclean-exit detection at next start",

@@ -80,9 +80,9 @@
   {
    "feature": "Handwriting recognition (PKStrokeRecognizer)",
    "apple": "PKStrokeRecognizer, handwriting to text",
-   "bifrost": "springboard/ui/src/handwriting.rs (segment_lines, recognize_lines, Recognizer trait); no recogniser implementation; built on parity/team-j-pencilkit; not yet verified on Midget",
+   "bifrost": "springboard/ui/src/handwriting.rs (segment_lines, recognize_lines, Recognizer trait); tests: springboard/ui/tests/parity_sdk-tests-06.rs; no recogniser implementation; built on parity/team-j-pencilkit; not yet verified on Midget",
    "status": "partial",
-   "note": "Line layout is modelled: strokes group into lines by vertical overlap and read top to bottom, left to right, with unit tests. No letter recognition exists in BifrOSt, so an app or the shell must supply a Recognizer. Not wired into the shell or apps."
+   "note": "Line layout is tested headless in ui/tests/parity_sdk-tests-06.rs: strokes group into lines by vertical overlap (a_tall_stroke_joins...), lines read top to bottom and strokes left to right (the_recogniser_is_handed...), and lines the recogniser refuses are left out (lines_the_recogniser_refuses...). No letter recognition exists in BifrOSt, so an app or the shell must supply a Recognizer. Not wired into the shell or apps."
   },
   {
    "feature": "Scribble on non-text views",
