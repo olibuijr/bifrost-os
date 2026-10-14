@@ -4,10 +4,11 @@
 //! the same rectangles, so a tap lands on what is drawn.
 
 use crate::export::Format;
-use crate::extras::Extras;
-use crate::model::{self, Category, Content, Row, Section, Stored, SECTIONS};
+use crate::extras::{Extras, ScreenFacts};
+use crate::model::{self, Category, Content, Item, Row, Section, Stored, SECTIONS};
 use crate::recents::{self, Recent};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
+use bifrost_app::displays::DisplayInfo;
 use bifrost_app::controls::search;
 use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -36,6 +37,8 @@ pub const STEP_PT: f32 = 40.0;
 pub const LIST_MAX_ROWS: usize = 8;
 /// The gap between the item list and the detail card (points).
 pub const PANE_GAP_PT: f32 = 12.0;
+/// The item list's column header (points); the rows start below it.
+pub const LIST_HEAD_PT: f32 = 22.0;
 /// The toolbar's search field (points).
 pub const SEARCH_W_PT: f32 = 200.0;
 
@@ -43,6 +46,9 @@ pub const SEARCH_W_PT: f32 = 200.0;
 pub const B_REFRESH: u32 = 1;
 pub const B_SEARCH: u32 = 2;
 pub const B_CANCEL: u32 = 3;
+/// The item list's column headers: sort by name, sort by details.
+pub const B_SORT_NAME: u32 = 4;
+pub const B_SORT_DETAILS: u32 = 5;
 /// Section header ids are `SECTION_BASE` plus the section's index; sidebar row ids are `ROW_BASE` plus the category's
 /// index, so neither meets the toolbar ids.
 pub const SECTION_BASE: u64 = 50;
@@ -67,6 +73,8 @@ pub const MENU_PREVIOUS_CATEGORY: u32 = 15;
 pub const MENU_OVERVIEW: u32 = 16;
 pub const MENU_SAVE_RTF: u32 = 17;
 pub const MENU_SAVE_JSON: u32 = 18;
+pub const MENU_USE_SELECTION: u32 = 19;
+pub const MENU_JUMP_SELECTION: u32 = 20;
 /// Open Recent entry `i` is `MENU_RECENT + i`.
 pub const MENU_RECENT: u32 = 200;
 
@@ -105,12 +113,41 @@ pub enum Target {
     /// A line of the item list, by its index in the items shown.
     Item(usize),
     ListArea,
+    /// A column header of the item list.
+    ListHeader(Column),
     /// A line of the detail card, by its index in the rows shown.
     Line(usize),
     DetailArea,
     Content,
     /// The Cancel button of the loading sheet.
     Cancel,
+}
+
+/// A column of the item list. The name column is the key column of the detail card, the details column its value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Column {
+    Name,
+    Details,
+}
+
+/// Sorts list items by a column, ignoring case. The sort is stable, so items that compare equal keep their order.
+pub fn sort_items(items: &mut [Item], column: Column, descending: bool) {
+    items.sort_by(|a, b| {
+        let ord = match column {
+            Column::Name => a.title.trim_start().to_lowercase().cmp(&b.title.trim_start().to_lowercase()),
+            Column::Details => a.summary.to_lowercase().cmp(&b.summary.to_lowercase()),
+        };
+        if descending {
+            ord.reverse()
+        } else {
+            ord
+        }
+    });
+}
+
+/// The rows of an item list pane: the pane below its column header.
+pub fn list_rows(list: Rect) -> Rect {
+    Rect { x: list.x, y: list.y + LIST_HEAD_PT, w: list.w, h: (list.h - LIST_HEAD_PT).max(0.0) }
 }
 
 /// What the window shows for the selected category: its content after the find, and which item of a list is picked.
@@ -203,6 +240,14 @@ pub struct SysInfo {
     pub notice: Option<String>,
     /// Whether the keyboard was asked for, so the request is sent only when it changes.
     pub keyboard_wanted: bool,
+    /// The column the item lists are sorted by, and whether the order is descending. None keeps the source order.
+    pub sort: Option<(Column, bool)>,
+    /// The title of the picked item before a refresh, so the pick stays on it when the new facts land.
+    pub pick_after_load: Option<String>,
+    /// The display service's list request, while its answer is awaited.
+    pub screens_request: Option<u32>,
+    /// The display list is asked for again (at the start, after a refresh, after the displays changed).
+    pub screens_stale: bool,
 }
 
 impl SysInfo {
@@ -236,6 +281,10 @@ impl SysInfo {
             prefs_dirty: false,
             notice: None,
             keyboard_wanted: false,
+            sort: None,
+            pick_after_load: None,
+            screens_request: None,
+            screens_stale: true,
         }
     }
 
@@ -288,10 +337,36 @@ impl SysInfo {
 
     /// Takes a finished read. The scroll stays where it is, clamped to the new length.
     pub fn apply(&mut self, report: Report, extras: Extras) {
+        let picked = self.pick_after_load.take().or_else(|| self.picked_title());
+        // the display list comes from the display service, not from the read: it stays with the window
+        let screens = std::mem::take(&mut self.extras.screens);
         self.report = report;
         self.extras = extras;
+        self.extras.screens = screens;
         self.loaded = true;
         self.clamp_scrolls();
+        self.restore_pick(picked);
+    }
+
+    /// Takes the displays the display service listed: their refresh rate and scale go under the matching connectors in
+    /// the Displays category. A new list replaces the old one.
+    pub fn set_screens(&mut self, list: &[DisplayInfo]) {
+        self.extras.screens = list.iter().map(ScreenFacts::from_info).collect();
+    }
+
+    /// The title of the picked item of the list, if the category has one.
+    pub fn picked_title(&self) -> Option<String> {
+        let view = self.view();
+        view.content.items.get(view.item).map(|i| i.title.clone())
+    }
+
+    /// Picks the item with `title` again, when the list still holds it. Otherwise the pick keeps its index.
+    pub fn restore_pick(&mut self, title: Option<String>) {
+        let Some(title) = title else { return };
+        let view = self.view();
+        if let Some(at) = view.content.items.iter().position(|i| i.title == title) {
+            self.item = at;
+        }
     }
 
     /// Reads the machine again: a report that is open gives way to this computer's facts.
@@ -299,6 +374,8 @@ impl SysInfo {
         if self.load.is_some() {
             return false;
         }
+        self.pick_after_load = self.picked_title();
+        self.screens_stale = true;
         self.stored = None;
         self.notice = None;
         self.start_load();
@@ -322,9 +399,35 @@ impl SysInfo {
 
     /// What the window shows now: the selected category's content after the find.
     pub fn view(&self) -> View {
-        let content = self.base_content(self.selected).filtered(self.query());
+        let mut content = self.base_content(self.selected).filtered(self.query());
+        if let Some((column, descending)) = self.sort {
+            if content.list && self.selected != Category::Usb {
+                sort_items(&mut content.items, column, descending);
+            }
+        }
         let item = self.item.min(content.items.len().saturating_sub(1));
         View { content, item }
+    }
+
+    /// Whether the selected category's list can be sorted: a list, but not the USB tree, which keeps its bus order.
+    pub fn can_sort(&self) -> bool {
+        self.selected != Category::Usb && self.view().content.list
+    }
+
+    /// A click on a column header sorts by it; a second click on the same header reverses the order. The picked item
+    /// stays picked. False when the list cannot be sorted.
+    pub fn sort_by(&mut self, column: Column) -> bool {
+        if !self.can_sort() {
+            return false;
+        }
+        let picked = self.picked_title();
+        self.sort = Some(match self.sort {
+            Some((current, descending)) if current == column => (current, !descending),
+            _ => (column, false),
+        });
+        self.restore_pick(picked);
+        self.list_scroll = self.list_scroll.clamp(0.0, self.max_list_scroll());
+        true
     }
 
     /// The summary rows of the selected category after the find (the card, or one line per item).
@@ -418,6 +521,64 @@ impl SysInfo {
             Some(c) => self.select(c),
             None => false,
         }
+    }
+
+    /// The text Use Selection for Find takes: the value of the first picked row, or the title of the picked item while
+    /// the item list has the focus. None when nothing is picked.
+    pub fn selection_text(&self) -> Option<String> {
+        let view = self.view();
+        let text = match self.selection {
+            Selection::One(i) => view.detail().get(i).map(|(_, v)| v.clone()),
+            Selection::All => view.detail().first().map(|(_, v)| v.clone()),
+            Selection::None if self.focus == Focus::List && view.content.list => view.content.items.get(view.item).map(|i| i.title.trim().to_string()),
+            Selection::None => None,
+        };
+        text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+    }
+
+    /// Edit > Use Selection for Find: the find bar opens with the picked text as its query.
+    pub fn use_selection_for_find(&mut self) -> bool {
+        let Some(text) = self.selection_text() else { return false };
+        let mut field = TextField::new();
+        field.push_str(&text);
+        self.find = Some(field);
+        self.after_find_change();
+        true
+    }
+
+    /// Edit > Jump to Selection: scrolls the picked row of the card into view, or the picked item of the list when the
+    /// list has the focus. True when a scroll moved.
+    pub fn jump_to_selection(&mut self) -> bool {
+        let view = self.view();
+        let panes = self.panes(&view);
+        match self.selection {
+            Selection::One(i) => {
+                let next = scroll_into_view(self.scroll, i, panes.detail.h);
+                let moved = (next - self.scroll).abs() >= f32::EPSILON;
+                self.scroll = next;
+                moved
+            }
+            Selection::All => {
+                let moved = self.scroll != 0.0;
+                self.scroll = 0.0;
+                moved
+            }
+            Selection::None if self.focus == Focus::List && view.content.list => match panes.list {
+                Some(list) => {
+                    let next = scroll_into_view(self.list_scroll, view.item, list_rows(list).h);
+                    let moved = (next - self.list_scroll).abs() >= f32::EPSILON;
+                    self.list_scroll = next;
+                    moved
+                }
+                None => false,
+            },
+            Selection::None => false,
+        }
+    }
+
+    /// Whether Jump to Selection has something to jump to.
+    pub fn can_jump(&self) -> bool {
+        self.selection != Selection::None || (self.focus == Focus::List && self.view().content.list)
     }
 
     // ------------------------------------------------------------ selection and copy
@@ -550,7 +711,7 @@ impl SysInfo {
         self.scroll = 0.0;
         let panes = self.panes(&view);
         if let Some(list) = panes.list {
-            self.list_scroll = scroll_into_view(self.list_scroll, next, list.h);
+            self.list_scroll = scroll_into_view(self.list_scroll, next, list_rows(list).h);
         }
         true
     }
@@ -662,8 +823,8 @@ impl SysInfo {
         if !view.content.list {
             return Panes { list: None, detail: Rect { x, y: top, w, h: avail } };
         }
-        let wanted = view.content.items.len().min(LIST_MAX_ROWS) as f32 * LINE_PT + 12.0;
-        let list_h = wanted.min((avail * 0.45).max(LINE_PT + 12.0)).min(avail);
+        let wanted = view.content.items.len().min(LIST_MAX_ROWS) as f32 * LINE_PT + 12.0 + LIST_HEAD_PT;
+        let list_h = wanted.min((avail * 0.45).max(LINE_PT + 12.0 + LIST_HEAD_PT)).min(avail);
         let detail_y = top + list_h + PANE_GAP_PT;
         Panes { list: Some(Rect { x, y: top, w, h: list_h }), detail: Rect { x, y: detail_y, w, h: (bottom - detail_y).max(0.0) } }
     }
@@ -676,7 +837,7 @@ impl SysInfo {
     /// The index of the list line under the window point `y` (points), if any.
     pub fn item_at(&self, view: &View, y: f32) -> Option<usize> {
         let list = self.panes(view).list?;
-        row_at(&list, self.list_scroll, view.content.items.len(), y)
+        row_at(&list_rows(list), self.list_scroll, view.content.items.len(), y)
     }
 
     /// How far the detail card can scroll: the rows beyond what the pane shows, in points.
@@ -688,7 +849,7 @@ impl SysInfo {
     pub fn max_list_scroll(&self) -> f32 {
         let view = self.view();
         match self.panes(&view).list {
-            Some(list) => max_scroll_of(view.content.items.len(), list.h),
+            Some(list) => max_scroll_of(view.content.items.len(), list_rows(list).h),
             None => 0.0,
         }
     }
@@ -788,7 +949,11 @@ impl SysInfo {
         }
         let view = self.view();
         let panes = self.panes(&view);
-        if panes.list.is_some_and(|l| l.contains(x, y)) {
+        if let Some(list) = panes.list.filter(|l| l.contains(x, y)) {
+            if y < list.y + LIST_HEAD_PT {
+                let column = if x < self.content_x() + KEY_PT { Column::Name } else { Column::Details };
+                return Target::ListHeader(column);
+            }
             return match self.item_at(&view, y) {
                 Some(i) => Target::Item(i),
                 None => Target::ListArea,
@@ -834,6 +999,7 @@ impl SysInfo {
                 self.selection = Selection::One(index);
                 true
             }
+            Target::ListHeader(column) => self.sort_by(column),
             Target::Cancel => self.cancel_load(),
             _ => false,
         }
@@ -849,6 +1015,12 @@ impl SysInfo {
         }
         if id == B_CANCEL as u64 {
             return Target::Cancel;
+        }
+        if id == B_SORT_NAME as u64 {
+            return Target::ListHeader(Column::Name);
+        }
+        if id == B_SORT_DETAILS as u64 {
+            return Target::ListHeader(Column::Details);
         }
         if id >= ROW_BASE {
             return Category::from_index((id - ROW_BASE) as usize).map_or(Target::Nothing, Target::Row);
@@ -977,6 +1149,8 @@ mod tests {
         assert_eq!(SysInfo::target_of_id(B_REFRESH as u64), Target::Toolbar(B_REFRESH));
         assert_eq!(SysInfo::target_of_id(B_SEARCH as u64), Target::Search);
         assert_eq!(SysInfo::target_of_id(B_CANCEL as u64), Target::Cancel);
+        assert_eq!(SysInfo::target_of_id(B_SORT_NAME as u64), Target::ListHeader(Column::Name));
+        assert_eq!(SysInfo::target_of_id(B_SORT_DETAILS as u64), Target::ListHeader(Column::Details));
         for (i, c) in model::ALL.iter().enumerate() {
             assert_eq!(SysInfo::target_of_id(ROW_BASE + i as u64), Target::Row(*c));
         }
@@ -1372,5 +1546,142 @@ mod tests {
         assert!(w.note_recent([2; 16], "B").is_empty());
         assert_eq!(w.recents[0].name, "B");
         assert!(w.recents_text().contains("\tA\n"));
+    }
+
+    fn with_apps() -> SysInfo {
+        let mut w = loaded();
+        w.report.apps = vec![bifrost_core::sysinfo::InstalledApp { id: "b.app".into(), version: "1.0".into() }, bifrost_core::sysinfo::InstalledApp { id: "a.app".into(), version: "2.0".into() }];
+        w.select(Category::Apps);
+        w
+    }
+
+    #[test]
+    fn a_header_click_sorts_the_list_and_a_second_click_reverses_it() {
+        let mut w = with_apps();
+        let titles = |w: &SysInfo| w.view().content.items.iter().map(|i| i.title.clone()).collect::<Vec<_>>();
+        assert_eq!(titles(&w), vec!["b.app", "a.app"], "the source order is kept until a sort");
+        assert!(w.activate(Target::ListHeader(Column::Name)));
+        assert_eq!(titles(&w), vec!["a.app", "b.app"]);
+        assert_eq!(w.sort, Some((Column::Name, false)));
+        assert!(w.activate(Target::ListHeader(Column::Name)));
+        assert_eq!(titles(&w), vec!["b.app", "a.app"]);
+        assert_eq!(w.sort, Some((Column::Name, true)));
+        assert!(w.activate(Target::ListHeader(Column::Details)));
+        assert_eq!(w.sort, Some((Column::Details, false)));
+    }
+
+    #[test]
+    fn the_pick_stays_on_its_item_through_a_sort() {
+        let mut w = with_apps();
+        assert!(w.activate(Target::Item(0)));
+        assert_eq!(w.picked_title().as_deref(), Some("b.app"));
+        assert!(w.activate(Target::ListHeader(Column::Name)));
+        assert_eq!(w.view().item, 1);
+        assert_eq!(w.picked_title().as_deref(), Some("b.app"));
+    }
+
+    #[test]
+    fn the_usb_tree_and_card_categories_do_not_sort() {
+        let mut w = with_usb();
+        assert!(!w.can_sort());
+        assert!(!w.activate(Target::ListHeader(Column::Name)));
+        assert_eq!(w.sort, None);
+        w.select(Category::System);
+        assert!(!w.sort_by(Column::Details));
+    }
+
+    #[test]
+    fn a_refresh_keeps_the_picked_item_when_the_new_facts_list_it() {
+        let mut w = with_apps();
+        assert!(w.activate(Target::Item(1)));
+        assert_eq!(w.picked_title().as_deref(), Some("a.app"));
+        let mut report = w.report.clone();
+        report.apps.reverse();
+        w.apply(report, Extras::default());
+        assert_eq!(w.picked_title().as_deref(), Some("a.app"));
+        assert_eq!(w.view().item, 0, "the item moved up with the new order");
+    }
+
+    #[test]
+    fn the_list_header_sits_above_the_rows_and_is_not_an_item() {
+        let w = with_apps();
+        let view = w.view();
+        let list = w.panes(&view).list.expect("apps are a list");
+        assert_eq!(w.item_at(&view, list.y + 2.0), None, "the header is not a row");
+        assert_eq!(w.item_at(&view, list.y + LIST_HEAD_PT + 7.0), Some(0));
+        assert_eq!(list_rows(list).y, list.y + LIST_HEAD_PT);
+    }
+
+    #[test]
+    fn sorting_by_details_uses_the_summary_ignoring_case() {
+        let mut items = vec![Item { title: "x".into(), summary: "beta".into(), detail: vec![] }, Item { title: "y".into(), summary: "Alpha".into(), detail: vec![] }];
+        sort_items(&mut items, Column::Details, false);
+        assert_eq!(items[0].title, "y");
+        sort_items(&mut items, Column::Details, true);
+        assert_eq!(items[0].title, "x");
+    }
+
+    #[test]
+    fn the_display_list_survives_a_fresh_read_and_a_refresh_asks_for_it_again() {
+        let mut w = loaded();
+        w.screens_stale = false;
+        w.extras.screens = vec![ScreenFacts::new("eDP-1", 60.0, 1.0)];
+        w.apply(Report::default(), Extras::default());
+        assert_eq!(w.extras.screens, vec![ScreenFacts::new("eDP-1", 60.0, 1.0)]);
+        w.set_screens(&[]);
+        assert!(w.extras.screens.is_empty(), "a new list replaces the old one");
+    }
+
+    #[test]
+    fn use_selection_for_find_takes_the_picked_value() {
+        let mut w = loaded();
+        w.select(Category::System);
+        assert_eq!(w.selection_text(), None);
+        assert!(!w.use_selection_for_find(), "nothing is picked");
+        assert!(w.activate(Target::Line(3)));
+        assert_eq!(w.selection_text(), Some("midget".to_string()));
+        assert!(w.use_selection_for_find());
+        assert!(w.find.is_some());
+        assert_eq!(w.query(), "midget");
+        assert_eq!(w.rows(), vec![kv("Computer Name", "midget")]);
+    }
+
+    #[test]
+    fn use_selection_for_find_takes_the_picked_item_in_the_list() {
+        let mut w = with_usb();
+        assert!(w.activate(Target::Item(1)));
+        assert!(w.use_selection_for_find());
+        assert_eq!(w.query(), "Hub");
+        assert_eq!(w.view().content.items.len(), 1);
+    }
+
+    #[test]
+    fn jump_to_selection_scrolls_the_picked_row_into_view() {
+        let mut w = loaded();
+        w.size = (1200.0, 300.0);
+        let rows: Vec<Row> = (0..40).map(|i| kv(format!("Key {i}"), "v")).collect();
+        w.show_stored(Stored::of("long.json", vec![(Category::Overview, Content::card(rows))]));
+        assert!(!w.can_jump(), "nothing is picked and the card has no list");
+        assert!(!w.jump_to_selection());
+        assert!(w.activate(Target::Line(35)));
+        assert!(w.can_jump());
+        assert!(w.jump_to_selection());
+        assert!(w.scroll > 0.0);
+        let h = w.panes(&w.view()).detail.h;
+        let top = 6.0 + 35.0 * LINE_PT;
+        assert!(top >= w.scroll && top + LINE_PT <= w.scroll + h, "the line is inside the pane");
+        assert!(!w.jump_to_selection(), "already in view");
+    }
+
+    #[test]
+    fn jump_to_selection_scrolls_the_list_when_it_has_the_focus() {
+        let mut w = with_usb();
+        w.size = (1200.0, 200.0);
+        w.step_item(3);
+        w.focus = Focus::List;
+        w.list_scroll = 0.0;
+        assert!(w.can_jump());
+        assert!(w.jump_to_selection());
+        assert!(w.list_scroll > 0.0 || w.view().item == 0);
     }
 }

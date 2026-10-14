@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Edit > Use Selection for Find (Cmd+E) opens the find bar with the picked value or item; Edit > Jump to Selection (Cmd+J) scrolls the picked row or item into view.
+- Item lists have a Name and Details header. A click sorts by the column and a second click reverses it; the USB tree keeps its bus order. The picked item stays picked through a sort and through a refresh.
+- Processor lists the clock of each processor and, on hybrid processors, the performance and efficiency core counts.
+- Displays show each display's refresh rate and scale, from the display service.
+- Hardware adds Card Reader, Controller, SAS, Fibre Channel, Disc Burning and Diagnostics (crash reports and core dumps).
+- Software adds Installations (the package log, newest first) and Printer Software (the installed printer drivers).
+
 ## 0.5.0
 
 - New categories: Audio, Bluetooth, Camera, Printers, Thunderbolt, NVMe and SATA under Hardware; a Network section with Wi-Fi, Ethernet, WWAN, Firewall and Volumes; Fonts and Logs under Software.

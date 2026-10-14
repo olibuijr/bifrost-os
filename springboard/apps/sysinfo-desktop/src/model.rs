@@ -5,7 +5,7 @@
 //! A category shows either a card of key and value rows (the processor, the operating system) or a list of items,
 //! one per device, disk or app, each with a detail card of its own. `Content` holds both shapes.
 
-use crate::extras::{split_locale, uptime_label, Extras};
+use crate::extras::{split_locale, uptime_label, Extras, ScreenFacts};
 use crate::probe::{self, day_label, usb_parent, usb_position, usb_tree, NetDetail};
 use bifrost_core::sysinfo::{clock_label, size_label, usb_speed, Disk, Display, InstalledApp, NetInterface, PciDevice, PowerSource, Report, Summary, UsbDevice};
 
@@ -53,12 +53,18 @@ pub enum Category {
     Audio,
     Bluetooth,
     Camera,
+    CardReader,
+    Controller,
     Printers,
     Thunderbolt,
     Power,
     Storage,
     Nvme,
     Sata,
+    Sas,
+    FibreChannel,
+    DiscBurning,
+    Diagnostics,
     Wifi,
     Ethernet,
     Wwan,
@@ -66,14 +72,16 @@ pub enum Category {
     Volumes,
     System,
     Apps,
+    Installations,
     Extensions,
     StartupItems,
     Fonts,
     Logs,
+    PrinterSoftware,
     Language,
 }
 
-pub const ALL: [Category; 28] = [
+pub const ALL: [Category; 36] = [
     Category::Overview,
     Category::Processor,
     Category::Memory,
@@ -84,12 +92,18 @@ pub const ALL: [Category; 28] = [
     Category::Audio,
     Category::Bluetooth,
     Category::Camera,
+    Category::CardReader,
+    Category::Controller,
     Category::Printers,
     Category::Thunderbolt,
     Category::Power,
     Category::Storage,
     Category::Nvme,
     Category::Sata,
+    Category::Sas,
+    Category::FibreChannel,
+    Category::DiscBurning,
+    Category::Diagnostics,
     Category::Wifi,
     Category::Ethernet,
     Category::Wwan,
@@ -97,10 +111,12 @@ pub const ALL: [Category; 28] = [
     Category::Volumes,
     Category::System,
     Category::Apps,
+    Category::Installations,
     Category::Extensions,
     Category::StartupItems,
     Category::Fonts,
     Category::Logs,
+    Category::PrinterSoftware,
     Category::Language,
 ];
 
@@ -121,7 +137,9 @@ impl Category {
     pub fn section(self) -> Section {
         match self {
             Category::Wifi | Category::Ethernet | Category::Wwan | Category::Firewall | Category::Volumes => Section::Network,
-            Category::System | Category::Apps | Category::Extensions | Category::StartupItems | Category::Fonts | Category::Logs | Category::Language => Section::Software,
+            Category::System | Category::Apps | Category::Installations | Category::Extensions | Category::StartupItems | Category::Fonts | Category::Logs | Category::PrinterSoftware | Category::Language => {
+                Section::Software
+            }
             _ => Section::Hardware,
         }
     }
@@ -138,12 +156,18 @@ impl Category {
             Category::Audio => "Audio",
             Category::Bluetooth => "Bluetooth",
             Category::Camera => "Camera",
+            Category::CardReader => "Card Reader",
+            Category::Controller => "Controller",
             Category::Printers => "Printers",
             Category::Thunderbolt => "Thunderbolt",
             Category::Power => "Power",
             Category::Storage => "Storage",
             Category::Nvme => "NVMe",
             Category::Sata => "SATA",
+            Category::Sas => "SAS",
+            Category::FibreChannel => "Fibre Channel",
+            Category::DiscBurning => "Disc Burning",
+            Category::Diagnostics => "Diagnostics",
             Category::Wifi => "Wi-Fi",
             Category::Ethernet => "Ethernet",
             Category::Wwan => "WWAN",
@@ -151,6 +175,8 @@ impl Category {
             Category::Volumes => "Volumes",
             Category::System => "Operating System",
             Category::Apps => "Installed Apps",
+            Category::Installations => "Installations",
+            Category::PrinterSoftware => "Printer Software",
             Category::Extensions => "Extensions",
             Category::StartupItems => "Startup Items",
             Category::Fonts => "Fonts",
@@ -172,12 +198,18 @@ impl Category {
             Category::Audio => "speaker.wave.2",
             Category::Bluetooth => "antenna.radiowaves.left.and.right",
             Category::Camera => "camera",
+            Category::CardReader => "sdcard",
+            Category::Controller => "gearshape.2",
             Category::Printers => "printer",
             Category::Thunderbolt => "bolt",
             Category::Power => "battery.100",
             Category::Storage => "internaldrive",
             Category::Nvme => "internaldrive",
             Category::Sata => "internaldrive",
+            Category::Sas => "server.rack",
+            Category::FibreChannel => "point.3.connected.trianglepath.dotted",
+            Category::DiscBurning => "opticaldisc",
+            Category::Diagnostics => "stethoscope",
             Category::Wifi => "wifi",
             Category::Ethernet => "cable.connector",
             Category::Wwan => "antenna.radiowaves.left.and.right",
@@ -185,6 +217,8 @@ impl Category {
             Category::Volumes => "externaldrive",
             Category::System => "gearshape",
             Category::Apps => "app.badge",
+            Category::Installations => "shippingbox",
+            Category::PrinterSoftware => "printer.filled.and.paper",
             Category::Extensions => "puzzlepiece.extension",
             Category::StartupItems => "power",
             Category::Fonts => "textformat",
@@ -206,12 +240,18 @@ impl Category {
             Category::Audio => "The sound cards the system sees.",
             Category::Bluetooth => "The Bluetooth controllers and their state.",
             Category::Camera => "The video capture devices.",
+            Category::CardReader => "The memory card slots and the card in each.",
+            Category::Controller => "The storage host adapters that are not Fibre Channel or SAS.",
             Category::Printers => "The printers set up on this computer and those on USB.",
             Category::Thunderbolt => "The devices on the Thunderbolt bus.",
             Category::Power => "Batteries and power supplies, with their health.",
             Category::Storage => "The disks, their partitions and where they are mounted.",
             Category::Nvme => "The NVMe controllers.",
             Category::Sata => "The SATA ports and the speed each link negotiated.",
+            Category::Sas => "The SAS links, their rates and the devices on them.",
+            Category::FibreChannel => "The Fibre Channel ports and their links.",
+            Category::DiscBurning => "The optical drives and whether a disc is in them.",
+            Category::Diagnostics => "Crash reports and core dumps saved on this computer.",
             Category::Wifi => "The wireless interfaces, their addresses and signal.",
             Category::Ethernet => "The wired and virtual interfaces, their addresses and speed.",
             Category::Wwan => "The cellular modem interfaces.",
@@ -219,6 +259,8 @@ impl Category {
             Category::Volumes => "The mounted volumes and the space left on them.",
             Category::System => "The operating system and the kernel it runs.",
             Category::Apps => "The apps installed on this computer, with their newest version.",
+            Category::Installations => "The packages installed, upgraded and removed, newest first.",
+            Category::PrinterSoftware => "The printer drivers installed for the printing system.",
             Category::Extensions => "The kernel modules that are loaded now.",
             Category::StartupItems => "The apps and helpers that start when you sign in.",
             Category::Fonts => "The font families the desktop can draw.",
@@ -353,10 +395,16 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
         Category::Graphics => Content::list(r.graphics().into_iter().enumerate().map(|(i, d)| graphics_item(i, d, x)).collect()),
         Category::Pci => Content::list(r.pci.iter().map(pci_item).collect()),
         Category::Usb => Content::list(usb_tree(&r.usb).into_iter().map(|(depth, d)| usb_item(depth, d, x)).collect()),
-        Category::Displays => Content::list(r.displays.iter().map(display_item).collect()),
+        Category::Displays => Content::list(r.displays.iter().map(|d| display_item(d, &x.screens)).collect()),
         Category::Audio => Content::list(x.hw.audio.iter().map(audio_item).collect()),
         Category::Bluetooth => Content::list(x.hw.bluetooth.iter().map(bluetooth_item).collect()),
         Category::Camera => Content::list(x.hw.cameras.iter().map(camera_item).collect()),
+        Category::CardReader => Content::list(x.hw.card_readers.iter().map(card_reader_item).collect()),
+        Category::Controller => Content::list(x.hw.scsi.iter().filter(|h| h.transport.is_empty()).map(scsi_item).collect()),
+        Category::Sas => Content::list(x.hw.sas_phys.iter().map(sas_item).collect()),
+        Category::FibreChannel => Content::list(x.hw.fc_ports.iter().map(fc_item).collect()),
+        Category::DiscBurning => Content::list(x.hw.optical.iter().map(optical_item).collect()),
+        Category::Diagnostics => Content::list(x.hw.diagnostics.iter().map(diagnostic_item).collect()),
         Category::Printers => Content::list(x.hw.printers.iter().map(printer_item).collect()),
         Category::Thunderbolt => Content::list(x.hw.thunderbolt.iter().map(thunderbolt_item).collect()),
         Category::Power => Content::list(r.power.iter().map(power_item).collect()),
@@ -370,6 +418,8 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
         Category::Volumes => Content::list(x.hw.volumes.iter().map(volume_item).collect()),
         Category::System => Content::card(system_rows(r, x)),
         Category::Apps => Content::list(r.apps.iter().map(|a| app_item(a, x)).collect()),
+        Category::Installations => Content::list(x.hw.installs.iter().map(install_item).collect()),
+        Category::PrinterSoftware => Content::list(x.hw.printer_drivers.iter().map(printer_driver_item).collect()),
         Category::Extensions => Content::card(x.modules.iter().map(|m| kv(m.name.clone(), format!("{} · used by {}", size_label(m.size_bytes, 1 << 10, "KB"), m.used_by))).collect()),
         Category::StartupItems => Content::card(x.startup.iter().map(|n| kv(n.clone(), "Opens at sign-in")).collect()),
         Category::Fonts => Content::card(x.hw.fonts.iter().map(|f| kv(f.name.clone(), font_line(f))).collect()),
@@ -475,9 +525,16 @@ fn processor_rows(r: &Report, x: &Extras) -> Vec<Row> {
     if cpu.packages > 1 {
         out.push(kv("Packages", cpu.packages.to_string()));
     }
+    if let Some((performance, efficiency)) = cpu.core_kinds {
+        out.push(kv("Performance cores", performance.to_string()));
+        out.push(kv("Efficiency cores", efficiency.to_string()));
+    }
     out.push(kv("Clock", clock_label(r.cpu.mhz)));
     if cpu.now_max_mhz > 0 && cpu.now_min_mhz != cpu.now_max_mhz {
         out.push(kv("Clock range now", format!("{} to {}", clock_label(cpu.now_min_mhz as f32), clock_label(cpu.now_max_mhz as f32))));
+    }
+    for (processor, mhz) in &cpu.core_clocks_mhz {
+        out.push(kv(format!("Processor {processor} clock"), clock_label(*mhz as f32)));
     }
     if cpu.rated_max_mhz > 0 {
         out.push(kv("Maximum clock", clock_label(cpu.rated_max_mhz as f32)));
@@ -617,17 +674,45 @@ fn usb_item(depth: usize, d: &UsbDevice, x: &Extras) -> Item {
     item(format!("{}{name}", "    ".repeat(depth)), summary, detail)
 }
 
-fn display_item(d: &Display) -> Item {
+fn display_item(d: &Display, screens: &[ScreenFacts]) -> Item {
     let state = match (d.connected, d.mode.is_empty()) {
         (false, _) => "Not connected".to_string(),
         (true, true) => "Connected".to_string(),
         (true, false) => format!("Connected · {}", d.mode),
     };
-    item(
-        d.connector.clone(),
-        state,
-        vec![kv("Connector", d.connector.clone()), kv("Status", if d.connected { "Connected" } else { "Not connected" }), kv("Mode", or_dash(&d.mode))],
-    )
+    let mut detail = vec![kv("Connector", d.connector.clone()), kv("Status", if d.connected { "Connected" } else { "Not connected" }), kv("Mode", or_dash(&d.mode))];
+    if let Some(screen) = screen_for(&d.connector, screens) {
+        if screen.refresh_hz > 0 {
+            detail.push(kv("Refresh rate", format!("{} Hz", screen.refresh_hz)));
+        }
+        if screen.scale_percent > 0 {
+            detail.push(kv("Scale", scale_label(screen.scale_percent)));
+        }
+    }
+    item(d.connector.clone(), state, detail)
+}
+
+/// The display service's entry for a connector. The service names a display by its own label, so the match is by name
+/// either way round (the connector "eDP-1" holds the label "eDP-1", or the label "Built-in" is part of it); a label
+/// that is empty matches nothing.
+pub fn screen_for<'a>(connector: &str, screens: &'a [ScreenFacts]) -> Option<&'a ScreenFacts> {
+    let connector = connector.to_lowercase();
+    screens.iter().find(|s| {
+        let name = s.name.trim().to_lowercase();
+        !name.is_empty() && (name == connector || connector.contains(&name) || name.contains(&connector))
+    })
+}
+
+/// A scale in percent as the desktop writes it: 200 is "2x", 125 is "1.25x", 150 is "1.5x".
+pub fn scale_label(percent: u32) -> String {
+    let (whole, part) = (percent / 100, percent % 100);
+    if part == 0 {
+        format!("{whole}x")
+    } else if part % 10 == 0 {
+        format!("{whole}.{}x", part / 10)
+    } else {
+        format!("{whole}.{part:02}x")
+    }
 }
 
 fn audio_item(c: &probe::AudioCard) -> Item {
@@ -656,6 +741,57 @@ fn bluetooth_item(c: &probe::BluetoothController) -> Item {
 fn camera_item(c: &probe::Camera) -> Item {
     let title = if c.name.is_empty() { c.node.clone() } else { c.name.clone() };
     item(title, format!("{} · {}", c.node, or_dash(&c.driver)), vec![kv("Name", or_dash(&c.name)), kv("Device node", c.node.clone()), kv("Driver", or_dash(&c.driver))])
+}
+
+fn card_reader_item(c: &probe::CardSlot) -> Item {
+    let title = if c.card.is_empty() { c.host.clone() } else { c.card.clone() };
+    let state = if c.card.is_empty() { "Empty slot" } else { "Card inserted" };
+    item(
+        title,
+        format!("{} · {state}", or_dash(&c.driver)),
+        vec![kv("Host", c.host.clone()), kv("Driver", or_dash(&c.driver)), kv("Card", or_dash(&c.card)), kv("Card type", or_dash(&c.kind)), kv("Manufacturer ID", or_dash(&c.manufacturer))],
+    )
+}
+
+fn scsi_item(h: &probe::ScsiHost) -> Item {
+    let title = if h.proc_name.is_empty() { h.name.clone() } else { h.proc_name.clone() };
+    item(title, format!("{} · {}", h.name, or_dash(&h.driver)), vec![kv("Host", h.name.clone()), kv("Driver", or_dash(&h.driver)), kv("Name", or_dash(&h.proc_name))])
+}
+
+fn sas_item(p: &probe::SasPhy) -> Item {
+    let link = if p.link_rate.is_empty() { "No link" } else { p.link_rate.as_str() };
+    item(p.name.clone(), format!("{link} · {}", or_dash(&p.device)), vec![kv("Phy", p.name.clone()), kv("Link rate", link), kv("Device", or_dash(&p.device)), kv("SAS address", or_dash(&p.address))])
+}
+
+fn fc_item(p: &probe::FcPort) -> Item {
+    let title = if p.symbolic.is_empty() { p.host.clone() } else { p.symbolic.clone() };
+    item(
+        title,
+        format!("{} · {}", or_dash(&p.state), or_dash(&p.speed)),
+        vec![
+            kv("Host", p.host.clone()),
+            kv("Port name", or_dash(&p.port_name)),
+            kv("Node name", or_dash(&p.node_name)),
+            kv("State", or_dash(&p.state)),
+            kv("Port type", or_dash(&p.port_type)),
+            kv("Speed", or_dash(&p.speed)),
+        ],
+    )
+}
+
+fn optical_item(o: &probe::OpticalDrive) -> Item {
+    let title = if o.model.is_empty() { o.device.clone() } else { o.model.clone() };
+    let media = if o.media_bytes == 0 { "No disc" } else { "Disc inserted" };
+    let size = if o.media_bytes == 0 { "—".to_string() } else { gb_label(o.media_bytes) };
+    item(
+        title,
+        format!("{} · {media}", o.device),
+        vec![kv("Device", format!("/dev/{}", o.device)), kv("Vendor", or_dash(&o.vendor)), kv("Model", or_dash(&o.model)), kv("Revision", or_dash(&o.revision)), kv("Media", media), kv("Disc size", size)],
+    )
+}
+
+fn diagnostic_item(d: &probe::DiagnosticReport) -> Item {
+    item(d.name.clone(), format!("{} · {}", bytes_label(d.bytes), day_label(d.day)), vec![kv("Name", d.name.clone()), kv("Size", bytes_label(d.bytes)), kv("Date", day_label(d.day))])
 }
 
 fn printer_item(p: &probe::Printer) -> Item {
@@ -754,6 +890,19 @@ fn app_item(a: &InstalledApp, x: &Extras) -> Item {
         format!("{} · {kind}", a.version),
         vec![kv("Name", name), kv("Identifier", a.id.clone()), kv("Version", a.version.clone()), kv("Kind", kind), kv("Installed", installed), kv("Package", package)],
     )
+}
+
+fn install_item(c: &probe::Installation) -> Item {
+    item(
+        c.package.clone(),
+        format!("{} · {}", capitalize(&c.action), c.when),
+        vec![kv("Package", c.package.clone()), kv("Action", capitalize(&c.action)), kv("Version", or_dash(&c.version)), kv("Date", c.when.clone())],
+    )
+}
+
+fn printer_driver_item(d: &probe::PrinterDriver) -> Item {
+    let title = if d.model.is_empty() { d.file.clone() } else { d.model.clone() };
+    item(title, or_dash(&d.manufacturer), vec![kv("Model", or_dash(&d.model)), kv("Manufacturer", or_dash(&d.manufacturer)), kv("File", d.file.clone())])
 }
 
 /// Which sidebar category an interface belongs to.
@@ -946,6 +1095,7 @@ mod tests {
         }
         assert_eq!(Category::from_index(ALL.len()), None);
         assert_eq!(in_section(Section::Network), vec![Category::Wifi, Category::Ethernet, Category::Wwan, Category::Firewall, Category::Volumes]);
+        assert_eq!(in_section(Section::Hardware).len(), 22, "every hardware class is listed under Hardware");
         assert_eq!(in_section(Section::Software)[0], Category::System);
         assert_eq!(in_section(Section::Software).last(), Some(&Category::Language));
     }
@@ -1013,9 +1163,14 @@ mod tests {
             now_min_mhz: 800,
             now_max_mhz: 3200,
             rated_max_mhz: 4200,
+            core_clocks_mhz: vec![(0, 3200), (1, 800)],
+            core_kinds: Some((2, 2)),
         };
         let rows = rows(Category::Processor, &r, &x);
         assert!(rows.contains(&kv("Physical cores", "4")));
+        assert!(rows.contains(&kv("Performance cores", "2")));
+        assert!(rows.contains(&kv("Efficiency cores", "2")));
+        assert!(rows.contains(&kv("Processor 1 clock", "800 MHz")));
         assert!(rows.contains(&kv("Logical processors", "8")));
         assert!(rows.contains(&kv("Clock range now", "800 MHz to 3.20 GHz")));
         assert!(rows.contains(&kv("Maximum clock", "4.20 GHz")));
@@ -1221,9 +1376,99 @@ mod tests {
     }
 
     #[test]
+    fn displays_show_the_refresh_rate_and_scale_the_service_reports() {
+        let mut r = Report::default();
+        r.displays = vec![Display { connector: "eDP-1".into(), connected: true, mode: "2880x1800".into() }, Display { connector: "HDMI-A-1".into(), connected: false, mode: String::new() }];
+        let mut x = Extras::default();
+        x.screens = vec![ScreenFacts::new("eDP-1", 120.0, 2.0)];
+        let c = content(Category::Displays, &r, &x);
+        assert!(c.items[0].detail.contains(&kv("Refresh rate", "120 Hz")));
+        assert!(c.items[0].detail.contains(&kv("Scale", "2x")));
+        assert!(!c.items[1].detail.iter().any(|(k, _)| k == "Scale"), "a display the service did not list gets no scale");
+    }
+
+    #[test]
+    fn scale_labels_read_as_the_desktop_writes_them() {
+        assert_eq!(scale_label(100), "1x");
+        assert_eq!(scale_label(200), "2x");
+        assert_eq!(scale_label(125), "1.25x");
+        assert_eq!(scale_label(150), "1.5x");
+    }
+
+    #[test]
+    fn a_screen_matches_its_connector_by_name_and_an_empty_name_matches_nothing() {
+        let screens = [ScreenFacts::new("", 60.0, 1.0), ScreenFacts::new("Built-in", 60.0, 1.0)];
+        assert!(screen_for("eDP-1", &screens).is_none());
+        let screens = [ScreenFacts::new("eDP-1", 144.0, 1.0)];
+        assert_eq!(screen_for("eDP-1", &screens).map(|s| s.refresh_hz), Some(144));
+        assert_eq!(screen_for("edp-1", &screens).map(|s| s.refresh_hz), Some(144), "case does not matter");
+    }
+
+    #[test]
+    fn the_new_hardware_classes_list_their_devices() {
+        let mut x = Extras::default();
+        x.hw.card_readers = vec![probe::CardSlot { host: "mmc0".into(), driver: "sdhci".into(), card: "SD64G".into(), kind: "SD".into(), manufacturer: "0x03".into() }, probe::CardSlot { host: "mmc1".into(), ..Default::default() }];
+        x.hw.scsi = vec![probe::ScsiHost { name: "host0".into(), proc_name: "ahci".into(), ..Default::default() }, probe::ScsiHost { name: "host1".into(), proc_name: "mpt3sas".into(), transport: "SAS".into(), ..Default::default() }];
+        x.hw.sas_phys = vec![probe::SasPhy { name: "phy-1:0".into(), link_rate: "6.0 Gbit".into(), device: "end device".into(), address: "0x5000".into() }];
+        x.hw.fc_ports = vec![probe::FcPort { host: "host2".into(), symbolic: "HBA 1".into(), state: "Online".into(), speed: "8 Gbit".into(), ..Default::default() }];
+        x.hw.optical = vec![probe::OpticalDrive { device: "sr0".into(), model: "DVD-RW".into(), media_bytes: 4_700_000_000, ..Default::default() }];
+        x.hw.diagnostics = vec![probe::DiagnosticReport { name: "core.app.1".into(), bytes: 2048, day: 20_000 }];
+
+        let slots = content(Category::CardReader, &Report::default(), &x);
+        assert_eq!(slots.items[0].title, "SD64G", "a card is named by the card");
+        assert_eq!(slots.items[1].title, "mmc1", "an empty slot is named by its host");
+        assert!(slots.items[1].summary.ends_with("Empty slot"));
+
+        let controllers = content(Category::Controller, &Report::default(), &x);
+        assert_eq!(controllers.items.len(), 1, "the SAS adapter lists under SAS, not here");
+        assert_eq!(controllers.items[0].title, "ahci");
+        assert_eq!(content(Category::Sas, &Report::default(), &x).items[0].summary, "6.0 Gbit · end device");
+        assert_eq!(content(Category::FibreChannel, &Report::default(), &x).items[0].title, "HBA 1");
+
+        let discs = content(Category::DiscBurning, &Report::default(), &x);
+        assert!(discs.items[0].detail.contains(&kv("Media", "Disc inserted")));
+        assert!(discs.items[0].detail.contains(&kv("Disc size", "4.7 GB")));
+
+        let reports = content(Category::Diagnostics, &Report::default(), &x);
+        assert_eq!(reports.items[0].title, "core.app.1");
+        assert_eq!(reports.items[0].detail.last(), Some(&kv("Date", "2024-10-04")));
+    }
+
+    #[test]
+    fn installations_and_printer_drivers_list_from_the_logs_and_files() {
+        let mut x = Extras::default();
+        x.hw.installs = vec![probe::Installation { when: "2026-10-02 09:30".into(), action: "removed".into(), package: "bar".into(), version: "0.9-2".into() }];
+        x.hw.printer_drivers = vec![probe::PrinterDriver { file: "hp4.ppd".into(), manufacturer: "HP".into(), model: "HP LaserJet 4".into() }, probe::PrinterDriver { file: "x.ppd".into(), ..Default::default() }];
+        let installs = content(Category::Installations, &Report::default(), &x);
+        assert_eq!(installs.items[0].title, "bar");
+        assert_eq!(installs.items[0].summary, "Removed · 2026-10-02 09:30");
+        assert!(installs.items[0].detail.contains(&kv("Action", "Removed")));
+        let printers = content(Category::PrinterSoftware, &Report::default(), &x);
+        assert_eq!(printers.items[0].title, "HP LaserJet 4");
+        assert_eq!(printers.items[1].title, "x.ppd", "a driver without a model is named by its file");
+        assert_eq!(in_section(Section::Software).len(), 9);
+    }
+
+    #[test]
     fn hardware_default_leaves_every_hardware_list_empty() {
         let x = Extras { hw: Hardware::default(), ..Default::default() };
-        for c in [Category::Audio, Category::Bluetooth, Category::Camera, Category::Printers, Category::Thunderbolt, Category::Nvme, Category::Sata, Category::Volumes, Category::Wifi] {
+        for c in [
+            Category::Audio,
+            Category::Bluetooth,
+            Category::Camera,
+            Category::CardReader,
+            Category::Controller,
+            Category::Printers,
+            Category::Thunderbolt,
+            Category::Nvme,
+            Category::Sata,
+            Category::Sas,
+            Category::FibreChannel,
+            Category::DiscBurning,
+            Category::Diagnostics,
+            Category::Volumes,
+            Category::Wifi,
+        ] {
             assert!(content(c, &Report::default(), &x).empty, "{:?}", c);
         }
     }

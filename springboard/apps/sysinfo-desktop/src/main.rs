@@ -16,12 +16,14 @@ mod window;
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::proto::{AnnouncePriority, DocErrorCode, DocMode};
+use bifrost_app::displays;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_core::json::Json;
 use export::Format;
 use std::io::{Read, Write};
 use window::{
-    Focus, PendingExport, SysInfo, Target, COLLAPSED_KEY, MENU_CLEAR_RECENTS, MENU_COPY, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREVIOUS, MENU_HELP, MENU_LESS, MENU_NEXT_CATEGORY, MENU_OPEN,
-    MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, STEP_PT,
+    Focus, PendingExport, SysInfo, Target, COLLAPSED_KEY, MENU_CLEAR_RECENTS, MENU_COPY, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREVIOUS, MENU_HELP, MENU_JUMP_SELECTION, MENU_LESS, MENU_NEXT_CATEGORY, MENU_OPEN,
+    MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, MENU_USE_SELECTION, STEP_PT,
 };
 
 /// The help page the Help menu opens.
@@ -42,6 +44,7 @@ impl App for SysInfo {
             self.load_recents(ctx.defaults().string(recents::KEY));
             self.start_load();
         }
+        self.sync(ctx);
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -79,6 +82,8 @@ impl App for SysInfo {
                     AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
                     AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(finding),
                     AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(finding),
+                    AppMenuItem::new(MENU_USE_SELECTION, "Use Selection for Find").key("cmd+e").enabled(self.selection_text().is_some()),
+                    AppMenuItem::new(MENU_JUMP_SELECTION, "Jump to Selection").key("cmd+j").enabled(self.can_jump()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_SPEAK, "Speak Serial Number"),
                 ],
@@ -146,6 +151,35 @@ impl App for SysInfo {
         self.poll_load(t)
     }
 
+    /// The display list the display service answered with: the refresh rate and scale of each display.
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.screens_request != Some(request) {
+            return false;
+        }
+        self.screens_request = None;
+        let changed = match displays::decode_list(result) {
+            Ok(list) => {
+                self.set_screens(&list);
+                true
+            }
+            Err(e) => {
+                ctx.log(&format!("displays: {e}"));
+                false
+            }
+        };
+        self.sync(ctx);
+        changed
+    }
+
+    /// The display service says the displays changed: the list is asked for again.
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, _body: &Json) -> bool {
+        if service == displays::SERVICE && event == displays::RECONFIGURED {
+            self.screens_stale = true;
+            self.sync(ctx);
+        }
+        false
+    }
+
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.is_loading().then_some(t + 50.0)
     }
@@ -174,6 +208,10 @@ impl SysInfo {
         if wanted != self.keyboard_wanted {
             ctx.wants_keyboard(wanted);
             self.keyboard_wanted = wanted;
+        }
+        if self.screens_stale && self.screens_request.is_none() {
+            self.screens_request = Some(displays::list(ctx, displays::Kind::Active));
+            self.screens_stale = false;
         }
     }
 
@@ -303,6 +341,8 @@ impl SysInfo {
             MENU_FIND => self.begin_find(),
             MENU_FIND_NEXT => self.find_step(true),
             MENU_FIND_PREVIOUS => self.find_step(false),
+            MENU_USE_SELECTION => self.use_selection_for_find(),
+            MENU_JUMP_SELECTION => self.jump_to_selection(),
             MENU_SPEAK => {
                 let text = self.serial_speech().unwrap_or_else(|| "No serial number is available".to_string());
                 ctx.announce(&text, AnnouncePriority::High);
