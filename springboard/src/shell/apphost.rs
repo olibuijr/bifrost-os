@@ -905,7 +905,10 @@ impl AppHost {
                 }
             }
             ToShell::SuddenTermination { enabled } => self.sudden = enabled,
-            ToShell::Activity { options } => self.activity = options,
+            ToShell::Activity { options } => {
+                self.activity = options;
+                crate::bare::sleep::note_app_activity(&self.id, options);
+            }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},
@@ -1156,6 +1159,7 @@ pub fn thumbnail(route: Route, has_frame: bool, capture_ready: bool) -> Thumb {
 impl Drop for AppHost {
     fn drop(&mut self) {
         self.kill();
+        crate::bare::sleep::forget_app(&self.id);
     }
 }
 
