@@ -461,7 +461,8 @@ mod tests {
         assert_eq!(details(&prefs, &photos[0].path).keywords, keywords(&["Beach"]));
         assert_eq!(details(&prefs, &photos[1].path).keywords, keywords(&["beach", "family"]));
         // an empty name deletes the keyword everywhere
-        set(&mut prefs, &rename_keyword_writes(&prefs, &photos, "beach", ""));
+        let deletes = rename_keyword_writes(&prefs, &photos, "beach", "");
+        set(&mut prefs, &deletes);
         assert_eq!(keyword_counts(&prefs, &photos), [("family".to_string(), 1)]);
         // adding skips the photos that have it
         let adds = add_keyword_writes(&prefs, &photos, "Family, friends");

@@ -71,7 +71,7 @@ impl Shell {
         }
         let at = self.term.active_index();
         let dir = self.term.as_ref().and_then(|tab| tab.cwd());
-        if self.new_terminal_tab(dir) {
+        if self.spawn_terminal_tab(self.term_cmd, dir) {
             let new = self.term.len() - 1;
             self.term.set_split(Some((at, new)));
             self.terminal_close_panel(t);

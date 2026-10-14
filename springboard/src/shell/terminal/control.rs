@@ -138,7 +138,6 @@ impl Shell {
                 let name = arg(args, "name").ok_or("name is required")?;
                 let theme = profile_index(name).ok_or_else(|| format!("unknown profile {name:?}; see state"))?;
                 self.terminal_ui.settings.theme = theme;
-                self.terminal_ui.profile = None;
                 self.terminal_appearance();
                 self.dirty = true;
                 Ok(format!("ok profile={}\n", pct_encode(termcore::palette::THEMES[theme].name)))

@@ -26,28 +26,22 @@ use termcore::{
 use std::{fs, path::PathBuf};
 
 pub mod layout;
-mod colors;
 mod command;
+mod extras;
 mod split;
 mod control;
 mod find;
 mod groups;
-mod help;
 mod input;
-mod launch;
 mod links;
-mod marks;
 mod menus;
-mod panels;
 #[allow(dead_code)]
 pub mod profile_table;
 mod profiles;
 mod selection;
 mod session;
 mod ssh;
-mod startup;
 mod tabs;
-mod title;
 mod view;
 mod window;
 #[cfg(test)]
@@ -61,9 +55,7 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-/// Height of one line of the help page.
-const HELP_PITCH: f32 = 30.0;
-const MENU: [&str; 51] = [
+const MENU: [&str; 34] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -88,68 +80,17 @@ const MENU: [&str; 51] = [
     "Close split pane",
     "Save window group",
     "Open window group",
-    "Edit tab title",
     "Close other tabs",
-    "Move tab left",
-    "Move tab right",
-    "Mark line",
-    "Previous mark",
-    "Next mark",
-    "Use selection for find",
     "Paste escaped text",
     "Paste selection",
+    "Terminal help",
+    "Edit title",
+    "Allow mouse reporting",
     "Search the web for selection",
     "Open man page for selection",
-    "Save selection to Files",
-    "Allow mouse reporting",
-    "Login shell",
-    "Open window group at launch",
-    "Terminal help",
-    "Text and background colors",
-    "Ignore case when finding",
-    "Wrap around when finding",
-    "Look up selection",
-    "Search man pages for selection",
-    "Profiles",
-    "Startup command",
-    "Show all tabs",
-    "Export scrollback as",
-    "Save selection as",
+    "Save selected text to Files",
+    "Use selection for find",
 ];
-/// More-menu rows added after the first 24; `terminal_menu_action` and the row details match on these.
-pub(crate) mod item {
-    pub const TITLE: usize = 24;
-    pub const CLOSE_OTHERS: usize = 25;
-    pub const MOVE_LEFT: usize = 26;
-    pub const MOVE_RIGHT: usize = 27;
-    pub const MARK: usize = 28;
-    pub const PREVIOUS_MARK: usize = 29;
-    pub const NEXT_MARK: usize = 30;
-    pub const FIND_SELECTION: usize = 31;
-    pub const PASTE_ESCAPED: usize = 32;
-    pub const PASTE_SELECTION: usize = 33;
-    pub const SEARCH_WEB: usize = 34;
-    pub const MAN_PAGE: usize = 35;
-    pub const SAVE_SELECTION: usize = 36;
-    pub const MOUSE: usize = 37;
-    pub const LOGIN_SHELL: usize = 38;
-    pub const GROUP_LAUNCH: usize = 39;
-    pub const HELP: usize = 40;
-    pub const COLORS: usize = 41;
-    pub const IGNORE_CASE: usize = 42;
-    pub const WRAP: usize = 43;
-    pub const LOOK_UP: usize = 44;
-    pub const MAN_SEARCH: usize = 45;
-    pub const PROFILES: usize = 46;
-    pub const STARTUP: usize = 47;
-    pub const ALL_TABS: usize = 48;
-    pub const EXPORT: usize = 49;
-    pub const EXPORT_SELECTION: usize = 50;
-    /// the rows the menu bar names by index (their More-menu positions)
-    pub const NEW_COMMAND: usize = 19;
-    pub const SAVE_GROUP: usize = 22;
-    pub const OPEN_GROUP: usize = 23;
-}
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
     message.split_once(" of ").is_some_and(|(a, b)| a.parse::<usize>().is_ok() && b.parse::<usize>().is_ok())
@@ -162,11 +103,8 @@ fn menu_key(i: usize) -> Option<&'static str> {
         2 => "\u{2318}+",
         7 => "\u{2318}A",
         8 => "\u{2318}C",
+        33 => "\u{2318}E",
         11 => "\u{2318}K",
-        item::MARK => "\u{2318}U",
-        item::PREVIOUS_MARK => "\u{2318}\u{2191}",
-        item::NEXT_MARK => "\u{2318}\u{2193}",
-        item::FIND_SELECTION => "\u{2318}E",
         _ => return None,
     })
 }
@@ -181,26 +119,6 @@ pub enum Panel {
     More,
     /// New command: a line typed here runs in a new tab that closes when the command ends
     Command,
-    /// Edit tab title: a name for the active tab
-    Title,
-    /// Login shell: the program new tabs run
-    Shell,
-    /// Terminal help: the keys and gestures
-    Help,
-    /// Text and background colors: the Custom entry of the Color theme cycle
-    Colors,
-    /// Profiles: every colour theme and profile, one tap each
-    Profiles,
-    /// Window groups: the saved groups, opened by a tap and deleted from their cross
-    Groups,
-    /// All tabs: a list of the open tabs, one tap to show one
-    Tabs,
-    /// Startup command: a line run in the first tab when the Terminal starts
-    Startup,
-    /// Save window group: the name of the group the open tabs are saved as
-    GroupName,
-    /// Export text as: the file name for the scrollback or the selection
-    Export,
 }
 pub struct TerminalUi {
     pub settings: Settings,
@@ -236,33 +154,10 @@ pub struct TerminalUi {
     pub secure: bool,
     /// the command line of the New command panel
     command: Option<TextField>,
-    /// the line of the Edit tab title and Login shell panels (one is open at a time)
-    entry: Option<TextField>,
-    /// programs that ask for mouse reports get them (More menu row; saved in prefs)
+    /// the command panel is editing the tab title instead of running a line
+    title_edit: bool,
+    /// View > Allow Mouse Reporting (saved in prefs)
     pub mouse_reporting: bool,
-    /// the shell new tabs run; None is the account's login shell
-    pub login_shell: Option<String>,
-    /// the saved window group opens when the Terminal starts
-    pub group_launch: bool,
-    /// the colour profile after Basic in use (an index into `profile_table::PROFILES`, or past them the custom colours);
-    /// None draws the numbered theme
-    pub profile: Option<usize>,
-    /// the user's own text and background colours (the Custom entry of the Color theme cycle)
-    pub custom_colors: Option<(termcore::palette::Rgb, termcore::palette::Rgb)>,
-    /// Close other tabs named running programs and waits for a second choice
-    confirm_others: bool,
-    /// the Find bar ignores letter case (More and Edit menu rows; saved in prefs)
-    pub find_ignore_case: bool,
-    /// the Find bar goes round the ends of the scrollback (More and Edit menu rows; saved in prefs)
-    pub find_wrap: bool,
-    /// the command typed to run in the first tab when the Terminal starts
-    pub startup_command: Option<String>,
-    /// the group whose cross was tapped once (a second tap deletes it)
-    group_delete: Option<usize>,
-    /// the tab a finger is dragging along the tab bar
-    tab_drag: Option<usize>,
-    /// the text and file name stem of an export waiting for its name (Export as, Save selection as)
-    export: Option<(String, String)>,
 }
 impl Default for TerminalUi {
     fn default() -> Self {
@@ -296,19 +191,8 @@ impl Default for TerminalUi {
             blink: false,
             secure: false,
             command: None,
-            entry: None,
+            title_edit: false,
             mouse_reporting: true,
-            login_shell: None,
-            group_launch: false,
-            profile: None,
-            custom_colors: None,
-            confirm_others: false,
-            find_ignore_case: true,
-            find_wrap: true,
-            startup_command: None,
-            group_delete: None,
-            tab_drag: None,
-            export: None,
         }
     }
 }
@@ -329,18 +213,7 @@ impl TerminalUi {
         self.cursor = profile_table::CursorStyle::from_key(prefs.get("terminal.cursor"));
         self.blink = prefs.get("terminal.blink") == Some("1");
         self.secure = prefs.get("terminal.secure_input") == Some("1");
-        self.mouse_reporting = prefs.get("terminal.mouse") != Some("0");
-        self.login_shell = prefs.get(startup::SHELL_KEY).filter(|path| !path.is_empty()).map(str::to_string);
-        self.group_launch = prefs.get(startup::LAUNCH_KEY) == Some("1");
-        self.custom_colors = prefs.get(colors::KEY).and_then(|value| colors::parse_colors(value).ok().flatten());
-        let known = profile_table::PROFILES.len() + usize::from(self.custom_colors.is_some());
-        let saved = prefs
-            .get("terminal.profile")
-            .and_then(|value| value.parse::<usize>().ok());
-        self.profile = profiles::startup_profile(prefs.get(profiles::DEFAULT_KEY), saved, known);
-        self.find_ignore_case = prefs.get(panels::IGNORE_CASE_KEY) != Some("0");
-        self.find_wrap = prefs.get(panels::WRAP_KEY) != Some("0");
-        self.startup_command = prefs.get(startup::COMMAND_KEY).filter(|c| !c.trim().is_empty()).map(str::to_string);
+        self.mouse_reporting = prefs.get("terminal.mouse_reporting") != Some("0");
     }
     pub fn next_wake(&self) -> Option<f64> {
         Some(if self.panel == Panel::Processes {

@@ -166,8 +166,6 @@ impl Shell {
                         self.terminal_ui.cpu_sort = false;
                         self.terminal_ui.scroll = 0.0;
                     }
-                } else if ly >= h - 56.0 && lx < 136.0 {
-                    self.terminal_open_title(t);
                 } else if ly >= h - 56.0 {
                     if let Some(p) = self
                         .terminal_ui
@@ -220,49 +218,6 @@ impl Shell {
                     self.terminal_run_command(t);
                 } else if ly >= 44.0 && ly < h - 56.0 {
                     self.set_keyboard(true, t);
-                }
-            }
-            Panel::Title | Panel::Shell | Panel::Colors | Panel::Startup | Panel::GroupName | Panel::Export => {
-                if ly < 44.0 && lx >= w - 44.0 {
-                    self.terminal_ui.entry = None;
-                    self.terminal_close_panel(t);
-                } else if ly >= h - 56.0 && lx >= w - 120.0 {
-                    self.terminal_apply_entry(t);
-                } else if ly >= 44.0 && ly < h - 56.0 {
-                    self.set_keyboard(true, t);
-                }
-            }
-            Panel::Profiles => {
-                if ly < 44.0 && lx >= w - 80.0 {
-                    self.terminal_close_panel(t);
-                } else if ly >= h - 56.0 && lx >= w - 170.0 {
-                    self.terminal_set_default_profile();
-                } else if ly >= 44.0 && ly < h - 56.0 {
-                    let i = ((ly - 44.0 + self.terminal_ui.scroll / self.ui.s) / 44.0) as usize;
-                    if let Some(choice) = self.terminal_profile_choices().get(i).copied() {
-                        self.terminal_apply_choice(choice);
-                    }
-                }
-            }
-            Panel::Groups => {
-                if ly < 44.0 && lx >= w - 80.0 {
-                    self.terminal_close_panel(t);
-                } else if ly >= 44.0 && ly < h - 56.0 {
-                    let i = ((ly - 44.0 + self.terminal_ui.scroll / self.ui.s) / 44.0) as usize;
-                    self.terminal_group_tapped(i, lx >= w - 56.0, t);
-                }
-            }
-            Panel::Tabs => {
-                if ly < 44.0 && lx >= w - 80.0 {
-                    self.terminal_close_panel(t);
-                } else if ly >= 44.0 && ly < h - 56.0 {
-                    let i = ((ly - 44.0 + self.terminal_ui.scroll / self.ui.s) / 44.0) as usize;
-                    self.terminal_show_tab(i, t);
-                }
-            }
-            Panel::Help => {
-                if ly < 44.0 && lx >= w - 80.0 {
-                    self.terminal_close_panel(t);
                 }
             }
             Panel::More => {

@@ -36,7 +36,7 @@ fn builtin(app: AppId, icon: &str) -> Option<Handler> {
         AppId::Photos => h.opens("public.png", Rank::Owner).opens("public.jpeg", Rank::Owner).scheme("photos"),
         AppId::Files => h.opens("public.folder", Rank::Owner).opens("public.text", Rank::Alternate).opens("public.png", Rank::Alternate).opens("public.jpeg", Rank::Alternate).opens("public.audio", Rank::Alternate).opens("public.movie", Rank::Alternate),
         AppId::Browser => h.opens("public.html", Rank::Owner).opens("public.xml", Rank::Alternate).scheme("http").scheme("https"),
-        AppId::Terminal => h.opens("public.shell-script", Rank::Alternate).opens("public.plain-text", Rank::None).scheme("ssh").scheme("telnet").scheme("x-man-page"),
+        AppId::Terminal => h.opens("public.shell-script", Rank::Alternate).opens("public.plain-text", Rank::None),
         AppId::Deildu => h.opens("public.movie", Rank::Alternate),
         _ => return None,
     })
@@ -291,19 +291,6 @@ mod tests {
         let saved = sh.prefs.get(PREF).unwrap().to_string();
         let again = registry(Some(&saved));
         assert_eq!(again.default_for_file("a.jpeg"), Some("bifrost.files"));
-    }
-
-    #[test]
-    fn the_terminal_owns_ssh_telnet_and_manual_page_links() {
-        use crate::shell::workspace::{route_url, Route};
-        let mut r = Registry::new();
-        r.register(builtin(AppId::Terminal, "is.olibuijr.term").unwrap());
-        for scheme in ["ssh", "telnet", "x-man-page", "SSH"] {
-            assert_eq!(r.default_for_scheme(scheme), Some("is.olibuijr.term"), "{scheme}");
-        }
-        assert_eq!(r.default_for_scheme("https"), None);
-        assert_eq!(route_url(&r, "ssh://me@host"), Route::App("is.olibuijr.term".into()));
-        assert_eq!(route_url(&r, "x-man-page://1/ls"), Route::App("is.olibuijr.term".into()));
     }
 
     #[test]

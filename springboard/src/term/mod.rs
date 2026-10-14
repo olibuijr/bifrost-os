@@ -3,7 +3,6 @@
 
 pub(crate) mod identity;
 pub mod control;
-mod marks;
 mod pty;
 mod render;
 mod sessions;
@@ -11,14 +10,12 @@ pub mod process;
 pub use sessions::Sessions;
 
 use crate::font::Font;
-use crate::gfx::{pack, rgba, Image, Surface};
+use crate::gfx::{rgba, Image, Surface};
 use termcore::cell::{attr, Cell};
 use termcore::damage::{row_hash, with_shape, RowCache};
 use termcore::keys::{encode, Key, Mods};
 pub use termcore::select::Selection;
-use termcore::palette::Theme;
 use termcore::term::{CursorShape, Term};
-use marks::Marks;
 use pty::Pty;
 use render::{paint_row, px, Cursor, GlyphCache, Metrics, THEME};
 use std::ffi::c_int;
@@ -116,43 +113,9 @@ fn shape_code(s: CursorShape) -> u8 {
     }
 }
 
-/// Mixed into a row's damage code while it carries a mark, so setting or losing a mark repaints the row.
-const MARKED: u8 = 0x40;
-
-/// The mark tick in the left margin of a marked row: the shell's accent green.
-const MARK: u32 = pack(42, 166, 106, 255);
-
-/// Draws the tick for grid row `row` into the margin left of the text (at most three pixels wide).
-fn paint_mark(canvas: &mut Image, m: &Metrics, row: usize, last: bool) {
-    let top = if row == 0 { 0 } else { m.pad + row as i32 * m.ch };
-    let bottom = if last { canvas.h as i32 } else { m.pad + (row as i32 + 1) * m.ch };
-    let width = m.pad.clamp(1, 3) as usize;
-    for y in top.max(0) as usize..(bottom.max(0) as usize).min(canvas.h) {
-        let start = y * canvas.w;
-        canvas.px[start..start + width.min(canvas.w)].fill(MARK);
-    }
-}
-
-/// The text a user-typed tab title keeps: control characters dropped, outer blanks trimmed, at most 64 characters.
-/// None when nothing is left, which puts the program's own title back.
-pub fn clean_title(typed: &str) -> Option<String> {
-    let title: String = typed.chars().filter(|c| !c.is_control()).collect::<String>().trim().chars().take(64).collect();
-    (!title.is_empty()).then_some(title)
-}
-
 /// The terminal background pixel, for chrome around the grid.
 pub fn background() -> u32 {
     px(THEME.bg)
-}
-
-/// The theme a session draws with: its profile's colours when it has them, else the numbered theme.
-fn scheme(profile: &Option<Theme>, index: usize) -> &Theme {
-    profile.as_ref().unwrap_or(&termcore::palette::THEMES[index])
-}
-
-/// The opaque pixel of an emulator colour, for chrome around the grid.
-pub fn color_pixel(c: termcore::palette::Rgb) -> u32 {
-    px(c)
 }
 
 /// The background pixel of theme `i`, for chrome around the grid.
@@ -171,8 +134,6 @@ pub struct Terminal {
     pty: Pty,
     font_data: &'static [u8],
     theme: usize,
-    /// colours from a profile, drawn instead of `theme`'s (the theme still decides nothing but the fallback)
-    profile: Option<Theme>,
     pub unread: bool,
     /// the program rang the bell while this tab was not on screen (cleared when it is)
     pub bell: bool,
@@ -193,28 +154,10 @@ pub struct Terminal {
     /// the profile blinks the caret; `blink_on` is the phase the shell last set
     blink: bool,
     blink_on: bool,
-    /// the lines where a prompt started or the user set a mark (see `marks`)
-    marks: Marks,
-    /// the last bytes of the previous read, so a prompt report split between two reads is still seen
-    osc_carry: Vec<u8>,
-    /// scrollback lines this session keeps; marks are kept until the scrollback is full
-    history: usize,
-    /// a title the user typed for the tab (Edit Title); it replaces the program's title
+    /// a title the user typed (Edit Title); it replaces the program's title and the job name
     custom_title: Option<String>,
-    /// programs that ask for mouse reports get them; off, clicks and the wheel stay with the terminal
+    /// View > Allow Mouse Reporting: when off, programs get no mouse or wheel reports
     mouse_reporting: bool,
-}
-
-/// Most matches a case-sensitive search passes over before it reports none.
-const MAX_CASE_SKIPS: usize = 256;
-
-/// Whether `hit` is not past `from` in the search direction, so the search went round the end of the scrollback (a
-/// search from a match only finds matches beyond it, so the match itself counts as wrapped).
-fn wrapped(from: termcore::search::Match, hit: termcore::search::Match, dir: termcore::search::Direction) -> bool {
-    match dir {
-        termcore::search::Direction::Newer => (hit.line, hit.start) <= (from.line, from.start),
-        termcore::search::Direction::Older => (hit.line, hit.start) >= (from.line, from.start),
-    }
 }
 
 /// Half a blink period of the caret, in milliseconds (on for one half, off for the next).
@@ -251,10 +194,9 @@ impl Terminal {
             _ => argv,
         };
         let pty = Pty::spawn(argv, &env, cols as u16, rows as u16, login.as_ref())?;
-        let history = history_lines();
-        let mut term = Term::new(cols, rows, history);
+        let mut term = Term::new(cols, rows, history_lines());
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, profile: None, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, marks: Marks::default(), osc_carry: Vec::new(), history, custom_title: None, mouse_reporting: true })
+        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, custom_title: None, mouse_reporting: true })
     }
 
     /// The px rect the terminal occupies.
@@ -316,11 +258,6 @@ impl Terminal {
         true
     }
 
-    /// Whether a program asked for drags (?1002 or ?1003) and this session passes mouse reports on.
-    pub fn reports_drag(&self) -> bool {
-        self.mouse_reporting && self.term.mouse_mode().reports(termcore::mouse::MouseEvent::Drag)
-    }
-
     /// Types `text` into the shell as a paste (bracketed when enabled).
     pub fn paste(&mut self, text: &str) {
         let bytes = paste_bytes(text, self.term.bracketed_paste());
@@ -337,7 +274,6 @@ impl Terminal {
         let background = self.background();
         self.canvas.px.fill(background);
         self.selection = None;
-        self.marks.forget_from(self.term.line_count());
         self.damage.invalidate_all(rows);
         self.area = area;
     }
@@ -362,7 +298,7 @@ impl Terminal {
             match self.pty.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    self.advance_marked(&buf[..n]);
+                    self.term.advance(&buf[..n]);
                     fed += n;
                     changed = true;
                 }
@@ -426,19 +362,13 @@ impl Terminal {
         let (cx, cy) = self.term.cursor();
         let (show, shape) = self.cursor_state();
         let cols = self.term.cols();
-        let rows = self.term.rows();
-        let mark_rows = self.mark_rows();
         let mut changed = Vec::new();
-        for y in 0..rows {
+        for y in 0..self.term.rows() {
             let cells = self.term.visible_row(y);
             let cursor = (show && y == cy).then(|| Cursor { col: cx.min(cols - 1), shape });
-            let marked = mark_rows[y];
-            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape) | if marked { MARKED } else { 0 });
+            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape));
             if self.damage.update(y, hash) {
-                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, scheme(&self.profile, self.theme)), y, cells, cols, cursor);
-                if marked {
-                    paint_mark(&mut self.canvas, &self.metrics, y, y + 1 == rows);
-                }
+                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
                 changed.push(y);
             }
         }
@@ -467,7 +397,7 @@ impl Terminal {
     /// Feeds bytes as if the child wrote them.
     #[cfg(any(test, feature = "testkit"))]
     pub fn feed(&mut self, bytes: &[u8]) {
-        self.advance_marked(bytes);
+        self.term.advance(bytes);
     }
 
     /// Sets the profile caret: `shape` replaces the default block (None keeps the program's choice) and `blink`
@@ -503,18 +433,12 @@ impl Terminal {
         let (cx, cy) = self.term.cursor();
         let (show, shape) = self.cursor_state();
         let cols = self.term.cols();
-        let rows = self.term.rows();
-        let mark_rows = self.mark_rows();
-        for y in 0..rows {
+        for y in 0..self.term.rows() {
             let cells = self.term.visible_row(y);
             let cursor = (show && y == cy).then(|| Cursor { col: cx.min(cols - 1), shape });
-            let marked = mark_rows[y];
-            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape) | if marked { MARKED } else { 0 });
+            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape));
             if self.damage.update(y, hash) {
-                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, scheme(&self.profile, self.theme)), y, cells, cols, cursor);
-                if marked {
-                    paint_mark(&mut self.canvas, &self.metrics, y, y + 1 == rows);
-                }
+                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
             }
         }
         s.copy(self.canvas.view(), self.area.0, self.area.1);
@@ -538,7 +462,7 @@ impl Terminal {
         }
     }
 
-    pub fn background(&self) -> u32 { px(scheme(&self.profile, self.theme).bg) }
+    pub fn background(&self) -> u32 { px(termcore::palette::THEMES[self.theme].bg) }
 
     /// Tab caption: the title the program set, else the running job's name, else `shell N`.
     pub fn title(&self, index: usize) -> String {
@@ -548,21 +472,30 @@ impl Terminal {
         termcore::tabs::label(self.term.title(), self.job().as_deref(), index as u32 + 1)
     }
 
+    /// Sets the tab title the user typed; blank text goes back to the automatic title.
+    pub fn set_custom_title(&mut self, title: &str) {
+        let title = title.trim();
+        self.custom_title = (!title.is_empty()).then(|| title.chars().take(64).collect());
+    }
+
+    pub fn has_custom_title(&self) -> bool {
+        self.custom_title.is_some()
+    }
+
+    /// Turns mouse and wheel reports to the running program on or off.
+    pub fn set_mouse_reporting(&mut self, on: bool) {
+        self.mouse_reporting = on;
+    }
+
     /// The job running in the foreground ("vim"), None at the prompt.
     pub fn job(&self) -> Option<String> {
         self.pty.job()
     }
 
     pub fn appearance(&mut self, theme: usize, px_size: f32) {
-        self.appearance_with(theme, None, px_size);
-    }
-
-    /// Like `appearance`, with the colours of `profile` in place of the theme's when there is one.
-    pub fn appearance_with(&mut self, theme: usize, profile: Option<Theme>, px_size: f32) {
         self.theme = theme.min(termcore::palette::THEMES.len() - 1);
-        self.profile = profile;
-        let colours = scheme(&self.profile, self.theme);
-        self.term.set_default_colors(colours.fg, colours.bg);
+        let theme = &termcore::palette::THEMES[self.theme];
+        self.term.set_default_colors(theme.fg, theme.bg);
         let font = Font::parse(self.font_data).expect("validated terminal font");
         self.metrics = Metrics::new(&font, px_size);
         self.glyphs = GlyphCache::new(font, px_size);
@@ -570,15 +503,9 @@ impl Terminal {
     }
 
     pub fn find(&mut self, query: &str, dir: termcore::search::Direction, restart: bool) -> bool {
-        self.find_with(query, dir, restart, true, true)
-    }
-
-    /// Like `find`, with the Find bar's options. `ignore_case` off passes over matches whose letters differ in case;
-    /// `wrap` off stops at the newest or oldest line instead of going round again.
-    pub fn find_with(&mut self, query: &str, dir: termcore::search::Direction, restart: bool, ignore_case: bool, wrap: bool) -> bool {
         self.find = query.chars().map(fold).collect();
-        let from = if restart { None } else { self.search_match };
-        let hit = self.next_match(query, from, dir, ignore_case, wrap);
+        let hit = termcore::search::find(self.term.line_count(), |i| self.term.line(i), query,
+            if restart { None } else { self.search_match }, dir);
         self.search_match = hit;
         self.selection = hit.map(|m| {
             let y = self.term.show_line(m.line);
@@ -587,68 +514,16 @@ impl Terminal {
         hit.is_some()
     }
 
-    /// The next match of `query` after `from` in direction `dir`, honouring the options of `find_with`.
-    fn next_match(
-        &self,
-        query: &str,
-        from: Option<termcore::search::Match>,
-        dir: termcore::search::Direction,
-        ignore_case: bool,
-        wrap: bool,
-    ) -> Option<termcore::search::Match> {
-        let count = self.term.line_count();
-        let mut from = from;
-        let mut first: Option<termcore::search::Match> = None;
-        // Each pass starts after the match before it, so a match in the wrong case is passed over once. A search that
-        // comes back to the first match it found has nothing exact left.
-        for _ in 0..MAX_CASE_SKIPS {
-            let hit = termcore::search::find(count, |i| self.term.line(i), query, from, dir)?;
-            if !wrap && from.is_some_and(|m| wrapped(m, hit, dir)) {
-                return None;
-            }
-            if ignore_case || self.exact(hit, query) {
-                return Some(hit);
-            }
-            if first == Some(hit) {
-                return None;
-            }
-            first.get_or_insert(hit);
-            from = Some(hit);
-        }
-        None
-    }
-
-    /// Whether the cells of match `hit` spell `query` with the same letter case.
-    fn exact(&self, hit: termcore::search::Match, query: &str) -> bool {
-        let got: String = self
-            .term
-            .line(hit.line)
-            .iter()
-            .skip(hit.start)
-            .take(hit.end.saturating_sub(hit.start))
-            .filter(|c| c.attrs & attr::SPACER == 0)
-            .map(|c| if c.ch == '\0' { ' ' } else { c.ch })
-            .collect();
-        got == query
-    }
-
     /// (position of the current match, matches in all) of `query`; (0, 0) when there are none. Capped at 999.
     pub fn match_position(&self, query: &str) -> (usize, usize) {
-        self.match_position_with(query, true)
-    }
-
-    /// `match_position` with the case option of `find_with`.
-    pub fn match_position_with(&self, query: &str, ignore_case: bool) -> (usize, usize) {
-        let newer = termcore::search::Direction::Newer;
-        let Some(first) = self.next_match(query, None, newer, ignore_case, true) else {
-            return (0, 0);
-        };
+        let find = |from| termcore::search::find(self.term.line_count(), |i| self.term.line(i), query, from, termcore::search::Direction::Newer);
+        let Some(first) = find(None) else { return (0, 0) };
         let (mut total, mut at, mut m) = (1, 0, first);
         if Some(m) == self.search_match {
             at = 1;
         }
         while total < 999 {
-            match self.next_match(query, Some(m), newer, ignore_case, true) {
+            match find(Some(m)) {
                 Some(next) if next != first => {
                     total += 1;
                     m = next;
@@ -664,7 +539,7 @@ impl Terminal {
 
     /// Drops the highlights of the other matches; the current one stays selected.
     pub fn clear_find(&mut self) { self.find.clear(); }
-    pub fn clear_history(&mut self) { self.term.clear_history(); self.marks.clear(); self.selection = None; self.search_match = None; self.find.clear(); }
+    pub fn clear_history(&mut self) { self.term.clear_history(); self.selection = None; self.search_match = None; self.find.clear(); }
     pub fn reset(&mut self) { self.term.advance(b"\x1bc"); self.clear_history(); self.damage.invalidate_all(self.term.rows()); }
     pub fn select_all(&mut self) {
         self.selection = Some(Selection { anchor: (0, 0), head: (self.term.cols() - 1, self.term.rows() - 1) });
@@ -675,90 +550,6 @@ impl Terminal {
     }
     pub fn take_clipboard(&mut self) -> Option<String> { self.term.take_clipboard() }
     pub fn cwd(&self) -> Option<String> { self.pty.cwd() }
-
-    /// Sets the tab title the user typed; an empty one puts the program's own title back.
-    pub fn set_custom_title(&mut self, typed: &str) {
-        self.custom_title = clean_title(typed);
-    }
-
-    /// The title the user typed for this tab, if any.
-    pub fn custom_title(&self) -> Option<&str> {
-        self.custom_title.as_deref()
-    }
-
-    /// Lets programs that asked for mouse reports receive them (on), or keeps clicks and the wheel for the terminal (off).
-    pub fn set_mouse_reporting(&mut self, on: bool) {
-        self.mouse_reporting = on;
-    }
-
-    /// Scrollback lines above the screen (none on the alternate screen).
-    fn history_len(&self) -> usize {
-        self.term.line_count().saturating_sub(self.term.rows())
-    }
-
-    /// Feeds the emulator and notes the lines where the shell reported a prompt start. Once the scrollback is full every
-    /// newline can shift the numbering, so the old marks go then.
-    fn advance_marked(&mut self, bytes: &[u8]) {
-        if self.history_len() >= self.history && bytes.contains(&b'\n') {
-            self.marks.clear();
-        }
-        let starts = marks::prompt_starts(&self.osc_carry, bytes);
-        self.osc_carry = marks::tail(&self.osc_carry, bytes);
-        let mut at = 0;
-        for start in starts {
-            self.term.advance(&bytes[at..start]);
-            at = start;
-            if !self.term.alt_screen_active() {
-                let line = self.history_len() + self.term.cursor().1;
-                self.marks.add(line);
-            }
-        }
-        self.term.advance(&bytes[at..]);
-    }
-
-    /// Whether each screen row shows a marked line.
-    fn mark_rows(&self) -> Vec<bool> {
-        let rows = self.term.rows();
-        if self.marks.is_empty() || self.term.alt_screen_active() {
-            return vec![false; rows];
-        }
-        let top = self.history_len().saturating_sub(self.term.view_offset());
-        (0..rows).map(|y| self.marks.contains(top + y)).collect()
-    }
-
-    /// Marks the line the caret is on (the top row while scrolled back), or removes the mark there: Some(true) when it is
-    /// marked now. None on the alternate screen, which keeps no marks.
-    pub fn toggle_mark(&mut self) -> Option<bool> {
-        if self.term.alt_screen_active() {
-            return None;
-        }
-        let view = self.term.view_offset();
-        let line = if view == 0 { self.history_len() + self.term.cursor().1 } else { self.history_len().saturating_sub(view) };
-        Some(self.marks.toggle(line))
-    }
-
-    /// Scrolls so the previous (or next) mark is on the top row; after the last mark the view returns to the live screen.
-    /// False when there is nowhere to go.
-    pub fn jump_mark(&mut self, forward: bool) -> bool {
-        if self.term.alt_screen_active() {
-            return false;
-        }
-        let (history, view) = (self.history_len(), self.term.view_offset());
-        let target = match self.marks.jump(history, view, forward) {
-            Some(target) => target,
-            None if forward && view > 0 => 0,
-            None => return false,
-        };
-        self.term.reset_view();
-        self.term.scroll_view(target as isize);
-        self.selection = None;
-        true
-    }
-
-    /// How many marks the session holds.
-    pub fn mark_count(&self) -> usize {
-        self.marks.len()
-    }
 
     /// The visible row `row` as text, trailing blanks dropped (for link detection on a tap).
     pub fn row_text(&self, row: usize) -> String {
@@ -945,6 +736,27 @@ mod tests {
     }
 
     #[test]
+    fn a_typed_title_replaces_the_automatic_one_until_cleared() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        t.set_custom_title("  build  ");
+        assert_eq!(t.title(0), "build");
+        assert!(t.has_custom_title());
+        t.set_custom_title("   ");
+        assert!(!t.has_custom_title());
+        assert_eq!(t.title(1), "shell 2");
+    }
+
+    #[test]
+    fn mouse_reports_stop_when_reporting_is_off() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        t.feed(b"\x1b[?1000h\x1b[?1006h");
+        t.set_mouse_reporting(false);
+        assert!(!t.report_mouse(termcore::mouse::MouseEvent::WheelUp, (1, 1)));
+        t.set_mouse_reporting(true);
+        assert!(t.report_mouse(termcore::mouse::MouseEvent::WheelUp, (1, 1)));
+    }
+
+    #[test]
     fn an_idle_shell_is_titled_by_its_number() {
         let t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
         assert_eq!(t.job(), None, "the shell itself is in the foreground");
@@ -1013,95 +825,5 @@ mod tests {
         t.draw(&mut Surface { w: 400, h: 650, stride: 400, px: &mut buf, y0: 0 });
         assert_eq!(buf[0], 0, "drawn at the new origin");
         assert_eq!(buf[60 * 400], px(THEME.bg));
-    }
-
-    #[test]
-    fn prompt_reports_become_marks_the_view_jumps_between() {
-        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
-        for i in 0..30 {
-            t.feed(format!("line{i}\r\n").as_bytes());
-        }
-        t.feed(b"\x1b]133;A\x07$ one\r\n");
-        for i in 0..30 {
-            t.feed(format!("more{i}\r\n").as_bytes());
-        }
-        t.feed(b"\x1b]133;A\x07$ two");
-        assert_eq!(t.mark_count(), 2, "one mark for each reported prompt");
-        assert_eq!(t.mark_rows().iter().filter(|&&m| m).count(), 1, "the second prompt is on the live screen, the first is in the scrollback");
-        assert!(t.jump_mark(false), "there is a mark above the screen");
-        assert!(t.viewport_text().starts_with("$ one"), "the marked line is the top row: {:?}", t.viewport_text());
-        assert!(t.mark_rows()[0], "and it carries the tick");
-        assert!(!t.jump_mark(false), "no mark above the first one");
-        assert!(t.jump_mark(true), "forward returns to the live screen");
-        assert_eq!(t.term.view_offset(), 0);
-        assert!(!t.jump_mark(true), "already live, no mark below");
-        t.clear_history();
-        assert_eq!(t.mark_count(), 0, "clearing the scrollback drops the marks");
-    }
-
-    #[test]
-    fn a_mark_can_be_set_and_removed_on_the_caret_line() {
-        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
-        t.feed(b"abc");
-        assert_eq!(t.toggle_mark(), Some(true));
-        assert_eq!(t.mark_count(), 1);
-        assert!(t.mark_rows()[0]);
-        assert_eq!(t.toggle_mark(), Some(false), "a second toggle removes it");
-        assert_eq!(t.mark_count(), 0);
-        t.feed(b"\x1b[?1049h");
-        assert_eq!(t.toggle_mark(), None, "no marks on the alternate screen");
-    }
-
-    #[test]
-    fn a_marked_row_is_drawn_with_the_tick_in_the_margin() {
-        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
-        t.feed(b"abc");
-        t.repaint();
-        assert_eq!(t.toggle_mark(), Some(true));
-        assert!(t.repaint().contains(&0), "the marked row is repainted");
-        let y = (t.metrics.pad + t.metrics.ch / 2) as usize;
-        assert_eq!(t.canvas.px[y * t.canvas.w], MARK);
-        assert_eq!(t.canvas.px[(y + 4 * t.metrics.ch as usize) * t.canvas.w], px(THEME.bg), "other rows have none");
-    }
-
-    #[test]
-    fn a_typed_title_replaces_the_program_title_until_it_is_cleared() {
-        assert_eq!(clean_title("  Build\u{7} log  ").as_deref(), Some("Build log"));
-        assert_eq!(clean_title("   \t"), None);
-        assert_eq!(clean_title(&"x".repeat(100)).map(|t| t.chars().count()), Some(64));
-        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
-        assert_eq!(t.title(0), "shell 1");
-        t.set_custom_title("deploy");
-        assert_eq!((t.title(0).as_str(), t.custom_title()), ("deploy", Some("deploy")));
-        t.set_custom_title("");
-        assert_eq!((t.title(0).as_str(), t.custom_title()), ("shell 1", None));
-    }
-
-    #[test]
-    fn mouse_reports_reach_programs_only_while_reporting_is_allowed() {
-        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
-        let press = termcore::mouse::MouseEvent::Press;
-        assert!(!t.report_mouse(press, (1, 1)), "no program asked for the mouse");
-        t.feed(b"\x1b[?1000h\x1b[?1006h");
-        assert!(t.report_mouse(press, (1, 1)));
-        t.set_mouse_reporting(false);
-        assert!(!t.report_mouse(press, (1, 1)), "off: the terminal keeps the click");
-        t.set_mouse_reporting(true);
-        assert!(t.report_mouse(press, (1, 1)));
-    }
-
-    #[test]
-    fn a_profile_replaces_the_theme_colours_until_a_theme_is_chosen_again() {
-        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
-        let ansi = termcore::palette::THEMES[0].ansi;
-        t.appearance_with(0, Some(Theme { name: "Test", fg: (1, 2, 3), bg: (10, 20, 30), ansi }), 20.0);
-        assert_eq!(t.background(), px((10, 20, 30)));
-        t.feed(b"x");
-        t.repaint();
-        let blank_row = (t.metrics.pad + 2 * t.metrics.ch + 1) as usize;
-        assert_eq!(t.canvas.px[blank_row * t.canvas.w + 1], px((10, 20, 30)), "the grid is painted in the profile background");
-        t.appearance(1, 20.0);
-        assert_eq!(t.background(), theme_background(1), "choosing a theme drops the profile");
-        assert_eq!(color_pixel((10, 20, 30)), px((10, 20, 30)));
     }
 }
