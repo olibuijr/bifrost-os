@@ -59,9 +59,9 @@
     {
       "feature": "Mixers and layering",
       "apple": "PHASEMixer, PHASEMixerDefinition, PHASEChannelMixerDefinition, PHASEAmbientMixerDefinition, PHASEMixerParameters",
-      "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors)",
+      "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors); springboard/src/media/mixer.rs (mix, Strip, db_to_linear)",
       "status": "partial",
-      "note": "audio/alsa/src/ctl.rs drives the card's controls, not a signal graph; buses exist only inside the DAW app"
+      "note": "Layers can be summed through a gain and mute strip with clipping counted, as bifrost_app::kit::mixer, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: there is no signal graph or per-layer parameter set, so the mixer is a flat sum; audio/alsa/src/ctl.rs drives the card's controls, and buses still exist only inside the DAW app."
     },
     {
       "feature": "Sound event nodes (switch, random, blend, container)",

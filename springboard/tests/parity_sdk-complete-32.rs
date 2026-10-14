@@ -249,3 +249,40 @@ mod push_buffers {
         assert_eq!(q.pull(3).underrun, 2);
     }
 }
+
+mod layering {
+    use springboard::media::mixer::{db_to_linear, mix, Mixed, Strip};
+
+    #[test]
+    fn a_layer_at_minus_six_db_is_about_half_amplitude_in_the_sum() {
+        let out = mix(&[(&[1000], Strip::from_db(-6.0))]);
+        assert_eq!(out.samples, vec![501]);
+    }
+
+    #[test]
+    fn a_muted_layer_is_left_out_of_the_sum() {
+        let muted = Strip { gain: 1.0, muted: true };
+        let out = mix(&[(&[500, 500], muted), (&[1, 1], Strip::default())]);
+        assert_eq!(out, Mixed { samples: vec![1, 1], clipped: 0 });
+    }
+
+    #[test]
+    fn a_sum_that_is_too_loud_is_clipped_and_counted() {
+        let loud: [i16; 2] = [30_000, -30_000];
+        let out = mix(&[(&loud, Strip::default()), (&loud, Strip::default())]);
+        assert_eq!(out.samples, vec![i16::MAX, i16::MIN]);
+        assert_eq!(out.clipped, 2);
+    }
+
+    #[test]
+    fn a_shorter_layer_is_silent_past_its_end() {
+        let out = mix(&[(&[5, 5, 5], Strip::default()), (&[1], Strip::default())]);
+        assert_eq!(out.samples, vec![6, 5, 5]);
+    }
+
+    #[test]
+    fn negative_infinity_decibels_is_silence_and_zero_is_unity() {
+        assert_eq!(db_to_linear(f32::NEG_INFINITY), 0.0);
+        assert!((db_to_linear(0.0) - 1.0).abs() < 1e-6);
+    }
+}

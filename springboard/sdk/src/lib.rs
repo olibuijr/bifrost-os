@@ -41,6 +41,8 @@ pub mod kit {
     pub use springboard::media::loop_region;
     /// Push buffers: an app queues its own sample blocks by priority, and the output pulls exact-length blocks.
     pub use springboard::media::push_queue;
+    /// Layering: sums sample layers through a gain and mute strip each, counting the samples it had to clip.
+    pub use springboard::media::mixer;
     pub use bifrost_render::appearance;
     /// The shared motion contract: durations per kind of animation (0 under Reduce Motion) and the curves.
     pub use bifrost_render::motion;

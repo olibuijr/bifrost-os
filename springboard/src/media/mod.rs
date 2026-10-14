@@ -45,6 +45,7 @@ pub mod volume;
 pub mod loop_region;
 pub mod engine;
 pub mod push_queue;
+pub mod mixer;
 
 #[cfg(target_os = "linux")]
 pub mod audio_out;
