@@ -45,9 +45,9 @@
   {
    "feature": "Authentication sessions (shared Safari login)",
    "apple": "SFAuthenticationSession (deprecated) and its completion handler, SFAuthenticationError",
-   "bifrost": "springboard/ui/src/web_auth.rs, springboard/ui/src/webauth_session.rs, springboard/sdk/src/web_auth.rs",
+   "bifrost": "springboard/ui/src/web_auth.rs, springboard/ui/src/webauth_session.rs, springboard/sdk/src/web_auth.rs; tests: springboard/ui/tests/parity_sdk-complete-04.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (web_auth.rs, webauth_session.rs, web_auth.rs); not wired into the shell or apps, not tested on Midget. Nothing shares a one-time login between the browser and apps. The Apple successor (ASWebAuthenticationSession) is not in this framework."
+   "note": "Pure session model: start URL and callback validation, the single completion, cancel, presentation failure, the router that gives each redirect to one session, and headers. Headless tests in springboard/ui/tests/parity_sdk-complete-04.rs. Gap: not wired into the shell or apps, and nothing shares a one-time login between the browser and apps (needs the browser profile on the lab machine). The Apple successor (ASWebAuthenticationSession) is not in this framework."
   },
   {
    "feature": "Universal links and associated domains",
