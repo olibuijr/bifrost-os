@@ -124,7 +124,7 @@
       "apple": "App schema domains, visual intelligence, Action button, side button",
       "bifrost": "none",
       "status": "gap",
-      "note": "no system schema adoption; hardware-button and visual-search entry points are Apple-only"
+      "note": "Blocked: the intent layer (springboard/sdk/src/intents.rs) has no schema domains, and the system has no schema registry for apps to adopt. The Action button and side button entry points need Apple hardware, and the visual search entry point has no BifrOSt counterpart."
     },
     {
       "feature": "Siri and Apple Intelligence",

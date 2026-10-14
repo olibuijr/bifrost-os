@@ -80,9 +80,9 @@
     {
       "feature": "Audio settings keys",
       "apple": "AVAudioSettings constants (format, sample rate, channels)",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. Recorder picks the first working PCM/format; no settings dictionary"
+      "bifrost": "springboard/ui/src/audio_settings.rs (Settings, Format, Quality; to_map and from_map)",
+      "status": "partial",
+      "note": "The settings dictionary keys (format, rate, channels, depth, quality, bitrate), per-format validation and the nearest supported configuration are tested in the model's own tests. Gap: nothing calls the model yet; the recorder in springboard/src/media/capture.rs still picks the first working PCM format and does not read a settings dictionary, and the audio server owns the device side."
     }
   ],
   "gaps": [

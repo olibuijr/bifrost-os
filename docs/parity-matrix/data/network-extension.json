@@ -96,7 +96,7 @@
    "apple": "NEAppExtensionConfiguration",
    "bifrost": "springboard/sdk/src/intents.rs is the App Intents layer, not an extension host for network providers",
    "status": "gap",
-   "note": "No Network Extension app-extension host. Apps cannot ship a network provider."
+   "note": "Blocked: there is no system extension host or network provider runtime. springboard/core/src/tunnel.rs has the tunnel model only, and nothing starts an app's provider or hands it traffic."
   },
   {
    "feature": "Error types (NEVPNError, NETunnelProviderError, NERelayClientErrorDomain)",

@@ -12,7 +12,7 @@
       "apple": "UnaryFileSystemExtension, FSUnaryFileSystem, FSFileSystemBase",
       "bifrost": "none; no SDK or shell API for an app to register a mount type",
       "status": "gap",
-      "note": "Apple's module runs as an app extension and is driven by FSKit. Linux has FUSE in the kernel, but BifrOSt exposes no SDK wrapper for it."
+      "note": "Blocked: a mount type needs a FUSE binding (the kernel interface exists, no Rust wrapper is built) plus a shell mount service that runs an app's module and checks its grants. Neither exists, and no C dependency is allowed to fill the gap."
     },
     {
       "feature": "Volumes and items",
