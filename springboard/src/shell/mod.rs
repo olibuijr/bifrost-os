@@ -9,6 +9,7 @@ pub mod atspi;
 pub mod account;
 pub mod applib;
 pub mod apphost;
+pub mod folder_actions;
 pub mod touch_frames;
 pub mod intents;
 pub mod kinds;
