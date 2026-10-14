@@ -282,6 +282,8 @@ pub struct Monitor {
     pub columns: ColumnSet,
     /// Processes shown relative to the moment Show Deltas was turned on for them, by pid.
     pub baselines: HashMap<u32, ProcSample>,
+    /// When each baseline was taken, in the sampler's milliseconds (the Since Baseline column).
+    pub baseline_at: HashMap<u32, f64>,
     /// The process whose family the Selected Processes filter shows.
     pub scope: Option<u32>,
     /// Running energy means by process name, for the 12 hr Average column.
@@ -339,6 +341,7 @@ impl Monitor {
             frequency: UpdateFrequency::VeryOften,
             columns: ColumnSet::default(),
             baselines: HashMap::new(),
+            baseline_at: HashMap::new(),
             scope: None,
             averages: EnergyAverages::default(),
             cpu_history: false,
@@ -529,6 +532,7 @@ impl Monitor {
         if let Some(s) = &self.snapshot {
             // a process that ended takes its baseline with it
             self.baselines.retain(|pid, _| s.procs.iter().any(|p| p.pid == *pid));
+            self.baseline_at.retain(|pid, _| self.baselines.contains_key(pid));
             if self.filter == Filter::Selected && !self.scope.map_or(false, |root| s.procs.iter().any(|p| p.pid == root)) {
                 self.filter = Filter::All;
                 self.scope = None;
@@ -542,7 +546,7 @@ impl Monitor {
             _ => None,
         };
         self.rows = match &self.snapshot {
-            Some(s) => model::visible_within(&s.procs, self.filter, self.sampler.own_uid, &query, self.sort, only.as_ref()),
+            Some(s) => model::visible_scoped(&s.procs, self.filter, self.sampler.own_uid, &query, self.sort, only.as_ref(), &self.baselines),
             None => Vec::new(),
         };
         if let Some(pid) = self.selected {
@@ -656,7 +660,20 @@ impl Monitor {
         let Some(p) = self.selected_proc().cloned() else { return };
         if self.baselines.remove(&p.pid).is_none() {
             self.status = format!("Showing deltas for {}", p.name);
+            self.baseline_at.insert(p.pid, self.last_sample.unwrap_or(0.0));
             self.baselines.insert(p.pid, p);
+        } else {
+            self.baseline_at.remove(&p.pid);
+        }
+    }
+
+    /// The Since Baseline column's text for a process: how long its baseline has been running as of the last reading,
+    /// or nothing when it has none.
+    pub fn since_text(&self, pid: u32) -> String {
+        match (self.baseline_at.get(&pid), self.last_sample) {
+            (Some(at), Some(now)) => model::elapsed_text((now - at) / 1000.0),
+            (Some(_), None) => model::elapsed_text(0.0),
+            _ => String::new(),
         }
     }
 
@@ -785,7 +802,7 @@ impl Monitor {
 
     /// The selected row as tab-separated text, for Edit > Copy.
     pub fn copy_text(&self) -> Option<String> {
-        self.selected_proc().map(|p| model::row_text(p, self.tab, &self.columns, self.baselines.get(&p.pid)))
+        self.selected_proc().map(|p| model::row_text(p, self.tab, &self.columns, self.baselines.get(&p.pid), &self.since_text(p.pid)))
     }
 
     fn signal_selected(&mut self, sig: i32, verb: &str) {

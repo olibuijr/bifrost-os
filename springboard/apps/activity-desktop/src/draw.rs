@@ -436,9 +436,10 @@ impl Monitor {
             }
             let ink = if selected { WHITE } else { LABEL.now() };
             let quiet = if selected { WHITE } else { LABEL_2.now() };
+            let since = self.since_text(p.pid);
             for (col, cx, cw) in &cols {
                 let color = if col.key == Some(SortKey::Name) { ink } else { quiet };
-                let label = cell(p, col.key, self.baselines.get(&p.pid));
+                let label = if col.title == model::SINCE_BASELINE { since.clone() } else { cell(p, col.key, self.baselines.get(&p.pid)) };
                 text(&mut self.labels, s, ui, &label, MAC_SUBHEAD_PT, Weight::Regular, color, cx + PAD, mid, cw - 2.0 * PAD);
             }
         }

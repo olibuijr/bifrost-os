@@ -11,6 +11,10 @@ pub const HISTORY: usize = 60;
 pub const DISK_FLOOR: f32 = 1024.0 * 1024.0;
 pub const NET_FLOOR: f32 = 64.0 * 1024.0;
 
+/// The title of the column that shows how long ago a process's Show Deltas baseline was taken. It has no sort key: the
+/// figure is per process and only means something next to the deltas.
+pub const SINCE_BASELINE: &str = "Since Baseline";
+
 /// The six tabs above the graph. Each picks the graph and the table's columns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
@@ -68,6 +72,7 @@ impl Tab {
                 user(),
                 Column::new(Some(SortKey::Cpu), "% CPU", 72.0).required(),
                 Column::new(Some(SortKey::CpuTime), "CPU Time", 88.0).off(),
+                Column::new(None, SINCE_BASELINE, 112.0).off(),
                 threads(),
                 Column::new(Some(SortKey::Ppid), "Parent PID", 88.0).off(),
                 pid(),
@@ -397,17 +402,57 @@ pub fn cell_text(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>
 }
 
 /// One table row as tab-separated text (Edit > Copy): the columns the tab shows, in order. The CPU figure carries its
-/// percent sign, as it does in the footer and the graph.
-pub fn row_text(p: &ProcSample, tab: Tab, set: &ColumnSet, base: Option<&ProcSample>) -> String {
+/// percent sign, as it does in the footer and the graph. `since` is the Since Baseline column's text (empty without a
+/// baseline).
+pub fn row_text(p: &ProcSample, tab: Tab, set: &ColumnSet, base: Option<&ProcSample>, since: &str) -> String {
     if tab == Tab::Network {
         return [p.name.clone(), p.user.clone(), p.pid.to_string()].join("\t");
     }
     let fields: Vec<String> = tab
         .columns(set)
         .iter()
-        .map(|c| if c.key == Some(SortKey::Cpu) { percent(p.cpu) } else { cell_text(p, c.key, base) })
+        .map(|c| {
+            if c.title == SINCE_BASELINE {
+                since.to_string()
+            } else if c.key == Some(SortKey::Cpu) {
+                percent(p.cpu)
+            } else {
+                cell_text(p, c.key, base)
+            }
+        })
         .collect();
     fields.join("\t")
+}
+
+/// How long ago a baseline was taken, in whole units: "45 s", "3 min 12 s" or "1 h 4 min".
+pub fn elapsed_text(secs: f64) -> String {
+    let s = secs.max(0.0) as u64;
+    if s < 60 {
+        format!("{s} s")
+    } else if s < 3600 {
+        format!("{} min {} s", s / 60, s % 60)
+    } else {
+        format!("{} h {} min", s / 3600, (s % 3600) / 60)
+    }
+}
+
+/// The sort keys whose figures Show Deltas counts from a baseline.
+pub fn is_cumulative(key: SortKey) -> bool {
+    matches!(key, SortKey::CpuTime | SortKey::BytesRead | SortKey::BytesWritten | SortKey::GpuTime)
+}
+
+/// The amount a row's cumulative figure has grown since its baseline, for sorting. A process without a baseline counts
+/// as nothing, so the deltas sort puts those together.
+fn delta_of(p: &ProcSample, key: SortKey, base: Option<&ProcSample>) -> u64 {
+    let Some(b) = base else { return 0 };
+    let since = |now: u64, then: u64| now.saturating_sub(then);
+    match key {
+        SortKey::CpuTime => since(p.cpu_ticks, b.cpu_ticks),
+        SortKey::BytesRead => since(p.read_total, b.read_total),
+        SortKey::BytesWritten => since(p.write_total, b.write_total),
+        SortKey::GpuTime => since(p.gpu_ns, b.gpu_ns),
+        _ => 0,
+    }
 }
 
 /// The pids of a process and everything it started, children and their children.
@@ -509,6 +554,28 @@ pub fn visible_within(procs: &[ProcSample], filter: Filter, own_uid: u32, query:
         let o = if sort.descending { o.reverse() } else { o };
         o.then(a.pid.cmp(&b.pid))
     });
+    rows
+}
+
+/// Like `visible_within`, and with Show Deltas on (`baselines` not empty), a cumulative sort key orders the rows by
+/// what each process has done since its baseline instead of by its whole history.
+pub fn visible_scoped(
+    procs: &[ProcSample],
+    filter: Filter,
+    own_uid: u32,
+    query: &str,
+    sort: Sort,
+    only: Option<&HashSet<u32>>,
+    baselines: &HashMap<u32, ProcSample>,
+) -> Vec<ProcSample> {
+    let mut rows = visible_within(procs, filter, own_uid, query, sort, only);
+    if is_cumulative(sort.key) && !baselines.is_empty() {
+        rows.sort_by(|a, b| {
+            let o = delta_of(a, sort.key, baselines.get(&a.pid)).cmp(&delta_of(b, sort.key, baselines.get(&b.pid)));
+            let o = if sort.descending { o.reverse() } else { o };
+            o.then(a.pid.cmp(&b.pid))
+        });
+    }
     rows
 }
 
@@ -749,8 +816,51 @@ mod tests {
     fn rows_copy_as_tab_separated_text() {
         let p = proc(7, "sh", 1000, 12.5, 2048);
         let set = ColumnSet::default();
-        assert_eq!(row_text(&p, Tab::Cpu, &set, None), "sh\tolibuijr\t12.5%\t1\t7");
-        assert_eq!(row_text(&p, Tab::Memory, &set, None), "sh\tolibuijr\t2.0 KB\t1\t7");
+        assert_eq!(row_text(&p, Tab::Cpu, &set, None, ""), "sh\tolibuijr\t12.5%\t1\t7");
+        assert_eq!(row_text(&p, Tab::Memory, &set, None, ""), "sh\tolibuijr\t2.0 KB\t1\t7");
+    }
+
+    #[test]
+    fn the_since_baseline_column_copies_its_text_where_it_is_shown() {
+        let p = proc(7, "sh", 1000, 12.5, 2048);
+        let mut set = ColumnSet::default();
+        let since = Tab::Cpu.all_columns().into_iter().find(|c| c.title == SINCE_BASELINE).unwrap();
+        set.toggle(Tab::Cpu, &since);
+        assert_eq!(row_text(&p, Tab::Cpu, &set, None, "3 min 2 s"), "sh\tolibuijr\t12.5%\t3 min 2 s\t1\t7");
+        assert_eq!(row_text(&p, Tab::Cpu, &ColumnSet::default(), None, "3 min 2 s"), "sh\tolibuijr\t12.5%\t1\t7", "hidden, so not copied");
+    }
+
+    #[test]
+    fn elapsed_time_reads_in_seconds_minutes_and_hours() {
+        assert_eq!(elapsed_text(0.0), "0 s");
+        assert_eq!(elapsed_text(45.9), "45 s");
+        assert_eq!(elapsed_text(192.0), "3 min 12 s");
+        assert_eq!(elapsed_text(3840.0), "1 h 4 min");
+        assert_eq!(elapsed_text(-5.0), "0 s");
+    }
+
+    #[test]
+    fn the_deltas_sort_orders_by_growth_since_the_baseline() {
+        let mut big = proc(1, "big", 1000, 0.0, 0);
+        big.cpu_ticks = 10_000;
+        let mut busy = proc(2, "busy", 1000, 0.0, 0);
+        busy.cpu_ticks = 500;
+        let mut quiet = proc(3, "quiet", 1000, 0.0, 0);
+        quiet.cpu_ticks = 100;
+        let sort = Sort { key: SortKey::CpuTime, descending: true };
+        // no baselines: the whole history decides
+        let plain = visible_scoped(&[big.clone(), busy.clone(), quiet.clone()], Filter::All, 1000, "", sort, None, &HashMap::new());
+        assert_eq!(plain.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![1, 2, 3]);
+        // baselines taken: big has grown least, busy most
+        let mut base = HashMap::new();
+        let mut big0 = big.clone();
+        big0.cpu_ticks = 9_900;
+        let mut busy0 = busy.clone();
+        busy0.cpu_ticks = 100;
+        base.insert(1, big0);
+        base.insert(2, busy0);
+        let rows = visible_scoped(&[big, busy, quiet], Filter::All, 1000, "", sort, None, &base);
+        assert_eq!(rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![2, 1, 3], "the process with no baseline counts as nothing");
     }
 
     #[test]
