@@ -214,6 +214,28 @@ fn the_gallery_has_three_more_starters_than_before() {
 }
 
 #[test]
+fn a_dragged_step_lands_on_the_index_it_is_dropped_at() {
+    let mut a = vec![Action::Wifi(true), Action::Screenshot, Action::Timer(5), Action::Dnd(true)];
+    assert_eq!(move_step(&mut a, 3, 0), Some(0));
+    assert_eq!(a[0], Action::Dnd(true));
+    assert_eq!(move_step(&mut a, 0, 2), Some(2));
+    assert_eq!(a, vec![Action::Wifi(true), Action::Screenshot, Action::Dnd(true), Action::Timer(5)]);
+    assert_eq!(move_step(&mut a, 1, 1), None, "a step dropped on itself stays");
+    assert_eq!(move_step(&mut a, 1, 9), None, "a drop past the end is refused");
+}
+
+#[test]
+fn block_openers_ends_and_otherwises_never_move() {
+    let mut b = vec![Action::Repeat(2), Action::Dnd(true), Action::EndRepeat];
+    assert_eq!(move_step(&mut b, 0, 2), None);
+    assert_eq!(move_step(&mut b, 2, 0), None);
+    let mut c = vec![Action::If(Cond::Empty), Action::Otherwise, Action::EndIf];
+    assert_eq!(move_step(&mut c, 1, 0), None);
+    assert_eq!(move_step(&mut c, 0, 1), None);
+    assert_eq!(move_step(&mut b, 9, 0), None, "no step there");
+}
+
+#[test]
 fn every_glyph_is_a_distinct_symbol() {
     let mut seen = std::collections::HashSet::new();
     for g in GLYPHS.iter().filter(|g| !g.is_empty()) {

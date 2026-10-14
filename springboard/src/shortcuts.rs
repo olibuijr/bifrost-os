@@ -828,6 +828,22 @@ pub fn move_action(actions: &mut [Action], k: usize, up: bool) -> Option<usize> 
     Some(to)
 }
 
+/// Takes step `from` out and puts it back at index `to`, the index it lands on once taken out (a drag onto the row of step
+/// `to`). Only a plain step moves: an opener, an Otherwise or an end keeps its place, so the blocks keep their shape.
+/// Returns the new position, or `None` when nothing moves.
+pub fn move_step(actions: &mut Vec<Action>, from: usize, to: usize) -> Option<usize> {
+    let plain = !matches!(
+        actions.get(from)?,
+        Action::If(_) | Action::Repeat(_) | Action::RepeatEach | Action::Otherwise | Action::EndIf | Action::EndRepeat
+    );
+    if !plain || to >= actions.len() || to == from {
+        return None;
+    }
+    let step = actions.remove(from);
+    actions.insert(to, step);
+    Some(to)
+}
+
 /// Whether `s` matches a search: the text is part of its name, of one of its steps or of its folder, ignoring case.
 /// An empty search matches everything.
 pub fn matches(s: &Shortcut, query: &str) -> bool {
