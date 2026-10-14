@@ -38,9 +38,9 @@
     {
       "feature": "App-side audio playback engine",
       "apple": "Playback that Siri requests start in the app (Media Intents results point to playable media)",
-      "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs",
+      "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs, springboard/ui/src/media_queue.rs (PlaybackQueue), springboard/sdk/src/media_intents.rs (handle_request); springboard/sdk/tests/parity_sdk-complete-28.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "Playback is a shared service that survives app restarts; the SDK exposes the client as bifrost_app::audio (springboard/sdk/src/lib.rs:88), but there is no media-item or queue type for apps to return to a voice request"
+      "note": "Playback is a shared service that survives app restarts, and bifrost_app::audio is the client. bifrost_app::media_intents now gives apps the media item, playback request and play queue types, and handle_request applies a request to the queue and returns its dialog; play, queue, search, advance and the end of the queue are tested headless. Gap: the queue is not yet handed to the audio service as a playlist, and a voice request reaching the app needs Midget."
     },
     {
       "feature": "Now-playing state shown outside the app",
