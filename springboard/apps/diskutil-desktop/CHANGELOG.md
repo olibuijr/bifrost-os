@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.4 — 2026-10-14
+
+- Use the shared large-title widget on the empty root screen and an inline title for selected-disk details.
+
 ## 0.7.3 — 2026-10-14
 
 - Add the generated app compliance harness.

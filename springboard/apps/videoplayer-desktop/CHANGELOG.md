@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3 — 2026-10-14
+
+- Size notices to the available window width, use shared corner-radius tokens, and position captions relative to the viewport.
+
 ## 0.2.2 — 2026-10-14
 
 - Add the generated app compliance harness.

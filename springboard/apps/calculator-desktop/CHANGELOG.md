@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.2 — 2026-10-14
+
+- Derive the wide-keypad activation width from its key grid, and align menu assertions with the app-specific Calculator menu.
+
 ## 1.11.1 — 2026-10-14
 
 - Place Copy Expression and Copy Last Result in the Calculator menu rather than duplicating the shell Edit menu.

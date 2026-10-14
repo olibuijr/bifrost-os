@@ -282,7 +282,7 @@ mod tests {
     fn the_menus_are_valid_for_the_shell() {
         let (ui, app) = landscape();
         let menus = app.menus(&ui);
-        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["Edit", "View", "Stack"]);
+        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["Calculator", "View", "Stack"]);
         for menu in &menus {
             assert!(menu.items.len() <= bifrost_app::proto::MAX_APP_MENU_ITEMS, "{}", menu.title);
             for it in &menu.items {
@@ -370,10 +370,10 @@ mod tests {
     fn copy_expression_and_copy_last_result() {
         let (ui, mut app) = landscape();
         assert!(!app.menu_action(&ui, MENU_COPY_RESULT), "nothing to copy yet");
-        assert!(!item(&app.menus(&ui), "Edit", "Copy Last Result").enabled);
+        assert!(!item(&app.menus(&ui), "Calculator", "Copy Last Result").enabled);
         type_str(&mut app, &ui, "2+3*4=");
         assert_eq!(app.display_text(&ui), "14");
-        assert!(item(&app.menus(&ui), "Edit", "Copy Expression").enabled);
+        assert!(item(&app.menus(&ui), "Calculator", "Copy Expression").enabled);
         assert!(app.menu_action(&ui, MENU_COPY_EXPRESSION));
         let copy = app.take_copy().unwrap();
         assert_eq!(copy.number, "2+3×4");

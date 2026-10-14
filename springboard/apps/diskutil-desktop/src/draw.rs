@@ -8,7 +8,7 @@ use crate::window::{DiskUtility, KEY_PT, LINE_PT, PAD_PT, SIDE_PT};
 use bifrost_app::controls::sheet::SHEET_PAD_PT;
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node as Control, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, SEPARATOR_C, SIDEBAR_BG, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE2_PT, SEPARATOR_C, SIDEBAR_BG, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -125,7 +125,7 @@ fn paint_detail(w: &mut DiskUtility, s: &mut Surface, ui: &Ui, node: &Node) {
     let (x, cw) = (w.content_x(), w.content_w());
     let y0 = UNIFIED_BAR_PT + PAD_PT;
     let title = model::display_name(node);
-    text_mid(&mut w.labels, s, ui, &title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
+    text_mid(&mut w.labels, s, ui, &title, MAC_TITLE2_PT, Weight::Semibold, LABEL.now(), x, y0 + 16.0, cw);
     let sub = subtitle(node);
     text_mid(&mut w.labels, s, ui, &sub, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
 
@@ -161,7 +161,10 @@ fn paint_empty(w: &mut DiskUtility, s: &mut Surface, ui: &Ui) {
     let (x, cw) = (w.content_x(), w.content_w());
     let y0 = UNIFIED_BAR_PT + PAD_PT;
     let body = if w.nodes.is_empty() { "No disks were found." } else { "Select a disk or volume to see its capacity, file system, mount point and SMART status." };
-    text_mid(&mut w.labels, s, ui, "Disk Utility", MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
+    let mut layout = bifrost_app::layout::Layout::from_points(w.size.0 / ui.pt(1.0), w.size.1 / ui.pt(1.0), 0.0, 0.0);
+    layout.sidebar = SIDE_PT;
+    layout.margin = PAD_PT;
+    widgets::large_title(s, ui, &layout, "Disk Utility", y0);
     text_mid(&mut w.labels, s, ui, body, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
 }
 

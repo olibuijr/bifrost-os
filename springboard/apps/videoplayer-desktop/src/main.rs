@@ -82,8 +82,8 @@ fn take_error(e: RecordError) -> String {
 impl VideoPlayerApp {
     fn new(pending: Option<PathBuf>) -> Self {
         VideoPlayerApp {
-            w: 1280,
-            h: 800,
+            w: 0,
+            h: 0,
             movie: None,
             held: None,
             pending,
@@ -217,7 +217,7 @@ impl VideoPlayerApp {
         if self.notice.is_empty() {
             self.notice_img = None;
         } else if self.notice_img.as_ref().map_or(true, |(text, _)| *text != self.notice) {
-            let max = (self.w as f32 - ui.pt(64.0)).max(ui.pt(100.0));
+            let max = (self.w as f32 - ui.pt(64.0)).max(0.0);
             let img = ui.text(&ui.fit(&self.notice, NOTICE_PT, max), NOTICE_PT, Weight::Regular, WHITE);
             self.notice_img = Some((self.notice.clone(), img));
         }
@@ -229,7 +229,7 @@ impl VideoPlayerApp {
         let (width, height) = (img.w as f32 + 2.0 * pad, img.h as f32 + 2.0 * pad);
         let x = (s.w as f32 - width) / 2.0;
         let y = s.h as f32 - height - ui.pt(12.0);
-        s.fill_rrect(x, y, width, height, ui.pt(8.0), rgba(0, 0, 0, 160));
+        s.fill_rrect(x, y, width, height, height / 2.0, rgba(0, 0, 0, 160));
         s.blit(img, (x + pad) as i32, (y + pad) as i32, 255, 255);
     }
 

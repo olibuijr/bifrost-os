@@ -68,6 +68,11 @@ const ID_HISTORY: u32 = 1000;
 
 /// Height of the binary row above the Programmer keypad, in points.
 const PROG_STRIP_PT: f32 = 64.0;
+/// A wide keypad needs ten 40-point keys, their nine gaps and side insets.
+const WIDE_KEY_PT: f32 = 40.0;
+const WIDE_INSET_PT: f32 = 48.0;
+const WIDE_COLUMNS: f32 = 10.0;
+const WIDE_GAPS: f32 = 9.0;
 
 /// The label of Clear History after one tap: a second tap clears.
 const CLEAR_CONFIRM_LABEL: &str = "Tap to Confirm";
@@ -372,13 +377,17 @@ impl Calculator {
         self.convert.is_none()
             && self.programmer.is_none()
             && !self.settings.rpn
-            && self.w as f32 >= ui.pt(520.0)
+            && self.w as f32 >= Self::wide_min_width(ui)
             && (self.settings.scientific || self.w > self.h)
     }
 
     /// Whether the Programmer keypad is showing (it needs the wide layout, like the scientific one).
     fn programmer_active(&self, ui: &Ui) -> bool {
-        self.convert.is_none() && self.programmer.is_some() && self.w as f32 >= ui.pt(520.0)
+        self.convert.is_none() && self.programmer.is_some() && self.w as f32 >= Self::wide_min_width(ui)
+    }
+
+    fn wide_min_width(ui: &Ui) -> f32 {
+        ui.pt(WIDE_INSET_PT + WIDE_KEY_PT * WIDE_COLUMNS + SPACE_S * WIDE_GAPS)
     }
 
     /// Whether the basic keypad drives the RPN stack.
