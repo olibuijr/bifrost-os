@@ -134,27 +134,45 @@ impl Location {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Current {
+    /// local "2026-10-14T13:15", the time of the current conditions
+    pub time: String,
     pub temp: f64,
     pub feels: f64,
     pub code: u8,
     pub day: bool,
     pub humidity: u8,
     pub wind_kmh: f64,
+    /// the direction the wind comes from, in degrees clockwise from north (None when the answer has none)
+    pub wind_dir: Option<f64>,
+    /// the strongest gust of the last hour, km/h
+    pub gust_kmh: Option<f64>,
+    /// sea-level pressure in hPa
+    pub pressure_hpa: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Hour {
     /// "13" (local hour of the place)
     pub label: String,
+    /// local "2026-10-14T13:00", the same format as the answer's time strings (sorts by time)
+    pub time: String,
     pub temp: f64,
     pub code: u8,
     pub day: bool,
+    /// chance of precipitation in percent (0 when the answer has none)
+    pub chance: u8,
+    /// precipitation in the hour, mm
+    pub precip_mm: f64,
+    /// visibility in metres (None when the answer has none)
+    pub visibility_m: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Day {
     /// "Mon"
     pub label: String,
+    /// local "2026-10-14"
+    pub date: String,
     pub code: u8,
     pub max: f64,
     pub min: f64,
@@ -163,6 +181,17 @@ pub struct Day {
     /// local "06:12" (empty when the answer has none)
     pub sunrise: String,
     pub sunset: String,
+    /// highest chance of precipitation in percent (0 when the answer has none)
+    pub chance: u8,
+    /// precipitation for the whole day, mm
+    pub precip_mm: f64,
+}
+
+/// One quarter-hour of the minute forecast: the local start "2026-10-14T13:15" and the precipitation in it, mm.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Quarter {
+    pub time: String,
+    pub mm: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -170,6 +199,10 @@ pub struct Forecast {
     pub current: Current,
     pub hours: Vec<Hour>,
     pub days: Vec<Day>,
+    /// the next hour in quarter-hour steps (empty when the answer has none)
+    pub quarters: Vec<Quarter>,
+    /// the pressure change over the last three hours, hPa (None without hourly pressure)
+    pub pressure_trend_hpa: Option<f64>,
 }
 
 impl Forecast {
@@ -197,50 +230,96 @@ fn numbers(v: Option<&Json>) -> Option<Vec<f64>> {
     v?.array()?.iter().map(|n| n.number()).collect()
 }
 
-/// The forecast in an Open-Meteo answer: the next 24 hours from the current
-/// one and the days.
+/// A whole-number chance from an answer's percentage, 0 to 100 (0 when absent).
+fn percent(v: Option<&f64>) -> u8 {
+    v.map_or(0, |c| c.round().clamp(0.0, 100.0) as u8)
+}
+
+/// The forecast in an Open-Meteo answer: the next 24 hours from the current one, the days, the next hour in
+/// quarter-hour steps and the pressure trend. Fields added after a cached answer was saved are optional, so an old
+/// cache still parses.
 pub fn parse_forecast(text: &str) -> Option<Forecast> {
     let root = json::parse(text)?;
     let cur = root.get("current")?;
     let num = |k: &str| cur.get(k).and_then(Json::number);
+    let now = cur.get("time").and_then(Json::string).unwrap_or("");
     let current = Current {
+        time: now.to_string(),
         temp: num("temperature_2m")?,
         feels: num("apparent_temperature").or(num("temperature_2m"))?,
         code: num("weather_code")? as u8,
         day: num("is_day").is_none_or(|d| d != 0.0),
         humidity: num("relative_humidity_2m").unwrap_or(0.0).clamp(0.0, 100.0) as u8,
         wind_kmh: num("wind_speed_10m").unwrap_or(0.0),
+        wind_dir: num("wind_direction_10m"),
+        gust_kmh: num("wind_gusts_10m"),
+        pressure_hpa: num("pressure_msl"),
     };
-    let now = cur.get("time").and_then(Json::string).unwrap_or("");
     let hourly = root.get("hourly")?;
     let times = hourly.get("time")?.array()?;
     let (temps, codes) = (numbers(hourly.get("temperature_2m"))?, numbers(hourly.get("weather_code"))?);
     let flags = numbers(hourly.get("is_day")).unwrap_or_default();
+    let chances = numbers(hourly.get("precipitation_probability")).unwrap_or_default();
+    let rain = numbers(hourly.get("precipitation")).unwrap_or_default();
+    let visible = numbers(hourly.get("visibility")).unwrap_or_default();
+    let pressure = numbers(hourly.get("pressure_msl")).unwrap_or_default();
     let from = times.iter().position(|t| t.string().is_some_and(|t| t.get(..13).unwrap_or(t) >= now.get(..13).unwrap_or(now))).unwrap_or(0);
     let hours = (from..times.len().min(temps.len()).min(codes.len()))
         .take(24)
         .filter_map(|i| {
             let t = times[i].string()?;
-            Some(Hour { label: t.get(11..13)?.to_string(), temp: temps[i], code: codes[i] as u8, day: flags.get(i).is_none_or(|&d| d != 0.0) })
+            Some(Hour {
+                label: t.get(11..13)?.to_string(),
+                time: t.to_string(),
+                temp: temps[i],
+                code: codes[i] as u8,
+                day: flags.get(i).is_none_or(|&d| d != 0.0),
+                chance: percent(chances.get(i)),
+                precip_mm: rain.get(i).copied().unwrap_or(0.0),
+                visibility_m: visible.get(i).copied(),
+            })
         })
         .collect();
+    let pressure_trend_hpa = pressure.get(from).zip(pressure.get(from.saturating_sub(3))).map(|(now_hpa, before)| now_hpa - before);
     let daily = root.get("daily")?;
     let dates = daily.get("time")?.array()?;
     let (dcodes, max, min) = (numbers(daily.get("weather_code"))?, numbers(daily.get("temperature_2m_max"))?, numbers(daily.get("temperature_2m_min"))?);
+    let day_chances = numbers(daily.get("precipitation_probability_max")).unwrap_or_default();
+    let day_sums = numbers(daily.get("precipitation_sum")).unwrap_or_default();
     let days = (0..dates.len().min(dcodes.len()).min(max.len()).min(min.len()))
         .take(10)
         .filter_map(|i| {
+            let date = dates[i].string()?;
             let clock = |k: &str| daily.get(k).and_then(|v| v.array()?.get(i)?.string()?.get(11..16).map(str::to_string)).unwrap_or_default();
             let uv = daily.get("uv_index_max").and_then(|v| v.array()?.get(i)?.number()).unwrap_or(0.0);
-            Some(Day { label: weekday_label(dates[i].string()?)?, code: dcodes[i] as u8, max: max[i], min: min[i], uv, sunrise: clock("sunrise"), sunset: clock("sunset") })
+            Some(Day {
+                label: weekday_label(date)?,
+                date: date.to_string(),
+                code: dcodes[i] as u8,
+                max: max[i],
+                min: min[i],
+                uv,
+                sunrise: clock("sunrise"),
+                sunset: clock("sunset"),
+                chance: percent(day_chances.get(i)),
+                precip_mm: day_sums.get(i).copied().unwrap_or(0.0),
+            })
         })
         .collect();
-    Some(Forecast { current, hours, days })
+    let quarters = match root.get("minutely_15") {
+        Some(m) => {
+            let times = m.get("time").and_then(Json::array).unwrap_or(&[]);
+            let mm = numbers(m.get("precipitation")).unwrap_or_default();
+            times.iter().zip(mm).filter_map(|(t, mm)| Some(Quarter { time: t.string()?.to_string(), mm })).collect()
+        }
+        None => Vec::new(),
+    };
+    Some(Forecast { current, hours, days, quarters, pressure_trend_hpa })
 }
 
 pub fn forecast_url(loc: &Location) -> String {
     format!(
-        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset&forecast_days=10&timezone=auto",
+        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,is_day&hourly=temperature_2m,weather_code,is_day,precipitation_probability,precipitation,visibility,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_probability_max,precipitation_sum&minutely_15=precipitation&forecast_days=10&timezone=auto",
         loc.lat, loc.lon
     )
 }
