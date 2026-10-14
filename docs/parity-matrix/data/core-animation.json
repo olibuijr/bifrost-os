@@ -19,14 +19,14 @@
    "apple": "CATransaction, CAMediaTiming, CAMediaTimingFunction",
    "bifrost": "springboard/sdk/src/view/animation.rs:232 (Window::animate, Timing), springboard/ui/src/anim.rs; wired: springboard/src/shell/window_fx.rs and springboard/render/src/motion.rs (window effects use the motion curves; dock bounce keeps one hop after the window maps)",
    "status": "partial",
-   "note": "Timing::DEFAULT is 0.25 s ease-in-out; any change to frame, opacity or background inside animate() is diffed and interpolated; no beginTime, repeatCount, autoreverses or speed Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Timing::DEFAULT is 0.25 s ease-in-out (default_timing_is_a_quarter_second_ease); any change to frame, opacity or background inside animate() is diffed and interpolated (headless_swatch_is_drawn_where_the_animation_has_moved_it in springboard/sdk/src/view/animation.rs); no beginTime, repeatCount, autoreverses or speed Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Basic property animation (CABasicAnimation, CAPropertyAnimation)",
    "apple": "CAAnimation, CAPropertyAnimation, CABasicAnimation",
    "bifrost": "springboard/sdk/src/view/animation.rs (Prop: X, Y, Width, Height, Opacity, Background), springboard/ui/src/anim.rs (Animation { from, to, start, duration, curve }); wired: springboard/src/shell/window_fx.rs (close added this wave; open, minimize and restore already present)",
    "status": "partial",
-   "note": "only typed view properties, no key paths; no explicit fromValue or byValue; no additive animations Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "typed view properties X, Y, Width, Height, Opacity and Background animate together (headless_frame_opacity_and_size_interpolate_together, background_mixes_colours in springboard/sdk/src/view/animation.rs); no key paths; no explicit fromValue or byValue; no additive animations Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Keyframe and group animations (CAKeyframeAnimation, CAAnimationGroup, CAValueFunction)",
@@ -40,14 +40,14 @@
    "apple": "CASpringAnimation",
    "bifrost": "springboard/sdk/src/view/animation.rs:51 (Timing::spring), springboard/render/src/motion.rs (Curve::Spring)",
    "status": "partial",
-   "note": "damping ratio and response are supported; velocity is not carried, so a retargeted spring starts from rest (anim.rs keeps no velocity)"
+   "note": "damping ratio and response are supported (headless_underdamped_spring_passes_its_target_then_rests_on_it, spring_settles_on_the_target in springboard/sdk/src/view/animation.rs); a retarget carries the velocity of the interrupted spring (a_retargeted_spring_keeps_its_speed); initial velocity and mass are not exposed through Timing::spring"
   },
   {
    "feature": "Transaction completion and actions (CATransaction completion, actions, disableActions)",
    "apple": "CATransaction (setCompletionBlock, setDisableActions, setValue for action names)",
    "bifrost": "springboard/sdk/src/view/animation.rs:74 (Transaction: completion, action), :243 (Window::disable_actions), :366 (take_animation_actions)",
    "status": "partial",
-   "note": "completion receives finished (false when interrupted); actions are queued and sent down the responder chain only when finished; no transaction nesting by key path"
+   "note": "completion receives finished (false when interrupted) and runs once after every track of its group (headless_group_completes_once_after_all_of_its_tracks, completion_fires_once_with_finished_flag in springboard/sdk/src/view/animation.rs); actions are queued and sent down the responder chain only when finished; no transaction nesting by key path"
   },
   {
    "feature": "Frame clock (CACurrentMediaTime, CADisplayLink)",

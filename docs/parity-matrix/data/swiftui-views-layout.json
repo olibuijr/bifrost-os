@@ -33,7 +33,7 @@
       "apple": "https://developer.apple.com/documentation/swiftui/animations",
       "bifrost": "springboard/sdk/src/view/animation.rs, springboard/ui/src/anim.rs",
       "status": "partial",
-      "note": "springs and timing curves exist; no implicit animation tied to state changes, no matchedGeometry"
+      "note": "springs and timing curves exist; Window::animate animates frame, opacity and background for any change made inside it (headless_swatch_is_drawn_where_the_animation_has_moved_it, headless_underdamped_spring_passes_its_target_then_rests_on_it in springboard/sdk/src/view/animation.rs); animation is opt-in per closure, not tied to state changes; no matchedGeometry"
     },
     {
       "feature": "Text input and output",
