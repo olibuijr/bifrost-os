@@ -14,6 +14,7 @@ pub mod touch_frames;
 pub mod intents;
 pub mod media_intents;
 pub mod kinds;
+pub mod app_usage;
 mod apps;
 mod appgrid;
 pub mod overview;
