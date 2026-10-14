@@ -80,9 +80,9 @@
     {
       "feature": "Processes and Threads: launching child processes",
       "apple": "Process, Pipe",
-      "bifrost": "springboard/src/bare/app_policy.rs; springboard/src/bare/app_manager.rs",
-      "status": "os",
-      "note": "shell launches sandboxed apps under bubblewrap and cgroups; apps get no Process/Pipe wrapper (Rust std::process is available)"
+      "bifrost": "springboard/sdk/src/child_process.rs (ProcessSpec, Termination, Finished); springboard/src/bare/app_policy.rs; springboard/src/bare/app_manager.rs",
+      "status": "partial",
+      "note": "Apps build a checked launch (absolute program, no NUL bytes, valid environment names), run it, and read the exit code or signal and both outputs (tested headless in springboard/sdk/tests/parity_sdk-rest-02.rs). Gap: the child is not confined by the shell's bubblewrap or cgroup policy, and pipes between processes are not exposed; the launch needs the lab machine to verify."
     },
     {
       "feature": "Streams, Sockets, Ports",
