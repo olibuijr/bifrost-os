@@ -47,7 +47,7 @@
       "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)",
       "bifrost": "springboard/src/shell/extras.rs (extension host shell, not a discovery extension point)",
       "status": "gap",
-      "note": "The extension host runs app extensions but has no discovery point that reports a receiver to the shell. springboard/ui/src/route_picker.rs takes discovered receivers as input, and nothing supplies them yet. Blocked on a discovery extension point in the shell."
+      "note": "The extension host runs app extensions but has no discovery point that reports a receiver to the shell. springboard/ui/src/route_picker.rs takes discovered receivers as input, and nothing supplies them yet. Blocked: a shell-side browse service has to feed receivers into the route picker; springboard/core/src/dns_browse.rs can browse DNS-SD names, but no receiver model or extension point uses it yet."
     },
     {
       "feature": "Playback arbitration between participants",

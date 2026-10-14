@@ -31,9 +31,9 @@
     {
       "feature": "ChaCha20-Poly1305 (ChaChaPoly)",
       "apple": "ChaChaPoly",
-      "bifrost": "springboard/src/keychain.rs:349 (chacha20_block), :387 (chacha20_xor)",
-      "status": "os",
-      "note": "ChaCha20 stream cipher only (RFC 8439 block function) with HMAC-SHA256 in place of Poly1305; encrypt-then-MAC is in keychain.rs:305 (seal_with) and :316 (open_box); not exposed to apps"
+      "bifrost": "springboard/core/src/chacha_poly.rs (seal, open, poly1305); springboard/sdk/src/chacha_poly.rs (ChaChaPolyKey)",
+      "status": "partial",
+      "note": "RFC 8439 ChaCha20-Poly1305 with a 32-byte ChaChaPolyKey that seals to nonce, ciphertext and tag and opens only on a matching tag; tested headless against the RFC section 2.5.2 and 2.8.2 vectors in tests/parity_sdk-rest-05.rs. Gap: the keychain still uses its own HMAC-SHA256 encrypt-then-MAC (keychain.rs seal_with and open_box), and the AEAD is not verified on Midget."
     },
     {
       "feature": "AES ciphers (AES.GCM)",
