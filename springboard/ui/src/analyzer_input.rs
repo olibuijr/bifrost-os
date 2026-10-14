@@ -4,6 +4,8 @@
 //! start time is kept across conversion, so results can be placed on the original timeline. These are pure models; no
 //! capture device or file is opened here.
 
+use std::collections::VecDeque;
+
 /// Sample layout of a block of audio.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AudioFormat {
@@ -116,6 +118,116 @@ impl AnalyzerInputConverter {
 impl Default for AnalyzerInputConverter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// A source of time-coded blocks for an analyzer, taken one at a time in timeline order.
+pub trait InputSequence {
+    /// The next block, or `None` when no block is ready (the end of a file, or an empty microphone queue).
+    fn next_input(&mut self) -> Option<AnalyzerInput>;
+}
+
+/// The blocks of a block of samples that is already in memory (a decoded file), cut into blocks of a fixed number of
+/// frames. The first block starts at `start`; each later block starts where the previous one ends. The last block may be
+/// shorter.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FileSequence {
+    start: f64,
+    format: AudioFormat,
+    samples: Vec<f32>,
+    block_frames: usize,
+    next_frame: usize,
+}
+
+impl FileSequence {
+    /// `None` when `block_frames` is zero. Samples that do not fill a whole frame are dropped.
+    pub fn new(start: f64, format: AudioFormat, samples: &[f32], block_frames: usize) -> Option<Self> {
+        if block_frames == 0 {
+            return None;
+        }
+        let format = AudioFormat::new(format.sample_rate, format.channels);
+        let width = format.channels as usize;
+        let whole = samples.len() / width * width;
+        Some(FileSequence {
+            start: if start.is_finite() { start.max(0.0) } else { 0.0 },
+            format,
+            samples: samples[..whole].to_vec(),
+            block_frames,
+            next_frame: 0,
+        })
+    }
+
+    /// The number of whole frames in the sequence.
+    pub fn frame_count(&self) -> usize {
+        self.samples.len() / self.format.channels as usize
+    }
+}
+
+impl InputSequence for FileSequence {
+    fn next_input(&mut self) -> Option<AnalyzerInput> {
+        let total = self.frame_count();
+        if self.next_frame >= total {
+            return None;
+        }
+        let frames = self.block_frames.min(total - self.next_frame);
+        let width = self.format.channels as usize;
+        let from = self.next_frame * width;
+        let start = self.start + self.next_frame as f64 / self.format.sample_rate as f64;
+        self.next_frame += frames;
+        Some(AnalyzerInput::new(start, self.format, &self.samples[from..from + frames * width]))
+    }
+}
+
+/// The blocks a capture callback delivers, held in order until the analyzer takes them. The first block fixes the
+/// format; a block in another format, a block that starts before the previous one, or an empty block is refused. The
+/// queue holds at most its capacity, and a block pushed when it is full is refused and counted. No capture device is
+/// opened here.
+#[derive(Clone, Debug)]
+pub struct MicrophoneSequence {
+    capacity: usize,
+    format: Option<AudioFormat>,
+    last_start: Option<f64>,
+    queue: VecDeque<AnalyzerInput>,
+    refused: usize,
+}
+
+impl MicrophoneSequence {
+    /// A queue that holds up to `capacity` blocks (at least one).
+    pub fn new(capacity: usize) -> Self {
+        MicrophoneSequence { capacity: capacity.max(1), format: None, last_start: None, queue: VecDeque::new(), refused: 0 }
+    }
+
+    /// Queues a block captured at `start` seconds on the timeline. `false` when the block is refused.
+    pub fn push(&mut self, start: f64, format: AudioFormat, samples: &[f32]) -> bool {
+        let block = AnalyzerInput::new(start, AudioFormat::new(format.sample_rate, format.channels), samples);
+        let accepted = block.frames() > 0
+            && self.format.is_none_or(|f| f == block.format())
+            && self.last_start.is_none_or(|last| block.start() >= last)
+            && self.queue.len() < self.capacity;
+        if !accepted {
+            self.refused += 1;
+            return false;
+        }
+        self.format = Some(block.format());
+        self.last_start = Some(block.start());
+        self.queue.push_back(block);
+        true
+    }
+
+    /// The number of blocks waiting to be taken.
+    pub fn pending(&self) -> usize {
+        self.queue.len()
+    }
+
+    /// The number of blocks refused so far.
+    pub fn refused(&self) -> usize {
+        self.refused
+    }
+}
+
+impl InputSequence for MicrophoneSequence {
+    fn next_input(&mut self) -> Option<AnalyzerInput> {
+        self.queue.pop_front()
     }
 }
 
