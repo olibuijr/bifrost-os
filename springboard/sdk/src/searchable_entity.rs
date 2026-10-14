@@ -1,11 +1,11 @@
 //! Searchable entities: an app value that it describes once and the system indexes as a searchable item. The entity
 //! gives its identifier, the domain it is grouped under, its attribute set and an optional expiry. `searchable_item`
-//! builds the item that the index stores, and `IndexError::check` validates it. Indexing and removal stay with
-//! `CSSearchableIndex`, so this module needs no index connection and no device.
+//! builds the item that the index stores, and `IndexError::check` validates it. Indexing and removal stay with the
+//! index type in `quicksearch`, so this module needs no index connection and no device.
 
 use crate::quicksearch::{CSSearchableItem, CSSearchableItemAttributeSet};
 
-/// An app value that the Spotlight index can hold as a searchable item.
+/// An app value that the search index can hold as a searchable item.
 pub trait SearchableEntity {
     /// The stable identifier of the entity. Indexing an entity whose identifier is already indexed replaces it.
     fn entity_identifier(&self) -> String;

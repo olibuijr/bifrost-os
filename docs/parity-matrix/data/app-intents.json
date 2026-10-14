@@ -82,7 +82,7 @@
       "apple": "IndexedEntity, attributeSet, hideInSpotlight, CSSearchableIndex",
       "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem), springboard/sdk/src/searchable_entity.rs (SearchableEntity, searchable_items); tests: springboard/sdk/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "An app value can implement SearchableEntity to build the searchable item the index stores, with its identifiers, attributes, expiry and validation tested headless. Gap: the entity protocol is not tied to App Intents entity queries, hideInSpotlight is not modelled, and the shell does not index entities yet."
+      "note": "An app value can implement SearchableEntity to build the searchable item the index stores, with its identifiers, attributes, expiry and validation tested headless. Gap: the entity protocol is not tied to App Intents entity queries, a hide-from-search flag is not modelled, and the shell does not index entities yet."
     },
     {
       "feature": "Intent errors",
