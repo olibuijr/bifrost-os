@@ -3,6 +3,20 @@
 
 /// How long each capture stays up, in ms.
 pub const SLIDE_MS: f64 = 3000.0;
+/// How long the capture that leaves fades out over the one that comes, in ms.
+pub const FADE_MS: f64 = 400.0;
+
+/// The opacity (0 to 255) of the capture that is leaving, `elapsed_ms` after the change: fully opaque at the change and
+/// gone once the fade has run its course.
+pub fn fade_alpha(elapsed_ms: f64) -> u32 {
+    if elapsed_ms <= 0.0 {
+        return 255;
+    }
+    if elapsed_ms >= FADE_MS {
+        return 0;
+    }
+    (255.0 * (1.0 - elapsed_ms / FADE_MS)).round() as u32
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Slideshow {
@@ -106,6 +120,16 @@ mod tests {
         let mut show = Slideshow::start(0, 0.0);
         assert!(!show.tick(1, SLIDE_MS * 2.0));
         assert_eq!(show.index, 0);
+    }
+
+    #[test]
+    fn the_leaving_capture_fades_from_opaque_to_gone() {
+        assert_eq!(fade_alpha(0.0), 255);
+        assert_eq!(fade_alpha(FADE_MS / 2.0), 128);
+        assert_eq!(fade_alpha(FADE_MS), 0);
+        assert_eq!(fade_alpha(FADE_MS * 3.0), 0);
+        let steps: Vec<u32> = (0..=10).map(|k| fade_alpha(FADE_MS * f64::from(k) / 10.0)).collect();
+        assert!(steps.windows(2).all(|pair| pair[1] <= pair[0]), "{steps:?}");
     }
 
     #[test]

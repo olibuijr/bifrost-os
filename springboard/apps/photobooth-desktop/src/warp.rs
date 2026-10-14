@@ -5,10 +5,57 @@
 use bifrost_app::kit::Image;
 use bifrost_render::distortion_filters as distortion;
 
-/// Bulge strength: 0 is no change, 1 the strongest.
-const BULGE_SCALE: f32 = 0.85;
-/// Twirl angle at the centre, in radians.
-const TWIRL_ANGLE: f32 = 2.4;
+/// How far the distortion effects pull, chosen in View > Distortion Strength.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Strength {
+    Subtle,
+    Normal,
+    Strong,
+}
+
+impl Strength {
+    pub const ALL: [Strength; 3] = [Strength::Subtle, Strength::Normal, Strength::Strong];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Strength::Subtle => "Subtle",
+            Strength::Normal => "Normal",
+            Strength::Strong => "Strong",
+        }
+    }
+
+    /// The name the choice is remembered under in the app's defaults.
+    pub fn key(self) -> &'static str {
+        match self {
+            Strength::Subtle => "subtle",
+            Strength::Normal => "normal",
+            Strength::Strong => "strong",
+        }
+    }
+
+    /// The choice stored under `key`, or none for a name that is not one of `key()`.
+    pub fn from_key(key: &str) -> Option<Strength> {
+        Strength::ALL.into_iter().find(|s| s.key() == key)
+    }
+
+    /// Bulge strength: 0 is no change, 1 the strongest.
+    fn bulge_scale(self) -> f32 {
+        match self {
+            Strength::Subtle => 0.4,
+            Strength::Normal => 0.85,
+            Strength::Strong => 1.0,
+        }
+    }
+
+    /// Twirl angle at the centre, in radians.
+    fn twirl_angle(self) -> f32 {
+        match self {
+            Strength::Subtle => 1.2,
+            Strength::Normal => 2.4,
+            Strength::Strong => 3.6,
+        }
+    }
+}
 
 /// The disc the warps act on: the picture's centre and a radius that never leaves the picture.
 fn disc(img: &Image) -> ((f32, f32), f32) {
@@ -38,15 +85,15 @@ pub fn mirror_left(img: &Image) -> Image {
 }
 
 /// The centre of the picture swollen outwards, as in a fish-eye lens.
-pub fn bulge(img: &Image) -> Image {
+pub fn bulge(img: &Image, strength: Strength) -> Image {
     let (centre, radius) = disc(img);
-    distortion::bump(img, centre, radius, BULGE_SCALE)
+    distortion::bump(img, centre, radius, strength.bulge_scale())
 }
 
 /// The picture rotated around its centre, most at the middle and not at all at the edge of the disc.
-pub fn twirl(img: &Image) -> Image {
+pub fn twirl(img: &Image, strength: Strength) -> Image {
     let (centre, radius) = disc(img);
-    distortion::twirl(img, centre, radius, TWIRL_ANGLE)
+    distortion::twirl(img, centre, radius, strength.twirl_angle())
 }
 
 #[cfg(test)]
@@ -103,7 +150,7 @@ mod tests {
     #[test]
     fn the_warps_keep_the_size_of_the_picture() {
         let img = ramp(64, 40);
-        for out in [bulge(&img), twirl(&img), mirror_left(&img), flip_horizontal(&img)] {
+        for out in [bulge(&img, Strength::Normal), twirl(&img, Strength::Normal), mirror_left(&img), flip_horizontal(&img)] {
             assert_eq!((out.w, out.h, out.px.len()), (64, 40, 64 * 40));
         }
     }
@@ -111,7 +158,7 @@ mod tests {
     #[test]
     fn bulge_pulls_the_middle_outwards_and_keeps_the_centre() {
         let img = ramp(100, 100);
-        let out = bulge(&img);
+        let out = bulge(&img, Strength::Normal);
         // the centre barely moves
         let centre = 50 * 100 + 50;
         assert!(red(out.px[centre]).abs_diff(red(img.px[centre])) <= 1);
@@ -123,7 +170,7 @@ mod tests {
     #[test]
     fn bulge_leaves_the_corners_untouched() {
         let img = ramp(100, 60);
-        let out = bulge(&img);
+        let out = bulge(&img, Strength::Normal);
         for corner in [0, 99, 59 * 100, 59 * 100 + 99] {
             assert_eq!(out.px[corner], img.px[corner]);
         }
@@ -132,7 +179,7 @@ mod tests {
     #[test]
     fn twirl_moves_pixels_inside_the_disc_and_keeps_the_corners() {
         let img = ramp(100, 100);
-        let out = twirl(&img);
+        let out = twirl(&img, Strength::Normal);
         assert_eq!(out.px[0], img.px[0]);
         assert_eq!(out.px[99 * 100 + 99], img.px[99 * 100 + 99]);
         let probe = 50 * 100 + 70;
@@ -142,9 +189,27 @@ mod tests {
     }
 
     #[test]
+    fn each_strength_gives_its_own_picture() {
+        let img = ramp(100, 100);
+        for pair in [[Strength::Subtle, Strength::Normal], [Strength::Normal, Strength::Strong]] {
+            assert_ne!(bulge(&img, pair[0]), bulge(&img, pair[1]));
+            assert_ne!(twirl(&img, pair[0]), twirl(&img, pair[1]));
+        }
+    }
+
+    #[test]
+    fn a_strength_is_remembered_by_its_key() {
+        for strength in Strength::ALL {
+            assert_eq!(Strength::from_key(strength.key()), Some(strength));
+        }
+        assert_eq!(Strength::from_key("loud"), None);
+        assert_eq!(Strength::ALL.map(Strength::title), ["Subtle", "Normal", "Strong"]);
+    }
+
+    #[test]
     fn an_empty_picture_survives_every_warp() {
         let img = Image { w: 0, h: 0, px: Vec::new() };
-        for out in [bulge(&img), twirl(&img), mirror_left(&img), flip_horizontal(&img)] {
+        for out in [bulge(&img, Strength::Normal), twirl(&img, Strength::Normal), mirror_left(&img), flip_horizontal(&img)] {
             assert!(out.px.is_empty());
         }
     }
