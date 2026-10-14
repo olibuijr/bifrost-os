@@ -38,9 +38,9 @@
     {
       "feature": "Multicast groups",
       "apple": "NWConnectionGroup",
-      "bifrost": "springboard/src/net/share.rs (join_multicast_v4)",
-      "status": "os",
-      "note": "Multicast is used inside the shell only. No app API"
+      "bifrost": "springboard/ui/src/multicast.rs (MulticastMembership); springboard/src/net/share.rs (join_multicast_v4)",
+      "status": "partial",
+      "note": "Group membership rules, the 224.0.0.0/4 range and send options are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the model opens no socket, so the shell's join is not driven by it, and apps still cannot join a group."
     },
     {
       "feature": "Custom Ethernet frames",
@@ -59,9 +59,9 @@
     {
       "feature": "TLS and security options",
       "apple": "NWProtocolTLS, sec_protocol_options_t, sec_protocol_metadata_t, sec_identity_t",
-      "bifrost": "springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots); springboard/sdk/src/keychain.rs (keychain items)",
-      "status": "os",
-      "note": "TLS is fixed in the shell (rustls). No handshake options, verify blocks, client identities, or TLS metadata for apps"
+      "bifrost": "springboard/ui/src/tls_options.rs (TlsOptions, Trust); springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots)",
+      "status": "partial",
+      "note": "Version range, protocol names, server name and pinned trust are validated headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: no handshake uses these options yet, the shell's client is still fixed, and client identities and TLS metadata are missing."
     },
     {
       "feature": "QUIC, WebSocket and custom framers",

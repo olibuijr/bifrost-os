@@ -73,16 +73,16 @@
     {
       "feature": "Zip archive creation",
       "apple": "Compressing and decompressing files with stream compression (sample code)",
-      "bifrost": "springboard/src/files/zip.rs:569 (create)",
-      "status": "os",
-      "note": "Files app archive feature; reachable from apps through the SDK archive module (compress_directory, compress_file)"
+      "bifrost": "springboard/sdk/src/archive.rs (compress_directory, compress_file); springboard/src/files/zip.rs:569 (create)",
+      "status": "partial",
+      "note": "Folder and single-file ZIP creation is reachable from apps and tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: the archives are ZIP only, with no reference stream format, and the Files app writer still uses its fixed-Huffman encoder."
     },
     {
       "feature": "Zip archive extraction",
       "apple": "Compressing and decompressing files with stream compression (sample code)",
-      "bifrost": "springboard/src/files/zip.rs:222 (extract)",
-      "status": "os",
-      "note": "Files app archive feature; progress callback and safe relative paths (safe_rel at :79); reachable through the SDK archive module (expand)"
+      "bifrost": "springboard/sdk/src/archive.rs (expand); springboard/src/files/zip.rs:222 (extract)",
+      "status": "partial",
+      "note": "Expansion into a new folder, with unsafe member paths skipped and listed, is reachable from apps and tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: extraction reads a file only, with no stream input."
     },
     {
       "feature": "SDK compression API for apps",

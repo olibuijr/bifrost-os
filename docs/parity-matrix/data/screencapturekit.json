@@ -38,9 +38,9 @@
     {
       "feature": "Capture a single window even when covered (window image capture source)",
       "apple": "SCWindow filter with SCScreenshotManager",
-      "bifrost": "springboard/mcp/src/wl.rs (one window through ext-image-copy-capture and ext-foreign-toplevel-image-capture-source)",
-      "status": "os",
-      "note": "Used by the agent tooling only. The shell's own screenshot chord captures the full screen."
+      "bifrost": "springboard/ui/src/capture_filter.rs (ContentFilter::window, captured); springboard/mcp/src/wl.rs (one window through ext-image-copy-capture and ext-foreign-toplevel-image-capture-source)",
+      "status": "partial",
+      "note": "The window filter picks a covered window by its id and is tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: no app receives pixels for the filter, the pixel path is used by the agent tooling only, and the shell's chord captures the full screen."
     },
     {
       "feature": "System content-sharing picker (SCContentSharingPicker, SCContentSharingPickerConfiguration, SCContentSharingPickerMode, SCContentSharingPickerObserver)",
