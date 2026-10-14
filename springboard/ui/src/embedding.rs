@@ -9,8 +9,8 @@
 //! * `DistanceType::Euclidean` is the straight-line distance.
 //! * `neighbors` sorts by distance, then by term (the vocabulary is ordered), and never returns the query term itself.
 //!
-//! Limits: there is no model file reader and no bundled vectors, so a vocabulary is only as good as what the caller
-//! inserts. Sentence vectors are a plain mean with no weighting, and tokens are split on non-alphanumeric characters
+//! `from_vector_text` reads a vocabulary from text lines (a term, then its components). Limits: there is no binary
+//! model reader and no bundled vectors, so a vocabulary is only as good as what the caller inserts or loads. Sentence vectors are a plain mean with no weighting, and tokens are split on non-alphanumeric characters
 //! only, so a sentence with no known words has no vector.
 
 use std::collections::BTreeMap;
@@ -34,6 +34,10 @@ pub enum EmbeddingError {
     EmptyTerm,
     /// A vector does not have the vocabulary's dimension.
     DimensionMismatch { expected: usize, found: usize },
+    /// A line of a vector file could not be read. The number is the 1-based line.
+    BadLine { line: usize },
+    /// A vector file holds no entries, so its dimension is unknown.
+    NoEntries,
 }
 
 impl fmt::Display for EmbeddingError {
@@ -44,6 +48,8 @@ impl fmt::Display for EmbeddingError {
             EmbeddingError::DimensionMismatch { expected, found } => {
                 write!(f, "expected {} dimensions, found {}", expected, found)
             }
+            EmbeddingError::BadLine { line } => write!(f, "line {} is not a term followed by numbers", line),
+            EmbeddingError::NoEntries => write!(f, "the vector file has no entries"),
         }
     }
 }
@@ -106,6 +112,36 @@ impl Embedding {
             return Err(EmbeddingError::ZeroDimension);
         }
         Ok(Embedding { dimension, vectors: BTreeMap::new() })
+    }
+
+    /// Reads a vocabulary from its text form: one entry per line, the term first and then its vector components,
+    /// separated by whitespace. Blank lines and lines starting with `#` are skipped. The first entry sets the
+    /// dimension, and every later entry must have the same number of components. A term cannot contain whitespace.
+    pub fn from_vector_text(text: &str) -> Result<Self, EmbeddingError> {
+        let mut embedding: Option<Embedding> = None;
+        for (n, raw) in text.lines().enumerate() {
+            // The first entry fixes the dimension; a later entry with another length is reported by its line.
+            let line = n + 1;
+            let trimmed = raw.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            let mut tokens = trimmed.split_whitespace();
+            let term = tokens.next().ok_or(EmbeddingError::BadLine { line })?;
+            let vector = tokens
+                .map(|t| t.parse::<f32>().ok().filter(|v| v.is_finite()))
+                .collect::<Option<Vec<f32>>>()
+                .ok_or(EmbeddingError::BadLine { line })?;
+            if vector.is_empty() {
+                return Err(EmbeddingError::BadLine { line });
+            }
+            let target = embedding.get_or_insert(Embedding::new(vector.len())?);
+            target.insert(term, &vector).map_err(|e| match e {
+                EmbeddingError::DimensionMismatch { .. } => EmbeddingError::BadLine { line },
+                other => other,
+            })?;
+        }
+        embedding.ok_or(EmbeddingError::NoEntries)
     }
 
     /// The number of components in each vector.

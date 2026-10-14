@@ -97,6 +97,25 @@ impl TextClassifier {
         Ok(TextClassifier { vocabulary: words_seen, labels: labels_seen, model })
     }
 
+    /// A two-label sentiment classifier built from word lists, the domain preset of the natural language framework's
+    /// sentiment tagging. Each positive word adds one to the positive score and takes one from the negative score;
+    /// each negative word does the reverse. The labels are `positive` and `negative`, in that order, so a tie goes to
+    /// `positive`. The word lists are the whole model: no weights are trained.
+    pub fn sentiment(positive: &[&str], negative: &[&str]) -> Result<Self, ClassifierError> {
+        if positive.is_empty() && negative.is_empty() {
+            return Err(ClassifierError::Empty);
+        }
+        let vocabulary: Vec<&str> = positive.iter().chain(negative.iter()).copied().collect();
+        let mut weights = Vec::with_capacity(vocabulary.len() * 2);
+        for _ in positive {
+            weights.extend_from_slice(&[1.0, -1.0]);
+        }
+        for _ in negative {
+            weights.extend_from_slice(&[-1.0, 1.0]);
+        }
+        Self::new(&vocabulary, &["positive", "negative"], weights, vec![0.0, 0.0])
+    }
+
     /// The vocabulary in lowercase, in the order the weights use.
     pub fn vocabulary(&self) -> &[String] {
         &self.vocabulary

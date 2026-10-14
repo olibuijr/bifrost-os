@@ -902,6 +902,7 @@ pub mod ml_model;
 pub mod text_classifier;
 pub mod ml_state;
 pub mod ml_update;
+pub mod ml_runtime;
 pub mod model_assets;
 pub mod model_specialization;
 pub mod work_stream;
