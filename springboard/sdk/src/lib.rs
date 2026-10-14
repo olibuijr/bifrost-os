@@ -55,6 +55,8 @@ pub mod dock_tile;
 pub mod cursor_service;
 pub mod text_services;
 pub mod accessibility_display;
+pub mod accessibility_rotor;
+pub mod guided_access;
 pub mod defaults;
 pub mod font_descriptor;
 pub mod font_substitution;
@@ -448,6 +450,11 @@ pub trait App {
     fn ax_text(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxText> {Vec::new()}
     /// `accessibilityTitle` and `accessibilityHelp` of elements (`Node::label` is `accessibilityLabel`). Sent only when they change.
     fn ax_meta(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxMeta> {Vec::new()}
+    /// Guided Access started or ended, or the user changed one of the app's restrictions (`UIGuidedAccessRestrictionDelegate`).
+    /// True when the app needs a new frame. The default ignores it.
+    fn guided_access(&mut self, _ctx: &Ctx, _change: guided_access::GuidedAccessChange) -> bool {
+        false
+    }
     /// An assistive technology acts on node `id` (`ax set`: `AXPress`, an `AXValue` write, `AXFocused`). The default maps
     /// `Press` onto `Input::Activate(id)` and ignores the rest; apps with editable nodes override it. True when a frame is needed.
     fn ax_set(&mut self, ctx: &Ctx, id: u64, action: crate::proto::AxAction) -> bool {

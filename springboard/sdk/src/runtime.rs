@@ -655,6 +655,16 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
                 ToApp::Touches(_) => {}
+                ToApp::GuidedAccessState { active } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.guided_access(c, crate::guided_access::GuidedAccessChange::Session(active));
+                    }
+                }
+                ToApp::GuidedRestriction { id, allowed } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.guided_access(c, crate::guided_access::GuidedAccessChange::Restriction { id, allowed });
+                    }
+                }
                 ToApp::Key(k) => {
                     if let Some(c) = &ctx {
                         need_frame |= app.event(c, Input::Key(k));
