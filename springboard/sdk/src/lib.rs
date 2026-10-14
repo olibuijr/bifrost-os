@@ -73,6 +73,7 @@ pub mod formatters;
 pub mod pref_domains;
 pub mod calendar_system;
 pub mod bundle_resources;
+pub mod package_layout;
 pub mod keychain;
 pub mod keychain_groups;
 pub mod keychain_query;
