@@ -96,6 +96,8 @@ pub const MENU_FILTER: u32 = 60;
 pub const MENU_COLUMN: u32 = 100;
 /// View > Dock Icon items: MENU_DOCK + index into `DockMode::ALL`.
 pub const MENU_DOCK: u32 = 80;
+/// Process > Sample Duration items: MENU_SAMPLE_LENGTH + index into `sample_proc::DURATIONS`.
+pub const MENU_SAMPLE_LENGTH: u32 = 140;
 
 /// Height of one line of the report view (points) and how often a running job is looked at (milliseconds).
 pub const REPORT_LINE_PT: f32 = 16.0;
@@ -286,6 +288,8 @@ pub struct Monitor {
     pub averages: EnergyAverages,
     /// The CPU graph shows one strip per core (View > CPU History) instead of the total.
     pub cpu_history: bool,
+    /// How long Sample Process looks, in seconds (one of `sample_proc::DURATIONS`).
+    pub sample_seconds: u32,
     /// The background task running now (a process sample or the diagnostics), if any.
     pub job: Option<Job>,
     /// The report shown in place of the table.
@@ -338,6 +342,7 @@ impl Monitor {
             scope: None,
             averages: EnergyAverages::default(),
             cpu_history: false,
+            sample_seconds: sample_proc::DURATION_SECS,
             job: None,
             report: None,
             request: None,
@@ -415,18 +420,27 @@ impl Monitor {
         self.job.is_some()
     }
 
-    /// Process > Sample Process: looks at the selected process's threads for ten seconds.
+    /// Process > Sample Process: looks at the selected process's threads for the chosen duration.
     pub fn start_sample(&mut self) {
         if self.job.is_some() {
             return;
         }
         let Some(p) = self.selected_proc().cloned() else { return };
-        let (pid, name) = (p.pid, p.name.clone());
+        let (pid, name, seconds) = (p.pid, p.name.clone(), self.sample_seconds);
         self.report = None;
         self.job = Some(Job::start(JobKind::Sample, &format!("Sampling {name}"), move |progress| {
-            sample_proc::run(pid, &name, sample_proc::DURATION_SECS, sample_proc::INTERVAL_MS, progress)
+            sample_proc::run(pid, &name, seconds, sample_proc::INTERVAL_MS, progress)
         }));
         self.status.clear();
+    }
+
+    /// Process > Sample Duration: the length of the next sample. Only the offered lengths are taken.
+    pub fn set_sample_seconds(&mut self, seconds: u32) -> bool {
+        if !sample_proc::DURATIONS.contains(&seconds) {
+            return false;
+        }
+        self.sample_seconds = seconds;
+        true
     }
 
     /// View > Run System Diagnostics: gathers the logs and counters into an archive to save.
@@ -1782,5 +1796,18 @@ mod tests {
         let lines = m.inspector_lines();
         assert!(lines.len() >= 2, "a heading for the files and one for the ports");
         assert!(lines[0].0, "the first line is a heading");
+    }
+
+    #[test]
+    fn the_sample_duration_takes_only_the_offered_lengths() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert_eq!(m.sample_seconds, 10);
+        assert!(m.set_sample_seconds(30));
+        assert_eq!(m.sample_seconds, 30);
+        assert!(!m.set_sample_seconds(7));
+        assert_eq!(m.sample_seconds, 30);
+        // nothing selected: no sample starts, and the length is kept for the next one
+        m.start_sample();
+        assert!(!m.job_running());
     }
 }

@@ -32,7 +32,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use window::{
     Monitor, Request, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_DOCK, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
-    MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAVE, MENU_SIGNAL, MENU_SIGNAL_SHEET, MENU_STOP,
+    MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAMPLE_LENGTH, MENU_SAVE, MENU_SIGNAL, MENU_SIGNAL_SHEET, MENU_STOP,
 };
 
 /// The preference holding View > Update Frequency, in seconds.
@@ -43,6 +43,8 @@ const PREF_COLUMNS: &str = "columns";
 const PREF_CPU_HISTORY: &str = "cpuHistory";
 /// The preference holding View > Dock Icon, as an index into `DockMode::ALL`.
 const PREF_DOCK: &str = "dockMode";
+/// The preference holding Process > Sample Duration, in seconds.
+const PREF_SAMPLE: &str = "sampleSeconds";
 
 /// What a pending save panel will write once the user has chosen a place.
 enum Export {
@@ -146,6 +148,13 @@ impl ActivityApp {
                 m.start_sample();
                 true
             }
+            n if (MENU_SAMPLE_LENGTH..MENU_SAMPLE_LENGTH + sample_proc::DURATIONS.len() as u32).contains(&n) => {
+                let seconds = sample_proc::DURATIONS[(n - MENU_SAMPLE_LENGTH) as usize];
+                if m.set_sample_seconds(seconds) {
+                    ctx.defaults_mut().set_int(PREF_SAMPLE, i64::from(seconds));
+                }
+                true
+            }
             MENU_DIAGNOSTICS => {
                 m.start_diagnostics();
                 true
@@ -216,6 +225,8 @@ impl App for ActivityApp {
                 m.set_columns(ColumnSet::from_pref(&ctx.defaults().string(PREF_COLUMNS).unwrap_or_default()));
                 m.set_cpu_history(ctx.defaults().bool(PREF_CPU_HISTORY));
                 m.set_dock_mode(DockMode::from_index(ctx.defaults().int(PREF_DOCK)));
+                // a stored length that is not offered (or none yet) keeps the default
+                m.set_sample_seconds(u32::try_from(ctx.defaults().int(PREF_SAMPLE)).unwrap_or(0));
                 self.monitor = Some(m);
             }
         }
@@ -339,6 +350,10 @@ impl App for ActivityApp {
         process.push(AppMenuItem::new(MENU_DELTAS, "Show Deltas for Process").checked(m.deltas_on_selected()).enabled(m.has_selected()));
         process.push(AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()));
         process.push(AppMenuItem::new(MENU_SAMPLE, "Sample Process").enabled(m.has_selected() && !m.job_running()));
+        process.push(AppMenuItem::submenu("Sample Duration"));
+        for (i, secs) in sample_proc::DURATIONS.iter().enumerate() {
+            process.push(AppMenuItem::new(MENU_SAMPLE_LENGTH + i as u32, &format!("{secs} seconds")).checked(m.sample_seconds == *secs).depth(1));
+        }
         process.push(AppMenuItem::new(MENU_STOP, "Stop Background Task").key("cmd+.").enabled(m.job_running()));
         process.push(AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"));
 

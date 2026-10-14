@@ -6,6 +6,7 @@
 
 use crate::job::{Outcome, Progress};
 use crate::sample::ProcSample;
+use crate::sample_proc;
 use bifrost_app::archive;
 use std::fs;
 use std::io::Read;
@@ -134,7 +135,8 @@ pub fn gather(dir: &Path, procs: &[ProcSample], progress: &Progress) -> Outcome 
     if let Err(e) = fs::create_dir_all(&stage) {
         return Outcome::Failed(format!("Could not prepare the diagnostics folder: {e}"));
     }
-    let total = (PROC_FILES.len() + CAPTURES.len() + 2) as u32;
+    // the /proc files, the process list, the system sample, the captures, and the zip
+    let total = (PROC_FILES.len() + CAPTURES.len() + 3) as u32;
     let mut done = 0u32;
     let mut included = Vec::new();
     let mut missing = Vec::new();
@@ -159,6 +161,16 @@ pub fn gather(dir: &Path, procs: &[ProcSample], progress: &Progress) -> Outcome 
         progress.set(done, total);
     }
     store("processes.txt", format_processes(procs), &mut included, &mut missing);
+    done += 1;
+    progress.set(done, total);
+
+    // a short look at every thread of every process, what Run Spindump gives the reference app
+    let pids: Vec<u32> = procs.iter().map(|p| p.pid).collect();
+    let sample = sample_proc::sample_system(&pids, sample_proc::SYSTEM_ROUNDS, sample_proc::SYSTEM_INTERVAL_MS, progress);
+    if progress.cancelled() {
+        return abandon(&stage);
+    }
+    store("system-sample.txt", cap(sample.render_system(sample_proc::SYSTEM_INTERVAL_MS)), &mut included, &mut missing);
     done += 1;
     progress.set(done, total);
 

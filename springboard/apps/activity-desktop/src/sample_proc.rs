@@ -12,8 +12,12 @@ use std::time::{Duration, Instant};
 
 /// Time between two looks at the process, in milliseconds.
 pub const INTERVAL_MS: u64 = 20;
-/// How long a sample lasts, in seconds.
+/// How long a sample lasts, in seconds, by default and the choices Process > Sample Duration offers.
 pub const DURATION_SECS: u32 = 10;
+pub const DURATIONS: [u32; 3] = [3, 10, 30];
+/// The system-wide sample in the diagnostics: how many looks at every thread, and the time between them.
+pub const SYSTEM_ROUNDS: u32 = 5;
+pub const SYSTEM_INTERVAL_MS: u64 = 200;
 /// Most kernel frames kept per place, innermost first.
 const MAX_FRAMES: usize = 6;
 /// Frames every system call passes through, which say nothing about where the thread waits.
@@ -57,6 +61,8 @@ pub fn wait_point(stack: &[String], wchan: Option<&str>, state: char) -> String 
 #[derive(Debug, Default)]
 struct ThreadProfile {
     name: String,
+    /// The process the thread belongs to (set for a system-wide sample).
+    owner: u32,
     seen: u32,
     waits: HashMap<Wait, u32>,
 }
@@ -65,8 +71,10 @@ struct ThreadProfile {
 #[derive(Debug, Default)]
 pub struct Profile {
     threads: BTreeMap<u32, ThreadProfile>,
-    /// How many times the process was looked at.
+    /// How many times the process (or every process, for a system-wide sample) was looked at.
     pub rounds: u32,
+    /// Name each thread's process in the report (a system-wide sample covers many).
+    pub show_owners: bool,
 }
 
 /// What the report says about the process before the counts.
@@ -91,12 +99,19 @@ impl Profile {
         *thread.waits.entry(wait).or_insert(0) += 1;
     }
 
+    /// Counts one sighting of a thread and records the process it belongs to.
+    pub fn add_for(&mut self, owner: u32, tid: u32, name: &str, wait: Wait) {
+        self.add(tid, name, wait);
+        if let Some(thread) = self.threads.get_mut(&tid) {
+            thread.owner = owner;
+        }
+    }
+
     pub fn thread_count(&self) -> usize {
         self.threads.len()
     }
 
-    /// The report: a header, then each thread with its places, the most frequent first. Indentation is leading spaces,
-    /// which the viewer turns into an offset.
+    /// The report of a single process: a header, then each thread with its places.
     pub fn render(&self, head: &Header) -> String {
         let mut out = format!("Sampling {} ({}) for {} seconds with {} millisecond intervals\n", head.name, head.pid, head.seconds, head.interval_ms);
         if !head.command.is_empty() {
@@ -109,8 +124,26 @@ impl Profile {
         if head.ended_early {
             out.push_str("The process ended before the sampling time was up.\n");
         }
+        self.push_threads(&mut out);
+        out
+    }
+
+    /// The report of a system-wide sample: how many looks were taken, then every thread with its process and places.
+    pub fn render_system(&self, interval_ms: u64) -> String {
+        let mut out = format!("System sample of every process: {} samples at {} millisecond intervals, {} threads\n", self.rounds, interval_ms, self.threads.len());
+        if self.threads.is_empty() {
+            out.push_str("No thread could be read. Threads of other users are not readable unless the system allows it.\n");
+        }
+        self.push_threads(&mut out);
+        out
+    }
+
+    /// Each thread in id order with its places, the most frequent first. Indentation is leading spaces, which the viewer
+    /// turns into an offset.
+    fn push_threads(&self, out: &mut String) {
         for (tid, thread) in &self.threads {
-            out.push_str(&format!("\nThread {tid} {}   seen in {} samples\n", thread.name, thread.seen));
+            let owner = if self.show_owners && thread.owner != 0 { format!(" of pid {}", thread.owner) } else { String::new() };
+            out.push_str(&format!("\nThread {tid} {}{owner}   seen in {} samples\n", thread.name, thread.seen));
             let mut waits: Vec<(&Wait, &u32)> = thread.waits.iter().collect();
             // most frequent first; equal counts in a fixed order so the report does not shuffle
             waits.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.point.cmp(&b.0.point)).then_with(|| a.0.state.cmp(&b.0.state)));
@@ -119,7 +152,6 @@ impl Profile {
                 out.push_str(&format!("    {count} ({share:.0}%)  state {}  {}\n", wait.state, wait.point));
             }
         }
-        out
     }
 }
 
@@ -138,6 +170,31 @@ fn observe_thread(pid: u32, tid: u32) -> Option<(String, Wait)> {
     let wchan = fs::read_to_string(format!("{base}/wchan")).ok();
     let point = wait_point(&stack, wchan.as_deref(), thread.state);
     Some((thread.name, Wait { state: thread.state, point }))
+}
+
+/// Looks at every thread of every process in `pids`, `rounds` times with `interval_ms` between the looks: the system-wide
+/// sample the diagnostics include. Processes that have gone are skipped. A stop request ends it early, with the looks
+/// taken so far. The caller owns the progress count, so this only reads the stop request.
+pub fn sample_system(pids: &[u32], rounds: u32, interval_ms: u64, progress: &Progress) -> Profile {
+    let mut profile = Profile { show_owners: true, ..Profile::default() };
+    for round in 0..rounds {
+        if progress.cancelled() {
+            break;
+        }
+        for &pid in pids {
+            let Some(tids) = threads_of(pid) else { continue };
+            for tid in tids {
+                if let Some((name, wait)) = observe_thread(pid, tid) {
+                    profile.add_for(pid, tid, &name, wait);
+                }
+            }
+        }
+        profile.rounds += 1;
+        if round + 1 < rounds {
+            std::thread::sleep(Duration::from_millis(interval_ms));
+        }
+    }
+    profile
 }
 
 /// Samples a process for `seconds`, looking every `interval_ms`. Reports progress in milliseconds and stops early,
@@ -243,6 +300,32 @@ mod tests {
         let mut h = head();
         h.ended_early = true;
         assert!(p.render(&h).contains("The process ended before the sampling time was up."));
+    }
+
+    #[test]
+    fn the_system_report_names_each_threads_process() {
+        let mut p = Profile { show_owners: true, ..Profile::default() };
+        p.add_for(7, 70, "worker", Wait { state: 'S', point: "ep_poll".into() });
+        p.add_for(8, 80, "other", Wait { state: 'R', point: "running".into() });
+        p.rounds = 2;
+        let text = p.render_system(20);
+        assert!(text.starts_with("System sample of every process: 2 samples at 20 millisecond intervals, 2 threads\n"));
+        assert!(text.contains("Thread 70 worker of pid 7   seen in 1 samples\n"));
+        assert!(text.contains("Thread 80 other of pid 8"));
+        // a single process's report keeps its plain thread lines
+        let single = Profile::default().render(&head());
+        assert!(!single.contains(" of pid"));
+    }
+
+    #[test]
+    fn a_system_sample_looks_round_by_round_and_stops_when_asked() {
+        let progress = Progress::default();
+        let profile = sample_system(&[std::process::id()], 2, 1, &progress);
+        assert_eq!(profile.rounds, 2);
+        assert!(profile.thread_count() >= 1);
+        assert!(profile.render_system(1).contains("Thread "));
+        progress.request_stop();
+        assert_eq!(sample_system(&[std::process::id()], 3, 1, &progress).rounds, 0);
     }
 
     #[test]
