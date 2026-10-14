@@ -569,6 +569,7 @@ pub mod anim_value;
 pub mod keypath_anim;
 pub mod anim_transaction;
 pub mod symbol_effect;
+pub mod dwell;
 pub mod symbol_layers;
 pub mod frame_rate;
 pub mod form_factor;
