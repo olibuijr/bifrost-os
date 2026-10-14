@@ -133,7 +133,6 @@ Worst first. Regenerate with `--update-baseline --write-doc`.
 | App | Score | Findings | Top 3 rules |
 |---|---:|---:|---|
 | screenshot-desktop | 96 | 1 | APP-11 x1 |
-| files | 98 | 1 | RES-02 x1 |
 | activity-desktop | 100 | 0 | none |
 | archive-desktop | 100 | 0 | none |
 | assistant-desktop | 100 | 0 | none |
@@ -157,6 +156,7 @@ Worst first. Regenerate with `--update-baseline --write-doc`.
 | dictionary-desktop | 100 | 0 | none |
 | diskutil-desktop | 100 | 0 | none |
 | effectcraft-desktop | 100 | 0 | none |
+| files | 100 | 0 | none |
 | filmcraft-desktop | 100 | 0 | none |
 | fontbook-desktop | 100 | 0 | none |
 | freeform-desktop | 100 | 0 | none |
