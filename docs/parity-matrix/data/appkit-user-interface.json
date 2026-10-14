@@ -45,9 +45,9 @@
     {
       "feature": "Windows, Panels, and Screens",
       "apple": "NSWindow, NSPanel, NSScreen, sheets, open/save panels, font and colour panels",
-      "bifrost": "springboard/ui/src/sheet.rs; springboard/ui/src/panels.rs; springboard/src/shell/docpanel.rs; springboard/src/shell/desk.rs; springboard/wm; wired: springboard/src/shell/desk.rs (desk_tile_front, desk_restore_front, edge snap on title-bar drop)",
+      "bifrost": "springboard/ui/src/sheet.rs; springboard/ui/src/panels.rs; springboard/src/shell/docpanel.rs; springboard/src/shell/desk.rs; springboard/wm; wired: springboard/src/shell/desk.rs (desk_tile_front, desk_restore_front, edge snap on title-bar drop); springboard/ui/tests/parity_sdk-tests-11.rs",
       "status": "partial",
-      "note": "Windows, sheets, open/save and font/colour panels exist; NSScreen-style multi-screen API for apps is thin. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Sheet buttons, keys and hit tests, alert sizes, font and colour panel selection and callbacks are tested headless in parity_sdk-tests-11.rs. Gap: the NSScreen-style multi-screen API for apps is thin, and the desk window wiring has no test; verify on Midget for parity."
     },
     {
       "feature": "Sound, Speech, and Haptics",
