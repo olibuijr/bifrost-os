@@ -81,8 +81,8 @@
       "feature": "Local key-value storage (complementary)",
       "apple": "app local persistence",
       "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/coding.rs",
-      "status": "os",
-      "note": "local only, not a CloudKit counterpart"
+      "status": "partial",
+      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices."
     }
   ],
   "gaps": [

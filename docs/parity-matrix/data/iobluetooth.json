@@ -10,9 +10,9 @@
     {
       "feature": "Host controller (power, name, bondable, SSP)",
       "apple": "IOBluetoothHostController",
-      "bifrost": "springboard/src/bare/bluetooth.rs (OP_SET_POWERED, OP_SET_LOCAL_NAME, OP_SET_BONDABLE, OP_SET_SSP, Cmd::Enable)",
-      "status": "os",
-      "note": "Shell only. Apps get no SDK call to read or set the local controller."
+      "bifrost": "springboard/sdk/src/bluetooth_service.rs (Bluetooth::apply_status, RadioState, enable); springboard/sdk/src/bluetooth_controller.rs (LocalName)",
+      "status": "partial",
+      "note": "The radio state an app reads and the local name check are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no app request sets the local name, bondable or SSP setting, and the shell does not take a name from an app."
     },
     {
       "feature": "Device inquiry (scan)",
@@ -31,16 +31,16 @@
     {
       "feature": "Pairing (Just Works, user confirm, timeout)",
       "apple": "IOBluetoothDevicePair, IOBluetoothDevicePairDelegate",
-      "bifrost": "springboard/src/bare/bluetooth.rs:68 (NoInputNoOutput Just Works), :73 (PAIR_MS timeout), OP_PAIR_DEVICE, OP_USER_CONFIRM_REPLY",
-      "status": "os",
-      "note": "Just Works (no input, no output) for the pairing the shell started. Legacy PIN requests are answered with a fixed \"0000\" (springboard/src/bare/bluetooth.rs:641-650). No user-entered PIN or passkey."
+      "bifrost": "springboard/sdk/src/bluetooth_service.rs (pair, Bluetooth::busy); springboard/sdk/src/bluetooth_picker.rs (BluetoothPicker)",
+      "status": "partial",
+      "note": "The pairing in progress and the device the user picks are modelled; the shell still pairs with Just Works and a fixed legacy PIN. Gap: no PIN or passkey entry and no confirmation prompt reach apps."
     },
     {
       "feature": "Connect, disconnect and forget a device",
       "apple": "IOBluetoothDevice (openConnection, closeConnection, remove)",
-      "bifrost": "springboard/src/bare/bluetooth.rs (Cmd::Connect, Cmd::Disconnect, Cmd::Forget, OP_DISCONNECT, OP_UNPAIR_DEVICE); springboard/src/shell/pages.rs (BluetoothDetail: Connect / Disconnect / Forget This Device)",
-      "status": "os",
-      "note": "Works from the Settings page. Apps cannot connect to a device."
+      "bifrost": "springboard/sdk/src/bluetooth_devices.rs (DeviceList: paired, connected, forget); springboard/sdk/src/bluetooth_events.rs (DeviceEvents); springboard/sdk/src/bluetooth_service.rs (connect, disconnect, forget)",
+      "status": "partial",
+      "note": "The device order, forgetting, and the connect and disconnect events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: the connect and disconnect requests are answered by the shell, and that round trip is not yet verified on the lab machine."
     },
     {
       "feature": "Audio output routing to a headset",
