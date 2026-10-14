@@ -11,7 +11,7 @@ composable node actions and keyframe sequences in `springboard/ui/src/sk_action.
   an action takes, infinite for an endless repeat.
 - `Runner` holds running actions. `run` returns a `Handle`, `advance(dt)` moves every action on by `dt` seconds and
   returns the report ids that fired, in order. `remove`, `remove_all`, `is_active` and `active_count` manage them. Negative
-  and non-finite steps count as zero. An endless repeat whose body takes no time finishes after one pass, and an endless repeat makes at most 10,000 passes in one step; the rest of that step is dropped.
+  and non-finite steps count as zero. An endless repeat whose body takes no time finishes after one pass.
 - `Keyframes` maps a time to a value. Keys are `(time, value)` pairs in strictly increasing time order, and
   `Interpolation::Linear` or `Interpolation::Hold` fills the span between keys. Times outside the keys take the nearest
   key's value.
