@@ -334,6 +334,15 @@ impl Clock {
         &self.stopwatch
     }
 
+    /// Changes the stopwatch (the App Intents path) and saves it when `change` reports a change, as the buttons do.
+    pub fn change_stopwatch(&mut self, t: f64, change: impl FnOnce(&mut Stopwatch) -> bool) -> bool {
+        let changed = change(&mut self.stopwatch);
+        if changed {
+            self.persist_stopwatch(t);
+        }
+        changed
+    }
+
     pub fn timers(&self) -> &Timers {
         &self.timers
     }

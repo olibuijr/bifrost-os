@@ -16,3 +16,21 @@ title = "World Clock Time"
 description = "Reports the time in a World Clock city, or on this device when no city is named."
 shortcut = true
 params = ["city:string?"]
+
+[[intent]]
+id = "start-stopwatch"
+title = "Start Stopwatch"
+description = "Starts the stopwatch if it is stopped."
+shortcut = true
+
+[[intent]]
+id = "stop-stopwatch"
+title = "Stop Stopwatch"
+description = "Stops the stopwatch if it is running."
+shortcut = true
+
+[[intent]]
+id = "record-lap"
+title = "Record Lap"
+description = "Records a lap while the stopwatch is running."
+shortcut = true
