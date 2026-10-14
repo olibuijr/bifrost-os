@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: hardware driver, kernel side",
+   "bifrost": "springboard/src/bare/bluetooth.rs",
+   "status": "partial",
+   "note": "Serial over Bluetooth (RFCOMM) comes from the Linux rfcomm kernel module. bluetooth.rs drives the radio through the kernel management socket and does not open RFCOMM serial ports for apps.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
