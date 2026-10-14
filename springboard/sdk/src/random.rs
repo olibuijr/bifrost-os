@@ -4,7 +4,7 @@
 //! once and seeds from `testing::seed()` so a test kit run deals the same sequence.
 //!
 //! A source is deterministic: one algorithm and one seed give one sequence on every machine. Nothing here reads the
-//! clock. See docs/parity/gameplaykit.md.
+//! clock. See docs/parity/gameplaykit-random.md.
 
 pub use bifrost_core::random::{
     shuffle, GaussianDistribution, RandomDistribution, RandomSource, ShuffledDistribution, SplitMix64, Xorshift64,
