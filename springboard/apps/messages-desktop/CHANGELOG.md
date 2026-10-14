@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 — 2026-10-14
+
+- Emoji picker: a strip of groups under the search field (All, Faces, Hands, Nature, Food, Things, Signs). A group shows its own emoji, with its recently used ones first; a search still finds emoji in every group.
+- Picker tests run headless in tests/parity_app-messages.rs.
+- Not yet: end-to-end encryption, dragging files in, a user directory search in New Message, server-side message search, skin tones.
+
 ## 0.3.0 — 2026-10-13
 
 - New Message takes several Matrix user ids, separated by commas, and starts a private group conversation; one id still starts a direct conversation.
