@@ -1807,13 +1807,7 @@ impl Shell {
         // shadow (CPU path; the GPU presenter draws its own): Golden Gate's key window casts a
         // large soft shadow (~40 pt blur, ~16 pt down, ~30% under the bottom edge), others a light one
         if !w.maximized && shadow {
-            let (layers, step, dy, a) = if focused { (8, 5.0, 12.0, 9) } else { (4, 4.0, 5.0, 8) };
-            for k in (0..layers).rev() {
-                let g = ui.pt(step) * (k + 1) as f32;
-                s.fill_rrect(r.x as f32 - g, r.y as f32 - g + ui.pt(dy), r.w as f32 + 2.0 * g, r.h as f32 + 2.0 * g, rad + g, rgba(0, 0, 0, a));
-            }
-            // the outer hairline: dark ~16% just outside the frame
-            s.fill_rrect(r.x as f32 - 1.0, r.y as f32 - 1.0, r.w as f32 + 2.0, r.h as f32 + 2.0, rad + 1.0, rgba(0, 0, 0, 40));
+            cached_window_shadow(s, ui, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, focused);
         }
         let bar = if focused { super::ui::WINDOW_FRAME_FOCUSED.now() } else { super::ui::WINDOW_FRAME_BLURRED.now() };
         s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, bar);
@@ -2048,6 +2042,40 @@ impl Shell {
         }
         if let Some(Grab::DockDrag{from,at_x,at_y,moved:true,..})=desk.grab {if let Some(&index)=list.get(from){if let Some(base)=self.base_icons.get(index){let size=rects[from].w as usize;let icon=base.resized(size,size);s.blit(&icon,at_x as i32-size as i32/2,at_y as i32-size as i32/2,255,210);}}}
     }
+}
+
+/// Cache the CPU window shadow's rounded-rectangle raster. The size and appearance stay identical;
+/// only the expensive per-frame SDF coverage walks are replaced by a clipped source-over blit.
+fn cached_window_shadow(s: &mut Surface, ui: &super::ui::Ui, x: f32, y: f32, w: f32, h: f32, rad: f32, focused: bool) {
+    use std::cell::RefCell;
+    type Key = (usize, usize, u32, u32, u32, bool);
+    thread_local! { static CACHE: RefCell<Vec<(Key, usize, Image)>> = const { RefCell::new(Vec::new()) }; }
+    let (layers, step_pt, dy_pt, alpha) = if focused { (8, 5.0, 12.0, 9) } else { (4, 4.0, 5.0, 8) };
+    let step = ui.pt(step_pt);
+    let dy = ui.pt(dy_pt);
+    let margin = (step * layers as f32 + dy + 2.0).ceil() as usize;
+    let (width, height) = (w.round() as usize, h.round() as usize);
+    let key = (width, height, rad.to_bits(), step.to_bits(), dy.to_bits(), focused);
+    CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let index = match cache.iter().position(|(candidate, _, _)| *candidate == key) {
+            Some(index) => index,
+            None => {
+                let mut image = Image::new(width + margin * 2, height + margin * 2);
+                let mut shadow = Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 };
+                for k in (0..layers).rev() {
+                    let g = step * (k + 1) as f32;
+                    shadow.fill_rrect(margin as f32 - g, margin as f32 - g + dy, width as f32 + 2.0 * g, height as f32 + 2.0 * g, rad + g, rgba(0, 0, 0, alpha));
+                }
+                shadow.fill_rrect(margin as f32 - 1.0, margin as f32 - 1.0, width as f32 + 2.0, height as f32 + 2.0, rad + 1.0, rgba(0, 0, 0, 40));
+                if cache.len() >= 12 { cache.remove(0); }
+                cache.push((key, margin, image));
+                cache.len() - 1
+            }
+        };
+        let (_, margin, image) = &cache[index];
+        s.blit(image, x.round() as i32 - *margin as i32, y.round() as i32 - *margin as i32, 255, 255);
+    });
 }
 
 impl Win {
@@ -2593,6 +2621,34 @@ mod dim_tests {
         let mut px = vec![0xffff_ffffu32; 8];
         dim_rect(&mut px, 4, 0, 0, 9, 9, 255);
         assert!(px.iter().all(|&p| p == 0xff00_0000));
+    }
+}
+
+#[cfg(test)]
+mod window_shadow_tests {
+    use super::*;
+
+    #[test]
+    fn cached_shadow_matches_the_cpu_shadow_layers() {
+        let ui = super::super::tests::ui();
+        let (width, height) = (500usize, 380usize);
+        let (x, y, w, h, rad) = (90.0, 80.0, 280.0, 180.0, ui.pt(17.0));
+        let background = vec![0xff34_5678; width * height];
+        let mut expected = background.clone();
+        let mut actual = background;
+        let mut expected_surface = Surface { w: width, h: height, stride: width, px: &mut expected, y0: 0 };
+        let mut actual_surface = Surface { w: width, h: height, stride: width, px: &mut actual, y0: 0 };
+        let (layers, step, dy, alpha) = (8, ui.pt(5.0), ui.pt(12.0), 9);
+        for k in (0..layers).rev() {
+            let g = step * (k + 1) as f32;
+            expected_surface.fill_rrect(x - g, y - g + dy, w + 2.0 * g, h + 2.0 * g, rad + g, rgba(0, 0, 0, alpha));
+        }
+        expected_surface.fill_rrect(x - 1.0, y - 1.0, w + 2.0, h + 2.0, rad + 1.0, rgba(0, 0, 0, 40));
+        cached_window_shadow(&mut actual_surface, &ui, x, y, w, h, rad, true);
+        let max_delta = expected.iter().zip(&actual).flat_map(|(a, b)| (0..4).map(move |shift| {
+            ((((a >> (shift * 8)) & 0xff) as i16) - (((b >> (shift * 8)) & 0xff) as i16)).abs()
+        })).max().unwrap_or(0);
+        assert!(max_delta <= 2, "precomposed shadow differs by at most two channel levels, got {max_delta}");
     }
 }
 
