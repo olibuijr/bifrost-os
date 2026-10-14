@@ -11,6 +11,7 @@ mod picture_tools;
 mod canvas;
 mod document;
 mod export;
+mod export_panel;
 mod find;
 mod inspector;
 mod model;
@@ -147,6 +148,9 @@ struct Viewer {
     after_open: Option<String>,
     /// Whether the Adjust Color sliders are shown on the right side.
     color_panel: bool,
+    /// Whether the Export As panel is shown on the right, and the format it exports to.
+    export_shown: bool,
+    export_format: export_panel::Format,
     /// A PDF that needs a password, and the password being typed for it.
     asking: Option<Ask>,
     /// The password a PDF was opened with this session, so it is not asked for again (Revert to Saved, Open Recent).
@@ -194,6 +198,8 @@ impl Viewer {
             authoring: None,
             after_open: None,
             color_panel: false,
+            export_shown: false,
+            export_format: export_panel::Format::Png,
             asking: None,
             password: None,
         }
@@ -212,7 +218,7 @@ impl Viewer {
         if !self.toolbar {
             lay.bar = 0;
         }
-        if self.inspector || self.color_panel {
+        if self.inspector || self.color_panel || self.export_shown {
             lay.inspector = Layout::inspector_width(ui, w);
         }
         lay
@@ -745,6 +751,11 @@ impl Viewer {
         self.selection_on_page()
     }
 
+    /// What the Export As panel shows: the chosen format, quality and size, and whether a document is open.
+    fn export_choices(&self) -> export_panel::Choices {
+        export_panel::Choices { format: self.export_format, quality: self.jpeg_quality, scale: self.export_scale, open: self.doc.is_some() }
+    }
+
     /// The rows the Inspector lists for the open file.
     fn inspector_rows(&self) -> Vec<(String, String)> {
         let Some(doc) = &self.doc else { return Vec::new() };
@@ -1016,6 +1027,20 @@ impl Viewer {
             }
             Action::ShowColorPanel => {
                 self.color_panel = !self.color_panel;
+                if self.color_panel {
+                    self.export_shown = false;
+                }
+                true
+            }
+            Action::ExportAs => {
+                self.export_shown = !self.export_shown;
+                if self.export_shown {
+                    self.color_panel = false;
+                }
+                true
+            }
+            Action::ChooseFormat(format) => {
+                self.export_format = format;
                 true
             }
             _ => self.track(|v| v.act_edit(ui, lay, action)),
@@ -1435,7 +1460,14 @@ impl Viewer {
             | Action::ToggleRememberPage
             | Action::ToggleContactDefault
             | Action::SetAuthor
-            | Action::ShowColorPanel => {}
+            | Action::ShowColorPanel
+            | Action::ExportAs
+            | Action::ChooseFormat(_) => {}
+            Action::ExportNow => match self.export_format {
+                export_panel::Format::Png => self.export_raster(Raster::Png),
+                export_panel::Format::Jpeg => self.export_raster(Raster::Jpeg(self.jpeg_quality)),
+                export_panel::Format::Pdf => self.export_pdf(),
+            },
             Action::QualityHigh | Action::QualityMedium | Action::QualityLow => {
                 if let Some(quality) = action.jpeg_quality() {
                     self.jpeg_quality = quality;
@@ -1556,6 +1588,14 @@ impl Viewer {
         }
         if let Some(action) = canvas::button_hit(ui, lay, x, y) {
             return self.act(ui, lay, action);
+        }
+        // the Export As panel takes the clicks on its side; a click on one of its buttons runs that button's action
+        if self.export_shown && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
+            let panel = export_panel::panel(&canvas::export_metrics(ui, lay), &self.export_choices());
+            return match export_panel::hit(&panel, x, y) {
+                Some(action) => self.act(ui, lay, action),
+                None => true,
+            };
         }
         // the Adjust Color panel takes the clicks on its side; its value changes while the finger moves
         if self.color_panel && lay.inspector > 0 && y >= lay.bar as f32 && x >= (lay.w - lay.inspector) as f32 {
@@ -1957,6 +1997,7 @@ fn item_labelled(action: Action, label: &str, enabled: bool, checked: bool) -> A
         Action::GoToPage => m.key("cmd+alt+g"),
         Action::AddBookmark => m.key("cmd+d"),
         Action::Save => m.key("cmd+s"),
+        Action::ExportAs => m.key("cmd+shift+s"),
         Action::CopyText => m.key("cmd+c"),
         Action::SelectAll => m.key("cmd+a"),
         Action::ToggleToolbar => m.key("cmd+alt+t"),
@@ -2062,6 +2103,7 @@ impl App for Viewer {
         );
         file_items.push(AppMenuItem::separator());
         file_items.push(item(Action::ExportPdf, pdf, false));
+        file_items.push(item(Action::ExportAs, open, self.export_shown));
         file_items.push(AppMenuItem::separator());
         file_items.push(item(Action::Save, open, false));
         file_items.push(item(Action::RevertToSaved, open, false));
@@ -2239,6 +2281,8 @@ impl App for Viewer {
         let draft = self.draft(&lay);
         let rows = if self.inspector && self.mode != Mode::Slideshow { self.inspector_rows() } else { Vec::new() };
         let sliders = (self.color_panel && lay.inspector > 0 && self.mode != Mode::Slideshow).then(|| self.adjust.sliders());
+        let export = (self.export_shown && lay.inspector > 0 && self.mode != Mode::Slideshow)
+            .then(|| export_panel::panel(&canvas::export_metrics(&ctx.ui, &lay), &self.export_choices()));
         let scene = Scene {
             doc: self.doc.as_ref(),
             view: self.view,
@@ -2255,6 +2299,7 @@ impl App for Viewer {
             contact_scroll: self.contact_scroll,
             found: &self.found,
             color: sliders.as_ref().map(|s| s.as_slice()),
+            export,
         };
         canvas::draw(s, &ctx.ui, &lay, &scene, &mut self.cache);
         let mut d = Damage::new(s.w, s.h);

@@ -3,6 +3,7 @@
 //! draw first; the sidebar and the toolbar draw last, so anything that runs under them is covered.
 
 use crate::document::{Document, THUMB_W};
+use crate::export_panel;
 use crate::find::Hit;
 use crate::model::{self, Adjust, Mark, MarkKind, Norm, Slider, View, HIGHLIGHT, MARK_BLUE};
 use bifrost_app::kit::ui::{self, Ui, Weight};
@@ -189,6 +190,12 @@ pub enum Action {
     /// Adjust > Sharpen and Soften: one step of the sharpness up or down.
     Sharpen,
     Soften,
+    /// File > Export As: the export panel on the right shows the format, quality and size choices and Export.
+    ExportAs,
+    /// The export panel's format choice.
+    ChooseFormat(export_panel::Format),
+    /// The export panel's Export button: the document is written in the chosen format.
+    ExportNow,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -283,6 +290,11 @@ pub const ACTIONS: &[Action] = &[
     Action::ShowColorPanel,
     Action::Sharpen,
     Action::Soften,
+    Action::ExportAs,
+    Action::ChooseFormat(export_panel::Format::Png),
+    Action::ChooseFormat(export_panel::Format::Jpeg),
+    Action::ChooseFormat(export_panel::Format::Pdf),
+    Action::ExportNow,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -411,6 +423,9 @@ impl Action {
             Action::ShowColorPanel => "Show Adjust Color",
             Action::Sharpen => "Sharpen",
             Action::Soften => "Soften",
+            Action::ExportAs => "Export As\u{2026}",
+            Action::ChooseFormat(format) => format.label(),
+            Action::ExportNow => "Export",
         }
     }
 
@@ -734,6 +749,8 @@ pub struct Scene<'a> {
     pub found: &'a [Hit],
     /// The Adjust Color panel's sliders, when the panel is shown; it takes the right side instead of the Inspector.
     pub color: Option<&'a [Slider]>,
+    /// The Export As panel, when it is shown; it takes the right side before the Adjust Color panel and the Inspector.
+    pub export: Option<export_panel::Panel>,
 }
 
 /// Draws the window. `cache` keeps the scaled picture between frames.
@@ -890,9 +907,11 @@ fn draw_sheet(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
     }
 }
 
-/// The right-hand panel: the Adjust Color sliders while they are shown, otherwise the Inspector.
+/// The right-hand panel: the Export As panel while it is shown, else the Adjust Color sliders, else the Inspector.
 fn draw_right_panel(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
-    if let Some(sliders) = scene.color {
+    if let Some(panel) = &scene.export {
+        draw_export_panel(s, ui, lay, panel);
+    } else if let Some(sliders) = scene.color {
         draw_color_panel(s, ui, lay, sliders);
     } else if let Some(rows) = scene.inspector {
         draw_inspector(s, ui, lay, rows);
@@ -910,6 +929,14 @@ pub fn slider_row(ui: &Ui, lay: &Layout, i: usize) -> (i32, i32) {
 pub fn slider_track(ui: &Ui, lay: &Layout) -> (i32, i32) {
     let pad = ui.pt(ui::SPACE_S) as i32;
     (lay.w - lay.inspector + pad, (lay.inspector - 2 * pad).max(1))
+}
+
+/// The export panel's sizes at this window: it takes the place of the inspector on the right.
+pub fn export_metrics(ui: &Ui, lay: &Layout) -> export_panel::Metrics {
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    let row = ui.pt(ui::MAC_BODY_PT * 2.0) as i32;
+    let heading = ui.pt(ui::MAC_FOOTNOTE_PT * 1.6) as i32;
+    export_panel::Metrics { left: lay.w - lay.inspector, top: lay.bar, width: lay.inspector, pad, row, heading, gap: pad }
 }
 
 /// The slider of the Adjust Color panel under a window point, when the panel is shown and the point is in one of its
@@ -954,6 +981,35 @@ fn draw_color_panel(s: &mut Surface, ui: &Ui, lay: &Layout, sliders: &[Slider]) 
         let t = if slider.max > slider.min { (slider.value - slider.min) / (slider.max - slider.min) } else { 0.0 };
         let kx = tx as f32 + t.clamp(0.0, 1.0) * tw as f32;
         s.fill_rrect(kx - 6.0, (ty - 5) as f32, 12.0, 12.0, 6.0, ui::TINT);
+    }
+}
+
+/// The Export As panel: a heading over each group, then its segmented buttons. The chosen segment is tinted and a
+/// disabled one is drawn dim.
+fn draw_export_panel(s: &mut Surface, ui: &Ui, lay: &Layout, panel: &export_panel::Panel) {
+    let w = lay.inspector;
+    if w <= 0 {
+        return;
+    }
+    let (x, top) = (lay.w - w, lay.bar);
+    fill(s, x, top, w, lay.h - top, ui::SIDEBAR_FILL);
+    fill(s, x, top, 1, lay.h - top, ui::SEPARATOR_C.now());
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    for (y, title) in &panel.headings {
+        let img = ui.text(title, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        s.blit_colored(&img, x + pad, *y, ui::LABEL_2.now(), 255);
+    }
+    for b in &panel.buttons {
+        let (background, text) = match (b.enabled, b.active) {
+            (false, _) => (ui::FILL, ui::LABEL_2.now()),
+            (true, true) => (ui::TINT, ui::WHITE),
+            (true, false) => (ui::FILL, ui::LABEL.now()),
+        };
+        s.fill_rrect(b.x as f32, b.y as f32, b.w as f32, b.h as f32, ui.pt(ui::SPACE_S), background);
+        let img = ui.text(b.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
+        let tx = b.x + (b.w - img.w as i32) / 2;
+        let ty = b.y + (b.h - img.h as i32) / 2;
+        s.blit_colored(&img, tx, ty, text, 255);
     }
 }
 
