@@ -6,6 +6,7 @@
 
 use super::keyboard::Out;
 use super::desk::Tile;
+use super::photos::commands::PhotoCommand;
 use super::{AppId, Effect, Screen, Shell};
 use crate::installer::keymaps::{Keyboard, Typed};
 use bifrost_proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
@@ -53,8 +54,6 @@ pub enum TermKey {
     Find,
     FindNext,
     FindPrev,
-    /// Cmd+E: Use Selection for Find
-    UseSelectionForFind,
     ClearScrollback,
     Bigger,
     Smaller,
@@ -65,16 +64,6 @@ pub enum TermKey {
     PrevTab,
     /// Cmd+1 .. Cmd+9, zero based
     Tab(u8),
-    /// Cmd+E: the selected text becomes the Find query
-    UseSelectionForFind,
-    /// Cmd+U: mark (or unmark) the current line
-    Mark,
-    /// Cmd+Up
-    PreviousMark,
-    /// Cmd+Down
-    NextMark,
-    /// Cmd+Shift+V: paste the clipboard with the shell's special characters escaped
-    PasteEscaped,
 }
 
 impl TermKey {
@@ -86,7 +75,6 @@ impl TermKey {
             (33, false) => TermKey::Find,
             (34, false) => TermKey::FindNext,
             (34, true) => TermKey::FindPrev,
-            (18, false) => TermKey::UseSelectionForFind,
             (37, false) => TermKey::ClearScrollback,
             // Cmd+= and Cmd++ (Shift+=) both enlarge
             (13, _) => TermKey::Bigger,
@@ -97,11 +85,6 @@ impl TermKey {
             (27, true) => TermKey::NextTab,
             (26, true) => TermKey::PrevTab,
             (2..=10, false) => TermKey::Tab((code - 2) as u8),
-            (18, false) => TermKey::UseSelectionForFind,
-            (22, false) => TermKey::Mark,
-            (103, false) => TermKey::PreviousMark,
-            (108, false) => TermKey::NextMark,
-            (47, true) => TermKey::PasteEscaped,
             _ => return None,
         })
     }
@@ -146,10 +129,10 @@ pub enum Shortcut {
     AccessibilityShortcut,
     /// Ctrl+Cmd+D: Look Up the selection in Dictionary (the Services menu's Look Up in Dictionary)
     LookUp,
-    /// Shift+Cmd+Y: Make New Sticky Note from the selection (the Services menu's Make New Sticky Note)
-    MakeSticky,
     /// Shift+Cmd+5: the screenshot toolbar, a capture session over the screen
     Capture,
+    /// a Photos menu command or its key equivalent, taken while Photos is in front (`photos::commands`)
+    Photo(PhotoCommand),
     /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
     ZoomToggle,
     /// Option+Cmd+= (true) zooms the screen in one step, Option+Cmd+- (false) zooms it out
@@ -166,7 +149,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::MakeSticky => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) => return None,
         }))
     }
 }
@@ -213,6 +196,12 @@ impl HwKeys {
 
     /// `key`, with Term's Cmd chords taken first when `term` (Term is in front).
     pub fn key_in(&mut self, code: u16, down: bool, term: bool) -> Option<Shortcut> {
+        self.key_front(code, down, term, false)
+    }
+
+    /// `key`, with the key equivalents of the front app taken first: Term's Cmd chords while `term`, and Photos'
+    /// commands while `photos`.
+    pub fn key_front(&mut self, code: u16, down: bool, term: bool, photos: bool) -> Option<Shortcut> {
         if code == KEY_RIGHTALT {
             self.altgr = if down { self.altgr.saturating_add(1) } else { self.altgr.saturating_sub(1) };
         }
@@ -246,6 +235,11 @@ impl HwKeys {
                 return Some(Shortcut::Term(k));
             }
         }
+        if photos && meta && !ctrl {
+            if let Some(c) = PhotoCommand::from_chord(code, self.shift > 0, alt) {
+                return Some(Shortcut::Photo(c));
+            }
+        }
         match code {
             KEY_SPACE if meta && !alt => Some(Shortcut::QuickSearch),
             // Ctrl+Space switches the input source (the input menu's next keyboard), as on the reference platform
@@ -267,7 +261,6 @@ impl HwKeys {
             KEY_8 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomToggle),
             KEY_EQUAL | KEY_MINUS if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomStep(code == KEY_EQUAL)),
             KEY_D if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::LookUp),
-            KEY_Y if meta && !ctrl && !alt && self.shift != 0 => Some(Shortcut::MakeSticky),
             KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Tile(match code {
                 KEY_LEFT => Tile::Left,
                 KEY_RIGHT => Tile::Right,
@@ -599,6 +592,10 @@ impl Shell {
     pub fn term_front(&self) -> bool {
         self.screen_on && self.screen == Screen::App(AppId::Terminal) && !self.is_locked()
     }
+    /// True while Photos is the front app: its menus show, and its Cmd key equivalents are taken.
+    pub fn photos_front(&self) -> bool {
+        self.screen_on && self.screen == Screen::App(AppId::Photos) && !self.is_locked()
+    }
     pub fn hw_window_shortcut(&self, sc: Shortcut) -> bool {
         cfg!(feature = "desktop-wayland") && matches!(sc, Shortcut::Close | Shortcut::Minimize) && self.desk_active() && !self.is_locked()
     }
@@ -701,7 +698,6 @@ impl Shell {
                 vec![]
             }
             Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::LookUp, t),
-            Shortcut::MakeSticky if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::MakeStickyNote, t),
             // Escape closes the Look Up popover first, then the Accessibility Shortcut panel, then the character viewer, before it goes Back
             Shortcut::Back if self.look_up_escape() => vec![],
             // Escape hides the Accessibility Shortcut panel, then the character viewer, before it goes Back
@@ -711,6 +707,7 @@ impl Shell {
             Shortcut::Back => self.hw_back(t),
             Shortcut::Home => self.assistive_action(super::assistive_touch::Action::Home, t),
             Shortcut::Term(k) => self.terminal_hw_key(k, t),
+            Shortcut::Photo(c) => self.photo_command(c, t),
             Shortcut::Paste if self.screen == Screen::App(AppId::Terminal) => {
                 self.type_out(Out::Named("Paste"), t);
                 vec![]
@@ -743,7 +740,6 @@ mod tests {
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 33), Some(Shortcut::Term(TermKey::Find)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 34), Some(Shortcut::Term(TermKey::FindNext)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 34), Some(Shortcut::Term(TermKey::FindPrev)));
-        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 18), Some(Shortcut::Term(TermKey::UseSelectionForFind)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 37), Some(Shortcut::Term(TermKey::ClearScrollback)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 13), Some(Shortcut::Term(TermKey::Bigger)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 13), Some(Shortcut::Term(TermKey::Bigger)), "Cmd++");
@@ -755,13 +751,8 @@ mod tests {
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 26), Some(Shortcut::Term(TermKey::PrevTab)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 2), Some(Shortcut::Term(TermKey::Tab(0))));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 10), Some(Shortcut::Term(TermKey::Tab(8))));
-        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 18), Some(Shortcut::Term(TermKey::UseSelectionForFind)));
-        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 22), Some(Shortcut::Term(TermKey::Mark)));
-        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 103), Some(Shortcut::Term(TermKey::PreviousMark)));
-        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 108), Some(Shortcut::Term(TermKey::NextMark)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_C), Some(Shortcut::Term(TermKey::Copy)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_A), Some(Shortcut::Term(TermKey::SelectAll)));
-        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 47), Some(Shortcut::Term(TermKey::PasteEscaped)));
         // Ctrl chords are never Term's: Ctrl+F, Ctrl+K and Ctrl+T stay control characters for the pty
         for key in [33, 37, 20, 34] {
             assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], key), None);
@@ -846,8 +837,6 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_SPACE), Some(Shortcut::ReaderActivate));
         // Look Up: Ctrl+Cmd+D (Services > Look Up in Dictionary on the selection)
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTMETA], KEY_D), Some(Shortcut::LookUp));
-        // Make New Sticky Note: Shift+Cmd+Y (Shift alone keeps Redo for Cmd+Y)
-        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_Y), Some(Shortcut::MakeSticky), "Shift+Cmd+Y");
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_F5), Some(Shortcut::AccessibilityShortcut), "Option+Cmd+F5");
         // Screen Zoom: Option+Cmd+8 toggles, Option+Cmd+= zooms in, Option+Cmd+- zooms out
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_8), Some(Shortcut::ZoomToggle));

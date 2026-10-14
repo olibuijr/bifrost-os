@@ -8,6 +8,7 @@
 //! whose results arrive through a pipe the shell polls, like Deildu.
 
 pub mod albums;
+pub mod commands;
 pub mod dupes;
 pub mod edit;
 pub mod entry;
@@ -28,6 +29,8 @@ pub mod thumbs;
 pub mod undo;
 pub mod viewer;
 pub mod zoom;
+#[cfg(test)]
+mod commands_tests;
 #[cfg(test)]
 mod favorites_tests;
 #[cfg(test)]
@@ -578,7 +581,24 @@ pub struct Photos {
     /// a picture the user chose to send; the shell opens the share sheet
     share_req: Option<PathBuf>,
     camera_req: bool,
+    /// the open photo a Print command handed over; the shell takes it once and opens the print sheet
+    print_req: Option<Image>,
     dirty: bool,
+}
+
+/// The cache key of the letterboxed grid thumbnail of a photo whose plain key is `key`.
+fn thumb_key_fit(key: &str) -> String {
+    format!("{key}-fit")
+}
+
+/// The rectangle a `w` by `h` picture takes inside `cell` when it keeps its shape: centred, with bars on the spare sides.
+pub fn fit_rect(cell: Rect, w: usize, h: usize) -> Rect {
+    if w == 0 || h == 0 {
+        return cell;
+    }
+    let k = (cell.w as f32 / w as f32).min(cell.h as f32 / h as f32);
+    let (fw, fh) = ((w as f32 * k).round() as i32, (h as f32 * k).round() as i32);
+    Rect { x: cell.x + (cell.w - fw) / 2, y: cell.y + (cell.h - fh) / 2, w: fw, h: fh }
 }
 
 /// Top of the scrolling grid: below the status and navigation bars.
@@ -682,6 +702,7 @@ impl Photos {
             effects: vec![],
             share_req: None,
             camera_req: false,
+            print_req: None,
             dirty: true,
             data,
         };
@@ -759,7 +780,7 @@ impl Photos {
     /// The albums the picker lists: the fixed ones, then the user's.
     fn menu_albums(&self) -> Vec<Album> {
         let mut v = vec![Album::All, Album::Recents, Album::Favorites, Album::Screenshots, Album::Trash];
-        if !self.hidden.is_empty() {
+        if !self.hidden.is_empty() || self.shows_hidden() {
             v.push(Album::Hidden);
         }
         if !self.duplicates.is_empty() {
@@ -1036,7 +1057,7 @@ impl Photos {
         let present: HashSet<PathBuf> = self.visible.iter().map(|p| p.path.clone()).collect();
         let twins: HashSet<PathBuf> = dupes::members(&self.dupe_groups, &present).into_iter().flatten().collect();
         self.duplicates = self.visible.iter().filter(|p| twins.contains(&p.path)).cloned().collect();
-        if (self.album == Album::Hidden && self.hidden.is_empty()) || (self.album == Album::Duplicates && self.duplicates.is_empty()) {
+        if (self.album == Album::Hidden && self.hidden.is_empty() && !self.shows_hidden()) || (self.album == Album::Duplicates && self.duplicates.is_empty()) {
             self.album = Album::All;
         }
         self.favorites = models::smart_album(SmartAlbum::Favourites, &self.visible, |p| self.is_favourite(p), now);
@@ -1249,7 +1270,8 @@ impl Photos {
         let more: Vec<usize> = self.grid.visible(ahead.0, ahead.1).into_iter().filter(|i| !near.contains(i)).collect();
         let order = [near, more].concat();
         let wanted: Vec<Photo> = order.into_iter().filter_map(|i| self.photos().get(i).cloned()).collect();
-        let keys: Vec<String> = wanted.iter().map(Photo::key).collect();
+        let fit = self.fit_grid();
+        let keys: Vec<String> = wanted.iter().map(|p| self.thumb_key(p)).collect();
         // jobs still queued for cells that scrolled away give way
         *self.thumb_wanted.lock().unwrap_or_else(|p| p.into_inner()) = keys.iter().cloned().collect();
         // the caching manager keeps the same window as its preparations; the ones that scrolled away stop
@@ -1273,7 +1295,7 @@ impl Photos {
                     }
                     let image = disk.read(&key).or_else(|| {
                         let img = decode_edited(&std::fs::read(&photo.path).ok()?, recipe)?;
-                        let thumb = imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE);
+                        let thumb = if fit { imgdec::contain(&img, thumbs::SIZE, thumbs::SIZE) } else { imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE) };
                         disk.write(&key, &thumb);
                         Some(thumb)
                     });
@@ -2405,12 +2427,27 @@ impl Photos {
 
     /// Drops the cached pictures of `p` so the next request decodes it with its current edit.
     fn invalidate(&mut self, p: &Photo) {
-        let key = p.key();
-        self.thumbs.remove(&key);
-        self.cells.remove(&key);
-        self.full.remove(&key);
-        self.thumb_failed.remove(&key);
-        let _ = std::fs::remove_file(self.disk.path(&key));
+        for key in [p.key(), thumb_key_fit(&p.key())] {
+            self.thumbs.remove(&key);
+            self.cells.remove(&key);
+            self.full.remove(&key);
+            self.thumb_failed.remove(&key);
+            let _ = std::fs::remove_file(self.disk.path(&key));
+        }
+    }
+
+    /// The key of the grid thumbnail of `p`: the aspect-ratio grid keeps its own, letterboxed ones.
+    fn thumb_key(&self, p: &Photo) -> String {
+        if self.fit_grid() {
+            thumb_key_fit(&p.key())
+        } else {
+            p.key()
+        }
+    }
+
+    /// Whether the grid shows whole pictures letterboxed in their cells (View > Aspect Ratio Grid).
+    pub(super) fn fit_grid(&self) -> bool {
+        self.prefs.get("grid") == Some("fit")
     }
 
     /// "12 days left" for a photo in Recently Deleted.
@@ -2463,7 +2500,7 @@ impl Photos {
         }
         let Some(thumb) = self.thumbs.get(key) else { return };
         if thumb.w != size || thumb.h != size {
-            let scaled = imgdec::cover(thumb, size, size);
+            let scaled = if self.prefs.get("grid") == Some("fit") { imgdec::contain(thumb, size, size) } else { imgdec::cover(thumb, size, size) };
             self.cells.insert(key, scaled);
         }
     }
@@ -2474,7 +2511,8 @@ impl Photos {
         let pressed = self.pressed;
         let empty = self.photos().is_empty();
         let selecting = self.selection.active;
-        let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, p.key(), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
+        let fit = self.fit_grid();
+        let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, self.thumb_key(p), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
         {
             let mut band = s.rows(top as usize, bottom as usize);
             for (si, y) in self.grid.headers(off, off + bottom - top) {
@@ -2487,7 +2525,10 @@ impl Photos {
                 let r = Rect { x: x as i32, y: (top + y - off) as i32, w: cw as i32, h: ch as i32 };
                 self.prepare_cell(&key, cw as usize);
                 match self.cells.get(&key).or_else(|| self.thumbs.get(&key)) {
-                    Some(img) => super::switcher::draw_scaled(&mut band, img, r, 0.0, 255),
+                    Some(img) => {
+                        let target = if fit { fit_rect(r, img.w, img.h) } else { r };
+                        super::switcher::draw_scaled(&mut band, img, target, 0.0, 255)
+                    }
                     None => band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, CELL),
                 }
                 if pressed == Some(Target::Cell(i)) {

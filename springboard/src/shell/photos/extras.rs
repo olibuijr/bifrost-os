@@ -30,6 +30,7 @@ impl Photos {
         match out {
             Out::Named("Undo") => self.undo(ui),
             Out::Named("Redo") => self.redo(ui),
+            Out::Named("Copy") if browsing && self.viewer.is_some() => self.copy_current(),
             Out::Named("SelectAll") if browsing && self.viewer.is_none() && !self.view.is_empty() => {
                 if !self.selection.active {
                     self.selection.begin();
@@ -771,16 +772,26 @@ impl Photos {
     /// Paste Edits: puts the copied adjustments on every selected photo.
     pub(super) fn paste_to_selection(&mut self, ui: &Ui) {
         self.more_menu = false;
+        let chosen = self.selected_photos();
+        self.paste_edits_to(ui, chosen);
+        self.selection.end();
+        self.rebuild(ui);
+    }
+
+    /// Pastes the copied edit onto `photos`, keeping each one's own geometry, as one step for Undo.
+    pub(super) fn paste_edits_to(&mut self, ui: &Ui, photos: Vec<Photo>) {
         let Some(clip) = self.edit_clip else { return };
+        if photos.is_empty() {
+            return;
+        }
         let mut changes = Vec::new();
-        for p in self.selected_photos() {
+        for p in &photos {
             changes.push(self.pref_now(&format!("edit:{}", p.path.display())));
-            let target = self.recipe(&p).unwrap_or_default();
-            self.set_recipe(&p, paste_edits(clip, target));
-            self.invalidate(&p);
+            let target = self.recipe(p).unwrap_or_default();
+            self.set_recipe(p, paste_edits(clip, target));
+            self.invalidate(p);
         }
         self.record("Paste Edits", changes);
-        self.selection.end();
         self.rebuild(ui);
     }
 
