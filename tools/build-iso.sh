@@ -106,9 +106,6 @@ install -Dm755 packaging/arch/wayland/open-url "$AIROOT/usr/bin/bifrost-open-url
 install -Dm644 packaging/arch/wayland/bifrost-browser.desktop "$AIROOT/usr/share/applications/bifrost-browser.desktop"
 install -Dm644 packaging/arch/wayland/mimeapps.list "$AIROOT/etc/xdg/mimeapps.list"
 install -Dm755 packaging/arch/wayland/apps "$AIROOT/usr/bin/bifrost-apps"
-for file in environment autostart rc.xml; do
-  install -Dm644 "packaging/arch/wayland/$file" "$AIROOT/usr/share/bifrost/wayland/$file"
-done
 W="$AIROOT/etc/systemd/system"
 mkdir -p "$W/graphical.target.wants" "$W/multi-user.target.wants"
 
