@@ -26,6 +26,8 @@ struct Observer {
     id: u64,
     name: String,
     object: Option<u64>,
+    /// A suspended observer hears no posts until it is resumed.
+    suspended: bool,
     f: Handler,
 }
 
@@ -42,10 +44,32 @@ thread_local! {
 #[derive(Clone, Copy, Debug)]
 pub struct NotificationCenter;
 
-/// Removes its observer when dropped (from any thread).
+/// Removes its observer when dropped (from any thread). [`ObserverToken::suspend`] and [`ObserverToken::resume`]
+/// pause and restart delivery without removing it.
 #[must_use = "dropping the token removes the observer"]
 pub struct ObserverToken {
     id: u64,
+}
+
+impl ObserverToken {
+    /// Stops delivery to the observer until [`ObserverToken::resume`]. Posts made meanwhile are not kept.
+    pub fn suspend(&self) {
+        self.set_suspended(true);
+    }
+
+    /// Restarts delivery to a suspended observer.
+    pub fn resume(&self) {
+        self.set_suspended(false);
+    }
+
+    fn set_suspended(&self, on: bool) {
+        let id = self.id;
+        REGISTRY.with(|r| {
+            if let Some(o) = r.borrow_mut().observers.iter_mut().find(|o| o.id == id) {
+                o.suspended = on;
+            }
+        });
+    }
 }
 
 impl Default for NotificationCenter {
@@ -62,7 +86,7 @@ impl NotificationCenter {
             let mut r = r.borrow_mut();
             r.next += 1;
             let id = r.next;
-            r.observers.push(Observer { id, name: name.to_string(), object, f: Rc::new(f) });
+            r.observers.push(Observer { id, name: name.to_string(), object, suspended: false, f: Rc::new(f) });
             ObserverToken { id }
         })
     }
@@ -97,7 +121,7 @@ fn deliver(n: &Notification) {
         r.borrow()
             .observers
             .iter()
-            .filter(|o| o.name == n.name && (o.object.is_none() || o.object == n.object))
+            .filter(|o| !o.suspended && o.name == n.name && (o.object.is_none() || o.object == n.object))
             .map(|o| o.f.clone())
             .collect()
     });
@@ -119,9 +143,9 @@ impl Drop for ObserverToken {
 ///
 /// `post` is process-local (tests, single-app use). `post_with(ctx, ..)` also sends `ToShell::DistPost`, which the
 /// shell forwards as `ToApp::DistNotify` to every other running app; the runtime delivers it to observers on the
-/// main thread. The sender's own observers are notified synchronously. Names live in their own namespace, apart from
-/// [`NotificationCenter`]. Gaps: `user_info` is string to string, capped at 32 entries and 1024 characters a value;
-/// no `suspensionBehavior` (an app that is not running misses the post, like `.drop`).
+/// main thread. The sender's own observers are notified synchronously, with the same payload the other apps get (see
+/// [`distributed_user_info`]). Names live in their own namespace, apart from [`NotificationCenter`]. Gaps: no
+/// `suspensionBehavior` (an app that is not running misses the post, like `.drop`).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DistributedNotificationCenter;
 
@@ -135,11 +159,25 @@ impl DistributedNotificationCenter {
     }
     /// Posts to this app's observers and, through the shell, to every other app.
     pub fn post_with(&self, ctx: &crate::Ctx, name: &str, user_info: HashMap<String, String>) {
-        let mut info: Vec<(String, String)> = user_info.clone().into_iter().collect();
-        info.sort();
-        ctx.send_to_shell(crate::proto::ToShell::DistPost { name: name.to_string(), user_info: info });
-        self.post(name, user_info);
+        let info = distributed_user_info(&user_info);
+        ctx.send_to_shell(crate::proto::ToShell::DistPost { name: name.to_string(), user_info: info.clone() });
+        self.post(name, info.into_iter().collect());
     }
+}
+
+/// Most entries a distributed post carries in its `user_info`.
+pub const MAX_USER_INFO_ENTRIES: usize = 32;
+/// Longest value, in characters, a distributed post carries in its `user_info`. A longer value is cut to this length.
+pub const MAX_USER_INFO_VALUE_CHARS: usize = 1024;
+
+/// The `user_info` a distributed post carries, sorted by key. Values are cut to [`MAX_USER_INFO_VALUE_CHARS`] characters
+/// and only the first [`MAX_USER_INFO_ENTRIES`] keys (in sorted order) are kept, so every app sees the same payload.
+pub fn distributed_user_info(user_info: &HashMap<String, String>) -> Vec<(String, String)> {
+    let mut info: Vec<(String, String)> =
+        user_info.iter().map(|(k, v)| (k.clone(), v.chars().take(MAX_USER_INFO_VALUE_CHARS).collect())).collect();
+    info.sort();
+    info.truncate(MAX_USER_INFO_ENTRIES);
+    info
 }
 
 /// A post relayed by the shell from another app.

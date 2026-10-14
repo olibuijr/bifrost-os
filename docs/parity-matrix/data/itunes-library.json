@@ -52,9 +52,9 @@
     {
       "feature": "Video media info (ITLibMediaItemVideoInfo)",
       "apple": "ITLibMediaItemVideoInfo",
-      "bifrost": "springboard/ui/src/video_info.rs",
+      "bifrost": "springboard/ui/src/video_info.rs; springboard/ui/tests/parity_sdk-complete-24.rs",
       "status": "partial",
-      "note": "Pure video track model: frame size, duration, frame rate and codec, validated, with the resolution label, aspect ratio and duration text. Host unit tests (6). It has no caller yet. Built on parity/team-a-03; not yet verified on Midget. No library holds video items yet."
+      "note": "Pure video track model: frame size, duration, frame rate and codec, validated, with the resolution label (4K from 2160 lines), aspect ratio, HD test and duration text. Host unit tests (6) and parity_sdk-complete-24 cover every validation error and the label and duration rules. Gap: it has no caller yet, and no library holds video items, so wiring waits for a library model. Not yet verified on Midget."
     },
     {
       "feature": "Access rules (code signing, read-only, iTunes version gate)",

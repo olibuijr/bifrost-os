@@ -31,9 +31,9 @@
     {
       "feature": "Dates and Times",
       "apple": "Date, Calendar, DateComponents, TimeZone, DateInterval",
-      "bifrost": "springboard/ui/src/calendar.rs (Gregorian Date, days_in_month, is_leap, weekday math); springboard/sdk/src/locale.rs (explicit tz_offset in DateFormatter); springboard/sdk/src/calendar_system.rs (Calendar, DateComponents, CalendarIdentifier); springboard/sdk/src/time_zone.rs (TimeZone)",
+      "bifrost": "springboard/ui/src/calendar.rs (Gregorian Date, days_in_month, is_leap, weekday math); springboard/sdk/src/locale.rs (explicit tz_offset in DateFormatter); springboard/sdk/src/calendar_system.rs (Calendar, DateComponents, CalendarIdentifier); springboard/sdk/src/time_zone.rs (TimeZone); springboard/sdk/src/date_interval.rs (DateInterval); springboard/sdk/tests/parity_sdk-complete-24.rs",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 6 tests (earlier part). Added later, host tests only: Gregorian, Buddhist, Japanese, tabular Islamic, Hebrew and ISO 8601 calendars and TZif time zones exist; no DateInterval, no week-of-year ranges or weekday ordinal components; host tests only, not checked on Midget"
+      "note": "verified on Midget 0.7.25 by 6 tests (earlier part). Added later, host tests only: Gregorian, Buddhist, Japanese, tabular Islamic, Hebrew and ISO 8601 calendars and TZif time zones exist; DateInterval is a half-open span with containment, duration and intersection (parity_sdk-complete-24). Gap: no week-of-year ranges or weekday ordinal components; host tests only, not checked on Midget"
     },
     {
       "feature": "Units and Measurement",
@@ -45,9 +45,9 @@
     {
       "feature": "Data Formatting",
       "apple": "NumberFormatter, DateFormatter, RelativeDateTimeFormatter, ByteCountFormatter, MeasurementFormatter, ListFormatter",
-      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button; wired: springboard/apps/calculator-desktop/src/tape.rs (render, statistics_lines use format::localize and format::display); springboard/sdk/src/formatters/ (spellOut and ordinal numbers, DateComponentsFormatter, named relative days)",
+      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button; wired: springboard/apps/calculator-desktop/src/tape.rs (render, statistics_lines use format::localize and format::display); springboard/sdk/src/formatters/ (spellOut and ordinal numbers, DateComponentsFormatter, named relative days, iso8601); springboard/sdk/tests/parity_sdk-complete-24.rs",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 6 tests (earlier part). Added later, host tests only: en, is and de number separators (dates and wording en and is); no stringsdict plurals, duration is English only, no person-name, interval or ISO8601 formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 6 tests (earlier part). Added later, host tests only: en, is and de number separators (dates and wording en and is); ISO 8601 date-time writing and reading with a zone designator (parity_sdk-complete-24). Gap: no stringsdict plurals, duration is English only, no person-name or interval formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Filters and Sorting",

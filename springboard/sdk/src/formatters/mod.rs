@@ -2,9 +2,10 @@
 //! currency, `DateFormatter`, `ByteCountFormatter`, `MeasurementFormatter`, `ListFormatter`) lives in
 //! `locale.rs` and is re-exported here; this module adds the styles that file lacks: spell-out and ordinal
 //! numbers (`number`), the named `RelativeDateTimeFormatter` style (`relative`), and
-//! `DateComponentsFormatter` (`date_components`).
+//! `DateComponentsFormatter` (`date_components`), and the internet date-time form (`iso8601`).
 
 pub mod date_components;
+pub mod iso8601;
 pub mod number;
 pub mod relative;
 
