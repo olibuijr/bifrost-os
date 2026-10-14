@@ -8041,10 +8041,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Uploads security diagnostics to the vendor's servers, a path BifrOSt does not have, so the daemon has no role here.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.sensingpredictd.plist",
@@ -8146,10 +8145,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Music recognition service whose matching depends on the vendor's catalogue and cloud lookup, which BifrOSt does not run.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.shazameventsd.plist",
@@ -8167,10 +8165,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Event lookups for the same song-recognition service; they depend on the vendor's catalogue and cloud, which BifrOSt does not run.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.sidecar-hid-relay.plist",
@@ -8566,10 +8563,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Manages the vendor's sticker and avatar-sticker store for the messaging ecosystem; the packs and their store are vendor content.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.storeaccountd.plist",
@@ -8818,10 +8814,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "gap",
+   "note": "Serves cross-document backlinks and link context to note and file apps; BifrOSt has no shared document link index, so build one in springboard/sdk and let the Notes app list backlinks.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.syncdefaultsd.plist",
@@ -8860,10 +8855,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Syncs contacts, calendars and media with the vendor's mobile devices over the desktop link; BifrOSt has no device pairing, and its calendar sync uses the DAV model instead.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.syncservices.uihandler.plist",
@@ -8881,10 +8875,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Front-end prompt and progress UI for the same vendor device sync engine, so it has no role without that engine.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.sysdiagnose_agent.plist",
@@ -8986,10 +8979,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Routes calls for the vendor's telephony and call hand-off services; BifrOSt has no cellular modem or carrier call stack.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.testmanagerd.plist",
@@ -9007,10 +8999,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Runs test sessions on the vendor's devices over the developer tool link; BifrOSt tests run as cargo tests and headless testkit tests.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.textcomposerd.plist",
@@ -9091,10 +9082,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Shows tips from the vendor's content service; the content and its fetch come from the vendor's servers.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.toolkitd.plist",
@@ -9113,9 +9103,8 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Tried reading the launchd plist (launch events, run at load, one XPC service); no framework or binary is extracted yet, so the purpose is unconfirmed.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.translationd.plist",
@@ -9511,10 +9500,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "gap",
+   "note": "Records voice samples and trains a personal synthetic voice for accessibility speech; ui/src/speech.rs synthesises speech, but no voice sample store or training exists, so build them.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.voicememod.plist",
@@ -9575,9 +9563,8 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Tried reading the launchd plist (environment, launch events, no service name); the binary is not extracted, so the purpose is unconfirmed.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.watchlistd.plist",
@@ -9847,10 +9834,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Guest agent for the vendor's own guests running under a QEMU host; BifrOSt is not a guest of that virtualisation, so the component has no role.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.AssetCache.builtin.plist",
@@ -9995,9 +9981,8 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Tried reading the launchd plist (remote services, run at load); the name suggests vendor support tooling, but the binary is not extracted, so the purpose is unconfirmed.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ContainerMigrationService.plist",
@@ -10015,10 +10000,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "gap",
+   "note": "Migrates app data containers when the OS upgrades; the updater has rollback (packaging/arch/recovery) but moves no per-app data, so build a migration step for app data format changes.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.CoreAuthentication.daemon.plist",
@@ -10645,10 +10629,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Enforces code signatures on the vendor's Mach-O binaries at launch; BifrOSt runs ELF binaries and has no launch-time signature check of that kind.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.NetworkLinkConditioner.plist",
@@ -10896,11 +10879,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/net/mod.rs",
+   "status": "partial",
+   "note": "Covers the network changes the shell makes itself (rtnetlink, DHCP, wpa_supplicant); the privileged helper that writes system network preferences is not replicated.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.SafeEjectGPUStartupDaemon.plist",
@@ -11275,10 +11257,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Manages the vendor's secure-world exclave partitions on its own silicon; BifrOSt runs on generic PC hardware.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.analyticsd.plist",
@@ -11359,10 +11340,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Manages the vendor's copy-on-write container and volumes; BifrOSt uses Linux filesystems, so there are no such volumes to manage.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.appinstalld.plist",
@@ -11570,9 +11550,8 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Tried reading the launchd plist (launched argument, one Mach service); its job is block restore of disk images, but the installer's image path was not checked, so the owner is unassigned.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.assetsubscriptiond.plist",
@@ -12072,11 +12051,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "systemd",
+   "status": "partial",
+   "note": "systemd covers the per-user runtime directory (/run/user/UID); the per-user cache and temporary directories this helper creates at login are not provided.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cameracaptured.plist",
@@ -12179,9 +12157,8 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Tried reading the launchd plist (keep alive, initial system support, one XPC service); the binary is not extracted, so the purpose is unconfirmed.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cfnetwork.cfnetworkagent.plist",
@@ -12450,11 +12427,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/net/mod.rs, springboard/src/net/wifi.rs",
+   "status": "partial",
+   "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant); no system-wide configuration store, DNS resolver or proxy service is provided.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.configureLocalKDC.plist",
@@ -12492,11 +12468,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/bare/app_policy.rs",
+   "status": "partial",
+   "note": "Each installed app launches in a bubblewrap sandbox that limits its files; there is no system container registry or per-app data container service beyond that.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.contextstored.plist",
@@ -12598,10 +12573,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Keeps the vendor's kernel-extension deny list up to date from vendor assets; BifrOSt loads no vendor kernel extensions.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.corercd.plist",
@@ -12620,9 +12594,8 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Tried reading the launchd plist (one Mach service, interactive spawn); the binary is not extracted, so the purpose is unconfirmed.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.corerepaird.plist",
@@ -12829,10 +12802,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Writes a weekly report of the vendor's system integrity protection state; that protection has no Linux counterpart, so the report has nothing to describe here.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ctkd.plist",
@@ -12934,10 +12906,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "gap",
+   "note": "Purges app cache directories of removed or memory-pressured apps; BifrOSt has no cache-purge service, so build one that frees per-app caches when the disk is low.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.deviceconfigurationd.plist",
@@ -13039,10 +13010,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Restores the vendor's mobile devices over the recovery link; BifrOSt has no device restore path.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.dhcp6d.plist",
@@ -13122,11 +13092,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/backup.rs",
+   "status": "partial",
+   "note": "Backs up and restores the shell's own data as one checksummed archive; the backup status diagnostics of the reference system's disk backup are not provided.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diagnosticservicesd.plist",
@@ -13334,9 +13303,8 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Tried reading the launchd plist (control and host special-port Mach services, filesystem label); the binary is not extracted, so the purpose is unconfirmed.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.dprivacyd.plist",
@@ -13375,10 +13343,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Sets the developer tools' automation mode for UI test automation on the vendor's systems; BifrOSt tests run through cargo and the headless testkit.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.dt.fetchsymbolsd.plist",
@@ -13396,10 +13363,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Fetches debug symbols from the vendor's symbol servers for developer tools; BifrOSt builds its own binaries and has no vendor symbol server.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.dvdplayback.setregion.plist",
@@ -13417,10 +13383,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Sets the region code of an optical drive through a vendor service; region is a drive firmware setting with no BifrOSt service behind it.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.dynamic_pager.plist",
@@ -13438,10 +13403,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
-   "rea": [],
-   "method": "heuristic"
+   "status": "gap",
+   "note": "Creates and removes swap files under memory pressure; the installer only detects existing swap partitions (springboard/src/installer/disks.rs), so nothing grows swap on demand and that needs building.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.eapolcfg_auth.plist",
