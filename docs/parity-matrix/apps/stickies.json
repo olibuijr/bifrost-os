@@ -112,8 +112,8 @@
    "area": "menu",
    "apple": "MainMenu: Edit > Find submenu",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:436",
-   "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes (ASCII case-insensitive), Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Replace is not done.",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:436 (replace_key), model.rs Board::replace_all",
+   "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes (ASCII case-insensitive), Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Replace... (Cmd+Alt+F) adds a replace field (Tab switches field, Return replaces and steps), Replace All replaces in every note, undoable. Not yet checked on the lab machine.",
    "wire": "Add Edit > Find… (Cmd+F) with the SDK find bar; search all notes, raise and focus the match note; Cmd+G next."
   },
   {
@@ -149,7 +149,7 @@
    "apple": "MainMenu: Font > Underline, Strikethrough, Outline",
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/main.rs:580",
-   "note": "Underline (Cmd+U) and Strikethrough, whole-note, drawn in board.rs:160. Outline is not done.",
+   "note": "Underline (Cmd+U), Strikethrough and Outline, whole-note, drawn in board.rs draw_body (outline is a ring of the text colour). Per-run attributes remain.",
    "wire": "Add Underline (Cmd+U) and Strikethrough to Style in model.rs and draw them in board.rs draw_body; menu items next to Bold/Italic."
   },
   {
@@ -165,9 +165,9 @@
    "feature": "Kern / Ligature / Baseline (super/subscript)",
    "area": "menu",
    "apple": "MainMenu: Font > Kern, Ligature, Baseline",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs per-run attributes.",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/model.rs Baseline; main.rs font_menu",
+   "note": "Font > Baseline (default, superscript, subscript) for the whole note, drawn as a vertical shift. Kern and Ligature are not done; no per-run attributes.",
    "wire": "Low value; add after per-run attributes: baseline offset attribute drawn in board.rs."
   },
   {

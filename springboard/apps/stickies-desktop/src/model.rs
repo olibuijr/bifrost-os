@@ -215,13 +215,50 @@ pub struct Style {
     pub italic: bool,
     pub underline: bool,
     pub strike: bool,
+    /// Text drawn as an outline: the letters are ringed in the text colour (Font > Outline).
+    pub outline: bool,
+    pub baseline: Baseline,
     pub size: TextSize,
     pub ink: Ink,
 }
 
+/// Where the text sits against the line (Font > Baseline).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Baseline {
+    #[default]
+    Normal,
+    Superscript,
+    Subscript,
+}
+
+impl Baseline {
+    pub fn name(self) -> &'static str {
+        match self {
+            Baseline::Normal => "normal",
+            Baseline::Superscript => "super",
+            Baseline::Subscript => "sub",
+        }
+    }
+    pub fn from_name(name: &str) -> Baseline {
+        match name {
+            "super" => Baseline::Superscript,
+            "sub" => Baseline::Subscript,
+            _ => Baseline::Normal,
+        }
+    }
+    /// Vertical shift as a fraction of the line step: negative is up.
+    pub fn shift(self) -> f32 {
+        match self {
+            Baseline::Normal => 0.0,
+            Baseline::Superscript => -0.22,
+            Baseline::Subscript => 0.18,
+        }
+    }
+}
+
 impl Default for Style {
     fn default() -> Self {
-        Style { bold: false, italic: false, underline: false, strike: false, size: TextSize::Medium, ink: Ink::Black }
+        Style { bold: false, italic: false, underline: false, strike: false, outline: false, baseline: Baseline::Normal, size: TextSize::Medium, ink: Ink::Black }
     }
 }
 
@@ -696,6 +733,47 @@ impl Board {
         found.or(if forward { all.first() } else { all.last() }).cloned()
     }
 
+    /// Replaces the focused note's selection with `with` when the selection is a match of `query`. True when it did.
+    pub fn replace_selected(&mut self, query: &str, with: &str, now: u64) -> bool {
+        if query.is_empty() {
+            return false;
+        }
+        let Some(note) = self.focused_mut() else { return false };
+        if !note.has_selection() || !note.selected_text().eq_ignore_ascii_case(query) {
+            return false;
+        }
+        note.type_text(with, now);
+        true
+    }
+
+    /// Replaces every match of `query` in every note with `with`. Returns how many were replaced. The caret of a
+    /// changed note goes to the end of its text.
+    pub fn replace_all(&mut self, query: &str, with: &str, now: u64) -> usize {
+        let needle = query.to_ascii_lowercase();
+        if needle.is_empty() {
+            return 0;
+        }
+        let mut count = 0;
+        for note in &mut self.notes {
+            let found: Vec<(usize, usize)> = note.text.to_ascii_lowercase().match_indices(&needle).map(|(i, m)| (i, i + m.len())).collect();
+            if found.is_empty() {
+                continue;
+            }
+            let mut text = String::with_capacity(note.text.len());
+            let mut last = 0;
+            for (a, b) in &found {
+                text.push_str(&note.text[last..*a]);
+                text.push_str(with);
+                last = *b;
+            }
+            text.push_str(&note.text[last..]);
+            note.set_text(&text);
+            note.modified = now;
+            count += found.len();
+        }
+        count
+    }
+
     /// Brings the match's note to the front and selects the match in it.
     pub fn select_match(&mut self, m: &Match) {
         self.raise(m.note);
@@ -712,6 +790,8 @@ fn style_fields(style: &Style) -> Vec<(String, Json)> {
         ("italic".into(), Json::Bool(style.italic)),
         ("underline".into(), Json::Bool(style.underline)),
         ("strike".into(), Json::Bool(style.strike)),
+        ("outline".into(), Json::Bool(style.outline)),
+        ("baseline".into(), Json::Str(style.baseline.name().into())),
         ("size".into(), Json::Str(style.size.name().into())),
         ("ink".into(), Json::Str(style.ink.name().into())),
     ]
@@ -730,6 +810,8 @@ fn style_from(item: &Json) -> Style {
         italic: flag(item, "italic", false),
         underline: flag(item, "underline", false),
         strike: flag(item, "strike", false),
+        outline: flag(item, "outline", false),
+        baseline: Baseline::from_name(&item.str_field("baseline").unwrap_or_default()),
         size: TextSize::from_name(&item.str_field("size").unwrap_or_default()),
         ink: Ink::from_name(&item.str_field("ink").unwrap_or_default()),
     }
@@ -1167,6 +1249,40 @@ mod tests {
     }
 
     #[test]
+    fn replace_all_swaps_every_match_in_every_note_ignoring_case() {
+        let mut b = Board::default();
+        let a = b.add_text("Cat and cat", 0.0, 0.0, 1);
+        let c = b.add_text("dog", 0.0, 0.0, 1);
+        assert_eq!(b.replace_all("CAT", "bird", 9), 2);
+        assert_eq!(b.find(a).unwrap().text, "bird and bird");
+        assert_eq!(b.find(a).unwrap().modified, 9);
+        assert_eq!(b.find(c).unwrap().modified, 1);
+        assert_eq!(b.replace_all("", "x", 9), 0);
+        assert_eq!(b.replace_all("zebra", "x", 9), 0);
+    }
+
+    #[test]
+    fn replace_selected_only_replaces_a_selection_that_matches() {
+        let mut b = Board::default();
+        let id = b.add_text("one two", 0.0, 0.0, 1);
+        b.focus = Some(id);
+        b.find_mut(id).unwrap().anchor = 0;
+        b.find_mut(id).unwrap().caret = 3;
+        assert!(!b.replace_selected("two", "2", 5));
+        assert!(b.replace_selected("ONE", "1", 5));
+        assert_eq!(b.find(id).unwrap().text, "1 two");
+    }
+
+    #[test]
+    fn baseline_names_round_trip_and_shift_the_right_way() {
+        for b in [Baseline::Normal, Baseline::Superscript, Baseline::Subscript] {
+            assert_eq!(Baseline::from_name(b.name()), b);
+        }
+        assert!(Baseline::Superscript.shift() < 0.0 && Baseline::Subscript.shift() > 0.0);
+        assert_eq!(Baseline::from_name("junk"), Baseline::Normal);
+    }
+
+    #[test]
     fn json_round_trip_keeps_every_field() {
         let mut b = Board::default();
         let a = b.add_text("Hello \"world\"\nline two", 12.5, 40.0, 100);
@@ -1175,7 +1291,7 @@ mod tests {
             n.colour = Colour::Pink;
             n.collapsed = true;
             n.translucent = false;
-            n.style = Style { bold: true, italic: true, underline: true, strike: true, size: TextSize::Large, ink: Ink::Green };
+            n.style = Style { bold: true, italic: true, underline: true, strike: true, outline: true, baseline: Baseline::Subscript, size: TextSize::Large, ink: Ink::Green };
             n.resize(300.0, 240.0);
             n.restore = Some((220.0, 200.0));
             n.modified = 150;

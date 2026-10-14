@@ -186,8 +186,20 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, x: f32, y:
         if line.start == line.end {
             continue;
         }
-        let img = ui.text(&note.text[line.start..line.end], m.pt, m.weight, ink);
-        widgets::blit(c, &img, text_x as i32, ly as i32);
+        let shift = (m.step * note.style.baseline.shift()) as i32;
+        let (tx, ty) = (text_x as i32, ly as i32 + shift);
+        let img = if note.style.outline {
+            // outline: the letters are ringed in the text colour and filled with the note colour
+            let ring = ui.text(&note.text[line.start..line.end], m.pt, m.weight, ink);
+            let r = (ui.pt(1.0) as i32).max(1);
+            for (dx, dy) in [(-r, 0), (r, 0), (0, -r), (0, r)] {
+                widgets::blit(c, &ring, tx + dx, ty + dy);
+            }
+            ui.text(&note.text[line.start..line.end], m.pt, m.weight, colour_value(note.colour))
+        } else {
+            ui.text(&note.text[line.start..line.end], m.pt, m.weight, ink)
+        };
+        widgets::blit(c, &img, tx, ty);
         let shown = note.text[line.start..line.end].trim_end().len();
         let line_w = width_of(line.start, line.start + shown);
         if note.style.underline {
@@ -229,12 +241,18 @@ pub fn find_bar_rect(ui: &Ui, width: u32, height: u32) -> Rect {
 }
 
 /// The find bar: the search text and how many places it was found in.
-pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, query: &str, found: usize) {
+pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, query: &str, replace: Option<&str>, replace_active: bool, found: usize) {
     let (cw, ch) = c.size();
     let bar = find_bar_rect(ui, cw, ch);
     widgets::material(c, ui, bar, FIND_RADIUS_PT, Material::Popover);
     let pad = ui.pt(10.0);
-    let shown = if query.is_empty() { "Find".to_string() } else { format!("{query}|") };
+    let caret = if replace.is_some() && replace_active { "" } else { "|" };
+    let shown = if query.is_empty() { "Find".to_string() } else { format!("{query}{caret}") };
+    // with the replace field open the find text comes first and the replacement follows it
+    let shown = match replace {
+        Some(with) => format!("{shown}  >  {}{}", if with.is_empty() && !replace_active { "Replace" } else { with }, if replace_active { "|" } else { "" }),
+        None => shown,
+    };
     let colour = if query.is_empty() { LABEL_2.now() } else { LABEL.now() };
     let status = match (query.is_empty(), found) {
         (true, _) => String::new(),
