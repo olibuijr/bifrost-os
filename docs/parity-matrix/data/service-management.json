@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/servicemanagement",
   "macos_since": "10.6",
   "status": "partial",
-  "bifrost": "springboard/sdk/src/service_management.rs (SMAppService.mainApp), springboard/proto/src/extras.rs, springboard/src/shell/extras.rs, springboard/src/shell/pages.rs (Settings > General > Login Items)",
-  "summary": "Login items for the app itself are covered: register, unregister, refresh and a four-case status enum, with the shell keeping the list and starting the apps at session start. Error values (kSMError*), unregister(completionHandler:) and openSystemSettingsLoginItems() are built (host-tested). Launch agents, launch daemons, embedded helper executables, the deprecated SMJob/SMLoginItemSetEnabled calls have no BifrOSt counterpart.",
+  "bifrost": "springboard/sdk/src/service_management.rs (SMAppService.mainApp), springboard/proto/src/extras.rs, springboard/src/shell/extras.rs, springboard/src/shell/pages.rs (Settings > General > Login Items), springboard/sdk/src/service_bundle.rs (embedded helpers and job plists in the app bundle)",
+  "summary": "Login items for the app itself are covered: register, unregister, refresh and a four-case status enum, with the shell keeping the list and starting the apps at session start. Error values (kSMError*), unregister(completionHandler:) and openSystemSettingsLoginItems() are built (host-tested). The app-bundle lookup for embedded login-item helpers, launch agent plists and launch daemon plists is a pure model (service_bundle.rs, host-tested) that is not yet wired into the handles or the shell. The deprecated SMJob/SMLoginItemSetEnabled calls have no BifrOSt counterpart.",
   "rea_evidence": "ev_2e998ed710ee6f18ac8c032c6df24db1fcdd3a0624632be9a80d07f655334958",
   "features": [
     {
@@ -31,30 +31,30 @@
     {
       "feature": "Login item by bundle identifier",
       "apple": "SMAppService.loginItem(identifier:)",
-      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::login_item",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::login_item); springboard/sdk/src/service_bundle.rs (find_login_item, helper_status)",
       "status": "partial",
-      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt login items are app ids only; no helper bundles"
+      "note": "service_bundle.rs finds an embedded helper by its bundle identifier and gives the reference's JobNotFound and NotFound answers; the handle does not yet read the app bundle, so it still answers NotFound. Pure model with host unit tests; not yet tested on the VM or Midget. Built on parity/team-k-service-management; not yet verified on Midget."
     },
     {
       "feature": "Launch agents",
       "apple": "SMAppService.agent(plistName:)",
-      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::agent",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::agent); springboard/sdk/src/service_bundle.rs (locate_job_plist, JobKind::Agent)",
       "status": "partial",
-      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no launch agent plist is loaded from an app bundle; bifrostd is the system supervisor and is not exposed to apps"
+      "note": "service_bundle.rs finds Contents/Library/LaunchAgents/<name>.plist in an app bundle's file list and gives InvalidPlist or JobPlistNotFound. No launch agent is loaded or started: bifrostd is the system supervisor and is not exposed to apps. Pure model with host unit tests; not yet tested on the VM or Midget. Built on parity/team-k-service-management; not yet verified on Midget."
     },
     {
       "feature": "Launch daemons",
       "apple": "SMAppService.daemon(plistName:)",
-      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::daemon",
+      "bifrost": "springboard/sdk/src/service_management.rs (SMAppService::daemon); springboard/sdk/src/service_bundle.rs (locate_job_plist, JobKind::Daemon)",
       "status": "partial",
-      "note": "Wave 3 (w3-service-management, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API for root daemons shipped in an app bundle"
+      "note": "service_bundle.rs finds Contents/Library/LaunchDaemons/<name>.plist in an app bundle's file list. No daemon is installed: there is no SDK API for root daemons shipped in an app bundle. Pure model with host unit tests; not yet tested on the VM or Midget. Built on parity/team-k-service-management; not yet verified on Midget."
     },
     {
       "feature": "Embedded helper executables",
       "apple": "helper executables inside the app's main bundle, registered through SMAppService",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "the SDK doc states BifrOSt has no embedded login-item helpers, launch agents or daemons"
+      "bifrost": "springboard/sdk/src/service_bundle.rs (LOGIN_ITEMS_DIR, helper_path_ok, helper_from_entry, find_login_item, helper_status)",
+      "status": "partial",
+      "note": "Pure model: a helper is a .app directly in Contents/Library/LoginItems with a CFBundleIdentifier (the caller reads the bundle). helper_status reports NotFound, NotRegistered or Enabled. Not wired: the handles do not scan the app bundle and the shell does not list helpers, so no helper is started or shown in Login Items. Host unit tests only; verify on Midget for parity. Built on parity/team-k-service-management; not yet verified on Midget."
     },
     {
       "feature": "Settings page for login items",
@@ -100,9 +100,9 @@
     }
   ],
   "gaps": [
-    "Launch agents and launch daemons: SMAppService.agent(plistName:) and daemon(plistName:) (the SDK doc states none exist)",
-    "Embedded helper executables registered from the app bundle, including loginItem(identifier:)",
-    "statusForLegacyPlist(at:) for earlier login-item plists",
+    "Launch agents and launch daemons are modelled but not loaded: SMAppService.agent(plistName:) and daemon(plistName:) find the plist in the bundle, and nothing starts it (no SDK API for root daemons shipped in an app bundle)",
+    "Embedded helper executables are modelled (service_bundle.rs) but not scanned from the app bundle or shown in Login Items; wiring needs the shell to list helpers and report their enabled state",
+    "statusForLegacyPlist(at:) for earlier login-item plists: the pure model exists but BifrOSt has no earlier login-item plist format to check",
     "Deprecated SMJobBless, SMLoginItemSetEnabled and the SMJob* launchd functions have no counterpart"
   ]
 }
