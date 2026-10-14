@@ -280,6 +280,7 @@ pub mod network_path;
 pub mod network_connection;
 pub mod network_listener;
 pub mod network_browser;
+pub mod route_discovery;
 pub mod http_cookies;
 pub mod passkey_client_data;
 pub mod passkey_authenticator_data;

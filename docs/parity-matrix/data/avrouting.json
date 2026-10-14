@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "springboard/audiod/src/main.rs (single audio service), springboard/src/media/route.rs (Speaker/Headphones output route), springboard/apps/music-desktop/src/music.rs (route glyph only)",
-  "summary": "AVRouting lets an app add third-party media receivers to the system route picker (AirPlay-style) through custom routing controllers, routing events and action items, and arbitrates playback between participants. BifrOSt has no route picker, no third-party receiver discovery and no playback arbitration API; the only routing is a local speaker/headphone switch in the audio layer.",
+ "summary": "AVRouting lets an app add third-party media receivers to the system route picker (AirPlay-style) through custom routing controllers, routing events and action items, and arbitrates playback between participants. BifrOSt has pure models for route rows, authorization, events, arbitration and a receiver-discovery feed, but no running network browse service or shell receiver picker; the audio layer also switches local speaker/headphone output.",
   "rea_evidence": "ev_14110f8179b556b56f5de61c07bede4c7dfac89ff255facccf244207b2b7d697",
   "features": [
     {
@@ -45,9 +45,9 @@
     {
       "feature": "Device discovery extension",
       "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)",
-      "bifrost": "springboard/src/shell/extras.rs (extension host shell, not a discovery extension point)",
-      "status": "gap",
-      "note": "The extension host runs app extensions but has no discovery point that reports a receiver to the shell. springboard/ui/src/route_picker.rs takes discovered receivers as input, and nothing supplies them yet. Blocked: a shell-side browse service has to feed receivers into the route picker; springboard/core/src/dns_browse.rs can browse DNS-SD names, but no receiver model or extension point uses it yet."
+      "bifrost": "springboard/sdk/src/route_discovery.rs (discovery_point, ReceiverFeed); springboard/ui/src/network_audio_browser.rs",
+      "status": "partial",
+      "note": "The SDK models a namespaced discovery point, validated receiver reports, TTL expiry and authorized route-picker rows, with headless tests. It sends no network browse packets, runs no extension process and is not wired to a system picker or shell browse service; not yet verified on Midget."
     },
     {
       "feature": "Playback arbitration between participants",
