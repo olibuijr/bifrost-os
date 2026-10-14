@@ -7,6 +7,7 @@ pub enum Kind {
     #[default]
     Arrow,
     IBeam,
+    VerticalIBeam,
     Crosshair,
     OpenHand,
     ClosedHand,
@@ -37,6 +38,7 @@ impl Kind {
     pub const ALL: &'static [Kind] = &[
         Kind::Arrow,
         Kind::IBeam,
+        Kind::VerticalIBeam,
         Kind::Crosshair,
         Kind::OpenHand,
         Kind::ClosedHand,
@@ -68,6 +70,7 @@ impl Kind {
         match self {
             Kind::Arrow => "arrow",
             Kind::IBeam => "i_beam",
+            Kind::VerticalIBeam => "vertical_i_beam",
             Kind::Crosshair => "crosshair",
             Kind::OpenHand => "open_hand",
             Kind::ClosedHand => "closed_hand",
@@ -105,6 +108,7 @@ impl Kind {
         match self {
             Kind::Arrow => "default",
             Kind::IBeam => "text",
+            Kind::VerticalIBeam => "vertical-text",
             Kind::Crosshair => "crosshair",
             Kind::OpenHand => "grab",
             Kind::ClosedHand => "grabbing",
