@@ -1,7 +1,7 @@
 //! End to end: a client asks for blur behind a fully transparent window over a striped background layer; the
 //! compositor's frame must show the stripes flattened inside the window and sharp outside it.
 
-use std::{io::Write, os::fd::AsFd, os::unix::net::UnixStream, path::PathBuf, time::Duration};
+use std::{io::Write, os::fd::AsFd, os::unix::net::UnixStream, path::PathBuf, sync::mpsc, time::Duration};
 
 use bifrost_wm::headless::Compositor;
 use wayland_client::{
@@ -79,10 +79,32 @@ fn luma(px: &[u8], w: usize, x: usize, y: usize) -> i32 {
     (px[i] as i32 * 2126 + px[i + 1] as i32 * 7152 + px[i + 2] as i32 * 722) / 10_000
 }
 
+/// Keep a missing wl_display.sync reply from hanging the entire integration-test process forever.
+fn bounded_registry_sync(socket: &str) {
+    let socket = socket.to_owned();
+    let (done, wait) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = (|| -> Result<(), String> {
+            let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).ok_or("XDG_RUNTIME_DIR")?;
+            let conn = Connection::from_socket(UnixStream::connect(dir.join(socket)).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+            registry_queue_init::<Client>(&conn).map(|_| ()).map_err(|e| e.to_string())
+        })();
+        let _ = done.send(result);
+    });
+    match wait.recv_timeout(Duration::from_secs(10)) {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => panic!("bounded Wayland registry/sync failed: {e}"),
+        Err(mpsc::RecvTimeoutError::Timeout) => panic!("Wayland registry/sync received no reply within 10 seconds"),
+        Err(mpsc::RecvTimeoutError::Disconnected) => panic!("Wayland registry/sync worker exited without a result"),
+    }
+}
+
 #[test]
 fn glass_blurs_what_is_behind_the_window_and_nothing_else() {
     let (w, h) = (800, 600);
     let wm = Compositor::start("wayland-bfwm-glass-test", w, h).expect("headless compositor");
+    bounded_registry_sync(&wm.socket);
     let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap();
     let conn = Connection::from_socket(UnixStream::connect(dir.join(&wm.socket)).expect("connect")).expect("connection");
     let (globals, mut queue) = registry_queue_init::<Client>(&conn).expect("registry");
