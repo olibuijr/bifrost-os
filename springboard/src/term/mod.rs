@@ -7,6 +7,7 @@ mod pty;
 mod render;
 mod sessions;
 pub mod process;
+pub mod tab_order;
 pub use sessions::Sessions;
 
 use crate::font::Font;
