@@ -45,9 +45,9 @@
     {
       "feature": "Shortcuts in Search (suggested actions)",
       "apple": "Offering Actions in the Shortcuts App, INShortcut, INVoiceShortcutCenter",
-      "bifrost": "springboard/src/shell/intents.rs (Search 'Shortcuts' section), manifest.toml [[intent]] with shortcut = true",
+      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line); springboard/src/shell/quicksearch.rs (shortcut_items, the Search 'Shortcuts' section); springboard/src/shell/apphost.rs (Manifest::parse reads [[intent]] with shortcut = true); springboard/tests/parity_sdk-tests-11.rs",
       "status": "partial",
-      "note": "Runnable parameterless intents appear in Search and run without a visible step. No user-added voice shortcuts and no suggestions from usage."
+      "note": "Manifest [[intent]] parsing, the runnable filter that Search applies and the request and reply lines are tested headless in parity_sdk-tests-11.rs. Gap: the Search list itself has no test, there are no user-added voice shortcuts and no suggestions from usage."
     },
     {
       "feature": "Donating interactions and shortcuts",
