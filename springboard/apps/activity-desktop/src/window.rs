@@ -615,13 +615,24 @@ impl Monitor {
     /// turned on is taken at once.
     fn sync_scans(&mut self) {
         let gpu = self.tab == Tab::Gpu || self.filter == Filter::Gpu;
-        let sleep = self.tab == Tab::Energy && self.tab.columns(&self.columns).iter().any(|c| c.key == Some(SortKey::PreventingSleep));
-        let turned_on = (gpu && !self.sampler.scan_gpu) || (sleep && !self.sampler.scan_sleep);
+        let sleep = self.shown_key(SortKey::PreventingSleep);
+        let ports = self.shown_key(SortKey::Ports);
+        let private = self.shown_key(SortKey::PrivateMem);
+        let wakeups = self.shown_key(SortKey::WakeUps);
+        let turned_on = (gpu && !self.sampler.scan_gpu) || (sleep && !self.sampler.scan_sleep) || (wakeups && !self.sampler.scan_wakeups);
         self.sampler.scan_gpu = gpu;
         self.sampler.scan_sleep = sleep;
+        self.sampler.scan_ports = ports;
+        self.sampler.scan_private = private;
+        self.sampler.scan_wakeups = wakeups;
         if turned_on {
             self.last_sample = None;
         }
+    }
+
+    /// Whether the current tab shows the column with this sort key.
+    fn shown_key(&self, key: SortKey) -> bool {
+        self.tab.columns(&self.columns).iter().any(|c| c.key == Some(key))
     }
 
     /// View > Columns: shows or hides the optional column at `index` of the current tab. Returns the new preference
@@ -1826,5 +1837,44 @@ mod tests {
         // nothing selected: no sample starts, and the length is kept for the next one
         m.start_sample();
         assert!(!m.job_running());
+    }
+
+    #[test]
+    fn the_per_process_readings_are_taken_only_while_their_column_is_shown() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let index = |tab: Tab, key: SortKey| tab.all_columns().iter().position(|c| c.key == Some(key)).unwrap();
+        m.set_tab(Tab::Memory);
+        assert!(!m.sampler.scan_private, "Private Memory is off by default");
+        m.toggle_column(index(Tab::Memory, SortKey::PrivateMem));
+        assert!(m.sampler.scan_private);
+        m.set_tab(Tab::Cpu);
+        assert!(!m.sampler.scan_private);
+        m.set_tab(Tab::Energy);
+        assert!(!m.sampler.scan_wakeups);
+        m.toggle_column(index(Tab::Energy, SortKey::WakeUps));
+        assert!(m.sampler.scan_wakeups && m.sampler.scan_sleep);
+        m.set_tab(Tab::Cpu);
+        m.toggle_column(index(Tab::Cpu, SortKey::Ports));
+        assert!(m.sampler.scan_ports && !m.sampler.scan_wakeups);
+    }
+
+    #[test]
+    fn the_new_columns_read_as_text_and_sort_by_their_figures() {
+        let mut small = proc(1, "small", 1000, 0.0, 0);
+        small.ports = Some(2);
+        small.private = Some(4096);
+        small.wakeups = 1.5;
+        let mut large = proc(2, "large", 1000, 0.0, 0);
+        large.ports = Some(9);
+        large.private = None;
+        large.wakeups = 0.2;
+        let rows = model::visible(&[small.clone(), large.clone()], Filter::All, 1000, "", Sort { key: SortKey::Ports, descending: true });
+        assert_eq!(rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![2, 1]);
+        let rows = model::visible(&[small.clone(), large.clone()], Filter::All, 1000, "", Sort { key: SortKey::WakeUps, descending: true });
+        assert_eq!(rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![1, 2]);
+        assert_eq!(model::cell_text(&large, Some(SortKey::PrivateMem), None), "-", "not readable");
+        assert_eq!(model::cell_text(&small, Some(SortKey::PrivateMem), None), "4.0 KB");
+        assert_eq!(model::cell_text(&small, Some(SortKey::WakeUps), None), "1.5/s");
+        assert_eq!(model::cell_text(&small, Some(SortKey::Ports), None), "2");
     }
 }

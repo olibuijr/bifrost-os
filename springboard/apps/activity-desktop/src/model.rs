@@ -74,6 +74,7 @@ impl Tab {
                 Column::new(Some(SortKey::CpuTime), "CPU Time", 88.0).off(),
                 Column::new(None, SINCE_BASELINE, 112.0).off(),
                 threads(),
+                Column::new(Some(SortKey::Ports), "Ports", 64.0).off(),
                 Column::new(Some(SortKey::Ppid), "Parent PID", 88.0).off(),
                 pid(),
             ],
@@ -81,6 +82,7 @@ impl Tab {
                 name(),
                 user(),
                 Column::new(Some(SortKey::Memory), "Memory", 88.0).required(),
+                Column::new(Some(SortKey::PrivateMem), "Private Memory", 112.0).off(),
                 Column::new(Some(SortKey::Virtual), "Virtual Size", 104.0).off(),
                 threads(),
                 pid(),
@@ -91,6 +93,7 @@ impl Tab {
                 Column::new(Some(SortKey::Energy), "Energy Impact", 112.0).required(),
                 Column::new(Some(SortKey::EnergyAvg), "12 hr Average", 104.0).off(),
                 Column::new(Some(SortKey::PreventingSleep), "Preventing Sleep", 124.0),
+                Column::new(Some(SortKey::WakeUps), "Idle Wake Ups", 104.0).off(),
                 threads(),
                 pid(),
             ],
@@ -218,6 +221,9 @@ pub enum SortKey {
     Virtual,
     Gpu,
     GpuTime,
+    Ports,
+    PrivateMem,
+    WakeUps,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -397,6 +403,9 @@ pub fn cell_text(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>
         Some(SortKey::Ppid) => p.ppid.to_string(),
         Some(SortKey::Gpu) => format!("{:.1}", p.gpu),
         Some(SortKey::GpuTime) => gpu_time(since(p.gpu_ns, base.map(|b| b.gpu_ns))),
+        Some(SortKey::Ports) => p.ports.map_or_else(|| "-".to_string(), |n| n.to_string()),
+        Some(SortKey::PrivateMem) => p.private.map_or_else(|| "-".to_string(), bytes),
+        Some(SortKey::WakeUps) => format!("{:.1}/s", p.wakeups),
         None => String::new(),
     }
 }
@@ -532,6 +541,9 @@ fn compare(a: &ProcSample, b: &ProcSample, key: SortKey) -> Ordering {
         SortKey::Virtual => a.vsize.cmp(&b.vsize),
         SortKey::Gpu => a.gpu.total_cmp(&b.gpu),
         SortKey::GpuTime => a.gpu_ns.cmp(&b.gpu_ns),
+        SortKey::Ports => a.ports.unwrap_or(0).cmp(&b.ports.unwrap_or(0)),
+        SortKey::PrivateMem => a.private.unwrap_or(0).cmp(&b.private.unwrap_or(0)),
+        SortKey::WakeUps => a.wakeups.total_cmp(&b.wakeups),
     }
 }
 

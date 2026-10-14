@@ -146,6 +146,13 @@ pub struct ProcSample {
     pub prevents_sleep: bool,
     /// Mean energy score of the processes of this name since the monitor started, weighted towards the last 12 hours.
     pub energy_avg: f64,
+    /// Open sockets (TCP, UDP, Unix and others) of the process; None when its descriptors are not readable or the
+    /// sampler is not counting them.
+    pub ports: Option<u32>,
+    /// Private memory in bytes (private clean and dirty pages); None when not readable or not being read.
+    pub private: Option<u64>,
+    /// Voluntary context switches of its threads per second: the wake-ups of an idle process. Zero unless counted.
+    pub wakeups: f64,
 }
 
 /// Everything read in one pass.
@@ -414,6 +421,45 @@ fn read_inhibitors() -> HashSet<u32> {
     }
 }
 
+/// Private memory of a process in bytes: the private clean and dirty pages of its `smaps_rollup`. None when the file
+/// is not there or has no private lines.
+pub fn parse_private(text: &str) -> Option<u64> {
+    let mut total = None;
+    for line in text.lines() {
+        let Some((key, rest)) = line.split_once(':') else { continue };
+        if key.starts_with("Private_") {
+            let kb: u64 = rest.split_whitespace().next()?.parse().ok()?;
+            total = Some(total.unwrap_or(0) + kb * 1024);
+        }
+    }
+    total
+}
+
+/// Private memory of a process, or None when its `smaps_rollup` is not readable (another user's process).
+fn read_private(pid: u32) -> Option<u64> {
+    parse_private(&read_file(&format!("/proc/{pid}/smaps_rollup"))?)
+}
+
+/// The sockets a process has open, counted from its descriptors. None when its descriptor table is not readable.
+fn count_sockets(pid: u32) -> Option<u32> {
+    let fds = fs::read_dir(format!("/proc/{pid}/fd")).ok()?;
+    let sockets = fds.flatten().filter(|fd| fs::read_link(fd.path()).map_or(false, |t| t.to_string_lossy().starts_with("socket:"))).count();
+    Some(sockets as u32)
+}
+
+/// Voluntary context switches summed over a process's threads (each thread's status file). None when the thread list
+/// is not readable.
+fn read_voluntary(pid: u32) -> Option<u64> {
+    let tasks = fs::read_dir(format!("/proc/{pid}/task")).ok()?;
+    let mut total = 0;
+    for task in tasks.flatten() {
+        if let Some(text) = read_file(&format!("/proc/{pid}/task/{}/status", task.file_name().to_string_lossy())) {
+            total += crate::inspect::parse_switches(&text).0;
+        }
+    }
+    Some(total)
+}
+
 /// Engine time of the DRM clients a process holds open, in nanoseconds. Descriptors of other users are unreadable
 /// and count as nothing.
 fn read_gpu_ns(pid: u32) -> u64 {
@@ -482,6 +528,12 @@ pub struct Sampler {
     pub scan_gpu: bool,
     /// Ask logind which processes keep the machine awake (every `BLOCKERS_EVERY_MS`). Only while it is shown.
     pub scan_sleep: bool,
+    /// Count each process's open sockets (the Ports column). Only while it is shown.
+    pub scan_ports: bool,
+    /// Read each process's private memory (the Private Memory column). Only while it is shown.
+    pub scan_private: bool,
+    /// Count each process's voluntary context switches over its threads (the Idle Wake Ups column). Only while shown.
+    pub scan_wakeups: bool,
 }
 
 /// How long the list of sleep blockers is trusted before logind is asked again (milliseconds).
@@ -495,6 +547,8 @@ struct Prev {
     written: u64,
     /// None when the GPU was not scanned then, so no rate can be taken.
     gpu_ns: Option<u64>,
+    /// None when the wake-ups were not counted then.
+    voluntary: Option<u64>,
 }
 
 impl Sampler {
@@ -573,6 +627,9 @@ impl Sampler {
                 let base = format!("/proc/{pid}");
                 let Some(stat) = read_file(&format!("{base}/stat")).and_then(|t| parse_stat(&t)) else { continue };
                 let uid = read_file(&format!("{base}/status")).and_then(|t| parse_uid(&t)).unwrap_or(u32::MAX);
+                let ports = self.scan_ports.then(|| count_sockets(pid)).flatten();
+                let private = self.scan_private.then(|| read_private(pid)).flatten();
+                let voluntary = self.scan_wakeups.then(|| read_voluntary(pid)).flatten();
                 let statm = read_file(&format!("{base}/statm"));
                 let rss = statm.as_deref().and_then(parse_rss_pages).unwrap_or(0) * PAGE_BYTES;
                 let vsize = statm.as_deref().and_then(parse_vsize_pages).unwrap_or(0) * PAGE_BYTES;
@@ -593,7 +650,12 @@ impl Sampler {
                     (Some(prev), Some(now), Some(d)) => (now.saturating_sub(prev) as f64 / 1e9 / d * 100.0) as f32,
                     _ => 0.0,
                 };
-                seen.insert(pid, Prev { ticks: stat.ticks, read, written, gpu_ns });
+                // wake-ups per second, from the switches counted at the last reading
+                let wakeups = match (before.and_then(|b| b.voluntary), voluntary, dt) {
+                    (Some(prev), Some(now), Some(d)) => now.saturating_sub(prev) as f64 / d,
+                    _ => 0.0,
+                };
+                seen.insert(pid, Prev { ticks: stat.ticks, read, written, gpu_ns, voluntary });
                 let user = self.users.get(&uid).cloned().unwrap_or_else(|| uid.to_string());
                 procs.push(ProcSample {
                     pid,
@@ -614,6 +676,9 @@ impl Sampler {
                     gpu_ns: gpu_ns.unwrap_or(0),
                     prevents_sleep: self.sleep_blockers.contains(&pid),
                     energy_avg: 0.0,
+                    ports,
+                    private,
+                    wakeups,
                 });
             }
         }
@@ -751,6 +816,13 @@ mod tests {
         assert!(parse_inhibitors("a(ssssuu) 2 \"sleep\" \"x\"").is_empty());
         assert!(parse_inhibitors("").is_empty());
         assert!(parse_inhibitors("garbage").is_empty());
+    }
+
+    #[test]
+    fn private_memory_adds_the_private_clean_and_dirty_pages() {
+        let rollup = "Rss:  900 kB\nPss:  400 kB\nShared_Clean:  100 kB\nPrivate_Clean:  200 kB\nPrivate_Dirty:  300 kB\nAnonymous:  50 kB\n";
+        assert_eq!(parse_private(rollup), Some(500 * 1024));
+        assert_eq!(parse_private("Rss: 1 kB\n"), None, "no private lines, nothing to say");
     }
 
     #[test]
