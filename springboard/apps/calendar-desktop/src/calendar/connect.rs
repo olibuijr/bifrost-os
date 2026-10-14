@@ -7,7 +7,8 @@
 //! over. When the shell has no `notification-schedule` service (an older shell answers "no service ..."), the app
 //! falls back to posting its own alert notifications from `take_alerts`.
 
-use super::alerts::{alert_calendar, due};
+use super::alerts::{alert_calendar_with, due};
+use super::extras::Extras;
 use super::ics::IcsCalendar;
 use super::recur;
 use super::store::CalendarEvent;
@@ -34,6 +35,8 @@ const UP_NEXT_MAX: usize = 4;
 pub struct Snap<'a> {
     pub events: &'a [CalendarEvent],
     pub rich: &'a IcsCalendar,
+    /// The calendars and the event extras (custom repeats, alarms, zones), `extras.rs`.
+    pub extras: &'a Extras,
     pub now: i64,
     pub offset: i32,
 }
@@ -173,7 +176,7 @@ impl Connect {
     /// what changed since the last call.
     pub fn sync(&mut self, ctx: &Ctx, snap: &Snap, gen: u64, day: i64) {
         self.synced = Some((gen, day));
-        let cal = alert_calendar(snap.events, snap.rich);
+        let cal = alert_calendar_with(snap.events, snap.rich, snap.extras);
         if !self.missing {
             let next = plan_alerts(&cal, snap.now, snap.offset);
             let (adds, removes) = diff(&self.scheduled, &next);
@@ -192,7 +195,7 @@ impl Connect {
 
     /// The shell asked for a new Up Next timeline (its reload date passed): send it again.
     pub fn refresh_up_next(&mut self, ctx: &Ctx, snap: &Snap) {
-        let cal = alert_calendar(snap.events, snap.rich);
+        let cal = alert_calendar_with(snap.events, snap.rich, snap.extras);
         self.up_next = None;
         self.send_up_next(ctx, &cal, snap);
     }
@@ -219,6 +222,7 @@ impl Connect {
 
 #[cfg(test)]
 mod tests {
+    use super::super::alerts::alert_calendar;
     use super::*;
     use bifrost_app::notification_schedule::Trigger;
     use bifrost_app::proto::{Configure, ToShell};
@@ -343,7 +347,7 @@ mod tests {
         assert!(c.is_stale(1, TODAY));
 
         let two = [event(1, "A", TOMORROW, 600, 3), event(2, "B", TOMORROW, 700, 3)];
-        c.sync(&ctx, &Snap { events: &two, rich: &rich, now: NOW, offset: OFF }, 1, TODAY);
+        c.sync(&ctx, &Snap { events: &two, rich: &rich, extras: &Extras::default(), now: NOW, offset: OFF }, 1, TODAY);
         assert!(!c.is_stale(1, TODAY));
         let first = calls(&ctx);
         let adds = first.iter().filter(|(s, m)| s == notification_schedule::SERVICE && m == "add").count();
@@ -352,12 +356,12 @@ mod tests {
         assert!(first.contains(&(dock_tile::SERVICE.to_string(), "badge".to_string())));
 
         // The same store again: nothing is sent.
-        c.sync(&ctx, &Snap { events: &two, rich: &rich, now: NOW, offset: OFF }, 1, TODAY);
+        c.sync(&ctx, &Snap { events: &two, rich: &rich, extras: &Extras::default(), now: NOW, offset: OFF }, 1, TODAY);
         assert!(calls(&ctx).is_empty());
 
         // B is deleted: one remove, no add.
         let one = [event(1, "A", TOMORROW, 600, 3)];
-        c.sync(&ctx, &Snap { events: &one, rich: &rich, now: NOW, offset: OFF }, 2, TODAY);
+        c.sync(&ctx, &Snap { events: &one, rich: &rich, extras: &Extras::default(), now: NOW, offset: OFF }, 2, TODAY);
         let del = calls(&ctx);
         assert_eq!(del.iter().filter(|(s, m)| s == notification_schedule::SERVICE && m == "remove").count(), 1);
         assert!(!del.iter().any(|(s, m)| s == notification_schedule::SERVICE && m == "add"));
@@ -370,7 +374,7 @@ mod tests {
         c.on_reply(&Err("no service notification-schedule".into()));
         let rich = IcsCalendar::default();
         let evs = [event(1, "A", TOMORROW, 600, 3)];
-        c.sync(&ctx, &Snap { events: &evs, rich: &rich, now: NOW, offset: OFF }, 1, TODAY);
+        c.sync(&ctx, &Snap { events: &evs, rich: &rich, extras: &Extras::default(), now: NOW, offset: OFF }, 1, TODAY);
         let sent = calls(&ctx);
         assert!(!sent.iter().any(|(s, _)| s == notification_schedule::SERVICE));
         assert!(sent.iter().any(|(s, _)| s == widgets_timeline::SERVICE));

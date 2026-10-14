@@ -26,15 +26,16 @@ pub fn matches(query: &str, fields: &[&str]) -> bool {
 /// Hits from stored events and rich (imported) events, de-duplicated by
 /// date, time and title, ordered by date then time.
 pub fn search(query: &str, store: &[CalendarEvent], rich: &[IcsEvent]) -> Vec<Hit> {
+    // a saved event matches on its title, its location and its notes
     let mut hits: Vec<Hit> = store
         .iter()
-        .filter(|e| matches(query, &[e.title.as_str()]))
+        .filter(|e| matches(query, &[e.title.as_str(), e.location.as_str(), e.notes.as_str()]))
         .map(|e| Hit {
             date: e.date,
             minute: e.minute,
             all_day: e.all_day,
             title: e.title.clone(),
-            location: String::new(),
+            location: e.location.clone(),
         })
         .collect();
     for e in rich {
@@ -96,6 +97,17 @@ mod tests {
         let titles: Vec<_> = hits.iter().map(|h| h.title.as_str()).collect();
         assert_eq!(titles, vec!["Sync with Ann", "Team sync", "Offsite"]);
         assert_eq!(hits[1].location, "Room 4");
+    }
+
+    #[test]
+    fn a_saved_event_matches_on_its_location_and_notes() {
+        let mut lunch = ev(4, 7, "Lunch");
+        lunch.location = "Laugavegur 5".into();
+        lunch.notes = "Bring the report".into();
+        let hits = search("laugavegur report", &[lunch.clone()], &[]);
+        assert_eq!(hits.len(), 1, "every term matches somewhere in the event");
+        assert_eq!(hits[0].location, "Laugavegur 5");
+        assert!(search("parking", &[lunch], &[]).is_empty());
     }
 
     #[test]

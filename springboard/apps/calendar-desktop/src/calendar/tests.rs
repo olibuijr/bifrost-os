@@ -559,11 +559,11 @@ fn week_numbers_are_a_saved_setting() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    assert!(!c.week_numbers);
+    assert!(!c.prefs.week_numbers);
     c.activate(&ui, Target::WeekNumbers, 0.0);
-    assert!(c.week_numbers);
+    assert!(c.prefs.week_numbers);
     let again = new(&ui, temp.file());
-    assert!(again.week_numbers, "kept after a restart");
+    assert!(again.prefs.week_numbers, "kept after a restart");
 }
 
 #[test]
@@ -651,264 +651,1207 @@ fn new_event_from_an_empty_pasteboard_is_a_plain_new_event() {
 }
 
 #[test]
-fn go_to_date_steps_the_sheet_and_shows_the_date_on_go() {
+fn zoom_changes_the_hour_height_and_keeps_it() {
+    use prefs::HOUR_H_DEFAULT;
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    assert!(c.enabled(Command::GoToDate));
-    assert!(c.perform(&ui, Command::GoToDate, 0.0));
-    assert_eq!(c.goto, Some(date(2026, 10, 4)));
-    assert!(!c.enabled(Command::NewEvent), "the sheet is modal");
-    c.activate(&ui, Target::GoStep(GoUnit::Year, 1), 0.0);
-    c.activate(&ui, Target::GoStep(GoUnit::Month, -1), 0.0);
-    c.activate(&ui, Target::GoStep(GoUnit::Day, 3), 0.0);
-    assert_eq!(c.goto, Some(date(2027, 9, 7)));
-    assert_eq!(c.selected, date(2026, 10, 4), "nothing moves until Go");
-    c.activate(&ui, Target::GoConfirm, 0.0);
-    assert_eq!((c.goto, c.selected), (None, date(2027, 9, 7)));
-}
-
-#[test]
-fn go_to_date_cancels_with_escape_and_takes_the_arrow_keys() {
-    let temp = Temp::new();
-    let ui = crate::test_ui();
-    let mut c = new(&ui, temp.file());
-    c.perform(&ui, Command::GoToDate, 0.0);
-    c.key(&ui, Out::Named("Down"), 0.0);
-    c.key(&ui, Out::Named("Left"), 0.0);
-    assert_eq!(c.goto, Some(date(2026, 10, 10)));
-    assert!(c.escape(&ui, 0.0));
-    assert_eq!((c.goto, c.selected), (None, date(2026, 10, 4)));
-    c.perform(&ui, Command::GoToDate, 0.0);
-    c.key(&ui, Out::Enter, 0.0);
-    assert_eq!(c.selected, date(2026, 10, 4));
-    assert!(c.goto.is_none());
-}
-
-#[test]
-fn go_to_date_hits_steppers_and_buttons() {
-    let temp = Temp::new();
-    let ui = crate::test_ui();
-    let mut c = new(&ui, temp.file());
-    c.perform(&ui, Command::GoToDate, 0.0);
-    let (left, w) = c.goto_card(&ui);
-    let rows = Calendar::goto_rows();
-    let mid = |i: usize| ui.pt(rows[i].1 + rows[i].2 / 2.0);
-    assert_eq!(c.hit(&ui, ui.pt(left + 4.0), mid(1)), Some(Target::GoStep(GoUnit::Month, -1)));
-    assert_eq!(c.hit(&ui, ui.pt(left + w - 4.0), mid(2)), Some(Target::GoStep(GoUnit::Day, 1)));
-    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(1)), None);
-    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(3)), Some(Target::GoConfirm));
-    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(4)), Some(Target::GoCancel));
-}
-
-#[test]
-fn zoom_changes_the_hour_height_within_limits_in_time_views() {
-    let temp = Temp::new();
-    let ui = crate::test_ui();
-    let mut c = new(&ui, temp.file());
-    assert!(!c.enabled(Command::ZoomIn), "the month grid has no hours");
+    assert!(!c.enabled(Command::ZoomIn) && !c.enabled(Command::ZoomOut), "the month grid has no hours");
     c.activate(&ui, Target::View(View::Week), 0.0);
+    assert!(c.enabled(Command::ZoomIn) && c.enabled(Command::ZoomOut));
     assert!(c.perform(&ui, Command::ZoomIn, 0.0));
-    assert_eq!(c.hour_h, timeview::HOUR_H + 12.0);
-    for _ in 0..10 {
-        c.perform(&ui, Command::ZoomIn, 0.0);
-    }
-    assert_eq!(c.hour_h, 96.0);
-    assert!(!c.enabled(Command::ZoomIn), "dimmed at the largest size");
-    for _ in 0..10 {
+    assert_eq!(c.prefs.hour_h, HOUR_H_DEFAULT + prefs::HOUR_H_STEP);
+    let again = new(&ui, temp.file());
+    assert_eq!(again.prefs.hour_h, HOUR_H_DEFAULT + prefs::HOUR_H_STEP, "kept after a restart");
+    for _ in 0..20 {
         c.perform(&ui, Command::ZoomOut, 0.0);
     }
-    assert_eq!(c.hour_h, 24.0);
-    assert!(!c.enabled(Command::ZoomOut));
+    assert_eq!(c.prefs.hour_h, prefs::HOUR_H_MIN);
+    assert!(!c.enabled(Command::ZoomOut), "at the smallest size");
 }
 
 #[test]
-fn copy_event_puts_ics_on_the_pasteboard_and_paste_adds_it_to_the_selected_day() {
+fn zooming_keeps_the_same_hour_at_the_top() {
     let temp = Temp::new();
     let ui = crate::test_ui();
-    let mut e = event(1, "Dentist");
-    e.location = "Main St 4".into();
-    store::save(&temp.file(), &[e]).unwrap();
     let mut c = new(&ui, temp.file());
-    assert!(!c.enabled(Command::CopyEvent), "needs an open saved event");
-    c.open(&ui, Some(1));
-    assert!(c.perform(&ui, Command::CopyEvent, 0.0));
-    let text = c.take_copied().expect("ics text");
-    c.close();
-    assert!(!c.enabled(Command::CopyEvent));
-    c.selected = date(2026, 10, 9);
-    c.paste_event(&text).expect("pasted");
-    assert_eq!(c.events.len(), 2);
-    let pasted = c.events.iter().find(|e| e.id != 1).unwrap();
-    assert_eq!((pasted.date, pasted.minute, pasted.title.as_str(), pasted.location.as_str()), (date(2026, 10, 9), 540, "Dentist", "Main St 4"));
-    assert_eq!(store::load(&temp.file()).unwrap().len(), 2, "saved");
-    assert!(c.paste_event("not an event").is_err());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    // the day opens at 8 AM
+    assert!((c.scroll.offset() - ui.pt(8.0 * prefs::HOUR_H_DEFAULT)).abs() < 1.0);
+    c.zoom_hours(&ui, 1);
+    assert!((c.scroll.offset() - ui.pt(8.0 * (prefs::HOUR_H_DEFAULT + prefs::HOUR_H_STEP))).abs() < 1.0);
+    assert!(c.time_scroll_max(&ui) > 0.0);
 }
 
 #[test]
-fn import_report_says_how_many_events_were_added() {
+fn an_event_block_grows_with_the_zoom() {
     let temp = Temp::new();
-    fs::create_dir_all(&temp.0).unwrap();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    let one = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261006T090000\r\nDTEND:20261006T100000\r\nSUMMARY:Standup\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-    c.import_report("team.ics", one);
-    assert_eq!(c.notice.as_deref(), Some("Imported 1 event from team.ics"));
-    c.import_report("team.ics", one);
-    assert_eq!(c.notice.as_deref(), Some("No new events in team.ics"));
-    c.import_report("empty.ics", "nothing");
-    assert!(c.error.is_some());
-    assert!(c.enabled(Command::ImportCalendar));
+    c.events = vec![event(1, "Standup")];
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    let height = |c: &Calendar| c.time_rects(&ui)[0].4;
+    let before = height(&c);
+    c.zoom_hours(&ui, 1);
+    assert!(height(&c) > before);
 }
 
 #[test]
-fn settings_sheet_steps_persist_and_set_new_event_defaults() {
-    let temp = Temp::new();
-    fs::create_dir_all(&temp.0).unwrap();
-    let ui = crate::test_ui();
-    let mut c = new(&ui, temp.file());
-    assert!(c.enabled(Command::Settings));
-    assert!(c.perform(&ui, Command::Settings, 0.0));
-    assert!(c.settings);
-    assert!(!c.enabled(Command::NewEvent), "the sheet is modal");
-    c.activate(&ui, Target::SetStep(SetRow::WeekStart, 1), 0.0);
-    c.activate(&ui, Target::SetStep(SetRow::Duration, 1), 0.0);
-    c.activate(&ui, Target::SetStep(SetRow::Alert, 3), 0.0);
-    c.activate(&ui, Target::SetStep(SetRow::AlertAllDay, 6), 0.0);
-    assert_eq!((c.prefs.week_start, c.prefs.duration, c.prefs.alert, c.prefs.alert_all_day), (1, 90, 3, 6));
-    c.activate(&ui, Target::SetDone, 0.0);
-    assert!(!c.settings);
-    let mut again = new(&ui, temp.file());
-    assert_eq!(again.prefs, c.prefs, "the settings are read back on the next start");
-    again.open(&ui, None);
-    let e = &again.editor.as_ref().unwrap().event;
-    assert_eq!((e.duration, e.alert), (90, 3));
-    // switching to all-day swaps the default alert, and back again
-    again.activate(&ui, Target::AllDay, 0.0);
-    assert_eq!(again.editor.as_ref().unwrap().event.alert, 6);
-    again.activate(&ui, Target::AllDay, 0.0);
-    assert_eq!(again.editor.as_ref().unwrap().event.alert, 3);
-}
-
-#[test]
-fn week_start_moves_the_month_grid_and_the_week_view() {
+fn the_week_can_start_on_monday() {
+    use prefs::Setting;
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    assert_eq!(c.grid_start(), date(2026, 9, 27), "Sunday first: the Sunday before Thursday 1 October");
-    c.prefs.week_start = 1;
+    // 4 October 2026 is a Sunday; the 1st of the month is a Thursday
+    assert_eq!(c.week_start(), date(2026, 10, 4));
+    assert_eq!(c.grid_start(), date(2026, 9, 27));
+    assert!(c.change_setting(&ui, Setting::MondayFirst));
+    assert!(c.setting_checked(Setting::MondayFirst));
+    assert_eq!(c.week_start(), date(2026, 9, 28));
     assert_eq!(c.grid_start(), date(2026, 9, 28));
-    c.activate(&ui, Target::View(View::Week), 0.0);
-    assert_eq!(c.week_start(), date(2026, 9, 28), "4 October is a Sunday, the last day of a Monday week");
+    let again = new(&ui, temp.file());
+    assert_eq!(again.week_start(), date(2026, 9, 28), "kept after a restart");
 }
 
 #[test]
-fn settings_rows_are_hit_at_their_edges() {
+fn new_events_take_the_default_length_and_alerts() {
+    use prefs::Setting;
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    c.perform(&ui, Command::Settings, 0.0);
-    let (left, w) = c.settings_card(&ui);
-    let rows = Calendar::settings_rows();
-    let mid = |i: usize| ui.pt(rows[i].1 + rows[i].2 / 2.0);
-    assert_eq!(c.hit(&ui, ui.pt(left + 4.0), mid(2)), Some(Target::SetStep(SetRow::Duration, -1)));
-    assert_eq!(c.hit(&ui, ui.pt(left + w - 4.0), mid(3)), Some(Target::SetStep(SetRow::Alert, 1)));
-    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(0)), None);
-    assert_eq!(c.hit(&ui, ui.pt(left + w / 2.0), mid(5)), Some(Target::SetDone));
-    assert!(c.escape(&ui, 0.0));
-    assert!(!c.settings);
+    c.change_setting(&ui, Setting::Length(2));
+    c.change_setting(&ui, Setting::Alert(3));
+    c.change_setting(&ui, Setting::AllDayAlert(6));
+    c.activate(&ui, Target::Add, 0.0);
+    let e = c.editor.as_ref().unwrap().event.clone();
+    assert_eq!((e.duration, e.alert), (90, 3));
+    // turning the new event all-day swaps the default alert, turning it back swaps it again
+    c.activate(&ui, Target::AllDay, 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().event.alert, 6);
+    c.activate(&ui, Target::AllDay, 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().event.alert, 3);
+    // a hand-picked alert is left alone: the picker clears the default and picks 30 minutes before
+    c.activate(&ui, Target::Alert, 0.0);
+    c.activate(&ui, Target::AlarmPreset(0), 0.0);
+    c.activate(&ui, Target::AlarmPreset(4), 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().alarms, vec![30]);
+    c.activate(&ui, Target::AllDay, 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().alarms, vec![30]);
 }
 
 #[test]
-fn zoom_is_saved_with_the_settings() {
+fn settings_cannot_change_while_an_event_is_open() {
+    use prefs::Setting;
     let temp = Temp::new();
-    fs::create_dir_all(&temp.0).unwrap();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    c.activate(&ui, Target::View(View::Week), 0.0);
-    assert!(c.perform(&ui, Command::ZoomIn, 0.0));
-    let zoomed = c.hour_h;
-    assert_eq!(new(&ui, temp.file()).hour_h, zoomed);
+    c.activate(&ui, Target::Add, 0.0);
+    assert!(!c.settings_enabled());
+    assert!(!c.change_setting(&ui, Setting::MondayFirst));
+    assert!(!c.setting_checked(Setting::MondayFirst));
 }
 
 #[test]
-fn search_finds_events_and_return_opens_the_first() {
+fn copy_and_paste_move_an_event_to_another_day() {
+    use bifrost_app::Command as Edit;
     let temp = Temp::new();
     let ui = crate::test_ui();
-    store::save(&temp.file(), &[event(1, "Dentist"), event(2, "Lunch")]).unwrap();
     let mut c = new(&ui, temp.file());
-    assert!(c.perform(&ui, Command::Find, 0.0));
-    assert!(c.search.is_some() && c.keyboard_shown());
-    assert!(!c.enabled(Command::NewEvent), "only leaving the search screen is meaningful");
-    for ch in "dent".chars() {
-        c.key(&ui, Out::Text(ch.to_string()), 0.0);
-    }
-    assert_eq!(c.search.as_ref().unwrap().hits.len(), 1);
-    c.key(&ui, Out::Enter, 0.0);
-    assert!(c.search.is_none());
-    assert_eq!(c.editor.as_ref().map(|d| d.event.id), Some(1));
+    c.events = vec![event(1, "Standup")];
+    assert!(c.edit_commands(None).supports(Edit::Copy));
+    assert!(c.edit_commands(None).supports(Edit::Cut));
+    assert!(!c.edit_commands(Some("buy milk")).supports(Edit::Paste), "plain text is not an event");
+    assert!(c.edit_command(&ui, Edit::Copy, None, 0.0));
+    let text = c.take_copied().expect("the .ics text for the pasteboard");
+    assert!(text.contains("SUMMARY:Standup"));
+    c.selected = date(2026, 10, 9);
+    assert!(!c.edit_commands(None).supports(Edit::Copy), "nothing on the 9th");
+    assert!(c.edit_commands(Some(&text)).supports(Edit::Paste));
+    assert!(c.edit_command(&ui, Edit::Paste, Some(&text), 0.0));
+    let days: Vec<(String, Date)> = c.events.iter().map(|e| (e.title.clone(), e.date)).collect();
+    assert_eq!(days, vec![("Standup".to_string(), date(2026, 10, 4)), ("Standup".to_string(), date(2026, 10, 9))]);
+    assert_eq!(c.notice.as_deref(), Some("Pasted 1 event"));
+    assert_eq!(new(&ui, temp.file()).events.len(), 2, "saved");
 }
 
 #[test]
-fn search_results_are_hit_and_escape_leaves() {
+fn pasting_something_else_changes_nothing_and_says_so() {
+    use bifrost_app::Command as Edit;
     let temp = Temp::new();
     let ui = crate::test_ui();
-    store::save(&temp.file(), &[event(1, "Dentist"), event(2, "Dentures")]).unwrap();
     let mut c = new(&ui, temp.file());
-    c.perform(&ui, Command::Find, 0.0);
-    for ch in "dent".chars() {
-        c.key(&ui, Out::Text(ch.to_string()), 0.0);
-    }
-    assert_eq!(c.search.as_ref().unwrap().hits.len(), 2);
-    let second = ui.pt(SEARCH_LIST_TOP + SEARCH_ROW * 1.5);
-    assert_eq!(c.hit(&ui, ui.pt(300.0), second), Some(Target::SearchHit(1)));
-    assert_eq!(c.hit(&ui, ui.pt(300.0), ui.pt(SEARCH_FIELD_TOP + 10.0)), Some(Target::SearchField));
-    assert!(c.escape(&ui, 0.0));
-    assert!(c.search.is_none() && c.editor.is_none());
-}
-
-#[test]
-fn archive_restores_the_calendar_and_keeps_a_backup() {
-    let temp = Temp::new();
-    let ui = crate::test_ui();
-    store::save(&temp.file(), &[event(1, "Dentist")]).unwrap();
-    let mut c = new(&ui, temp.file());
-    let backup = c.export_archive();
-    store::save(&temp.file(), &[event(1, "Dentist"), event(2, "Lunch")]).unwrap();
-    c.reload();
-    assert_eq!(c.events.len(), 2);
-    c.restore_archive("backup.bfcal", &backup);
-    assert_eq!(c.events.len(), 1);
-    assert_eq!(c.notice.as_deref(), Some("Restored 1 event from backup.bfcal"));
-    assert_eq!(store::load(&temp.file()).unwrap().len(), 1);
-    assert!(temp.file().with_extension("tsv.bak").exists(), "the calendar as it was is kept");
-    c.restore_archive("bad.bfcal", "nonsense");
-    assert!(c.error.is_some());
-    assert_eq!(c.events.len(), 1, "a bad archive changes nothing");
-}
-
-#[test]
-fn cut_event_copies_then_deletes_with_undo() {
-    let temp = Temp::new();
-    let ui = crate::test_ui();
-    store::save(&temp.file(), &[event(1, "Dentist")]).unwrap();
-    let mut c = new(&ui, temp.file());
-    assert!(!c.enabled(Command::CutEvent), "nothing is open");
-    c.open(&ui, Some(1));
-    assert!(c.enabled(Command::CutEvent) && c.can_copy_event());
-    assert!(c.perform(&ui, Command::CutEvent, 0.0));
+    assert!(!c.edit_command(&ui, Edit::Paste, Some("buy milk"), 0.0));
     assert!(c.events.is_empty());
-    assert!(c.take_copied().is_some());
-    assert!(c.undo.is_some());
-    assert!(c.can_paste_event());
+    assert_eq!(c.error.as_deref(), Some("There are no events to paste"));
+    assert!(!c.edit_command(&ui, Edit::Paste, None, 0.0));
 }
 
 #[test]
-fn go_to_shows_the_day_for_intents() {
+fn cut_removes_the_event_with_an_undo_bar() {
+    use bifrost_app::Command as Edit;
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    c.go_to(date(2027, 3, 9));
-    assert_eq!(c.selected(), date(2027, 3, 9));
-    let _ = &ui;
+    c.events = vec![event(1, "Standup"), event(2, "Lunch")];
+    // the event opened last is the one Cut takes
+    c.open(&ui, Some(2));
+    c.close();
+    assert!(c.edit_command(&ui, Edit::Cut, None, 1000.0));
+    assert!(c.take_copied().is_some_and(|t| t.contains("SUMMARY:Lunch")));
+    assert_eq!(c.events.iter().map(|e| e.id).collect::<Vec<_>>(), vec![1]);
+    assert!(c.undo.is_some());
+    c.undo_delete(&ui, 2000.0);
+    assert_eq!(c.events.len(), 2, "undo puts it back");
+}
+
+#[test]
+fn copy_in_the_editor_takes_the_open_event_and_text_commands_go_to_the_field() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Standup")];
+    c.open(&ui, Some(1));
+    assert!(c.edit_commands(None).supports(Edit::Copy), "no field has focus, so Copy takes the event");
+    assert!(!c.edit_commands(None).supports(Edit::Cut));
+    assert!(c.edit_command(&ui, Edit::Copy, None, 0.0));
+    assert!(c.take_copied().is_some());
+    // a field with focus gets the text commands
+    c.activate(&ui, Target::Notes, 0.0);
+    c.key(&ui, Out::Text("remember the cake".into()), 0.0);
+    assert!(c.edit_commands(None).supports(Edit::SelectAll));
+    assert!(!c.edit_commands(None).supports(Edit::Cut), "nothing is selected");
+    assert!(c.edit_command(&ui, Edit::SelectAll, None, 0.0));
+    assert!(c.edit_commands(None).supports(Edit::Cut));
+    assert!(c.edit_command(&ui, Edit::Cut, None, 0.0));
+    assert_eq!(c.fields[2].text(), "");
+    assert!(c.take_copied().is_none(), "the field's text is not an event");
+}
+
+#[test]
+fn go_to_date_steps_and_accepts_the_chosen_day() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.perform(&ui, Command::GoToDate, 0.0));
+    assert_eq!(c.goto, Some(date(2026, 10, 4)));
+    assert!(!c.enabled(Command::NewEvent) && !c.enabled(Command::GoToDate), "the sheet is modal");
+    // the Month row's plus, the Year row's plus, the Day row's minus (window points)
+    tap(&mut c, &ui, 713.0, 174.0, 10.0);
+    tap(&mut c, &ui, 713.0, 218.0, 50.0);
+    tap(&mut c, &ui, 250.0, 130.0, 100.0);
+    assert_eq!(c.goto, Some(date(2027, 11, 3)));
+    assert_eq!(c.selected, date(2026, 10, 4), "nothing moves until Go");
+    tap_bar(&mut c, &ui, chrome::B_GO, 200.0);
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2027, 11, 3));
+    assert!(c.enabled(Command::NewEvent), "the sheet is closed");
+}
+
+#[test]
+fn cancel_and_escape_leave_the_shown_date_alone() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    c.activate(&ui, Target::GoYear(3), 1.0);
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 2.0);
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2026, 10, 4));
+    c.perform(&ui, Command::GoToDate, 3.0);
+    c.activate(&ui, Target::GoDay(9), 4.0);
+    assert!(c.escape(&ui, 5.0));
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2026, 10, 4));
+    assert!(!c.escape(&ui, 6.0), "nothing left to close");
+}
+
+#[test]
+fn the_sheet_has_a_today_shortcut_and_keys() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    c.activate(&ui, Target::GoYear(2), 1.0);
+    tap(&mut c, &ui, 400.0, 282.0, 10.0);
+    assert_eq!(c.goto, Some(date(2026, 10, 4)), "Today puts the sheet back on today");
+    c.key(&ui, Out::Named("Right"), 20.0);
+    c.key(&ui, Out::Named("Down"), 21.0);
+    assert_eq!(c.goto, Some(date(2026, 10, 12)));
+    assert!(!c.chord(&ui, 3, CHORD_META, 22.0), "no view change behind the sheet");
+    c.key(&ui, Out::Enter, 30.0);
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2026, 10, 12));
+}
+
+#[test]
+fn the_sheet_publishes_its_controls() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    let labels: Vec<String> = c.controls(&ui).into_iter().map(|n| n.label).collect();
+    for want in ["Cancel", "Go", "Previous Day", "Next Day", "Previous Month", "Next Year", "Today"] {
+        assert!(labels.iter().any(|l| l == want), "{want} in {labels:?}");
+    }
+}
+
+fn weekly_gym_ics() -> String {
+    let mut gym = ics::IcsEvent::new("gym@x", "Gym", ics::Local::new(date(2026, 10, 5), 600), ics::Local::new(date(2026, 10, 5), 660));
+    gym.rule = recur::parse_rrule("FREQ=WEEKLY;COUNT=4");
+    ics::write(&ics::IcsCalendar { name: String::new(), events: vec![gym], timezones: vec![] }, "20261004T000000Z")
+}
+
+#[test]
+fn an_archive_restores_events_and_the_sidecar_in_another_calendar() {
+    let (ta, tb) = (Temp::new(), Temp::new());
+    let ui = crate::test_ui();
+    let mut dentist = event(2, "Dentist");
+    dentist.location = "Laugavegur 5".into();
+    store::save(&ta.file(), &[event(1, "Standup"), dentist]).unwrap();
+    let mut a = new(&ui, ta.file());
+    a.import_ics(&weekly_gym_ics()).unwrap();
+    assert_eq!(a.events.len(), 6, "two saved events and four Gym days");
+    let text = a.archive_text();
+    assert!(archive::is_archive(&text));
+
+    let mut b = new(&ui, tb.file());
+    assert!(b.import_file(&text));
+    assert_eq!(b.notice.as_deref(), Some("Imported 6 events"));
+    assert_eq!(b.events.len(), 6);
+    assert_eq!(b.events.iter().find(|e| e.title == "Dentist").unwrap().location, "Laugavegur 5");
+    assert!(b.rich_events().events.iter().any(|e| e.uid == "gym@x" && e.rule.is_some()), "the repeat rule came along");
+    assert_eq!(new(&ui, tb.file()).events.len(), 6, "saved");
+
+    // the same archive again changes nothing
+    assert!(b.import_file(&text));
+    assert_eq!(b.notice.as_deref(), Some("Nothing new to import"));
+    assert_eq!(b.events.len(), 6);
+    assert_eq!(fs::read_dir(&tb.0).unwrap().filter(|e| e.as_ref().unwrap().file_name() == "events.import.tmp").count(), 0, "no scratch file left");
+}
+
+#[test]
+fn an_empty_calendar_archives_and_restores() {
+    let (ta, tb) = (Temp::new(), Temp::new());
+    let ui = crate::test_ui();
+    let a = new(&ui, ta.file());
+    let mut b = new(&ui, tb.file());
+    b.events = vec![event(1, "Kept")];
+    assert!(b.import_file(&a.archive_text()));
+    assert_eq!(b.notice.as_deref(), Some("Nothing new to import"));
+    assert_eq!(b.events.len(), 1, "an import never removes anything");
+}
+
+#[test]
+fn importing_an_ics_file_adds_its_events() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.import_file(&weekly_gym_ics()));
+    assert_eq!(c.notice.as_deref(), Some("Imported 4 events"));
+    assert_eq!(c.events.len(), 4);
+}
+
+#[test]
+fn a_file_that_is_not_a_calendar_is_reported() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.import_file("shopping list"));
+    assert_eq!(c.error.as_deref(), Some("No events found in this file"));
+    assert!(!c.import_file(&format!("{}\nevents.tsv 99\nabc\n", archive::MAGIC)));
+    assert_eq!(c.error.as_deref(), Some("This calendar archive is damaged"));
+    assert!(c.events.is_empty());
+    c.show_error("Could not read it");
+    assert_eq!(c.error.as_deref(), Some("Could not read it"));
+}
+
+#[test]
+fn the_file_commands_are_menu_items_for_the_app_to_run() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    for cmd in [Command::Import, Command::ImportArchive, Command::ExportArchive] {
+        assert!(c.enabled(cmd), "{cmd:?}");
+        assert!(!c.perform(&ui, cmd, 0.0), "the app shows the panel, not the calendar");
+        assert_eq!(Command::from_id(cmd.id()), Some(cmd));
+    }
+    assert_eq!(c.archive_name(), "Calendar Archive 2026-10-04.calarchive");
+    c.activate(&ui, Target::Add, 0.0);
+    assert!(!c.enabled(Command::Import) && !c.enabled(Command::ExportArchive));
+}
+
+/// Window pixels at the middle of minute `minute` in day column `col` of the Week view's hour grid.
+fn grid_xy(c: &Calendar, ui: &Ui, col: usize, minute: u32) -> (f32, f32) {
+    let (gut, col_w) = c.col_geometry(ui);
+    let top = ui.pt(timeview::GRID0 + timeview::ALLDAY_H) - c.scroll.offset();
+    (c.x0 + gut + col_w * (col as f32 + 0.5), top + (minute as f32 + 0.5) / 60.0 * ui.pt(c.prefs.hour_h))
+}
+
+fn week_calendar(ui: &Ui, file: PathBuf) -> Calendar {
+    let mut c = new(ui, file);
+    c.activate(ui, Target::View(View::Week), 0.0);
+    c
+}
+
+#[test]
+fn holding_then_dragging_on_empty_space_draws_out_a_new_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    // Sunday 4 October is column 0, so column 3 is Wednesday the 7th
+    let (x, y) = grid_xy(&c, &ui, 3, 600);
+    let (_, y2) = grid_xy(&c, &ui, 3, 690);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + 1.0), 300.0);
+    assert!(c.drag.is_some(), "held long enough, the move drags");
+    c.touch(&ui, Event::Move(x, y2), 400.0);
+    assert_eq!(c.drag.map(|d| d.span), Some(layout::DragSpan { start: 600, end: 705 }));
+    c.touch(&ui, Event::Up(x, y2), 450.0);
+    assert!(c.drag.is_none());
+    let draft = c.editor.as_ref().expect("the editor opens on the drawn-out event");
+    assert!(!draft.existing);
+    assert_eq!((draft.event.date, draft.event.minute, draft.event.duration), (date(2026, 10, 7), 600, 105));
+    assert!(c.events.is_empty(), "nothing is saved until Save");
+    assert_eq!(c.selected, date(2026, 10, 7));
+}
+
+#[test]
+fn dragging_upwards_works_too_and_a_drawn_event_takes_the_default_alert() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    c.change_setting(&ui, Setting::Alert(3));
+    let (x, y) = grid_xy(&c, &ui, 1, 720);
+    let (_, y2) = grid_xy(&c, &ui, 1, 660);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y2), 300.0);
+    c.touch(&ui, Event::Up(x, y2), 310.0);
+    let e = c.editor.as_ref().unwrap().event.clone();
+    assert_eq!((e.date, e.minute, e.duration, e.alert), (date(2026, 10, 5), 660, 75, 3));
+}
+
+#[test]
+fn holding_then_dragging_an_event_moves_it_to_another_day_and_time() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    // the event is on Sunday the 4th at 09:00 for an hour; grab it 20 minutes in and drop it on Tuesday near 13:20
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    let (x2, y2) = grid_xy(&c, &ui, 2, 800);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + 1.0), 300.0);
+    c.touch(&ui, Event::Move(x2, y2), 400.0);
+    assert_eq!(c.drag.map(|d| (d.day, d.span.start)), Some((date(2026, 10, 6), 780)));
+    c.touch(&ui, Event::Up(x2, y2), 450.0);
+    assert!(c.editor.is_none(), "a moved event does not open the editor");
+    let moved = &c.events[0];
+    assert_eq!((moved.date, moved.minute, moved.duration), (date(2026, 10, 6), 780, 60));
+    assert_eq!(c.notice.as_deref(), Some("Moved Standup to 13:00"));
+    let again = new(&ui, temp.file());
+    assert_eq!((again.events[0].date, again.events[0].minute), (date(2026, 10, 6), 780), "saved");
+}
+
+#[test]
+fn a_press_that_moves_at_once_still_scrolls() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    let before = c.scroll.offset();
+    let (x, y) = grid_xy(&c, &ui, 3, 600);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + ui.pt(60.0)), 40.0);
+    c.touch(&ui, Event::Move(x, y + ui.pt(120.0)), 80.0);
+    assert!(c.drag.is_none(), "not held, so not a drag");
+    c.touch(&ui, Event::Up(x, y + ui.pt(120.0)), 120.0);
+    assert!(c.editor.is_none() && c.events.is_empty());
+    assert_ne!(c.scroll.offset(), before, "the grid scrolled");
+}
+
+#[test]
+fn a_quick_tap_on_an_event_in_the_week_still_opens_it() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Up(x, y), 50.0);
+    assert!(c.drag.is_none());
+    assert!(c.editor.as_ref().is_some_and(|d| d.existing && d.event.id == 1));
+}
+
+#[test]
+fn a_drag_that_ends_where_it_began_changes_nothing() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + 1.0), 300.0);
+    c.touch(&ui, Event::Up(x, y + 1.0), 350.0);
+    assert!(c.editor.is_none());
+    assert_eq!((c.events[0].date, c.events[0].minute), (date(2026, 10, 4), 540));
+    assert!(c.notice.is_none());
+}
+
+#[test]
+fn nothing_drags_in_the_month_grid_or_the_hour_labels() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.touch(&ui, Event::Down(500.0, 700.0), 0.0);
+    c.touch(&ui, Event::Move(520.0, 720.0), 400.0);
+    assert!(c.drag.is_none() && c.press.is_none(), "the month grid does not drag");
+    c.touch(&ui, Event::Up(520.0, 720.0), 450.0);
+    let mut w = week_calendar(&ui, temp.file());
+    let (gut, _) = w.col_geometry(&ui);
+    let (_, y) = grid_xy(&w, &ui, 0, 600);
+    w.touch(&ui, Event::Down(w.x0 + gut / 2.0, y), 0.0);
+    assert!(w.press.is_none(), "the hour labels scroll, they do not draw events");
+}
+
+/// A calendar with three saved events in a window wide enough for the toolbar's search field.
+fn searchable(ui: &Ui, file: PathBuf) -> Calendar {
+    let mut lunch = event(2, "Lunch with Ana");
+    lunch.date = date(2026, 10, 6);
+    lunch.minute = 750;
+    let mut dentist = event(3, "Dentist");
+    dentist.date = date(2026, 10, 8);
+    store::save(&file, &[event(1, "Standup"), lunch, dentist]).unwrap();
+    let mut c = new(ui, file);
+    c.set_size(2400, 1920);
+    c.layout_columns(ui);
+    c
+}
+
+fn type_text(c: &mut Calendar, ui: &Ui, text: &str) {
+    for ch in text.chars() {
+        c.key(ui, Out::Text(ch.to_string()), 0.0);
+    }
+}
+
+fn draw_once(c: &mut Calendar, ui: &Ui) {
+    let (w, h) = (c.full_w as usize, c.h as usize);
+    let mut px = vec![0u32; w * h];
+    let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
+    c.draw(&mut s, ui, 0.0);
+}
+
+#[test]
+fn typing_in_the_search_field_lists_matching_events() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let field = c.search_rect(&ui).expect("a wide window has the search field");
+    tap(&mut c, &ui, field.x + field.w / 2.0, field.y + field.h / 2.0, 0.0);
+    assert!(c.search_focused && !c.searching());
+    type_text(&mut c, &ui, "lun");
+    assert!(c.searching());
+    assert_eq!(c.search_query(), "lun");
+    let titles: Vec<&str> = c.search_hits().iter().map(|h| h.title.as_str()).collect();
+    assert_eq!(titles, vec!["Lunch with Ana"]);
+    type_text(&mut c, &ui, "x");
+    assert!(c.searching() && c.search_hits().is_empty(), "no match, and the list says so");
+    c.key(&ui, Out::Backspace, 0.0);
+    assert_eq!(c.search_hits().len(), 1);
+    c.key(&ui, Out::Enter, 0.0);
+    assert!(!c.search_focused && c.searching(), "Return leaves the field and keeps the results");
+}
+
+#[test]
+fn a_result_opens_its_event_on_its_day() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "d");
+    // "Standup", "Lunch with Ana" has no d, "Dentist": the rows are in date order
+    let titles: Vec<&str> = c.search_hits().iter().map(|h| h.title.as_str()).collect();
+    assert_eq!(titles, vec!["Standup", "Dentist"]);
+    // the second row (window points: below the large title, 52 pt rows)
+    tap(&mut c, &ui, 400.0, GRID_TOP + 52.0 + 26.0, 10.0);
+    assert!(!c.searching() && c.search_query().is_empty(), "the search ends");
+    assert_eq!(c.selected, date(2026, 10, 8));
+    assert!(c.editor.as_ref().is_some_and(|d| d.existing && d.event.id == 3));
+}
+
+#[test]
+fn the_clear_button_and_escape_end_the_search() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let field = c.search_rect(&ui).unwrap();
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    // the clear button is at the trailing edge once there is text
+    tap(&mut c, &ui, field.x + field.w - 10.0, field.y + field.h / 2.0, 10.0);
+    assert!(c.search_query().is_empty() && c.search_focused, "cleared, and the cursor stays");
+    type_text(&mut c, &ui, "den");
+    assert!(c.escape(&ui, 20.0));
+    assert!(!c.searching() && !c.search_focused);
+    assert!(!c.escape(&ui, 30.0), "nothing left to close");
+}
+
+#[test]
+fn choosing_a_view_or_a_new_event_ends_the_search() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    c.activate(&ui, Target::View(View::Week), 1.0);
+    assert!(!c.searching() && c.search_query().is_empty());
+    c.activate(&ui, Target::SearchField, 2.0);
+    type_text(&mut c, &ui, "den");
+    c.activate(&ui, Target::Add, 3.0);
+    assert!(c.search_query().is_empty() && c.editor.is_some());
+}
+
+#[test]
+fn a_press_elsewhere_takes_the_cursor_out_of_the_field() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    tap(&mut c, &ui, 500.0, 600.0, 10.0);
+    assert!(!c.search_focused);
+    // keys then move the shown day again
+    let day = c.selected;
+    c.key(&ui, Out::Named("Right"), 20.0);
+    assert_eq!(c.selected, day.shift_days(1));
+}
+
+#[test]
+fn cmd_f_and_the_menu_item_focus_the_field_and_paste_goes_into_it() {
+    use bifrost_app::proto::CHORD_META;
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    assert!(c.chord(&ui, 33, CHORD_META, 0.0));
+    assert!(c.search_focused);
+    c.escape(&ui, 1.0);
+    assert!(c.enabled(Command::Search) && c.perform(&ui, Command::Search, 2.0));
+    assert!(c.search_focused);
+    assert!(c.edit_commands(Some("dent")).supports(Edit::Paste));
+    assert!(!c.edit_commands(Some("dent")).supports(Edit::Copy));
+    assert!(c.edit_command(&ui, Edit::Paste, Some("dent\nsecond line"), 3.0));
+    assert_eq!(c.search_query(), "dent");
+    assert_eq!(c.search_hits().len(), 1);
+}
+
+#[test]
+fn the_field_is_published_for_assistive_technology() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let has_field = |c: &Calendar| c.controls(&ui).iter().any(|n| n.role == bifrost_app::controls::Role::TextField && n.label == "Search");
+    assert!(has_field(&c));
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    let rows: Vec<String> = c.controls(&ui).into_iter().filter(|n| n.id >= 400 && n.id < 500).map(|n| n.label).collect();
+    assert_eq!(rows, vec!["Dentist".to_string()]);
+    c.activate(&ui, Target::Add, 1.0);
+    assert!(!has_field(&c), "no field while the event form is open");
+}
+
+#[test]
+fn a_narrow_window_has_no_search_field_but_still_searches() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(c.search_rect(&ui).is_none());
+    c.perform(&ui, Command::Search, 0.0);
+    type_text(&mut c, &ui, "stand");
+    assert_eq!(c.search_hits().len(), 1);
+}
+
+#[test]
+fn every_screen_draws() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    draw_once(&mut c, &ui);
+    for view in [View::Day, View::Week, View::Year, View::Month] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    // results, with matches and without
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "d");
+    draw_once(&mut c, &ui);
+    type_text(&mut c, &ui, "zzz");
+    draw_once(&mut c, &ui);
+    c.escape(&ui, 1.0);
+    // the Go to Date sheet
+    c.perform(&ui, Command::GoToDate, 2.0);
+    draw_once(&mut c, &ui);
+    c.activate(&ui, Target::Cancel, 3.0);
+    // a block being dragged out in the Week view
+    c.activate(&ui, Target::View(View::Week), 4.0);
+    let (x, y) = grid_xy(&c, &ui, 2, 600);
+    let (_, y2) = grid_xy(&c, &ui, 2, 700);
+    c.touch(&ui, Event::Down(x, y), 10.0);
+    c.touch(&ui, Event::Move(x, y2), 400.0);
+    assert!(c.drag.is_some());
+    draw_once(&mut c, &ui);
+}
+
+fn params(fields: &[(&str, &str)]) -> bifrost_core::json::Json {
+    use bifrost_core::json::Json;
+    Json::Obj(fields.iter().map(|(k, v)| (k.to_string(), Json::Str(v.to_string()))).collect())
+}
+
+#[test]
+fn the_show_date_intent_opens_the_calendar_on_a_date() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    c.open(&ui, Some(1));
+    let r = intents::perform(&mut c, &ui, "show-date", &params(&[("date", "2027-01-15")])).unwrap();
+    assert_eq!(c.selected, date(2027, 1, 15));
+    assert!(c.editor.is_none() && !c.searching(), "whatever was open is closed");
+    assert!(r.continue_foreground);
+    assert_eq!(r.dialog.as_deref(), Some("Showing January 15, 2027"));
+    assert!(intents::perform(&mut c, &ui, "show-date", &params(&[("date", "soon")])).is_err());
+}
+
+#[test]
+fn the_show_event_intent_opens_the_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let r = intents::perform(&mut c, &ui, "show-event", &params(&[("event", "3")])).unwrap();
+    assert!(r.continue_foreground);
+    assert_eq!(c.selected, date(2026, 10, 8));
+    assert!(c.editor.as_ref().is_some_and(|d| d.existing && d.event.id == 3));
+    assert!(intents::perform(&mut c, &ui, "show-event", &params(&[("event", "99")])).is_err(), "no such event");
+    assert!(intents::perform(&mut c, &ui, "show-event", &params(&[("event", "abc")])).is_err());
+}
+
+#[test]
+fn the_create_event_intent_adds_and_saves_an_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let r = intents::perform(
+        &mut c,
+        &ui,
+        "create-event",
+        &bifrost_core::json::Json::Obj(vec![
+            ("title".into(), bifrost_core::json::Json::Str("  Physio ".into())),
+            ("start".into(), bifrost_core::json::Json::Str("2026-10-12T09:30".into())),
+            ("minutes".into(), bifrost_core::json::Json::Num(45.0)),
+            ("location".into(), bifrost_core::json::Json::Str("Laugavegur 5".into())),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(r.dialog.as_deref(), Some("Created Physio on 2026-10-12 09:30"));
+    assert!(!r.continue_foreground);
+    let saved = new(&ui, temp.file());
+    let e = saved.events.iter().find(|e| e.title == "Physio").expect("saved");
+    assert_eq!((e.date, e.minute, e.duration, e.location.as_str()), (date(2026, 10, 12), 570, 45, "Laugavegur 5"));
+    assert_eq!(r.value, bifrost_core::json::Json::Str(e.id.to_string()));
+    assert_eq!(c.events.len(), 4);
+}
+
+#[test]
+fn the_create_event_intent_takes_the_shown_day_and_the_defaults_and_refuses_bad_input() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.change_setting(&ui, Setting::Length(2));
+    c.change_setting(&ui, Setting::Alert(3));
+    intents::perform(&mut c, &ui, "create-event", &params(&[("title", "Call")])).unwrap();
+    let e = &c.events[0];
+    assert_eq!((e.date, e.minute, e.duration, e.alert), (date(2026, 10, 4), 540, 90, 3));
+    // an all-day event has no time and its own alert
+    c.change_setting(&ui, Setting::AllDayAlert(6));
+    let json = bifrost_core::json::Json::Obj(vec![
+        ("title".into(), bifrost_core::json::Json::Str("Holiday".into())),
+        ("all_day".into(), bifrost_core::json::Json::Bool(true)),
+    ]);
+    intents::perform(&mut c, &ui, "create-event", &json).unwrap();
+    let holiday = c.events.iter().find(|e| e.title == "Holiday").unwrap();
+    assert_eq!((holiday.all_day, holiday.minute, holiday.duration, holiday.alert), (true, 0, 1440, 6));
+    assert!(intents::perform(&mut c, &ui, "create-event", &params(&[("title", "   ")])).is_err(), "a blank title");
+    assert!(intents::perform(&mut c, &ui, "create-event", &params(&[("title", "Ok"), ("start", "nope")])).is_err());
+    assert!(intents::perform(&mut c, &ui, "no-such-intent", &params(&[])).is_err());
+    assert_eq!(c.events.len(), 2);
+}
+
+#[test]
+fn events_are_entities_for_the_intents() {
+    use bifrost_app::intents::EntityQuery;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let c = searchable(&ui, temp.file());
+    let ids = |q: &EntityQuery| c.event_entities(q).into_iter().map(|e| e.id).collect::<Vec<_>>();
+    assert_eq!(ids(&EntityQuery::Suggested), vec!["1", "2", "3"]);
+    assert_eq!(ids(&EntityQuery::Ids(vec!["3".into(), "9".into()])), vec!["3"]);
+    assert_eq!(ids(&EntityQuery::String("LUNCH".into())), vec!["2"]);
+    let lunch = &c.event_entities(&EntityQuery::String("lunch".into()))[0];
+    assert_eq!((lunch.ty.as_str(), lunch.title.as_str(), lunch.subtitle.as_deref()), ("Event", "Lunch with Ana", Some("2026-10-06 12:30")));
+}
+
+#[test]
+fn print_sends_the_agenda_of_what_the_window_shows() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    assert!(c.enabled(Command::Print) && !c.perform(&ui, Command::Print, 0.0), "the app runs the print job");
+    let (job, text) = c.print_job();
+    assert_eq!(job, "Calendar October 2026");
+    assert!(text.starts_with("October 2026\n============\n"));
+    for title in ["Standup", "Lunch with Ana", "Dentist"] {
+        assert!(text.contains(title), "{title}");
+    }
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    let (job, text) = c.print_job();
+    assert_eq!(job, "Calendar Sunday, October 4");
+    assert!(text.contains("Standup") && !text.contains("Dentist"));
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    assert_eq!(c.print_job().0, "Calendar Oct 4 - 10, 2026");
+    assert_eq!(c.print_job().1.matches("\n  ").count(), 3, "three events that week");
+    c.activate(&ui, Target::Add, 0.0);
+    assert!(!c.enabled(Command::Print), "not while the event form is open");
+}
+
+/// Window points inside the calendar list's row `id`.
+fn layer_point(c: &Calendar, ui: &Ui, id: u32) -> (f32, f32) {
+    for y in 0..800 {
+        if c.layer_at(ui, ui.pt(50.0), ui.pt(y as f32)) == Some(id) {
+            return (50.0, y as f32);
+        }
+    }
+    panic!("no row {id} in the calendar list");
+}
+
+fn team_calendar_text() -> String {
+    let standup = ics::IcsEvent::new("standup@team", "Team standup", ics::Local::new(date(2026, 10, 6), 540), ics::Local::new(date(2026, 10, 6), 570));
+    ics::write(&ics::IcsCalendar { name: "Team".into(), events: vec![standup], timezones: vec![] }, "20261004T000000Z")
+}
+
+#[test]
+fn the_holidays_are_a_read_only_calendar_the_list_switches_on_and_off() {
+    use overlay::{LAYER_HOLIDAYS, LAYER_LOCAL};
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.prefs.show_holidays);
+    assert_eq!(c.shown_events().count(), 1, "only the saved event");
+
+    let (x, y) = layer_point(&c, &ui, LAYER_HOLIDAYS);
+    tap(&mut c, &ui, x, y, 0.0);
+    assert!(c.prefs.show_holidays);
+    assert_eq!(c.shown_events().count(), 1 + 3 * holidays::iceland(2026).len(), "three years of holidays");
+    // Good Friday 2026 is in its day cell, and the saved events were not touched
+    c.selected = date(2026, 4, 1);
+    c.sync_overlay();
+    let (cell, _) = c.cell_events(&ui, date(2026, 4, 3));
+    let good_friday = cell.iter().find(|e| e.title == "Good Friday").expect("Good Friday in its cell");
+    assert!(overlay::is_overlay(good_friday.id) && good_friday.all_day);
+    let id = good_friday.id;
+    assert_eq!(c.events.len(), 1);
+    // a tap on it says what it is, and does not open the editor
+    c.activate(&ui, Target::Row(id), 1.0);
+    assert!(c.editor.is_none());
+    assert_eq!(c.notice.as_deref(), Some("Good Friday (Holidays)"));
+    assert_ne!(c.event_colour(id), c.event_colour(1), "its own colour");
+    // the setting is kept
+    assert!(new(&ui, temp.file()).prefs.show_holidays);
+
+    // the Calendar row hides the saved events without deleting them
+    let (x, y) = layer_point(&c, &ui, LAYER_LOCAL);
+    c.selected = date(2026, 10, 4);
+    tap(&mut c, &ui, x, y, 10.0);
+    assert!(!c.prefs.show_local);
+    assert!(c.shown_events().all(|e| overlay::is_overlay(e.id)));
+    assert_eq!(c.events.len(), 1);
+    tap(&mut c, &ui, x, y, 20.0);
+    assert!(c.shown_events().any(|e| e.id == 1));
+    // and the Holidays row turns the holidays off again
+    let (x, y) = layer_point(&c, &ui, LAYER_HOLIDAYS);
+    tap(&mut c, &ui, x, y, 30.0);
+    assert_eq!(c.shown_events().count(), 1);
+}
+
+#[test]
+fn read_only_events_show_in_the_week_and_cannot_be_dragged() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    c.toggle_layer(overlay::LAYER_HOLIDAYS);
+    c.selected = date(2026, 4, 1);
+    c.sync_overlay();
+    let rects = c.time_rects(&ui);
+    assert!(rects.iter().any(|r| overlay::is_overlay(r.0)), "an Easter day is in that week");
+    // pressing on its band in the all-day row starts no drag, and a tap says what it is
+    c.scroll.jump_top();
+    let (_, x, y, w, h) = *c.time_rects(&ui).iter().find(|r| overlay::is_overlay(r.0)).unwrap();
+    let (px, py) = (c.x0 + x + w / 2.0, y + h / 2.0);
+    c.touch(&ui, Event::Down(px, py), 0.0);
+    assert!(c.press.is_none() && c.drag.is_none());
+    c.touch(&ui, Event::Up(px, py), 10.0);
+    assert!(c.editor.is_none());
+    assert!(c.notice.as_deref().is_some_and(|n| n.ends_with("(Holidays)")), "{:?}", c.notice);
+}
+
+#[test]
+fn subscribing_adds_a_calendar_that_is_read_on_a_schedule() {
+    use overlay::LAYER_SUBS;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.subscribe("hello").is_err());
+    assert_eq!(c.subscribe("webcal://cal.example.is/team.ics"), Ok("cal.example.is".to_string()));
+    assert!(c.subscribe("https://cal.example.is/team.ics").is_err(), "the same calendar twice");
+    assert_eq!(c.subscription_names(), vec!["cal.example.is".to_string()]);
+    let url = "https://cal.example.is/team.ics".to_string();
+    // it is due at once, then again an hour later
+    assert_eq!(c.next_fetch(10.0), Some(url.clone()));
+    assert_eq!(c.next_fetch(20.0), None);
+    assert_eq!(c.fetch_wake(), Some(10.0 + subscribe::EVERY_MS));
+    assert_eq!(c.next_fetch(10.0 + subscribe::EVERY_MS), Some(url.clone()));
+
+    // the calendar answers: it names itself and its events appear, read-only
+    c.fetch_finished(&url, Ok(team_calendar_text()));
+    assert_eq!(c.subscription_names(), vec!["Team".to_string()]);
+    c.selected = date(2026, 10, 6);
+    c.sync_overlay();
+    let events: Vec<(String, u16)> = c.shown_events().map(|e| (e.title.clone(), e.minute)).collect();
+    assert_eq!(events, vec![("Team standup".to_string(), 540)]);
+    let id = c.shown_events().next().unwrap().id;
+    assert_eq!(overlay::slot_of(id), 1);
+    c.activate(&ui, Target::Row(id), 0.0);
+    assert_eq!(c.notice.as_deref(), Some("Team standup (Team)"));
+    assert!(c.editor.is_none());
+
+    // kept after a restart, from the cached answer
+    let mut again = new(&ui, temp.file());
+    assert_eq!(again.subscription_names(), vec!["Team".to_string()]);
+    again.selected = date(2026, 10, 6);
+    again.sync_overlay();
+    assert_eq!(again.shown_events().count(), 1);
+
+    // a failed or foreign answer is reported and the calendar stays as it was
+    c.fetch_finished(&url, Err("the server answered 500".into()));
+    assert_eq!(c.error.as_deref(), Some("Could not update Team: the server answered 500"));
+    c.fetch_finished(&url, Ok("<html>Not found</html>".into()));
+    assert_eq!(c.error.as_deref(), Some("Could not update Team: it is not a calendar"));
+    c.sync_overlay();
+    assert_eq!(c.shown_events().count(), 1);
+    c.fetch_finished("https://other.example.is/x.ics", Ok(team_calendar_text()));
+    assert_eq!(c.subscription_names().len(), 1, "an answer for a calendar that is not subscribed to is ignored");
+
+    // the list hides it, and unsubscribing removes it and its cached answer
+    let (x, y) = layer_point(&c, &ui, LAYER_SUBS);
+    tap(&mut c, &ui, x, y, 100.0);
+    assert_eq!(c.shown_events().count(), 0);
+    tap(&mut c, &ui, x, y, 200.0);
+    assert_eq!(c.shown_events().count(), 1);
+    assert!(!c.unsubscribe(5));
+    assert!(c.unsubscribe(0));
+    assert!(c.subscription_names().is_empty());
+    assert_eq!(c.shown_events().count(), 0);
+    assert!(!subscribe::cache_path(&temp.file(), &url).exists());
+    assert!(new(&ui, temp.file()).subscription_names().is_empty(), "the list is saved");
+}
+
+#[test]
+fn the_fetcher_wakes_for_the_next_read() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    let fetcher = subscribe::Fetcher::default();
+    assert_eq!(fetcher.wake(&c), None, "nothing to read");
+    c.subscribe("https://cal.example.is/team.ics").unwrap();
+    assert_eq!(fetcher.wake(&c), Some(0.0), "never read, so due now");
+}
+
+#[test]
+fn answers_a_worker_posted_reach_the_calendar_on_the_next_tick() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.subscribe("https://cal.example.is/team.ics").unwrap();
+    let mut fetcher = subscribe::Fetcher::default();
+    fetcher.post("https://cal.example.is/team.ics", Ok(team_calendar_text()));
+    fetcher.deliver(&mut c);
+    assert_eq!(c.subscription_names(), vec!["Team".to_string()]);
+    fetcher.post("https://cal.example.is/team.ics", Err("no route".into()));
+    fetcher.deliver(&mut c);
+    assert_eq!(c.error.as_deref(), Some("Could not update Team: no route"));
+    fetcher.deliver(&mut c);
+    assert_eq!(c.subscription_names(), vec!["Team".to_string()], "nothing more to take");
+}
+
+#[test]
+fn holidays_and_subscribed_events_draw_in_every_view() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.toggle_layer(overlay::LAYER_HOLIDAYS);
+    c.subscribe("https://cal.example.is/team.ics").unwrap();
+    let url = "https://cal.example.is/team.ics";
+    c.fetch_finished(url, Ok(team_calendar_text()));
+    c.selected = date(2026, 4, 3);
+    for view in [View::Month, View::Week, View::Day, View::Year] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    c.selected = date(2026, 10, 6);
+    for view in [View::Month, View::Week, View::Day] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    // the printed agenda lists them too
+    assert!(c.print_job().1.contains("Team standup"));
+}
+
+#[test]
+fn quick_event_adds_the_event_a_sentence_describes() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.enabled(Command::QuickEvent) && c.perform(&ui, Command::QuickEvent, 0.0));
+    assert_eq!(c.quick_text(), Some(""));
+    assert!(!c.enabled(Command::NewEvent) && !c.enabled(Command::QuickEvent), "the sheet is modal");
+    type_text(&mut c, &ui, "Lunch with Ana tomorrow at 12:30");
+    let rows = c.quick_preview();
+    assert_eq!(rows[0].1, "Lunch with Ana");
+    assert_eq!(rows[1].1, "Monday, October 5, 2026");
+    assert_eq!(rows[2].1, "12:30");
+    // pasted text goes into the line too
+    assert!(c.edit_commands(Some("x")).supports(Edit::Paste) && !c.edit_commands(Some("x")).supports(Edit::Copy));
+    tap_bar(&mut c, &ui, chrome::B_QUICK, 10.0);
+    assert!(c.quick_text().is_none(), "Add closes the sheet");
+    assert_eq!(c.events.len(), 1);
+    let e = &c.events[0];
+    assert_eq!((e.title.as_str(), e.date, e.minute, e.duration), ("Lunch with Ana", date(2026, 10, 5), 750, 60));
+    assert_eq!(c.notice.as_deref(), Some("Added Lunch with Ana on 2026-10-05 at 12:30"));
+    assert_eq!(c.selected, date(2026, 10, 5));
+    assert_eq!(new(&ui, temp.file()).events.len(), 1, "saved");
+}
+
+#[test]
+fn quick_event_takes_return_paste_and_backspace_and_refuses_an_empty_sentence() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::QuickEvent, 0.0);
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.quick_text().is_some(), "the sheet stays");
+    assert_eq!(c.error.as_deref(), Some("Type what the event is, for example: Lunch tomorrow at 12:30"));
+    assert!(c.events.is_empty());
+    assert!(c.edit_command(&ui, Edit::Paste, Some("Dentist friday 3pm\nsecond line"), 2.0));
+    assert_eq!(c.quick_text(), Some("Dentist friday 3pm"));
+    assert!(c.error.is_none(), "typing clears the message");
+    c.key(&ui, Out::Backspace, 3.0);
+    assert_eq!(c.quick_text(), Some("Dentist friday 3p"));
+    type_text(&mut c, &ui, "m");
+    c.key(&ui, Out::Enter, 4.0);
+    assert!(c.quick_text().is_none());
+    assert_eq!((c.events[0].title.as_str(), c.events[0].date, c.events[0].minute), ("Dentist", date(2026, 10, 9), 15 * 60));
+}
+
+#[test]
+fn quick_event_can_be_cancelled_and_blocks_the_window_behind_it() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::QuickEvent, 0.0);
+    type_text(&mut c, &ui, "Never mind");
+    assert!(!c.chord(&ui, 3, CHORD_META, 1.0), "no view change behind the sheet");
+    assert!(!c.change_setting(&ui, prefs::Setting::MondayFirst));
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 2.0);
+    assert!(c.quick_text().is_none() && c.events.is_empty());
+    c.perform(&ui, Command::QuickEvent, 3.0);
+    assert_eq!(c.quick_text(), Some(""), "a fresh line each time");
+    assert!(c.escape(&ui, 4.0));
+    assert!(c.quick_text().is_none());
+    // the sheet and its field draw and are published
+    c.perform(&ui, Command::QuickEvent, 5.0);
+    type_text(&mut c, &ui, "Dentist tomorrow 3pm");
+    draw_once(&mut c, &ui);
+    assert!(c.controls(&ui).iter().any(|n| n.role == bifrost_app::controls::Role::TextField && n.label == "Quick Event" && n.value == "Dentist tomorrow 3pm"));
+    // the app's intents close it
+    intents::perform(&mut c, &ui, "show-date", &params(&[("date", "2027-01-15")])).unwrap();
+    assert!(c.quick_text().is_none());
+}
+
+#[test]
+fn a_custom_repeat_is_saved_beside_the_store_and_its_days_are_worked_out() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Gym");
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::Repeat, 2.0);
+    c.activate(&ui, Target::RepeatFreq, 3.0);
+    c.activate(&ui, Target::RepeatFreq, 4.0);
+    c.activate(&ui, Target::RepeatDay(2), 5.0);
+    c.activate(&ui, Target::RepeatEnds, 6.0);
+    c.activate(&ui, Target::RepeatCount(-7), 7.0);
+    assert!(c.rows().iter().any(|r| r.0 == Target::RepeatCount(0)), "the count row shows");
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 8.0);
+    assert!(c.editor.is_none());
+    let id = c.events[0].id;
+    assert_eq!(c.events[0].repeat, 0, "a custom rule is not one of the presets");
+    let rule = c.extras().events.get(&id).and_then(|x| x.rrule.clone());
+    assert_eq!(rule.as_deref(), Some("FREQ=WEEKLY;BYDAY=SU,TU;COUNT=3"));
+    let e = c.events[0].clone();
+    assert!(c.occurs(&e, date(2026, 10, 6)), "a Tuesday");
+    assert!(c.occurs(&e, date(2026, 10, 11)), "the second Sunday");
+    assert!(!c.occurs(&e, date(2026, 10, 5)), "a Monday");
+    assert!(!c.occurs(&e, date(2026, 10, 13)), "the count is used up");
+    let reopened = new(&ui, temp.file());
+    assert_eq!(reopened.extras().events.get(&id).and_then(|x| x.rrule.clone()), rule, "the rule survives a reload");
+}
+
+#[test]
+fn the_alert_picker_saves_custom_alarms_for_the_alert_calendar() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Call");
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::Alert, 2.0);
+    c.activate(&ui, Target::AlarmPreset(0), 3.0);
+    c.activate(&ui, Target::AlarmPreset(5), 4.0);
+    c.activate(&ui, Target::AlarmStep(1), 5.0);
+    c.activate(&ui, Target::AlarmAdd, 6.0);
+    assert_eq!(c.editor.as_ref().unwrap().alarms, vec![35, 60]);
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 7.0);
+    let id = c.events[0].id;
+    assert_eq!(c.extras().events.get(&id).and_then(|x| x.alarms.clone()), Some(vec![35, 60]));
+    let cal = alerts::alert_calendar_with(&c.events, &ics::IcsCalendar::default(), c.extras());
+    assert_eq!(cal.events[0].alarms, vec![35, 60]);
+    // picking a single preset again stores it as the event's preset, with no list of its own
+    c.activate(&ui, Target::Row(id), 8.0);
+    c.activate(&ui, Target::Alert, 9.0);
+    c.activate(&ui, Target::AlarmPreset(0), 10.0);
+    c.activate(&ui, Target::AlarmPreset(3), 11.0);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 12.0);
+    assert_eq!(c.events[0].alert, 3);
+    assert_eq!(c.extras().events.get(&id).and_then(|x| x.alarms.clone()), None, "a preset needs no entry of its own");
+}
+
+#[test]
+fn calendars_are_made_shown_renamed_and_removed_only_when_empty() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.perform(&ui, Command::NewCalendar, 0.0));
+    assert_eq!(c.line_text().as_deref(), Some(""), "the sheet opens empty");
+    draw_once(&mut c, &ui);
+    type_text(&mut c, &ui, "Work");
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.line_sheet.is_none(), "Return makes the calendar and closes the sheet");
+    assert_eq!(c.extras().name_of(2), "Work");
+    // an event on the new calendar, shown until its row hides the calendar
+    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    type_text(&mut c, &ui, "Standup");
+    c.key(&ui, Out::Hide, 3.0);
+    c.activate(&ui, Target::Calendar, 4.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.calendar, 2);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 5.0);
+    let id = c.events[0].id;
+    assert_eq!(c.extras().calendar_of(id), 2);
+    assert_eq!(c.shown_events().count(), 1);
+    c.activate(&ui, Target::Layer(overlay::LAYER_CAL + 2), 6.0);
+    assert_eq!(c.shown_events().count(), 0, "the calendar row hides its events");
+    c.activate(&ui, Target::Layer(overlay::LAYER_CAL + 2), 7.0);
+    assert_eq!(c.shown_events().count(), 1);
+    // rename it, then refuse to delete it while it holds an event
+    assert!(c.open_rename(2));
+    assert_eq!(c.line_text().as_deref(), Some("Work"));
+    for _ in 0..4 {
+        c.key(&ui, Out::Backspace, 8.0);
+    }
+    type_text(&mut c, &ui, "Job");
+    c.key(&ui, Out::Enter, 9.0);
+    assert_eq!(c.extras().name_of(2), "Job");
+    assert!(c.delete_calendar(2));
+    assert!(c.extras().exists(2), "a calendar with an event is kept");
+    assert!(c.error.as_deref().is_some_and(|e| e.contains("Delete them first")));
+    c.activate(&ui, Target::Row(id), 10.0);
+    tap_row(&mut c, &ui, Target::Delete, 384.0, 11.0);
+    assert!(c.events.is_empty());
+    assert!(c.delete_calendar(2));
+    assert!(!c.extras().exists(2), "an empty calendar is removed");
+    assert!(!c.delete_calendar(1), "the built-in calendar cannot be removed");
+}
+
+#[test]
+fn the_default_calendar_setting_is_kept_with_the_calendars() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::NewCalendar, 0.0);
+    type_text(&mut c, &ui, "Home");
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.change_setting(&ui, Setting::DefaultCalendar(2)));
+    assert!(c.setting_checked(Setting::DefaultCalendar(2)) && !c.setting_checked(Setting::DefaultCalendar(1)));
+    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.calendar, 2, "new events go to the default");
+    c.activate(&ui, Target::Cancel, 3.0);
+    assert!(!c.change_setting(&ui, Setting::DefaultCalendar(7)), "a calendar that does not exist");
+    let reopened = new(&ui, temp.file());
+    assert_eq!(reopened.extras().default_id(), 2);
+}
+
+#[test]
+fn the_time_zone_and_travel_time_rows_cycle_and_are_saved() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Flight");
+    c.key(&ui, Out::Hide, 1.0);
+    c.activate(&ui, Target::Zone, 2.0);
+    assert_eq!(c.editor.as_ref().unwrap().extra.tzid.as_deref(), Some("UTC"));
+    c.activate(&ui, Target::Zone, 3.0);
+    c.activate(&ui, Target::Travel, 4.0);
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 5.0);
+    let id = c.events[0].id;
+    let extra = c.extras().events.get(&id).cloned().unwrap();
+    assert_eq!(extra.tzid.as_deref(), Some("Atlantic/Reykjavik"));
+    assert_eq!(extra.travel, 15);
+    assert!(c.export_ics().contains("TZID=Atlantic/Reykjavik"), "the export names the zone");
+}
+
+#[test]
+fn an_empty_subscription_address_keeps_the_sheet_open() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.open_subscription("");
+    assert!(c.line_sheet.is_some());
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.line_sheet.is_some(), "the address is refused and the sheet stays open");
+    assert!(c.error.is_some());
+    draw_once(&mut c, &ui);
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 2.0);
+    assert!(c.line_sheet.is_none());
 }

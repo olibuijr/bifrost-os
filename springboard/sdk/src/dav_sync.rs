@@ -76,8 +76,8 @@ impl Sync {
         done
     }
 
-    /// File > Refresh Accounts: makes the next `poll` start a sync at once instead of waiting for the interval. A sync
-    /// that is already running finishes first.
+    /// Asks for a sync on the next `poll`, not waiting for the interval (View > Refresh Calendars). A sync that is
+    /// already running finishes first and the next one starts after it.
     pub fn refresh(&mut self) {
         self.last = None;
     }
@@ -171,15 +171,6 @@ mod tests {
     }
 
     #[test]
-    fn refresh_makes_the_next_poll_due_at_once() {
-        let mut sync = Sync::new(Service::Contacts);
-        sync.last = Some(1_000.0);
-        assert!(sync.last.map_or(true, |last| 2_000.0 - last < EVERY_MS), "a second later nothing is due");
-        sync.refresh();
-        assert!(sync.last.map_or(true, |last| 2_000.0 - last >= EVERY_MS), "after a refresh the sync is due");
-    }
-
-    #[test]
     fn an_account_with_its_service_off_is_skipped() {
         let all = [dav(Kind::CalDav, "off", false), dav(Kind::CalDav, "on", true)];
         assert_eq!(first_account(&all, Service::Calendars).unwrap().id, "on");
@@ -190,6 +181,14 @@ mod tests {
     fn a_reply_for_another_request_is_not_the_password() {
         let mut s = Sync::new(Service::Contacts);
         assert!(!s.reply(7, &Err("x".into())));
+    }
+
+    #[test]
+    fn refresh_makes_the_next_sync_due_at_once() {
+        let mut s = Sync::new(Service::Calendars);
+        s.last = Some(1_000_000.0);
+        s.refresh();
+        assert!(s.last.is_none(), "the interval no longer holds the next sync back");
     }
 
     #[test]
