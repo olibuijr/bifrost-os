@@ -1198,4 +1198,7 @@ pub mod auth_prompt;
 pub mod video_info;
 
 pub mod sk_action;
+pub mod route_address;
+pub mod model_seal;
+pub mod remote_session;
 
