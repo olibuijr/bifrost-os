@@ -80,9 +80,9 @@
     {
       "feature": "Neural networks",
       "apple": "BNNS (neural network training and inference)",
-      "bifrost": "springboard/ui/src/cnn_layers.rs (inference only",
+      "bifrost": "springboard/ui/src/cnn_layers.rs (inference only: Network, lstm_step, gru_step); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No neural network inference or training API for apps. Searches for neural network and tensor code found nothing."
+      "note": "Forward inference for convolution, pooling, dense, relu, custom and LSTM or GRU steps runs on the CPU and is tested headless. Gap: there is no training API and no descriptor an app can build a network from, and the code is not yet wired into apps or the shell."
     },
     {
       "feature": "Audio DSP (biquad filters, spectrogram)",

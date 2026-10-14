@@ -18,7 +18,7 @@ use crate::service;
 use bifrost_core::json::Json;
 
 pub use bifrost_ui::media_artwork::{aspect_fit, request_pixels, Artwork, ArtworkError, ArtworkSize, MAX_SIDE};
-pub use bifrost_ui::media_content::{MediaContent, MediaDuration, MediaType};
+pub use bifrost_ui::media_content::{ContentKind, MediaContent, MediaDuration, MediaType};
 pub use bifrost_ui::media_session::{
     CommandState, MediaPlaybackSnapshot, MediaSession, MediaSessionError, PlaybackState, RemoteCommand,
 };
@@ -54,6 +54,31 @@ pub enum Command {
     SkipForward,
     SkipBackward,
     Seek(f64),
+}
+
+impl Command {
+    /// The session command this shell command asks for. A seek is the seek-to-position command.
+    pub fn remote(self) -> RemoteCommand {
+        match self {
+            Command::Play => RemoteCommand::Play,
+            Command::Pause => RemoteCommand::Pause,
+            Command::Stop => RemoteCommand::Stop,
+            Command::Toggle => RemoteCommand::TogglePlayPause,
+            Command::Next => RemoteCommand::Next,
+            Command::Previous => RemoteCommand::Previous,
+            Command::SkipForward => RemoteCommand::SkipForward,
+            Command::SkipBackward => RemoteCommand::SkipBackward,
+            Command::Seek(_) => RemoteCommand::SeekTo,
+        }
+    }
+}
+
+/// Checks a shell command against the commands the app declared on its session. `Ok` is the session command the app
+/// should run. An undeclared command is refused as unsupported, and a declared but disabled one as disabled.
+pub fn accept(session: &MediaSession, command: Command) -> Result<RemoteCommand, MediaSessionError> {
+    let remote = command.remote();
+    session.dispatch(remote)?;
+    Ok(remote)
 }
 
 /// The typed command in a `command` service event from the shell, or `None` for any other event or name.
@@ -101,6 +126,8 @@ pub fn publish_body(session: &MediaSession) -> Option<Json> {
     };
     fields.push(text("state", state));
     fields.push(("position_ms".to_string(), Json::Num(snapshot.position_ms as f64)));
+    fields.push(("rate".to_string(), Json::Num(snapshot.rate() as f64)));
+    fields.push(text("kind", content.kind.name()));
     let commands: Vec<(String, Json)> = NAMES
         .iter()
         .filter_map(|(name, command)| match session.command_state(*command) {
