@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- Edit > Speak Serial Number reads the serial through the system speech engine (`espeak-ng`, else `espeak`), whether or not the screen reader is on. With no engine installed the announcement shows as the banner, as before.
+- The manifest declares the JSON type (`public.json`, rank none), so Files lists System Information under Open With for a saved report. Files still does not pick it by itself.
+
 ## 0.6.0
 
 - Edit > Use Selection for Find (Cmd+E) opens the find bar with the picked value or item; Edit > Jump to Selection (Cmd+J) scrolls the picked row or item into view.

@@ -11,6 +11,7 @@ mod extras;
 mod model;
 mod probe;
 mod recents;
+mod speech;
 mod window;
 
 use bifrost_app::controls::Node;
@@ -344,8 +345,14 @@ impl SysInfo {
             MENU_USE_SELECTION => self.use_selection_for_find(),
             MENU_JUMP_SELECTION => self.jump_to_selection(),
             MENU_SPEAK => {
-                let text = self.serial_speech().unwrap_or_else(|| "No serial number is available".to_string());
-                ctx.announce(&text, AnnouncePriority::High);
+                let Some(text) = self.serial_speech() else {
+                    ctx.announce("No serial number is available", AnnouncePriority::High);
+                    return false;
+                };
+                // the engine speaks whether or not the screen reader is on; with no engine the reader's banner carries it
+                if self.speaker.start(&text) == Err(speech::SpeakError::NoEngine) {
+                    ctx.announce(&text, AnnouncePriority::High);
+                }
                 false
             }
             MENU_OVERVIEW => self.select(model::Category::Overview),

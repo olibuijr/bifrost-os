@@ -248,6 +248,8 @@ pub struct SysInfo {
     pub screens_request: Option<u32>,
     /// The display list is asked for again (at the start, after a refresh, after the displays changed).
     pub screens_stale: bool,
+    /// The speech engine that reads the serial number aloud (Speak Serial Number).
+    pub speaker: crate::speech::Speaker,
 }
 
 impl SysInfo {
@@ -285,6 +287,7 @@ impl SysInfo {
             pick_after_load: None,
             screens_request: None,
             screens_stale: true,
+            speaker: crate::speech::Speaker::default(),
         }
     }
 
