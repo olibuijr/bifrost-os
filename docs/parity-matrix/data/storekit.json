@@ -17,16 +17,16 @@
     {
       "feature": "Purchase flow",
       "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
-      "bifrost": "springboard/ui/src/purchase.rs; wired: springboard/src/shell/store/mod.rs (press_button refuses paid apps); wired: springboard/src/shell/store/sheet.rs; springboard/src/shell/store/mod.rs (open_sheet, finish_purchase)",
+      "bifrost": "springboard/ui/src/purchase.rs (Price, Purchase, Outcome)",
       "status": "partial",
-      "note": "Wave 3 (w3-storekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no payment sheet, no purchase result type, no paid-app install path Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Pure model: price text, one purchase attempt from the confirmation sheet to a final result, and the install gate that allows a paid package only after success. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (purchase_*) and the purchase unit tests. The shell wiring (press_button refuses paid apps, open_sheet, finish_purchase in springboard/src/shell/store) is not covered by these tests and is not verified on Midget. No store payment sheet yet."
     },
     {
       "feature": "Transactions and entitlements",
       "apple": "Transaction, Transaction.updates, Transaction.all, Transaction.currentEntitlements",
-      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs; wired: springboard/src/shell/store/mod.rs (AppStore::purchased), springboard/ui/src/entitlement.rs; wired: springboard/src/shell/store/mod.rs (finish_purchase, purchased, restore_purchases); springboard/ui/src/entitlement.rs",
+      "bifrost": "springboard/ui/src/entitlement.rs (Ledger, Transaction), springboard/ui/src/subscription.rs (Renewal)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. installed state is kept in apps/installed.json (install.rs), not as transactions an app can query Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Pure ledger of purchases: record, revoke, finish, the latest purchase per product and the current entitlements on a day, with grace-period access. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (ledger_*) and the entitlement unit tests. The shell keeps installed state in apps/installed.json and reads it through AppStore::purchased; that path is not covered by these tests and not verified on Midget. No app-facing transaction API yet."
     },
     {
       "feature": "Signed transaction verification (JWS)",
@@ -38,9 +38,9 @@
     {
       "feature": "Subscription status and renewal",
       "apple": "SubscriptionStatus, SubscriptionRenewalInfo, SubscriptionPeriod, Product.SubscriptionInfo.RenewalState",
-      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs",
+      "bifrost": "springboard/ui/src/subscription.rs (Period, Renewal, State)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no subscription groups, renewal or billing state"
+      "note": "Period arithmetic with month and year clamping, the paid, grace, billing-retry and expired states, and the next expiration. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (subscription_*) and the subscription unit tests. No subscription groups or billing backend; the store supplies the dates."
     },
     {
       "feature": "Offers, offer codes and win-back offers",
@@ -94,9 +94,9 @@
     {
       "feature": "Review prompts",
       "apple": "RequestReviewAction, SKStoreReviewController",
-      "bifrost": "springboard/sdk/src/review.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs",
+      "bifrost": "springboard/sdk/src/review.rs (Policy, ReviewRequests)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK call to ask the user for a rating; a simple SDK prompt helper would fit the usernotif and sheet patterns"
+      "note": "Pure ask policy: a minimum gap between asks and a maximum number of asks in a window, over the days the app saved. Tests: springboard/sdk/tests/parity_sdk-tests-08.rs (review_*) and the review unit tests. No SDK call shows the store rating prompt yet: request only records the decision; a simple SDK prompt helper would fit the usernotif and sheet patterns."
     },
     {
       "feature": "App Store messages",
