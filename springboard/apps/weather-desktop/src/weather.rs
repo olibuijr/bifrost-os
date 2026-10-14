@@ -1077,6 +1077,12 @@ impl Weather {
         std::mem::take(&mut self.share_pending)
     }
 
+    /// The dialog of the current-conditions intent for the selected place; None until its forecast has loaded.
+    pub fn intent_dialog(&self) -> Option<String> {
+        let place = self.place();
+        Some(control::intent_dialog(&place.name, self.forecasts.get(&place.key())?, self.units))
+    }
+
     /// The text to share for the selected place (see `control::share_text`).
     pub fn share_text(&self) -> Option<String> {
         let place = self.place();

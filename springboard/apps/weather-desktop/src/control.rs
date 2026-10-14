@@ -99,6 +99,12 @@ pub fn share_text(place: &str, f: &Forecast, units: Units) -> String {
     format!("{place}: {} {sky}{range}\nWeather data from {}", units.degrees(f.current.temp), insights::DATA_SERVICE)
 }
 
+/// The dialog a Weather intent answers with: the first line of the share text, which names the place, the temperature,
+/// the sky and the day's range. The data attribution line is left out.
+pub fn intent_dialog(place: &str, f: &Forecast, units: Units) -> String {
+    share_text(place, f, units).lines().next().unwrap_or_default().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,6 +175,11 @@ mod tests {
         let text = forecast_json("A", &forecast(), Units::Celsius).encode();
         assert!(bifrost_core::json::parse(&text).is_ok());
         assert!(text.len() < 64 * 1024);
+    }
+
+    #[test]
+    fn the_intent_dialog_is_the_summary_line_without_the_source() {
+        assert_eq!(intent_dialog("Akureyri", &forecast(), Units::Celsius), "Akureyri: 7\u{b0} Rain, H:8\u{b0} L:3\u{b0}");
     }
 
     #[test]

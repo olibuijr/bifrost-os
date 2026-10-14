@@ -11,3 +11,10 @@ architecture = "x86_64-linux"
 permissions = ["storage", "network", "notifications"]
 schemes = ["weather"]
 window = "full-size"
+
+[[intent]]
+id = "current"
+title = "Current Weather"
+description = "Says the current conditions at the selected place."
+shortcut = true
+params = []
