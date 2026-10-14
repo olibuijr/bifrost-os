@@ -61,8 +61,9 @@ pub fn encode(groups: &[Group]) -> String {
 
 /// The groups of the pref's JSON text. Text that is not a list of groups gives none, and a broken entry is skipped.
 pub fn decode(text: &str) -> Vec<Group> {
-    let Ok(json) = json::parse(text) else { return Vec::new() };
-    json.as_array()
+    let Ok(value) = json::parse(text) else { return Vec::new() };
+    value
+        .as_array()
         .unwrap_or(&[])
         .iter()
         .filter_map(|group| {
