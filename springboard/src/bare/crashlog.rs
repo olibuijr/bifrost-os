@@ -47,18 +47,22 @@ fn stamp() -> String {
     format!("{unix} {h:02}:{m:02}:{s:02}")
 }
 
-/// Appends one entry to DIR/crash.log, rotating first when it is full.
-pub fn append(dir: &str, msg: &str) {
+/// Appends one entry to DIR/crash.log, rotating first when it is full. Write errors go back to the caller.
+pub fn try_append(dir: &str, msg: &str) -> std::io::Result<()> {
     let path = format!("{dir}/crash.log");
     if fs::metadata(&path).is_ok_and(|m| should_rotate(m.len())) {
         let _ = fs::rename(&path, format!("{path}.old"));
     }
     let thread = std::thread::current();
     let entry = format_entry(&stamp(), thread.name().unwrap_or("unnamed"), msg);
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = f.write_all(entry.as_bytes());
-        let _ = f.sync_all();
-    }
+    let mut f = fs::OpenOptions::new().create(true).append(true).open(&path)?;
+    f.write_all(entry.as_bytes())?;
+    f.sync_all()
+}
+
+/// Appends one entry, ignoring write errors: a crash logger must not fail the code that reports the crash.
+pub fn append(dir: &str, msg: &str) {
+    let _ = try_append(dir, msg);
 }
 
 /// Installs the panic hook; call it as early as `dir` is known.
@@ -74,9 +78,14 @@ pub fn install(dir: &str) {
     }));
 }
 
-/// Records a controlled exit; call it right before `process::exit`.
+/// Records a controlled exit, reporting a failure to write it; call it right before `process::exit`.
+pub fn try_write_last_exit(dir: &str, status: i32, reason: &str) -> std::io::Result<()> {
+    fs::write(format!("{dir}/last_exit"), format!("{status} {reason}\n"))
+}
+
+/// Records a controlled exit; call it right before `process::exit`. A failed write leaves the next start unclean.
 pub fn write_last_exit(dir: &str, status: i32, reason: &str) {
-    let _ = fs::write(format!("{dir}/last_exit"), format!("{status} {reason}\n"));
+    let _ = try_write_last_exit(dir, status, reason);
 }
 
 /// Consumes the previous run's last_exit, marks this start, and returns a note

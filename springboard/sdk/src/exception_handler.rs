@@ -14,6 +14,7 @@
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
+use springboard::bare::crashlog;
 use springboard::shell::diag::{self, CrashEntry};
 
 /// The kinds of failure a handler can monitor, in the order their bits are laid out.
@@ -32,6 +33,17 @@ pub enum FailureKind {
 }
 
 impl FailureKind {
+    /// The words a log line uses for this kind.
+    pub fn name(self) -> &'static str {
+        match self {
+            FailureKind::Uncaught => "uncaught",
+            FailureKind::UncaughtSystem => "uncaught system",
+            FailureKind::UncaughtRuntime => "uncaught runtime",
+            FailureKind::TopLevel => "top level",
+            FailureKind::Other => "other",
+        }
+    }
+
     /// Position in the bit layout: 0 for `Uncaught` up to 4 for `Other`.
     pub fn index(self) -> u32 {
         match self {
@@ -102,6 +114,15 @@ pub struct Failure {
 impl Failure {
     pub fn new(kind: FailureKind, message: &str, location: Option<&str>) -> Failure {
         Failure { kind, message: message.to_string(), location: location.map(String::from) }
+    }
+
+    /// The one-line record for this failure, such as `uncaught failure: boom at src/a.rs:3:9`. The shell's crash log
+    /// reader keeps the text after the thread name as the entry's signature.
+    pub fn log_line(&self) -> String {
+        match &self.location {
+            Some(at) => format!("{} failure: {} at {at}", self.kind.name(), self.message),
+            None => format!("{} failure: {}", self.kind.name(), self.message),
+        }
     }
 }
 
@@ -180,6 +201,17 @@ impl ExceptionHandler {
         Decision { handle, log, halt }
     }
 
+    /// Decides one failure and, when the decision says to log it, appends its [`Failure::log_line`] to `dir/crash.log`
+    /// in the shell's record format. The caller acts on `handle` and `halt`. Fails when the log cannot be written, or
+    /// when `dir` is not valid UTF-8.
+    pub fn capture(&self, failure: &Failure, dir: &Path) -> std::io::Result<Decision> {
+        let decision = self.decide(failure);
+        if decision.log {
+            crashlog::try_append(utf8_dir(dir)?, &failure.log_line())?;
+        }
+        Ok(decision)
+    }
+
     /// True when there is no delegate or the delegate says yes.
     fn approves<F>(&self, ask: F) -> bool
     where
@@ -203,6 +235,21 @@ pub fn default_handler() -> &'static Mutex<ExceptionHandler> {
 /// directory and does not grant apps that directory, so an app reads records only from a directory it is given.
 pub fn crash_records(dir: &Path) -> Vec<CrashEntry> {
     diag::load(dir)
+}
+
+/// Marks the start of a run in the app's data directory. Returns a note when the previous run never reached
+/// [`end_session`]: a panic abort, a kill or a power loss. Marker writes that fail are ignored, as in the shell.
+pub fn start_session(dir: &Path) -> std::io::Result<Option<String>> {
+    Ok(crashlog::previous_run_note(utf8_dir(dir)?))
+}
+
+/// Records a controlled exit in the app's data directory, so the next [`start_session`] reports a clean end.
+pub fn end_session(dir: &Path, status: i32, reason: &str) -> std::io::Result<()> {
+    crashlog::try_write_last_exit(utf8_dir(dir)?, status, reason)
+}
+
+fn utf8_dir(dir: &Path) -> std::io::Result<&str> {
+    dir.to_str().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "directory path is not valid UTF-8"))
 }
 
 #[cfg(test)]
