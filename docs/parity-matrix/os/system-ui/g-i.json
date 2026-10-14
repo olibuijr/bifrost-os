@@ -39,8 +39,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no game overlay",
+   "status": "n/a",
+   "note": "Game Center overlay, and Game Center is an Apple online service BifrOSt does not have.",
    "rea": []
   },
   {
@@ -99,8 +99,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "status": "n/a",
+   "note": "AppleScript scripting target for Apple image automation; BifrOSt has no AppleScript layer (scripting goes through the intents socket in springboard/src/shell/intents.rs).",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "installer progress UI in the installer, not in the desktop",
+   "bifrost": "springboard/src/installer/app.rs (progress_page)",
+   "status": "partial",
+   "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
    "rea": []
   },
   {
@@ -158,9 +158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "installer progress UI in the installer, not in the desktop",
+   "bifrost": "springboard/src/installer/app.rs (progress_page)",
+   "status": "partial",
+   "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
    "rea": []
   },
   {
@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "the native installer is not a desktop component",
+   "bifrost": "springboard/src/installer/app.rs",
+   "status": "partial",
+   "note": "The installer app runs at first boot with welcome, account, look, disk, confirm, progress and done pages; no standalone Installer.app bundle. built on os/team-l-03-system-ui; not yet verified on Midget.",
    "rea": []
   },
   {
@@ -398,9 +398,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/ui/src/procedural_texture.rs (gradient)",
+   "status": "partial",
+   "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget.",
    "rea": []
   },
   {
@@ -439,8 +439,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents for Apple Home (HomeKit accessories), an Apple home-hardware service BifrOSt cannot have.",
    "rea": []
   },
   {
@@ -559,8 +559,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents for Apple Intelligence, an Apple cloud service BifrOSt does not have.",
    "rea": []
   },
   {
@@ -579,8 +579,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents for Apple Intelligence platform data, an Apple cloud service BifrOSt does not have.",
    "rea": []
   },
   {
