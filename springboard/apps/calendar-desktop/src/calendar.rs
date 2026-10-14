@@ -1248,7 +1248,7 @@ impl Calendar {
             }
             Event::Up(..) => {
                 if self.drag.is_some() {
-                    self.finish_drag(ui, t);
+                    self.finish_drag(ui);
                     self.pressed = None;
                     self.start = None;
                     self.scrolling = false;

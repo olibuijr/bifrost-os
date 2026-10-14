@@ -2,7 +2,7 @@
 //! when the pointer is released), on an event it moves the event to the time and day under the pointer. A press that
 //! moves at once still scrolls the grid, so a finger can scroll it; the geometry is `layout::drag_create` and
 //! `layout::drag_move`.
-use super::layout::{self, DragSpan};
+use super::layout::{self, DragSpan, Edge};
 use super::timeview::{ALLDAY_H, GRID0};
 use super::*;
 use bifrost_app::kit::ui::{FIELD_BG, MAC_CALLOUT_PT, MAC_CAPTION1_PT, SPACE_XXL};
@@ -11,6 +11,8 @@ use bifrost_app::kit::ui::{FIELD_BG, MAC_CALLOUT_PT, MAC_CAPTION1_PT, SPACE_XXL}
 pub(super) const HOLD_MS: f64 = 250.0;
 /// Events snap to quarter hours.
 const SNAP: u32 = 15;
+/// The band along the top and bottom of a timed block where a press grabs an edge to resize it (points).
+const EDGE_ZONE: f32 = 8.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Kind {
@@ -18,6 +20,8 @@ pub(super) enum Kind {
     Create { press: u32 },
     /// a timed event, grabbed `grab` minutes after its start
     Move { id: u64, grab: u32, duration: u32 },
+    /// a timed event, resized by one edge; `span` is the event's own start and end before the drag
+    Resize { id: u64, edge: Edge, span: DragSpan },
 }
 
 /// A press in the grid that may become a drag if it is held.
@@ -45,6 +49,18 @@ pub(super) fn span_for(kind: Kind, now: u32) -> DragSpan {
     match kind {
         Kind::Create { press } => layout::drag_create(press, now, SNAP),
         Kind::Move { grab, duration, .. } => layout::drag_move(duration, grab, now, SNAP),
+        Kind::Resize { edge, span, .. } => layout::drag_resize(span, edge, now, SNAP),
+    }
+}
+
+/// The edge of a timed block that spans `top..top + h` (px) and that a press at `y` grabs: the top or the bottom band.
+fn edge_under(top: f32, h: f32, y: f32, zone: f32) -> Option<Edge> {
+    if y - top < zone {
+        Some(Edge::Top)
+    } else if top + h - y < zone {
+        Some(Edge::Bottom)
+    } else {
+        None
     }
 }
 
@@ -85,9 +101,15 @@ impl Calendar {
         let day = self.view_days()[col];
         let under = self.time_rects(ui).into_iter().find(|r| within(x, y, (r.1, r.2, r.3, r.4)));
         let kind = match under {
-            Some((id, ..)) => {
+            Some((id, _, top, _, h)) => {
                 let Some(e) = self.events.iter().find(|e| e.id == id).filter(|e| !e.all_day) else { return };
-                Kind::Move { id, grab: minute.saturating_sub(e.minute as u32), duration: e.duration as u32 }
+                match edge_under(top, h, y, ui.pt(EDGE_ZONE)) {
+                    Some(edge) => {
+                        let span = DragSpan { start: e.minute as u32, end: e.minute as u32 + e.duration as u32 };
+                        Kind::Resize { id, edge, span }
+                    }
+                    None => Kind::Move { id, grab: minute.saturating_sub(e.minute as u32), duration: e.duration as u32 },
+                }
             }
             None => Kind::Create { press: minute },
         };
@@ -124,8 +146,8 @@ impl Calendar {
         true
     }
 
-    /// The pointer was released: a drawn-out event opens in the editor, a moved one is saved in its new place.
-    pub(super) fn finish_drag(&mut self, ui: &Ui, t: f64) {
+    /// The pointer was released: a drawn-out event opens in the editor, a moved or resized one is saved in its new place.
+    pub(super) fn finish_drag(&mut self, ui: &Ui) {
         let Some(d) = self.drag.take() else { return };
         self.press = None;
         match d.kind {
@@ -145,17 +167,18 @@ impl Calendar {
                 self.selected = d.day;
                 self.open_draft(ui, event, false);
             }
-            Kind::Move { id, .. } => self.move_event(ui, id, &d, t),
+            Kind::Move { id, .. } | Kind::Resize { id, .. } => self.put_timed_event(ui, id, &d),
         }
     }
 
-    /// Puts event `id` where the drag `d` ended: the same length, the new start, and (for a repeating event, the
-    /// whole series) the new day.
-    fn move_event(&mut self, ui: &Ui, id: u64, d: &Drag, _t: f64) {
+    /// Puts event `id` where the drag `d` ended: the block's start and length, and (for a repeating event, the whole
+    /// series) the new day. A move keeps the length, so the block's length is the same for both drags.
+    fn put_timed_event(&mut self, ui: &Ui, id: u64, d: &Drag) {
         let Some(old) = self.events.iter().find(|e| e.id == id).cloned() else { return };
         let mut moved = old.clone();
         moved.date = old.date.shift_days((d.day.days() - d.origin.days()) as i32);
         moved.minute = d.span.start as u16;
+        moved.duration = (d.span.end - d.span.start) as u16;
         if moved == old {
             return;
         }
@@ -174,7 +197,8 @@ impl Calendar {
                 self.selected = d.day;
                 self.picked = Some(id);
                 self.error = None;
-                self.notice = Some(format!("Moved {} to {}", moved.title, time_label(moved.minute)));
+                let verb = if matches!(d.kind, Kind::Resize { .. }) { "Resized" } else { "Moved" };
+                self.notice = Some(format!("{verb} {} to {}", moved.title, time_label(moved.minute)));
                 self.fit_scroll(ui);
             }
             Err(e) => {
@@ -193,12 +217,12 @@ impl Calendar {
         let h = ((d.span.end - d.span.start) as f32 / 60.0 * hh - ui.pt(1.0)).max(ui.pt(SPACE_L));
         g.fill_rrect(x, y, w, h, ui.pt(SPACE_XS), FIELD_BG.now());
         let accent = match d.kind {
-            Kind::Move { id, .. } => self.event_colour(id),
+            Kind::Move { id, .. } | Kind::Resize { id, .. } => self.event_colour(id),
             Kind::Create { .. } => chrome::cal_colour(),
         };
         g.fill_rrect(x, y, ui.pt(SPACE_XS), h, ui.pt(SPACE_XS) / 2.0, accent);
         let title = match d.kind {
-            Kind::Move { id, .. } => self.events.iter().find(|e| e.id == id).map(|e| e.title.clone()),
+            Kind::Move { id, .. } | Kind::Resize { id, .. } => self.events.iter().find(|e| e.id == id).map(|e| e.title.clone()),
             Kind::Create { .. } => None,
         };
         let text_w = w - ui.pt(SPACE_M);
