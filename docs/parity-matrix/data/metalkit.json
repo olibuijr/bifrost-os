@@ -17,9 +17,9 @@
     {
       "feature": "Device and drawable setup",
       "apple": "MTKView.device, preferredDevice, colorPixelFormat",
-      "bifrost": "springboard/src/gpu/wl.rs (Presenter::create_surface, line 380); springboard/src/gpu/egl.rs",
-      "status": "os",
-      "note": "GBM and EGL drawables exist in the system layer; apps get no device or drawable API"
+      "bifrost": "springboard/ui/src/drawable_setup.rs (DrawableSetup::validate, FORMAT_OPAQUE, FORMAT_ALPHA); springboard/src/gpu/wl.rs (Presenter::create_surface, line 380); springboard/src/gpu/egl.rs",
+      "status": "partial",
+      "note": "A drawable request is validated headless in ui/tests/parity_sdk-rest-12.rs: zero sides, the device side limit, render node paths, the presenter format codes and buffer sizes. Gap: the shell's GBM and EGL presenter does not take these requests yet, and no app receives a device or drawable handle; checking the real device limit needs the lab machine."
     },
     {
       "feature": "Texture loading from image files",
@@ -38,9 +38,9 @@
     {
       "feature": "Vertex batching for 2D draws",
       "apple": "(no direct MetalKit class; Metal draw calls)",
-      "bifrost": "springboard/src/gpu/batch.rs (Vertex, ATTRIBS)",
-      "status": "os",
-      "note": "Internal batching of shell primitives into one vertex list per frame. Not exposed to apps"
+      "bifrost": "springboard/ui/src/sprite_batch.rs (SpriteBatch::push_quad, Run); springboard/src/gpu/batch.rs (Vertex, ATTRIBS)",
+      "status": "partial",
+      "note": "The app-facing sprite batch joins quads into texture runs and refuses a full or empty quad; tested headless in ui/tests/parity_sdk-rest-12.rs. Gap: the shell's frame batch in gpu/batch.rs is still its own copy, and no app submits sprites to the GPU."
     },
     {
       "feature": "Conversion functions and model errors",
