@@ -560,8 +560,34 @@ fn audio_specific_config(es: &[u8]) -> Option<Vec<u8>> {
 
 pub(super) const AAC_RATES: [u32; 13] = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
 
-/// (sample rate, channels) from an AudioSpecificConfig.
-pub fn asc_params(asc: &[u8]) -> Option<(u32, u16)> {
+/// The fields of an AudioSpecificConfig that this module reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AudioSpecificConfig {
+    /// `audioObjectType`, see [`object_type_name`]. For HE-AAC this is the SBR object (5 or 29), not the AAC core.
+    pub object_type: u8,
+    /// The sample rate the config signals. For HE-AAC this is the core rate; the SBR output rate is twice it.
+    pub sample_rate: u32,
+    /// Output channels. Channel configuration 7 (7.1) is reported as 8.
+    pub channels: u16,
+}
+
+/// The name of an `audioObjectType` this module knows, or `None` for an object type it does not name.
+pub fn object_type_name(object_type: u8) -> Option<&'static str> {
+    Some(match object_type {
+        1 => "AAC Main",
+        2 => "AAC LC",
+        3 => "AAC SSR",
+        4 => "AAC LTP",
+        5 => "HE-AAC (SBR)",
+        29 => "HE-AAC v2 (SBR and PS)",
+        42 => "USAC",
+        _ => return None,
+    })
+}
+
+/// Reads the object type, sample rate and channel count of an AudioSpecificConfig. An object type of 31 is an escape
+/// followed by six more bits (32 plus their value), and a rate index of 15 is followed by the 24-bit rate itself.
+pub fn parse_asc(asc: &[u8]) -> Option<AudioSpecificConfig> {
     let mut pos = 0;
     let mut bits = |n: usize| -> Option<u32> {
         let mut v = 0;
@@ -571,15 +597,21 @@ pub fn asc_params(asc: &[u8]) -> Option<(u32, u16)> {
         }
         Some(v)
     };
-    if bits(5)? == 31 {
-        bits(6)?;
-    }
+    let object_type = match bits(5)? {
+        31 => 32 + bits(6)?,
+        t => t,
+    };
     let rate = match bits(4)? {
         15 => bits(24)?,
         i => *AAC_RATES.get(i as usize)?,
     };
     let channels = bits(4)? as u16;
-    Some((rate, if channels == 7 { 8 } else { channels }))
+    Some(AudioSpecificConfig { object_type: object_type as u8, sample_rate: rate, channels: if channels == 7 { 8 } else { channels } })
+}
+
+/// (sample rate, channels) from an AudioSpecificConfig.
+pub fn asc_params(asc: &[u8]) -> Option<(u32, u16)> {
+    parse_asc(asc).map(|c| (c.sample_rate, c.channels))
 }
 
 fn sample_table(stbl: &[u8]) -> Result<Vec<SampleInfo>, Error> {

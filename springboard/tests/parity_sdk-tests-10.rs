@@ -7,6 +7,8 @@
 use bifrost_ui::product::ProductType;
 use springboard::bare::timezone::days_from_civil;
 use springboard::shell::store::api::{age_rating_of, parse_catalog, parse_changelog, parse_screenshots, relative_date, update_available, AGE_RATINGS, MAX_SHOTS};
+use springboard::media::mp4::{asc_params, object_type_name, parse_asc, AudioSpecificConfig};
+use springboard::media::sbr::{fill_candidates, supported, Sbr, CORE_FRAME};
 use springboard::shell::store::json;
 
 const SHA: &str = "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789";
@@ -132,4 +134,91 @@ fn release_dates_read_as_today_yesterday_days_ago_or_a_full_date() {
     assert_eq!(relative_date("2026-09-01", today), "1 Sep 2026");
     assert_eq!(relative_date("not-a-date", today), "not-a-date", "an unreadable date is shown as it is");
     assert_eq!(relative_date("2026-13-01", today), "2026-13-01", "a month out of range is shown as it is");
+}
+
+#[test]
+fn an_aac_lc_config_names_its_object_type_rate_and_channels() {
+    assert_eq!(parse_asc(&[0x11, 0x90]), Some(AudioSpecificConfig { object_type: 2, sample_rate: 48000, channels: 2 }));
+    assert_eq!(parse_asc(&[0x12, 0x08]), Some(AudioSpecificConfig { object_type: 2, sample_rate: 44100, channels: 1 }));
+}
+
+#[test]
+fn an_he_aac_config_reports_the_sbr_object_type_and_its_core_rate() {
+    assert_eq!(parse_asc(&[0x29, 0x90]), Some(AudioSpecificConfig { object_type: 5, sample_rate: 48000, channels: 2 }));
+    assert_eq!(object_type_name(5), Some("HE-AAC (SBR)"));
+}
+
+#[test]
+fn an_escaped_object_type_is_32_plus_its_six_bit_value() {
+    assert_eq!(parse_asc(&[0xF8, 0x06, 0x20]), Some(AudioSpecificConfig { object_type: 32, sample_rate: 48000, channels: 1 }));
+}
+
+#[test]
+fn an_explicit_rate_index_reads_the_24_bit_rate_that_follows() {
+    assert_eq!(parse_asc(&[0x17, 0x80, 0x56, 0x22, 0x10]), Some(AudioSpecificConfig { object_type: 2, sample_rate: 44100, channels: 2 }));
+}
+
+#[test]
+fn a_seven_point_one_layout_is_reported_as_eight_channels() {
+    assert_eq!(parse_asc(&[0x11, 0xB8]), Some(AudioSpecificConfig { object_type: 2, sample_rate: 48000, channels: 8 }));
+}
+
+#[test]
+fn the_rate_and_channel_helper_keeps_its_two_fields() {
+    assert_eq!(asc_params(&[0x11, 0x90]), Some((48000, 2)));
+    assert_eq!(asc_params(&[0x11]), None, "a config cut short is refused");
+}
+
+#[test]
+fn the_object_type_names_cover_the_aac_family_and_stop_at_unknown_values() {
+    assert_eq!(object_type_name(1), Some("AAC Main"));
+    assert_eq!(object_type_name(2), Some("AAC LC"));
+    assert_eq!(object_type_name(29), Some("HE-AAC v2 (SBR and PS)"));
+    assert_eq!(object_type_name(42), Some("USAC"));
+    assert_eq!(object_type_name(0), None);
+    assert_eq!(object_type_name(31), None);
+}
+
+#[test]
+fn sbr_applies_to_core_rates_whose_double_has_a_frequency_table() {
+    for rate in [8000, 11025, 22050, 44100, 48000] {
+        assert!(supported(rate), "{rate}");
+    }
+    assert!(!supported(7350), "14700 Hz has no table");
+    assert!(!supported(96000), "192000 Hz is above the table");
+    assert!(!supported(0));
+}
+
+#[test]
+fn a_new_sbr_decoder_is_not_engaged_until_the_stream_shows_sbr_data() {
+    assert!(!Sbr::new().engaged());
+    assert!(!Sbr::default().engaged());
+    assert_eq!(CORE_FRAME, 1024);
+}
+
+#[test]
+fn sbr_passes_the_core_through_when_the_block_holds_no_sbr_data() {
+    let mut sbr = Sbr::new();
+    let mut out = vec![7i16];
+    let pcm = vec![0i16; CORE_FRAME];
+    assert!(!sbr.process(&[0u8; 16], &pcm, 1, 22050, &mut out));
+    assert!(out.is_empty());
+    assert!(!sbr.engaged());
+}
+
+#[test]
+fn sbr_refuses_three_channels_an_unsupported_rate_or_a_short_frame() {
+    let mut sbr = Sbr::new();
+    let mut out = Vec::new();
+    let frame = vec![0i16; CORE_FRAME];
+    assert!(!sbr.process(&[], &frame, 3, 22050, &mut out), "three channels");
+    assert!(!sbr.process(&[], &frame, 1, 7350, &mut out), "rate without a table");
+    assert!(!sbr.process(&[], &frame[..100], 1, 22050, &mut out), "short frame");
+    assert!(out.is_empty());
+}
+
+#[test]
+fn fill_candidates_finds_nothing_in_an_empty_or_zero_block() {
+    assert!(fill_candidates(&[]).is_empty());
+    assert!(fill_candidates(&[0u8; 16]).is_empty());
 }
