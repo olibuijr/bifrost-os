@@ -10,7 +10,7 @@
    "area": "toolbar",
    "apple": "record button",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:406",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:648",
    "note": "",
    "wire": ""
   },
@@ -28,7 +28,7 @@
    "area": "view",
    "apple": "sidebar list",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:913",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1515",
    "note": "",
    "wire": ""
   },
@@ -37,7 +37,7 @@
    "area": "toolbar",
    "apple": "transport",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1157",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1809",
    "note": "",
    "wire": ""
   },
@@ -46,7 +46,7 @@
    "area": "toolbar",
    "apple": "volume",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:979",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1605",
    "note": "",
    "wire": ""
   },
@@ -55,7 +55,7 @@
    "area": "menu",
    "apple": "Recording > Rename",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:599",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:996",
    "note": "",
    "wire": ""
   },
@@ -64,7 +64,7 @@
    "area": "menu",
    "apple": "Edit > Delete",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:693",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1138",
    "note": "",
    "wire": ""
   },
@@ -82,7 +82,7 @@
    "area": "menu",
    "apple": "Edit > Trim",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:624",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1045",
    "note": "",
    "wire": ""
   },
@@ -90,17 +90,17 @@
    "feature": "Replace part of a recording",
    "area": "menu",
    "apple": "Edit > Replace",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Record over a selected span in the editor and splice in store.rs"
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1050",
+   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "wire": "Check on Midget: pick a span, record over it; the result is saved as a new copy, not over the original"
   },
   {
    "feature": "Split at playhead",
    "area": "menu",
    "apple": "Recording > Split",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:745",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1323",
    "note": "",
    "wire": ""
   },
@@ -109,7 +109,7 @@
    "area": "menu",
    "apple": "Enhance",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:769",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1347",
    "note": "",
    "wire": ""
   },
@@ -118,7 +118,7 @@
    "area": "settings",
    "apple": "playback options",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:482",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:886",
    "note": "",
    "wire": ""
   },
@@ -136,7 +136,7 @@
    "area": "panel",
    "apple": "notes",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:806",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1367",
    "note": "",
    "wire": ""
   },
@@ -145,9 +145,9 @@
    "area": "menu",
    "apple": "File > Share",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:789",
-   "note": "Fixed copy to Downloads; no save panel",
-   "wire": "Use the document SaveTo flow as photobooth-desktop does"
+   "bifrost": "springboard/apps/voicememos-desktop/src/main.rs:209",
+   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "wire": "Check on Midget: Recording > Export opens the save panel and the file is written"
   },
   {
    "feature": "Folders",
@@ -190,16 +190,16 @@
    "area": "settings",
    "apple": "Settings",
    "status": "partial",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:340",
-   "note": "Input taken from the device listing; no settings UI",
-   "wire": "Settings window with input picker and sample rate"
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:468",
+   "note": "built on parity/team-d-voice-memos; not yet verified on Midget",
+   "wire": "Sample rate and quality need a format option in the audio service; there is no settings window"
   },
   {
    "feature": "System Now Playing integration",
    "area": "integration",
    "apple": "media controls",
    "status": "parity",
-   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:352",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:480",
    "note": "",
    "wire": ""
   },

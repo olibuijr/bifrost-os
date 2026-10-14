@@ -11,7 +11,7 @@ mod voicememos;
 use bifrost_app::audio_devices;
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::now_playing;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, TouchKind, KeyInput};
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use springboard::shell::clock::Wall;
@@ -21,6 +21,8 @@ struct VoiceMemosApp {
     memos: Option<voicememos::VoiceMemos>,
     last_t: f64,
     bus: services::Bus,
+    /// a save panel is open for this recording: the request and the recording's file
+    export: Option<(u32, PathBuf)>,
 }
 
 fn shell_dir() -> PathBuf {
@@ -44,6 +46,7 @@ impl VoiceMemosApp {
                 KeyInput::Code(8) => Out::Backspace,
                 KeyInput::Code(13) => Out::Enter,
                 KeyInput::Code(9) => Out::Named("Tab"),
+                KeyInput::Code(27) if self.memos.as_ref().is_some_and(|m| m.search_active()) => Out::Named("Escape"),
                 KeyInput::Code(37) => Out::Named("Left"),
                 KeyInput::Code(38) => Out::Named("Up"),
                 KeyInput::Code(39) => Out::Named("Right"),
@@ -136,32 +139,111 @@ impl App for VoiceMemosApp {
         true
     }
 
-    /// One app menu, "Recording", between App and the shell's File, Edit, View, Window and Help.
+    /// Two app menus between App and the shell's File, Edit, View, Window and Help: "Recording" (the take and the
+    /// selected recording) and "Library" (favourites, folders).
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        let on = self.memos.as_ref().is_some_and(|m| m.has_selection());
-        let split = self.memos.as_ref().is_some_and(|m| m.can_split());
-        let skip = self.memos.as_ref().is_some_and(|m| m.skip_silence_on());
-        vec![AppMenu {
-            title: "Recording".into(),
-            items: vec![
-                AppMenuItem::new(voicememos::MENU_TRIM, "Trim\u{2026}").key("cmd+t").enabled(on),
-                AppMenuItem::new(voicememos::MENU_SPLIT, "Split at Playhead").enabled(split),
-                AppMenuItem::new(voicememos::MENU_ENHANCE, "Enhance Recording").enabled(on),
-                AppMenuItem::new(voicememos::MENU_NOTES, "Notes\u{2026}").key("cmd+shift+n").enabled(on),
-                AppMenuItem::separator(),
-                AppMenuItem::new(voicememos::MENU_RENAME, "Rename\u{2026}").enabled(on),
-                AppMenuItem::new(voicememos::MENU_EXPORT, "Export to Downloads").key("cmd+shift+e").enabled(on),
-                AppMenuItem::separator(),
-                AppMenuItem::new(voicememos::MENU_SKIP, "Skip Silence").checked(skip).enabled(on),
-            ],
-        }]
+        let m = self.memos.as_ref();
+        let on = m.is_some_and(|m| m.has_selection());
+        let split = m.is_some_and(|m| m.can_split());
+        let skip = m.is_some_and(|m| m.skip_silence_on());
+        let recording = m.is_some_and(|m| m.is_recording());
+        let paused = m.is_some_and(|m| m.is_paused());
+        let favorite = m.is_some_and(|m| m.selected_favorite());
+        let in_folder = m.is_some_and(|m| m.in_folder());
+        let folders: Vec<String> = m.map(|m| m.folders().to_vec()).unwrap_or_default();
+        let current = m.map(|m| m.selected_folder().to_string()).unwrap_or_default();
+        let inputs = m.map(|m| m.input_choices()).unwrap_or_default();
+
+        let mut recording_items = vec![
+            AppMenuItem::new(voicememos::MENU_PAUSE, if paused { "Resume Recording" } else { "Pause Recording" }).enabled(recording),
+            AppMenuItem::separator(),
+            AppMenuItem::new(voicememos::MENU_TRIM, "Trim\u{2026}").key("cmd+t").enabled(on),
+            AppMenuItem::new(voicememos::MENU_REPLACE, "Replace\u{2026}").enabled(on),
+            AppMenuItem::new(voicememos::MENU_SPLIT, "Split at Playhead").enabled(split),
+            AppMenuItem::new(voicememos::MENU_ENHANCE, "Enhance Recording").enabled(on),
+            AppMenuItem::new(voicememos::MENU_NOTES, "Notes\u{2026}").key("cmd+shift+n").enabled(on),
+            AppMenuItem::separator(),
+            AppMenuItem::new(voicememos::MENU_RENAME, "Rename\u{2026}").enabled(on),
+            AppMenuItem::new(voicememos::MENU_EXPORT, "Export\u{2026}").key("cmd+shift+e").enabled(on),
+            AppMenuItem::separator(),
+            AppMenuItem::new(voicememos::MENU_SKIP, "Skip Silence").checked(skip).enabled(on),
+        ];
+        if !inputs.is_empty() {
+            recording_items.push(AppMenuItem::separator());
+            recording_items.push(AppMenuItem::submenu("Input"));
+            for (n, (name, chosen)) in inputs.iter().enumerate() {
+                recording_items.push(AppMenuItem::new(voicememos::MENU_INPUT + n as u32, name).checked(*chosen).enabled(!recording).depth(1));
+            }
+        }
+
+        let mut library_items = vec![
+            AppMenuItem::new(voicememos::MENU_FAVORITE, "Favourite").key("cmd+d").checked(favorite).enabled(on),
+            AppMenuItem::separator(),
+            AppMenuItem::new(voicememos::MENU_NEW_FOLDER, "New Folder\u{2026}").key("cmd+shift+f"),
+            AppMenuItem::new(voicememos::MENU_DELETE_FOLDER, "Delete Folder").enabled(in_folder),
+            AppMenuItem::separator(),
+            AppMenuItem::submenu("Move to Folder"),
+            AppMenuItem::new(voicememos::MENU_MOVE, "No Folder").checked(on && current.is_empty()).enabled(on).depth(1),
+        ];
+        for (n, name) in folders.iter().enumerate() {
+            library_items.push(AppMenuItem::new(voicememos::MENU_MOVE + 1 + n as u32, name).checked(on && *name == current).enabled(on).depth(1));
+        }
+        vec![AppMenu { title: "Recording".into(), items: recording_items }, AppMenu { title: "Library".into(), items: library_items }]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let Some(m) = &mut self.memos else { return false };
+        if id == voicememos::MENU_EXPORT {
+            // the save panel is the shell's: the answer comes back through `document`
+            if let Some((name, path)) = m.export_source() {
+                let request = ctx.save_document(&name, &["wav"]);
+                self.export = Some((request, path));
+            }
+            return true;
+        }
         let handled = m.menu(&ctx.ui, id);
         self.flush(ctx);
         handled
+    }
+
+    /// The answer of the save panel: write the recording to the file the shell hands over, then commit it.
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let Some(m) = &mut self.memos else { return false };
+        match ev {
+            DocumentEvent::SaveTo(mut doc) => {
+                let Some((request, path)) = self.export.clone() else { return false };
+                if doc.request != request {
+                    return false;
+                }
+                let written = std::fs::File::open(&path).and_then(|mut source| std::io::copy(&mut source, &mut doc.file));
+                match written {
+                    Ok(_) => ctx.commit_document(request),
+                    Err(e) => {
+                        ctx.abort_document(request);
+                        self.export = None;
+                        m.set_error(&format!("Cannot export: {e}"));
+                    }
+                }
+                true
+            }
+            DocumentEvent::Saved(doc) => {
+                if self.export.as_ref().is_some_and(|(r, _)| *r == doc.request) {
+                    self.export = None;
+                    m.set_notice(&format!("Exported {}", doc.name));
+                    return true;
+                }
+                false
+            }
+            DocumentEvent::Failed { request, .. } => {
+                if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
+                    // the panel was cancelled (or refused)
+                    self.export = None;
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
@@ -175,5 +257,5 @@ impl App for VoiceMemosApp {
 }
 
 fn main() {
-    bifrost_app::run(VoiceMemosApp { memos: None, last_t: 0.0, bus: services::Bus::default() });
+    bifrost_app::run(VoiceMemosApp { memos: None, last_t: 0.0, bus: services::Bus::default(), export: None });
 }
