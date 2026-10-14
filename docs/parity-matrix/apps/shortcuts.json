@@ -37,9 +37,9 @@
    "area": "view",
    "apple": "editor",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:766",
-   "note": "Add and remove with steppers; each row has move up and move down arrows (Shortcut::move_action, springboard/src/shortcuts.rs:901). Drag reordering is not done. Not yet checked on the lab machine.",
-   "wire": "Drag to reorder editor rows"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1363",
+   "note": "Add and remove with steppers; move up and down arrows; a grip at the right edge of each plain step drags it to another row, and the step moves when released (touch, widget.rs:1363; model move_step, springboard/src/shortcuts.rs:834). Openers, Otherwise and the ends do not drag. No live preview of the moved row while dragging. Not yet checked on the lab machine.",
+   "wire": "A live preview of the moved row while it is dragged; dragging a whole block"
   },
   {
    "feature": "Action library",
@@ -64,36 +64,36 @@
    "area": "view",
    "apple": "editor",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:721",
-   "note": "Every step passes its result on as {Previous}; Set Variable names it ({Name}); a text row has an Insert Variable button (tokens: springboard/src/shortcuts.rs:504, Env: springboard/src/shortcuts.rs:537). Variable chips drawn inside the text field are not done: tokens are typed text. Not yet checked on the lab machine.",
-   "wire": "A variable picker in the editor instead of typing {Name}; typed values (numbers, lists, files) beyond text"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1256",
+   "note": "Every step passes its result on as {Output}; Set Variable names it ({Name}, flow in springboard/src/shortcuts/flow.rs). While a text step is typed into, a row per variable (Output, then the names Set Variable steps set; variable_names, springboard/src/shortcuts.rs:751) inserts {Name} into the text (widget.rs:1256). Variable chips drawn inside the text field are not done: tokens are typed text. Not yet checked on the lab machine.",
+   "wire": "Variable chips drawn in the field instead of rows under the step; typed values (numbers, lists, files) beyond text"
   },
   {
    "feature": "Control flow: If, Repeat, Choose from Menu",
    "area": "view",
    "apple": "scripting actions",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:447",
-   "note": "If (has any value, is empty, is, contains) with Otherwise, Repeat 1 to 20 and Choose from Menu with Menu Items, as a flat list with block markers and an End; adding a block adds its End, removing it removes the End; rows are indented by depth; menu questions list their choices in a panel. Blocks are edited as rows, not as nested cards. Not yet checked on the lab machine.",
-   "wire": "Choose from Menu block; Repeat with Each; Stop and Output steps"
+   "bifrost": "springboard/src/shortcuts/flow.rs:247",
+   "note": "If (has any value, is empty, is, contains) with Otherwise, Repeat 1 to 20, Repeat with Each (one pass per line of the previous output, at most 20, with {Item}) and Stop (ends the run; the steps after it are listed as not run), as a flat list with block markers and an End; adding a block adds its End, removing it removes the End; rows are indented by depth. Blocks are edited as rows, not as nested cards. Choose from Menu is not done. Not yet checked on the lab machine.",
+   "wire": "Choose from Menu block; an Output step"
   },
   {
    "feature": "Colour and glyph",
    "area": "panel",
    "apple": "Details",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1383",
-   "note": "A glyph picker of ten symbols beside the colour swatches; the tile shows the chosen symbol. A wider symbol set and a custom colour are not done. Not yet checked on the lab machine.",
-   "wire": "More glyphs than the thirteen drawn symbols; a colour picker beyond the eight swatches"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:38",
+   "note": "A glyph picker of twenty-one symbols (springboard/src/shortcuts.rs:41) beside a row of nine colour swatches (PALETTE, widget.rs:38); the tile shows the chosen symbol. A custom colour is not done. Not yet checked on the lab machine.",
+   "wire": "A colour picker beyond the nine swatches"
   },
   {
    "feature": "Rename / duplicate / delete",
    "area": "menu",
    "apple": "File / context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1013",
-   "note": "The Name row types a new name (Return saves, Escape cancels); Duplicate Shortcut in the editor and File > Duplicate Shortcut; delete in the editor and Shortcut > Delete Shortcut. A context menu on the tile is not done. Not yet checked on the lab machine.",
-   "wire": "Context menu on a tile with Rename, Duplicate and Delete"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:949",
+   "note": "The Name row types a new name (Return saves, Escape cancels); Duplicate Shortcut in the editor and File > Duplicate Shortcut; delete in the editor and Shortcut > Delete Shortcut. A long press on a tile opens Run, Rename, Duplicate and Delete under it (choice_cells, widget.rs:949; choose, widget.rs:986). Not yet checked on the lab machine.",
+   "wire": ""
   },
   {
    "feature": "Folders",
@@ -108,9 +108,9 @@
    "feature": "Personal automations",
    "area": "view",
    "apple": "Automation",
-   "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1414",
-   "note": "The Automation row picks When App Opens or When Battery Is Low with a stepper for the app or level, next to the daily time. The battery trigger runs the shortcut once each time the charge falls below the level (checked every minute, check_triggers springboard/apps/shortcuts-desktop/src/widget.rs:1275); the app-open trigger is stored but nothing tells the app when another app opens, so it does not fire yet. Not yet checked on the lab machine.",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Not built: the shortcut model has no automation field and the app has no trigger code. The daily reminder is the only trigger (services.rs). An earlier note described an automation row that was never in the code.",
    "wire": "Automations list with time, app-open and battery triggers"
   },
   {
@@ -127,9 +127,9 @@
    "area": "settings",
    "apple": "Details > keyboard shortcut",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/main.rs:155",
-   "note": "The Menu Key row gives a shortcut Cmd+1 to Cmd+9 (next_hotkey, springboard/src/shortcuts.rs:952); the app's Shortcut menu lists every shortcut with its key and runs it while the app is in front. A system-wide hotkey needs shell hotkey registration, which is not done. Not yet checked on the lab machine.",
-   "wire": "Per-shortcut key chosen by the user and a shell hotkey registration that works while the app is not in front"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:24",
+   "note": "Each shortcut has its own menu key, 1 to 9 (Control and Command with the digit), chosen with the Menu Key row in the editor (set_key, springboard/src/shortcuts.rs:722; the first four shortcuts of a first launch hold keys 1 to 4); the app's Shortcuts menu lists every shortcut with its key and runs it while the app is in front (run_key, menus.rs:24). A system-wide hotkey needs shell hotkey registration, which is not done. Not yet checked on the lab machine.",
+   "wire": "A shell hotkey registration that works while the app is not in front"
   },
   {
    "feature": "Import / export shortcut files",
@@ -154,9 +154,9 @@
    "area": "toolbar",
    "apple": "search field",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:557",
-   "note": "A search field in the toolbar of the grid filters the tiles by name or folder as you type; View > Find focuses it; Escape clears it. Not yet checked on the lab machine.",
-   "wire": "Search inside the Add Action list and over the gallery"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:938",
+   "note": "A search field in the toolbar of the grid, the Add Action list and the gallery filters what is listed as you type: tiles by name, step or folder; built-in actions and intents by title; starters by name, line or heading (fits, widget.rs:938). Find focuses it on the grid; Escape clears it. Not yet checked on the lab machine.",
+   "wire": ""
   },
   {
    "feature": "Shortcuts exposed as system intents and RPC",
@@ -172,18 +172,18 @@
    "area": "view",
    "apple": "Gallery",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:1005",
-   "note": "A Gallery row in the sidebar lists six starter shortcuts with a line of their steps; tapping one adds a copy. Not yet checked on the lab machine.",
-   "wire": "More starters and categories; the gallery lists seven"
+   "bifrost": "springboard/src/shortcuts.rs:879",
+   "note": "A Gallery row in the sidebar lists ten starter shortcuts under three headings (Focus, Everyday, Tools), each with a line of its steps; the search narrows them; tapping one adds a copy. Not yet checked on the lab machine.",
+   "wire": "More starters beyond the ten listed"
   },
   {
    "feature": "App menus",
    "area": "menu",
    "apple": "MainMenu",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/main.rs:155",
-   "note": "File (New, Duplicate, Import, Export), Shortcut (Run, Delete and one item per shortcut) and View (Find, All Shortcuts, Gallery) with key equivalents; Edit > Paste works while typing. Not yet checked on the lab machine.",
-   "wire": "Context menu on a tile (Run, Duplicate, Delete); Window and Help items"
+   "bifrost": "springboard/apps/shortcuts-desktop/src/menus.rs:29",
+   "note": "File (New, Duplicate, Import, Export, Delete), Edit (Rename, Find) and Shortcuts (Run, Gallery and one item per shortcut with its menu key) with key equivalents (build, menus.rs:29); Edit > Paste works while typing. The tile context menu is in the window (widget.rs:949). Not yet checked on the lab machine.",
+   "wire": "Window and Help items"
   },
   {
    "feature": "Cloud sharing links",
