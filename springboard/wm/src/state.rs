@@ -132,6 +132,12 @@ impl WmState {
                 if let Err(e) = unsafe { display.get_mut().dispatch_clients(state) } {
                     eprintln!("bifrost-wm: dispatch clients: {e}");
                 }
+                // Reply to registry/sync requests as part of dispatch. The headless backend may
+                // not render immediately (and rendering can block on first-use GPU setup), so
+                // protocol progress must not depend on its frame timer.
+                if let Err(e) = state.dh.flush_clients() {
+                    eprintln!("bifrost-wm: flush clients: {e}");
+                }
                 state.dirty = true;
                 Ok(PostAction::Continue)
             })
