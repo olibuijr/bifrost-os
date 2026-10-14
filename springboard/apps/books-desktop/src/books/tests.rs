@@ -251,7 +251,7 @@ fn font_size_and_theme_change_repaginate_and_persist() {
     assert_eq!(b.settings().theme, Theme::Dark);
     draw(&mut b, &ui, 1050.0);
     let again = Books::with_library_dirs(&ui, 1200, 1920, dir.clone(), Vec::new());
-    assert_eq!(again.settings(), store::Settings { size: store::DEFAULT_SIZE + 1, theme: Theme::Dark });
+    assert_eq!(again.settings(), store::Settings { size: store::DEFAULT_SIZE + 1, theme: Theme::Dark, ..store::Settings::default() });
     let _ = std::fs::remove_dir_all(dir);
 }
 
