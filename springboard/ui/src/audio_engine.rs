@@ -46,6 +46,8 @@ enum Kind {
     Player { samples: Vec<f32>, cursor: usize },
     /// Scales its input by a gain.
     Gain(f32),
+    /// A one-pole low-pass filter: `alpha` is the smoothing factor and `state` the last output of each channel.
+    LowPass { alpha: f32, state: Vec<f32> },
     /// Sums any number of inputs.
     Mixer,
     /// The output node. Sums its single input.
@@ -140,6 +142,19 @@ impl AudioEngine {
         Ok(self.add(Node { kind: Kind::Mixer, format: self.format, inputs: Vec::new() }))
     }
 
+    /// Attaches a one-pole low-pass filter that keeps frequencies below `cutoff_hz`. The cutoff must be above zero and
+    /// below half the engine's sample rate. Each channel is filtered on its own, and the filter starts from silence.
+    pub fn attach_low_pass(&mut self, cutoff_hz: f32) -> Result<NodeId, EngineError> {
+        self.ensure_stopped()?;
+        let rate = self.format.sample_rate as f32;
+        if !cutoff_hz.is_finite() || cutoff_hz <= 0.0 || cutoff_hz >= rate / 2.0 {
+            return Err(EngineError::InvalidValue);
+        }
+        let alpha = 1.0 - (-2.0 * std::f32::consts::PI * cutoff_hz / rate).exp();
+        let state = vec![0.0; usize::from(self.format.channels)];
+        Ok(self.add(Node { kind: Kind::LowPass { alpha, state }, format: self.format, inputs: Vec::new() }))
+    }
+
     /// Detaches a node and removes every connection that feeds it. The output node cannot be detached.
     pub fn detach(&mut self, id: NodeId) -> Result<(), EngineError> {
         self.ensure_stopped()?;
@@ -192,7 +207,7 @@ impl AudioEngine {
         }
         match to_node.kind {
             Kind::Player { .. } => return Err(EngineError::InvalidConnection),
-            Kind::Gain(_) | Kind::Output if !to_node.inputs.is_empty() => {
+            Kind::Gain(_) | Kind::LowPass { .. } | Kind::Output if !to_node.inputs.is_empty() => {
                 return Err(EngineError::InputBusy)
             }
             _ => {}
@@ -291,6 +306,15 @@ impl AudioEngine {
                 Kind::Gain(g) => {
                     for s in sum.iter_mut() {
                         *s *= *g;
+                    }
+                    sum
+                }
+                Kind::LowPass { alpha, state } => {
+                    let channels = state.len();
+                    for (i, s) in sum.iter_mut().enumerate() {
+                        let c = i % channels;
+                        state[c] += *alpha * (*s - state[c]);
+                        *s = state[c];
                     }
                     sum
                 }
