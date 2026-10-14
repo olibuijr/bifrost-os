@@ -1,6 +1,6 @@
 id = "is.olibuijr.bluetoothexchange.desktop"
 name = "Bluetooth File Exchange"
-version = "0.1.2"
+version = "0.1.3"
 exec = "bifrost-bluetooth-exchange"
 icon = "icon.png"
 min_shell = "0.6.5"

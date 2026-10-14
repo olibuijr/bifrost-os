@@ -77,6 +77,8 @@ const DOUBLE_CLICK_MS: f64 = 450.0;
 /// One line of notes or transcript text, and the top of the episode page's buttons, in points.
 const LINE_PT: f32 = 20.0;
 const DETAIL_BUTTONS_PT: f32 = 64.0;
+/// How often to check the playback service clock while it is connected, in seconds.
+const AUDIO_WAKE_INTERVAL_S: f64 = 1.0;
 const BAR_TITLE: u32 = 1;
 const BAR_ADD: u32 = 2;
 const BAR_REMOVE: u32 = 3;
@@ -2481,7 +2483,7 @@ impl Podcasts {
         let mut due = self.playing.is_some().then_some(t + POLL_MS);
         let hold = self.hold.as_ref().map(|(_, at, _)| at + HOLD_MS);
         // the service socket is only read between frames: once a second while idle, to notice an episode playing
-        let listening = if self.audio.connected() { Some(t + 1000.0) } else { self.audio.next_wake(t) };
+        let listening = if self.audio.connected() { Some(t + AUDIO_WAKE_INTERVAL_S) } else { self.audio.next_wake(t) };
         due = [due, listening].into_iter().flatten().reduce(f64::min);
         let refresh = self.last_refresh.zip(self.prefs.settings.refresh_ms()).map(|(at, ms)| at + ms);
         let search = if self.view == View::Search { self.search_field.as_ref().and_then(|f| f.next_wake(t)) } else { None };

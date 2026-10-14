@@ -2,6 +2,7 @@
 //! or the red Empty Trash button deletes every item for good as a job on the worker, like Move to Trash; Escape or Cancel
 //! closes the sheet. While the sheet is open it takes every key and touch, so the folder behind does not change.
 use crate::*;
+use bifrost_app::kit::ui::DESTRUCTIVE;
 
 /// The sheet's height, its button size and the gap from its right edge (points).
 const SHEET_H: f32 = 124.;
@@ -9,9 +10,6 @@ const BUTTON_W: f32 = 104.;
 const BUTTON_H: f32 = 26.;
 const PAD: f32 = 20.;
 const BUTTON_GAP: f32 = 8.;
-/// The destructive button's fill (the system red).
-const DESTRUCTIVE: u32 = pack(255, 69, 58, 255);
-
 /// Where a touch on the sheet landed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Hit {

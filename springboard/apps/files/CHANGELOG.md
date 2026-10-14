@@ -1,3 +1,7 @@
+## 1.28.2 — 2026-10-14
+
+- Use the shared destructive-action color token for Empty Trash.
+
 ## 1.28.1 — 2026-10-14
 
 - Run FTP server listings on the shared utility dispatch queue and wake the main queue when results arrive.

@@ -115,7 +115,8 @@ impl Automator {
             log: Vec::new(),
             running: None,
             status: String::new(),
-            size: (1000.0, 640.0),
+            // The app host configures the actual client size before the first frame.
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
             home,
@@ -570,7 +571,9 @@ mod tests {
     use super::*;
 
     fn window() -> Automator {
-        Automator::new("/home/u".into())
+        let mut app = Automator::new("/home/u".into());
+        app.resize(1000.0, 640.0);
+        app
     }
 
     /// Points on the middle of the sequence row `i`.

@@ -86,7 +86,8 @@ impl BluetoothExchange {
             model: Model::default(),
             link: Link::start(),
             next_poll: 0.0,
-            size: (1000.0, 640.0),
+            // The app host configures the actual client size before the first frame.
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
             home,

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.3 — 2026-10-14
+
+- Name the one-second playback-service wake interval explicitly.
+
 ## 1.12.2 — 2026-10-14
 
 - Let the source-list sidebar shrink with compact windows while retaining its desktop width.
