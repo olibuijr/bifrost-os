@@ -1216,4 +1216,7 @@ pub mod help_menu;
 pub mod scene_handoff;
 pub mod photo_adjustment;
 pub mod os_services;
+pub mod bluetooth_errors;
+pub mod bluetooth_devices;
+pub mod save_options;
 
