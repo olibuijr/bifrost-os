@@ -42,6 +42,7 @@ pub mod stream;
 pub mod symfile;
 pub mod system_sound;
 pub mod volume;
+pub mod loop_region;
 
 #[cfg(target_os = "linux")]
 pub mod audio_out;

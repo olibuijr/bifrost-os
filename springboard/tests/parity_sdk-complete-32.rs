@@ -62,3 +62,34 @@ fn the_volume_and_the_normalization_multiply() {
     let combined = normalized_linear(half, -6.0);
     assert!(close(combined, half.linear() * 0.501_187));
 }
+
+mod loop_regions {
+    use springboard::media::loop_region::{Head, LoopMode, LoopRegion};
+
+    #[test]
+    fn a_loop_region_needs_at_least_one_frame() {
+        assert!(LoopRegion::new(10, 10, LoopMode::Forward).is_none());
+        assert_eq!(LoopRegion::new(4, 10, LoopMode::PingPong).map(|r| r.end()), Some(10));
+    }
+
+    #[test]
+    fn a_forward_loop_on_the_sdk_path_wraps_inside_the_region() {
+        let r = LoopRegion::new(2, 6, LoopMode::Forward).unwrap();
+        let head = Head::Playing { position: 4, backward: false };
+        assert_eq!(r.advance(head, 3, 100), Head::Playing { position: 3, backward: false });
+    }
+
+    #[test]
+    fn a_one_shot_stops_at_the_sample_end() {
+        let r = LoopRegion::new(2, 6, LoopMode::Off).unwrap();
+        let head = r.advance(r.head_at_start(), 9, 8);
+        assert_eq!(head, Head::Done);
+    }
+
+    #[test]
+    fn a_ping_pong_loop_reverses_at_the_region_end() {
+        let r = LoopRegion::new(0, 4, LoopMode::PingPong).unwrap();
+        let head = r.advance(Head::Playing { position: 3, backward: false }, 1, 100);
+        assert_eq!(head, Head::Playing { position: 3, backward: true });
+    }
+}

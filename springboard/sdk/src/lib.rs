@@ -34,6 +34,8 @@ pub mod kit {
     /// Pixel buffer layouts and the 8-bit CMYK, grey and RGB conversions, plane splitting and interleaving.
     pub use bifrost_render::pixel_layout;
     pub use springboard::shell::list;
+    /// Loop regions for sampled playback: the loop modes (off, forward, ping-pong) and the read head through them.
+    pub use springboard::media::loop_region;
     pub use bifrost_render::appearance;
     /// The shared motion contract: durations per kind of animation (0 under Reduce Motion) and the curves.
     pub use bifrost_render::motion;

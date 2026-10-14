@@ -17,9 +17,9 @@
     {
       "feature": "Sampler playback of complete audio",
       "apple": "PHASESamplerNodeDefinition, PHASEPlaybackMode",
-      "bifrost": "springboard/src/media/audioplayer.rs; springboard/apps/daw/src/devices/inst/zones/voice.rs",
+      "bifrost": "springboard/src/media/audioplayer.rs; springboard/apps/daw/src/devices/inst/zones/voice.rs; springboard/src/media/loop_region.rs (LoopMode, LoopRegion, Head)",
       "status": "partial",
-      "note": "files play through the player and the DAW sampler voices; the sampler is app-internal, not an SDK API; no loop mode options in the SDK"
+      "note": "Files play through the player and the DAW sampler voices. Loop modes (off, forward, ping-pong) and the read head through a region are in the SDK as bifrost_app::kit::loop_region, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: the player and the DAW voice do not yet take a region from an app, and the sampler voice stays app-internal; the lab machine confirms an audible loop on Midget."
     },
     {
       "feature": "Streamed buffers (push and pull streams)",
