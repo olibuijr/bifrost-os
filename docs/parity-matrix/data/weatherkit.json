@@ -10,23 +10,23 @@
     {
       "feature": "Weather service and queries",
       "apple": "WeatherService, WeatherQuery, WeatherMetadata",
-      "bifrost": "springboard/src/shell/weather/data.rs (forecast_url, fetch_forecast, FORECAST_API)",
+      "bifrost": "springboard/core/src/weather.rs (forecast_url, parse_forecast, FORECAST_API)",
       "status": "partial",
-      "note": "Fetch and parse exist, but only inside the Weather app's data module; no SDK type exposes a weather request to other apps. Data source is Open-Meteo, not Apple's service."
+      "note": "The request URL and answer parsing are in bifrost_core::weather; the fetch and disk cache (fetch_forecast) are in the Weather app's data module. No SDK type exposes a weather request to other apps. Data source is Open-Meteo, not Apple's service. Tests: forecast_url_asks_for_every_field_the_parser_reads, parses_current_hours_from_now_and_days (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Current conditions",
       "apple": "CurrentWeather, WeatherCondition",
-      "bifrost": "springboard/src/shell/weather/data.rs (Current, Sky::from_code)",
+      "bifrost": "springboard/core/src/weather.rs (Current, Sky::from_code)",
       "status": "partial",
-      "note": "Temperature, apparent temperature, humidity, wind speed, condition code and day flag are parsed. Condition is mapped to a local Sky enum from WMO codes."
+      "note": "Temperature, apparent temperature, humidity, wind speed, condition code and day flag are parsed. Condition is mapped to a local Sky enum from WMO codes. Tests: forecast_reports_current_conditions_with_wind_and_humidity, wmo_codes_map_to_skies_and_labels (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Wind",
       "apple": "Wind (speed, direction, gust)",
-      "bifrost": "springboard/src/shell/weather/data.rs (Current.wind_kmh)",
+      "bifrost": "springboard/core/src/weather.rs (Current.wind_kmh)",
       "status": "partial",
-      "note": "Speed only. No direction or gust fields are requested or stored."
+      "note": "Speed only. No direction or gust fields are requested or stored. Test: forecast_reports_current_conditions_with_wind_and_humidity (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Precipitation",
@@ -45,16 +45,16 @@
     {
       "feature": "UV index",
       "apple": "UVIndex",
-      "bifrost": "springboard/src/shell/weather/data.rs (Day.uv from uv_index_max)",
+      "bifrost": "springboard/core/src/weather.rs (Day.uv from uv_index_max)",
       "status": "partial",
-      "note": "Daily peak only, used by the Weather detail pane. No current or hourly UV."
+      "note": "Daily peak only, used by the Weather detail pane. No current or hourly UV. Tests: forecast_days_carry_range_uv_and_sun_times, optional_forecast_fields_fall_back_to_defaults (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Hourly and daily forecasts",
       "apple": "Forecast, HourWeather, DayWeather, DayPartForecast",
-      "bifrost": "springboard/src/shell/weather/data.rs (Hour, Day, parse_forecast); springboard/apps/weather-desktop/src/weather.rs (HOURLY_TOP, DAILY_TOP)",
+      "bifrost": "springboard/core/src/weather.rs (Hour, Day, parse_forecast)",
       "status": "partial",
-      "note": "Hourly temperature and code, and 10 daily max, min, code, UV, sunrise and sunset. No day-part forecasts."
+      "note": "Hourly temperature and code, and 10 daily max, min, code, UV, sunrise and sunset. No day-part forecasts. Tests: forecast_hours_start_at_the_current_hour, forecast_drops_days_whose_date_is_not_real (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Minute forecast",
@@ -73,9 +73,9 @@
     {
       "feature": "Sun and moon events",
       "apple": "SunEvents, MoonEvents, MoonPhase",
-      "bifrost": "springboard/src/shell/weather/data.rs (Day.sunrise, Day.sunset)",
+      "bifrost": "springboard/core/src/weather.rs (Day.sunrise, Day.sunset)",
       "status": "partial",
-      "note": "Sunrise and sunset only. No dawn, dusk, moonrise, moonset or moon phase."
+      "note": "Sunrise and sunset only. No dawn, dusk, moonrise, moonset or moon phase. Test: forecast_days_carry_range_uv_and_sun_times (core/tests/parity_sdk-tests-06.rs)."
     },
     {
       "feature": "Historical statistics and comparisons",
