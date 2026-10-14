@@ -45,9 +45,9 @@
     {
       "feature": "Security types (CWSecurity)",
       "apple": "CWSecurity: none, WEP, WPA personal and enterprise, WPA2 personal and enterprise, WPA3 personal and transition, and others",
-      "bifrost": "springboard/src/net/wifi_config.rs:29 (Security: Open, Wpa2, Wpa3, Wpa2Wpa3, Enterprise(Eap)); wired: springboard/src/shell/desktop_network.rs (security_of maps NetworkManager key-mgmt onto springboard/src/net/wifi_config.rs Security)",
+      "bifrost": "springboard/src/net/wifi_config.rs (Security, Eap, NetworkConfig::fields, conf, parse_conf)",
       "status": "partial",
-      "note": "no WEP and no WPA-only personal; enterprise uses PEAP or TTLS with MSCHAPv2 inner method Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "no WEP and no WPA-only personal; enterprise uses PEAP or TTLS with MSCHAPv2 inner method. Host tests the_security_choice_cycles_through_the_five_choices, a_wpa2_network_writes_a_pre_shared_key_and_a_wpa3_one_writes_sae, an_enterprise_network_uses_the_inner_mschapv2_method_and_no_ca_check and the_config_file_reads_back_the_same_networks_in_joining_order (springboard/tests/parity_sdk-tests-01e.rs). The mapping from NetworkManager key management (security_of in springboard/src/shell/desktop_network.rs) is shell wiring and not part of this evidence. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Configuration (CWConfiguration, CWMutableConfiguration)",
