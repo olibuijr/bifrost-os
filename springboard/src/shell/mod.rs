@@ -2915,8 +2915,10 @@ impl Shell {
             }
         }
         let mut effects = cc_fx;
+        let typing_on_hardware = self.desk_active();
         if let Some(p) = &mut self.photos {
             if self.screen == Screen::App(AppId::Photos) {
+                p.set_hardware_keyboard(typing_on_hardware);
                 self.dirty |= p.tick(&self.ui, t);
             }
             effects.extend(p.take_effects());
