@@ -10,6 +10,7 @@ architecture = "x86_64-linux"
 kind = "system-app"
 entitlements = ["log-store"]
 permissions = ["documents"]
+handles = ["public.plain-text:alternate", "org.gnu.gnu-zip-archive:alternate"]
 window = "full-size"
 
 [[log.subsystem]]
