@@ -17,9 +17,9 @@
   {
    "feature": "Incoming call UI",
    "apple": "CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes",
-   "bifrost": "springboard/ui/src/call_ui.rs",
+   "bifrost": "springboard/ui/src/call_ui.rs (IncomingCard, CardStack)",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (call_ui.rs); not wired into the shell or apps, not tested on Midget. no full-screen/banner call interface with answer and decline"
+   "note": "Each ringing call gets a banner or full-screen card with answer and decline, and CardStack keeps the oldest ringing card on screen with the rest waiting, pruned against the call controller; tested headless in ui/tests/parity_sdk-complete-35.rs. Gap: no shell surface draws the card or sends its requests yet, so the card is not shown on a device."
   },
   {
    "feature": "Outgoing calls",

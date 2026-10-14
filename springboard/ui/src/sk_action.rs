@@ -9,6 +9,8 @@
 //!
 //! Keyframes map a time to a value by linear interpolation or by holding the previous key.
 
+use crate::anim::Curve;
+
 /// One node action.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
@@ -265,7 +267,7 @@ impl Runner {
     }
 }
 
-/// How a keyframe sequence fills the time between two keys.
+/// How a key fills the time from itself to the next key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Interpolation {
     /// Interpolates linearly between the two keys around the time.
@@ -274,50 +276,100 @@ pub enum Interpolation {
     Hold,
 }
 
+/// One key of a keyframe sequence: the value at a time, and how the segment that starts at it is filled.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Key {
+    pub time: f64,
+    pub value: f64,
+    /// How the segment from this key to the next one is filled.
+    pub interpolation: Interpolation,
+    /// Eases the progress through a linear segment. Ignored by a held segment.
+    pub easing: Curve,
+}
+
+impl Key {
+    /// A key whose segment interpolates linearly, with no easing.
+    pub fn linear(time: f64, value: f64) -> Key {
+        Key {
+            time,
+            value,
+            interpolation: Interpolation::Linear,
+            easing: Curve::Linear,
+        }
+    }
+
+    /// A key whose segment holds its value until the next key.
+    pub fn hold(time: f64, value: f64) -> Key {
+        Key {
+            time,
+            value,
+            interpolation: Interpolation::Hold,
+            easing: Curve::Linear,
+        }
+    }
+
+    /// The same key with its segment eased by `curve`.
+    pub fn eased(self, curve: Curve) -> Key {
+        Key { easing: curve, ..self }
+    }
+}
+
 /// Values at increasing times. Times outside the keys take the value of the nearest key.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Keyframes {
-    keys: Vec<(f64, f64)>,
-    interpolation: Interpolation,
+    keys: Vec<Key>,
 }
 
 impl Keyframes {
-    /// Builds a sequence from `(time, value)` pairs. Returns `None` when there are no keys, a time or value is not
-    /// finite, or the times are not strictly increasing.
+    /// Builds a sequence from `(time, value)` pairs that all share one interpolation and have no easing. Returns `None`
+    /// under the same conditions as [`Keyframes::from_keys`].
     pub fn new(interpolation: Interpolation, keys: Vec<(f64, f64)>) -> Option<Self> {
+        let keys = keys
+            .into_iter()
+            .map(|(time, value)| Key {
+                time,
+                value,
+                interpolation,
+                easing: Curve::Linear,
+            })
+            .collect();
+        Self::from_keys(keys)
+    }
+
+    /// Builds a sequence from keys, each with its own timing. Returns `None` when there are no keys, a time or value is
+    /// not finite, or the times are not strictly increasing.
+    pub fn from_keys(keys: Vec<Key>) -> Option<Self> {
         if keys.is_empty() {
             return None;
         }
-        let finite = keys.iter().all(|(t, v)| t.is_finite() && v.is_finite());
-        let increasing = keys.windows(2).all(|w| w[0].0 < w[1].0);
+        let finite = keys.iter().all(|k| k.time.is_finite() && k.value.is_finite());
+        let increasing = keys.windows(2).all(|w| w[0].time < w[1].time);
         if !finite || !increasing {
             return None;
         }
-        Some(Keyframes {
-            keys,
-            interpolation,
-        })
+        Some(Keyframes { keys })
     }
 
     /// The value at time `t`.
     pub fn value_at(&self, t: f64) -> f64 {
         let first = self.keys[0];
         let last = self.keys[self.keys.len() - 1];
-        if t <= first.0 {
-            return first.1;
+        if t <= first.time {
+            return first.value;
         }
-        if t >= last.0 {
-            return last.1;
+        if t >= last.time {
+            return last.value;
         }
-        // Index of the first key after `t`; the key before it is the segment start.
-        let after = self.keys.partition_point(|k| k.0 <= t);
-        let (t0, v0) = self.keys[after - 1];
-        let (t1, v1) = self.keys[after];
-        match self.interpolation {
-            Interpolation::Hold => v0,
+        // Index of the first key after `t`; the key before it starts the segment that holds `t`.
+        let after = self.keys.partition_point(|k| k.time <= t);
+        let start = self.keys[after - 1];
+        let end = self.keys[after];
+        match start.interpolation {
+            Interpolation::Hold => start.value,
             Interpolation::Linear => {
-                let frac = (t - t0) / (t1 - t0);
-                v0 + (v1 - v0) * frac
+                let progress = (t - start.time) / (end.time - start.time);
+                let eased = f64::from(start.easing.at(progress as f32));
+                start.value + (end.value - start.value) * eased
             }
         }
     }

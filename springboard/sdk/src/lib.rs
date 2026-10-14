@@ -95,6 +95,8 @@ pub mod digest;
 pub mod crypto_key;
 pub mod keychain_protection;
 pub mod keychain_keys;
+pub mod security_status;
+pub mod transport_policy;
 pub mod system;
 pub mod autofill;
 pub mod trust;

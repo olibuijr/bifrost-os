@@ -17,16 +17,16 @@
   {
    "feature": "Node tree and camera",
    "apple": "SKNode, SKCameraNode, SKReferenceNode",
-   "bifrost": "springboard/sdk/src/view/mod.rs",
+   "bifrost": "springboard/sdk/src/view/mod.rs; springboard/ui/src/sk_node.rs (NodeTree, set_camera, view_point, scene_point)",
    "status": "partial",
-   "note": "views nest and lay out, but there is no camera node, no archived .sks scene files and no per-node z-order or transform API for 2D content"
+   "note": "Nodes with position, rotation, scale, alpha, z order, hidden subtrees and a camera node that maps views to scenes are tested headless in ui/tests/parity_sdk-complete-35.rs. Gap: no view or window draws a node tree yet, and archived .sks scene files are not supported."
   },
   {
    "feature": "Drawing shapes, images and text",
    "apple": "SKSpriteNode, SKShapeNode, SKLabelNode",
-   "bifrost": "springboard/render/src/gfx, springboard/sdk/src/glyphs.rs, springboard/apps/games-desktop/src/games.rs",
+   "bifrost": "springboard/render/src/gfx, springboard/sdk/src/glyphs.rs, springboard/apps/games-desktop/src/games.rs; springboard/ui/src/sk_node.rs (Content, draw_list)",
    "status": "partial",
-   "note": "apps draw into a Surface with damage tracking (the Games app does); no node-based sprite, shape or label objects"
+   "note": "Apps draw into a Surface with damage tracking (the Games app does), and sk_node models rectangle, circle, label and image nodes whose paint-order draw list and view frames are tested headless. Gap: the draw list is not rasterised into a Surface yet, so text measurement and image decoding still belong to the renderer."
   },
   {
    "feature": "Textures and texture atlases",
@@ -38,16 +38,16 @@
   {
    "feature": "Actions",
    "apple": "SKAction, Getting Started with Actions",
-   "bifrost": "springboard/sdk/src/view/animation.rs; springboard/ui/src/sk_action.rs (node action tree and runner); wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
+   "bifrost": "springboard/sdk/src/view/animation.rs; springboard/ui/src/sk_action.rs (node action tree and runner); springboard/ui/src/sk_node.rs (NodeTree::run_action, advance_actions); wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
    "status": "partial",
-   "note": "Window::animate interpolates frame, opacity and background when a closure changes them. sk_action.rs adds composable actions (wait, report, sequence, group, counted and endless repeat) run by a Runner that reports fired ids; no node or window runs it yet. built on parity/team-a-07; not yet verified on Midget"
+   "note": "Window::animate interpolates frame, opacity and background when a closure changes them. sk_action.rs adds composable actions (wait, report, sequence, group, counted and endless repeat) run by a Runner that reports fired ids, and sk_node.rs gives each scene node its own runner so reports carry the node that fired them. Gap: no window or view builds a node tree yet, so node actions run only in the headless tests in ui/tests/parity_sdk-complete-35.rs. built on parity/team-a-07; not yet verified on Midget"
   },
   {
    "feature": "Timing curves and springs",
    "apple": "SKActionTimingMode, SKActionTimingFunction, SKKeyframeSequence interpolation",
-   "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs, springboard/ui/src/sk_action.rs (Keyframes)",
+   "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs, springboard/ui/src/sk_action.rs (Keyframes, Key)",
    "status": "partial",
-   "note": "curves and springs exist as pure functions. sk_action.rs adds keyframe sequences with linear or hold interpolation between keys; per-key timing modes and key-level easing are not modelled. built on parity/team-a-07; not yet verified on Midget"
+   "note": "curves and springs exist as pure functions. Keyframes now give each key its own timing, hold or linear, and an easing curve for its segment, tested headless in ui/tests/parity_sdk-complete-35.rs. Gap: no node action uses Keyframes yet, so the timing modes apply only to the keyframe model. built on parity/team-a-07; not yet verified on Midget"
   },
   {
    "feature": "Node constraints",

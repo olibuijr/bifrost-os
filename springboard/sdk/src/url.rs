@@ -595,15 +595,15 @@ impl ChunkDecoder {
     }
 }
 
-struct Parsed {
-    tls: bool,
-    host: String,
+pub(crate) struct Parsed {
+    pub(crate) tls: bool,
+    pub(crate) host: String,
     host_header: String,
     port: u16,
     target: String,
 }
 
-fn parse_url(url: &str) -> Result<Parsed, URLError> {
+pub(crate) fn parse_url(url: &str) -> Result<Parsed, URLError> {
     let bad = || URLError::BadURL(url.to_string());
     let (scheme, rest) = url.split_once("://").ok_or_else(bad)?;
     let tls = match scheme {
@@ -629,6 +629,10 @@ fn parse_url(url: &str) -> Result<Parsed, URLError> {
 
 fn resolve(base: &str, loc: &str) -> Result<String, URLError> {
     if loc.contains("://") {
+        // A redirect may not move an https request to plain http. Exceptions are applied by the transport policy.
+        if parse_url(base)?.tls && !parse_url(loc)?.tls {
+            return Err(URLError::BadServerResponse(format!("redirect from https to http: {loc}")));
+        }
         return Ok(loc.to_string());
     }
     let p = parse_url(base)?;
@@ -930,5 +934,12 @@ mod transport_security_tests {
         assert_eq!(resolve("https://bifrost.example/ota/a.json", "b.json").unwrap(), "https://bifrost.example/ota/b.json");
         assert_eq!(resolve("http://bifrost.example:8080/x", "/y").unwrap(), "http://bifrost.example:8080/y");
         assert_eq!(resolve("https://bifrost.example/", "https://cdn.example/z").unwrap(), "https://cdn.example/z");
+    }
+
+    #[test]
+    fn a_redirect_cannot_move_an_https_request_to_http_but_may_move_http_to_https() {
+        assert!(matches!(resolve("https://bifrost.example/a", "http://bifrost.example/b"), Err(URLError::BadServerResponse(_))));
+        assert!(resolve("https://bifrost.example/a", "HTTP://cdn.example/b").is_err(), "an unknown scheme is refused");
+        assert_eq!(resolve("http://bifrost.example/a", "https://bifrost.example/b").unwrap(), "https://bifrost.example/b");
     }
 }
