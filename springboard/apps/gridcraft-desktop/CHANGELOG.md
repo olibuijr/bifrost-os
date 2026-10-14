@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.6.2
+
+- Upstream gridcraft v0.6.1.
+  ## What's Changed
+  * selection.move: clamp extreme dr/dc to the sheet edge instead of overflowing by @webdevtodayjason in https://github.com/storytold/gridcraft/pull/232
+  * CHOOSE: pick element by element when the index is an array by @nihilist-narwhal in https://github.com/storytold/gridcraft/pull/252
+  * Add MacJedi42 to the contributor names by @MacJedi42 in https://github.com/storytold/gridcraft/pull/253
+  * Sort and Remove Duplicates: compare text the way Excel does by @nihilist-narwhal in https://github.com/storytold/gridcraft/pull/255
+
 ## 0.6.1
 
 - Upstream gridcraft v0.6.1.
