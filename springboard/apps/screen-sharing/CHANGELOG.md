@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Moved the RFB reader and writer onto utility dispatch tasks; connection events wake the app through the main dispatch queue instead of a frame polling timer.
+
 ## 0.1.1 — 2026-10-14
 
 - Empty areas around the remote display follow the active appearance; the app enables sudden termination because it has no unsaved document state.
