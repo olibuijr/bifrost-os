@@ -1066,6 +1066,7 @@ pub mod route_auth;
 pub mod route_action;
 pub mod route_picker;
 pub mod route_picker_view;
+pub mod content_sniff;
 pub mod picker_wheel;
 pub mod content_unavailable;
 pub mod large_content;

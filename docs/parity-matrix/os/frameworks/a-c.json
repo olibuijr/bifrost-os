@@ -12534,9 +12534,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "The reference resources include magic.mgc, a file type magic-number database, so the framework most likely identifies file contents from their leading bytes; the API was not confirmed. Nothing in BifrOSt sniffs magic numbers yet: build a sniffer that maps leading bytes to the type identifiers in springboard/ui/src/uttype.rs.",
+   "bifrost": "springboard/ui/src/content_sniff.rs (sniff; maps signatures to UTType identifiers)",
+   "status": "partial",
+   "note": "A bounded pure sniffer recognizes common signatures and maps them to the identifiers in uttype.rs, with host integration tests. The ContentKit API was not confirmed from magic.mgc; this is not a magic-database-compatible engine, and no picker or preview consumer calls it yet.",
    "rea": [],
    "method": "assessed"
   },
