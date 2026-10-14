@@ -45,9 +45,9 @@
     {
       "feature": "Shared file lists (recent items, favourites)",
       "apple": "LSSharedFileList, LSSharedFileListItem",
-      "bifrost": "springboard/ui/src/shared_list.rs; wired: springboard/src/shell/recent_items.rs; springboard/src/shell/desktop_bar.rs (Menu::System: Recent Items group, Clear Menu)",
+      "bifrost": "springboard/ui/src/shared_list.rs (SharedList, Item)",
       "status": "partial",
-      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Deprecated by Apple in favour of other APIs; no counterpart. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Host tests a_used_document_moves_to_the_front_with_its_new_title, favourites_are_kept_when_recents_are_trimmed_and_listed_first and clearing_recents_keeps_the_favourites (ui/tests/parity_sdk-tests-01e.rs). The recents menu (springboard/src/shell/recent_items.rs, springboard/src/shell/desktop_bar.rs) is shell wiring and not part of this evidence. Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Deprecated by Apple in favour of other APIs; no counterpart. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Quarantine properties",
