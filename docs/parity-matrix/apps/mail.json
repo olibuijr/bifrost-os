@@ -133,9 +133,9 @@
    "area": "menu",
    "apple": "Message > Flag > colours",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/flags.rs:FlagColor",
-   "note": "Message > Flag Color (seven colours, Clear Flag) stored as the $MailFlagBit0-2 keywords; the list row shows a colour dot. Not on the toolbar; no flag-colour smart filter yet.",
-   "wire": "Map the colours to the $MailFlagBit0-2 keywords in flags.rs, add a submenu in window.rs and a colour dot to the list row in draw.rs"
+   "bifrost": "springboard/apps/mail-desktop/src/flags.rs:FlagColor; springboard/apps/mail-desktop/src/window.rs:344 (colour submenu); springboard/apps/mail-desktop/src/draw.rs:727 (colour dot)",
+   "note": "Message > Flag Color (seven colours, Clear Flag) stored as the $MailFlagBit0-2 keywords; the list row draws the colour dot (draw.rs:727). Not on the toolbar; no flag-colour smart filter yet.",
+   "wire": "Built; a flag-colour smart filter and the toolbar button are the remaining items"
   },
   {
    "feature": "Mark as Read/Unread",
@@ -187,18 +187,18 @@
    "area": "menu",
    "apple": "Message > Remind Me; View > Sort by Send Later",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs (remind_time, due_reminders, due_sends); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
-   "note": "organize::remind_time gives the Remind Me times and due_reminders and due_sends pick what is due, all tested headless in tests/parity_app-mail.rs. No Remind Me or Send Later menu calls them yet.",
-   "wire": "Keep Remind and Scheduled queues in the data dir; check due_reminders / due_sends in tick(); add the Remind Me and Send Later menus using remind_time."
+   "bifrost": "springboard/apps/mail-desktop/src/schedule.rs (parse_delay, Queue::take_due_reminders, Queue::drop_reminders); springboard/apps/mail-desktop/src/window.rs:351 (Remind Me), window.rs:352 (Ignore Follow-Up), window.rs:325 (Send Later); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "Remind Me takes a delay (30m, 2h, 1d), queues it in mail-queue.json and tick() brings the message back when it is due; Ignore Follow-Up drops the open message's reminders; Send Later uses the same queue. The queue is tested headless. The calendar-style times in organize.rs (remind_time: tonight, tomorrow) are not offered by any menu yet.",
+   "wire": "Built; decide whether the calendar-style Remind Me times are wanted (then wire organize::remind_time) and check the queue on Midget."
   },
   {
    "feature": "Mute conversation / Ignore follow-up",
    "area": "menu",
    "apple": "Message > Mute",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:667",
-   "note": "Message > Mute / Unmute keeps the conversation key in muted.txt, silences its new-mail notifications, and the list marks muted conversations with a Muted tag. Ignore follow-up is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Ignore follow-up: stop reminders for a conversation"
+   "bifrost": "springboard/apps/mail-desktop/src/mute.rs; springboard/apps/mail-desktop/src/window.rs:1065 (Mute); springboard/apps/mail-desktop/src/window.rs:1084 (Ignore Follow-Up); springboard/apps/mail-desktop/src/draw.rs:719 (Muted tag)",
+   "note": "Message > Mute / Unmute keeps the conversation key in muted.txt, silences its new-mail notifications, and the list marks muted conversations with a Muted tag. Ignore Follow-Up drops the reminders of the open message (window.rs ignore_follow_up); it does not yet cover a whole conversation, because reminders hold one message each.",
+   "wire": "Ignore follow-up for a whole conversation: store the conversation key with each reminder"
   },
   {
    "feature": "Set priority",
@@ -214,7 +214,7 @@
    "area": "menu",
    "apple": "Message > Remove Attachments",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1775",
+   "bifrost": "springboard/apps/mail-desktop/src/mime.rs (strip_attachments, removed_note); springboard/apps/mail-desktop/src/window.rs:1854 (remove_attachments)",
    "note": "Message > Remove Attachments cuts the file parts out (mime.rs strip_attachments), appends the result under the same flags and deletes the original over IMAP (session.rs append and remove). Built on parity/team-d-mail; not yet verified on Midget.",
    "wire": "Replace the file with a short note in the text, and check it against more servers"
   },
@@ -232,9 +232,9 @@
    "area": "settings",
    "apple": "RulesPreferences; Message > Apply Rules",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/rules.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Save rules::to_text in the data dir, run rules::evaluate after apply_listing and perform the actions over imap.rs, add a Rules settings pane."
+   "bifrost": "springboard/apps/mail-desktop/src/rules.rs; springboard/apps/mail-desktop/src/window.rs (apply_rules_to_arrivals, apply_rules_to_shown); springboard/apps/mail-desktop/src/prefs.rs (rules)",
+   "note": "Rules are saved in mail-prefs.json, made from Mailbox > New Rule, and run on new mail and by Mailbox > Apply Rules over the shown mailbox. The rule actions run over IMAP. There is no Rules settings pane yet to edit a rule, and the rules are not tested on Midget.",
+   "wire": "Add a Rules settings pane that lists, edits and reorders rules; check the actions on Midget"
   },
   {
    "feature": "Conversations (organize by thread, expand/collapse)",
@@ -277,9 +277,9 @@
    "area": "menu",
    "apple": "Edit > Find > Find, Find Next/Previous",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs (find_in_body); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
-   "note": "organize::find_in_body returns the case-insensitive matches of a needle as byte ranges, Icelandic capitals included, and the tests in tests/parity_app-mail.rs cover it headless. The view pane does not draw the matches yet.",
-   "wire": "Add a find bar in the view pane that draws organize::find_in_body matches over the body."
+   "bifrost": "springboard/apps/mail-desktop/src/findbar.rs (find_all, FindBar); springboard/apps/mail-desktop/src/draw.rs:790 (matches drawn over the body); springboard/apps/mail-desktop/src/window.rs:834 (find_matches); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "Find in Message (cmd+alt+f) opens a find bar over the open message; the matches are drawn in the body and Find Next and Find Previous step through them. The case-insensitive matching is tested headless in tests/parity_app-mail.rs through organize::find_in_body, a parallel model the window does not call. Not yet verified on Midget.",
+   "wire": "Point the tests at findbar::find_all and delete organize::find_in_body"
   },
   {
    "feature": "Sidebar with accounts and mailboxes",
@@ -304,9 +304,9 @@
    "area": "view",
    "apple": "View > Show Favorites Bar; FavoritesBarViewController",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "Draw a strip of organize::Favorites under the toolbar and save to_text in the data dir."
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:127 (favorites_height), draw.rs:614 (draw_favorites); springboard/apps/mail-desktop/src/prefs.rs (favorites, toggle_favorite)",
+   "note": "View > Show Favorites Bar and Add to Favorites Bar pin mailboxes to a strip under the toolbar, saved in mail-prefs.json. Not yet verified on Midget.",
+   "wire": "Built; check the strip on Midget and the favourites of a second account"
   },
   {
    "feature": "New, rename and delete mailbox",
@@ -322,9 +322,9 @@
    "area": "panel",
    "apple": "Mailbox > New Smart Mailbox; NewSmartMailbox",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
-   "wire": "List organize::SmartMailbox rows in the sidebar and fill them with select over the cached docs."
+   "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (SmartMailbox); springboard/apps/mail-desktop/src/draw.rs:232 (sidebar section); springboard/apps/mail-desktop/src/state.rs (smart_active)",
+   "note": "Mailbox > New Smart Mailbox saves a named search; the sidebar lists the smart mailboxes and a click shows the messages the search matches. Delete Smart Mailbox removes the one shown. Not yet verified on Midget.",
+   "wire": "Built; check the sidebar section on Midget with two smart mailboxes"
   },
   {
    "feature": "Get new mail / synchronize",
@@ -385,18 +385,18 @@
    "area": "settings",
    "apple": "SignaturePreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/signature.rs; springboard/apps/mail-desktop/tests/parity_app-mail.rs",
-   "note": "signature.rs appends, strips and places the signature after the -- delimiter, and the tests in tests/parity_app-mail.rs cover it headless. Not yet wired into accounts, the compose sheet or a Signatures pane.",
-   "wire": "Store a signature per account in accounts.rs, call signature::append / reply_body in open_compose, add a Signatures settings pane."
+   "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (signature, set_signature); springboard/apps/mail-desktop/src/state.rs:1546 (with_signature, used at send); springboard/apps/mail-desktop/src/state.rs (open_settings: Signature field); springboard/apps/mail-desktop/src/signature.rs",
+   "note": "Each account has a signature, set in Mail Settings and added after the -- delimiter when a message is sent (state.rs with_signature). The compose sheet shows it. signature.rs holds the delimiter helpers, tested headless in tests/parity_app-mail.rs. There is no separate Signatures pane, and replies keep the signature at the end rather than above the quote.",
+   "wire": "Add a Signatures pane with one signature per account and a choice of place for replies; move the send path onto signature::append once a message's own -- line no longer blocks the signature"
   },
   {
    "feature": "Viewing settings (headers shown, remote content, bold unread, dark backgrounds)",
    "area": "settings",
    "apple": "ViewerPreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:905",
-   "note": "View > All Headers (prefs.all_headers) shows every header above the text. Remote content, bold unread and dark backgrounds have no settings yet, and messages are shown as text (no HTML rendering).",
-   "wire": "Add a Viewing settings pane for remote content, bold unread and dark backgrounds, and wire html::sanitize into the view"
+   "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (bold_unread, all_headers); springboard/apps/mail-desktop/src/draw.rs:712 (bold unread senders); springboard/apps/mail-desktop/src/draw.rs:908 (all headers)",
+   "note": "View > All Headers (prefs.all_headers) shows every header above the text. Mail Settings has Bold unread messages (prefs.bold_unread, drawn at draw.rs:712). Remote content and dark backgrounds have no settings yet, and messages are shown as text (no HTML rendering).",
+   "wire": "Add a Viewing settings pane for remote content and dark backgrounds, and wire html::sanitize into the view"
   },
   {
    "feature": "Composing settings (format, quoting, undo send delay, spelling)",
@@ -475,9 +475,9 @@
    "area": "view",
    "apple": "View > Categories",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/organize.rs (categorize); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
-   "note": "organize::categorize sorts a header block into Primary, Transactions, Updates or Promotions, and the tests in tests/parity_app-mail.rs cover the rules headless. Not yet wired into the list or the sidebar.",
-   "wire": "Run organize::categorize on the header block when a listing is applied and add a category filter in the sidebar."
+   "bifrost": "springboard/apps/mail-desktop/src/category.rs (classify, Category); springboard/apps/mail-desktop/src/state.rs:1160 (category filter); springboard/apps/mail-desktop/src/window.rs:439 (View > Categories)",
+   "note": "View > Categories filters the list to Primary, Transactions, Updates or Promotions, classified by category.rs from the message summary. The sidebar does not list the categories yet. A parallel header-block model, organize::categorize, is covered by the tests in tests/parity_app-mail.rs but the window does not call it.",
+   "wire": "Add the category list to the sidebar; then point the tests at category::classify and delete organize::categorize"
   },
   {
    "feature": "Out-of-office and server quota (Exchange)",
