@@ -204,9 +204,9 @@
    "area": "menu",
    "apple": "Edit.nib: Edit > Transformations",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:561, springboard/apps/textedit-desktop/src/main.rs:502",
-   "note": "Edit > Transformations: Make Upper Case, Make Lower Case and Capitalize act on the selection as one undo entry.",
-   "wire": "Add three items in edit_menu that replace the selection with its transformed string through the text.rs undoable replace."
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:702 (transform), springboard/apps/textedit-desktop/src/main.rs:1726",
+   "note": "Edit > Transformations: Make Upper Case, Make Lower Case and Capitalize act on the selection as one undo entry (text.rs transformations_change_case_in_one_undo). Not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Speech",
@@ -303,9 +303,9 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Writing Direction",
    "status": "partial",
-   "bifrost": "springboard/ui/src/bidi.rs",
-   "note": "Audit 2026-10-13: kit model ui/src/bidi.rs (host tests) already provides this; the app does not use it yet.",
-   "wire": "Add a paragraph direction prop and run bifrost_ui::bidi in layout.rs; menu items under Text."
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:569 (set_writing_direction), springboard/apps/textedit-desktop/src/layout.rs:199 (x_offset), springboard/apps/textedit-desktop/src/rtf.rs:309 (\\rtlpar), springboard/apps/textedit-desktop/src/main.rs:1770",
+   "note": "Format > Text > Left to Right and Right to Left set the paragraph direction on the selected paragraphs (one undo entry); a right to left paragraph's left-aligned lines start at the right edge, and the direction is kept in RTF (\\rtlpar). Not done: the direction in HTML, .docx and .odt, and the bidi reordering of mixed-direction runs (the kit model ui/src/bidi.rs is not used by the app yet). Tested in text.rs and layout.rs unit tests; not yet verified on Midget.",
+   "wire": "Run bifrost_ui::bidi visual order in layout.rs for mixed runs; carry the direction in html.rs (dir), .docx (w:bidi) and .odt (style:writing-mode)."
   },
   {
    "feature": "Show/Hide Ruler, Copy/Paste Ruler",

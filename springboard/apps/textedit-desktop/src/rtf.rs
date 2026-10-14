@@ -306,6 +306,9 @@ fn paragraph_words(style: &Style) -> String {
     if style.space_after > 0 {
         words += &format!("\\sa{} ", style.space_after as u32 * 20);
     }
+    if style.rtl {
+        words += "\\rtlpar ";
+    }
     match style.list {
         ListKind::None => {}
         ListKind::Bullet => words += "\\pnlvlblt ",
@@ -595,12 +598,15 @@ impl Reader {
             "qc" => self.cur.align = Align::Center,
             "qr" => self.cur.align = Align::Right,
             "qj" => self.cur.align = Align::Justified,
+            "rtlpar" => self.cur.rtl = true,
+            "ltrpar" => self.cur.rtl = false,
             "pard" => {
                 self.cur.align = Align::Left;
                 self.cur.spacing = 0;
                 self.cur.list = ListKind::None;
                 self.cur.space_before = 0;
                 self.cur.space_after = 0;
+                self.cur.rtl = false;
             }
             "sb" => {
                 if let Some(twips) = param.filter(|&v| v >= 0) {
@@ -854,6 +860,17 @@ mod tests {
         let plain = read(b"{\\rtf1 \\strike \\super x\\plain y}");
         assert!(plain[0].style.strike && plain[0].style.script == 1);
         assert!(!plain[1].style.strike && plain[1].style.script == 0);
+    }
+
+    #[test]
+    fn right_to_left_paragraphs_round_trip_and_the_next_paragraph_starts_left_to_right() {
+        let rtl = Style { rtl: true, ..Style::default() };
+        let cells = vec![cell('a', rtl), cell('\n', rtl), cell('b', Style::default())];
+        let rtf = String::from_utf8(write(&cells)).unwrap();
+        assert!(rtf.contains("\\rtlpar"), "{rtf}");
+        let back = read(rtf.as_bytes());
+        assert!(back[0].style.rtl, "the first paragraph stays right to left");
+        assert!(!back[2].style.rtl, "a paragraph without the control word is left to right");
     }
 
     #[test]
