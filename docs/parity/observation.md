@@ -19,6 +19,13 @@ crates, no `unsafe`, no hardware or network.
    `Observations<T>` that records each later change; `try_next()` pops the oldest and `pending_len()` counts
    the waiting ones. Dropping it cancels the recording.
 
+4. **Model declaration macro (partial).** `observable_model!` in `springboard/sdk/src/observable_object.rs` declares a
+   struct whose fields are each an `Observable<T>`:
+   `observable_model! { pub struct Session { pub name: String = String::from("guest"), pub count: u32 = 0 } }`.
+   `Session::new()` sets the initial values, links every field to one `ObservableObjectPublisher`, and implements
+   `ObservableObject`, so a write to any field notifies `object_will_change`. The subscriptions live in the struct.
+   No app uses it yet. Built on parity/team-a-09; not yet verified on Midget.
+
 Tests added in the same module (run by the next build stage, not run here): re-entrant set order, durable
 cancellation during a change, tracking fires once for a read value, tracking fires for any of several reads,
 tracking without reads never fires, and pull-ordered observations with cancel on drop.
@@ -30,6 +37,7 @@ tracking without reads never fires, and pull-ordered observations with cancel on
 | `Observable<T>` with change delivery | `Observable` protocol, `ObservationRegistrar` |
 | `with_observation_tracking(apply, on_change)` | `withObservationTracking(_:onChange:)` |
 | `Observable::observations()`, `Observations<T>` | `Observations` (structure) |
+| `observable_model!` | Observable macro (declarative form only) |
 
 ## Differences from the official API
 

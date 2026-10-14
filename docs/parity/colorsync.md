@@ -15,6 +15,11 @@ modules, Supporting types and conventions).
   (none, straight, premultiplied). It gives channel counts, row and buffer sizes and a length check. `to_bytes`
   serialises the renderer's premultiplied `u32` pixels into any of those layouts. `from_bytes_u8` reads 8-bit
   buffers back. `unpremultiply`, `widen` and `narrow` are the helpers.
+- `springboard/render/src/rendering_intent.rs`: `Intent` (an alias of `cg::color::RenderingIntent`, extended with `ALL`,
+  `name` and `adapts_white`), `IntentTransform` (a conversion under one intent, with optional `BlackPoints`) and
+  `compensate_black`, the affine black point map. Perceptual compresses out-of-gamut colours toward the neutral grey
+  of their mean; saturation clips them; absolute uses `colorspace::matrix_absolute`, which skips white adaptation.
+  Nothing outside its tests calls it yet. Built on parity/team-a-09; not yet verified on Midget.
 - Both modules are registered in `springboard/render/src/lib.rs`, one line each. Both have unit tests covering
   the matrix math, transfer curves, white-point mapping, round trips, gamut clamping, buffer sizes and byte order.
 
@@ -27,6 +32,7 @@ Pure std: no crates, no `unsafe`, no hardware, no services.
 | `colorspace::Transform` | ColorSyncTransform (colour transforms, `ColorSyncTransformConvert` by matrix only) |
 | `colorspace::Space::DisplayP3`, `AdobeRgb`, `RommRgb`, `Srgb` | kColorSyncDisplayP3Profile, kColorSyncAdobeRGB1998Profile, kColorSyncROMMRGBProfile, kColorSyncSRGBProfile |
 | `pixel_layout::Layout`, `Depth`, `Alpha` | ColorSyncDataLayout, ColorSyncDataDepth, ColorSyncAlphaInfo |
+| `cg::color::RenderingIntent` (`rendering_intent::Intent`), `rendering_intent::BlackPoints` | Rendering intents, black point compensation |
 
 The names are only the concepts. The Apple symbols are not used in code (owner rule).
 
@@ -44,7 +50,8 @@ The names are only the concepts. The Apple symbols are not used in code (owner r
   the working spaces are not applied to them.
 - Decoded JPEG and PNG stay sRGB (`springboard/render/src/imgdec.rs`); wide-gamut input is not tagged.
 - No display profile or gamma ramp: `springboard/src/bare/kms.rs` reads `gamma_size` only.
-- No rendering intents or black point compensation.
+- Rendering intents and black point compensation exist as models (`rendering_intent.rs`), but an ICC profile's
+  own intent tables are not read, and no image path applies them yet.
 - No HDR pipeline (PQ, HLG, extended range, Headroom Adaptive Gain Curve metadata).
 - Colour management modules (CMM plug-ins) remain `n/a`.
 - No app-facing SDK wrapper: `springboard/sdk/src` does not expose `colorspace` or `pixel_layout` yet.
