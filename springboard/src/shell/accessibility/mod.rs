@@ -12,9 +12,11 @@
 use super::prefs::Prefs;
 
 pub mod actions;
+pub mod app_rotors;
 pub mod banner;
 pub mod dwell;
 pub mod earcons;
+pub mod guided;
 pub mod reader;
 pub mod shortcut;
 pub mod shortcut_panel;
@@ -42,6 +44,8 @@ pub struct AccessibilitySettings {
     pub button_shapes: bool,
     /// Dim Flashing Lights: apps that read the setting (the `accessibility_display` service) dim flagged sequences.
     pub dim_flashing_lights: bool,
+    /// Guided Access: a supervised app may ask for a single-app session (`guided`). Off until the user turns it on.
+    pub guided_access: bool,
     /// Screen Reader: a keyboard cursor walks the visible Settings page and speaks each element (`reader`).
     pub screen_reader: bool,
     /// index into `HOLD_MS`
@@ -53,7 +57,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, screen_reader: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new() };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new() };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -69,6 +73,7 @@ impl AccessibilitySettings {
             reduce_transparency: flag("a11y_reduce_transparency", d.reduce_transparency),
             button_shapes: flag("a11y_button_shapes", d.button_shapes),
             dim_flashing_lights: flag("a11y_dim_flashing_lights", d.dim_flashing_lights),
+            guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
@@ -86,6 +91,7 @@ impl AccessibilitySettings {
             ("a11y_reduce_transparency", flag(self.reduce_transparency)),
             ("a11y_button_shapes", flag(self.button_shapes)),
             ("a11y_dim_flashing_lights", flag(self.dim_flashing_lights)),
+            ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),

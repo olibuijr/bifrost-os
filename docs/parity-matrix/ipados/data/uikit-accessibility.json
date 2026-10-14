@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/uikit/accessibility-for-uikit",
  "macos_since": "",
  "status": "partial",
- "bifrost": "springboard/ui/src/ax.rs, springboard/src/shell/accessibility, springboard/src/shell/atspi, springboard/sdk/src/accessibility_display.rs, springboard/ui/src/switch_scan.rs",
- "summary": "An accessibility element map, a screen reader with earcons and speech, an AT-SPI bridge, zoom, display options and switch scanning exist. Touch exploration, custom rotors, accessibility containers and the assistive-technology status queries are missing or desktop oriented.",
+ "bifrost": "springboard/ui/src/ax.rs, springboard/src/shell/accessibility, springboard/src/shell/atspi, springboard/sdk/src/accessibility_display.rs, springboard/ui/src/switch_scan.rs, springboard/ui/src/ax_rotor.rs, springboard/sdk/src/accessibility_rotor.rs, springboard/sdk/src/guided_access.rs, springboard/src/shell/accessibility/guided.rs",
+ "summary": "An accessibility element map, a screen reader with earcons and speech, an AT-SPI bridge, zoom, display options and switch scanning exist. Custom rotors are partial: apps declare them and the rotor model exists, but the screen reader does not step through them yet. Guided Access is partial: apps request a single-app session with restrictions and the shell keeps the session, but Home, the Dock and other windows are not yet kept out of it. Touch exploration, accessibility containers and the assistive-technology status queries are missing or desktop oriented.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -31,9 +31,9 @@
   {
    "feature": "Rotors and navigation",
    "apple": "UIAccessibilityCustomRotor",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "item navigation by headings, links and custom rotors"
+   "bifrost": "springboard/ui/src/ax_rotor.rs, springboard/sdk/src/accessibility_rotor.rs, springboard/proto/src/axrotor.rs, springboard/src/shell/accessibility/app_rotors.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-accessibility; not yet verified on the tablet. Apps declare named rotors of Node ids with Ctx::set_custom_rotors; the shell keeps them cleaned to the caps and RotorCycle orders All, the standard rotors and the custom ones. Item navigation by headings and links is still missing"
   },
   {
    "feature": "Data table containers",
@@ -87,9 +87,9 @@
   {
    "feature": "Guided Access",
    "apple": "requestGuidedAccessSession",
-   "bifrost": "none",
-   "status": "gap",
-   "note": "single-app mode"
+   "bifrost": "springboard/src/shell/accessibility/guided.rs, springboard/sdk/src/guided_access.rs, springboard/proto/src/guided.rs, springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "built on parity/team-p-accessibility; not yet verified on the tablet. The session is one app with its restrictions, switched in Settings > Accessibility > Guided Access; the session options sheet and single-app enforcement are not built"
   },
   {
    "feature": "Large text sizes",
@@ -101,8 +101,10 @@
  ],
  "gaps": [
   "Touch exploration mode for the screen reader",
-  "Custom rotors and custom actions",
+  "Custom rotors: the screen reader's rotor keys do not yet step through app rotors (the cycle model is ready)",
+  "Custom actions for app elements (the window actions exist; apps do not declare custom actions)",
   "Discrete content size categories and accessibility sizes on top of the text scale",
-  "Zoom focus reporting from apps"
+  "Zoom focus reporting from apps",
+  "Guided Access session options sheet and enforcement that keeps Home, the Dock and other windows out of a session"
  ]
 }

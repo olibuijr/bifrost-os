@@ -17,9 +17,12 @@ pub use extras::{LoginOp, LoginStatus, StatusMenuItem};
 pub mod quicksearch;
 pub mod peek;
 pub mod axtext;
+pub mod axrotor;
+pub mod guided;
 pub mod touch;
 pub use bifrost_ui::touch::{Raw as RawTouch, Sample as TouchSample, Touch as TouchPoint, TouchEvent, TouchPhase, TouchTracker, TouchType};
-pub use bifrost_ui::ax::{AxMeta, AxText, Priority as AnnouncePriority};
+pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePriority};
+pub use guided::GuidedRestriction;
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
 pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
@@ -443,6 +446,10 @@ pub enum ToApp {
     LoginItemStatus { request: u32, status: LoginStatus },
     /// The user chose item `id` in the menu of status item `item` (`NativeStatusItem.menu`). Tag 0x1b1.
     StatusItemAction { item: u32, id: u32 },
+    /// Guided Access started (`active`) or ended (`ToShell::GuidedAccessRequest`). Tag 0x171.
+    GuidedAccessState { active: bool },
+    /// The user changed one restriction of the running Guided Access session (`UIGuidedAccessRestrictionDelegate`). Tag 0x172.
+    GuidedRestriction { id: String, allowed: bool },
     /// A `DistributedNotificationCenter` post by another app, relayed by the shell.
     DistNotify { name: String, user_info: Vec<(String, String)> },
     /// The answer to `ToShell::ServiceCall` `request`: `ok` with a JSON result, else an error message. Tag 0x1d2.
@@ -702,6 +709,10 @@ pub enum ToShell {
     AxMeta(Vec<AxMeta>),
     /// the announcement-requested accessibility notification: speak `text` now. Leaves as an AT-SPI `announcement` event. 0x212.
     Announce { text: String, priority: AnnouncePriority },
+    /// Custom rotors the screen reader steps through beside the standard ones (`bifrost_ui::ax_rotor`). Tag 0x213.
+    AxRotors(Vec<AxCustomRotor>),
+    /// Guided Access: `on` asks for a single-app session with these restrictions, `!on` ends it. Tag 0x170.
+    GuidedAccessRequest { on: bool, restrictions: Vec<GuidedRestriction> },
     /// `UNUserNotificationCenter.add`: answered with `NotificationStatus`.
     NotifyRequest { request: u32, req: NotifRequest },
     /// `removeDeliveredNotifications` / `removePendingNotificationRequests`; no ids removes all.
@@ -1158,6 +1169,7 @@ impl ToApp {
             }
             m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
             m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
+            m @ (ToApp::GuidedAccessState { .. } | ToApp::GuidedRestriction { .. }) => guided::encode_app(m, &mut b),
             m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
             m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
@@ -1284,6 +1296,7 @@ impl ToApp {
             t @ (50..=59 | 0x1d0..=0x1df) => rich::decode_app(t, &mut r)?,
             t @ 0x1b0..=0x1bf => extras::decode_app(t, &mut r)?,
             t @ 0x1c0..=0x1cf => quicksearch::decode_app(t, &mut r)?,
+            t @ 0x171..=0x172 => guided::decode_app(t, &mut r)?,
             t @ 0x1f0..=0x1ff => touch::decode_app(t, &mut r)?,
             t @ 100..=109 => workspace::decode_app(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
@@ -1409,6 +1422,8 @@ impl ToShell {
             m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => workspace::encode_shell(m, &mut b),
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
+            m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
+            m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
@@ -1830,6 +1845,8 @@ impl ToShell {
             t @ 0x1c0..=0x1cf => quicksearch::decode_shell(t, &mut r)?,
             t @ 0x230..=0x23f => workspace::decode_shell(t, &mut r)?,
             t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
+            t @ 0x213 => axrotor::decode_shell(t, &mut r)?,
+            t @ 0x170 => guided::decode_shell(t, &mut r)?,
             t @ 0x210..=0x21f => axtext::decode_shell(t, &mut r)?,
             t => return Err(DecodeError::UnknownTag(t)),
         })
