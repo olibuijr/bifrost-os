@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- The model is a library target (`src/lib.rs`), so its behaviour is tested through the public API in `tests/parity_app-dictionary.rs`: history, scope, preferences, text size, find, cross-reference words, settings drag order, the copy and print text, the folder URL and the dict: and x-dictionary: URLs.
+- The Dictionary matrix rows cite the test file; Services, New Window and the Midget checks stay open.
+
 ## 0.4.0
 
 - Copy Definition and Print send the same text: each dictionary's name above its definition, from one tested routine.

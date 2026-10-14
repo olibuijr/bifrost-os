@@ -14,8 +14,7 @@ use bifrost_ui::stardict::{load_library, Hit, Library};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-mod model;
-use model::{History, Prefs};
+use bifrost_dictionary::model::{self, History, Prefs};
 
 const MENU_LOOK_UP_CLIPBOARD: u32 = 1;
 const MENU_COPY_DEFINITION: u32 = 2;
