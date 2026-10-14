@@ -7,5 +7,5 @@ min_shell = "0.4.84"
 summary = "Your library, Radio stations and playlists, played by the audio service."
 category = "Entertainment"
 architecture = "x86_64-linux"
-permissions = ["storage", "network", "audio"]
+permissions = ["storage", "network", "audio", "documents"]
 window = "full-size"

@@ -46,9 +46,9 @@
    "area": "panel",
    "apple": "Up Next panel, song context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1258",
-   "note": "Reorder is move-up only; no drag, no History",
-   "wire": "Add drag reorder and a History list (played ids recorded in Music::sync_now_playing) to draw_queue (music.rs:1821)"
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:2513",
+   "note": "built on parity/team-d-music; not yet verified on Midget. A drag handle on each upcoming row, and a History page of recently started songs",
+   "wire": "History is the last 100 starts and opens from the Up Next toolbar, not beside the queue"
   },
   {
    "feature": "Playlists: new, add to, remove from, rename, delete",
@@ -91,9 +91,9 @@
    "area": "view",
    "apple": "View > Sort By, column headers",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1472",
-   "note": "The Songs header cycles one sort key; no column table",
-   "wire": "Add a column table (title, artist, album, time, plays) with header-click sort in draw_song_rows"
+   "bifrost": "springboard/apps/music-desktop/src/music/browse.rs:9",
+   "note": "built on parity/team-d-music; not yet verified on Midget. Sort orders now include Rating, Plays and Recently Played besides Title, Artist, Album and Recently Added",
+   "wire": "Still one sort key cycled by the toolbar button (View > Sort Songs By picks one); no column table with header-click sort"
   },
   {
    "feature": "Get Info editor (tags, artwork, lyrics)",
@@ -136,9 +136,9 @@
    "area": "menu",
    "apple": "File > Import",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/app.rs:425",
-   "note": "Library is a scan of ~/Music; opening a file plays it without adding it",
-   "wire": "Add File > Import that copies files into the library root and calls start_scan (music.rs:1177)"
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs:228",
+   "note": "built on parity/team-d-music; not yet verified on Midget. File > Import copies chosen songs into Music/Imported and scans again",
+   "wire": "Folders cannot be chosen yet, and files cannot be dropped onto the window"
   },
   {
    "feature": "Full player and MiniPlayer",
@@ -199,9 +199,9 @@
    "area": "integration",
    "apple": "output route picker",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/app.rs:139",
-   "note": "Follows route changes; no picker in the app",
-   "wire": "Add an output picker in the player bar that lists the audio devices service and sets the route"
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1825",
+   "note": "built on parity/team-d-music; not yet verified on Midget. The route button on the Now Playing sheet lists the output devices and sets the default output",
+   "wire": "No picker in the mini player bar; the choice is the system default output, not per app"
   },
   {
    "feature": "App menus: Song, Controls, View with shortcuts",

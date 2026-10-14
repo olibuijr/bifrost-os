@@ -2,7 +2,7 @@
 //! (back, title, sort, search, playlist actions, Up Next). The window draws them with the SDK kit
 //! (`widgets::source_list`, `widgets::toolbar`) beside and above the content pane `Music` draws.
 
-use super::marks::Shelf;
+use super::browse::Scope;
 use super::{Music, Page, Tab, Target};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -15,12 +15,19 @@ pub const BAR_SEARCH: u32 = 4;
 pub const BAR_RENAME: u32 = 5;
 pub const BAR_DELETE: u32 = 6;
 pub const BAR_QUEUE: u32 = 7;
+/// Edit Rules on a smart playlist, and History on the Up Next page.
+pub const BAR_EDIT: u32 = 8;
+pub const BAR_HISTORY: u32 = 9;
 
-/// Sidebar row ids: the Library tabs, then one row per playlist.
+/// Sidebar row ids: the Library tabs, the lists under Songs (Recently Added, Recently Played, Favourite Songs), then one
+/// row per playlist and one per smart playlist.
 pub const SIDE_TAB: u32 = 100;
-/// Smart list rows (Recently Added, Recently Played, Favourite Songs, Top Rated), in `Shelf::LISTED` order.
-pub const SIDE_SHELF: u32 = 150;
+pub const SIDE_SCOPE: u32 = 150;
 pub const SIDE_PLAYLIST: u32 = 200;
+pub const SIDE_SMART: u32 = 1000;
+
+/// The lists under Songs in the source list, with their symbols: every `Scope` but the whole library.
+const SCOPES: [(Scope, &str); 3] = [(Scope::RecentlyAdded, "clock"), (Scope::RecentlyPlayed, "arrow.clockwise"), (Scope::Favourites, "star")];
 
 const TABS: [(Tab, &str, &str); 5] = [
     (Tab::Artists, "Artists", "music.note"),
@@ -37,16 +44,22 @@ impl Music {
             Page::Root => match self.tab {
                 Tab::Radio if self.radio.error.is_some() && !self.radio.stations().is_empty() => "Radio (Offline)".into(),
                 Tab::Playlists => "Playlists".into(),
-                Tab::Songs if self.shelf != Shelf::All => self.shelf.label().into(),
+                Tab::Songs => self.scope.label().into(),
                 t => TABS.iter().find(|e| e.0 == t).map_or("", |e| e.1).into(),
             },
             Page::Artist(a) => self.library.artists[a].name.clone(),
             Page::Album(a) => self.library.albums[a].name.clone(),
             Page::Queue => "Up Next".into(),
+            Page::History => "History".into(),
             Page::Playlist(p) => match &self.renaming {
                 Some(typed) => format!("{typed}|"),
                 None => self.playlists.lists().get(p).map_or(String::new(), |l| l.name.clone()),
             },
+            Page::Smart(p) => match &self.renaming {
+                Some(typed) => format!("{typed}|"),
+                None => self.smart.lists().get(p).map_or(String::new(), |l| l.name.clone()),
+            },
+            Page::SmartEdit(p) => self.smart.lists().get(p).map_or(String::new(), |l| format!("{} Rules", l.name)),
         }
     }
 
@@ -71,12 +84,18 @@ impl Music {
         }
         items.push(ToolbarItem::custom(BAR_TITLE, "Title", title_w));
         items.push(ToolbarItem::flexible_space());
-        if let Page::Playlist(_) = self.page() {
+        if let Page::Smart(_) = self.page() {
+            items.push(ToolbarItem::button(BAR_EDIT, "Edit Rules"));
+        }
+        if let Page::Playlist(_) | Page::Smart(_) = self.page() {
             items.push(ToolbarItem::button(BAR_RENAME, if self.renaming.is_some() { "Done" } else { "Rename" }));
             items.push(ToolbarItem::icon(BAR_DELETE, "Delete Playlist", "trash"));
         }
         if self.page() == Page::Root && self.tab == Tab::Songs {
             items.push(ToolbarItem::icon(BAR_SORT, &format!("Sort By {}", self.sort.label()), "arrow.up.arrow.down"));
+        }
+        if self.page() == Page::Queue {
+            items.push(ToolbarItem::icon(BAR_HISTORY, "History", "clock"));
         }
         if !self.queue.items().is_empty() {
             items.push(ToolbarItem::icon(BAR_QUEUE, "Up Next", "list.bullet").selected(self.page() == Page::Queue));
@@ -89,9 +108,17 @@ impl Music {
 
     /// A toolbar button was pressed.
     pub fn bar_press(&mut self, id: u32, t: f64) {
+        self.commit_rule_edit();
         let target = match id {
             BAR_BACK => Target::Back,
             BAR_SORT => Target::Sort,
+            BAR_EDIT => Target::EditRules,
+            BAR_HISTORY => {
+                self.pages.push(Page::History);
+                self.scroll.jump_top();
+                self.dirty = true;
+                return;
+            }
             BAR_SEARCH if !self.searching => Target::Search,
             BAR_RENAME if self.renaming.is_some() => {
                 self.type_text("\n");
@@ -111,8 +138,12 @@ impl Music {
         self.activate(target, t);
     }
 
-    /// Esc: closes the search field or stops renaming.
+    /// Esc: closes the search field, stops renaming or drops a rule value being typed.
     pub fn cancel(&mut self, t: f64) -> bool {
+        if self.rule_edit.take().is_some() {
+            self.dirty = true;
+            return true;
+        }
         if self.renaming.take().is_some() {
             self.dirty = true;
             return true;
@@ -135,24 +166,31 @@ impl Music {
         let mut items = vec![SidebarItem::header("Library")];
         for (i, (tab, label, symbol)) in TABS.iter().enumerate() {
             if *tab == Tab::Radio {
-                for (k, shelf) in Shelf::LISTED.iter().enumerate() {
-                    items.push(SidebarItem::row(SIDE_SHELF + k as u32, shelf.label()).with_symbol(shelf.symbol()));
-                }
                 items.push(SidebarItem::header("Radio"));
             }
             if *tab == Tab::Playlists {
                 items.push(SidebarItem::header("Playlists"));
             }
             items.push(SidebarItem::row(SIDE_TAB + i as u32, label).with_symbol(symbol));
+            if *tab == Tab::Songs {
+                for (k, (scope, symbol)) in SCOPES.iter().enumerate() {
+                    items.push(SidebarItem::row(SIDE_SCOPE + k as u32, scope.label()).with_symbol(symbol));
+                }
+            }
         }
         for (p, list) in self.playlists.lists().iter().enumerate() {
             items.push(SidebarItem::row(SIDE_PLAYLIST + p as u32, &list.name).with_symbol("music.note"));
         }
+        for (p, list) in self.smart.lists().iter().enumerate() {
+            items.push(SidebarItem::row(SIDE_SMART + p as u32, &list.name).with_symbol("music.note.list"));
+        }
         let mut list = SourceList::new(items, 32., 30.);
+        let on_scope = self.page() == Page::Root && self.tab == Tab::Songs;
         let selected = match self.page() {
-            Page::Queue => None,
+            Page::Queue | Page::History => None,
             Page::Playlist(p) => Some(SIDE_PLAYLIST + p as u32),
-            _ if self.tab == Tab::Songs && self.shelf != Shelf::All => Shelf::LISTED.iter().position(|s| *s == self.shelf).map(|k| SIDE_SHELF + k as u32),
+            Page::Smart(p) | Page::SmartEdit(p) => Some(SIDE_SMART + p as u32),
+            _ if on_scope && self.scope != Scope::All => SCOPES.iter().position(|e| e.0 == self.scope).map(|k| SIDE_SCOPE + k as u32),
             _ => TABS.iter().position(|e| e.0 == self.tab).map(|i| SIDE_TAB + i as u32),
         };
         list.set_selected(selected);
@@ -163,8 +201,14 @@ impl Music {
     pub fn pick_sidebar(&mut self, id: u32, t: f64) {
         if (SIDE_TAB..SIDE_TAB + TABS.len() as u32).contains(&id) {
             self.activate(Target::Seg((id - SIDE_TAB) as usize), t);
-        } else if let Some(shelf) = id.checked_sub(SIDE_SHELF).and_then(|k| Shelf::LISTED.get(k as usize)).filter(|_| id < SIDE_PLAYLIST) {
-            self.show_shelf(*shelf, t);
+        } else if let Some((scope, _)) = id.checked_sub(SIDE_SCOPE).and_then(|k| SCOPES.get(k as usize)) {
+            // Seg(2) is the Songs tab; the scope is set after it, which leaves the whole library
+            self.activate(Target::Seg(2), t);
+            self.set_scope(*scope);
+        } else if let Some(p) = id.checked_sub(SIDE_SMART).map(|p| p as usize).filter(|&p| p < self.smart.lists().len()) {
+            self.activate(Target::Seg(4), t);
+            self.pages.push(Page::Smart(p));
+            self.scroll.jump_top();
         } else if let Some(p) = id.checked_sub(SIDE_PLAYLIST).map(|p| p as usize).filter(|&p| p < self.playlists.lists().len()) {
             self.activate(Target::Seg(4), t);
             self.pages.push(Page::Playlist(p));
