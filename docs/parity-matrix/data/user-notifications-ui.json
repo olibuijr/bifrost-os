@@ -17,9 +17,9 @@
     {
       "feature": "Custom actions and response handling",
       "apple": "didReceive(_:completionHandler:), UNNotificationContentExtensionResponseOption",
-      "bifrost": "springboard/sdk/src/usernotif.rs (Event::Response), springboard/src/shell/usernotif.rs",
+      "bifrost": "springboard/sdk/src/usernotif.rs (Event::Response), springboard/src/shell/usernotif.rs; springboard/sdk/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "category actions (button, destructive, foreground, text reply) and Response events exist; no content-extension response options or per-view action dismissal"
+      "note": "category actions (button, destructive, foreground, text reply) and Response events exist, and the action model and the text reply response are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs; no content-extension response options or per-view action dismissal"
     },
     {
       "feature": "Media play and pause in notifications",
@@ -31,9 +31,9 @@
     {
       "feature": "Delivering notifications to the notification UI",
       "apple": "UNNotificationContent delivery into the system banner, lock screen and Notification Center (framework context)",
-      "bifrost": "springboard/src/shell/notify/mod.rs (Shell post path), springboard/src/shell/notify/center.rs, springboard/src/shell/notify/banner.rs",
+      "bifrost": "springboard/src/shell/notify/mod.rs (Shell post path), springboard/src/shell/notify/center.rs, springboard/src/shell/notify/banner.rs; springboard/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "banner, lock screen stack and Notification Center exist; subtitle and body are shown but there is no sound, attachment or userInfo"
+      "note": "banner, lock screen stack and Notification Center exist; subtitle and body are shown but there is no sound, attachment or userInfo. The notification store behind the lists (grouping, clearing per app, the 50-entry limit, mute state) is tested headless in springboard/tests/parity_sdk-tests-04.rs; the drawn cards are not tested"
     }
   ],
   "gaps": [

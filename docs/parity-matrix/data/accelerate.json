@@ -38,9 +38,9 @@
     {
       "feature": "Compositing and blend modes",
       "apple": "vImage alpha blending and blend modes",
-      "bifrost": "springboard/src/shell/controls.rs:82 (blend, source-over with alpha)",
+      "bifrost": "springboard/src/shell/controls.rs:82 (blend, source-over with alpha); springboard/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "Source-over alpha blend only. No blend-mode set and no SDK-level image compositing."
+      "note": "Source-over alpha blend is tested headless in springboard/tests/parity_sdk-tests-04.rs (transparent, opaque and half alpha, and the monotonic red over black). No blend-mode set and no SDK-level image compositing."
     },
     {
       "feature": "Pixel format and colour conversion",
