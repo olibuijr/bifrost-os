@@ -1,5 +1,5 @@
 //! Reserved regions: parts of a view that another entity occupies, such as the on-screen keyboard or the window controls
-//! (the UIKit reserved region API).
+//! (the reference toolkit reserved region API).
 //!
 //! A view declares its regions in [`ReservedRegions`]. Layout asks for the area it may use with
 //! [`ReservedRegions::free_area`], and a pointer or touch event asks which region it lands in with

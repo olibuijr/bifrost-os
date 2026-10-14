@@ -1,4 +1,4 @@
-//! Declarative background configuration for views and list cells (the UIKit background configuration).
+//! Declarative background configuration for views and list cells (the reference toolkit background configuration).
 //!
 //! A configuration holds the fill, the stroke, the corner radius and the inset from the view frame, with a value per
 //! interaction state. [`BackgroundConfiguration::resolve`] returns the values for one state and the frame the background

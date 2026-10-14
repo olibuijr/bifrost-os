@@ -1,4 +1,4 @@
-//! Declarative content configuration for list cells (the UIKit list content configuration).
+//! Declarative content configuration for list cells (the reference toolkit list content configuration).
 //!
 //! A cell describes what it shows: a primary text, an optional secondary text, an optional image, the layout margins
 //! and the text colours per interaction state. [`ListContentConfiguration::layout`] places those parts inside the cell
