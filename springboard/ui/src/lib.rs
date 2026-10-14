@@ -1008,6 +1008,8 @@ pub mod route_action;
 pub mod route_picker;
 pub mod route_picker_view;
 pub mod display_manager;
+pub mod capture_view;
+pub mod capture_direction;
 pub mod webauth_session;
 pub mod verification_codes;
 pub mod photo_changes;
