@@ -66,9 +66,9 @@
   {
    "feature": "Formatting names and addresses",
    "apple": "CNContactFormatter, CNPostalAddressFormatter",
-   "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials; wired: springboard/ui/src/contact_display.rs (sort order wired in springboard/apps/contacts-desktop/src/contacts.rs and display_file.rs; name display order still missing); wired: springboard/apps/contacts-desktop/src/names.rs (NameOrder, shown); View menu in src/contacts.rs (main_menu, set_name_order); springboard/ui/src/contact_book.rs:format_name (full-name style, given or family first, required keys). No postal address formatter.",
+   "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials; wired: springboard/ui/src/contact_display.rs (sort order wired in springboard/apps/contacts-desktop/src/contacts.rs and display_file.rs); wired: springboard/apps/contacts-desktop/src/names.rs (NameOrder, shown); View menu in src/contacts.rs (main_menu, set_name_order); springboard/ui/src/contact_book.rs:format_name (full-name style, given or family first, required keys); springboard/ui/src/contact_address.rs (postal lines, city-first and postal-first styles); springboard/ui/tests/parity_sdk-complete-16.rs",
    "status": "partial",
-   "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Display name falls back name, company, phone, email, and initials are computed. Given-first and family-first full names, the nickname and organization fallback, and postal address lines in two layouts are tested headless in parity_sdk-complete-16.rs. Gap: no locale-aware name order or country-specific address layout, and the Contacts app does not yet print postal addresses through the formatter. Needs Midget for the visible name and address text."
   },
   {
    "feature": "vCard serialization",
