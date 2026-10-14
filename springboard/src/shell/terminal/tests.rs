@@ -454,3 +454,40 @@ fn paste_selection_and_help_report_through_the_menu() {
     sh.terminal_menu_action(27, 2100.0);
     assert_eq!(sh.terminal_ui.message, extras::HELP);
 }
+
+#[test]
+fn edit_title_renames_the_front_tab_and_empty_restores_it() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    assert_eq!(MENU[28], "Edit title");
+    sh.terminal_menu_action(28, 2000.0);
+    assert!(matches!(sh.terminal_ui.panel, Panel::Command));
+    sh.terminal_ui.command.as_mut().unwrap().set_text(&sh.ui, "deploy");
+    sh.terminal_run_command(2100.0);
+    assert!(matches!(sh.terminal_ui.panel, Panel::None));
+    assert_eq!(sh.term.as_ref().unwrap().title(0), "deploy");
+    sh.terminal_menu_action(28, 2200.0);
+    sh.terminal_ui.command.as_mut().unwrap().set_text(&sh.ui, "");
+    sh.terminal_run_command(2300.0);
+    assert!(!sh.term.as_ref().unwrap().has_custom_title());
+}
+
+#[test]
+fn mouse_reporting_toggle_applies_to_new_tabs() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    assert_eq!(MENU[29], "Allow mouse reporting");
+    assert!(sh.terminal_ui.mouse_reporting);
+    sh.terminal_menu_action(29, 2000.0);
+    assert!(!sh.terminal_ui.mouse_reporting);
+    assert_eq!(sh.terminal_ui.message, "Mouse reports to programs are off");
+}
+
+#[test]
+fn selection_rows_ask_for_a_selection_first() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    for (i, label) in [(30, "Search the web for selection"), (31, "Open man page for selection"), (32, "Save selected text to Files"), (33, "Use selection for find")] {
+        assert_eq!(MENU[i], label);
+        sh.terminal_ui.message.clear();
+        sh.terminal_menu_action(i, 2000.0);
+        assert!(sh.terminal_ui.message.contains("elect"), "row {i}: {}", sh.terminal_ui.message);
+    }
+}

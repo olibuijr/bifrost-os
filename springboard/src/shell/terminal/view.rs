@@ -233,6 +233,7 @@ impl Shell {
                 }
             }
             Panel::Processes => "Processes",
+            Panel::Command if self.terminal_ui.title_edit => "Edit Title",
             Panel::Command => "New Command",
             _ => "Terminal",
         };
@@ -593,6 +594,7 @@ impl Shell {
                         16 => self.terminal_ui.cursor.label().into(),
                         17 => String::from(if self.terminal_ui.blink { "On" } else { "Off" }),
                         18 => String::from(if self.terminal_ui.secure { "On" } else { "Off" }),
+                        29 => String::from(if self.terminal_ui.mouse_reporting { "On" } else { "Off" }),
                         _ => menu_key(i).map_or_else(|| "›".into(), String::from),
                     };
                     text(
@@ -672,7 +674,7 @@ impl Shell {
             );
         }
         if panel == Panel::Command {
-            button(s, ui, "Run", (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
+            button(s, ui, if self.terminal_ui.title_edit { "Set" } else { "Run" }, (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
         }
         let message = if !self.terminal_ui.message.is_empty() {
             self.terminal_ui.message.as_str()
@@ -681,6 +683,7 @@ impl Shell {
                 Panel::Connections => "Tap a host to connect in a new tab.",
                 Panel::Form => "Enter a name and host. Port defaults to 22.",
                 Panel::Processes => "Select a process to inspect or terminate.",
+                Panel::Command if self.terminal_ui.title_edit => "An empty title goes back to the automatic one.",
                 Panel::Command => "The command runs in a new tab that closes when it ends.",
                 _ => "Changes to text size and theme are saved automatically.",
             }

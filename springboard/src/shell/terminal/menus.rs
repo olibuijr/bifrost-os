@@ -255,6 +255,44 @@ impl Shell {
                 self.terminal_paste_or_say(text, "Select terminal text first", t);
             }
             27 => self.terminal_ui.message = extras::HELP.into(),
+            28 => self.terminal_open_title_edit(t),
+            29 => self.terminal_toggle_mouse_reporting(),
+            30 => {
+                let url = self.term.as_ref().and_then(|term| term.selected_text()).and_then(|text| selection::web_search_url(&text));
+                self.terminal_ui.message = match url {
+                    Some(url) => match self.desktop_open_url(&url, t) {
+                        Ok(()) => "Opened web search".into(),
+                        Err(e) => format!("Could not search: {e}"),
+                    },
+                    None => "Select terminal text first".into(),
+                };
+            }
+            31 => {
+                let argv = self.term.as_ref().and_then(|term| term.selected_text()).and_then(|text| selection::man_argv(&text));
+                match argv {
+                    Some(argv) => {
+                        let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+                        if self.spawn_terminal_tab(&refs, None) {
+                            self.terminal_close_panel(t);
+                        }
+                    }
+                    None => self.terminal_ui.message = "Select a man page name such as ls or printf(3)".into(),
+                }
+            }
+            32 => {
+                let text = self.term.as_ref().and_then(|term| term.selected_text());
+                self.terminal_ui.message = match text {
+                    Some(text) => {
+                        let path = self.data_dir.join("Files/terminal-selection.txt");
+                        match fs::create_dir_all(path.parent().unwrap()).and_then(|_| fs::write(&path, text)) {
+                            Ok(()) => "Saved to Files/terminal-selection.txt".into(),
+                            Err(e) => format!("Could not save: {e}"),
+                        }
+                    }
+                    None => "Select terminal text first".into(),
+                };
+            }
+            33 => self.terminal_use_selection_for_find(t),
             _ => {}
         }
     }

@@ -154,6 +154,10 @@ pub struct Terminal {
     /// the profile blinks the caret; `blink_on` is the phase the shell last set
     blink: bool,
     blink_on: bool,
+    /// a title the user typed (Edit Title); it replaces the program's title and the job name
+    custom_title: Option<String>,
+    /// View > Allow Mouse Reporting: when off, programs get no mouse or wheel reports
+    mouse_reporting: bool,
 }
 
 /// Half a blink period of the caret, in milliseconds (on for one half, off for the next).
@@ -192,7 +196,7 @@ impl Terminal {
         let pty = Pty::spawn(argv, &env, cols as u16, rows as u16, login.as_ref())?;
         let mut term = Term::new(cols, rows, history_lines());
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true })
+        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, custom_title: None, mouse_reporting: true })
     }
 
     /// The px rect the terminal occupies.
@@ -248,7 +252,7 @@ impl Terminal {
     /// Sends an xterm mouse report for `event` at cell `cell` when the program asked for it (?1000/?1002/?1003, ?1006);
     /// true when sent, so the caller skips its own selection handling.
     pub fn report_mouse(&mut self, event: termcore::mouse::MouseEvent, cell: (usize, usize)) -> bool {
-        if !self.term.mouse_mode().reports(event) { return false; }
+        if !self.mouse_reporting || !self.term.mouse_mode().reports(event) { return false; }
         let bytes = termcore::mouse::encode(event, cell.0, cell.1, self.term.mouse_sgr());
         self.write(&bytes);
         true
@@ -331,7 +335,7 @@ impl Terminal {
             self.selection = None;
         }
         // A program that asked for mouse reports (htop, vim, tmux with `mouse on`) gets wheel events, not arrow keys.
-        if self.term.mouse_mode().reports(termcore::mouse::MouseEvent::WheelUp) {
+        if self.mouse_reporting && self.term.mouse_mode().reports(termcore::mouse::MouseEvent::WheelUp) {
             let ev = if lines > 0 { termcore::mouse::MouseEvent::WheelUp } else { termcore::mouse::MouseEvent::WheelDown };
             let (cols, rows) = (self.term.cols(), self.term.rows());
             for _ in 0..lines.unsigned_abs().min(8) {
@@ -462,7 +466,25 @@ impl Terminal {
 
     /// Tab caption: the title the program set, else the running job's name, else `shell N`.
     pub fn title(&self, index: usize) -> String {
+        if let Some(title) = &self.custom_title {
+            return title.clone();
+        }
         termcore::tabs::label(self.term.title(), self.job().as_deref(), index as u32 + 1)
+    }
+
+    /// Sets the tab title the user typed; blank text goes back to the automatic title.
+    pub fn set_custom_title(&mut self, title: &str) {
+        let title = title.trim();
+        self.custom_title = (!title.is_empty()).then(|| title.chars().take(64).collect());
+    }
+
+    pub fn has_custom_title(&self) -> bool {
+        self.custom_title.is_some()
+    }
+
+    /// Turns mouse and wheel reports to the running program on or off.
+    pub fn set_mouse_reporting(&mut self, on: bool) {
+        self.mouse_reporting = on;
     }
 
     /// The job running in the foreground ("vim"), None at the prompt.
@@ -711,6 +733,27 @@ mod tests {
         let t0 = std::time::Instant::now();
         for _ in 0..1000 { std::hint::black_box(t.repaint()); }
         println!("BENCH term_repaint_undamaged {:.4} ms", t0.elapsed().as_secs_f64());
+    }
+
+    #[test]
+    fn a_typed_title_replaces_the_automatic_one_until_cleared() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        t.set_custom_title("  build  ");
+        assert_eq!(t.title(0), "build");
+        assert!(t.has_custom_title());
+        t.set_custom_title("   ");
+        assert!(!t.has_custom_title());
+        assert_eq!(t.title(1), "shell 2");
+    }
+
+    #[test]
+    fn mouse_reports_stop_when_reporting_is_off() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        t.feed(b"\x1b[?1000h\x1b[?1006h");
+        t.set_mouse_reporting(false);
+        assert!(!t.report_mouse(termcore::mouse::MouseEvent::WheelUp, (1, 1)));
+        t.set_mouse_reporting(true);
+        assert!(t.report_mouse(termcore::mouse::MouseEvent::WheelUp, (1, 1)));
     }
 
     #[test]
