@@ -79,6 +79,7 @@ pub mod time_zone;
 pub mod formatters;
 pub mod pref_domains;
 pub mod calendar_system;
+pub mod date_interval;
 pub mod bundle_resources;
 pub mod container_layout;
 pub mod package_layout;

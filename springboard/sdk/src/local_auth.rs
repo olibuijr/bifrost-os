@@ -40,6 +40,24 @@ pub enum BiometryType {
     OpticID,
 }
 
+/// The error domain name of [`LAError`] values on the wire and in logs.
+pub const ERROR_DOMAIN: &str = "bifrost.local-authentication";
+
+/// Every [`LAError`], in code order.
+const ALL_ERRORS: [LAError; 11] = [
+    LAError::AuthenticationFailed,
+    LAError::UserCancel,
+    LAError::UserFallback,
+    LAError::SystemCancel,
+    LAError::PasscodeNotSet,
+    LAError::BiometryNotAvailable,
+    LAError::BiometryNotEnrolled,
+    LAError::BiometryLockout,
+    LAError::AppCancel,
+    LAError::InvalidContext,
+    LAError::NotInteractive,
+];
+
 /// `LAError.Code`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LAError {
@@ -76,20 +94,29 @@ impl LAError {
 
     /// The error for a wire name; `None` for an unknown name.
     pub fn from_wire(name: &str) -> Option<LAError> {
-        const ALL: [LAError; 11] = [
-            LAError::AuthenticationFailed,
-            LAError::UserCancel,
-            LAError::UserFallback,
-            LAError::SystemCancel,
-            LAError::PasscodeNotSet,
-            LAError::BiometryNotAvailable,
-            LAError::BiometryNotEnrolled,
-            LAError::BiometryLockout,
-            LAError::AppCancel,
-            LAError::InvalidContext,
-            LAError::NotInteractive,
-        ];
-        ALL.into_iter().find(|e| e.wire() == name)
+        ALL_ERRORS.into_iter().find(|e| e.wire() == name)
+    }
+
+    /// The numeric code of the error in [`ERROR_DOMAIN`], as the reference platform numbers `LAError.Code`.
+    pub fn code(self) -> i64 {
+        match self {
+            LAError::AuthenticationFailed => -1,
+            LAError::UserCancel => -2,
+            LAError::UserFallback => -3,
+            LAError::SystemCancel => -4,
+            LAError::PasscodeNotSet => -5,
+            LAError::BiometryNotAvailable => -6,
+            LAError::BiometryNotEnrolled => -7,
+            LAError::BiometryLockout => -8,
+            LAError::AppCancel => -9,
+            LAError::InvalidContext => -10,
+            LAError::NotInteractive => -1004,
+        }
+    }
+
+    /// The error for a numeric code; `None` for a code this domain does not define.
+    pub fn from_code(code: i64) -> Option<LAError> {
+        ALL_ERRORS.into_iter().find(|e| e.code() == code)
     }
 }
 
