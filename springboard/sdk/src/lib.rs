@@ -280,6 +280,7 @@ pub mod image_filter;
 pub mod image_effects;
 pub use restoration::RestorableState;
 pub mod attributed;
+pub mod text_formatting;
 pub mod layer_kinds;
 pub mod richlayout;
 pub mod spellcheck;
