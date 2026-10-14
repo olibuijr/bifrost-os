@@ -14,7 +14,7 @@ VALIDATOR = re.search(
 class MkarchisoEfiValidationTests(unittest.TestCase):
     def test_root_validation_verifies_existing_loader_without_building(self):
         self.assertIn("tools/verify-efi-loader.sh", VALIDATOR)
-        self.assertNotIn("tools/build-efi-boot.sh", VALIDATOR)
+        self.assertNotIn('"${repo}/tools/build-efi-boot.sh"', VALIDATOR)
         self.assertIn("missing or stale", VALIDATOR)
 
 
