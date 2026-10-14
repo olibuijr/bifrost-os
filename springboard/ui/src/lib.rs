@@ -652,6 +652,7 @@ pub mod launch;
 pub mod detect;
 pub mod prefs_layout;
 pub mod search;
+pub mod notification_content;
 pub mod search_scope;
 pub mod scene_phase;
 pub mod text_attachment;

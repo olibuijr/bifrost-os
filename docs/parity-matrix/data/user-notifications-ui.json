@@ -10,9 +10,9 @@
     {
       "feature": "Notification content app extension (custom notification view)",
       "apple": "UNNotificationContentExtension, didReceive(_:), Customizing the Appearance of Notifications",
-      "bifrost": "springboard/src/shell/notify/mod.rs (start_banner, Card::new), springboard/src/shell/notify/banner.rs",
-      "status": "gap",
-      "note": "The shell draws every notification card itself. No app can supply a view controller or view for a delivered notification, and no extension process hosts one. Blocked on a notification content extension point in the shell."
+      "bifrost": "springboard/ui/src/notification_content.rs (ContentRegistry, clamp_height); springboard/src/shell/notify/mod.rs (start_banner, Card::new), springboard/src/shell/notify/banner.rs",
+      "status": "partial",
+      "note": "Per-category content view heights are validated and clamped, tested headless in springboard/ui/tests/parity_sdk-rest-07.rs. Gap: no extension process draws an app's view for a delivered notification, and the shell's cards do not read the registry yet."
     },
     {
       "feature": "Custom actions and response handling",

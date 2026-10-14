@@ -19,7 +19,7 @@
       "apple": "IOHIDDevice, IOUserHIDDevice, IOHIDInterface",
       "bifrost": "springboard/src/bare/input.rs:140 (Device::open, exclusive EVIOCGRAB), :178 (Device::read)",
       "status": "os",
-      "note": "Runs in the shell; apps never open devices"
+      "note": "Runs in the shell; apps never open devices. Blocker: Device::open takes an exclusive grab, so an app reader would receive no events, and the shell's decoded keys and touches reach apps through the runtime input enum instead."
     },
     {
       "feature": "Device discovery and matching by capability",
