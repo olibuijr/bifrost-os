@@ -4,6 +4,14 @@
 
 # Changelog
 
+## 0.6.2
+
+- Upstream deckcraft v0.6.1.
+  ## What's Changed
+  * ci: refactor workflows to use storytold/craft-common-actions by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/152
+  * Release workflow: pass the Azure signing secrets by @echelon in https://github.com/storytold/deckcraft/pull/181
+  **Full Changelog**: https://github.com/storytold/deckcraft/compare/v0.5.0...v0.6.1
+
 ## 0.6.1
 
 - Upstream deckcraft v0.6.1.
