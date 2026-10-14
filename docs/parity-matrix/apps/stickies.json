@@ -11,10 +11,10 @@
  "summary": {
   "features": 33,
   "parity": 5,
-  "partial": 24,
-  "gap": 3,
+  "partial": 25,
+  "gap": 2,
   "n/a": 1,
-  "coverage_pct": 53.1
+  "coverage_pct": 54.7
  },
  "features": [
   {
@@ -22,7 +22,7 @@
    "area": "menu",
    "apple": "MainMenu: File > New Note",
    "status": "parity",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:299",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1206",
    "note": "Cmd+N, cascades position (main.rs:81).",
    "wire": ""
   },
@@ -31,25 +31,25 @@
    "area": "menu",
    "apple": "MainMenu: File > Close; Localizable: discard-note confirmation",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:553",
-   "note": "Delete Sticky Note asks first (alert sheet, Cancel/Delete, Escape cancels) when the note has text, and the delete is undoable. Cmd+W is not bound: the shell keeps it for the window.",
-   "wire": "Add a confirm alert (\"discard this note?\") in main.rs action(MENU_DELETE) when note.text is non-empty, via the SDK alert/sheet API; map Cmd+W to the same path."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:995",
+   "note": "Delete Sticky Note asks first (alert sheet, Cancel/Delete, Escape cancels) when the note has text, and the delete is undoable. Cmd+W is not bound: the shell keeps it for the window. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Cmd+W is owned by the shell's window close; to route it here the shell would need a per-app close hook."
   },
   {
    "feature": "Import Text",
    "area": "menu",
    "apple": "MainMenu: File > Import Text…",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1",
-   "note": "Unchanged: plain text only, but the import is now one undo step. RTF import still needs the shared rich-text reader.",
-   "wire": "Accept public.rtf in import_panel (main.rs:184) and strip/convert via the textedit-desktop rtf.rs reader moved into a shared crate."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1456",
+   "note": "Plain text, and RTF files (public.rtf) become one note whose bold, italic, underline and strikethrough runs are kept (model.rs:726 runs_from_rtf, from the SDK attributed string reader). Text colours, lists and RTFD images are not imported yet. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Map the RTF foreground colours to Ink and keep list markers; RTFD images need the rich note model (see the rich text row)."
   },
   {
    "feature": "Export Text (current note)",
    "area": "menu",
    "apple": "MainMenu: File > Export Text…",
    "status": "parity",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:316",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1197",
    "note": "Writes .txt named after the note title.",
    "wire": ""
   },
@@ -58,18 +58,18 @@
    "area": "menu",
    "apple": "MainMenu: File > Export All to Notes…",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:317",
-   "note": "Unchanged: no BifrOSt notes-app import control exists to export into.",
-   "wire": "If a BifrOSt notes app exposes an import control method, add an \"Export All to Notes\" item that posts each note with its colour as folder name; keep the text export as is."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1201",
+   "note": "Unchanged: no BifrOSt notes-app import control exists to export into. The notes app's intents are reachable from the shell's Services only, not from another app.",
+   "wire": "If an SDK call from one app to another app's intent exists (or a shell routing for it), add an \"Export All to Notes\" item that posts each note with its colour as folder name; keep the text export as is."
   },
   {
    "feature": "Print note",
    "area": "menu",
    "apple": "MainMenu: File > Print…",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:466",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:826",
    "note": "File > Print... (Cmd+P) sends the focused note as plain text through the SDK print operation and reports the result as a notification. No page setup or print preview; not yet checked on the lab machine.",
-   "wire": "Add File > Print… (Cmd+P) in main_menu (main.rs:292) that sends the focused note text to the SDK print service, as textedit-desktop print.rs does."
+   "wire": "Add a page setup item that uses the SDK print info (ui print.rs PrintInfo) and print preview through the print panel."
   },
   {
    "feature": "Undo / Redo of edits and arrange",
@@ -77,53 +77,53 @@
    "apple": "MainMenu: Edit > Undo/Redo; Localizable: Undo/Redo Arrange",
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/history.rs:1",
-   "note": "Snapshot undo/redo (history.rs) for typing runs, move/resize, delete, colour, style, collapse, arrange, import; named Edit titles via commands()/undo_titles() (main.rs:867). Caret and selection moves are not steps.",
-   "wire": "Add an undo stack of Board snapshots in StickiesApp (push before every mutating action/key in main.rs), handle Command::Undo/Redo in event() (main.rs:263)."
+   "note": "Snapshot undo/redo (history.rs) for typing runs, move/resize, delete, colour, style, collapse, arrange, import, replace, add link and correct spelling; named Edit titles via undo_name (main.rs:148). Caret and selection moves are not steps.",
+   "wire": "Undo of a style change restores the whole board snapshot; a per-range undo would store only the changed runs."
   },
   {
    "feature": "Cut / Copy / Paste / Select All",
    "area": "menu",
    "apple": "MainMenu: Edit > Cut, Copy, Paste, Select All",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:638",
-   "note": "Cut, Copy, Paste and Select All act on the selection (Copy without a selection copies the whole note); both Edit menu items and the shell Command route. Plain text only.",
-   "wire": "Needs a caret+selection model in Note (model.rs:193 says no caret yet); reuse textedit-desktop text.rs buffer for note bodies, then wire Command::Cut/SelectAll."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1092",
+   "note": "Cut, Copy, Paste and Select All act on the selection (Copy without a selection copies the whole note); both Edit menu items and the shell Command route. Paste is plain text: pasted text takes the style before the caret.",
+   "wire": "Carry styled runs on the pasteboard (SDK pasteboard rich types) so a paste keeps bold and italic; Paste and Match Style then drops them."
   },
   {
    "feature": "Caret and text selection inside a note",
    "area": "view",
    "apple": "SNDocument text view",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:391",
-   "note": "Caret and selection (byte offsets, TextBuffer) with typing at the caret, click placement, drag selection, double-press word select, arrows, Home/End, Delete (main.rs:338, board.rs:93). No Shift+arrow extension or word/line jumps: the shell sends no modifier for plain keys.",
-   "wire": "Replace Note.text String editing with a TextBuffer (caret, selection, arrows, click-to-place) shared with textedit-desktop text.rs; hit-test clicks in touch() Part::Body."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:604",
+   "note": "Caret and selection (byte offsets, TextBuffer) with typing at the caret, click placement, drag selection, double-press word select, arrows, Home/End, Delete. Cmd-Left and Cmd-Right go to the ends of the line, Cmd-Up and Cmd-Down to the ends of the text, and Cmd with Shift extends the selection (chord keys, main.rs:604). Plain Shift+arrow and Option+arrow word jumps are not possible: the shell sends no modifier for plain keys.",
+   "wire": "Shift+arrow and Option+arrow need the shell to send Shift and Alt with plain arrow keys (the proto CHORD flags only cover Ctrl and Cmd chords)."
   },
   {
    "feature": "Paste and Match Style / Copy Style / Paste Style",
    "area": "menu",
    "apple": "MainMenu: Edit > Paste and Match Style; Format > Font > Copy/Paste Style",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:494",
-   "note": "Paste and Match Style (plain paste), Copy Style and Paste Style move the whole-note style between notes. Per-run styling is not there.",
-   "wire": "After per-run styling exists, add these items to an Edit/Font menu in main_menu."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:860",
+   "note": "Copy Style takes the style at the caret (model.rs current_style); Paste Style applies it to the selection, or the whole note, and keeps the note's size (Style::take_attributes). Paste and Match Style is the plain paste, which already takes the style before the caret. Not yet verified on Midget.",
+   "wire": "Paste Style from another app's rich text needs the rich pasteboard (see the Cut / Copy row)."
   },
   {
    "feature": "Find / Replace / Find Next / Use Selection for Find",
    "area": "menu",
    "apple": "MainMenu: Edit > Find submenu",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:517",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:624",
    "note": "Find... (Cmd+F) opens an in-app find bar, searches all notes (ASCII case-insensitive), Cmd+G / Cmd+Shift+G step and select the match, Use Selection for Find (Cmd+E). Replace: Tab in the bar moves to a replace field, Return (or Edit > Replace) replaces the selected match and steps on, Edit > Replace All replaces in every note; one undo step each. Built on parity/team-d-stickies; not yet verified on Midget.",
-   "wire": "Verify Replace and Replace All on Midget; Find still uses the in-app bar rather than the SDK find bar."
+   "wire": "Add an Ignore Case switch and Replace in Current Note / All Notes choices; the SDK text find model (controls textfind.rs) has the case and whole-word options."
   },
   {
    "feature": "Spelling and Grammar / Substitutions / Transformations",
    "area": "menu",
    "apple": "MainMenu: Edit > Spelling and Grammar, Substitutions, Transformations",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:665",
-   "note": "Transformations only: Make Upper Case, Make Lower Case, Capitalise on the selection. No spelling check or substitutions.",
-   "wire": "Reuse textedit-desktop spell.rs for check-as-you-type underline in draw_body (board.rs:98); add Make Upper/Lower/Capitalise items operating on the selection."
+   "bifrost": "springboard/apps/stickies-desktop/src/spell.rs:99",
+   "note": "Spelling and Grammar: Check Spelling While Typing marks misspelled words with a wavy rule (board.rs:347), Check Document Now selects the next one, Correct Spelling replaces the word at the caret, Learn and Ignore Spelling act on it, and Correct Spelling Automatically fixes a word when a space or punctuation follows it (spell.rs:57). Data Detectors are marked (see the links row). Substitutions: Smart Quotes and Smart Dashes (substitute.rs:23). Transformations: Make Upper Case, Make Lower Case, Capitalise. No grammar check, no Show Spelling and Grammar panel, no Text Replacement. Not yet verified on Midget.",
+   "wire": "Grammar checking and the Show Spelling and Grammar panel need an SDK grammar service; Text Replacement needs the SDK text replacement table."
   },
   {
    "feature": "Speech (start/stop speaking)",
@@ -139,52 +139,52 @@
    "area": "menu",
    "apple": "MainMenu: Font > Bold, Italic",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:580",
-   "note": "Unchanged whole-note toggles (Italic is stored but not drawn slanted); undoable.",
-   "wire": "Move to per-run attributes once selection exists (see caret row)."
+   "bifrost": "springboard/apps/stickies-desktop/src/board.rs:229",
+   "note": "Bold and Italic apply to the selection (or the whole note), per character (model.rs:302 Style, toggle_style main.rs:873). Bold is a heavier weight per run; Italic is drawn leaning (board.rs:261 slant) rather than with a true italic face.",
+   "wire": "Use a real italic face once the renderer selects one per run."
   },
   {
    "feature": "Underline / Strikethrough / Outline",
    "area": "menu",
    "apple": "MainMenu: Font > Underline, Strikethrough, Outline",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:580",
-   "note": "Underline (Cmd+U) and Strikethrough, whole-note, drawn in board.rs:160. Outline is not done.",
-   "wire": "Add Underline (Cmd+U) and Strikethrough to Style in model.rs and draw them in board.rs draw_body; menu items next to Bold/Italic."
+   "bifrost": "springboard/apps/stickies-desktop/src/board.rs:272",
+   "note": "Underline (Cmd+U), Strikethrough and Outline apply per selection (drawn in draw_body; Outline rings the letters, board.rs:229 draw_run). Built on the per-character styles of this round; not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Bigger / Smaller text and Show Fonts",
    "area": "menu",
    "apple": "MainMenu: Font > Bigger, Smaller, Show Fonts",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:590",
-   "note": "Bigger/Smaller (Cmd+= / Cmd+-) step the three sizes. No font family and no Show Fonts panel (no SDK font panel).",
-   "wire": "Map Cmd+= / Cmd+- to stepping TextSize; add a font family field to Style and a Show Fonts item using the SDK font panel."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1027",
+   "note": "Bigger/Smaller (Cmd+= / Cmd+-) step the three sizes of the whole note; size is per note, not per run. No font family and no Show Fonts panel (the SDK font panel model has no per-run family drawing).",
+   "wire": "Add a font family field to Style and a Show Fonts item using the SDK font panel once the renderer selects a face per run."
   },
   {
    "feature": "Kern / Ligature / Baseline (super/subscript)",
    "area": "menu",
    "apple": "MainMenu: Font > Kern, Ligature, Baseline",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs per-run attributes.",
-   "wire": "Low value; add after per-run attributes: baseline offset attribute drawn in board.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/board.rs:100",
+   "note": "Kern and Ligature: Use Default, Use None, Use All per selection, set as font features (board.rs:100 features). Baseline: Use Default, Superscript, Subscript per selection, drawn shifted (model.rs:158 Baseline). Raise, Lower, Tighten and Loosen are not done.",
+   "wire": "Raise and Lower move the baseline by points; Tighten and Loosen change tracking. Both need a point value on Style."
   },
   {
    "feature": "Text colour (Show Colours)",
    "area": "menu",
    "apple": "MainMenu: Font > Show Colours",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:605",
-   "note": "Font > Text Colour with five preset colours, whole-note. No colour panel (SDK has none).",
-   "wire": "Add a text colour attribute and a Show Colours item using the SDK colour panel."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1040",
+   "note": "Font > Text Colour with five preset colours, per selection. No colour panel (the SDK ColorPanel model has no shell panel to open).",
+   "wire": "Add a text colour attribute with a custom value and a Show Colours item using the SDK colour panel once it has a shell panel."
   },
   {
    "feature": "Note colours (six colours)",
    "area": "menu",
    "apple": "MainMenu: Colour > Yellow, Blue, Green, Pink, Purple, Grey",
    "status": "parity",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:312",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1062",
    "note": "Six colours; set differs (Orange/Teal instead of Blue/Grey).",
    "wire": ""
   },
@@ -193,18 +193,18 @@
    "area": "menu",
    "apple": "Localizable: Customize Color…, Customized Color",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:547",
-   "note": "Colour > Custom Colour... opens an in-app bar for a #RRGGBB value with a live swatch; Return applies it as one undo step. The colour is saved with the note (model.rs rgb field, JSON \"rgb\"), carried to new notes by Use as Default and checked in the menu. There is no hue wheel or slider panel: the SDK has no colour panel. Built on parity/team-d-stickies; not yet verified on Midget.",
-   "wire": "Add a hue wheel or slider panel when the SDK gets a colour panel (ui panels.rs ColorPanel has the model); until then the hex bar is the entry."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:783",
+   "note": "Colour > Custom Colour... opens an in-app bar for a #RRGGBB value with a live swatch; Return applies it as one undo step. The colour is saved with the note (model.rs rgb field, JSON \"rgb\"), carried to new notes by Use as Default and checked in the menu. There is no hue wheel or slider panel: the SDK has no shell colour panel. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": "Add a hue wheel or slider panel using the SDK ColorPanel model (ui panels.rs hsb_to_rgb) once a shell colour panel exists; until then the hex bar is the entry."
   },
   {
    "feature": "Use as Default (colour/font for new notes)",
    "area": "menu",
    "apple": "MainMenu: Font/Colour > Use as Default",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:616",
-   "note": "Font > Use as Default stores the focused note's colour and style on the board (saved in the file); new notes take them (model.rs:540).",
-   "wire": "Store default colour+style in the board file; Board::new_note (model.rs:240) applies it; add a \"Use as Default\" item."
+   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:815",
+   "note": "Font > Use as Default stores the focused note's colour and the style at its caret on the board (saved in the file); new notes take them. The caret style follows the per-character styles of this round.",
+   "wire": "Store the default font family once a font family attribute exists."
   },
   {
    "feature": "Float on Top",
@@ -212,34 +212,34 @@
    "apple": "MainMenu: Window > Float on Top",
    "status": "gap",
    "bifrost": "",
-   "note": "Not done: apps have no window-level API and notes share one window.",
-   "wire": "Either make each note its own shell window with an always-on-top level (SDK window level) or offer Float on Top for the board window via ctx window API; add a checked item."
+   "note": "Not done: the shell protocol has no window level message, so an app cannot ask for an always-on-top window. Notes share one window.",
+   "wire": "Add a window level message to the shell protocol (proto) and the window manager; then make each note its own window or offer Float on Top for the board window, with a checked item."
   },
   {
    "feature": "Translucent",
    "area": "menu",
    "apple": "MainMenu: Window > Translucent",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:623",
-   "note": "Window > Translucent is a checked per-note toggle, saved in the file (board.rs:127).",
-   "wire": "Add a per-note translucent flag with a checked Window > Translucent item; board.rs uses it instead of the fixed rule."
+   "bifrost": "springboard/apps/stickies-desktop/src/board.rs:190",
+   "note": "Window > Translucent is a checked per-note toggle, saved in the file (model.rs translucent flag). draw_note uses it instead of a fixed rule (board.rs:195 see_through). Not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Collapse / Expand note (and all)",
    "area": "menu",
    "apple": "MainMenu: Window > Collapse, Collapse All, Expand All; title-bar double-click",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:576",
-   "note": "Collapse All, Expand All and a double press on the title bar (main.rs:307) added.",
-   "wire": "Add Collapse All / Expand All items iterating board.notes; handle double-tap on Part::Title in touch() to toggle."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:471",
+   "note": "Collapse All, Expand All and a double press on the title bar (main.rs:471) added. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "wire": ""
   },
   {
    "feature": "Arrange By (colour, content, date, location) with undo",
    "area": "menu",
    "apple": "MainMenu: Window > Arrange By; Localizable: Undo Arrange",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:635",
-   "note": "Window > Arrange By Colour, Content, Date Created, Date Modified and Location sorts and lays the notes out in rows (model.rs), undoable; Location reads the notes in rows from the top, left to right. Built on parity/team-d-stickies; not yet verified on Midget.",
+   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:897",
+   "note": "Window > Arrange By Colour, Content, Date Created, Date Modified and Location sorts and lays the notes out in rows (model.rs arrange), undoable; Location reads the notes in rows from the top, left to right. Built on parity/team-d-stickies; not yet verified on Midget.",
    "wire": "Verify the five orders and the undo step on Midget."
   },
   {
@@ -247,16 +247,16 @@
    "area": "menu",
    "apple": "MainMenu: Window > Zoom, Minimise, Bring All to Front",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:628",
-   "note": "Window > Zoom Sticky Note toggles the focused note between its size and a large size (model.rs:460). Minimise and Bring All to Front stay with the shell.",
-   "wire": "Add a per-note Zoom that toggles the focused note between its size and a large size (store previous frame in Note)."
+   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:712",
+   "note": "Window > Zoom Sticky Note toggles the focused note between its size and a large size (model.rs toggle_zoom). Minimise and Bring All to Front stay with the shell.",
+   "wire": ""
   },
   {
    "feature": "Move and resize notes",
    "area": "view",
    "apple": "SNDocument window",
    "status": "parity",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:111",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:382",
    "note": "Drag title to move, grip to resize.",
    "wire": ""
   },
@@ -266,7 +266,7 @@
    "apple": "Saved state / StickieDocument type",
    "status": "parity",
    "bifrost": "springboard/apps/stickies-desktop/src/store.rs:30",
-   "note": "Saved on every change, restored at launch; broken file moved aside.",
+   "note": "Saved on every change, restored at launch; broken file moved aside. The file keeps one style per run of text (model.rs encode, \"runs\").",
    "wire": ""
   },
   {
@@ -274,7 +274,7 @@
    "area": "view",
    "apple": "Localizable: Created/Modified tooltip",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:808",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1342",
    "note": "The focused note's created and modified dates (UTC, dates.rs) show as disabled rows in the Window menu; there is no hover tooltip input yet.",
    "wire": "Show a hover tooltip or a footer line with created/modified dates on the title bar via the SDK tooltip API."
   },
@@ -283,18 +283,18 @@
    "area": "menu",
    "apple": "MainMenu: Edit > Add Link…, Substitutions > Smart Links, Data Detectors",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/model.rs:474",
-   "note": "URLs (http, https, www.) are underlined (board.rs:160); double-press one or choose Edit > Open Link to open it (main.rs:697). No Add Link, no other data detectors.",
-   "wire": "Detect URLs in note text, underline them in board.rs, open on Cmd-click via ctx.open_url."
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:771",
+   "note": "Add Link... (Cmd+K) inserts a typed web address as text in place of the selection (one undo step; the note then underlines it). URLs (http, https, www.) are underlined (board.rs draw_body) and a double press or Edit > Open Link opens them. Data Detectors: Dates, Addresses and Phone Numbers are marked with a dotted rule when switched on (spell.rs marks, detect kinds from prefs.rs). No Cmd-click, no Smart Links substitution that turns typed text into a link.",
+   "wire": "Cmd-click needs modifiers on touch input; Smart Links would convert typed addresses as they are typed."
   },
   {
    "feature": "Make Sticky service (selection to new note)",
    "area": "integration",
    "apple": "Info.plist NSServices: Make Sticky (Cmd+Shift+Y)",
    "status": "partial",
-   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1037",
-   "note": "The shell's Services menu routes Make New Sticky Note to a create-sticky intent, which the app now declares (manifest.toml) and performs: a note holding the text is added in front as one undo step, or written to the saved board when the app has not loaded it yet. No Cmd+Shift+Y key is registered. Built on parity/team-d-stickies; not yet verified on Midget.",
-   "wire": "Register the Cmd+Shift+Y key for the service in the shell Services menu; the intent is in place."
+   "bifrost": "springboard/src/shell/hwkeys.rs:252",
+   "note": "The shell's Services menu routes Make New Sticky Note to a create-sticky intent, which the app declares (manifest.toml) and performs (main.rs:358 create_sticky): a note holding the text is added in front as one undo step, or written to the saved board when the app has not loaded it yet. Shift+Cmd+Y runs the service (hwkeys.rs MakeSticky, dispatched next to Look Up). Built on parity/team-d-stickies; the key is not yet verified on Midget.",
+   "wire": "Check the Shift+Cmd+Y chord on Midget against the reference app's key."
   },
   {
    "feature": "Rich text body with images (RTFD notes)",
@@ -302,8 +302,8 @@
    "apple": "Info.plist StickieDocument; en.lproj welcome .rtfd notes",
    "status": "gap",
    "bifrost": "",
-   "note": "Not done: long term, needs a shared rich-text model.",
-   "wire": "Long-term: store notes as rich runs; shared rich-text model with textedit-desktop."
+   "note": "Not done: notes hold text with one style per character. Images and attachments need the rich note model (the SDK AttributedString and RichTextView types have a richer model than the note body).",
+   "wire": "Long-term: store the note body as an AttributedString (SDK attributed.rs) with attachments; this also covers RTF export."
   },
   {
    "feature": "Help",

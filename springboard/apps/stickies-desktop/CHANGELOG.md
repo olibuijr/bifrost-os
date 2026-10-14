@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+- Styles apply to a selection. Bold, Italic, Underline, Strikethrough, Outline and Text Colour change only the selected text (or the whole note when nothing is selected), and typed text takes the style before the caret. Each run is drawn with its own weight, slant, outline and decorations.
+- Font > Outline draws the letters ringed in the text colour. Font > Baseline sets Superscript or Subscript, and Font > Kern and Font > Ligature turn kerning and ligatures off or on for the run.
+- Italic text is drawn leaning, not only marked.
+- Copy Style and Paste Style take the style at the caret and keep the size of the note they land in.
+- Spelling and Grammar: Check Spelling While Typing marks misspelled words with a wavy rule, Check Document Now selects the next one, Correct Spelling replaces the word at the caret, Learn Spelling and Ignore Spelling act on it, and Correct Spelling Automatically fixes a word when a space or punctuation follows it. Spelling and Grammar switches are kept across launches.
+- Substitutions: Smart Quotes turns typed quotes into curly quotes, and Smart Dashes turns a second typed hyphen into an em dash.
+- Data Detectors: Dates, Addresses and Phone Numbers are marked with a dotted rule. Add Link inserts a typed web address, which the note underlines.
+- Command arrows: Cmd-Left and Cmd-Right move to the ends of the line, Cmd-Up and Cmd-Down to the ends of the text, and Shift with them extends the selection.
+- File > Import Text reads rich text files: bold, italic, underline and strikethrough are kept.
+- Shift+Cmd+Y makes a new sticky note from the selected text (the Make New Sticky Note service).
+
 ## 0.4.0
 
 - Custom colours: Colour, Custom Colour... opens a bar for a `#RRGGBB` value with a live swatch; Return applies it. A custom colour is saved with the note, undoable, and carried to new notes by Use as Default.
