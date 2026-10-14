@@ -2,6 +2,7 @@
 
 ## 0.5.4 — 2026-10-14
 
+- Require shell 0.8.0 for the launcher's camera permission.
 - Keep mode, timer, shutter and export hit targets inside the controls bar without overlap as the window narrows.
 - Document the intentional white camera flash and shutter face fills.
 
