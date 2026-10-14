@@ -24,9 +24,9 @@
     {
       "feature": "Cross-process broadcast messages",
       "apple": "Distributed notifications (NSDistributedNotificationCenter-style delivery; Distributed framework docs do not cover it directly)",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter, post_with, add_observer); springboard/src/shell/apphost.rs (ToShell::DistPost relay); docs/bifrost-ui.md; springboard/sdk/tests/parity_sdk-tests-01d.rs",
+      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter, post_with, post_checked, check_user_info, add_observer); springboard/src/shell/apphost.rs (ToShell::DistPost relay); docs/bifrost-ui.md; springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-40.rs",
       "status": "partial",
-      "note": "The shell relays posts to every running app; user_info is string to string with at most 32 entries. Headless tests: a_distributed_post_reaches_local_observers_and_is_queued_for_the_shell_sorted, a_process_local_distributed_post_sends_nothing_to_the_shell. No suspensionBehavior and no deliverImmediately; a plain post stays process-local."
+      "note": "The shell relays posts to every running app. post_checked refuses a user_info over 32 entries or with a value over 1024 characters before anything is sent, tested headless in springboard/sdk/tests/parity_sdk-complete-40.rs. Headless tests also cover a_distributed_post_reaches_local_observers_and_is_queued_for_the_shell_sorted and a_process_local_distributed_post_sends_nothing_to_the_shell. Gap: no suspensionBehavior and no deliverImmediately, so a post to an app that is not running is missed, and a plain post stays process-local."
     },
     {
       "feature": "Remote call errors",

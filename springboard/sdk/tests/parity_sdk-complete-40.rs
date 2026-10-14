@@ -1,7 +1,10 @@
 //! Parity sdk-complete-40: headless tests for the remote device model (name, class, paired, connected) and for the
-//! contact search items. They use the models only: no radio, no socket, no index service.
+//! contact search items and the distributed post limits. They use the models only: no radio, no socket, no index service.
+
+use std::collections::HashMap;
 
 use bifrost_app::bluetooth_devices::{DeviceList, RemoteDevice};
+use bifrost_app::notification::{check_user_info, DistributedPostError, MAX_USER_INFO_ENTRIES, MAX_USER_INFO_VALUE_CHARS};
 use bifrost_app::contact_index::{self, DOMAIN};
 use bifrost_core::bt_address::{BdAddr, ClassOfDevice};
 use bifrost_ui::contact_book::{Contact, LabeledValue};
@@ -138,4 +141,44 @@ fn a_batch_keeps_the_indexable_contacts_in_order() {
     let items = contact_index::searchable_items(&batch);
     let ids: Vec<&str> = items.iter().map(|i| i.unique_identifier.as_str()).collect();
     assert_eq!(ids, vec!["contacts.c-ada", "contacts.c-grace"]);
+}
+
+fn info_with(entries: usize) -> HashMap<String, String> {
+    (0..entries).map(|i| (format!("k{i:02}"), "v".to_string())).collect()
+}
+
+#[test]
+fn a_user_info_of_32_entries_is_accepted_and_33_is_refused() {
+    assert_eq!(check_user_info(&info_with(MAX_USER_INFO_ENTRIES)), Ok(()));
+    assert_eq!(check_user_info(&info_with(MAX_USER_INFO_ENTRIES + 1)), Err(DistributedPostError::TooManyEntries(33)));
+}
+
+#[test]
+fn a_value_is_measured_in_characters_not_bytes() {
+    let at_limit = HashMap::from([("body".to_string(), "\u{e9}".repeat(MAX_USER_INFO_VALUE_CHARS))]);
+    assert_eq!(check_user_info(&at_limit), Ok(()), "1024 accented letters are 2048 bytes but still 1024 characters");
+}
+
+#[test]
+fn a_value_one_character_over_the_limit_names_its_key_and_length() {
+    let over = HashMap::from([("body".to_string(), "x".repeat(MAX_USER_INFO_VALUE_CHARS + 1))]);
+    assert_eq!(
+        check_user_info(&over),
+        Err(DistributedPostError::ValueTooLong { key: "body".to_string(), chars: 1025 })
+    );
+}
+
+#[test]
+fn when_several_values_are_too_long_the_first_key_in_sorted_order_is_named() {
+    let long = "x".repeat(MAX_USER_INFO_VALUE_CHARS + 5);
+    let both = HashMap::from([("zeta".to_string(), long.clone()), ("alpha".to_string(), long)]);
+    match check_user_info(&both) {
+        Err(DistributedPostError::ValueTooLong { key, .. }) => assert_eq!(key, "alpha"),
+        other => panic!("expected a value error, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_empty_user_info_is_accepted() {
+    assert_eq!(check_user_info(&HashMap::new()), Ok(()));
 }

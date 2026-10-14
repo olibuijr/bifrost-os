@@ -120,8 +120,9 @@ impl Drop for ObserverToken {
 /// `post` is process-local (tests, single-app use). `post_with(ctx, ..)` also sends `ToShell::DistPost`, which the
 /// shell forwards as `ToApp::DistNotify` to every other running app; the runtime delivers it to observers on the
 /// main thread. The sender's own observers are notified synchronously. Names live in their own namespace, apart from
-/// [`NotificationCenter`]. Gaps: `user_info` is string to string, capped at 32 entries and 1024 characters a value;
-/// no `suspensionBehavior` (an app that is not running misses the post, like `.drop`).
+/// [`NotificationCenter`]. `user_info` is string to string; `post_checked` refuses one over 32 entries or with a value
+/// over 1024 characters, and `post_with` does not check. Gap: no `suspensionBehavior` (an app that is not running
+/// misses the post, like `.drop`).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DistributedNotificationCenter;
 
@@ -139,6 +140,47 @@ impl DistributedNotificationCenter {
         info.sort();
         ctx.send_to_shell(crate::proto::ToShell::DistPost { name: name.to_string(), user_info: info });
         self.post(name, user_info);
+    }
+}
+
+/// The most entries a distributed post's `user_info` may hold.
+pub const MAX_USER_INFO_ENTRIES: usize = 32;
+/// The longest value, in characters, a distributed post's `user_info` may hold.
+pub const MAX_USER_INFO_VALUE_CHARS: usize = 1024;
+
+/// Why a distributed post was refused before it was sent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DistributedPostError {
+    /// The `user_info` holds more than [`MAX_USER_INFO_ENTRIES`] entries.
+    TooManyEntries(usize),
+    /// The value under `key` is longer than [`MAX_USER_INFO_VALUE_CHARS`] characters.
+    ValueTooLong { key: String, chars: usize },
+}
+
+/// Checks a distributed post's `user_info` against the limits the shell relays under. The keys are read in sorted
+/// order, so the same bad input always names the same key.
+pub fn check_user_info(user_info: &HashMap<String, String>) -> Result<(), DistributedPostError> {
+    if user_info.len() > MAX_USER_INFO_ENTRIES {
+        return Err(DistributedPostError::TooManyEntries(user_info.len()));
+    }
+    let mut keys: Vec<&String> = user_info.keys().collect();
+    keys.sort();
+    for key in keys {
+        let chars = user_info[key].chars().count();
+        if chars > MAX_USER_INFO_VALUE_CHARS {
+            return Err(DistributedPostError::ValueTooLong { key: key.clone(), chars });
+        }
+    }
+    Ok(())
+}
+
+impl DistributedNotificationCenter {
+    /// Posts like [`DistributedNotificationCenter::post_with`], but first checks `user_info` with
+    /// [`check_user_info`]. A refused post is not delivered to this app or sent to the shell.
+    pub fn post_checked(&self, ctx: &crate::Ctx, name: &str, user_info: HashMap<String, String>) -> Result<(), DistributedPostError> {
+        check_user_info(&user_info)?;
+        self.post_with(ctx, name, user_info);
+        Ok(())
     }
 }
 
