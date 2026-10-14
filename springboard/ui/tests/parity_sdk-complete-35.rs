@@ -353,3 +353,88 @@ mod call_cards {
         assert_eq!(stack.prune(&center), 0);
     }
 }
+
+// --- gameplay_values: constants, structures and option sets ----------------------------------------------------------
+
+mod gameplay_constants {
+    use bifrost_ui::gameplay_values::{Box3, Quad, SplitStrategy, Triangle, TriangulationMode, GAME_MODEL_MAX_SCORE, GAME_MODEL_MIN_SCORE};
+
+    fn close(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-5
+    }
+
+    #[test]
+    fn score_bounds_are_symmetric_and_the_maximum_is_the_largest_i32() {
+        assert_eq!(GAME_MODEL_MAX_SCORE, i64::from(i32::MAX));
+        assert_eq!(GAME_MODEL_MIN_SCORE, -GAME_MODEL_MAX_SCORE);
+    }
+
+    #[test]
+    fn a_box_with_its_minimum_above_its_maximum_on_one_axis_is_invalid() {
+        assert!(Box3::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]).is_valid());
+        assert!(!Box3::new([0.0, 0.0, 0.0], [1.0, -1.0, 1.0]).is_valid());
+    }
+
+    #[test]
+    fn a_box_contains_points_on_its_faces_and_not_beyond_them() {
+        let b = Box3::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+        assert!(b.contains([1.0, 1.0, 1.0]));
+        assert!(b.contains([0.0, 0.5, 1.0]));
+        assert!(!b.contains([1.1, 0.0, 0.0]));
+    }
+
+    #[test]
+    fn boxes_that_touch_on_a_face_intersect_and_separated_boxes_do_not() {
+        let a = Box3::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+        assert!(a.intersects(&Box3::new([1.0, 0.0, 0.0], [2.0, 1.0, 1.0])));
+        assert!(!a.intersects(&Box3::new([1.5, 0.0, 0.0], [2.0, 1.0, 1.0])));
+    }
+
+    #[test]
+    fn quads_follow_the_same_face_rules_in_two_dimensions() {
+        let q = Quad::new([0.0, 0.0], [2.0, 2.0]);
+        assert!(q.is_valid());
+        assert!(q.contains([2.0, 2.0]));
+        assert!(!q.contains([2.5, 1.0]));
+        assert!(q.intersects(&Quad::new([2.0, 2.0], [3.0, 3.0])));
+        assert!(!q.intersects(&Quad::new([2.5, 0.0], [3.0, 1.0])));
+    }
+
+    #[test]
+    fn a_triangle_area_is_half_the_product_of_its_legs() {
+        let t = Triangle::new([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0]]);
+        assert!(close(t.area(), 2.0));
+    }
+
+    #[test]
+    fn a_triangle_normal_points_up_for_counter_clockwise_winding_and_down_for_clockwise() {
+        let ccw = Triangle::new([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0]]);
+        let cw = Triangle::new([[0.0, 0.0, 0.0], [0.0, 2.0, 0.0], [2.0, 0.0, 0.0]]);
+        assert!(ccw.normal()[2] > 0.0);
+        assert!(cw.normal()[2] < 0.0);
+    }
+
+    #[test]
+    fn a_triangle_contains_ground_points_inside_it_for_either_winding() {
+        let ccw = Triangle::new([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0]]);
+        let cw = Triangle::new([[0.0, 0.0, 0.0], [0.0, 2.0, 0.0], [2.0, 0.0, 0.0]]);
+        assert!(ccw.contains_xy([0.5, 0.5]));
+        assert!(cw.contains_xy([0.5, 0.5]));
+        assert!(!ccw.contains_xy([3.0, 3.0]));
+    }
+
+    #[test]
+    fn a_triangle_centre_is_the_mean_of_its_corners() {
+        let t = Triangle::new([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 3.0, 3.0]]);
+        let c = t.center();
+        assert!(close(c[0], 1.0) && close(c[1], 1.0) && close(c[2], 1.0));
+    }
+
+    #[test]
+    fn option_sets_keep_their_variants_apart() {
+        assert_ne!(TriangulationMode::Vertices, TriangulationMode::Centers);
+        assert_ne!(TriangulationMode::Centers, TriangulationMode::EdgeMidpoints);
+        assert_ne!(SplitStrategy::Halve, SplitStrategy::Linear);
+        assert_ne!(SplitStrategy::Quadratic, SplitStrategy::ReduceOverlap);
+    }
+}
