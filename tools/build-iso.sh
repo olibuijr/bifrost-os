@@ -71,6 +71,8 @@ for app_id in is.olibuijr.browser.desktop is.olibuijr.files.desktop; do
 done
 offline_apps=("$AIROOT"/usr/share/bifrost/offline/apps/*.aap)
 [ "${#offline_apps[@]}" -eq 2 ] || { echo "expected exactly two offline default apps, found ${#offline_apps[@]}" >&2; exit 1; }
+# The installer copies its verified loader into the target ESP after pacstrap; the ISO boot copy itself is not in AIROOT.
+install -Dm644 packaging/archiso/bootweave.efi "$AIROOT/usr/share/bifrost/bootweave.efi"
 # The live installer and installed shell need these generated assets; never inherit a stale profile copy. Preparing the
 # assets (including any font fetches) is a separate build-time step, not an ISO-build/network fallback.
 ASSET_SRC=${BIFROST_ISO_ASSETS_DIR:-springboard/assets}
