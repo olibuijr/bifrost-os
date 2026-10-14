@@ -52,7 +52,8 @@ fn wrap(line: &str) -> Vec<String> {
     out
 }
 
-/// The WinAnsi byte for a character: printable ASCII and Latin-1 keep their code, everything else is `?`.
+/// The single-byte code for a character of the file's encoding: printable ASCII and Latin-1 keep their code, everything
+/// else is `?`.
 fn byte_of(c: char) -> u8 {
     match c {
         ' '..='~' => c as u8,

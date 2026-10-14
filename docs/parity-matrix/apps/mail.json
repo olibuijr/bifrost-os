@@ -52,18 +52,18 @@
    "area": "menu",
    "apple": "Message > Reply All",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:177",
-   "note": "Message > Reply All and a Reply All button on the toolbar while a message is open. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Hide the toolbar button when the message has no other recipients, and check it on Midget"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:318",
+   "note": "Message > Reply All and a Reply All button on the toolbar while a message is open. Both are offered only when the message has recipients besides the sender and the user (state.rs has_other_recipients, draw.rs open_has_others). Not yet verified on Midget.",
+   "wire": "Check on Midget that the button shows only with other recipients"
   },
   {
    "feature": "Forward, Forward as Attachment, Redirect",
    "area": "menu",
    "apple": "Message > Forward, Forward as Attachment, Redirect",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:469",
-   "note": "Forward quotes the text under Fwd:. Forward as Attachment sends the original as a message/rfc822 file. Redirect sends the original unchanged with Resent headers (message.rs redirect_message). Plain Forward does not re-attach the original's own files. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Re-attach the files of the original on a plain Forward"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1769",
+   "note": "Forward quotes the text under Fwd: and carries the files of the original too, within the message limits (state.rs open_forward_with). Forward as Attachment sends the original as a message/rfc822 file. Redirect sends the original unchanged with Resent headers (message.rs redirect_message). Not yet verified on Midget.",
+   "wire": "Check on Midget that the forwarded files arrive"
   },
   {
    "feature": "Rich text formatting (bold/italic/underline, fonts, colours, alignment, lists, indentation)",
@@ -88,9 +88,9 @@
    "area": "menu",
    "apple": "File > Save Attachments",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1753",
-   "note": "Message > Save Attachments opens a save panel for each file in turn, and a tap on a file name in the reader saves that file alone. Without the panel the file goes into the app data directory. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Save every file into one folder chosen with a single panel"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1785",
+   "note": "Message > Save Attachments opens one folder panel and writes every file of the message into the folder under its name (save_folder, window.rs). Without the panel the files go into the app's data directory. A tap on one file name still saves that file alone. Not yet verified on Midget.",
+   "wire": "Check on Midget that the folder the panel returns is writable by the app"
   },
   {
    "feature": "Open or preview an attachment from the message",
@@ -115,9 +115,9 @@
    "area": "menu",
    "apple": "File > Export as PDF, Save As",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1466",
-   "note": "File > Save As writes the raw .eml where the save panel chooses. Export as PDF is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Render the message to PDF through the print path into a save panel"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1815",
+   "note": "File > Save As writes the raw .eml. File > Export as PDF writes the subject and the readable text of the message through the save panel (pdf.rs render, standard Helvetica). Pictures and the HTML layout are not in the PDF. Not yet verified on Midget.",
+   "wire": "Lay out the HTML part and the pictures of the message in the PDF"
   },
   {
    "feature": "Flag message (toggle)",
@@ -205,9 +205,9 @@
    "area": "menu",
    "apple": "Message > Set Priority",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:Priority",
-   "note": "Priority menu on the compose sheet sends X-Priority and Importance.",
-   "wire": "Mark High and Low priority messages in the list, and check the headers on Midget"
+   "bifrost": "springboard/apps/mail-desktop/src/message.rs:101",
+   "note": "Priority menu on the compose sheet sends X-Priority and Importance. The list marks received messages high or low from their headers (message.rs priority_of, draw.rs row_tag). Not yet verified on Midget.",
+   "wire": "Check the headers on Midget"
   },
   {
    "feature": "Remove attachments",
@@ -259,9 +259,9 @@
    "area": "view",
    "apple": "View > Filter",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:109",
-   "note": "View > Filter: All, Unread, Flagged, Replied and With Attachments (judged by the message type until its text is loaded). No toolbar button yet. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "A filter button on the toolbar"
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:181",
+   "note": "View > Filter: All, Unread, Flagged, Replied and With Attachments. While a filter is applied a filter chip shows in the toolbar; a tap moves to the next filter and All takes the chip away (draw.rs toolbar_items). Not yet verified on Midget.",
+   "wire": "Check the chip on Midget"
   },
   {
    "feature": "Mailbox search",
@@ -376,9 +376,9 @@
    "area": "settings",
    "apple": "EditEmailAliases; Composing > Send new messages from",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:982",
-   "note": "Mail Settings keeps other addresses for each account; the compose sheet then has a From field that a click cycles through the account address and its aliases. The choice must be one of them. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Pick the alias a message was addressed to when replying"
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:962",
+   "note": "Mail Settings keeps other addresses for each account; the compose sheet has a From field that a click cycles. Replies and Reply All send from the alias the original was addressed to (state.rs sent_from). Not yet verified on Midget.",
+   "wire": "Check on Midget that the From field shows the alias"
   },
   {
    "feature": "Signatures",
@@ -394,18 +394,18 @@
    "area": "settings",
    "apple": "ViewerPreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/html.rs:37",
-   "note": "sanitize can block remote images, but there is no settings pane and messages are shown as text",
-   "wire": "Add a Viewing settings pane and wire html::sanitize and HTML rendering into the view"
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:905",
+   "note": "View > All Headers (prefs.all_headers) shows every header above the text. Remote content, bold unread and dark backgrounds have no settings yet, and messages are shown as text (no HTML rendering).",
+   "wire": "Add a Viewing settings pane for remote content, bold unread and dark backgrounds, and wire html::sanitize into the view"
   },
   {
    "feature": "Composing settings (format, quoting, undo send delay, spelling)",
    "area": "settings",
    "apple": "ComposingPreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:2153",
-   "note": "Mail Settings sets an undo-send delay of 0 to 30 seconds: the message waits in the outbox and Message > Undo Send brings it back as it was written. Spelling is Edit > Check Spelling. Message format and quoting settings are not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Settings for quoting the original in replies, plain text only, and spelling as you type"
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:1349",
+   "note": "Mail Settings: Quote the original in replies (on by default; the reply starts with an 'On <date>, <name> wrote:' line and the quoted text), Plain text messages only (no HTML part) and the undo-send delay. Spelling is Edit > Check Spelling; checking as you type, text substitutions and speech are not done.",
+   "wire": "Add spelling as you type and text substitutions from Keyboard settings, and a message format choice in a Composing pane"
   },
   {
    "feature": "Fonts and colours settings",
@@ -430,8 +430,8 @@
    "area": "view",
    "apple": "View > Message > All Headers, Raw Source; RawSourceWindow",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:raw_text",
-   "note": "View > Raw Source (Opt+Cmd+U) shows the whole message text in the reader. A separate window and a headers-only mode (All Headers) are not done.",
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:208",
+   "note": "View > All Headers shows the header block above the text (draw.rs header_block). View > Raw Source shows the whole message as the server holds it. A separate raw source window is not done.",
    "wire": "Add a raw source window over the fetched raw text in the body cache"
   },
   {
@@ -457,9 +457,9 @@
    "area": "menu",
    "apple": "Edit > Paste as Quotation",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:quote_text",
-   "note": "Edit > Paste as Quotation. A plain paste takes the style of the text typed so far, which is what Paste and Match Style does. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Check on Midget; a Paste and Match Style command by name"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:480",
+   "note": "Edit > Paste as Quotation. Edit > Paste and Match Style pastes in the style of the text typed so far (a plain paste does the same); it is a menu command under its own name. Not yet verified on Midget.",
+   "wire": "Check on Midget"
   },
   {
    "feature": "Spelling and grammar, substitutions, speech",
@@ -511,9 +511,9 @@
    "area": "panel",
    "apple": "OpenQuicklyWindowController",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:quickly_matches",
-   "note": "Mailbox > Open Quickly (Shift+Cmd+O) sheet; Return opens the best matching mailbox. The match list is not shown under the field and it only covers the shown account.",
-   "wire": "Add a type-to-filter sheet over mail.mailboxes"
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:200",
+   "note": "Mailbox > Open Quickly (Shift+Cmd+O) sheet. The mailboxes its field matches are listed under it (up to 8, draw.rs choices_of); a click opens one, and Return opens the first. It only covers the shown account.",
+   "wire": "Include the mailboxes of the other accounts"
   },
   {
    "feature": "Smart replies and summaries",

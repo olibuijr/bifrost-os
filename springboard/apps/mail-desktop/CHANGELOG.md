@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.10.0 — 2026-10-14
+
+Reading:
+
+- View > All Headers shows every header line above the text of the open message. The choice is remembered.
+- The Reply All button and Message > Reply All are offered only when the message has recipients besides the sender and you.
+- Messages sent with high or low priority carry a "High priority" or "Low priority" tag in the list.
+- The toolbar shows a chip with the filter in use (Unread, Flagged, ...) while a filter is applied; a tap moves to the next
+  filter, and All takes the chip away. The menu still holds every filter.
+
+Writing:
+
+- Replies start with the original quoted under an "On <date>, <name> wrote:" line. Mail Settings has a "Quote the original in
+  replies" switch (on by default).
+- Mail Settings has a "Plain text messages only" switch: such messages are sent without the HTML part.
+- A reply is sent from the address the original was sent to when that address is one of the account's aliases.
+- Message > Forward carries the files of the original along, within the limits of a message (8 files, 20 MB).
+- Message > Paste and Match Style (Edit menu) pastes the text in the style of the text typed so far.
+
+Saving:
+
+- Message > Save Attachments asks for one folder and writes every file of the message into it, under the names the files
+  had. Without a folder panel the files go into the app's data directory.
+- Message > Export as PDF writes the subject and the text of the message to a PDF file through the save panel.
+
+Finding:
+
+- Open Quickly lists the mailboxes its field matches under the field, the best match first. A click opens one of them;
+  Return still opens the first.
+
 ## 0.9.0 — 2026-10-13
 
 Sending and receiving files:
