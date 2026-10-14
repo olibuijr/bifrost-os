@@ -128,6 +128,8 @@ pub enum Shortcut {
     AccessibilityShortcut,
     /// Ctrl+Cmd+D: Look Up the selection in Dictionary (the Services menu's Look Up in Dictionary)
     LookUp,
+    /// Shift+Cmd+Y: Make New Sticky Note from the selection (the Services menu's Make New Sticky Note)
+    MakeSticky,
     /// Shift+Cmd+5: the screenshot toolbar, a capture session over the screen
     Capture,
     /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
@@ -146,7 +148,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::MakeSticky => return None,
         }))
     }
 }
@@ -247,6 +249,7 @@ impl HwKeys {
             KEY_8 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomToggle),
             KEY_EQUAL | KEY_MINUS if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomStep(code == KEY_EQUAL)),
             KEY_D if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::LookUp),
+            KEY_Y if meta && !ctrl && !alt && self.shift != 0 => Some(Shortcut::MakeSticky),
             KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Tile(match code {
                 KEY_LEFT => Tile::Left,
                 KEY_RIGHT => Tile::Right,
@@ -671,6 +674,7 @@ impl Shell {
                 vec![]
             }
             Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::LookUp, t),
+            Shortcut::MakeSticky if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::MakeStickyNote, t),
             // Escape closes the Look Up popover first, then the Accessibility Shortcut panel, then the character viewer, before it goes Back
             Shortcut::Back if self.look_up_escape() => vec![],
             // Escape hides the Accessibility Shortcut panel, then the character viewer, before it goes Back
@@ -809,6 +813,8 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_SPACE), Some(Shortcut::ReaderActivate));
         // Look Up: Ctrl+Cmd+D (Services > Look Up in Dictionary on the selection)
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTMETA], KEY_D), Some(Shortcut::LookUp));
+        // Make New Sticky Note: Shift+Cmd+Y (Shift alone keeps Redo for Cmd+Y)
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_Y), Some(Shortcut::MakeSticky), "Shift+Cmd+Y");
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_F5), Some(Shortcut::AccessibilityShortcut), "Option+Cmd+F5");
         // Screen Zoom: Option+Cmd+8 toggles, Option+Cmd+= zooms in, Option+Cmd+- zooms out
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_8), Some(Shortcut::ZoomToggle));
