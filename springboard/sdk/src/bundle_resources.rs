@@ -7,7 +7,76 @@ use std::path::{Path, PathBuf};
 
 use bifrost_core::json::Json;
 
+use bifrost_core::json::Json;
+
 use crate::locale::Locale;
+
+/// `CFBundleTypeRole` of a URL type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BundleTypeRole {
+    None,
+    Viewer,
+    Editor,
+    Shell,
+}
+
+/// `LSHandlerRank`, lowest to highest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HandlerRank {
+    None,
+    Alternate,
+    Default,
+    Owner,
+}
+
+/// One `CFBundleURLTypes` entry: the schemes an app declares.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct URLType {
+    pub url_name: String,
+    pub url_schemes: Vec<String>,
+    pub type_role: BundleTypeRole,
+    pub handler_rank: HandlerRank,
+}
+
+impl URLType {
+    /// Parses the `CFBundleURLTypes` array. Entries without schemes are dropped; schemes are lowercased.
+    pub fn parse_all(types: &Json) -> Vec<URLType> {
+        let Some(items) = types.as_array() else { return vec![] };
+        items
+            .iter()
+            .filter_map(|d| {
+                let schemes: Vec<String> = d
+                    .get("CFBundleURLSchemes")
+                    .and_then(Json::as_array)
+                    .map(|a| a.iter().filter_map(Json::as_str).filter(|s| !s.is_empty()).map(str::to_ascii_lowercase).collect())
+                    .unwrap_or_default();
+                if schemes.is_empty() {
+                    return None;
+                }
+                let role = match d.str_field("CFBundleTypeRole").as_deref() {
+                    Some("Viewer") => BundleTypeRole::Viewer,
+                    Some("Editor") => BundleTypeRole::Editor,
+                    Some("Shell") => BundleTypeRole::Shell,
+                    _ => BundleTypeRole::None,
+                };
+                let rank = match d.str_field("LSHandlerRank").as_deref() {
+                    Some("Owner") => HandlerRank::Owner,
+                    Some("Alternate") => HandlerRank::Alternate,
+                    Some("None") => HandlerRank::None,
+                    _ => HandlerRank::Default,
+                };
+                Some(URLType { url_name: d.str_field("CFBundleURLName").unwrap_or_default(), url_schemes: schemes, type_role: role, handler_rank: rank })
+            })
+            .collect()
+    }
+}
+
+/// The scheme of a URL string (`myapp://x` gives `myapp`), lowercased; `None` when it has no valid scheme.
+pub fn url_scheme(url: &str) -> Option<String> {
+    let (s, _) = url.split_once(':')?;
+    let ok = s.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && s.chars().all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c));
+    ok.then(|| s.to_ascii_lowercase())
+}
 
 /// `CFBundleTypeRole` of a URL type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -143,6 +212,29 @@ impl ResourceBundle {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    fn types(text: &str) -> Vec<URLType> {
+        URLType::parse_all(&bifrost_core::json::parse(text).unwrap())
+    }
+
+    #[test]
+    fn url_types_parse_schemes_role_and_rank() {
+        let t = types(r#"[{"CFBundleURLName":"com.x.cb","CFBundleURLSchemes":["MyApp","x-cb"],"CFBundleTypeRole":"Editor","LSHandlerRank":"Owner"},{"CFBundleURLSchemes":[]},{"CFBundleURLSchemes":["plain"]}]"#);
+        assert_eq!(t.len(), 2, "an entry without schemes is dropped");
+        assert_eq!(t[0].url_schemes, ["myapp", "x-cb"]);
+        assert_eq!((t[0].type_role, t[0].handler_rank), (BundleTypeRole::Editor, HandlerRank::Owner));
+        assert_eq!((t[1].type_role, t[1].handler_rank), (BundleTypeRole::None, HandlerRank::Default));
+        assert!(HandlerRank::Owner > HandlerRank::Alternate);
+        assert!(URLType::parse_all(&Json::Null).is_empty());
+    }
+
+    #[test]
+    fn url_scheme_reads_the_prefix() {
+        assert_eq!(url_scheme("MyApp://x"), Some("myapp".into()));
+        assert_eq!(url_scheme("mailto:a@b.c"), Some("mailto".into()));
+        assert_eq!(url_scheme("no scheme"), None);
+        assert_eq!(url_scheme("1a://x"), None);
+    }
 
     fn types(text: &str) -> Vec<URLType> {
         URLType::parse_all(&bifrost_core::json::parse(text).unwrap())

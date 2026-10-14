@@ -6,6 +6,7 @@
 //! - `open_with` `{name}`: `{apps: [{app, name, default}]}`, every app that can open the file's type, the default first.
 //! - `default_for_file` `{name}`: `{app}`, the default app for the file name (`app` is null when none).
 //! - `application_for_url` `{url}`: `{app, apps}`, `urlForApplication(toOpen:)`: the app that opens the URL and every app declaring its scheme.
+//! - `application_for_url` `{url}`: `{app, apps}`, `urlForApplication(toOpen:)`: the app that opens the URL and every app declaring its scheme.
 //! - `default_for_scheme` `{scheme}`: `{app}`, the app that opens the URL scheme (null when none).
 use super::SystemService;
 use crate::shell::defaultapps::app_name;
@@ -51,6 +52,16 @@ impl SystemService for LaunchServices {
             "application_for_url" => {
                 let url = text_param(params, "url")?;
                 let scheme = url.split_once(':').map(|(s, _)| s.to_ascii_lowercase()).filter(|s| !s.is_empty()).ok_or("url has no scheme")?;
+                let apps = shell.apps_for_scheme(&scheme);
+                let mut j = app_json(shell.default_app_for_scheme(&scheme));
+                if let Json::Obj(o) = &mut j {
+                    o.push(("apps".to_string(), Json::Arr(apps.into_iter().map(Json::Str).collect())));
+                }
+                Ok(j)
+            }
+            "application_for_url" => {
+                let url = text_param(params, "url")?;
+                let scheme = bifrost_app::bundle_resources::url_scheme(&url).ok_or("url has no scheme")?;
                 let apps = shell.apps_for_scheme(&scheme);
                 let mut j = app_json(shell.default_app_for_scheme(&scheme));
                 if let Json::Obj(o) = &mut j {
