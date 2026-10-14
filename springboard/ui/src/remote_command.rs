@@ -229,7 +229,7 @@ impl RatingCommand {
     }
 }
 
-/// Skips the playing item forward or backward by a preferred interval (`MPSkipIntervalCommand`). The app seeks by the
+/// Skips the playing item forward or backward by a preferred interval, as the skip command of a remote control. The app seeks by the
 /// interval it accepts; a disabled command refuses every request.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkipIntervalCommand {
@@ -275,7 +275,7 @@ impl SkipIntervalCommand {
     }
 }
 
-/// Where a position request (`MPChangePlaybackPositionCommand`) lands: the requested position inside an item of
+/// Where a position request from a remote control lands: the requested position inside an item of
 /// `duration_ms`. A duration of zero means the length is unknown, so the position is kept as asked.
 pub fn seek_target(position_ms: u64, duration_ms: u64) -> u64 {
     if duration_ms == 0 { position_ms } else { position_ms.min(duration_ms) }
