@@ -77,8 +77,8 @@
    "area": "menu",
    "apple": "File > New Group From Selection",
    "status": "partial",
-   "bifrost": "springboard/ui/src/contact_groups.rs",
-   "note": "Audit 2026-10-13: kit model ui/src/contact_groups.rs (host tests) already provides this; the app does not use it yet.",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1948 (group_selection); springboard/ui/src/contact_groups.rs",
+   "note": "Card > Select Contacts marks rows and New Group From Selection adds the marked contacts to a group through the kit model contact_groups (contacts.rs:1948). Gap: a press has no Shift or Command modifier, so there is no range or extend selection yet (contacts.rs:1926).",
    "wire": "Add Shift/Cmd multi-select to the list and New Group From Selection backed by contact_groups."
   },
   {
@@ -131,8 +131,8 @@
    "area": "document",
    "apple": "ABTextFileImport.nib; Info.plist LDIF type",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/tabular.rs",
-   "note": "Inline pass 2026-10-13: pure model with host unit tests; not yet wired into the UI, not tested on Midget.",
+   "bifrost": "springboard/apps/contacts-desktop/src/textimport.rs:378 (import_csv); springboard/apps/contacts-desktop/src/textimport.rs:455 (import_ldif)",
+   "note": "File > Import reads CSV, TSV and LDIF files from the Import folder through textimport.rs, with host tests in that module (contacts.rs:2017). Gap: no column-mapping review sheet yet, and the separate tabular.rs model is not called by the app.",
    "wire": "Add CSV and LDIF to File > Import; show the column-mapping review sheet from tabular::guess_columns before tabular::import_csv, then assign ids and save like the vCard import."
   },
   {
