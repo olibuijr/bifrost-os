@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0 — 2026-10-14
+
+- Air quality card names the main pollutant (PM2.5, PM10, ozone, nitrogen dioxide or sulphur dioxide, whichever is furthest
+  over its European Good limit) with its concentration, and the advice for the band.
+- Pressure tile draws a trend dial: a needle swings toward rising or falling with the three-hour change.
+- Rain tomorrow: a place with notifications on is told once a day when tomorrow's chance of precipitation is 60 percent or more.
+- Precipitation tile says how much of today's total is snow.
+- A "Current Weather" intent for Search and the assistant answers with the selected place's summary. It is a shortcut
+  with no parameters.
+
 ## 1.6.0 — 2026-10-13
 
 - Detail tiles: wind direction and gusts with a compass dial, dew point under humidity, a sun path on the sunrise tile, and new Precipitation, Visibility and Pressure tiles that follow the unit setting.

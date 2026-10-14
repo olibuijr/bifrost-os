@@ -20,9 +20,9 @@
    "area": "view",
    "apple": "Source list of saved places, each with a live temperature and condition",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:313",
-   "note": "Each sidebar row shows the place's last known temperature on the right; no condition glyph in the row yet (SidebarItem has no icon slot for a drawn glyph).",
-   "wire": "Verify the two-line rows, temperature and sky glyph on Midget; the glyph is drawn over a slot the list reserves with an invisible dot."
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs (sidebar, the sky glyph drawn over the row)",
+   "note": "Each sidebar row shows the place's sky glyph, its sky in words and its last known temperature. Not yet verified on Midget.",
+   "wire": "Verify the two-line rows, temperature and sky glyph on Midget."
   },
   {
    "feature": "Search and add a location",
@@ -38,9 +38,9 @@
    "area": "view",
    "apple": "Delete from the list (Edit > Delete, swipe, context menu)",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:952",
-   "note": "Delete or Backspace removes the selected place from the main page (code 46 mapped in main.rs). The sidebar secondary-click menu is still missing.",
-   "wire": "Verify the Delete key and the sidebar context menu on Midget; the per-row remove button and the swipe already worked."
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs (context_items, the sidebar secondary-click menu with Remove)",
+   "note": "Delete or Backspace removes the selected place from the main page, and the sidebar secondary-click menu offers Remove. Not yet verified on Midget.",
+   "wire": "Verify the Delete key and the sidebar context menu on Midget."
   },
   {
    "feature": "Reorder locations",
@@ -165,8 +165,8 @@
    "apple": "Rain or snow amount for 24 hours and the next days",
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-   "note": "Next 24 hours total with tomorrow's amount as the note, mm or in following the unit setting. Snow is not separated from rain.",
-   "wire": "The tile shows today's total and the next 24 hours; it does not split snow from rain or list the coming days."
+   "note": "Today's total as the value; the note gives the next 24 hours, or how much of today's total is snow when there is snow. The coming days are not listed. Not yet verified on Midget.",
+   "wire": "The tile lists today's total and the next 24 hours, with snow named when the day has it; it does not list the coming days."
   },
   {
    "feature": "Visibility tile",
@@ -183,26 +183,26 @@
    "apple": "Barometric pressure with a trend dial",
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-   "note": "hPa or inHg with a Rising, Falling or Steady note from the three-hour change. No trend dial.",
-   "wire": "Draw the reference's trend dial; the tile has the value and a rising, falling or steady note."
+   "note": "hPa or inHg with a Rising, Falling or Steady note from the three-hour change, and a trend dial whose needle follows that change (insights::pressure_dial_angle, weather.rs draw_pressure_dial). Not yet verified on Midget.",
+   "wire": "Verify the trend dial on Midget against the reference tile."
   },
   {
    "feature": "Air quality",
    "area": "detail",
    "apple": "Air Quality index card with level and main pollutant",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1608",
-   "note": "built on parity/team-d-weather; not yet verified on Midget",
-   "wire": "Name the main pollutant and add the advice text; the card shows the European index, its band and PM2.5."
+   "bifrost": "springboard/src/shell/weather/data.rs (Air::main_pollutant, Air::advice); springboard/apps/weather-desktop/src/weather.rs (the air quality card)",
+   "note": "The card names the main pollutant, the one furthest over its European Good limit, with its concentration, the index band and the advice for the band. The model is tested headless in springboard/tests/parity_app-weather.rs. Not yet verified on Midget.",
+   "wire": "Verify the taller card on Midget against the reference card."
   },
   {
    "feature": "Averages",
    "area": "detail",
    "apple": "Today's high against the average high for the date",
    "status": "partial",
-   "bifrost": "springboard/ui/src/weather_stats.rs",
-   "note": "Audit 2026-10-13: kit model ui/src/weather_stats.rs (host tests) already provides this; the app does not use it yet.",
-   "wire": "Fetch the archive daily maximum for the date over ten years and add an Averages tile using weather_stats."
+   "bifrost": "springboard/apps/weather-desktop/src/insights.rs (average_text); springboard/src/shell/weather/data.rs (average_window, parse_average_high)",
+   "note": "The Averages tile shows the difference between today's high and the ten-year mean high of this date from the archive, with a word for it. The kit statistics model (springboard/ui/src/weather_stats.rs) is not used by the app. Not yet verified on Midget.",
+   "wire": "Verify the tile on Midget; move the mean onto weather_stats only if the app needs its percentiles."
   },
   {
    "feature": "Temperature chart",
@@ -236,9 +236,9 @@
    "area": "alerts",
    "apple": "Notifications for severe weather, precipitation starting, rain tomorrow (per-location setting)",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/notify.rs:46",
-   "note": "built on parity/team-d-weather; not yet verified on Midget",
-   "wire": "Alert notifications need an alert feed (see Severe weather alerts) and rain tomorrow is not announced; rain starting within the hour is posted per place."
+   "bifrost": "springboard/apps/weather-desktop/src/notify.rs (RainWatch::check, RainWatch::check_tomorrow)",
+   "note": "Per place, behind the Notify switch: rain starting within the hour, and rain tomorrow at 60 percent or more, once a day. Severe weather alerts are not posted because there is no alert feed. Not yet verified on Midget.",
+   "wire": "Alert notifications need an alert feed (see Severe weather alerts). Verify both notice kinds on Midget."
   },
   {
    "feature": "Units setting",
@@ -281,18 +281,18 @@
    "area": "system",
    "apple": "weather: URL scheme, user activities WeatherIntent and handoff",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1178",
-   "note": "built on parity/team-d-weather; not yet verified on Midget",
-   "wire": "Register the user activity and handoff; weather:// links select or add a place."
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs (Done::Linked, the weather:// link handling)",
+   "note": "weather:// links select a saved place or look a name up and add it, and the lat and lon form adds a position. The SDK has no user activity or handoff service, so the WeatherIntent activity is not registered. Not yet verified on Midget.",
+   "wire": "Register the user activity and handoff when the SDK has a user-activity service."
   },
   {
    "feature": "Share and assistant intents",
    "area": "system",
    "apple": "Share forecast, Weather intent for assistants and shortcuts",
    "status": "partial",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1197",
-   "note": "built on parity/team-d-weather; not yet verified on Midget",
-   "wire": "Declare App::intents for Shortcuts and the assistant; the Share button and the weather.* control methods exist."
+   "bifrost": "springboard/apps/weather-desktop/src/main.rs (WeatherApp::intents, WeatherApp::perform_intent); springboard/apps/weather-desktop/src/weather.rs (share_text, intent_dialog)",
+   "note": "The Share button sends the selected place's summary to the share menu. A Current Weather intent, a shortcut with no parameters, answers with that summary. Not yet verified on Midget.",
+   "wire": "Verify the intent in Search and Shortcuts on Midget; the weather.* control methods already exist."
   },
   {
    "feature": "Stocks watchlist",
