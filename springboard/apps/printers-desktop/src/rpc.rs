@@ -41,11 +41,7 @@ pub fn call(p: &mut PrintCenter, method: &str, params: &Json) -> Result<Json, Rp
         }
         "printers.cancel_job" => {
             let name = printer_param(p, params)?;
-            let id = params
-                .get("id")
-                .and_then(Json::number)
-                .filter(|n| n.fract() == 0.0 && *n > 0.0 && *n < f64::from(i32::MAX))
-                .ok_or_else(|| bad("id must be a job number"))? as i32;
+            let id = job_number(params, "id")?;
             p.request(name.clone(), Action::CancelJob(id));
             Ok(obj(vec![("printer", Json::Str(name)), ("job", Json::Num(f64::from(id))), ("requested", text(method))]))
         }
@@ -53,8 +49,18 @@ pub fn call(p: &mut PrintCenter, method: &str, params: &Json) -> Result<Json, Rp
     }
 }
 
+/// The job number in the parameter `key`: a whole number above zero.
+pub fn job_number(params: &Json, key: &str) -> Result<i32, RpcError> {
+    params
+        .get(key)
+        .and_then(Json::number)
+        .filter(|n| n.fract() == 0.0 && *n > 0.0 && *n < f64::from(i32::MAX))
+        .map(|n| n as i32)
+        .ok_or_else(|| bad(&format!("{key} must be a job number")))
+}
+
 /// The named printer, which must be listed, else the selected one.
-fn printer_param(p: &PrintCenter, params: &Json) -> Result<String, RpcError> {
+pub fn printer_param(p: &PrintCenter, params: &Json) -> Result<String, RpcError> {
     let name = params.str_field("printer").or_else(|| p.model.selected.clone()).ok_or_else(|| bad("no printer is selected"))?;
     if p.model.printers.iter().any(|x| x.name == name) {
         Ok(name)
@@ -63,7 +69,7 @@ fn printer_param(p: &PrintCenter, params: &Json) -> Result<String, RpcError> {
     }
 }
 
-fn list(p: &PrintCenter) -> Json {
+pub fn list(p: &PrintCenter) -> Json {
     Json::Arr(
         p.model
             .printers
