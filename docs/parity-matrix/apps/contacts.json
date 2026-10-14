@@ -167,8 +167,8 @@
    "area": "menu",
    "apple": "Card > Mark as a Company",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2383",
-   "note": "built on parity/team-d-contacts; not yet verified on Midget; Card menu item and edit form switch; the card and list row show the company as the title with a building avatar",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2418 (toggle_company); springboard/apps/contacts-desktop/src/contacts.rs:470 (compare_contacts)",
+   "note": "Card menu item and edit form switch; the card and list row show the company as the title with a building avatar, and the list sorts and sections a company by its company name (host test a_company_sorts_by_its_company_name_in_the_list). Not yet verified on Midget.",
    "wire": "Sort companies by company name in the list."
   },
   {
@@ -194,8 +194,8 @@
    "area": "menu",
    "apple": "Card > Go to Next/Previous Card",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1201",
-   "note": "Card > Go to Next/Previous Card with cmd+] / cmd+[",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2395 (step_card)",
+   "note": "Card > Go to Next/Previous Card with cmd+] / cmd+[, stepping along the shown list and stopping at the ends (host test next_and_previous_card_step_along_the_list_and_stop_at_the_ends); the key equivalents are not yet checked on Midget",
    "wire": "Check on Midget that the key equivalents reach the menu items."
   },
   {
@@ -284,8 +284,8 @@
    "area": "view",
    "apple": "Show Last Import Group",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1553",
-   "note": "built on parity/team-d-contacts; not yet verified on Midget; a Last Import sidebar list of the contacts the most recent file import added, kept between runs; Recently Changed is still session-only",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1580 (recent_ids); springboard/apps/contacts-desktop/src/display_file.rs (changed lines)",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; a Last Import sidebar list of the contacts the most recent file import added, kept between runs; Recently Changed keeps each edited contact between runs in the display settings and drops a deleted one (host test recent_changes_are_kept_between_runs_and_forgotten_when_deleted)",
    "wire": "Keep the Recently Changed history between runs."
   },
   {
