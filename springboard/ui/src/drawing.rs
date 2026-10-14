@@ -260,8 +260,9 @@ impl Drawing {
     /// Renders the drawing over `rect` (drawing coordinates) at `scale` pixels per point, the way
     /// the reference SDK image call does. The image is `ceil(w * scale)` by `ceil(h * scale)` pixels, starting at the
     /// rect's top left. Strokes are painted in drawing order with source-over blending. A stroke is its width around its
-    /// segments, with a half-pixel edge ramp. The colour alpha scales the coverage. Per-point opacity, pressure and
-    /// the blend modes of marker ink are not rendered yet. An empty, non-finite or too large rect or scale gives an
+    /// segments, with a half-pixel edge ramp. The colour alpha scales the coverage, the mean point opacity of each
+    /// segment scales it again, and the width follows the mean stylus force (see `pressure_width`). The blend modes of
+    /// marker ink are not rendered yet. An empty, non-finite or too large rect or scale gives an
     /// empty raster.
     pub fn image(&self, rect: Rect, scale: f32) -> Raster {
         let finite = [rect.x, rect.y, rect.w, rect.h, scale].iter().all(|v| v.is_finite());
@@ -415,8 +416,51 @@ fn over(rgb: u32, alpha: f32, dst: u32) -> u32 {
     out
 }
 
+/// The width a stroke point is drawn at when the stylus reports `force`. A force of zero is the value of a point with
+/// no pressure reading, so it keeps the full `width`. Any positive force scales the width from a quarter (a light
+/// touch) up to the full width at a force of one or more.
+pub fn pressure_width(width: f32, force: f32) -> f32 {
+    if force > 0.0 {
+        width * (0.25 + 0.75 * force.min(1.0))
+    } else {
+        width
+    }
+}
+
+/// One painted piece of a stroke: the segment from `a` to `b`, drawn `radius` either side of it, at `opacity`.
+#[derive(Clone, Copy)]
+struct PaintedSegment {
+    a: (f32, f32),
+    b: (f32, f32),
+    radius: f32,
+    opacity: f32,
+}
+
+/// The segments of a stroke with the radius and opacity each is painted with. Both ends of a segment contribute: the
+/// radius follows the mean force and the opacity the mean point opacity. A one-point stroke paints its single point.
+fn painted_segments(s: &Stroke) -> Vec<PaintedSegment> {
+    let width = s.ink.width.max(0.0);
+    let piece = |a: StrokePoint, b: StrokePoint| PaintedSegment {
+        a: (a.x, a.y),
+        b: (b.x, b.y),
+        radius: pressure_width(width, (a.force + b.force) * 0.5) * 0.5,
+        opacity: ((a.opacity + b.opacity) * 0.5).clamp(0.0, 1.0),
+    };
+    match s.points.as_slice() {
+        [] => Vec::new(),
+        [p] => vec![PaintedSegment {
+            a: (p.x, p.y),
+            b: (p.x, p.y),
+            radius: pressure_width(width, p.force) * 0.5,
+            opacity: p.opacity.clamp(0.0, 1.0),
+        }],
+        pts => pts.windows(2).map(|w| piece(w[0], w[1])).collect(),
+    }
+}
+
 /// Paints one stroke into `pixels`, a `w` by `h` image over `rect` at `scale`. The coverage of each pixel is the
-/// largest over the stroke's segments, so joints do not darken, and the stroke is blended once per pixel.
+/// largest over the stroke's segments, so joints do not darken, and the stroke is blended once per pixel. Each
+/// segment's coverage is scaled by its opacity, so transparent points paint nothing.
 fn paint_stroke(s: &Stroke, rect: Rect, scale: f32, w: usize, h: usize, pixels: &mut [u32]) {
     let bounds = match s.bounds() {
         Some(b) => b,
@@ -431,14 +475,15 @@ fn paint_stroke(s: &Stroke, rect: Rect, scale: f32, w: usize, h: usize, pixels: 
     }
     let cw = x1 - x0;
     let mut cov = vec![0.0f32; cw * (y1 - y0)];
-    for (a, b) in segments(s) {
+    for seg in painted_segments(s) {
+        let (a, b) = (seg.a, seg.b);
         let (sx0, sx1) = pixel_span(a.0.min(b.0) - reach, a.0.max(b.0) + reach, rect.x, scale, w);
         let (sy0, sy1) = pixel_span(a.1.min(b.1) - reach, a.1.max(b.1) + reach, rect.y, scale, h);
         for j in sy0.max(y0)..sy1.min(y1) {
             let cy = rect.y + (j as f32 + 0.5) / scale;
             for i in sx0.max(x0)..sx1.min(x1) {
                 let cx = rect.x + (i as f32 + 0.5) / scale;
-                let c = ((radius - seg_dist(cx, cy, a, b)) * scale + 0.5).clamp(0.0, 1.0);
+                let c = ((seg.radius - seg_dist(cx, cy, a, b)) * scale + 0.5).clamp(0.0, 1.0) * seg.opacity;
                 let cell = &mut cov[(j - y0) * cw + (i - x0)];
                 *cell = cell.max(c);
             }

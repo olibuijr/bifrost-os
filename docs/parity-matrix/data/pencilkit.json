@@ -68,14 +68,14 @@
    "apple": "PKStroke init from path data, Bezier import article",
    "bifrost": "springboard/ui/src/drawing.rs (Drawing::from_path)",
    "status": "partial",
-   "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Strokes are polylines only. Curve data cannot be imported."
+   "note": "Drawing::from_path makes one stroke per subpath, flattening curves to points within a tolerance; the shape and the subpath split are tested in the drawing unit tests. Gap: a stroke keeps only points, so imported curves are not kept as curves, and the shell does not import paths yet."
   },
   {
    "feature": "Stroke slicing, animation and blending",
    "apple": "Controlling stroke rendering for animation and editing",
-   "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice",
+   "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice, Stroke::resampled, Stroke::blend)",
    "status": "partial",
-   "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to slice, interpolate or animate strokes. Rendering is a single pass per stroke."
+   "note": "Stroke::slice, resampled and blend cut and interpolate strokes by arc length, tested headless in springboard/ui/tests/parity_sdk-tests-02.rs. Gap: there is no time-based animation driver, and the shell and sketch pad do not animate or blend strokes yet."
   },
   {
    "feature": "Handwriting recognition (PKStrokeRecognizer)",
@@ -94,16 +94,16 @@
   {
    "feature": "Pressure, tilt and stylus input",
    "apple": "PKStrokePoint force, altitude, azimuth",
-   "bifrost": "springboard/ui/src/drawing.rs (StrokePoint force",
+   "bifrost": "springboard/ui/src/drawing.rs (StrokePoint, pressure_width); springboard/ui/tests/parity_sdk-complete-15.rs",
    "status": "partial",
-   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Markup and Freeform handle only position on touch events. Stroke width is fixed per tool, not driven by pressure."
+   "note": "The stylus force sets each point's width through pressure_width, and a point's opacity scales its paint, both tested headless in springboard/ui/tests/parity_sdk-complete-15.rs. Gap: tilt (azimuth, altitude) does not change the rendered mark, and Markup and Freeform still send only position on touch events, so the shell has no pressure to pass on yet."
   },
   {
    "feature": "Rendering to an image",
    "apple": "PKDrawing.image(from:scale:)",
    "bifrost": "springboard/ui/src/drawing.rs (Drawing::image, Raster); springboard/src/shell/markup.rs (Done saves the marked-up PNG over the capture); springboard/apps/freeform-desktop/src/freeform.rs (saves a PNG); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (render, encode)",
    "status": "partial",
-   "note": "Drawing::image renders the strokes to a raster at a chosen scale with source-over blending, verified pixel by pixel headless in springboard/ui/tests/parity_sdk-tests-02.rs. Per-point opacity, pressure and marker blend modes are not rendered yet, and no SDK call exposes the render. Both editors write PNG files. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "Drawing::image renders the strokes to a raster at a chosen scale with source-over blending, pressure-scaled width and per-point opacity, verified pixel by pixel headless in springboard/ui/tests/parity_sdk-tests-02.rs and springboard/ui/tests/parity_sdk-complete-15.rs. Marker blend modes are not rendered yet, and no SDK call exposes the render. Both editors write PNG files. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
   },
   {
    "feature": "Backward-compatible ink types (PKContentVersion)",
