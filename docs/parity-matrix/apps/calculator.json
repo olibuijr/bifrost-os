@@ -83,8 +83,8 @@
    "area": "view",
    "apple": "Localizable: Programmer, Hexadecimal, Bitwise …, Shift Left/Right, Rotate, Byte Flip, Word Flip, Show Binary, ASCII value, Unicode value",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/programmer.rs; springboard/apps/calculator-desktop/src/calc.rs:755",
-   "note": "Programmer is a toolbar segment (calc.rs:755) and View > Programmer (cmd+3, calc/menu.rs:47) driving programmer::Programmer, with the A-F and operator keypad, a clickable bit row and a Unicode readout; the model is tested in programmer.rs. The ASCII readout and the Show Binary toggle are not in the UI yet, and it is not tested on Midget.",
+   "bifrost": "springboard/apps/calculator-desktop/src/programmer.rs (readout); springboard/apps/calculator-desktop/src/calc.rs:755",
+   "note": "Programmer is a toolbar segment (calc.rs:755) and View > Programmer (cmd+3, calc/menu.rs:47) driving programmer::Programmer, with the A-F and operator keypad, a clickable bit row, and a readout of the Unicode code point, the character and the ASCII code (programmer.rs readout, tested there). Show Binary is not a toggle yet, and it is not tested on Midget.",
    "wire": "Show the ASCII value next to the Unicode readout, then verify the keypad on Midget."
   },
   {
@@ -92,8 +92,8 @@
    "area": "view",
    "apple": "Localizable: RPN Mode On/Off, Enter, Drop, Swap, Rotate stack up/down",
    "status": "partial",
-   "bifrost": "springboard/apps/calculator-desktop/src/rpn.rs; springboard/apps/calculator-desktop/src/calc/menu.rs:102",
-   "note": "RPN Mode (View, cmd+R, calc/menu.rs:102) routes the basic keypad to rpn::Rpn, with Enter, Swap, Drop and Roll Up and Down in the Stack menu (calc/menu.rs:126-129); the model is tested in rpn.rs. The stack values are not drawn above the display yet, and it is not tested on Midget.",
+   "bifrost": "springboard/apps/calculator-desktop/src/rpn.rs; springboard/apps/calculator-desktop/src/calc/menu.rs:102; springboard/apps/calculator-desktop/src/calc.rs:1149",
+   "note": "RPN Mode (View, cmd+R, calc/menu.rs:102) routes the basic keypad to rpn::Rpn, with Enter, Swap, Drop and Roll Up and Down in the Stack menu (calc/menu.rs:126-129); the model is tested in rpn.rs. The values below X are drawn on the line above the display (calc.rs:1149), in one row of text that truncates when the stack is deep. Not tested on Midget.",
    "wire": "Draw the stack() values above the display in RPN mode, then verify on Midget."
   },
   {

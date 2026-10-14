@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.0 — 2026-10-14
+
+- Programmer readout: the value's ASCII code (0 to 127) follows the Unicode code point and the character, for example
+  `U+0041  A  ASCII 65`.
+- Parity matrix rows for the Programmer and RPN modes cite the readout and the stack line above the display, and state
+  what is still missing (Show Binary, a deep stack that truncates).
+
 ## 1.10.0 — 2026-10-14
 
 - Display settings have one model: thousands separators, decimal places and scientific notation are rendered by

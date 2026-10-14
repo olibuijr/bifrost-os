@@ -177,17 +177,20 @@ impl Programmer {
         (c == ' ' || !(c.is_control() || c.is_whitespace())).then_some(c)
     }
 
-    /// The readout under the value: the code point and the character it stands for.
+    /// The readout under the value: the Unicode code point, the character it stands for, and the ASCII code when the
+    /// value is one of the 128 ASCII codes. Empty when the value is not a code point.
     pub fn readout(&self) -> String {
-        if self.error {
+        if self.error || u32::try_from(self.value).ok().and_then(char::from_u32).is_none() {
             return String::new();
         }
-        let scalar = u32::try_from(self.value).ok().and_then(char::from_u32);
-        match (scalar, self.character()) {
-            (Some(_), Some(c)) => format!("U+{:04X}  {c}", self.value),
-            (Some(_), None) => format!("U+{:04X}", self.value),
-            _ => String::new(),
+        let mut text = format!("U+{:04X}", self.value);
+        if let Some(c) = self.character() {
+            text.push_str(&format!("  {c}"));
         }
+        if self.value < 128 {
+            text.push_str(&format!("  ASCII {}", self.value));
+        }
+        text
     }
 
     /// Whether bit `index` (0 is the least significant) is set.
@@ -596,11 +599,14 @@ mod tests {
         let mut p = Programmer::default();
         run(&mut p, "65");
         assert_eq!(p.character(), Some('A'));
-        assert_eq!(p.readout(), "U+0041  A");
+        assert_eq!(p.readout(), "U+0041  A  ASCII 65");
         p.press(PKey::Clear);
         run(&mut p, "7");
         assert_eq!(p.character(), None);
-        assert_eq!(p.readout(), "U+0007");
+        assert_eq!(p.readout(), "U+0007  ASCII 7", "a control code has an ASCII value but no character");
+        p.press(PKey::Clear);
+        run(&mut p, "8364");
+        assert_eq!(p.readout(), "U+20AC  €", "above 127 there is no ASCII value");
         p.press(PKey::Clear);
         run(&mut p, "55296");
         assert_eq!(p.readout(), "", "a surrogate is not a character");

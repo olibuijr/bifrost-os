@@ -123,7 +123,7 @@ fn the_programmer_screen_draws_with_its_readout_and_base_selection() {
     open_programmer(&mut app, &ui);
     tap_key(&mut app, &ui, Key::Digit(6));
     tap_key(&mut app, &ui, Key::Digit(5));
-    assert_eq!(app.programmer.as_ref().unwrap().readout(), "U+0041  A");
+    assert_eq!(app.programmer.as_ref().unwrap().readout(), "U+0041  A  ASCII 65");
     let mut buf = vec![0; 1920 * 1200];
     app.draw(&mut Surface { w: 1920, h: 1200, stride: 1920, px: &mut buf, y0: 0 }, &ui, 0.0);
     assert!(buf.contains(&scientific()));
