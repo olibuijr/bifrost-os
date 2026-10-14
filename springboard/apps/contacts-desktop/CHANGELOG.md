@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.1 — 2026-10-14
+
+- Removed unused keychain access; the company avatar and background printing now use shared appearance-aware colours and dispatch.
+
 ## 1.10.0
 
 - Mark as a Company: the list sorts and sections a company by its company name, as the card and the row already show it.
