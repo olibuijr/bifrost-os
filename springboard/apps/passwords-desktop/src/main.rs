@@ -62,7 +62,9 @@ struct PasswordsApp {
     pending: HashMap<u32, Pending>,
     export_rows: Vec<Entry>,
     export_left: usize,
+    export_failure: Option<String>,
     imported: usize,
+    import_failed: usize,
     status: String,
 }
 
@@ -109,10 +111,19 @@ impl PasswordsApp {
     }
 
     fn import(&mut self, ctx: &Ctx, path: &str) {
+        if self.pending.values().any(|p| matches!(p, Pending::Import { .. } | Pending::ImportUpdate)) {
+            self.status = "An import is already in progress.".into();
+            return;
+        }
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| model::parse_import(&t)) {
             Ok(got) => {
                 self.imported = 0;
+                self.import_failed = 0;
                 let count = got.entries.len();
+                if count == 0 {
+                    self.status = format!("No logins to import{}.", skipped_text(got.skipped));
+                    return;
+                }
                 for entry in got.entries {
                     let id = passwords::save(ctx, &entry.site, &entry.account, &entry.password);
                     self.pending.insert(id, Pending::Import { entry });
@@ -125,12 +136,17 @@ impl PasswordsApp {
 
     /// Asks for the password of every login; the CSV is written once they have all come back.
     fn export(&mut self, ctx: &Ctx) {
+        if self.export_left > 0 {
+            self.status = "An export is already in progress.".into();
+            return;
+        }
         let logins: Vec<Item> = self.items.iter().filter(|i| i.kind == Kind::Login).cloned().collect();
         if logins.is_empty() {
             self.status = "No logins to export.".into();
             return;
         }
         self.export_rows.clear();
+        self.export_failure = None;
         self.export_left = logins.len();
         for l in logins {
             let id = passwords::fill(ctx, &l.service, &l.account);
@@ -141,13 +157,18 @@ impl PasswordsApp {
 
     /// Writes the export once every password has come back; a failed write is shown in the status line.
     fn finish_export(&mut self) {
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-        let dir = home.join("Downloads");
         let text = model::render_export(&self.export_rows);
         let rows = self.export_rows.len();
-        self.status = match write_private(&dir.join("passwords.csv"), text.as_bytes()) {
-            Ok(()) => format!("Exported {rows} logins to Downloads."),
-            Err(e) => format!("Could not export: {e}"),
+        self.status = if let Some(reason) = self.export_failure.take() {
+            format!("Could not export; {reason}. No file was changed.")
+        } else {
+            match std::env::var_os("HOME") {
+                Some(home) => match write_private(&PathBuf::from(home).join("Downloads/passwords.csv"), text.as_bytes()) {
+                    Ok(()) => format!("Exported {rows} logins to Downloads."),
+                    Err(e) => format!("Could not export: {e}"),
+                },
+                None => "Could not export: HOME is unavailable.".into(),
+            }
         };
         self.export_rows.clear();
     }
@@ -188,15 +209,30 @@ fn empty_text(kind: Kind) -> &'static str {
     }
 }
 
-/// Creates the file for the owner only, then writes it (the export holds passwords in clear text).
+/// Atomically replaces the clear-text export with an owner-only file. A sibling temporary file means interruption
+/// cannot truncate the previous export or leave a partially written CSV at the published path.
 fn write_private(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SERIAL: AtomicU64 = AtomicU64::new(0);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
-    f.write_all(data)
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+    let tmp = dir.join(format!(".passwords-{}-{}.tmp", std::process::id(), SERIAL.fetch_add(1, Ordering::Relaxed)));
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp)?;
+    let written = (|| {
+        f.write_all(data)?;
+        f.sync_all()
+    })();
+    if let Err(e) = written.and_then(|()| std::fs::rename(&tmp, path)) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    // Directory sync is best effort because some supported filesystems reject it.
+    let _ = std::fs::File::open(dir).and_then(|d| d.sync_all());
+    Ok(())
 }
 
 /// The kind tab at point `(x, y)` in the list column, if any.
@@ -359,16 +395,22 @@ impl App for PasswordsApp {
                     self.pending.insert(id, Pending::ImportUpdate);
                     return true;
                 }
-                Err(e) => self.status = format!("Could not import {}: {e}", entry.site),
+                Err(e) => {
+                    self.import_failed += 1;
+                    self.status = format!("Could not import {}: {e}", entry.site);
+                }
             },
             Pending::ImportUpdate => match passwords::decode_password(result) {
                 Ok(_) => self.imported += 1,
-                Err(e) => self.status = format!("Could not update a login: {e}"),
+                Err(e) => {
+                    self.import_failed += 1;
+                    self.status = format!("Could not update a login: {e}");
+                }
             },
             Pending::Export { service, account } => {
                 match passwords::decode_password(result) {
                     Ok(password) => self.export_rows.push(Entry { site: service, account, password }),
-                    Err(e) => self.status = format!("Could not read {service}: {e}"),
+                    Err(e) => self.export_failure = Some(format!("could not read {service}: {e}")),
                 }
                 self.export_left = self.export_left.saturating_sub(1);
                 if self.export_left == 0 {
@@ -377,10 +419,19 @@ impl App for PasswordsApp {
                 return true;
             }
         }
-        if self.imported > 0 && self.pending.values().all(|p| !matches!(p, Pending::Import { .. } | Pending::ImportUpdate)) {
-            self.status = format!("Imported {} logins.", self.imported);
+        if (self.imported > 0 || self.import_failed > 0)
+            && self.pending.values().all(|p| !matches!(p, Pending::Import { .. } | Pending::ImportUpdate))
+        {
+            self.status = if self.import_failed == 0 {
+                format!("Imported {} logins.", self.imported)
+            } else {
+                format!("Imported {}; {} failed. Keychain changes are not transactional.", self.imported, self.import_failed)
+            };
+            if self.imported > 0 {
+                self.ask_list(ctx);
+            }
             self.imported = 0;
-            self.ask_list(ctx);
+            self.import_failed = 0;
         }
         true
     }
@@ -480,4 +531,26 @@ impl App for PasswordsApp {
 
 fn main() {
     bifrost_app::run(PasswordsApp::default());
+}
+
+#[cfg(test)]
+mod private_export_tests {
+    use super::write_private;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn replaces_export_atomically_with_owner_only_permissions() {
+        let dir = std::env::temp_dir().join(format!("bifrost-passwords-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("passwords.csv");
+        std::fs::write(&path, b"old,complete,export\n").unwrap();
+
+        write_private(&path, b"new,complete,export\n").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"new,complete,export\n");
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no temporary export remains");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }
