@@ -31,9 +31,9 @@
     {
       "feature": "XPC activities (background activity scheduling)",
       "apple": "XPC activities (xpc_activity_register, criteria, defer and check-in)",
-      "bifrost": "springboard/sdk/src/process_info.rs (ActivityOptions: USER_INITIATED, LATENCY_CRITICAL, BACKGROUND, IDLE_SYSTEM_SLEEP_DISABLED); springboard/sdk/src/runtime.rs:213 (beginActivity keeps an app running after it leaves the foreground)",
+      "bifrost": "springboard/sdk/src/process_info.rs (ActivityOptions: USER_INITIATED, LATENCY_CRITICAL, BACKGROUND, IDLE_SYSTEM_SLEEP_DISABLED); springboard/sdk/src/runtime.rs:213 (beginActivity keeps an app running after it leaves the foreground); springboard/sdk/src/activity_schedule.rs (ActivityCriteria, ActivitySchedule, run_if_due); tests: springboard/sdk/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "Activities keep an app from being suspended and hint the system's throttling. There is no scheduler: no criteria, interval, deferral or system-run callback like XPC activities."
+      "note": "Activity criteria with an interval, a tolerance and repeats, and a schedule that decides wait, run or finished and runs work when due, are tested headless. Gap: the scheduler is an in-process model driven by the caller's clock, so the system does not run it, and the shell's throttling hints are not tied to it; the lab machine must verify the system behaviour."
     },
     {
       "feature": "XPC events (on-demand IOKit and notification events)",

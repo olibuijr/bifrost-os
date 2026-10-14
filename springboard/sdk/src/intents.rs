@@ -233,6 +233,8 @@ pub struct Intent {
     pub params: Vec<Param>,
     /// `AppShortcut`: Search lists it (only when it has no required parameter) without opening the app
     pub shortcut: bool,
+    /// `AppShortcut` phrases: the spoken or typed forms that start the shortcut. Trimmed, non-empty and unique.
+    pub phrases: Vec<String>,
     /// `supportedModes`: where the intent may run. Background only unless `foreground()` is called.
     pub modes: Vec<IntentMode>,
     /// `authenticationPolicy`: what the system must check before the intent runs.
@@ -247,6 +249,7 @@ impl Intent {
             description: description.into(),
             params: Vec::new(),
             shortcut: false,
+            phrases: Vec::new(),
             modes: vec![IntentMode::Background],
             authentication: Authentication::AlwaysAllowed,
         }
@@ -293,6 +296,14 @@ impl Intent {
         self.shortcut = true;
         self
     }
+    /// Adds a shortcut phrase. Surrounding spaces are trimmed; an empty phrase or one already added is ignored.
+    pub fn phrase(mut self, text: &str) -> Intent {
+        let text = text.trim();
+        if !text.is_empty() && !self.phrases.iter().any(|p| p == text) {
+            self.phrases.push(text.into());
+        }
+        self
+    }
     pub fn method(&self) -> String {
         format!("intent.{}", self.id)
     }
@@ -302,6 +313,7 @@ impl Intent {
             ("title".into(), Json::Str(self.title.clone())),
             ("description".into(), Json::Str(self.description.clone())),
             ("shortcut".into(), Json::Bool(self.shortcut)),
+            ("phrases".into(), Json::Arr(self.phrases.iter().map(|p| Json::Str(p.clone())).collect())),
             ("modes".into(), Json::Arr(self.modes.iter().map(|m| Json::Str(m.name().into())).collect())),
             ("authentication".into(), Json::Str(self.authentication.name().into())),
             (
@@ -325,13 +337,22 @@ impl Intent {
     /// The `[[intent]]` table for `manifest.toml` (the shell reads `id`, `title`, `description`, `shortcut`, `params`).
     pub fn manifest_toml(&self) -> String {
         let params: Vec<String> = self.params.iter().map(|p| format!("\"{}:{}{}\"", p.name, p.ty.name(), if p.optional { "?" } else { "" })).collect();
+        // The phrases line is written only when the intent has phrases, so manifests of intents without phrases keep
+        // the table they always had.
+        let phrases = if self.phrases.is_empty() {
+            String::new()
+        } else {
+            let quoted: Vec<String> = self.phrases.iter().map(|p| format!("\"{}\"", p.replace('"', "'"))).collect();
+            format!("phrases = [{}]\n", quoted.join(", "))
+        };
         format!(
-            "[[intent]]\nid = \"{}\"\ntitle = \"{}\"\ndescription = \"{}\"\nshortcut = {}\nparams = [{}]\n",
+            "[[intent]]\nid = \"{}\"\ntitle = \"{}\"\ndescription = \"{}\"\nshortcut = {}\nparams = [{}]\n{}",
             self.id,
             self.title.replace('"', "'"),
             self.description.replace('"', "'"),
             self.shortcut,
-            params.join(", ")
+            params.join(", "),
+            phrases
         )
     }
 
