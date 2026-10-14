@@ -1075,6 +1075,13 @@ pub mod token_registration;
 pub mod certificate_panel;
 pub mod identity_chooser;
 pub mod screensaver;
+pub mod screensaver_manifest;
+pub mod saver_random;
+pub mod render_view;
+pub mod texture_catalog;
+pub mod effect_shader;
+pub mod lazy_stack;
+pub mod shared_list_store;
 pub use bifrost_core::disk_image;
 
 // Media analysis: keyframe, highlight and face grouping models (parity wave 3)
