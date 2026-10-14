@@ -20,11 +20,14 @@
 //! System names the shell posts, once per change, after the first tick (which only records the state):
 //! `system.appearance.change` (the scheme went Light or Dark), `system.screen.locked` and `system.screen.unlocked`,
 //! `system.network.change` (the Wi-Fi or wired link went up or down), `system.contacts.change` (the contacts file
-//! changed) and `system.calendar.change` (the events file changed). Each reaches the apps that hold a token on it and
-//! may read that store: a read grant for contacts, the `calendars` permission for events.
+//! changed), `system.calendar.change` (the events file changed), `system.timezone.change` (the local time zone file
+//! changed), `system.hostname.change` (the host name file changed) and `system.volume.mount` or
+//! `system.volume.unmount` (the number of removable volumes in the mount table went up or down). Each reaches the apps
+//! that hold a token on it and may read that store: a read grant for contacts, the `calendars` permission for events.
+//! The clock-set, low-disk-space, disk-cache and log-database names have no source in the shell yet and are not posted.
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
-use bifrost_core::notify_center::NotifyCenter;
+use bifrost_core::notify_center::{volume_change, NotifyCenter, HOSTNAME_CHANGE, TIME_ZONE_CHANGE};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::SystemTime;
@@ -53,6 +56,12 @@ pub const MAX_NAME: usize = 128;
 pub const MAX_TOKENS_PER_APP: usize = 64;
 /// Names with this prefix are the shell's.
 const SYSTEM_PREFIX: &str = "system.";
+/// The local time zone. Its target file changes when the zone changes.
+const LOCAL_TIME_ZONE: &str = "/etc/localtime";
+/// The host name file, rewritten when the host name changes.
+const HOST_NAME_FILE: &str = "/etc/hostname";
+/// The kernel's mount table.
+const MOUNT_TABLE: &str = "/proc/mounts";
 
 /// Whether `app` may hear `name`. The store-change names say that a person's private data changed, so only an app
 /// with that store's access hears them (the reference platform sends the contacts and event-store change notices only to apps that can
@@ -103,6 +112,20 @@ struct Seen {
     contacts: Option<Stamp>,
     /// The events file's stamp, `None` when there is no file.
     calendar: Option<Stamp>,
+    /// The local time zone file's stamp, `None` when there is no file.
+    time_zone: Option<Stamp>,
+    /// The host name file's stamp, `None` when there is no file.
+    hostname: Option<Stamp>,
+    /// How many removable volumes are mounted.
+    volumes: usize,
+}
+
+/// The system files the shell watches, as of the last stat.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct SystemFiles {
+    time_zone: Option<Stamp>,
+    hostname: Option<Stamp>,
+    volumes: usize,
 }
 
 #[derive(Default)]
@@ -114,6 +137,8 @@ pub struct NotifyBus {
     stat_at: Option<f64>,
     /// The store files' stamps as of `stat_at`: contacts, then calendar.
     stores: (Option<Stamp>, Option<Stamp>),
+    /// The system files as of `stat_at`.
+    system_files: SystemFiles,
 }
 
 impl NotifyBus {
@@ -222,6 +247,11 @@ impl NotifyBus {
                 let contacts = crate::shell::contactstore::store_path(data_dir);
                 let calendar = super::calendar::store_path(data_dir);
                 self.stores = (stamp(&contacts), stamp(&calendar));
+                self.system_files = SystemFiles {
+                    time_zone: stamp(Path::new(LOCAL_TIME_ZONE)),
+                    hostname: stamp(Path::new(HOST_NAME_FILE)),
+                    volumes: mounted_volumes(&std::fs::read_to_string(MOUNT_TABLE).unwrap_or_default()),
+                };
             }
         }
     }
@@ -243,6 +273,15 @@ impl NotifyBus {
             }
             if prev.calendar != now.calendar {
                 self.center.post(CALENDAR_CHANGE);
+            }
+            if prev.time_zone != now.time_zone {
+                self.center.post(TIME_ZONE_CHANGE);
+            }
+            if prev.hostname != now.hostname {
+                self.center.post(HOSTNAME_CHANGE);
+            }
+            if let Some(name) = volume_change(prev.volumes, now.volumes) {
+                self.center.post(name);
             }
         }
     }
@@ -280,6 +319,9 @@ impl SystemService for NotifyBus {
             reachable: shell.info.online || shell.info.wired,
             contacts: self.stores.0,
             calendar: self.stores.1,
+            time_zone: self.system_files.time_zone,
+            hostname: self.system_files.hostname,
+            volumes: self.system_files.volumes,
         };
         self.system_changes(now);
         self.deliver()
@@ -288,6 +330,14 @@ impl SystemService for NotifyBus {
 
 fn is_system(name: &str) -> bool {
     name.starts_with(SYSTEM_PREFIX)
+}
+
+/// How many mount points in a mount table (`/proc/mounts` format) are removable volumes under `/media` or `/run/media`.
+fn mounted_volumes(table: &str) -> usize {
+    table
+        .lines()
+        .filter(|line| line.split_whitespace().nth(1).is_some_and(|point| point.starts_with("/media/") || point.starts_with("/run/media/")))
+        .count()
 }
 
 /// The stamp of the file at `path`; `None` when it is missing or unreadable.
@@ -352,7 +402,7 @@ mod tests {
     }
 
     fn quiet() -> Seen {
-        Seen { light: false, locked: false, reachable: true, contacts: None, calendar: None }
+        Seen { light: false, locked: false, reachable: true, contacts: None, calendar: None, time_zone: None, hostname: None, volumes: 0 }
     }
 
     /// A file last written at `secs` after the epoch, `len` bytes long.
@@ -558,6 +608,29 @@ mod tests {
         bus.system_changes(quiet());
         bus.system_changes(quiet());
         assert!(bus.deliver().is_empty());
+    }
+
+    #[test]
+    fn a_change_of_time_zone_hostname_or_volume_count_posts_its_system_name() {
+        let mut bus = NotifyBus::default();
+        for n in [TIME_ZONE_CHANGE, HOSTNAME_CHANGE, bifrost_core::notify_center::VOLUME_MOUNT, bifrost_core::notify_center::VOLUME_UNMOUNT] {
+            bus.handle("app.a", "register", &name(n)).unwrap();
+        }
+        bus.system_changes(quiet());
+        bus.system_changes(Seen { time_zone: file(10, 1), hostname: file(10, 1), volumes: 1, ..quiet() });
+        let names: Vec<String> = event_names(&mut bus).into_iter().map(|(_, n)| n).collect();
+        assert_eq!(names, vec![TIME_ZONE_CHANGE.to_string(), HOSTNAME_CHANGE.to_string(), bifrost_core::notify_center::VOLUME_MOUNT.to_string()]);
+        bus.system_changes(Seen { time_zone: file(10, 1), hostname: file(10, 1), volumes: 0, ..quiet() });
+        let names: Vec<String> = event_names(&mut bus).into_iter().map(|(_, n)| n).collect();
+        assert_eq!(names, vec![bifrost_core::notify_center::VOLUME_UNMOUNT.to_string()]);
+    }
+
+    #[test]
+    fn the_mount_table_counts_only_removable_volumes() {
+        let table = "/dev/sda1 / ext4 rw 0 0\n/dev/sdb1 /media/olibuijr/USB vfat rw 0 0\ntmpfs /run/media/alice/SD tmpfs rw 0 0\n/dev/sdc1 /home ext4 rw 0 0\n";
+        assert_eq!(mounted_volumes(table), 2);
+        assert_eq!(mounted_volumes(""), 0);
+        assert_eq!(mounted_volumes("garbage\n"), 0);
     }
 
     #[test]
