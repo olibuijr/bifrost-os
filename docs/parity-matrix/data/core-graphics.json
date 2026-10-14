@@ -24,9 +24,9 @@
   {
    "feature": "Primitive shapes (rects, rounded rects, lines, ellipses, arcs)",
    "apple": "CGContextFillRect, CGContextStrokeRect, CGContextAddEllipseInRect, CGContextAddArc, lines",
-   "bifrost": "springboard/render/src/cg/surface.rs (stroke_line, fill_ellipse, stroke_ellipse, stroke_arc, fill_arc), springboard/render/src/gfx.rs (fill_rect, fill_rrect, stroke_rrect)",
+   "bifrost": "springboard/render/src/cg/surface.rs (stroke_line, fill_ellipse, stroke_ellipse, stroke_arc, fill_arc), springboard/render/src/gfx.rs (fill_rect, fill_rrect, stroke_rrect); springboard/sdk/src/graphics_context.rs (stroke_line, stroke_arc)",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Lines, ellipses and arcs draw on the Surface through the scan converter, with line caps for lines and arcs. Rounded rectangles and squircles are anti-aliased. Lines and arcs have no SDK wrapper call yet."
+   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Lines, ellipses and arcs draw on the Surface through the scan converter, with line caps for lines and arcs. The SDK context strokes one line segment and one arc with its stroke colour and line width, tested headless in sdk/tests/parity_sdk-complete-02.rs. Gap: no app calls the new line and arc wrappers yet; verify on Midget."
   },
   {
    "feature": "Clipping",
@@ -66,9 +66,9 @@
   {
    "feature": "Patterns (CGPattern)",
    "apple": "CGPattern, CGContextSetFillPattern",
-   "bifrost": "springboard/render/src/cg/paint.rs (Pattern, Tiling, PatternPaint, invert_matrix)",
+   "bifrost": "springboard/render/src/cg/paint.rs (Pattern, Tiling, PatternPaint, invert_matrix); springboard/sdk/src/graphics_pattern.rs (CgPattern, PatternTiling)",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Tiled pattern model with a cell and tiling settings and a pattern matrix. No pattern fill is connected to the Surface or to the SDK."
+   "note": "The SDK CgPattern wraps the cell model: it samples the cell in user space with the pattern matrix, repeats it every step, and fits the step to device pixels for each tiling mode; headless tests are in sdk/tests/parity_sdk-complete-02.rs. Gap: no pattern fill is connected to the Surface or to a context's fill call, and coloured-cell callbacks and uncoloured tinting are not in the SDK; verify the fill on Midget."
   },
   {
    "feature": "Images and bitmaps (CGImage, image masks, cropping)",
@@ -108,9 +108,9 @@
   {
    "feature": "Layers and offscreen reusable content (CGLayer)",
    "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
-   "bifrost": "springboard/render/src/cg/reusable_layer.rs; springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
+   "bifrost": "springboard/render/src/cg/reusable_layer.rs; springboard/sdk/src/graphics_layer.rs (CgLayer); springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object. new_layer_context makes an offscreen context and draw_layer_at composites it with clip, alpha and blend; draw_layer draws a group. Host tests only; verify on Midget."
+   "note": "CgLayer is the app-facing reusable layer: it keeps offscreen pixels and a draw count, is drawn into by a closure over a context, and is composited into any context with draw_layer_at (clip, alpha and blend apply); headless tests are in sdk/tests/parity_sdk-complete-02.rs. Gap: no shell or app draws through a CgLayer yet; verify on Midget."
   },
   {
    "feature": "Display services (Quartz Display Services)",
