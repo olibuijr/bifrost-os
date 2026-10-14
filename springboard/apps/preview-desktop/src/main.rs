@@ -1637,7 +1637,14 @@ impl Viewer {
                 return false;
             }
             let rows = self.side_rows(ui);
-            if let Some(i) = canvas::sidebar_hit(lay, &rows, self.view.sidebar_scroll, x, y) {
+            let hit = if self.side == Side::Pages {
+                canvas::sidebar_hit(lay, &rows, self.view.sidebar_scroll, x, y)
+            } else {
+                self.doc.as_ref().and_then(|doc| {
+                    canvas::source_list_hit(ui, lay, doc, self.side, &self.found, self.view.page, self.view.sidebar_scroll, x, y)
+                })
+            };
+            if let Some(i) = hit {
                 match self.side {
                     Side::Pages => self.go_page(i),
                     Side::Outline => {

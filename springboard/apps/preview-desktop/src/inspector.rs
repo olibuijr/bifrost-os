@@ -6,8 +6,8 @@ use crate::model::{Mark, MarkKind};
 use std::io::Read;
 use std::path::Path;
 
-/// How much of a JPEG is read for its EXIF block, which sits before the image data.
-const HEAD_BYTES: u64 = 256 * 1024;
+/// Byte budget for reading a JPEG's EXIF block; this is a metadata I/O limit, not a display size.
+const EXIF_SCAN_LIMIT_BYTES: u64 = 256 * 1024;
 
 /// What the file itself tells.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -29,7 +29,7 @@ pub fn read(path: &Path) -> Facts {
     if kind == "JPEG image" {
         let mut head = Vec::new();
         if let Ok(file) = std::fs::File::open(path) {
-            if file.take(HEAD_BYTES).read_to_end(&mut head).is_err() {
+            if file.take(EXIF_SCAN_LIMIT_BYTES).read_to_end(&mut head).is_err() {
                 head.clear();
             }
         }

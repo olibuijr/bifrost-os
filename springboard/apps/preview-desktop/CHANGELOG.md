@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.5 — 2026-10-14
+
+- Outline, markup, bookmark and search sidebar rows use the Golden Gate source-list widget and its hit model; page
+  thumbnails remain a content-specific gallery. Inspector metadata scan bounds are named by their purpose. Markup
+  colours use named system tokens, with highlight opacity applied separately; black remains reserved for redaction.
+
 ## 0.11.4 — 2026-10-14
 
 - Scale the magnifier handle to the shared legacy-control radius.
