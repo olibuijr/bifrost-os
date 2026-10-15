@@ -10,23 +10,23 @@
     {
       "feature": "Engine and asset registry",
       "apple": "PHASEEngine, PHASEAssetRegistry, PHASESoundAsset, PHASEAsset",
-      "bifrost": "springboard/audiod/src/main.rs (one process owns speaker and mic); springboard/sdk/src/lib.rs:87 (audio::Client)",
+      "bifrost": "springboard/audiod/src/main.rs (one process owns speaker and mic); springboard/sdk/src/lib.rs:87 (audio::Client); springboard/src/media/engine.rs (Engine, AssetRegistry, UpdateMode)",
       "status": "partial",
-      "note": "a shared playback service exists; no engine object, no asset registry and no update-mode control"
+      "note": "The shared playback service and an app-side engine model work: named assets with loop modes, a start and stop lifecycle, and an update mode locked while running, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: the engine does not yet drive audiod, so playing a name is not heard; the lab machine is needed to confirm an asset plays through the server."
     },
     {
       "feature": "Sampler playback of complete audio",
       "apple": "PHASESamplerNodeDefinition, PHASEPlaybackMode",
-      "bifrost": "springboard/src/media/audioplayer.rs; springboard/apps/daw/src/devices/inst/zones/voice.rs",
+      "bifrost": "springboard/src/media/audioplayer.rs; springboard/apps/daw/src/devices/inst/zones/voice.rs; springboard/src/media/loop_region.rs (LoopMode, LoopRegion, Head)",
       "status": "partial",
-      "note": "files play through the player and the DAW sampler voices; the sampler is app-internal, not an SDK API; no loop mode options in the SDK"
+      "note": "Files play through the player and the DAW sampler voices. Loop modes (off, forward, ping-pong) and the read head through a region are in the SDK as bifrost_app::kit::loop_region, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: the player and the DAW voice do not yet take a region from an app, and the sampler voice stays app-internal; the lab machine confirms an audible loop on Midget."
     },
     {
       "feature": "Streamed buffers (push and pull streams)",
       "apple": "PHASEPushStreamNode, PHASEPullStreamNode, PHASEStreamNode, PHASEPushStreamBufferOptions",
-      "bifrost": "springboard/src/media/stream.rs; springboard/src/media/player.rs",
+      "bifrost": "springboard/src/media/stream.rs; springboard/src/media/player.rs; springboard/src/media/push_queue.rs (PushQueue, Priority, Pulled)",
       "status": "partial",
-      "note": "the decoder pipeline streams internally; apps cannot supply their own buffers or set buffer priority"
+      "note": "The decoder pipeline streams internally, and an app can push its own sample blocks into a bounded queue with a priority and pull exact-length output with the underrun counted, as bifrost_app::kit::push_queue, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: the player does not yet read from an app's queue and there is no pull-stream callback, so the lab machine is needed for an app's stream to be heard."
     },
     {
       "feature": "Spatial sources and listener",
@@ -59,9 +59,9 @@
     {
       "feature": "Mixers and layering",
       "apple": "PHASEMixer, PHASEMixerDefinition, PHASEChannelMixerDefinition, PHASEAmbientMixerDefinition, PHASEMixerParameters",
-      "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors)",
+      "bifrost": "springboard/audio/alsa/src/ctl.rs (ALSA control elements); springboard/apps/daw/src/devices/mod.rs (bus processors); springboard/src/media/mixer.rs (mix, Strip, db_to_linear)",
       "status": "partial",
-      "note": "audio/alsa/src/ctl.rs drives the card's controls, not a signal graph; buses exist only inside the DAW app"
+      "note": "Layers can be summed through a gain and mute strip with clipping counted, as bifrost_app::kit::mixer, tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: there is no signal graph or per-layer parameter set, so the mixer is a flat sum; audio/alsa/src/ctl.rs drives the card's controls, and buses still exist only inside the DAW app."
     },
     {
       "feature": "Sound event nodes (switch, random, blend, container)",
@@ -87,9 +87,9 @@
     {
       "feature": "Loudness normalization and calibration",
       "apple": "PHASENormalizationMode, PHASECalibrationMode",
-      "bifrost": "springboard/src/media/volume.rs (apply, software gain)",
+      "bifrost": "springboard/src/media/volume.rs (apply, software gain, normalization_gain_db, normalized_linear)",
       "status": "partial",
-      "note": "a per-route volume and headphone cap exist; no per-asset loudness normalization"
+      "note": "A per-route volume, a headphone cap and a per-track normalization gain (a target and boost limit, tested headless in springboard/tests/parity_sdk-complete-32.rs) exist. Gap: no loudness analysis of the asset yet, so the measured level must be supplied, and calibration of a device's output needs the lab machine's speakers."
     },
     {
       "feature": "Head tracking and personalized spatial audio",

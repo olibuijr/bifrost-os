@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.12.4 — 2026-10-14
+
+- Clarify that the periodic wake is a media-service clock interval, not window sizing.
+
+## 1.12.3 — 2026-10-14
+
+- Name the one-second playback-service wake interval explicitly.
+
+## 1.12.2 — 2026-10-14
+
+- Let the source-list sidebar shrink with compact windows while retaining its desktop width.
+
+## 1.12.1 — 2026-10-14
+
+- Use shared spacing values in the episode list, transcript rows, chapter indicator, and notes view.
+
+## 1.12.0 — 2026-10-14
+
+- Episode menu: Mark All as Played (or Mark All as Unplayed, when every episode of the show is played) marks every
+  episode of the show on screen in one step. It changes only the episodes whose flag differs and keeps the flags of
+  other shows. The item is off on the New Episodes, Up Next and other lists that are not a single show.
+
+## 1.11.0 — 2026-10-14
+
+- Parity records: the Podcasts rows for downloads, Up Next, refresh, search, New Episodes, notes, chapters, show and
+  app settings, OPML, transcripts and menus now cite the code that does the work (feed refresh, the download queue,
+  Up Next moves, the search, the settings choices, the OPML and transcript parsers, and the main menu). No behaviour
+  change in this release.
+
+## 1.10.0 — 2026-10-14
+
+- Up Next can be reordered by hand: press and hold an episode for half a second, then drag it to a new place. The
+  list keeps its order when the app restarts. A drag that starts as a quick swipe still scrolls the list.
+- Episode notes keep links: a link shows its text followed by its address in parentheses, unless the text is the
+  address itself.
+
 ## 1.8.0 — 2026-10-13
 
 - Library: the sidebar has Search, New Episodes (unplayed episodes of every show, newest first), Up Next, Downloaded,
@@ -125,3 +161,9 @@
 - Connect to the Linux audio service path.
 - Keep text-field focus without drawing an on-screen keyboard in PC app processes.
 - Route physical text, Backspace and Return keys to existing field editors.
+
+## 1.9.0 — 2026-10-13
+
+- Chapters: when a feed links to a chapters file (the `podcast:chapters` JSON format) instead of listing the marks
+  itself, Podcasts reads it when the episode plays or its page opens. Chapters marked as hidden are left out.
+- Transcript: tap a timed line to jump to it.

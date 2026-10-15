@@ -16,6 +16,8 @@ pub struct Episode {
     pub notes: String,
     /// Chapter marks from the feed, in start order.
     pub chapters: Vec<Chapter>,
+    /// The address of a JSON file holding the chapters, empty when the feed names none (the feed's own marks win).
+    pub chapters_url: String,
     /// The address of the transcript file, empty when the feed names none.
     pub transcript: String,
 }
@@ -200,6 +202,7 @@ pub fn rfc2822_ts(raw: &str) -> Option<i64> {
         .position(|m| mon.to_ascii_lowercase().starts_with(m))? as i64
         + 1;
     let (day, year): (i64, i64) = (day.parse().ok()?, year.parse().ok()?);
+    // compliance-allow: LAY-03 Converts media timestamps from milliseconds to seconds, not screen dimensions.
     let mut clock = rest.first().map_or(Some(0), |t| clock_ms(t).map(|ms| (ms / 1000) as i64))?;
     if let Some(zone) = rest.get(1) {
         if let (Some(sign), true) = (zone.chars().next().filter(|c| *c == '+' || *c == '-'), zone.len() == 5) {
@@ -212,20 +215,36 @@ pub fn rfc2822_ts(raw: &str) -> Option<i64> {
 }
 
 /// Turns the HTML of a feed description into plain text: tags go, paragraph and line breaks become line breaks,
-/// entities are decoded, and runs of blank lines collapse to one.
+/// entities are decoded, and runs of blank lines collapse to one. A link keeps its text and its address in
+/// parentheses, unless the text is the address itself.
 pub fn html_to_text(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
+    // the link being read: where its text starts in `out`, and its address
+    let mut link: Option<(usize, String)> = None;
     while let Some(i) = rest.find('<') {
         out.push_str(&rest[..i]);
         let Some(end) = rest[i..].find('>') else {
             rest = "";
             break;
         };
+        let tag = &rest[i..i + end + 1];
         let closing = rest[i + 1..].starts_with('/');
         let name: String = rest[i + 1..i + end].trim_start_matches('/').chars().take_while(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
         if name == "br" || (closing && matches!(name.as_str(), "p" | "div" | "li" | "h1" | "h2" | "h3" | "h4")) {
             out.push('\n');
+        }
+        if name == "a" {
+            if closing {
+                if let Some((from, href)) = link.take() {
+                    let text = out[from..].trim();
+                    if !href.is_empty() && text != href {
+                        out.push_str(&format!(" ({href})"));
+                    }
+                }
+            } else {
+                link = Some((out.len(), attribute(tag, "a", "href").unwrap_or_default()));
+            }
         }
         rest = &rest[i + end + 1..];
     }
@@ -282,6 +301,7 @@ pub fn parse(xml: &str) -> (String, Vec<Episode>) {
                 .map(|t| html_to_text(&t))
                 .unwrap_or_default(),
             chapters: chapters(item),
+            chapters_url: attribute(item, "podcast:chapters", "url").unwrap_or_default(),
             transcript: attribute(item, "podcast:transcript", "url").unwrap_or_default(),
         });
     }
@@ -411,12 +431,14 @@ mod tests {
 <item><title>E</title><pubDate>Sat, 01 Jan 2000 00:00:00 GMT</pubDate>
 <description><![CDATA[<p>First &amp; second</p><p>Third<br/>line</p>]]></description>
 <podcast:transcript url="https://x.test/t.vtt" type="text/vtt"/>
+<podcast:chapters url="https://x.test/c.json" type="application/json+chapters"/>
 <psc:chapter start="00:01:00" title="Later"/><psc:chapter start="0" title="Intro"/>
 <enclosure url="https://x.test/1.mp3"/></item></channel></rss>"#;
         let (_, eps) = parse(xml);
         assert_eq!(eps[0].ts, 946_684_800);
         assert_eq!(eps[0].notes, "First & second\nThird\nline");
         assert_eq!(eps[0].transcript, "https://x.test/t.vtt");
+        assert_eq!(eps[0].chapters_url, "https://x.test/c.json");
         assert_eq!(eps[0].chapters, [Chapter { start_ms: 0, title: "Intro".into() }, Chapter { start_ms: 60_000, title: "Later".into() }]);
     }
 
@@ -436,6 +458,14 @@ mod tests {
     fn html_becomes_plain_text() {
         assert_eq!(html_to_text("<b>Hi</b> &lt;you&gt;<br>\n\n\n<ul><li>a</li><li>b</li></ul>"), "Hi <you>\n\na\nb");
         assert_eq!(html_to_text("plain"), "plain");
+    }
+
+    #[test]
+    fn links_keep_their_address_unless_the_text_is_the_address() {
+        assert_eq!(html_to_text(r#"Read <a href="https://x.test/a?b=1&amp;c=2">the guide</a> now"#), "Read the guide (https://x.test/a?b=1&c=2) now");
+        assert_eq!(html_to_text(r#"<a href="https://x.test">https://x.test</a>"#), "https://x.test");
+        assert_eq!(html_to_text(r#"<a href='https://y.test/p'>Y</a>, <abbr>ok</abbr>"#), "Y (https://y.test/p), ok");
+        assert_eq!(html_to_text("<a>bare</a>"), "bare");
     }
 
     #[test]

@@ -1,0 +1,7 @@
+[package]
+name = "bifrost-locate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bifrost-maps = { path = "../maps-desktop" }

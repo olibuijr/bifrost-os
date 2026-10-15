@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.7.0
+
+- Upstream wordcraft v0.7.0.
+  ## What's Changed
+  * Font list previews no longer keep every family in memory (#848) by @dkhlapov in https://github.com/storytold/wordcraft/pull/874
+  * Layout: blank pages put sections on the right side, and paragraph spacing is the larger of after and before (#733, rebased) by @echelon in https://github.com/storytold/wordcraft/pull/964
+  * Insert › Picture takes WMF and EMF metafiles (#802) by @dkhlapov in https://github.com/storytold/wordcraft/pull/869
+  * Wingdings, Webdings and Symbol text draws as Unicode symbols (#776) by @dkhlapov in https://github.com/storytold/wordcraft/pull/876
+
+## 0.6.2
+
+- Upstream wordcraft v0.6.1.
+  ## What's Changed
+  * Hyperlinks cover only their own text (#413) by @vangel76 in https://github.com/storytold/wordcraft/pull/449
+  * Groups keep rotated members' orientation; group resize; ink erase after rotation (#441, #442, #443, #445) by @vangel76 in https://github.com/storytold/wordcraft/pull/474
+  * Mail merge: SKIPIF, NEXT, IF in preview, header/footer fields (#427, #428, #429, #430) by @vangel76 in https://github.com/storytold/wordcraft/pull/478
+  * Options: interface size setting (#475) by @vangel76 in https://github.com/storytold/wordcraft/pull/480
+
 ## 0.6.1
 
 - Upstream wordcraft v0.6.1.

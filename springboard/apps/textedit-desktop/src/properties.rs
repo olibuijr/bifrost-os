@@ -191,6 +191,41 @@ pub fn field_at(layout: &PanelLayout, x: f32, y: f32) -> Option<usize> {
     layout.fields.iter().position(|f| f.contains(x, y))
 }
 
+/// The Preferences panel: a title, one row per setting (its name at the left, its value at the right), and the buttons
+/// on the bottom row. Rows are shorter than a field row so the whole list fits a normal window.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListLayout {
+    pub frame: Rect,
+    pub title_y: f32,
+    pub labels_x: f32,
+    pub right: f32,
+    pub rows: Vec<Rect>,
+    pub buttons_y: f32,
+}
+
+/// Height of one row of a list panel, in points.
+pub const LIST_ROW_H: f32 = 28.0;
+
+/// A list panel with `rows` rows for a window `width` points wide whose page starts at `body_top`.
+pub fn list_layout(width: f32, body_top: f32, rows: usize) -> ListLayout {
+    let w = (width - 2.0 * PAD).clamp(0.0, MAX_W);
+    let x = ((width - w) / 2.0).max(0.0);
+    let y = body_top + TOP_GAP;
+    let h = PAD + TITLE_H + LIST_ROW_H * rows as f32 + BUTTONS_H;
+    let first = y + PAD + TITLE_H;
+    let row_rects = (0..rows)
+        .map(|i| Rect { x: x + PAD, y: first + LIST_ROW_H * i as f32, w: w - 2.0 * PAD, h: LIST_ROW_H })
+        .collect();
+    ListLayout {
+        frame: Rect { x, y, w, h },
+        title_y: y + PAD,
+        labels_x: x + PAD,
+        right: x + w - PAD,
+        rows: row_rects,
+        buttons_y: first + LIST_ROW_H * rows as f32 + (BUTTONS_H - FIELD_H) / 2.0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -56,6 +56,16 @@ impl<T: Clone> SensorLog<T> {
         self.samples.range(start..).take_while(|(t, _)| *t <= to).cloned().collect()
     }
 
+    /// The samples from `from` to `to` in consecutive batches of at most `size`, oldest batch first. Only the last
+    /// batch can be short. Empty when `size` is zero or the range holds no samples.
+    pub fn batches(&self, from: f64, to: f64, size: usize) -> Vec<Vec<(f64, T)>> {
+        if size == 0 {
+            return Vec::new();
+        }
+        let samples = self.between(from, to);
+        samples.chunks(size).map(<[(f64, T)]>::to_vec).collect()
+    }
+
     /// Drops every sample taken before `t`.
     pub fn discard_before(&mut self, t: f64) {
         let n = self.samples.partition_point(|(s, _)| *s < t);

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.5 — 2026-10-14
+
+- Write CSV exports through a synced, owner-only sibling file and atomic replacement, preserving the previous export if
+  the new write is interrupted or fails. Failed password reads now abort the export instead of publishing a partial CSV.
+- Report partial keychain imports accurately; imports consist of individual keychain operations and cannot be rolled
+  back transactionally.
+
+## 0.2.4 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.2.3 — 2026-10-14
+
+- Render and hit-test password entries with the shared source-list widget.
+
+## 0.2.2 — 2026-10-14
+
+- Use appearance-aware selected, field and separator fills.
+
+## 0.2.1 — 2026-10-14
+
+- Add the Passwords store icon.
+
 ## 0.2.0
 
 - Passwords lists three kinds of item in the shared passwords group: Logins, Notes and Certificates tabs. A note or

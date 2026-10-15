@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.12.2 — 2026-10-14
+
+- Use scheme-aware popover material for board search and the inspector, and named layout/type tokens.
+
+## 1.12.1 — 2026-10-14
+
+- Draw board search with the shared Golden Gate search field and make its clear button interactive.
+
+## 1.12.0 — 2026-10-14
+
+- Route standard Undo, Redo, Copy and Paste through the shell's Edit commands; keep Duplicate and Delete in Arrange.
+
+## 1.11.0 — 2026-10-14
+
+- Text boxes, sticky notes and table cells have a caret you can move: Left and Right step through the text, Home and End go to its ends, and typing and Backspace act at the caret. The caret is drawn where it is in the wrapped text. Tab and Return start the next cell with the caret at its end. There is no selection yet.
+
+## 1.10.0 — 2026-10-14
+
+- Edit > Paste centres pasted strokes, notes, links and text boxes on the pointer. With the pointer over the toolbar, the paste keeps the fixed offset; Duplicate is unchanged.
+- The unused second zoom, connector and search model (`canvas_view`) is removed; the app keeps one implementation of each.
+
 ## 1.9.0 — 2026-10-13
 
 - Board items: text boxes, sticky notes, tables, links, files and pictures. The toolbar has Text, Note and Connect tools, and the Insert menu adds a text box, sticky note, table, connector, link and Picture or File. Type into an item (double tap one with the lasso, or press Return on it); Tab and Return move between table cells; Add Table Row and Column grow a table.

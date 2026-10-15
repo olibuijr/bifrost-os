@@ -10,9 +10,9 @@
     {
       "feature": "File descriptors (open, read, write, seek, close, duplicate)",
       "apple": "FileDescriptor, FileDescriptor.AccessMode, OpenOptions, SeekOrigin, DuplicateOptions, PipeOptions (https://developer.apple.com/documentation/system/filedescriptor)",
-      "bifrost": "springboard/sdk/src/runtime.rs:373 (takes ownership of a received descriptor as a File); springboard/proto/src/sys.rs:91 (Owned fd wrapper)",
+      "bifrost": "springboard/sdk/src/file_descriptor.rs (FileDescriptor, Access, OpenFlags); springboard/sdk/src/runtime.rs:373 (takes ownership of a received descriptor as a File); springboard/proto/src/sys.rs:91 (Owned fd wrapper)",
       "status": "partial",
-      "note": "Apps get raw descriptors through document grants and shared memory, and they can use Rust std::fs. There is no typed SDK FileDescriptor with open options, positional read and write, or pipe creation."
+      "note": "A typed FileDescriptor opens with an access mode and flags, reads and writes at the position or at an offset, seeks, duplicates and refuses I/O that its access mode forbids (headless tests in springboard/sdk/tests/parity_sdk-complete-36.rs). Gap: there is no pipe creation and no typed wrapper for a received descriptor, and the descriptor is not verified on Midget."
     },
     {
       "feature": "Document grants (user-chosen file access without a path)",
@@ -24,9 +24,9 @@
     {
       "feature": "File paths (typed, component-wise paths)",
       "apple": "FilePath, FilePath.Component, FilePath.ComponentView, FilePath.Root (https://developer.apple.com/documentation/system/filepath)",
-      "bifrost": "Rust std::path::Path and PathBuf, used across springboard/src/ and springboard/sdk/src/ (for example springboard/sdk/src/file_coordination.rs:105 takes &Path)",
-      "status": "os",
-      "note": "The language's path type is the counterpart. No SDK type gives a null-terminated platform string or component views; the Rust path type is what apps use."
+      "bifrost": "springboard/sdk/src/typed_path.rs (TypedPath, Part, PathError)",
+      "status": "partial",
+      "note": "Parsing with checks, component views, push and removal, lexical normalisation and the bridge to the language path type are tested headless in tests/parity_sdk-rest-06.rs. Gap: there is no null-terminated platform string, no root enum and no separate component view type; the language path type stays the storage."
     },
     {
       "feature": "File permissions and modes",
@@ -45,9 +45,9 @@
     {
       "feature": "Filesystem capacity (statvfs)",
       "apple": "No direct System type; used by Foundation volume APIs and the Storage pane",
-      "bifrost": "springboard/src/bare/sys.rs:121 (statvfs extern) and springboard/src/bare/sys.rs:125 (disk_space); springboard/src/shell/storage.rs:145 (shell caller)",
-      "status": "os",
-      "note": "Shell-only. Apps have no SDK call for free and total space of a volume."
+      "bifrost": "springboard/sdk/src/volume.rs (capacity, Capacity); springboard/core/src/volume.rs (statvfs); springboard/src/bare/sys.rs (disk_space); springboard/src/shell/storage.rs:145 (shell caller)",
+      "status": "partial",
+      "note": "Apps read total, free and available bytes of the volume holding a path; tested headless in sdk tests parity_sdk-os-08.rs. Gap: no change notifications when a volume's space changes."
     },
     {
       "feature": "Error numbers (Errno)",
@@ -80,9 +80,9 @@
     {
       "feature": "File ownership by user and group identity",
       "apple": "UserID, GroupID, DeviceID, Inode (strongly typed wrappers over uid_t, gid_t, dev_t, ino_t)",
-      "bifrost": "springboard/src/bare/docbroker.rs:1-20 (fsuid and fsgid switched for the calling thread)",
-      "status": "os",
-      "note": "Identity switching is done in the shell. The types are not exposed to apps."
+      "bifrost": "springboard/sdk/src/file_identity.rs (FileIdentity::of, UserId, GroupId, DeviceId, Inode); springboard/src/bare/docbroker.rs:1-20 (fsuid and fsgid switched for the calling thread)",
+      "status": "partial",
+      "note": "Apps read the owning user, group, device and inode of a file and test whether two paths name the same file; tested headless in sdk tests parity_sdk-os-08.rs. Gap: the shell's identity switch for document grants is not exposed to apps."
     },
     {
       "feature": "Adopting C file operations in Swift (migration guides)",

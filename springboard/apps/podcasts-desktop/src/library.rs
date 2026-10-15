@@ -28,6 +28,11 @@ impl Library {
         was != played
     }
 
+    /// Marks every episode in `urls` played or unplayed. Returns how many of them changed.
+    pub fn set_all_played<'a>(&mut self, urls: impl IntoIterator<Item = &'a str>, played: bool) -> usize {
+        urls.into_iter().filter(|u| self.set_played(u, played)).count()
+    }
+
     pub fn queue(&self) -> &[String] {
         &self.queue
     }
@@ -72,6 +77,19 @@ impl Library {
             }
             None => false,
         }
+    }
+
+    /// Moves a queued episode to position `to` of Up Next (clamped to the last place), for a drag. False when the
+    /// episode is not queued or already there.
+    pub fn move_to(&mut self, url: &str, to: usize) -> bool {
+        let Some(from) = self.queue.iter().position(|u| u == url) else { return false };
+        let to = to.min(self.queue.len() - 1);
+        if from == to {
+            return false;
+        }
+        let item = self.queue.remove(from);
+        self.queue.insert(to, item);
+        true
     }
 
     /// Forgets the played flags and queue entries of `urls` (an unfollowed show's episodes).
@@ -174,6 +192,25 @@ mod tests {
     }
 
     #[test]
+    fn marking_a_show_played_counts_only_the_episodes_that_change() {
+        let mut lib = Library::default();
+        lib.set_played("b", true);
+        assert_eq!(lib.set_all_played(["a", "b", "c"], true), 2);
+        assert!(lib.is_played("a") && lib.is_played("b") && lib.is_played("c"));
+        assert_eq!(lib.set_all_played(["a", "b", "c"], true), 0, "a second pass changes nothing");
+    }
+
+    #[test]
+    fn marking_a_show_unplayed_clears_only_its_own_episodes() {
+        let mut lib = Library::default();
+        lib.set_all_played(["a", "b"], true);
+        lib.set_played("other", true);
+        assert_eq!(lib.set_all_played(["a", "b"], false), 2);
+        assert!(!lib.is_played("a") && !lib.is_played("b"));
+        assert!(lib.is_played("other"), "episodes of other shows keep their flag");
+    }
+
+    #[test]
     fn the_queue_orders_next_and_last_without_duplicates() {
         let mut lib = Library::default();
         lib.play_last("a");
@@ -202,6 +239,22 @@ mod tests {
         assert!(!lib.move_in_queue("b", false));
         assert!(!lib.move_in_queue("zzz", true));
         assert_eq!(lib.queue(), ["c", "a", "b"]);
+    }
+
+    #[test]
+    fn a_dragged_episode_lands_at_the_target_place() {
+        let mut lib = Library::default();
+        for u in ["a", "b", "c", "d"] {
+            lib.play_last(u);
+        }
+        assert!(!lib.move_to("b", 1), "already there");
+        assert!(lib.move_to("a", 2));
+        assert_eq!(lib.queue(), ["b", "c", "a", "d"]);
+        assert!(lib.move_to("d", 0));
+        assert_eq!(lib.queue(), ["d", "b", "c", "a"]);
+        assert!(lib.move_to("d", 99), "past the end clamps to the last place");
+        assert_eq!(lib.queue(), ["b", "c", "a", "d"]);
+        assert!(!lib.move_to("zzz", 0));
     }
 
     #[test]

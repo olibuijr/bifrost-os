@@ -32,6 +32,14 @@ pub const NETWORK_CHANGE: &str = "system.network.change";
 pub const CONTACTS_CHANGE: &str = "system.contacts.change";
 /// Posted by the shell when the events file changes (the Calendar app saved, or the file appeared or went).
 pub const CALENDAR_CHANGE: &str = "system.calendar.change";
+/// Posted by the shell when the local time zone changes.
+pub const TIME_ZONE_CHANGE: &str = "system.timezone.change";
+/// Posted by the shell when the host name changes.
+pub const HOSTNAME_CHANGE: &str = "system.hostname.change";
+/// Posted by the shell when a removable volume is mounted.
+pub const VOLUME_MOUNT: &str = "system.volume.mount";
+/// Posted by the shell when a removable volume is unmounted.
+pub const VOLUME_UNMOUNT: &str = "system.volume.unmount";
 
 /// How a token delivers its posts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

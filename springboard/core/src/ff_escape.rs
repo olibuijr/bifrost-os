@@ -58,22 +58,30 @@ impl Escape {
 
     /// Reads a frame made by [`Escape::encode`]. The frame must hold exactly the payload its header declares.
     pub fn decode(frame: &[u8]) -> Result<Self, EscapeError> {
-        if frame.len() < HEADER_LEN {
+        let (escape, used) = Escape::split(frame)?;
+        if used != frame.len() {
+            return Err(EscapeError::TrailingBytes);
+        }
+        Ok(escape)
+    }
+
+    /// Reads the first frame at the start of `buffer`, for a reply that carries several frames back to back. Returns
+    /// the escape and the number of bytes the frame used, so the caller can read the next one from the rest.
+    pub fn split(buffer: &[u8]) -> Result<(Self, usize), EscapeError> {
+        if buffer.len() < HEADER_LEN {
             return Err(EscapeError::Truncated);
         }
-        let code = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]);
-        let len = u32::from_le_bytes([frame[4], frame[5], frame[6], frame[7]]) as usize;
-        let body = &frame[HEADER_LEN..];
+        let code = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        let len = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]) as usize;
         if len > MAX_PAYLOAD {
             return Err(EscapeError::PayloadTooLarge(len));
         }
-        if body.len() < len {
+        let end = HEADER_LEN + len;
+        if buffer.len() < end {
             return Err(EscapeError::Truncated);
         }
-        if body.len() > len {
-            return Err(EscapeError::TrailingBytes);
-        }
-        Escape::new(code, body.to_vec())
+        let escape = Escape::new(code, buffer[HEADER_LEN..end].to_vec())?;
+        Ok((escape, end))
     }
 }
 

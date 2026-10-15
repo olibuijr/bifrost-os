@@ -4,14 +4,18 @@
 //! membership. Fonts are added from the Font menu (Add Fonts), by Open With, or by a `fontbook:` link; a file is shown
 //! in an install preview first and refused when it fails validation (a setting). The model is in `model.rs`; the font
 //! checks are in `validate.rs`. Libraries (named sets of font folders) switch what the list reads; Export Font saves a
-//! copy of the selected font through the save panel, Show in Files reveals a font of the user's, and Print Sample Sheet
-//! sends the font's details and sample line to the printer.
+//! copy of the selected font through the save panel, Export Fonts to Folder copies every family the list shows into a
+//! folder (`export.rs`), Validate File checks a font file from the panel without installing it, Show in Files reveals
+//! a font of the user's, and Print Sample Sheet sends the font's details and sample line to the printer.
 
+mod export;
 mod model;
 mod validate;
 
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{Damage, Font, Surface};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::widgets;
 use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::DocErrorCode;
 use bifrost_app::workspace;
@@ -81,6 +85,8 @@ const MENU_LIBRARY_REMOVE: u32 = 23;
 const MENU_REVEAL: u32 = 24;
 const MENU_EXPORT: u32 = 25;
 const MENU_PRINT: u32 = 26;
+const MENU_VALIDATE_FILE: u32 = 27;
+const MENU_EXPORT_FOLDER: u32 = 28;
 /// The library items of the menu: this id plus the library's index in `model::library_names`.
 const MENU_LIBRARY_BASE: u32 = 100;
 
@@ -139,6 +145,12 @@ struct FontBookApp {
     reveal: Option<u32>,
     /// the save panel request of an export, with the font file it copies
     export: Option<(u32, PathBuf)>,
+    /// the folder panel request of Export Fonts to Folder, with the font files it copies
+    export_folder: Option<(u32, Vec<PathBuf>)>,
+    /// the open panel request of Validate File
+    validate_file: Option<u32>,
+    /// the file chosen in Validate File, checked and not installed, shown in place of the selected family
+    checked: Option<(String, validate::Report)>,
     /// a message from a completion closure (the workspace answers later), shown at the next draw
     notice: Rc<RefCell<String>>,
 }
@@ -270,6 +282,40 @@ impl FontBookApp {
                 ctx.abort_document(request);
                 self.status = format!("Could not export the font: {e}");
             }
+        }
+    }
+
+    /// The font files of the families the list shows now, in list order.
+    fn shown_paths(&self) -> Vec<PathBuf> {
+        self.library.as_ref().map(|l| l.visible(&self.source, &self.query).iter().map(|f| PathBuf::from(&f.path)).collect()).unwrap_or_default()
+    }
+
+    /// The folder panel answered Export Fonts to Folder: each font file in `files` is copied into the folder, under a
+    /// name no file there uses. The folder is reached through its descriptor, so the copies are made inside it.
+    fn export_into_folder(&mut self, ctx: &Ctx, doc: bifrost_app::Document, files: Vec<PathBuf>) {
+        use std::os::fd::AsRawFd;
+        let dest = PathBuf::from(format!("/proc/self/fd/{}", doc.file.as_raw_fd()));
+        ctx.release_document(doc.grant);
+        let existing: Vec<String> = std::fs::read_dir(&dest)
+            .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+            .unwrap_or_default();
+        let failed = export::plan(&files, &dest, &existing).iter().filter(|(src, target)| export::copy_new(src, target).is_err()).count();
+        self.status = if failed == 0 {
+            format!("Exported {} fonts to {}.", files.len(), doc.name)
+        } else {
+            format!("Exported {} of {} fonts; {failed} could not be copied.", files.len() - failed, files.len())
+        };
+    }
+
+    /// The file chosen in Validate File is read and checked. Nothing is installed.
+    fn check_chosen_file(&mut self, doc: bifrost_app::Document) {
+        let mut bytes = Vec::new();
+        match (&doc.file).read_to_end(&mut bytes) {
+            Ok(_) => {
+                self.status = format!("Checked {}; it is not installed.", doc.name);
+                self.checked = Some((doc.name, validate::check(&bytes)));
+            }
+            Err(e) => self.status = format!("Cannot read {}: {e}", doc.name),
         }
     }
 
@@ -511,6 +557,9 @@ impl FontBookApp {
         if self.pending.is_some() {
             return self.pending_touch(ctx, x, y, preview_x);
         }
+        if x < SIDEBAR_PT + LIST_PT {
+            self.checked = None;
+        }
         if x < SIDEBAR_PT {
             let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
             let index = ((y - HEADER_PT) / ROW_PT).floor();
@@ -721,6 +770,8 @@ impl App for FontBookApp {
                     self.edit = Edit::None;
                 } else if self.pending.is_some() {
                     self.cancel_install(ctx);
+                } else if self.checked.is_some() {
+                    self.checked = None;
                 } else {
                     self.query.clear();
                 }
@@ -750,6 +801,17 @@ impl App for FontBookApp {
                 self.reveal_granted(ctx, doc);
                 return true;
             }
+            DocumentEvent::Opened(doc) if self.export_folder.as_ref().is_some_and(|(r, _)| *r == doc.request) => {
+                if let Some((_, files)) = self.export_folder.take() {
+                    self.export_into_folder(ctx, doc, files);
+                }
+                return true;
+            }
+            DocumentEvent::Opened(doc) if self.validate_file == Some(doc.request) => {
+                self.validate_file = None;
+                self.check_chosen_file(doc);
+                return true;
+            }
             DocumentEvent::SaveTo(doc) => {
                 self.write_export(ctx, doc);
                 return true;
@@ -760,6 +822,12 @@ impl App for FontBookApp {
                 }
                 if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
                     self.export = None;
+                }
+                if self.export_folder.as_ref().is_some_and(|(r, _)| *r == request) {
+                    self.export_folder = None;
+                }
+                if self.validate_file == Some(request) {
+                    self.validate_file = None;
                 }
                 if self.reveal == Some(request) {
                     self.reveal = None;
@@ -798,6 +866,7 @@ impl App for FontBookApp {
         let collection = self.current_collection().is_some();
         let has_query = !self.query.trim().is_empty();
         let reveal = self.selected.as_deref().is_some_and(|n| self.revealable(n));
+        let has_list = !self.shown_paths().is_empty();
         let mut items = vec![
                 AppMenuItem::new(MENU_ADD, "Add Fonts...").key("cmd+o"),
                 AppMenuItem::separator(),
@@ -815,6 +884,7 @@ impl App for FontBookApp {
                 AppMenuItem::new(MENU_TOGGLE, if on == Some(false) { "Turn Font On" } else { "Turn Font Off" }).enabled(has_font),
                 AppMenuItem::new(MENU_REMOVE, "Remove Font").enabled(has_font && is_user),
                 AppMenuItem::new(MENU_VALIDATE, "Validate Font").key("cmd+shift+v").enabled(has_font),
+                AppMenuItem::new(MENU_VALIDATE_FILE, "Validate File..."),
                 AppMenuItem::new(MENU_DUPLICATES, if self.duplicates.is_empty() { "Resolve Duplicates" } else { "Resolve Duplicates (Confirm)" }),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_SAMPLE, "Sample").key("cmd+1").checked(self.mode == Mode::Sample),
@@ -839,6 +909,7 @@ impl App for FontBookApp {
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_REVEAL, "Show in Files").enabled(has_font && reveal),
             AppMenuItem::new(MENU_EXPORT, "Export Font...").key("cmd+e").enabled(has_font),
+            AppMenuItem::new(MENU_EXPORT_FOLDER, "Export Fonts to Folder...").enabled(has_list),
             AppMenuItem::new(MENU_PRINT, "Print Sample Sheet").key("cmd+p").enabled(has_font),
         ]);
         vec![AppMenu { title: "Font".into(), items }]
@@ -866,7 +937,19 @@ impl App for FontBookApp {
             }
             MENU_RENAME => self.start_rename(),
             MENU_DELETE => self.delete_current(&data),
-            MENU_VALIDATE => self.mode = Mode::Validation,
+            MENU_VALIDATE => {
+                self.checked = None;
+                self.mode = Mode::Validation;
+            }
+            MENU_VALIDATE_FILE => {
+                let options = OpenOptions { title: "Validate Font File".into(), filters: vec!["ttf".into(), "otf".into(), "ttc".into()], ..OpenOptions::default() };
+                self.validate_file = Some(ctx.open_panel(&options));
+            }
+            MENU_EXPORT_FOLDER => {
+                let files = self.shown_paths();
+                let options = OpenOptions { title: "Export Fonts".into(), files: false, directories: true, create_directories: true, ..OpenOptions::default() };
+                self.export_folder = Some((ctx.open_panel(&options), files));
+            }
             MENU_DUPLICATES => self.resolve_duplicates(&data),
             MENU_SAMPLE => self.mode = Mode::Sample,
             MENU_REPERTOIRE => self.mode = Mode::Repertoire,
@@ -937,29 +1020,25 @@ impl App for FontBookApp {
         let (w, h) = (s.w, s.h);
         let (wp, hp) = (w as f32 / scale, h as f32 / scale);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
-        // sidebar
-        s.fill_rect(0, 0, p(SIDEBAR_PT), h, ui::SIDEBAR_BG.now());
+        // Sidebar source list uses the shared Golden Gate neutral selection and row treatment.
         let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
-        for (i, (label, source)) in rows.iter().enumerate() {
-            let y = HEADER_PT + i as f32 * ROW_PT;
-            if *source == self.source {
-                s.fill_rect(p(6.0), p(y), p(SIDEBAR_PT - 12.0), p(ROW_PT), ui::SIDEBAR_SELECTED);
-            }
+        let entries = rows.iter().enumerate().map(|(i, (label, source))| {
             let editing = match (&self.edit, source) {
-                (Edit::Rename { old, smart, text }, Source::Collection(n)) if !*smart && old == n => Some(text.clone()),
-                (Edit::Rename { old, smart, text }, Source::Smart(n)) if *smart && old == n => Some(text.clone()),
+                (Edit::Rename { old, smart, text }, Source::Collection(n)) if !*smart && old == n => Some(text.as_str()),
+                (Edit::Rename { old, smart, text }, Source::Smart(n)) if *smart && old == n => Some(text.as_str()),
                 _ => None,
             };
-            let shown = match editing {
-                Some(text) => format!("{text}|"),
-                None => label.clone(),
-            };
-            put(s, ui, &shown, ui::MAC_BODY_PT, ui::LABEL.now(), PAD_PT, y + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
-        }
+            let shown = editing.map_or(label.as_str(), |text| text);
+            let symbol = match i { 0 => "textformat", 1 => "eye.slash", _ => "folder" };
+            SidebarItem::row(i as u32 + 1, shown).with_symbol(symbol)
+        }).collect();
+        let mut sidebar = SourceList::new(entries, ROW_PT, ROW_PT);
+        sidebar.set_selected(rows.iter().position(|(_, source)| *source == self.source).map(|i| i as u32 + 1));
+        widgets::source_list(s, ui, bifrost_app::controls::Rect { x: 0.0, y: HEADER_PT, w: SIDEBAR_PT, h: (hp - HEADER_PT).max(0.0) }, &sidebar, 0.0, None);
         put(s, ui, "New Collection", ui::MAC_BODY_PT, ui::LINK, PAD_PT, HEADER_PT + rows.len() as f32 * ROW_PT + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
         // list column
         let x0 = SIDEBAR_PT;
-        s.fill_rect(p(x0 + LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR);
+        s.fill_rect(p(x0 + LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR_C.now());
         let shown = self.shown();
         let heading = match (self.query.is_empty(), self.prefs.library.eq_ignore_ascii_case(model::LIBRARY_COMPUTER)) {
             (true, true) => format!("{} families", shown.len()),
@@ -974,7 +1053,7 @@ impl App for FontBookApp {
             }
             let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
             if self.selected.as_deref() == Some(name.as_str()) {
-                s.fill_rect(p(x0 + 6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(x0 + 6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT), ui::SIDEBAR_PLATE.now());
             }
             let colour = if on { ui::LABEL.now() } else { ui::LABEL_2.now() };
             put(s, ui, name, ui::MAC_BODY_PT, colour, x0 + PAD_PT, y + 6.0, LIST_PT - 2.0 * PAD_PT);
@@ -984,6 +1063,10 @@ impl App for FontBookApp {
         let avail = wp - px - PAD_PT;
         if self.pending.is_some() {
             self.draw_pending(ui, s, px, avail);
+        } else if let Some((name, report)) = &self.checked {
+            put(s, ui, name, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
+            put(s, ui, "Checked, not installed. Select a font to leave this view.", ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, HEADER_PT + 44.0, avail);
+            self.draw_validation(ui, s, Some(report), px, avail);
         } else if let Some(name) = self.selected.clone() {
             self.draw_selected(ui, s, &name, px, avail, hp);
         } else {
@@ -1003,8 +1086,8 @@ impl FontBookApp {
     fn draw_pending(&self, ui: &Ui, s: &mut Surface, px: f32, avail: f32) {
         let Some(pending) = &self.pending else { return };
         let can = pending.family.is_some() && (!self.prefs.validate_before_install || pending.report.is_valid());
-        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR }, px, PAD_PT, BUTTON_PT, 28.0);
-        button(s, ui, "Cancel", ui::SEPARATOR, px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR_C.now() }, px, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, "Cancel", ui::SEPARATOR_C.now(), px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
         let title = pending.family.clone().unwrap_or_else(|| pending.name.clone());
         put(s, ui, &title, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
         let verdict = match pending.report.verdict() {
@@ -1036,7 +1119,7 @@ impl FontBookApp {
     /// The selected family: switch and Remove Font, the name, the mode tabs and the mode's content.
     fn draw_selected(&self, ui: &Ui, s: &mut Surface, name: &str, px: f32, avail: f32, hp: f32) {
         let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
-        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR }, px, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR_C.now() }, px, PAD_PT, BUTTON_PT, 28.0);
         if self.is_user_font(name) {
             button(s, ui, "Remove Font", ui::DESTRUCTIVE, px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
         }
@@ -1046,7 +1129,7 @@ impl FontBookApp {
             let active = self.mode == *mode;
             let p = |v: f32| (v * ui.s) as usize;
             if active {
-                s.fill_rect(p(x), p(TABS_TOP_PT), p(TAB_PT - 4.0), p(TAB_H_PT), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(x), p(TABS_TOP_PT), p(TAB_PT - 4.0), p(TAB_H_PT), ui::SIDEBAR_PLATE.now());
             }
             put(s, ui, label, ui::MAC_BODY_PT, ui::LABEL.now(), x + 10.0, TABS_TOP_PT + 4.0, TAB_PT - 20.0);
         }
@@ -1073,8 +1156,8 @@ impl FontBookApp {
         put(s, ui, &text, ui::MAC_BODY_PT, colour, px + 8.0, CONTENT_TOP_PT + 5.0, FIELD_W_PT - 16.0);
         let smaller_x = px + FIELD_W_PT + 12.0;
         let bigger_x = smaller_x + SIZE_BTN_PT + 4.0;
-        button(s, ui, "-", ui::SEPARATOR, smaller_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
-        button(s, ui, "+", ui::SEPARATOR, bigger_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
+        button(s, ui, "-", ui::SEPARATOR_C.now(), smaller_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
+        button(s, ui, "+", ui::SEPARATOR_C.now(), bigger_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
         put(s, ui, &format!("{} pt", self.prefs.sample_size.round() as i32), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), bigger_x + SIZE_BTN_PT + 8.0, CONTENT_TOP_PT + 6.0, 60.0);
         let Some(font) = preview else { return };
         let mut y = CONTENT_TOP_PT + FIELD_H_PT + 14.0;
@@ -1109,7 +1192,7 @@ impl FontBookApp {
             if cy > hp {
                 break;
             }
-            let img = font.text(&c.to_string(), 20.0, Weight::Regular, ui::LABEL.now());
+            let img = font.text(&c.to_string(), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
             s.blit_colored(&img, (cx * ui.s) as i32, (cy * ui.s) as i32, ui::LABEL.now(), 255);
         }
     }
@@ -1207,6 +1290,9 @@ fn main() {
         add_library: None,
         reveal: None,
         export: None,
+        export_folder: None,
+        validate_file: None,
+        checked: None,
         notice: Rc::new(RefCell::new(String::new())),
     });
 }

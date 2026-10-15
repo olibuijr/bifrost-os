@@ -433,6 +433,10 @@ Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
    fonts that had no file). Upstream: `BIFROST_UPSTREAM_MIRROR` or the first Server in `/etc/pacman.d/mirrorlist`;
    `--skip-mirror-sync` only checks. Run it alone with `python3 tools/pc_mirror.py [--sync|--check]`; tests:
    `python3 -I tools/test_pc_mirror.py`. Midget's mirrorlist must point at that URL (not written by the installer). It refuses a version that is not newer than the published one.
+   The same publish exports the retained `springboard-shell` packages and pacman database to
+   `~/Projects/bifrost-site/site/arch/x86_64`, the live static path for `https://bifrost.olibuijr.com/arch/$arch`.
+   Package names are immutable; the database is atomically replaced last so it never refers to a package that is still
+   uploading. `BIFROST_PUBLIC_SITE` changes the site root when publishing from another host.
 4. Apps: bump manifest and Cargo versions with the CHANGELOG entry, commit, then
    `python3 tools/pc-app.py publish <app dir>`.
 5. Midget: `bifrost pc midget ota` drives Settings > Software Update by element name (check, download, Install Now,
@@ -479,6 +483,26 @@ to running an app with shell credentials. Remote sharing uses the SDK broker.
 
 Installed packages also use the [desktop app resource manager](app-manager.md).
 Inspect `/run/bifrost/app-resources.json` for actual per-app resource use and OOM events.
+
+## Store packages and the SDK protocol (2026-10-13)
+
+The shell and an app talk over the SDK protocol (`SDK_VERSION` in `springboard/proto/src/lib.rs`). An app built for
+another protocol installs but cannot run, so the protocol travels with the package:
+
+- `springboard/tools/aap.py pack` (run by `tools/pc-app.py pack|publish`) writes `sdk_protocol = N` as a top-level key
+  of the packaged `manifest.toml` for every package with a binary. `N` is read from `SDK_VERSION`; the source
+  `manifest.toml` is not edited.
+- The catalogue entry carries it as `"sdk_protocol": N` (the store server copies it from the packaged manifest, next to
+  `min_shell`). The shell reads it into `StoreApp::sdk_protocol`; an entry without it (0) is assumed to run.
+- The App Store shows "Needs update" instead of Get or Open for a package whose protocol differs from the shell's, and
+  the updates and system plans skip such a version. An installed app that a shell update left behind gets Update as soon
+  as a compatible version is published.
+- The shell starts an app with a mismatching protocol once, marks that binary incompatible and shows "This app needs an
+  update"; it does not start it again until the installed version (its binary path) changes.
+
+Republish rule: after every `SDK_VERSION` bump, rebuild and republish every app (`tools/pc-app.py publish APP` for each
+`-desktop` app) so each catalogue entry carries the new protocol. Until an app is republished it still carries the old
+number and shows "Needs update".
 
 ## Third-party prebuilt apps (upstream.toml)
 

@@ -7,10 +7,12 @@ mod model;
 mod store;
 
 use bifrost_app::controls::text::TextBuffer;
+use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{
-    Ui, Weight, FIELD_BG, FILL, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
-    MENU_HIGHLIGHT_TEXT, SEPARATOR, SYSTEM_BLUE, SYSTEM_ORANGE, SYSTEM_RED,
+    Ui, Weight, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
+    MENU_HIGHLIGHT_TEXT, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_ORANGE, SYSTEM_RED,
 };
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::widgets::{self, Material};
@@ -21,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Corner radius of buttons, fields and rows (points). The design rules keep corners at 6 points or less.
-const RADIUS_PT: f32 = 6.0;
+const RADIUS_PT: f32 = m::ICON_RADIUS;
 /// Distance between lines of the entry text (points).
 const LINE_PT: f32 = 18.0;
 /// How far a touch must move before it scrolls the timeline instead of selecting a row (points).
@@ -439,7 +441,7 @@ impl JournalApp {
         }
     }
 
-    fn draw_sidebar(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout, timeline: &[u64]) {
+    fn draw_navigation(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout, timeline: &[u64]) {
         let sidebar = Rect { x: 0.0, y: 0.0, w: layout::SIDEBAR_PT, h: layout.h };
         widgets::material(c, ui, controls_rect(sidebar), 0.0, Material::Sidebar);
 
@@ -457,7 +459,7 @@ impl JournalApp {
         // bookmarks filter
         let filter = layout.filter();
         let on = self.journal.bookmarks_only;
-        plate(c, ui, filter, if on { SYSTEM_ORANGE } else { FILL });
+        plate(c, ui, filter, if on { SYSTEM_ORANGE } else { FIELD_BG.now() });
         let label = if on { "Showing Bookmarks" } else { "All Entries" };
         text_centred(c, ui, label, MAC_FOOTNOTE_PT, Weight::Semibold, if on { MENU_HIGHLIGHT_TEXT } else { LABEL.now() }, filter);
 
@@ -471,36 +473,26 @@ impl JournalApp {
             return;
         }
 
-        let selected = self.journal.selected;
-        for slot in 0..layout.visible_rows() {
-            let Some(id) = timeline.get(self.top + slot).copied() else { break };
-            let Some(entry) = self.journal.entry(id) else { continue };
-            let row = layout.row(slot);
-            let is_selected = selected == Some(id);
-            if is_selected {
-                plate(c, ui, Rect { x: 6.0, y: row.y + 3.0, w: layout::SIDEBAR_PT - 12.0, h: row.h - 6.0 }, SYSTEM_BLUE);
-            }
-            let (title, sub, meta) = if is_selected {
-                (MENU_HIGHLIGHT_TEXT, MENU_HIGHLIGHT_TEXT, MENU_HIGHLIGHT_TEXT)
-            } else {
-                (LABEL.now(), LABEL_2.now(), LABEL_2.now())
-            };
-            let width = ui.pt(layout::SIDEBAR_PT - 2.0 * layout::PAD_PT);
-            let title_text = ui.fit(&entry.day.long(), MAC_BODY_PT, width);
-            text_at(c, ui, &title_text, MAC_BODY_PT, Weight::Semibold, title, 12.0, row.y + 8.0);
-            let line = if preview(&entry.text).is_empty() { "No text".to_string() } else { preview(&entry.text).to_string() };
-            text_at(c, ui, &ui.fit(&line, MAC_FOOTNOTE_PT, width), MAC_FOOTNOTE_PT, Weight::Regular, sub, 12.0, row.y + 26.0);
-            let mut bits = Vec::new();
-            if entry.bookmarked {
-                bits.push("Bookmarked".to_string());
-            }
+        let selected = self.journal.selected.and_then(|id| timeline.iter().position(|entry| *entry == id));
+        let items = timeline.iter().enumerate().filter_map(|(i, id)| {
+            let entry = self.journal.entry(*id)?;
+            let mut subtitle = if preview(&entry.text).is_empty() { "No text".to_string() } else { preview(&entry.text).to_string() };
+            if entry.bookmarked { subtitle.push_str(" · Bookmarked"); }
             if !entry.photos.is_empty() {
-                bits.push(format!("{} photo{}", entry.photos.len(), if entry.photos.len() == 1 { "" } else { "s" }));
+                subtitle.push_str(&format!(" · {} photo{}", entry.photos.len(), if entry.photos.len() == 1 { "" } else { "s" }));
             }
-            if !bits.is_empty() {
-                text_at(c, ui, &bits.join(" \u{00B7} "), MAC_FOOTNOTE_PT, Weight::Regular, meta, 12.0, row.y + 42.0);
-            }
-        }
+            Some(SidebarItem::row(i as u32 + 1, &entry.day.long()).with_subtitle(&subtitle))
+        }).collect();
+        let mut list = SourceList::new(items, layout::ROW_H_PT, layout::ROW_H_PT);
+        list.set_selected(selected.map(|i| i as u32 + 1));
+        widgets::source_list(
+            c,
+            ui,
+            bifrost_app::controls::Rect { x: 0.0, y: layout::LIST_TOP_PT, w: layout::SIDEBAR_PT, h: (layout.h - layout::LIST_TOP_PT).max(0.0) },
+            &list,
+            self.top as f32 * layout::ROW_H_PT,
+            None,
+        );
     }
 
     fn draw_header(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout) {
@@ -515,13 +507,13 @@ impl JournalApp {
         let [new, bookmark, delete] = layout.buttons();
         let has = self.journal.selected.is_some();
         let bookmarked = self.selected_entry().is_some_and(|e| e.bookmarked);
-        plate(c, ui, new, FILL);
+        plate(c, ui, new, FIELD_BG.now());
         text_centred(c, ui, "New Entry", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL.now(), new);
-        plate(c, ui, bookmark, if bookmarked { SYSTEM_ORANGE } else { FILL });
+        plate(c, ui, bookmark, if bookmarked { SYSTEM_ORANGE } else { FIELD_BG.now() });
         let label = if bookmarked { "Bookmarked" } else { "Bookmark" };
         let ink = if has { LABEL.now() } else { LABEL_2.now() };
         text_centred(c, ui, label, MAC_FOOTNOTE_PT, Weight::Semibold, if bookmarked { MENU_HIGHLIGHT_TEXT } else { ink }, bookmark);
-        plate(c, ui, delete, FILL);
+        plate(c, ui, delete, FIELD_BG.now());
         text_centred(c, ui, "Delete", MAC_FOOTNOTE_PT, Weight::Semibold, if has { SYSTEM_RED } else { LABEL_2.now() }, delete);
     }
 
@@ -551,14 +543,14 @@ impl JournalApp {
 
     fn draw_photo_bar(&self, c: &mut dyn Canvas, ui: &Ui, layout: &Layout) {
         let bar = layout.photo_bar();
-        c.fill_rect(RectF::new(ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.w), ui.pt(1.0)), SEPARATOR);
+        c.fill_rect(RectF::new(ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.w), ui.pt(1.0)), SEPARATOR_C.now());
         let names = self.selected_entry().map(|e| e.photos.join(", ")).unwrap_or_default();
         let list = if names.is_empty() { "No photos yet.".to_string() } else { format!("Photos: {names}") };
         let width = ui.pt(bar.w - 2.0 * layout::PAD_PT);
         text_at(c, ui, &ui.fit(&list, MAC_SUBHEAD_PT, width), MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), bar.x + layout::PAD_PT, bar.y + 10.0);
 
         let field = layout.photo_field();
-        plate(c, ui, field, FILL);
+        plate(c, ui, field, FIELD_BG.now());
         let focused = self.focus == Focus::PhotoField;
         if self.photo_path.text().is_empty() && !focused {
             text_at(c, ui, "Path to an image file (jpg, png, gif, webp, heic)", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), field.x + 8.0, field.y + 7.0);
@@ -568,7 +560,7 @@ impl JournalApp {
         }
 
         let attach = layout.attach();
-        plate(c, ui, attach, FILL);
+        plate(c, ui, attach, FIELD_BG.now());
         text_centred(c, ui, "Attach Photo", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL.now(), attach);
 
         if !self.status.is_empty() {
@@ -613,7 +605,7 @@ impl App for JournalApp {
         self.visible = layout.visible_rows();
         let timeline = self.timeline();
         let ui = &ctx.ui;
-        self.draw_sidebar(canvas, ui, &layout, &timeline);
+        self.draw_navigation(canvas, ui, &layout, &timeline);
         self.draw_header(canvas, ui, &layout);
         self.draw_editor(canvas, ui, &layout);
         self.draw_photo_bar(canvas, ui, &layout);

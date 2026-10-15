@@ -10,9 +10,9 @@
     {
       "feature": "Attach to a running scriptable app (SBApplication init by bundle id, pid or URL)",
       "apple": "SBApplication init(bundleIdentifier:), init(processIdentifier:), init(url:); isRunning",
-      "bifrost": "springboard/sdk/src/workspace.rs (running_applications, frontmost_application, url_for_application), springboard/sdk/src/control.rs (per-app socket)",
+      "bifrost": "springboard/sdk/src/workspace.rs (running_applications, frontmost_application, url_for_application), springboard/sdk/src/control.rs (per-app socket), springboard/sdk/src/script_target.rs (attach, socket_path)",
       "status": "partial",
-      "note": "A running app can be listed and its socket found (tools/app-control.py list). There is no handle object for a target app; a caller addresses it by app id and gets the socket path."
+      "note": "attach resolves a bundle id, process id or bundle URL against a running-app list (first match wins, trailing slashes ignored) and socket_path gives the per-app control socket; both are tested headless in springboard/sdk/tests/parity_sdk-complete-29.rs. Gap: the shell's running list carries only app ids, so attaching by process id or URL needs the shell to report those, and there is no handle object that sends calls to the attached app; the live check needs the lab machine."
     },
     {
       "feature": "Launch and activate a target app",

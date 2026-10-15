@@ -1,4 +1,4 @@
-//! Two-finger trackpad gestures as one event stream: magnification and rotation (the events behind `NSEvent` magnify and
+//! Two-finger trackpad gestures as one event stream: magnification and rotation (the events behind pointer magnify and
 //! rotate). The compositor feeds each frame with both finger positions and then the lift. The pinch and the rotation
 //! run together, since a two-finger touch can do both at once, and each frame returns the events for the app in order:
 //! magnify first, then rotate. Pure model: the caller delivers the events however its input path does.

@@ -31,9 +31,9 @@
     {
       "feature": "ChaCha20-Poly1305 (ChaChaPoly)",
       "apple": "ChaChaPoly",
-      "bifrost": "springboard/src/keychain.rs:349 (chacha20_block), :387 (chacha20_xor)",
-      "status": "os",
-      "note": "ChaCha20 stream cipher only (RFC 8439 block function) with HMAC-SHA256 in place of Poly1305; encrypt-then-MAC is in keychain.rs:305 (seal_with) and :316 (open_box); not exposed to apps"
+      "bifrost": "springboard/core/src/chacha_poly.rs (seal, open, poly1305); springboard/sdk/src/chacha_poly.rs (ChaChaPolyKey)",
+      "status": "partial",
+      "note": "RFC 8439 ChaCha20-Poly1305 with a 32-byte ChaChaPolyKey that seals to nonce, ciphertext and tag and opens only on a matching tag; tested headless against the RFC section 2.5.2 and 2.8.2 vectors in tests/parity_sdk-rest-05.rs. Gap: the keychain still uses its own HMAC-SHA256 encrypt-then-MAC (keychain.rs seal_with and open_box), and the AEAD is not verified on Midget."
     },
     {
       "feature": "AES ciphers (AES.GCM)",
@@ -66,23 +66,23 @@
     {
       "feature": "Hybrid public key encryption (HPKE)",
       "apple": "HPKE and HPKE key protocols",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no HPKE"
+      "bifrost": "springboard/ui/src/hpke.rs (setup_sender, setup_recipient, seal_base, open_base, Context)",
+      "status": "partial",
+      "note": "Base mode of RFC 9180 with DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and AES-128-GCM, with sealing, opening and exporter tests in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: no PSK or authenticated modes, no other KEM or AEAD suites, and no SDK type for the HPKE key protocols, so apps cannot reach it yet."
     },
     {
       "feature": "Post-quantum KEM and signatures (ML-KEM, X-Wing, ML-DSA)",
       "apple": "MLKEM768, MLKEM1024, XWingMLKEM768X25519, KEM, KEMPrivateKey, KEMPublicKey, MLDSA65, MLDSA87",
       "bifrost": "none",
       "status": "gap",
-      "note": "no post-quantum primitives"
+      "note": "Blocked: ML-KEM, X-Wing and ML-DSA need the FIPS 203 and FIPS 204 arithmetic (NTT, sampling, encodings) and the standard's known-answer vectors to test against. Neither is in this repository, and no unverified implementation was written in this round."
     },
     {
       "feature": "Typed key storage in the keychain",
       "apple": "CryptoKit keys stored as keychain items (sample: Storing CryptoKit Keys in the Keychain)",
-      "bifrost": "springboard/sdk/src/keychain.rs:36-51 (add, get, update, delete)",
+      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/sdk/src/keychain_keys.rs (encode, decode, add, update, decode_reply); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-41.rs",
       "status": "partial",
-      "note": "SDK keychain stores opaque secret bytes keyed by service and account, with a permission; there are no typed key objects and no key references"
+      "note": "Typed keys are stored as a kind-tagged record in one keychain item, and the record is checked headless on read: wrong magic, unknown kind and bad key length are refused. Gap: there are no key references, and keys are not reachable from apps outside the keychain calls; the keychain round trip needs the shell on Midget."
     },
     {
       "feature": "Hardware-backed keys (SecureEnclave)",

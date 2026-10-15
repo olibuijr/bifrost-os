@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.9.0
+
+- Upstream photocraft v0.9.0.
+  ## What's Changed
+  * Use craft-print for system printing by @skylartaylor in https://github.com/storytold/photocraft/pull/3872
+  * Tests: allow-list language-invariant bit-depth labels, add missing tr/hu 'Enable animations' (#4359) by @vangel76 in https://github.com/storytold/photocraft/pull/4362
+  * feat(automation): allow Crop and Straighten Photos through automation (#1052) by @buivanvu94 in https://github.com/storytold/photocraft/pull/3917
+  * Pencil: no 8-bit dither on aliased strokes, one flat colour at partial opacity by @cloudalister in https://github.com/storytold/photocraft/pull/3990
+
+## 0.8.3
+
+- Upstream photocraft v0.8.2.
+  ## What's Changed
+  * Adopt shared docking while preserving panel controls and workspaces by @skylartaylor in https://github.com/storytold/photocraft/pull/3097
+  * GPU composite: reuse unchanged lower-stack chunks for property edits by @Elvis33LE in https://github.com/storytold/photocraft/pull/1169
+  * Design: bounded GPU stack prefix reuse for property edits by @Elvis33LE in https://github.com/storytold/photocraft/pull/1164
+  * feat(ui): allow disabling Studio canvas background dots by @Ni-zav in https://github.com/storytold/photocraft/pull/2317
+
 ## 0.8.2
 
 - Upstream photocraft v0.8.2.

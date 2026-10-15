@@ -45,9 +45,9 @@
     {
       "feature": "Angles and trigonometry",
       "apple": "Angle2D, Angle2DFloat, sin/cos/tan and hyperbolic functions over Angle2D",
-      "bifrost": "springboard/src/shell/window_fx.rs (uses plain f32 radians and degrees, no Angle type)",
+      "bifrost": "springboard/ui/src/angle.rs (Angle: degrees, radians, sin, cos, tan, sin_cos, atan2, asin, acos, lerp, normalized, arithmetic)",
       "status": "partial",
-      "note": "trigonometry exists in the Rust std lib; no typed Angle value for apps"
+      "note": "typed Angle value in bifrost_ui::angle, reachable to apps as bifrost_app::controls::angle::Angle, with inverse trigonometry, lerp and scalar division tested headless in springboard/ui/tests/parity_sdk-complete-46.rs (plus parity_sdk-tests-05.rs). Gap: the hyperbolic functions are not built, and the shell's window effects still pass plain f32 radians."
     },
     {
       "feature": "Protocols for translate, rotate, scale, shear",

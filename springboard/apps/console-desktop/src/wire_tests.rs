@@ -7,7 +7,7 @@ use crate::services::test_ctx;
 use crate::model::{Level, LogEntry, Query};
 
 fn msg(date: i64, subsystem: &str, message: &str) -> LogEntry {
-    LogEntry { date, process: "notes".into(), pid: 1, subsystem: subsystem.into(), category: "sync".into(), level: Level::Notice, message: message.into() }
+    LogEntry { date, process: "notes".into(), pid: 1, subsystem: subsystem.into(), category: "sync".into(), level: Level::Notice, message: message.into(), invocation: String::new() }
 }
 
 fn console_with(entries: Vec<LogEntry>) -> Console {

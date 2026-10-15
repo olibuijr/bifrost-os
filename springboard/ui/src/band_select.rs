@@ -1,4 +1,4 @@
-//! Band selection (`UIBandSelectionInteraction`): a drag that starts on empty space draws a rubber band and selects every
+//! Band selection: a drag that starts on empty space draws a rubber band and selects every
 //! item the band touches. The same model serves a pointer drag and a finger drag, since both report a start point and a
 //! series of points in view points. A short movement is still a tap, so the band only becomes active once the pointer
 //! has moved `START_DISTANCE_PT` from where it started.

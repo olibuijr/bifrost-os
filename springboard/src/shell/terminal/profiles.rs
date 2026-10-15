@@ -32,6 +32,21 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// View > Allow Mouse Reporting: flips it for every tab and saves it.
+    pub(super) fn terminal_toggle_mouse_reporting(&mut self) {
+        self.terminal_ui.mouse_reporting = !self.terminal_ui.mouse_reporting;
+        let on = self.terminal_ui.mouse_reporting;
+        for term in self.term.iter_mut() {
+            term.set_mouse_reporting(on);
+        }
+        self.terminal_ui.message = match self.prefs.set("terminal.mouse_reporting", if on { "1" } else { "0" }) {
+            Ok(()) if on => "Programs receive mouse reports".into(),
+            Ok(()) => "Mouse reports to programs are off".into(),
+            Err(e) => format!("Could not save mouse reporting: {e}"),
+        };
+        self.dirty = true;
+    }
+
     /// Applies the profile caret (style and blink) to every tab and saves it.
     pub(super) fn terminal_cursor_changed(&mut self) {
         let (shape, blink) = (self.terminal_ui.cursor.shape(), self.terminal_ui.blink);

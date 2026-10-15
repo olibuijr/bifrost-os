@@ -114,9 +114,14 @@ impl Player {
     /// (`SPRINGBOARD_PCM` names another ALSA plugin; the speaker session
     /// opens on the first sound, and without one video plays against the wall clock). Starts the threads.
     pub fn open(path: &std::path::Path) -> io::Result<Player> {
-        let source = Box::new(FileSource::open(path)?);
         // the same lazy session Music uses: opens the PCM on the first write
         let audio: Box<dyn AudioOut> = Box::new(super::speaker::SpeakerOut::new(aac::OUT_RATE, 2));
+        Self::open_audio(path, audio)
+    }
+
+    /// Like `open`, with the caller's audio output in place of the speaker (a silent output, or a test sink).
+    pub fn open_audio(path: &std::path::Path, audio: Box<dyn AudioOut>) -> io::Result<Player> {
+        let source = Box::new(FileSource::open(path)?);
         Self::start(source, Box::new(super::default_decoder), audio)
     }
 

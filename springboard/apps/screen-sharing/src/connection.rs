@@ -3,6 +3,7 @@
 //! polls `Shared` on its own clock and sends through a channel.
 
 use bifrost_rfb::{handshake, message, Error, Framebuffer, PixelFormat};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::io::Write;
 use std::net::{Shutdown, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -57,7 +58,7 @@ impl Connection {
         let socket = Arc::new(Mutex::new(None));
         let target = bifrost_rfb::with_default_port(addr);
         let (s, sock, out) = (shared.clone(), socket.clone(), outbox.clone());
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let result = run(&target, &s, &sock, out, outbox_rx, &cut_tx);
             let mut st = lock(&s.status);
             if !matches!(*st, Status::Closed(_)) {
@@ -66,6 +67,8 @@ impl Connection {
                     Err(e) => e.to_string(),
                 });
             }
+            drop(st);
+            DispatchQueue::main().async_(|| {});
         });
         Connection { shared, cut_text, outbox, socket }
     }
@@ -125,6 +128,7 @@ fn run(
         *lock(&shared.frame) = Framebuffer::new(init.width as usize, init.height as usize);
         *st = Status::Connected { name: init.name.clone() };
     }
+    DispatchQueue::main().async_(|| {});
 
     let fmt = PixelFormat::VIEWER;
     let (w, h) = (init.width, init.height);
@@ -134,7 +138,7 @@ fn run(
 
     // The writer owns a second handle, so the reader can keep reading while the window sends input.
     let mut writer = stream.try_clone()?;
-    std::thread::spawn(move || {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         for msg in outbox_rx {
             if writer.write_all(&msg).is_err() {
                 break;
@@ -153,11 +157,13 @@ fn run(
                     (fb.w, fb.h)
                 };
                 shared.generation.fetch_add(1, Ordering::SeqCst);
+                DispatchQueue::main().async_(|| {});
                 // Ask for what changes next: an incremental update of the whole desktop.
                 let _ = outbox.send(message::update_request(true, 0, 0, fw as u16, fh as u16));
             }
             message::ServerMessage::CutText(text) => {
                 let _ = cut_tx.send(text);
+                DispatchQueue::main().async_(|| {});
             }
             message::ServerMessage::ColourMapIgnored | message::ServerMessage::Bell => {}
         }

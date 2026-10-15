@@ -56,6 +56,12 @@ pub fn layout(events: &[(u32, u32)], min_len: u32) -> Vec<Slot> {
     out
 }
 
+/// The minutes a timed event fills in a Day or Week column: its travel time before it starts, then its length. The
+/// block starts no earlier than midnight and ends no later than midnight.
+pub fn travel_span(start: u32, duration: u32, travel: u32) -> (u32, u32) {
+    (start.saturating_sub(travel), (start + duration).min(1440))
+}
+
 /// Pixel box `(x, width)` of a slot inside a column starting at `x0`.
 pub fn slot_x(slot: Slot, x0: f32, width: f32, gap: f32) -> (f32, f32) {
     let w = width / slot.cols as f32;
@@ -104,6 +110,24 @@ pub fn drag_move(duration: u32, grab_offset: u32, now_min: u32, snap: u32) -> Dr
     let raw = now_min.saturating_sub(grab_offset);
     let start = (raw / snap * snap).min(1440 - duration);
     DragSpan { start, end: start + duration }
+}
+
+/// The edge of a timed block that a resize drag moves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Edge {
+    Top,
+    Bottom,
+}
+
+/// Resizing moves one edge of `span` to the snapped minute under the pointer and keeps the other edge fixed. The block
+/// keeps at least `snap` minutes, and its end never passes midnight.
+pub fn drag_resize(span: DragSpan, edge: Edge, now_min: u32, snap: u32) -> DragSpan {
+    let snap = snap.max(1);
+    let cell = now_min.min(1439) / snap * snap;
+    match edge {
+        Edge::Top => DragSpan { start: cell.min(span.end.saturating_sub(snap)), end: span.end },
+        Edge::Bottom => DragSpan { start: span.start, end: (cell + snap).max(span.start + snap).min(1440) },
+    }
 }
 
 /// Day offset (-n, 0, +n) for a horizontal drag across week columns.

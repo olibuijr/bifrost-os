@@ -2,6 +2,8 @@
 //! whose path prefix is longest. Pure model. The caller reads the association data and lists the installed apps;
 //! this module only answers which app a link belongs to. Nothing is fetched here.
 
+use crate::json::{self, Json};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Claim {
     host: String,
@@ -33,6 +35,18 @@ impl AppLinks {
         for prefix in paths {
             self.claims.push(Claim { host: host.clone(), app: app.to_string(), prefix, enabled: true });
         }
+    }
+
+    /// Claims the paths that a site association document gives to the app with id `app_id`, as `claim` does for
+    /// `app`. The document is the JSON a site publishes: each `applinks.details` entry names an app id (`appID`, or
+    /// `appIDs` as a list) and may list `paths`. A path ending in `*` is a prefix, and a path without `*` is taken as
+    /// a prefix too, bounded at a segment. Exclusion paths (`NOT ...`) cannot be held by this model, so the whole
+    /// document is refused. A refused or unreadable document leaves the earlier claims as they were.
+    pub fn claim_from_association(&mut self, host: &str, app: &str, app_id: &str, text: &str) -> Result<(), String> {
+        let prefixes = association_paths(text, app_id)?;
+        let refs: Vec<&str> = prefixes.iter().map(String::as_str).collect();
+        self.claim(host, app, &refs);
+        Ok(())
     }
 
     /// Turns an app's link handling on or off without dropping its claims.
@@ -80,6 +94,41 @@ pub fn split_address(url: &str) -> Option<(&str, &str)> {
     let path_end = tail.find(['?', '#']).unwrap_or(tail.len());
     let path = &tail[..path_end];
     Some((host, if path.is_empty() { "/" } else { path }))
+}
+
+/// The path prefixes that the association document gives to `app_id`. A detail without `paths` gives none, which
+/// `claim` reads as the whole site.
+fn association_paths(text: &str, app_id: &str) -> Result<Vec<String>, String> {
+    let doc = json::parse(text).map_err(|e| format!("association is not JSON: {e}"))?;
+    let details = doc
+        .get("applinks")
+        .and_then(|links| links.get("details"))
+        .and_then(Json::as_array)
+        .ok_or("association has no applinks.details array")?;
+    let detail = details
+        .iter()
+        .find(|d| detail_names_app(d, app_id))
+        .ok_or_else(|| format!("no association detail names app id {app_id}"))?;
+    let Some(paths) = detail.get("paths") else {
+        return Ok(Vec::new());
+    };
+    let mut prefixes = Vec::new();
+    for item in paths.as_array().ok_or("association paths must be an array")? {
+        let path = item.as_str().ok_or("an association path must be a string")?;
+        if path.starts_with("NOT ") {
+            return Err(format!("exclusion path is not supported: {path}"));
+        }
+        prefixes.push(path.strip_suffix('*').unwrap_or(path).to_string());
+    }
+    Ok(prefixes)
+}
+
+fn detail_names_app(detail: &Json, app_id: &str) -> bool {
+    detail.str_field("appID").is_some_and(|id| id == app_id)
+        || detail
+            .get("appIDs")
+            .and_then(Json::as_array)
+            .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(app_id)))
 }
 
 /// The prefix covers the path when the path starts with it and the prefix ends at a segment boundary.

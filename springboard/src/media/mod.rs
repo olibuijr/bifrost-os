@@ -32,16 +32,24 @@ pub mod demux;
 pub mod id3;
 pub mod ilst;
 pub mod mp3;
+pub mod metadata;
 pub mod mp4;
 pub mod movie;
+pub mod offline;
 pub mod route;
 pub mod sbr;
 mod sbr_tables;
 pub mod source;
 pub mod stream;
+pub mod pcm_channels;
+pub mod time;
 pub mod symfile;
 pub mod system_sound;
 pub mod volume;
+pub mod loop_region;
+pub mod engine;
+pub mod push_queue;
+pub mod mixer;
 
 #[cfg(target_os = "linux")]
 pub mod audio_out;

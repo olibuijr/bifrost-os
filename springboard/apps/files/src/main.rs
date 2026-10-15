@@ -784,6 +784,20 @@ mod tests {
     }
 
     #[test]
+    fn idle_files_sleeps_without_a_polling_deadline() {
+        let files = fixture(vec![]);
+        assert_eq!(files.next_wake(1.0), None, "an idle Files window has no timer");
+    }
+
+    #[test]
+    fn worker_feed_wakes_the_dispatch_main_queue() {
+        let (tx, rx) = feed::<u8>();
+        tx.send(7).unwrap();
+        assert_eq!(rx.try_recv(), Ok(7));
+        assert!(bifrost_app::dispatch::drain_main(), "Feed::send must enqueue an event-driven main-queue wake");
+    }
+
+    #[test]
     fn expanded_folder_children_are_read_again_only_after_the_folder_changes() {
         let dir = temp("kids");
         std::fs::create_dir_all(dir.join("sub")).unwrap();

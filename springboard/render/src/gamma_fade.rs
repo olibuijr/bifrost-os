@@ -59,6 +59,55 @@ impl GammaFade {
     }
 }
 
+/// The brightness of a saver's start and stop as one timeline. `start` begins a fade in at that time, and `stop` begins a
+/// fade out from that time. A stop starts the fade out from full brightness, and a start after a stop begins a new fade in.
+/// With the fade switched off the level is always 1, because the display gamma is never changed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FadeCycle {
+    fade: GammaFade,
+    enabled: bool,
+    started_at: Option<f32>,
+    stopped_at: Option<f32>,
+}
+
+impl FadeCycle {
+    /// A cycle with fades of `secs` seconds. `enabled` is the saver's gamma fade request.
+    pub fn new(secs: f32, enabled: bool) -> Self {
+        FadeCycle { fade: GammaFade::new(secs), enabled, started_at: None, stopped_at: None }
+    }
+
+    /// Whether the cycle changes brightness at all.
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// The saver starts at `now` (seconds): a fade in begins.
+    pub fn start(&mut self, now: f32) {
+        self.started_at = Some(now);
+        self.stopped_at = None;
+    }
+
+    /// The saver stops at `now` (seconds): a fade out begins. Stopping a saver that has not started does nothing.
+    pub fn stop(&mut self, now: f32) {
+        if self.started_at.is_some() {
+            self.stopped_at = Some(now);
+        }
+    }
+
+    /// The brightness level in 0..=1 at `now`. Before the first start it is 0; during a fade in it rises; while the saver
+    /// runs it is 1; during a fade out it falls; after the fade out it is 0 again.
+    pub fn level(&self, now: f32) -> f32 {
+        if !self.enabled {
+            return 1.0;
+        }
+        match (self.started_at, self.stopped_at) {
+            (None, _) => 0.0,
+            (Some(start), None) => self.fade.level(FadeDirection::In, now - start),
+            (Some(_), Some(stop)) => self.fade.level(FadeDirection::Out, now - stop),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

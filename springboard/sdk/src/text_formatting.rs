@@ -1,7 +1,6 @@
 //! The text formatting panel of a rich text view and the coordinator that binds it to the focused view.
 //!
-//! This is the SDK side of the "Text formatting controller" row of the tablet parity data (UITextFormattingViewController
-//! and UITextFormattingCoordinator). Three parts:
+//! This is the SDK side of the "Text formatting controller" row of the tablet parity data. Three parts:
 //!
 //! * [`FormatState`] reads the formatting at the selection (or the typing attributes at a caret), so a panel can show
 //!   what is in effect. A mark, colour or font that the whole selection shares is reported; a mixed selection reports

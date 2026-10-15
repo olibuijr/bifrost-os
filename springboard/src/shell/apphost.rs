@@ -293,6 +293,25 @@ pub fn root() -> PathBuf {
     ROOT.get().cloned().unwrap_or_else(|| PathBuf::from("/var/lib/springboard"))
 }
 
+static INCOMPATIBLE: std::sync::Mutex<Vec<(String, PathBuf)>> = std::sync::Mutex::new(Vec::new());
+
+/// Records that the binary at `exec` for app `id` speaks another SDK protocol.
+fn remember_incompatible(id: &str, exec: &Path) {
+    if exec.as_os_str().is_empty() {
+        return;
+    }
+    if let Ok(mut g) = INCOMPATIBLE.lock() {
+        if !g.iter().any(|(i, e)| i == id && e == exec) {
+            g.push((id.to_string(), exec.to_path_buf()));
+        }
+    }
+}
+
+/// True when this exact binary was already found incompatible with the shell's SDK protocol.
+fn is_known_incompatible(id: &str, exec: &Path) -> bool {
+    INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
+}
+
 /// The slot of an installed app by manifest id.
 pub fn slot_of(id: &str) -> Option<usize> {
     installed().iter().position(|a| a.manifest.id == id)
@@ -886,7 +905,10 @@ impl AppHost {
                 }
             }
             ToShell::SuddenTermination { enabled } => self.sudden = enabled,
-            ToShell::Activity { options } => self.activity = options,
+            ToShell::Activity { options } => {
+                self.activity = options;
+                crate::bare::sleep::note_app_activity(&self.id, options);
+            }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},
@@ -965,6 +987,7 @@ impl AppHost {
     /// Stops an app whose protocol does not match and keeps its host, so the window says why instead of staying black.
     fn mark_incompatible(&mut self) {
         self.incompatible = true;
+        remember_incompatible(&self.id, &self.exec);
         self.kill();
     }
 
@@ -1136,6 +1159,7 @@ pub fn thumbnail(route: Route, has_frame: bool, capture_ready: bool) -> Thumb {
 impl Drop for AppHost {
     fn drop(&mut self) {
         self.kill();
+        crate::bare::sleep::forget_app(&self.id);
     }
 }
 
@@ -1231,6 +1255,11 @@ impl Shell {
         }
         let registered = installed();
         let Some(app) = registered.get(slot) else { return };
+        // An app that speaks another SDK protocol is started once and then left alone until its binary changes
+        // (a new installed version has a new path): no respawn loop, and the window keeps saying why.
+        if is_known_incompatible(&app.manifest.id, &app.exec_path()) {
+            return;
+        }
         if let Some(h) = self.ext[slot].as_mut().filter(|h| h.running()) {
             if !h.is_outdated(&app.exec_path()) {
                 return;
@@ -1852,6 +1881,19 @@ mod tests {
         host.handle(ToShell::Hello { sdk_version: SDK_VERSION + 1, app_id: "fixture".into() }, vec![], &mut pumped);
         assert!(host.incompatible && !host.hello);
         assert!(!pumped.died, "the window stays up to show the message");
+    }
+
+    #[test]
+    fn an_incompatible_binary_is_remembered_so_the_shell_never_respawns_it() {
+        let exec = PathBuf::from("/var/lib/springboard/apps/loop-test/1.4.1/bin");
+        assert!(!is_known_incompatible("loop-test", &exec));
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("loop-test", channel, None, cfg);
+        host.exec = exec.clone();
+        host.handle(ToShell::Hello { sdk_version: SDK_VERSION + 1, app_id: "loop-test".into() }, vec![], &mut Pumped::default());
+        assert!(is_known_incompatible("loop-test", &exec));
+        assert!(!is_known_incompatible("loop-test", Path::new("/var/lib/springboard/apps/loop-test/1.5.0/bin")), "a new version gets a fresh try");
     }
 
     #[test]

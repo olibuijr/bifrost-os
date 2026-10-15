@@ -23,7 +23,7 @@ const BIN_NAME: &str = "bifrost-textedit";
 const APP_ID: &str = "is.olibuijr.textedit.desktop";
 const SNAP_NAME: &str = "textedit-desktop";
 const EXPECT_SIDEBAR: bool = false;  // source_list in the source
-const EXPECT_TOOLBAR: bool = false;  // the toolbar is drawn with Canvas calls and publishes no controls yet
+const EXPECT_TOOLBAR: bool = true;  // widgets::toolbar in the source
 const EXPECT_SEARCH: bool = false;  // search_field in the source
 /// An app must draw a frame on start.
 const FRAME_REQUIRED: bool = true;

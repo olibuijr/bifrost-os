@@ -10,9 +10,9 @@
   {
    "feature": "Text Display: attributed strings and rich text",
    "apple": "NSAttributedString, NSTextView rich mode",
-   "bifrost": "springboard/sdk/src/attributed.rs (AttributedString, RichTextView, RTF and HTML)",
+   "bifrost": "springboard/sdk/src/attributed.rs (AttributedString, RichTextView, RTF and HTML); springboard/sdk/tests/parity_sdk-tests-11.rs",
    "status": "partial",
-   "note": "bold, italic, size class, colour token, underline, strikethrough, link only; no paragraph styles, text attachments, lists or tables; the ui layer now has paragraph styles, lists and attachments per paragraph (text_layout_manager.rs), not yet carried by bifrost_app::attributed"
+   "note": "Runs, RTF and HTML round trips, accessibility runs in UTF-16 units and rich text typing and undo are tested headless in parity_sdk-tests-11.rs and attributed::tests. Gap: no paragraph styles, text attachments, lists or tables in this model (the ui layer has them per paragraph in text_layout_manager.rs, not yet carried by bifrost_app::attributed), and rich text drawing has no pixel test."
   },
   {
    "feature": "Text Display: single-line text field and editing model",
@@ -24,16 +24,16 @@
   {
    "feature": "Text Display: multi-line text view widget",
    "apple": "NSTextView, NSScrollView text container",
-   "bifrost": "springboard/ui/src/textview.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (notes card: draw_notes, notes_key, notes_place) on bifrost_app::controls::textview::TextView; sidecar in src/store.rs; springboard/ui/src/text_layout_manager.rs (layout, selection navigation)",
+   "bifrost": "springboard/ui/src/textview.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (notes card: draw_notes, notes_key, notes_place) on bifrost_app::controls::textview::TextView; sidecar in src/store.rs; springboard/ui/src/text_layout_manager.rs (layout, selection navigation); tests: springboard/ui/tests/parity_sdk-tests-06.rs",
    "status": "partial",
-   "note": "TextView adds isRichText, allowsUndo, usesFindBar, incremental find, next, previous, replace and replace all (one undo step), and a spelling hook; typing coalesces into one undo step. Host unit and integration tests (springboard/ui/tests/text_view.rs); not yet drawn by a shell widget or checked on Midget, so the row stays partial."
+   "note": "TextView adds isRichText, allowsUndo, usesFindBar, incremental find, next, previous, replace and replace all (one undo step), and a spelling hook; typing coalesces into one undo step. Host unit and integration tests (springboard/ui/tests/text_view.rs) cover those, and ui/tests/parity_sdk-tests-06.rs headless tests cover wrapping, line lookup, hit testing, goal columns, highlights, scrolling to the caret and the find bar flags. Not yet drawn by a shell widget or checked on Midget, so the row stays partial."
   },
   {
    "feature": "Text Display: spell checking",
    "apple": "NSSpellChecker",
    "bifrost": "springboard/sdk/src/spellcheck.rs (tokenizer, pluggable Dictionary, learned and ignored words); wired: springboard/core/src/spellcheck.rs (model, moved from sdk); springboard/sdk/src/spellcheck.rs (SDK re-export); springboard/src/shell/services/text_services.rs (shell service `text`); springboard/sdk/src/text_services.rs (client); springboard/apps/textedit-desktop/src/spell.rs over bifrost_app::spellcheck",
    "status": "partial",
-   "note": "no system-wide spelling panel or autocorrect UI in text views Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. round 75, host only: wired into TextEdit; needs Midget check."
+   "note": "The tokenizer, the pluggable dictionary, learned and ignored words and the checks are tested headless in sdk/tests/parity_sdk-tests-02.rs (spelling module, through the SDK re-export). Gaps: no system-wide spelling panel or autocorrect UI in text views; wired into TextEdit in wiring wave 3 (0.5.39), not yet verified on Midget."
   },
   {
    "feature": "Text Display: data detectors",
@@ -73,16 +73,16 @@
   {
    "feature": "Fonts: font rendering engine",
    "apple": "NSFont, NSFontDescriptor",
-   "bifrost": "springboard/render/src/font.rs, cff.rs, gvar.rs",
+   "bifrost": "springboard/render/src/font.rs, cff.rs, gvar.rs, fontobj.rs; springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "TrueType, CFF and variable fonts render; no app-facing descriptor or trait matching API"
+   "note": "TrueType, CFF and variable fonts render, and the font object, metrics, glyph map, cascade and manager behind them are tested headless. Gap: the engine's output is not compared with the reference on the lab machine."
   },
   {
    "feature": "Fonts: user font choice",
    "apple": "System font settings",
    "bifrost": "springboard/sdk/src/font_descriptor.rs (UserFonts)",
    "status": "partial",
-   "note": "Wave 5 (w5-appkit-text, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Settings > Fonts replaces UI fonts from BifrOSt's font library"
+   "note": "Settings > Fonts replaces the system and mono fonts with a face from BifrOSt's font library. The choice, the library listing and resolution are tested headless in springboard/sdk/tests/parity_sdk-tests-10-fonts-w7.rs (font_descriptor tests). Not yet wired into apps or the shell, and not yet tested on the VM or Midget."
   },
   {
    "feature": "Writing Tools",

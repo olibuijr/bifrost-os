@@ -4,77 +4,77 @@
   "macos_since": "11.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/archive.rs (ByteStream, compress_to, compress_to_threaded, decompress_from, compress_file, compress_directory, expand), springboard/sdk/src/compression.rs (encode_buffer_threaded), springboard/src/files/zip.rs (create, extract), springboard/src/shell/store/install.rs (read_tar, index_tar, extract_from), springboard/render/src/cg/pdf/inflate.rs",
-  "summary": "BifrOSt has an app-facing archive module in the SDK: ZIP folders and single files, raw DEFLATE for buffers, strings and byte streams, and a thread-count option for large streams. Tar reading and extraction serve app package install. The Apple Archive container format (header, entry messages, stream traits) and encrypted archives are not present.",
+ "summary": "BifrOSt has an app-facing archive module in the SDK: ZIP folders and single files, raw DEFLATE for buffers, strings and byte streams, a thread-count option for large streams, and a custom BFEA encrypted wrapper. Tar reading and extraction serve app package install. The Apple Archive container format (header, entry messages, stream traits) and Apple-compatible encrypted archive profiles are not present.",
   "rea_evidence": "ev_d29483e649b181c7241be638022e1dc6ebfbd3923c5a414205cc47a344dd7a4d",
   "features": [
     {
       "feature": "Compressing and extracting file system directories",
       "apple": "Compressing file system directories; Decompressing and extracting an archived directory",
-      "bifrost": "springboard/sdk/src/archive.rs (compress_directory, expand)",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_directory, expand); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "ZIP folder trees through the SDK archive module and the Files app; the ZIP format, not Apple Archive. built on parity/team-j-apple-archive; not yet verified on Midget."
+      "note": "ZIP folder trees through the SDK archive module and the Files app; the ZIP format, not Apple Archive. Tests: parity_sdk-tests-20 compress_directory_archives_the_whole_tree_and_expands_it_again, compress_directory_refuses_a_file_and_a_missing_path, expanding_the_same_archive_twice_takes_a_new_folder_each_time; parity_sdk-tests-04 compress_directory_archives_the_tree_and_expands_it_again, compress_directory_refuses_a_plain_file. Known issue: members keep the zipped folder name, so expanding nests the tree one level deeper. Not yet verified on Midget."
     },
     {
       "feature": "Compressing and decompressing single files",
       "apple": "Compressing single files; Decompressing single files",
-      "bifrost": "springboard/sdk/src/archive.rs (compress_file, expand)",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_file, expand); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Writes name.zip for one file and extracts it again; ZIP format, not Apple Archive. built on parity/team-j-apple-archive; not yet verified on Midget."
+      "note": "Writes <file name>.zip for one file and extracts it again; ZIP format, not Apple Archive. Tests: parity_sdk-tests-20 compress_file_writes_a_zip_named_after_the_file_and_expands_it, compress_file_refuses_a_folder_and_a_missing_path, compress_file_stops_when_progress_asks_it_to; parity_sdk-tests-04 compress_file_archives_one_file_and_expands_it_again, compress_file_refuses_a_folder_and_stops_when_progress_cancels. Not yet verified on Midget."
     },
     {
       "feature": "Compressing and parsing strings",
       "apple": "Compressing and saving a string to the file system; Decompressing and parsing an archived string",
-      "bifrost": "springboard/sdk/src/archive.rs (compress_text, decompress_text)",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_text, decompress_text); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Raw DEFLATE of the UTF-8 bytes with a caller-given size limit; no file-system save of the string. built on parity/team-j-apple-archive; not yet verified on Midget."
+      "note": "Raw DEFLATE of the UTF-8 bytes with a caller-given size limit; no file-system save of the string. Tests: parity_sdk-tests-20 text_helpers_round_trip_unicode, text_helpers_write_raw_deflate_that_the_codec_decodes, decompress_text_refuses_bytes_that_are_not_utf8; parity_sdk-tests-04 text_helpers_round_trip_and_match_the_codec, decompress_text_refuses_bytes_that_are_not_utf8, decompress_reports_the_limit_and_damage_in_its_messages. Not yet verified on Midget."
     },
     {
       "feature": "Archive headers and file attributes",
       "apple": "ArchiveHeader; file ownership, permissions, flags, times, extended attributes",
-      "bifrost": "springboard/src/shell/store/install.rs:250 (TarEntry: path, mode, is_dir, offset, size)",
+      "bifrost": "springboard/src/shell/store/install.rs (TarEntry, read_tar, index_tar)",
       "status": "partial",
-      "note": "Tar entries keep mode only; the zip path was not checked for ownership, times or xattr preservation"
+      "note": "Tar entries keep the path, mode, directory flag, contents offset and size, and the reader refuses unsafe paths, links, pax headers, duplicates and bad checksums, as tested headless in springboard/tests/parity_sdk-tests-12.rs; ownership, times and extended attributes are not kept, and the zip path was not checked."
     },
     {
       "feature": "Archive streams (data blobs and byte buffers)",
       "apple": "ArchiveStream, ArchiveStreamProtocol, ArchiveByteStream, ArchiveByteStreamProtocol",
-      "bifrost": "springboard/sdk/src/archive.rs (ByteStream, compress_to, compress_to_threaded, decompress_from)",
+      "bifrost": "springboard/sdk/src/archive.rs (ByteStream, compress_to, compress_to_threaded, decompress_from); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "In-memory cursor stream with Read, Write, Seek and cancel. Not the Apple Archive stream traits. built on parity/team-j-apple-archive; not yet verified on Midget."
+      "note": "In-memory cursor stream with Read, Write, Seek and cancel. Not the Apple Archive stream traits. Tests: parity_sdk-tests-20 a_new_byte_stream_is_empty_with_the_cursor_at_zero, byte_stream_reads_from_the_cursor_after_a_seek, byte_stream_writes_past_the_end_with_a_zero_gap, byte_stream_refuses_a_seek_before_the_start, byte_stream_positional_access_leaves_the_cursor_alone, a_cancelled_byte_stream_refuses_every_operation, compress_to_writes_at_the_cursor_and_decompress_from_reads_to_the_end; parity_sdk-tests-04 byte_stream_reads_from_the_cursor_after_a_seek, byte_stream_writes_past_the_end_with_zero_gap, compress_to_writes_at_the_cursor_and_decompress_from_reads_to_the_end; cancel is covered by the inline cancelled_stream_refuses_reads_writes_and_flushes. Not yet verified on Midget."
     },
     {
       "feature": "Multithreaded compression (thread count for streams)",
       "apple": "Multithreaded lossless compression (no thread count recorded for this row)",
-      "bifrost": "springboard/sdk/src/archive.rs (compress_to_threaded); springboard/sdk/src/compression/dynamic.rs (encode_threaded)",
+      "bifrost": "springboard/sdk/src/archive.rs (compress_to_threaded); springboard/sdk/src/compression/dynamic.rs (encode_threaded); springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Inputs of 2 MiB or more are split into pieces that each become a DEFLATE block, joined into one stream; matches do not cross pieces. The Files app zip writer is still single-threaded. built on parity/team-j-apple-archive; not yet verified on Midget."
+      "note": "Inputs of 2 MiB or more are split into pieces that each become a DEFLATE block, joined into one stream; matches do not cross pieces. The Files app zip writer is still single-threaded. Tests: parity_sdk-tests-20 compress_to_threaded_round_trips_large_input_over_two_threads, compress_to_threaded_with_one_thread_matches_the_single_step_bytes, compress_to_threaded_is_deterministic_for_a_fixed_thread_count; parity_sdk-tests-04 compress_to_threaded_matches_the_codec_and_round_trips_large_input, compress_to_threaded_with_one_thread_matches_the_single_step_bytes, large_input_split_over_two_threads_is_deterministic_and_round_trips. Not yet verified on Midget."
     },
     {
       "feature": "Reading and indexing tar packages for install",
       "apple": "No direct equivalent; closest is the archive read path",
-      "bifrost": "springboard/src/shell/store/install.rs:276 (read_tar), :287 (index_tar), :345 (extract_from)",
-      "status": "os",
-      "note": "Used by the App Store installer; headers are indexed without loading file data; not an app-facing API"
+      "bifrost": "springboard/sdk/src/tar_package.rs (read, index, extract_from); springboard/src/shell/store/install.rs:276 (read_tar), :287 (index_tar), :345 (extract_from)",
+      "status": "partial",
+      "note": "Tar packages are read, indexed and extracted through the SDK tar_package module with the App Store install rules, and the installer uses the same reader. Tests: parity_sdk-rest-04 read_returns_every_member_in_archive_order_with_its_contents, index_reads_the_headers_and_leaves_the_contents_unloaded, a_package_with_a_path_that_climbs_out_is_refused, a_symbolic_link_member_is_refused_as_an_unsupported_entry, a_damaged_header_fails_its_checksum, extract_from_refuses_a_hand_built_entry_that_climbs_out_and_writes_nothing. Gap: ownership, times and extended attributes are not kept, pax headers are refused, and the module is not yet verified on Midget."
     },
     {
       "feature": "DEFLATE decoding",
       "apple": "Multithreaded lossless compression (decoding side)",
-      "bifrost": "springboard/sdk/src/archive.rs (decompress, decompress_from) over springboard/render/src/cg/pdf/inflate.rs",
+      "bifrost": "springboard/sdk/src/archive.rs (decompress, decompress_from) over springboard/render/src/cg/pdf/inflate.rs; springboard/sdk/tests/parity_sdk-tests-20.rs",
       "status": "partial",
-      "note": "Bounded by a caller-given size limit; the decoder is shared with the Books engine. built on parity/team-j-apple-archive; not yet verified on Midget."
+      "note": "Bounded by a caller-given size limit; the decoder is shared with the Books engine. Tests: parity_sdk-tests-20 the_reference_deflate_bytes_inflate_through_the_archive_helpers, decompress_reports_damaged_input, decompress_refuses_output_past_the_limit_with_a_clear_message; parity_sdk-tests-04 raw_deflate_helpers_read_the_codec_output, decompress_reports_the_limit_and_damage_in_its_messages, decode_rejects_a_reserved_block_type. Not yet verified on Midget."
     },
     {
       "feature": "Encrypted archives",
       "apple": "Apple Encrypted Archive; ArchiveEncryptionContext",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No encrypted archive format in the code. Blocked: the SDK has no cipher (springboard/sdk/src/crypto_key.rs provides HMAC authentication only), and the reference encryption profiles are not implemented."
+      "bifrost": "springboard/sdk/src/encrypted_archive.rs (BFEA v1 wrapper over ChaCha20-Poly1305); springboard/sdk/tests/parity_sdk-rest-05.rs",
+      "status": "partial",
+      "note": "BFEA v1 seals caller-provided archive bytes with ChaCha20-Poly1305 and authenticates its header; host tests cover round-trip, wrong-key, tampering and version errors. This is a custom wrapper, not the Apple Encrypted Archive format or its profiles; compression and key derivation/storage remain the caller's responsibility. Not yet verified on Midget."
     }
   ],
   "gaps": [
     "No Apple Archive container (AAR) reader or writer, with its header, entry messages and stream model; the SDK writes ZIP and raw DEFLATE",
     "No preservation of file ownership, extended attributes or flags in archives, as far as the code shows",
-    "No encrypted archives or encryption context; blocked until the SDK has a cipher and key derivation",
+    "No Apple-compatible encrypted archive format or ArchiveEncryptionContext; BFEA v1 is a custom wrapper and callers manage compression and keys",
     "Multithreaded compression covers byte streams only; the Files app zip writer runs as a single background job",
     "No lazy matching in the DEFLATE encoder, so output is larger than a full zlib encoder"
   ]

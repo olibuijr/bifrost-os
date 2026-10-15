@@ -92,7 +92,8 @@ impl ImageCapture {
             link,
             in_flight: 0,
             next_poll: 0.0,
-            size: (1000.0, 640.0),
+            // The app host configures the actual client size before the first frame.
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
             home,
@@ -201,11 +202,11 @@ impl ImageCapture {
 
     /// When the loop should come back: soon while a request is in flight, else at the next listing.
     pub fn wake_at(&self, t: f64) -> f64 {
-        if self.in_flight > 0 {
-            t + BUSY_WAKE_MS
-        } else {
-            self.next_poll.max(t + BUSY_WAKE_MS)
-        }
+        self.next_poll.max(t + BUSY_WAKE_MS)
+    }
+
+    pub fn has_in_flight_request(&self) -> bool {
+        self.in_flight != 0
     }
 
     pub fn bar_rect(&self) -> Rect {
@@ -416,7 +417,9 @@ mod tests {
     use bifrost_ui::scanner;
 
     fn window() -> ImageCapture {
-        ImageCapture::with_link(Link::detached(), PathBuf::from("/home/u"))
+        let mut window = ImageCapture::with_link(Link::detached(), PathBuf::from("/home/u"));
+        window.resize(1200.0, 780.0);
+        window
     }
 
     fn sources(w: &mut ImageCapture) {

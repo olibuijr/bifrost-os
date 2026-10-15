@@ -38,23 +38,23 @@
     {
       "feature": "App-side audio playback engine",
       "apple": "Playback that Siri requests start in the app (Media Intents results point to playable media)",
-      "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs",
+      "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs, springboard/ui/src/media_queue.rs (PlaybackQueue), springboard/sdk/src/media_intents.rs (handle_request); springboard/sdk/tests/parity_sdk-complete-28.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "Playback is a shared service that survives app restarts; the SDK exposes the client as bifrost_app::audio (springboard/sdk/src/lib.rs:88), but there is no media-item or queue type for apps to return to a voice request"
+      "note": "Playback is a shared service that survives app restarts, and bifrost_app::audio is the client. bifrost_app::media_intents now gives apps the media item, playback request and play queue types, and handle_request applies a request to the queue and returns its dialog; play, queue, search, advance and the end of the queue are tested headless. Gap: the queue is not yet handed to the audio service as a playlist, and a voice request reaching the app needs Midget."
     },
     {
       "feature": "Now-playing state shown outside the app",
       "apple": "Not in Media Intents itself (Now Playing and lock-screen controls are separate Apple APIs)",
-      "bifrost": "springboard/src/shell/music/system.rs, springboard/src/shell/music/nowplaying.rs",
-      "status": "os",
-      "note": "The shell draws the lock-screen card and Control Center media controls for whatever the audio service plays; apps get no SDK call to publish their own metadata"
+      "bifrost": "springboard/sdk/src/now_playing.rs (publish_body, accept, command_from_event); springboard/src/shell/services/now_playing.rs (parse_session, the now_playing service); springboard/src/shell/music/system.rs, springboard/src/shell/music/nowplaying.rs",
+      "status": "partial",
+      "note": "Apps publish their session (content, playback, declared commands) through bifrost_app::now_playing, and the shell reads it back; tested headless in sdk/tests/parity_sdk-rest-11.rs. Gap: artwork does not reach the shell yet, and the card and the Control Center tile are drawn only on the lab machine."
     },
     {
       "feature": "Discovering intents without launching the app",
       "apple": "Intents surfaced to the system for Siri and Shortcuts",
-      "bifrost": "springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs (Intent::manifest_toml)",
+      "bifrost": "springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs (Intent::manifest_toml), springboard/src/shell/media_intents.rs (manifest_intents)",
       "status": "partial",
-      "note": "Spotlight lists manifest [[intent]] entries with shortcut = true and no required parameter; no Siri or Shortcuts-app listing"
+      "note": "Spotlight lists manifest [[intent]] entries with shortcut = true and no required parameter, and the transport intents are listed the same way. The listing rules and the manifest reader are tested headless in springboard/tests/parity_sdk-tests-10-w7.rs. No Siri or Shortcuts-app listing."
     },
     {
       "feature": "Voice and spoken dialog",

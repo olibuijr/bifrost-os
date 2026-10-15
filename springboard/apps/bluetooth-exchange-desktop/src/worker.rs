@@ -1,13 +1,18 @@
-//! Bluetooth File Exchange's disk and bus work. A thread runs the requests, so a slow transfer never stalls the window:
-//! requests go in on one channel and replies come back on another, which the window drains on each tick. One file is
-//! sent at a time; a cancel asks obexd to stop the running transfer.
+//! Bluetooth File Exchange's disk and bus work. Requests run serially on the utility dispatch queue, so slow transfers
+//! never stall the window; replies wake it through a descriptor. One file is sent at a time, and cancel/close asks obexd
+//! to stop the active transfer.
 
 use crate::model::{self, FileEntry, Status};
 use crate::transport::Obexd;
-use std::collections::VecDeque;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 /// How often the transfer's progress is read from obexd (milliseconds).
@@ -36,28 +41,102 @@ pub enum Reply {
     Cancelled { id: u64 },
 }
 
-/// The window's end of the channels. Dropping it ends the worker thread.
+/// The window's worker state. Requests run serially on dispatch; dropping it cancels pending and active sends.
 pub struct Link {
-    tx: Sender<Request>,
+    replies: Sender<Reply>,
     rx: Receiver<Reply>,
+    cancels: Arc<Mutex<HashMap<u64, Arc<AtomicBool>>>>,
+    closed: Arc<AtomicBool>,
+    wake_rx: Option<UnixStream>,
+    wake_tx: Option<Arc<Mutex<UnixStream>>>,
+    obex: Arc<Mutex<Option<Obexd>>>,
+    queue: DispatchQueue,
 }
 
 impl Link {
-    /// Starts the worker thread. If it cannot start, requests are dropped and no replies come back.
+    /// Creates the worker state. Slow work never blocks the window loop.
     pub fn start() -> Link {
-        let (tx, requests) = mpsc::channel::<Request>();
         let (replies, rx) = mpsc::channel::<Reply>();
-        let _ = thread::Builder::new().name("bluetooth-exchange".into()).spawn(move || serve(requests, replies));
-        Link { tx, rx }
+        let (wake_rx, wake_tx) = UnixStream::pair().ok().and_then(|(rx, tx)| {
+            rx.set_nonblocking(true).ok()?;
+            tx.set_nonblocking(true).ok()?;
+            Some((rx, Arc::new(Mutex::new(tx))))
+        }).map_or((None, None), |(rx, tx)| (Some(rx), Some(tx)));
+        Link {
+            replies, rx,
+            cancels: Arc::new(Mutex::new(HashMap::new())),
+            closed: Arc::new(AtomicBool::new(false)),
+            wake_rx, wake_tx,
+            obex: Arc::new(Mutex::new(None)),
+            queue: DispatchQueue::serial_qos("bluetooth-exchange", Qos::Utility),
+        }
     }
 
     pub fn send(&self, request: Request) {
-        let _ = self.tx.send(request);
+        if self.closed.load(Ordering::Relaxed) { return; }
+        match request {
+            Request::Cancel { id } => {
+                if let Ok(cancels) = self.cancels.lock() {
+                    if let Some(cancel) = cancels.get(&id) { cancel.store(true, Ordering::Relaxed); }
+                }
+            }
+            Request::List { downloads, received } => {
+                let (replies, wake, closed) = (self.replies.clone(), self.wake_tx.clone(), self.closed.clone());
+                self.queue.async_(move || {
+                    if closed.load(Ordering::Relaxed) { return; }
+                    report(&replies, &wake, &closed, Reply::Listed {
+                        outbox: model::listing(files_in(&downloads)), inbox: model::listing(files_in(&received)),
+                    });
+                });
+            }
+            Request::Send { id, address, path } => {
+                let cancel = Arc::new(AtomicBool::new(false));
+                if let Ok(mut cancels) = self.cancels.lock() { cancels.insert(id, cancel.clone()); }
+                let (replies, wake, closed, cancels, obex) = (self.replies.clone(), self.wake_tx.clone(), self.closed.clone(), self.cancels.clone(), self.obex.clone());
+                self.queue.async_(move || {
+                    if closed.load(Ordering::Relaxed) || cancel.load(Ordering::Relaxed) {
+                        if let Ok(mut cancels) = cancels.lock() { cancels.remove(&id); }
+                        if !closed.load(Ordering::Relaxed) { report(&replies, &wake, &closed, Reply::Cancelled { id }); }
+                        return;
+                    }
+                    let reply = match obex.lock() {
+                        Ok(mut slot) => match bus(&mut slot) {
+                            Ok(obexd) => transfer(obexd, id, &address, &path, &cancel, &closed, &replies, &wake),
+                            Err(text) => Reply::Failed { id, text },
+                        },
+                        Err(_) => Reply::Failed { id, text: "The transfer worker is unavailable".into() },
+                    };
+                    if let Ok(mut cancels) = cancels.lock() { cancels.remove(&id); }
+                    report(&replies, &wake, &closed, reply);
+                });
+            }
+        }
     }
 
     /// The replies that arrived since the last call.
     pub fn drain(&self) -> Vec<Reply> {
+        if let Some(mut wake) = self.wake_rx.as_ref() {
+            let mut buf = [0u8; 64];
+            while wake.read(&mut buf).is_ok_and(|n| n > 0) {}
+        }
         self.rx.try_iter().collect()
+    }
+
+    pub fn wake_fd(&self) -> Option<i32> { self.wake_rx.as_ref().map(AsRawFd::as_raw_fd) }
+}
+
+impl Drop for Link {
+    fn drop(&mut self) {
+        self.closed.store(true, Ordering::Relaxed);
+        if let Ok(cancels) = self.cancels.lock() {
+            for cancel in cancels.values() { cancel.store(true, Ordering::Relaxed); }
+        }
+    }
+}
+
+fn report(replies: &Sender<Reply>, wake: &Option<Arc<Mutex<UnixStream>>>, closed: &AtomicBool, reply: Reply) {
+    if !closed.load(Ordering::Relaxed) && replies.send(reply).is_ok() {
+        if let Some(mut wake) = wake.as_ref().and_then(|w| w.lock().ok()) { let _ = wake.write(&[1]); }
     }
 }
 
@@ -65,39 +144,6 @@ impl Link {
 enum Stop {
     Cancelled,
     Failed(String),
-}
-
-fn serve(requests: Receiver<Request>, replies: Sender<Reply>) {
-    // requests that arrive during a transfer and are not its cancel wait here, in order
-    let mut pending: VecDeque<Request> = VecDeque::new();
-    let mut obex: Option<Obexd> = None;
-    loop {
-        let request = match pending.pop_front() {
-            Some(request) => request,
-            None => match requests.recv() {
-                Ok(request) => request,
-                Err(_) => return,
-            },
-        };
-        let sent = match request {
-            Request::List { downloads, received } => replies.send(Reply::Listed {
-                outbox: model::listing(files_in(&downloads)),
-                inbox: model::listing(files_in(&received)),
-            }),
-            // nothing is running, so a cancel has nothing to stop
-            Request::Cancel { .. } => Ok(()),
-            Request::Send { id, address, path } => {
-                let reply = match bus(&mut obex) {
-                    Ok(obexd) => transfer(obexd, id, &address, &path, &requests, &mut pending, &replies),
-                    Err(text) => Reply::Failed { id, text },
-                };
-                replies.send(reply)
-            }
-        };
-        if sent.is_err() {
-            return;
-        }
-    }
 }
 
 /// The bus connection, made on first use. A failed connection is tried again on the next transfer.
@@ -114,15 +160,16 @@ fn transfer(
     id: u64,
     address: &str,
     path: &Path,
-    requests: &Receiver<Request>,
-    pending: &mut VecDeque<Request>,
+    cancel: &AtomicBool,
+    closed: &AtomicBool,
     replies: &Sender<Reply>,
+    wake: &Option<Arc<Mutex<UnixStream>>>,
 ) -> Reply {
     let session = match obexd.create_session(address) {
         Ok(session) => session,
         Err(text) => return Reply::Failed { id, text },
     };
-    let outcome = run(obexd, &session, id, path, requests, pending, replies);
+    let outcome = run(obexd, &session, id, path, cancel, closed, replies, wake);
     let _ = obexd.remove_session(&session);
     match outcome {
         Ok(()) => Reply::Done { id },
@@ -137,23 +184,19 @@ fn run(
     session: &str,
     id: u64,
     path: &Path,
-    requests: &Receiver<Request>,
-    pending: &mut VecDeque<Request>,
+    cancel: &AtomicBool,
+    closed: &AtomicBool,
     replies: &Sender<Reply>,
+    wake: &Option<Arc<Mutex<UnixStream>>>,
 ) -> Result<(), Stop> {
     let file = path.to_str().ok_or_else(|| Stop::Failed("The file name is not readable text".to_string()))?;
     let transfer = obexd.send_file(session, file).map_err(Stop::Failed)?;
     let mut last_sent = 0u64;
     let mut last_change = Instant::now();
     loop {
-        while let Ok(request) = requests.try_recv() {
-            match request {
-                Request::Cancel { id: wanted } if wanted == id => {
-                    let _ = obexd.cancel(&transfer);
-                    return Err(Stop::Cancelled);
-                }
-                other => pending.push_back(other),
-            }
+        if cancel.load(Ordering::Relaxed) || closed.load(Ordering::Relaxed) {
+            let _ = obexd.cancel(&transfer);
+            return Err(Stop::Cancelled);
         }
         let (sent, status) = obexd.progress(&transfer).map_err(Stop::Failed)?;
         match status {
@@ -164,12 +207,12 @@ fn run(
         if sent != last_sent {
             last_sent = sent;
             last_change = Instant::now();
-            let _ = replies.send(Reply::Progress { id, sent });
+            report(replies, wake, closed, Reply::Progress { id, sent });
         } else if last_change.elapsed() > STALL {
             let _ = obexd.cancel(&transfer);
             return Err(Stop::Failed("The transfer stopped moving and was given up".to_string()));
         }
-        thread::sleep(Duration::from_millis(POLL_MS));
+        std::thread::sleep(Duration::from_millis(POLL_MS));
     }
 }
 
@@ -202,12 +245,8 @@ mod tests {
 
     #[test]
     fn a_cancel_with_nothing_running_is_a_no_op() {
-        // the worker answers a cancel without a transfer by sending nothing back
-        let (tx, requests) = mpsc::channel::<Request>();
-        let (replies, rx) = mpsc::channel::<Reply>();
-        tx.send(Request::Cancel { id: 7 }).unwrap();
-        drop(tx);
-        serve(requests, replies);
-        assert!(rx.try_recv().is_err());
+        let link = Link::start();
+        link.send(Request::Cancel { id: 7 });
+        assert!(link.drain().is_empty());
     }
 }

@@ -3,7 +3,7 @@
 //! This is the app-facing counterpart of the reference compression API (`compression_encode_buffer`,
 //! `compression_decode_buffer`, `compression_stream_*`, `InputFilter`, `OutputFilter`, `FilterError`).
 //! The codecs are DEFLATE (RFC 1951) and the zlib wrapper (RFC 1950). The encoder is greedy LZ77 with
-//! dynamic Huffman blocks, chosen by a [`Level`] (the chain depth of the match finder). It can also
+//! dynamic Huffman blocks, chosen by a [`Level`] (the chain depth of the match search). It can also
 //! split large inputs over several threads (`encode_buffer_threaded`). Algorithm cases this build has
 //! no codec for (Brotli, LZ4, LZBITMAP, LZFSE, LZMA) are named so that app code keeps the reference
 //! shape, and they fail with `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a

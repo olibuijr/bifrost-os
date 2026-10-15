@@ -1,3 +1,7 @@
+## 0.14.2
+
+- Kept the keychain-backed password-group row type explicitly named at its import so the declared keychain permission is traceable to the code that uses it.
+
 ## 0.14.1
 
 - The Web Inspector console keeps its last 500 input lines for Up and Down recall; the oldest are dropped.

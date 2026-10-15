@@ -201,6 +201,11 @@ impl Generation {
     pub fn is_finished(&self) -> bool {
         self.done
     }
+
+    /// Ends the generation early (the caller no longer wants the picture). Later replies are refused.
+    pub fn cancel(&mut self) {
+        self.done = true;
+    }
 }
 
 #[cfg(test)]

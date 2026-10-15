@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.8.2 — 2026-10-14
+
+- Derive window geometry from the configured content size rather than a fixed-resolution fallback.
+
+## 0.8.1
+
+- Routed Copy and Select All through the shell Edit menu; app search and speech actions have separate menus. Added the compliance test harness.
+
+## 0.8.0
+
+- Help > System Information Help shows a short help card in the window: what each part of the window does and which keys and menu items reach it. Choosing a category or starting a find brings the facts back. Help > System Information Online Help opens the web page, as before.
+
+## 0.7.0
+
+- Edit > Speak Serial Number reads the serial through the system speech engine (`espeak-ng`, else `espeak`), whether or not the screen reader is on. With no engine installed the announcement shows as the banner, as before.
+- The manifest declares the JSON type (`public.json`, rank none), so Files lists System Information under Open With for a saved report. Files still does not pick it by itself.
+
+## 0.6.0
+
+- Edit > Use Selection for Find (Cmd+E) opens the find bar with the picked value or item; Edit > Jump to Selection (Cmd+J) scrolls the picked row or item into view.
+- Item lists have a Name and Details header. A click sorts by the column and a second click reverses it; the USB tree keeps its bus order. The picked item stays picked through a sort and through a refresh.
+- Processor lists the clock of each processor and, on hybrid processors, the performance and efficiency core counts.
+- Displays show each display's refresh rate and scale, from the display service.
+- Hardware adds Card Reader, Controller, SAS, Fibre Channel, Disc Burning and Diagnostics (crash reports and core dumps).
+- Software adds Installations (the package log, newest first) and Printer Software (the installed printer drivers).
+
 ## 0.5.0
 
 - New categories: Audio, Bluetooth, Camera, Printers, Thunderbolt, NVMe and SATA under Hardware; a Network section with Wi-Fi, Ethernet, WWAN, Firewall and Volumes; Fonts and Logs under Software.

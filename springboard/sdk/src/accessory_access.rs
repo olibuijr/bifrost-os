@@ -42,12 +42,12 @@ mod tests {
         };
         assert_eq!(manager.register(1, criteria), Ok(Vec::new()));
 
-        let mut other = Accessory::new(0, device(0x9999, 1));
+        let mut other = Accessory::new(1, device(0x9999, 1));
         other.name = "Other".to_string();
         manager.attach(other);
         assert!(manager.take_events(1).is_empty());
 
-        let id = manager.attach(Accessory::new(0, device(0x1234, 7)));
+        let id = manager.attach(Accessory::new(2, device(0x1234, 7)));
         assert_eq!(manager.take_events(1), vec![Event::Connected(id)]);
     }
 

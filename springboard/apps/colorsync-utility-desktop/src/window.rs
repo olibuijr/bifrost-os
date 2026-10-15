@@ -4,6 +4,7 @@
 
 use crate::library::{self, Found};
 use crate::model::{Gamut, Issue, Profile};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::TextCache;
 use bifrost_app::layout::UNIFIED_BAR_PT;
@@ -233,6 +234,18 @@ impl ColourUtility {
         Rect { x: 0.0, y: UNIFIED_BAR_PT, w: SIDE_PT, h: (self.size.1 - UNIFIED_BAR_PT).max(0.0) }
     }
 
+    pub fn sidebar(&self) -> SourceList {
+        let mut items = vec![SidebarItem::header("")];
+        for (index, found) in self.found.iter().enumerate() {
+            let name = found.path.file_name().and_then(|n| n.to_str()).unwrap_or("profile");
+            items.push(SidebarItem::row(index as u32 + 1, name).with_symbol("folder").with_subtitle(found.group.title()));
+        }
+        let mut list = SourceList::new(items, ROW_PT, LIST_TOP_PT);
+        list.two_line_h = ROW_PT;
+        list.set_selected(self.selected.map(|i| i as u32 + 1));
+        list
+    }
+
     /// The rectangle of profile row `index`, moved by the list's scroll.
     pub fn row_rect(&self, index: usize) -> Rect {
         Rect { x: 0.0, y: UNIFIED_BAR_PT + LIST_TOP_PT + index as f32 * ROW_PT - self.side_scroll, w: SIDE_PT, h: ROW_PT }
@@ -258,10 +271,9 @@ impl ColourUtility {
             return Target::Nothing;
         }
         if x < SIDE_PT {
-            for i in 0..self.found.len() {
-                if contains(self.row_rect(i), x, y) {
-                    return Target::Row(i);
-                }
+            let bounds = self.sidebar_rect();
+            if let Some(id) = self.sidebar().hit(bounds, self.side_scroll, x, y) {
+                return Target::Row(id.saturating_sub(1) as usize);
             }
             return Target::Side;
         }

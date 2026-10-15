@@ -24,9 +24,9 @@
     {
       "feature": "Service browser (IOBluetoothServiceBrowserController)",
       "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef",
-      "bifrost": "springboard/core/src/bt_service_browser.rs; wired: springboard/core/src/bt_service_browser.rs via springboard/src/shell/services/bluetooth_service.rs (services method) and springboard/sdk/src/bluetooth_service.rs (services, services_from_reply); Settings row in springboard/src/shell/pages.rs BluetoothDetail",
+      "bifrost": "springboard/core/src/bt_service_browser.rs; springboard/core/tests/parity_sdk-complete-47.rs; wired: springboard/core/src/bt_service_browser.rs via springboard/src/shell/services/bluetooth_service.rs (services method) and springboard/sdk/src/bluetooth_service.rs (services, services_from_reply); Settings row in springboard/src/shell/pages.rs BluetoothDetail",
       "status": "partial",
-      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDP query, no service list, and no service selection. Audio routing is decided from device class (class_is_audio), not from a service browse. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-complete-47.rs cover the UUID allow list, the filtered choice, cancel, panel text and option bits. Gap: the service list comes from an SDP query on the radio, which needs the lab machine, and audio routing is still decided from device class (class_is_audio), not from a service browse. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Object push transfer UI (IOBluetoothObjectPushUIController)",
@@ -45,9 +45,9 @@
     {
       "feature": "Accessibility ignored cells (IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell)",
       "apple": "IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell (cells hidden from accessibility)",
-      "bifrost": "springboard/ui/src/ax.rs (AxText, role_name, Priority); springboard/src/shell/atspi/ (accessibility bridge)",
+      "bifrost": "springboard/ui/src/ax_ignored.rs (CellKind::is_ignored, exposed, ignored_count)",
       "status": "partial",
-      "note": "The accessibility bridge exists for the shell, but nothing marks Bluetooth-specific cells as ignored because no Bluetooth picker UI exists in the SDK."
+      "note": "Image and text-field cells are ignored and filtered out of the exposed list, and tests in springboard/ui/tests/parity_sdk-gaps-03.rs cover it headless. Gap: the element map in ui/src/ax.rs has no ignored flag, the shell's accessibility bridge does not call this filter yet, and no Bluetooth picker cell is built on it."
     },
     {
       "feature": "Bluetooth power, scan and device state (framework enumerations, constants, functions, BluetoothKeyboardReturnType)",

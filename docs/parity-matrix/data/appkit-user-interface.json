@@ -17,9 +17,9 @@
     {
       "feature": "View Management",
       "apple": "NSViewController, NSSplitView, NSTabView, NSScrollView, NSVisualEffectView",
-      "bifrost": "springboard/ui/src/split.rs; springboard/ui/src/nav.rs; springboard/sdk/src/view/scroll.rs; springboard/render/src/glass.rs",
+      "bifrost": "springboard/ui/src/split.rs (SplitView, place_popover, visible_rows); springboard/ui/src/nav.rs (NavigationStack, NavigationPath); springboard/sdk/src/view/scroll.rs (ScrollPhysics, Fling, rubber band; headless_model_tests); springboard/render/src/glass.rs; springboard/ui/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "Split, navigation, scroll and vibrancy exist; no view-controller lifecycle clone."
+      "note": "Split divider limits and collapse, popover placement with edge flipping, visible rows, navigation stacks and paths, and scroll physics have headless tests (the_divider_respects_both_minimum_widths, a_popover_flips_to_the_opposite_edge_when_the_preferred_side_has_no_room, pushing_and_popping_screens_tracks_the_titles_and_the_back_title, a_navigation_path_rebuilds_the_stack_from_its_destinations, a_fast_release_inside_the_range_flings). No view-controller lifecycle clone."
     },
     {
       "feature": "View Layout",
@@ -45,9 +45,9 @@
     {
       "feature": "Windows, Panels, and Screens",
       "apple": "NSWindow, NSPanel, NSScreen, sheets, open/save panels, font and colour panels",
-      "bifrost": "springboard/ui/src/sheet.rs; springboard/ui/src/panels.rs; springboard/src/shell/docpanel.rs; springboard/src/shell/desk.rs; springboard/wm; wired: springboard/src/shell/desk.rs (desk_tile_front, desk_restore_front, edge snap on title-bar drop)",
+      "bifrost": "springboard/ui/src/sheet.rs; springboard/ui/src/panels.rs; springboard/src/shell/docpanel.rs; springboard/src/shell/desk.rs; springboard/wm; wired: springboard/src/shell/desk.rs (desk_tile_front, desk_restore_front, edge snap on title-bar drop); springboard/ui/tests/parity_sdk-tests-11.rs",
       "status": "partial",
-      "note": "Windows, sheets, open/save and font/colour panels exist; NSScreen-style multi-screen API for apps is thin. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Sheet buttons, keys and hit tests, alert sizes, font and colour panel selection and callbacks are tested headless in parity_sdk-tests-11.rs. Gap: the NSScreen-style multi-screen API for apps is thin, and the desk window wiring has no test; verify on Midget for parity."
     },
     {
       "feature": "Sound, Speech, and Haptics",
@@ -73,9 +73,9 @@
     {
       "feature": "Menus, Cursors, and the Dock",
       "apple": "NSMenu, NSCursor, NSStatusItem, NSDockTile",
-      "bifrost": "springboard/ui/src/menu.rs; springboard/sdk/src/status_item.rs; springboard/src/shell/desktop_bar.rs; springboard/src/shell/desktop_dock.rs; wired: springboard/src/shell/desktop_bar.rs (Window menu tile, restore and Next Window rows)",
+      "bifrost": "springboard/ui/src/menu.rs (Menu, MenuItem, popup_origin); springboard/sdk/src/status_item.rs (StatusItem messages); springboard/src/shell/desktop_bar.rs; springboard/src/shell/desktop_dock.rs; springboard/sdk/tests/parity_sdk-tests-01d.rs; wired: springboard/src/shell/desktop_bar.rs (Window menu tile, restore and Next Window rows)",
       "status": "partial",
-      "note": "Menus and status items exist; dock tile badges/menus for apps and custom cursors are limited. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Menu navigation with arrow keys, type-to-select, pop-up checks and row hit testing, and menu-bar extra updates, have headless tests (arrow_keys_skip_separators_and_disabled_rows_and_wrap, typing_selects_the_next_row_whose_title_starts_with_the_typed_text, a_status_item_sends_its_whole_state_on_every_change). Dock tile badges and menus for apps and custom cursors are limited. Verify on Midget for parity."
     },
     {
       "feature": "Gestures",
@@ -101,9 +101,9 @@
     {
       "feature": "Accessibility for AppKit",
       "apple": "NSAccessibility protocols, VoiceOver",
-      "bifrost": "springboard/ui/src/ax.rs; springboard/src/shell/atspi; springboard/src/shell/accessibility; springboard/src/shell/magnifier.rs",
+      "bifrost": "springboard/ui/src/ax.rs (slug, Map, Resolve, Announcements); springboard/src/shell/atspi; springboard/src/shell/accessibility; springboard/src/shell/magnifier.rs; springboard/ui/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "Accessibility tree bridged over AT-SPI with text, announcements; no full role/rotor coverage."
+      "note": "The element map (addresses, resolution by path or name, custom actions) and the announcement queue (politeness, repeats dropped, capacity) have headless tests (a_repeated_name_under_one_parent_gets_a_numbered_address, an_agent_query_resolves_by_address_by_path_or_by_name, assertive_announcements_are_spoken_first_and_repeats_are_dropped). The accessibility tree is bridged over AT-SPI with text and announcements; no full role or rotor coverage."
     }
   ],
   "gaps": [

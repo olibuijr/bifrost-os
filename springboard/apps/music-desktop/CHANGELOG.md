@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.10.1 — 2026-10-14
+
+- Use the shared spacing token for the artwork badge inset.
+
+## 1.10.0 — 2026-10-14
+
+- View > Sort Songs By > Descending reverses the order of any sort key in the Songs list. A recent list keeps its
+  newest songs in either order. The order is `browse::view_in_order`, tested headless in `tests/parity_app-music_w10.rs`.
+- The View menu carries the Descending item with its checked state, and `Command::SortDescending` is in the menu ids.
+
+## 1.9.0 — 2026-10-14
+
+- Playlist folders can be renamed and deleted in the model. A renamed folder keeps its playlists, and a deleted folder
+  leaves its playlists in no folder. The folder page that offers these buttons is not built yet.
+- Playback settings model: a crossfade length of up to 12 seconds, Sound Check (a gain that moves each song toward
+  -16 dB, limited to 9 dB either way), and an equal-power crossfade curve. The settings are kept as text in the same
+  form the settings file uses. No Settings page sets them yet, and the audio service does not take them.
+- Visualizer model: the level of each of the ten equalizer bands in a block of audio, and the rise and fall of a bar.
+  No window draws the bars yet, because the audio service publishes no spectrum.
+
+## 1.8.0 — 2026-10-14
+
+- Get Info. Song > Get Info, and Get Info in a song's "..." menu, opens a page with the song's Title, Artist and Album.
+  Tap a field to type a new value; an empty value takes the edit away, and Restore Original Tags drops them all. The
+  edits are kept in `info.txt` in the Music data folder by file path and laid over the tags at every scan. The audio
+  files are not written, so the changes show in Music only.
+- Playlist folders. File > New Playlist Folder, or New Playlist Folder in the Playlists list, makes a folder. A
+  playlist page's Move to Folder button (or its folder menu) puts the playlist in a folder; folders list their playlists
+  nested under them and Show or Hide them. The folders are kept in `Playlists/folders.txt`.
+- The mini player bar has a route button left of Play that lists the output devices, as the Now Playing sheet does.
+
 ## 1.7.0 — 2026-10-13
 
 - Song and Controls menus in the menu bar: Play/Pause, Next, Previous, Shuffle, Repeat and volume with shortcuts;
@@ -7,6 +38,29 @@
 - Favourites show a heart in the song rows and the song menu has Favourite.
 - New source list entries: Recently Added, Recently Played, Favourite Songs and Top Rated. Marks and the play log are
   kept in the Music data folder.
+
+## 1.7.0 — 2026-10-13
+
+- Ratings and favourites. A song's "..." menu steps its rating (none, 1 to 5 stars) and adds it to or takes it off the
+  favourites. Rated songs show their stars under the length and favourites show a heart. The sort button gains Rating,
+  Plays and Recently Played.
+- New lists under Songs in the source list: Recently Added, Recently Played and Favourite Songs. Music counts a play once
+  a song has been heard for 30 seconds (half of a shorter one) and keeps ratings, favourites, play counts and the history
+  in `stats.txt` next to the queue.
+- Smart playlists. "New Smart Playlist" in the Playlists list opens a rules editor: pick Title, Artist, Album, Year,
+  Rating, Plays, days since added or played, or Favourite, an operator and a value, and choose whether all rules or any
+  rule must match. The playlist fills itself from the library and follows new ratings and plays. Smart playlists are
+  files in `Smart/` and appear in the source list.
+- Up Next: drag a row by its handle to move it anywhere in the queue, and open History (the songs that played lately,
+  most recent first) from the Up Next toolbar or the View menu.
+- Lyrics. A song with a `.lrc` file beside it gets a Lyrics switch on the Now Playing sheet: the line being sung is
+  highlighted and follows the song. Plain text lyrics are listed without highlight.
+- App menus: File > Import, Song (Play Next, Play Last, Add to Playlist, Rating, Favourite), Controls (Play or Pause,
+  Next, Previous, Shuffle, Repeat, Volume) and View (Artists to Playlists, the new lists, Up Next, History, Lyrics, Sort
+  Songs By), with key equivalents.
+- File > Import copies chosen songs into `Music/Imported` and scans the library again.
+- The route button on the Now Playing sheet lists the output devices and makes the chosen one the default output.
+- Music asks for the `documents` permission, for the Import open panel.
 
 ## 1.6.2 — 2026-10-13
 

@@ -1,18 +1,20 @@
-//! Background work for the window: the sign-in, the sync loop and the sends. Each job runs on its own thread and sends
-//! one [`Event`] back; a byte on the wake pipe tells the window's loop to read the channel, so nothing waits on a network
-//! call. The sync loop runs for as long as the app does.
+//! Background work for the window: the sign-in, the sync loop and the sends. Jobs run on utility dispatch queues and
+//! push [`Event`]s into a shared queue; a byte on the wake pipe tells the window's loop to drain it.
 
 use crate::api::Api;
 use crate::protocol::Sync;
 use springboard::deildu::http::Transport;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::io::Write;
 use std::os::unix::net::UnixStream;
-use std::sync::mpsc::Sender;
-use std::sync::Arc;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// How long the sync loop waits after a failed call before it tries again.
 const RETRY: Duration = Duration::from_secs(5);
+
+pub type EventQueue = Arc<Mutex<VecDeque<Event>>>;
 
 /// The answer of one job.
 pub enum Event {
@@ -38,8 +40,8 @@ pub enum Event {
 }
 
 /// Runs `work` on a new thread and sends its event, then writes the wake pipe.
-pub fn spawn(tx: Sender<Event>, wake: Option<UnixStream>, work: impl FnOnce() -> Event + Send + 'static) {
-    std::thread::spawn(move || {
+pub fn spawn(tx: EventQueue, wake: Option<UnixStream>, work: impl FnOnce() -> Event + Send + 'static) {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let event = work();
         let mut wake = wake;
         notify(&tx, &mut wake, event);
@@ -47,10 +49,12 @@ pub fn spawn(tx: Sender<Event>, wake: Option<UnixStream>, work: impl FnOnce() ->
 }
 
 /// Sends `event` and wakes the window. False when the window has gone and nobody reads the channel.
-fn notify(tx: &Sender<Event>, wake: &mut Option<UnixStream>, event: Event) -> bool {
-    if tx.send(event).is_err() {
+fn notify(tx: &EventQueue, wake: &mut Option<UnixStream>, event: Event) -> bool {
+    let Ok(mut queue) = tx.lock() else {
         return false;
-    }
+    };
+    queue.push_back(event);
+    drop(queue);
     if let Some(w) = wake.as_mut() {
         let _ = w.write(&[1]);
     }
@@ -65,8 +69,8 @@ pub fn sign_in(transport: Arc<dyn Transport>, homeserver: String, user: String, 
 
 /// Starts the sync loop for `api` on its own thread. Every answer is sent to the window. A failed call is sent too, and
 /// the loop waits before it tries again. An expired or revoked token ends the loop: the user must sign in again.
-pub fn run_sync(api: Arc<Api>, tx: Sender<Event>, wake: Option<UnixStream>) {
-    std::thread::spawn(move || {
+pub fn run_sync(api: Arc<Api>, tx: EventQueue, wake: Option<UnixStream>) {
+    DispatchQueue::serial_qos("is.olibuijr.messages.sync", Qos::Utility).async_(move || {
         let mut wake = wake;
         let mut since: Option<String> = None;
         loop {

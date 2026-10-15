@@ -31,6 +31,76 @@ pub enum BiometryKind {
     Optic,
 }
 
+impl BiometryKind {
+    /// The kind named by a sensor name from an authentication context: `touch`, `face`, `optic` or `none`. Any other
+    /// name is None, so an unknown sensor never picks an icon by accident.
+    pub fn from_sensor_name(name: &str) -> Option<BiometryKind> {
+        match name {
+            "touch" => Some(BiometryKind::Touch),
+            "face" => Some(BiometryKind::Face),
+            "optic" => Some(BiometryKind::Optic),
+            "none" => Some(BiometryKind::None),
+            _ => None,
+        }
+    }
+}
+
+/// Why a [`Prompt`] cannot be shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PromptError {
+    /// The reason is blank. The system shows it under the title, so it must say why authentication is asked.
+    EmptyReason,
+    /// The cancel title is blank. The cancel button always exists and needs a label.
+    EmptyCancelTitle,
+}
+
+/// The text of an authentication prompt: the reason, the fallback button and the cancel button. A fallback title
+/// that is empty hides the fallback button, as the system's authentication context does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prompt {
+    reason: String,
+    fallback: Option<String>,
+    cancel: String,
+}
+
+impl Prompt {
+    /// A prompt that says `reason`, with the fallback button titled "Enter Password" and the cancel button "Cancel".
+    pub fn new(reason: &str) -> Result<Prompt, PromptError> {
+        if reason.trim().is_empty() {
+            return Err(PromptError::EmptyReason);
+        }
+        Ok(Prompt { reason: reason.to_string(), fallback: Some("Enter Password".to_string()), cancel: "Cancel".to_string() })
+    }
+
+    /// Sets the fallback button's title. An empty title hides the button.
+    pub fn with_fallback_title(mut self, title: &str) -> Prompt {
+        self.fallback = if title.is_empty() { None } else { Some(title.to_string()) };
+        self
+    }
+
+    /// Sets the cancel button's title. A blank title is refused.
+    pub fn with_cancel_title(mut self, title: &str) -> Result<Prompt, PromptError> {
+        if title.trim().is_empty() {
+            return Err(PromptError::EmptyCancelTitle);
+        }
+        self.cancel = title.to_string();
+        Ok(self)
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    /// The fallback button's title, or None when the button is hidden.
+    pub fn fallback_title(&self) -> Option<&str> {
+        self.fallback.as_deref()
+    }
+
+    pub fn cancel_title(&self) -> &str {
+        &self.cancel
+    }
+}
+
 /// The size of the icon as a control size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ControlSize {

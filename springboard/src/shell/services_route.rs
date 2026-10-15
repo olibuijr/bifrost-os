@@ -69,6 +69,11 @@ impl Shell {
                     eprintln!("services: {e}");
                 }
             }
+            // a selected file opens its folder: `cd` cannot enter a file
+            Route::Terminal(path) => {
+                let folder = reveal_folder(&path);
+                self.open_terminal_at(Path::new(&folder), t)
+            }
             Route::Reveal(path) => {
                 let folder = reveal_folder(&path);
                 if let Err(e) = self.desktop_open_folder(FILES_APP, &folder, t) {

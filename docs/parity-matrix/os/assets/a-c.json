@@ -2160,9 +2160,9 @@
    "description": "",
    "role": "Accessibility cursor art, crossTop shape,  layer",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::Crosshair) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
+   "bifrost": "springboard/ui/src/cursor_art.rs (art, Kind::Crosshair)",
+   "status": "partial",
+   "note": "The crosshair pointer has separate fill and outline masks in cursor_art.rs, tested headless in parity_os-misc-01. Gap: the masks are drawn in code rather than from the reference PDF, and the compositor does not draw them yet, so the Pointer outline and fill colours do not reach the screen.",
    "rea": [],
    "method": "assessed"
   },

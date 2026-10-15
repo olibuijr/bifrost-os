@@ -80,10 +80,11 @@ pub fn classify(name: &str, exec: &str) -> Result<Placement, LayoutError> {
         ["manifest.toml"] => Ok(Placement::Manifest),
         ["icon.png"] => Ok(Placement::Icon),
         [file] if *file == exec => Ok(Placement::Executable),
+        ["libs"] | ["plugins"] => Err(LayoutError::Unplaced(name.to_string())),
         ["assets", ..] if parts.len() > 1 => Ok(Placement::Resource),
         ["libs", file] if is_module_file(file) => Ok(Placement::Library),
         ["plugins", file] if is_module_file(file) => Ok(Placement::Plugin),
-        ["libs", file] | ["plugins", file] => Err(LayoutError::BadModule {
+        ["libs", _file] | ["plugins", _file] => Err(LayoutError::BadModule {
             path: name.to_string(),
             expected: "a shared module must be a named .so file directly in libs/ or plugins/",
         }),

@@ -83,6 +83,44 @@ pub fn transfer_nv12(src: Nv12, ow: usize, oh: usize, m: Colorimetry) -> Option<
     Some(img)
 }
 
+/// A borrowed I420 picture: a luma plane and separate Cb and Cr planes, each with a quarter of the luma samples. `stride`
+/// is the luma row length in bytes and `chroma_stride` the chroma row length in bytes.
+#[derive(Clone, Copy, Debug)]
+pub struct I420<'a> {
+    pub y: &'a [u8],
+    pub u: &'a [u8],
+    pub v: &'a [u8],
+    pub stride: usize,
+    pub chroma_stride: usize,
+    pub w: usize,
+    pub h: usize,
+}
+
+/// Converts an I420 picture to an opaque `ow` x `oh` RGBA image by nearest-neighbour sampling, as `transfer_nv12` does
+/// for NV12. None when the picture is empty or its planes are too short for its size.
+pub fn transfer_i420(src: I420, ow: usize, oh: usize, m: Colorimetry) -> Option<Image> {
+    let I420 { y, u, v, stride, chroma_stride, w, h } = src;
+    if w == 0 || h == 0 || stride < w {
+        return None;
+    }
+    let (cw, ch) = (w.div_ceil(2), h.div_ceil(2));
+    if chroma_stride < cw || y.len() < stride * h || u.len() < chroma_stride * ch || v.len() < chroma_stride * ch {
+        return None;
+    }
+    let mut img = Image::new(ow, oh);
+    for oy in 0..oh {
+        let sy = oy * h / oh;
+        let yr = &y[sy * stride..sy * stride + w];
+        let ur = &u[(sy / 2) * chroma_stride..];
+        let vr = &v[(sy / 2) * chroma_stride..];
+        for ox in 0..ow {
+            let sx = ox * w / ow;
+            img.px[oy * ow + ox] = yuv_to_rgba(yr[sx], ur[sx / 2], vr[sx / 2], m);
+        }
+    }
+    Some(img)
+}
+
 /// Scales an RGBA image to `ow` x `oh` by nearest-neighbour sampling. None for an empty source.
 pub fn transfer_rgba(src: &Image, ow: usize, oh: usize) -> Option<Image> {
     if src.w == 0 || src.h == 0 {
@@ -120,6 +158,18 @@ pub fn mirror(img: &Image, horizontal: bool, vertical: bool) -> Image {
         }
     }
     out
+}
+
+/// The quarter turn for a clockwise angle in degrees, as a rotation session takes its angle. Only the multiples of 90
+/// are turns. Negative angles and angles past a full turn wrap, so -90 and 270 are the same turn. `None` otherwise.
+pub fn turn_for_degrees(degrees: i32) -> Option<Rotation> {
+    match degrees.rem_euclid(360) {
+        0 => Some(Rotation::None),
+        90 => Some(Rotation::Cw),
+        180 => Some(Rotation::Half),
+        270 => Some(Rotation::Ccw),
+        _ => None,
+    }
 }
 
 /// Rotates a picture in quarter turns, after the optional mirrors. The result is

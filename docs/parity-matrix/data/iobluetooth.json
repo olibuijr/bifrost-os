@@ -10,16 +10,16 @@
     {
       "feature": "Host controller (power, name, bondable, SSP)",
       "apple": "IOBluetoothHostController",
-      "bifrost": "springboard/src/bare/bluetooth.rs (OP_SET_POWERED, OP_SET_LOCAL_NAME, OP_SET_BONDABLE, OP_SET_SSP, Cmd::Enable)",
-      "status": "os",
-      "note": "Shell only. Apps get no SDK call to read or set the local controller."
+      "bifrost": "springboard/sdk/src/bluetooth_service.rs (Bluetooth::apply_status, RadioState, enable); springboard/sdk/src/bluetooth_controller.rs (LocalName)",
+      "status": "partial",
+      "note": "The radio state an app reads and the local name check are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no app request sets the local name, bondable or SSP setting, and the shell does not take a name from an app."
     },
     {
       "feature": "Device inquiry (scan)",
       "apple": "IOBluetoothDeviceInquiry, IOBluetoothDeviceInquiryDelegate",
-      "bifrost": "springboard/sdk/src/bluetooth_inquiry.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_inquiry.rs (parse_device_found, Inquiry::feed); springboard/sdk/tests/parity_sdk-complete-41.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Discovery runs through the mgmt socket. No delegate or callback API for apps."
+      "note": "The inquiry model reads the controller's Device Found payload headless (address order, name preference, class of device, unknown RSSI, truncated data) and feeds it into a search. Gap: nothing opens the mgmt socket yet, and there is no delegate or callback API for apps; the radio path needs the lab machine."
     },
     {
       "feature": "Remote device model (name, class, paired, connected)",
@@ -31,16 +31,16 @@
     {
       "feature": "Pairing (Just Works, user confirm, timeout)",
       "apple": "IOBluetoothDevicePair, IOBluetoothDevicePairDelegate",
-      "bifrost": "springboard/src/bare/bluetooth.rs:68 (NoInputNoOutput Just Works), :73 (PAIR_MS timeout), OP_PAIR_DEVICE, OP_USER_CONFIRM_REPLY",
-      "status": "os",
-      "note": "Just Works (no input, no output) for the pairing the shell started. Legacy PIN requests are answered with a fixed \"0000\" (springboard/src/bare/bluetooth.rs:641-650). No user-entered PIN or passkey."
+      "bifrost": "springboard/sdk/src/bluetooth_service.rs (pair, Bluetooth::busy); springboard/sdk/src/bluetooth_picker.rs (BluetoothPicker)",
+      "status": "partial",
+      "note": "The pairing in progress and the device the user picks are modelled; the shell still pairs with Just Works and a fixed legacy PIN. Gap: no PIN or passkey entry and no confirmation prompt reach apps."
     },
     {
       "feature": "Connect, disconnect and forget a device",
       "apple": "IOBluetoothDevice (openConnection, closeConnection, remove)",
-      "bifrost": "springboard/src/bare/bluetooth.rs (Cmd::Connect, Cmd::Disconnect, Cmd::Forget, OP_DISCONNECT, OP_UNPAIR_DEVICE); springboard/src/shell/pages.rs (BluetoothDetail: Connect / Disconnect / Forget This Device)",
-      "status": "os",
-      "note": "Works from the Settings page. Apps cannot connect to a device."
+      "bifrost": "springboard/sdk/src/bluetooth_devices.rs (DeviceList: paired, connected, forget); springboard/sdk/src/bluetooth_events.rs (DeviceEvents); springboard/sdk/src/bluetooth_service.rs (connect, disconnect, forget)",
+      "status": "partial",
+      "note": "The device order, forgetting, and the connect and disconnect events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: the connect and disconnect requests are answered by the shell, and that round trip is not yet verified on the lab machine."
     },
     {
       "feature": "Audio output routing to a headset",
@@ -87,16 +87,16 @@
     {
       "feature": "HID device handling (ignore, counts)",
       "apple": "IOBluetoothIgnoreHIDDevice, IOBluetoothRemoveIgnoredHIDDevice, IOBluetoothNumberOf*HIDDevices",
-      "bifrost": "springboard/sdk/src/bluetooth_hid.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_hid.rs (IgnoreList, counts, is_hid); tests in springboard/sdk/tests/parity_sdk-complete-42.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-iobluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to count or ignore HID devices. Keyboards and mice are not visible to apps through Bluetooth calls."
+      "note": "The ignore list and the connected and paired HID counts are tested headless in sdk/tests/parity_sdk-complete-42.rs, and an ignored device stays in the device list. Not yet wired into the shell or apps, the radio layer does not act on the ignore list, and it is not tested on Midget."
     },
     {
       "feature": "User notifications on device events",
       "apple": "IOBluetoothUserNotification, IOBluetoothUserNotificationCallback",
-      "bifrost": "springboard/sdk/src/bluetooth_events.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_events.rs (DeviceEvents, notice_for, notices_for_registration); springboard/sdk/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Connect and disconnect events go to the shell's own state. No app subscription API."
+      "note": "Registrations with filters, bounded queues and device notices (title and name or address) gated on the app's authorization are tested headless in parity_sdk-complete-43.rs. Gap: the model is not wired into apps or the shell, which keep their own connect and disconnect state, so the notices need Midget to be verified."
     },
     {
       "feature": "Address and utility helpers",

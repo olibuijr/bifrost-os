@@ -31,16 +31,16 @@
     {
       "feature": "On-device ML analysis runtime (shared by all requests)",
       "apple": "In-process on-device analysis, no data leaves the system (per the framework overview)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No ML inference runtime in springboard/. Searches for onnx, tflite and inference found nothing in springboard source. ML inference lives in the separate hamr project, which is not a BifrOSt desktop feature."
+      "bifrost": "springboard/ui/src/ml_runtime.rs (AnalysisRuntime); springboard/ui/src/ml_model.rs, springboard/sdk/src/inference.rs, springboard/ui/src/tensor.rs; tests: springboard/ui/tests/parity_sdk-complete-25.rs",
+      "status": "partial",
+      "note": "AnalysisRuntime loads named models once, routes every request to the model it names, refuses unknown or duplicate names and counts requests per model, tested headless in ui/tests/parity_sdk-complete-25.rs. Gap: no compute device acceleration, no model download or cache, and no shell or app client yet, which needs Midget with a deployed app."
     },
     {
       "feature": "Errors (MediaIntelligenceError)",
       "apple": "MediaIntelligenceError",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No error type for media analysis, since no analysis operation exists. Non-applicable until the analysis APIs exist."
+      "bifrost": "springboard/ui/src/media_intelligence_error.rs (MediaIntelligenceError, check_embedding, check_threshold); springboard/ui/src/face_group.rs (FaceGroups::try_insert_face, try_entities)",
+      "status": "partial",
+      "note": "One typed error covers face grouping: an empty, non-finite or wrong-length embedding and a threshold outside -1 to 1 are refused with their reason, and runtime failures are carried through; tested headless in ui/tests/parity_sdk-rest-10.rs. Gap: no app-facing analysis request returns it yet, so the reference error cases for asset loading and video analysis have no counterpart."
     }
   ],
   "gaps": [
@@ -48,6 +48,6 @@
     "On-device ML inference runtime that the analysis requests would run on",
     "Video highlight scoring (engaging segments) over decoded frames",
     "Content-based keyframe selection (representative frame) beyond container sync samples",
-    "Media analysis error type"
+    "Media analysis errors for asset loading and video analysis (face grouping errors are typed)"
   ]
 }

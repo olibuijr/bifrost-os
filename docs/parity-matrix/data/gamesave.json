@@ -38,9 +38,9 @@
     {
       "feature": "Offline and local-only saving",
       "apple": "Local saving when the device is not signed into iCloud Drive (GameSave overview)",
-      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs (FILE in the app data directory)",
+      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs (FILE in the app data directory); springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "Local saving works without any account. The save is not synced, so this matches only the offline half of the feature."
+      "note": "Local saving works without any account: preferences and window state survive a relaunch, a removed value stays removed, and a broken state file does not cost the preferences (headless tests in parity_sdk-complete-19.rs). The save is not synced and no cloud service exists here, so the sync half of the feature stays out."
     },
     {
       "feature": "Error domain for save errors",
@@ -59,9 +59,9 @@
     {
       "feature": "Cloud account backup of user data",
       "apple": "Not part of GameSave; nearest Apple counterpart is iCloud Drive",
-      "bifrost": "~/Projects/bifrost-cloud/docs/schema.md (device_backups, encrypted backups of a BifrOSt PC); ~/Projects/bifrost-cloud/skill/SKILL.md (backups timer)",
-      "status": "partial",
-      "note": "Account-level encrypted device backups exist in the cloud backend, but the PC client code that uploads them was not found in bifrost-os, and no app can reach its save directory through them. Counted as partial background only, not as GameSave parity."
+      "bifrost": "none in bifrost-os; the account backend is in ~/Projects/bifrost-cloud (outside this repo)",
+      "status": "gap",
+      "note": "Blocked: bifrost-cloud's generic data API (crates/cloud-server/src/api_data.rs) accepts owner rows in device_backups and upload_sessions, which are metadata only. No route in crates/cloud-server accepts save file bytes, and the blobs table is admin-only, so an SDK client has no endpoint to send a save directory to. Until the backend adds a byte upload route, no app can reach its save directory through a cloud backup."
     }
   ],
   "gaps": [

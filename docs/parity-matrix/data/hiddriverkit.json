@@ -19,7 +19,7 @@
       "apple": "IOHIDDevice, IOUserHIDDevice, IOHIDInterface",
       "bifrost": "springboard/src/bare/input.rs:140 (Device::open, exclusive EVIOCGRAB), :178 (Device::read)",
       "status": "os",
-      "note": "Runs in the shell; apps never open devices"
+      "note": "Runs in the shell; apps never open devices. Blocker: Device::open takes an exclusive grab, so an app reader would receive no events, and the shell's decoded keys and touches reach apps through the runtime input enum instead."
     },
     {
       "feature": "Device discovery and matching by capability",
@@ -31,9 +31,9 @@
     {
       "feature": "Keyboard events",
       "apple": "Handling Keyboard Events from a Human Interface Device, kIOHIDSupportedKeyboardUsagePairsKey",
-      "bifrost": "springboard/src/bare/input.rs:16-18 (Key, Switch events), springboard/sdk/src/runtime.rs:20-28 (Input::Key)",
+      "bifrost": "springboard/src/bare/input.rs:16-18 (Key, Switch events), springboard/sdk/src/runtime.rs:20-28 (Input::Key), springboard/src/bare/key_usage.rs (usage_of, code_of, boot_modifier_bit, boot_report)",
       "status": "partial",
-      "note": "Key codes are evdev codes, not HID usages; no keyboard usage-pair declaration"
+      "note": "Key events stay evdev codes, and key_usage maps them to HID keyboard usages (page 0x07) with a boot keyboard report and roll-over, tested in springboard/tests/parity_sdk-complete-46.rs. Gap: no keyboard usage-pair declaration is published to the system, and keys outside the boot set (keypad, media, vendor keys) have no usage."
     },
     {
       "feature": "Touch and multitouch digitizer data",
@@ -45,23 +45,23 @@
     {
       "feature": "Stylus and pen input",
       "apple": "IOHIDDigitizerStylusData, Handling Stylus Input from a Human Interface Device",
-      "bifrost": "springboard/ui/src/stylus.rs (StylusReport::to_point",
+      "bifrost": "springboard/ui/src/stylus.rs (StylusReport::to_point, pen_angles, LogicalRange)",
       "status": "partial",
-      "note": "Wave 4 (theme-21, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pen tilt, pressure and eraser are not decoded"
+      "note": "Pure model in bifrost_ui::stylus: pressure maps to force, tilt maps to altitude and azimuth, and hover reports are skipped. These mappings are tested headless in springboard/ui/tests/parity_sdk-tests-07-w7.rs. Not wired into apps or the shell and not tested on the VM or Midget. No device decoding; the eraser flag is carried on the report but to_point does not act on it."
     },
     {
       "feature": "Pointer and scrolling devices",
       "apple": "IOUserHIDEventDriver (pointer and scroll events)",
-      "bifrost": "springboard/src/bare/pointer_finger.rs (Mouse, PointerFinger), springboard/src/bare/input.rs:382 (PointerDecoder), :656 (pointer source selection)",
-      "status": "os",
-      "note": "Mouse and pointer events reach the shell only"
+      "bifrost": "springboard/ui/src/device_match.rs (Criteria::pointer, Capabilities); springboard/src/bare/pointer_finger.rs (Mouse, PointerFinger), springboard/src/bare/input.rs:382 (PointerDecoder), :656 (pointer source selection)",
+      "status": "partial",
+      "note": "A pointer device is matched by capability (relative motion and a left button), tested headless in parity_sdk-os-01. Gap: scroll wheel axes are not a matching criterion, and no app reads pointer events."
     },
     {
       "feature": "Switches (lid, jack insert)",
       "apple": "IOHIDEventService sensor and switch elements",
-      "bifrost": "springboard/ui/src/input_switches.rs",
+      "bifrost": "springboard/ui/src/input_switches.rs (SwitchState, SwitchWatch)",
       "status": "partial",
-      "note": "Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell reads switches; apps get no switch events"
+      "note": "Lid, tablet mode and headset states, their edges, and per-observer SwitchWatch selection are tested headless in ui/tests/parity_sdk-complete-37.rs. Gap: the shell does not yet publish switch edges to apps, and the feed needs the tablet or Midget hardware."
     },
     {
       "feature": "Virtual HID devices (synthetic input)",

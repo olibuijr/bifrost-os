@@ -10,37 +10,37 @@
     {
       "feature": "Accessory manager and connect/disconnect notifications",
       "apple": "EAAccessoryManager (shared(), registerForLocalNotifications, EAAccessoryDidConnect, EAAccessoryDidDisconnect) https://developer.apple.com/documentation/externalaccessory/eaaccessorymanager",
-      "bifrost": "springboard/core/src/accessory_manager.rs (AccessoryManager",
+      "bifrost": "springboard/sdk/src/external_accessory.rs (AccessoryManager, register_for_notifications, take_events); springboard/core/src/accessory_manager.rs (AccessoryManager::sync); tests: springboard/sdk/tests/parity_sdk-complete-14.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps cannot subscribe to accessory attach or detach. The SDK's notification module (springboard/sdk/src/usernotif.rs) is for user notifications, not hardware events."
+      "note": "Apps register for connect and disconnect notifications and take them in order, and a registration that is cancelled drops the queue; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: no bus source drives attach and detach on a real device, which needs hardware and a Midget check."
     },
     {
       "feature": "Accessory object (identity and state)",
       "apple": "EAAccessory (name, manufacturer, modelNumber, serialNumber, protocolStrings, isConnected, connectionID) https://developer.apple.com/documentation/externalaccessory/eaaccessory",
       "bifrost": "springboard/sdk/src/external_accessory.rs (Accessory::from_core), springboard/core/src/accessory_manager.rs (Accessory identity fields)",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. Accessory::from_core builds the app view (identity, protocol strings, connection id, connected state) from the USB accessory manager record. Wired accessories are not modelled; no bus event feeds it."
+      "note": "Accessory::from_core builds the app view (identity, protocol strings, connection id, connected state) from the USB accessory manager record, tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: wired accessories are not modelled, and no bus event feeds the view yet, which needs hardware."
     },
     {
       "feature": "Protocol matching (declared protocols)",
       "apple": "UISupportedExternalAccessoryProtocols (Info.plist key); EASession(accessory:forProtocol:)",
-      "bifrost": "springboard/core/src/accessory_manager.rs (session",
+      "bifrost": "springboard/core/src/accessory_manager.rs (AccessoryManager::session); springboard/sdk/src/external_accessory.rs (accessories_for_protocol, session)",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No manifest key declares accessory protocols, and the sandbox has no accessory grant. The sandbox binds only /dev/snd and /dev/dri, so an app has no path to a serial or USB device."
+      "note": "Protocol strings match exactly, a session is refused for a disconnected accessory or an undeclared protocol, and the matches are listed in attach order; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: no manifest key declares accessory protocols and the sandbox grants no accessory device, so an app cannot reach hardware yet."
     },
     {
       "feature": "Data session streams",
       "apple": "EASession (inputStream, outputStream, protocolString, accessory) https://developer.apple.com/documentation/externalaccessory/easession",
-      "bifrost": "springboard/sdk/src/external_accessory.rs, springboard/sdk/src/stream.rs",
+      "bifrost": "springboard/sdk/src/external_accessory.rs (Session, input_stream, output_stream, receive, take_output), springboard/sdk/src/stream.rs; tests: springboard/sdk/tests/parity_sdk-complete-14.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-external-accessory, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing byte stream to an accessory. The PTY code serves the terminal app, not hardware."
+      "note": "A session carries bytes in both directions through its input and output streams, and closing refuses writes; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: the transport that moves bytes to and from a real accessory needs hardware."
     },
     {
       "feature": "Bluetooth picker and pairing UI",
       "apple": "EAAccessoryManager showBluetoothAccessoryPicker (Bluetooth MFi accessory selection sheet)",
-      "bifrost": "springboard/sdk/src/bluetooth_picker.rs",
+      "bifrost": "springboard/sdk/src/bluetooth_picker.rs (PickerRequest, for_request, Outcome::address)",
       "status": "partial",
-      "note": "Wave 5 (w5-external-accessory, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Settings page pairs, connects and unpairs devices, and sets an audio route. No app can open a picker to choose an accessory for itself. The picker is a shell feature only."
+      "note": "An app's request (a name filter and device kinds) builds the picker, and the app receives only the chosen address; tested headless in sdk/tests/parity_sdk-complete-35.rs. Gap: the request does not cross the shell boundary yet, so no app can open the picker for itself, and the pairing sheet remains a shell feature."
     },
     {
       "feature": "Wi-Fi accessory configuration (unconfigured accessories)",
@@ -52,16 +52,16 @@
     {
       "feature": "Accessory input and media devices",
       "apple": "Not in the framework; closest analogue for hardware input is GameController and CoreMIDI (outside this matrix)",
-      "bifrost": "springboard/src/bare/input.rs (evdev discovery, shell only); springboard/src/media/v4l2.rs (V4L2 camera devices, shell only)",
-      "status": "os",
-      "note": "Input and camera devices are opened by the shell. An app that needs a generic accessory cannot get its device path or events through the SDK."
+      "bifrost": "springboard/sdk/src/external_accessory.rs (accessory registry, connect and disconnect, data sessions); springboard/sdk/src/hid_devices.rs (HID device matching and changes); springboard/ui/src/device_match.rs (capability filter); springboard/src/bare/input.rs (evdev discovery, shell only); springboard/src/media/v4l2.rs (V4L2 camera devices, shell only)",
+      "status": "partial",
+      "note": "Apps see connected accessories and HID devices by role and transport, and open data sessions over the protocols an accessory declares, all in tested pure models. Gap: the shell opens the devices and no transport moves bytes to them, and apps never receive raw input events."
     },
     {
       "feature": "USB and serial accessories",
       "apple": "Not part of this framework (MFi uses Lightning and 30-pin, which BifrOSt does not expose); USB is covered by AccessoryAccess and serial is not an Apple accessory API",
-      "bifrost": "none in springboard/src/ for USB or serial access by apps (no hits for tty, serialport, hidraw or libusb in SDK code)",
-      "status": "gap",
-      "note": "Checked for serial and USB device access in springboard/ with a text search: only the PTY (springboard/src/term/pty.rs), the installer and the DRM driver (springboard/wm/src/drm.rs) matched. Recorded for completeness; the USB side belongs to the AccessoryAccess matrix row."
+      "bifrost": "springboard/core/src/serial_ports.rs, springboard/sdk/src/serial_ports.rs, springboard/sdk/src/external_accessory.rs, springboard/core/src/usb_descriptors.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (serial_ports.rs, serial_ports.rs, external_accessory.rs, usb_descriptors.rs); not wired into the shell or apps, not tested on Midget. Checked for serial and USB device access in springboard/ with a text search: only the PTY (springboard/src/term/pty.rs), the installer and the DRM driver (springboard/wm/src/drm.rs) matched. Recorded for completeness; the USB side belongs to the AccessoryAccess matrix row."
     }
   ],
   "gaps": [

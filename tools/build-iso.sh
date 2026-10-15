@@ -1,18 +1,35 @@
 #!/usr/bin/env bash
 # Build the BifrOSt installer ISO.
-#   tools/build-iso.sh [--lab|--release] [--skip-cargo] [--deploy]
+#   tools/build-iso.sh [--lab|--release] [--profile fast|release] [--skip-cargo] [--deploy]
 #     --debug    lab + full trace: graphical splash + journal diagnostics streamed to titan
 #                (run tools/lab-log-sink.py), BIFROST_TRACE for the installer
 #     --lab      (default) adds remote access for testing: root SSH key (out/lab), bifrost-lab token + API
-#     --release  hardened: no SSH key, no lab token or service, no lab hooks
+#     --release  hardened: no SSH key, no lab token or service, no lab hooks (full release profile by default)
+#     --profile  choose the Cargo profile; --release --profile fast makes a hardened ISO from validated fast artifacts
 #     --deploy   copy the ISO into iVentoy's iso/ folder under a NEW name (never replaces a served file)
 # Needs sudo (mkarchiso). Work dirs live in out/; they are unmounted before removal and removed with
 # --one-file-system (a work dir can still hold bind mounts of /dev and /run after an interrupted build).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-MODE=lab; CARGO=1; DEPLOY=0; DEBUG=0
-CPROF=fast
-for a in "$@"; do case $a in --lab) MODE=lab ;; --debug) MODE=lab; DEBUG=1 ;; --release) MODE=release; CPROF=release ;; --skip-cargo) CARGO=0 ;; --deploy) DEPLOY=1 ;; *) echo "unknown option $a" >&2; exit 2 ;; esac; done
+MODE=lab; CARGO=1; DEPLOY=0; DEBUG=0; PROFILE_OVERRIDE=
+while (($#)); do
+  case $1 in
+    --lab) MODE=lab ;;
+    --debug) MODE=lab; DEBUG=1 ;;
+    --release) MODE=release ;;
+    --profile)
+      [ "$#" -ge 2 ] || { echo "--profile requires fast or release" >&2; exit 2; }
+      case $2 in fast|release) PROFILE_OVERRIDE=$2 ;; *) echo "invalid profile: $2 (expected fast or release)" >&2; exit 2 ;; esac
+      shift
+      ;;
+    --skip-cargo) CARGO=0 ;;
+    --deploy) DEPLOY=1 ;;
+    *) echo "unknown option $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+CPROF=${PROFILE_OVERRIDE:-fast}
+[ "$MODE" != release ] || CPROF=${PROFILE_OVERRIDE:-release}
 
 KEEP=3        # newest local ISO builds kept in out/
 KEEP_WORK=1   # archiso work dirs kept (a successful build removes its own; only interrupted ones remain)
@@ -31,6 +48,52 @@ if [ "$CARGO" = 1 ]; then
 fi
 tools/build-efi-boot.sh "$CPROF"
 python3 tools/apply-archiso-profile.py "$PROFILE"
+# An installed release has no network route. Package the complete system dependency closure and default apps into the
+# live image before mkarchiso; the bundler verifies every package, app and hash and fails closed on a missing input.
+python3 tools/bundle-iso-offline.py --dest "$AIROOT/usr/share/bifrost/offline"
+test -s "$AIROOT/usr/share/bifrost/offline/manifest.json" || { echo "offline bundle manifest missing" >&2; exit 1; }
+test -s "$AIROOT/usr/share/bifrost/offline/repo/offline.db" || { echo "offline package database missing" >&2; exit 1; }
+test -s "$AIROOT/usr/share/bifrost/offline/springboard-shell.pkg.tar.zst" || { echo "offline springboard-shell package missing" >&2; exit 1; }
+python3 - "$AIROOT/usr/share/bifrost/offline/manifest.json" "$AIROOT/usr/share/bifrost/offline/repo/offline.db" <<'PY'
+import hashlib, json, pathlib, sys
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text())
+expected = manifest.get("repo", {}).get("sha256")
+digest = hashlib.sha256()
+with pathlib.Path(sys.argv[2]).open("rb") as stream:
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(block)
+actual = digest.hexdigest()
+if not isinstance(expected, str) or expected != actual:
+    raise SystemExit("offline repo database SHA-256 is missing or does not match manifest")
+PY
+for app_id in is.olibuijr.browser.desktop is.olibuijr.files.desktop; do
+  compgen -G "$AIROOT/usr/share/bifrost/offline/apps/$app_id-*.aap" >/dev/null || { echo "offline App Store package missing: $app_id" >&2; exit 1; }
+done
+offline_apps=("$AIROOT"/usr/share/bifrost/offline/apps/*.aap)
+[ "${#offline_apps[@]}" -eq 2 ] || { echo "expected exactly two offline default apps, found ${#offline_apps[@]}" >&2; exit 1; }
+# The installer copies its verified loader into the target ESP after pacstrap; the ISO boot copy itself is not in AIROOT.
+install -Dm644 packaging/archiso/bootweave.efi "$AIROOT/usr/share/bifrost/bootweave.efi"
+# The live installer and installed shell need these generated assets; never inherit a stale profile copy. Preparing the
+# assets (including any font fetches) is a separate build-time step, not an ISO-build/network fallback.
+ASSET_SRC=${BIFROST_ISO_ASSETS_DIR:-springboard/assets}
+for file in SFUI.ttf SFUIMono.ttf Symbols.ttf wallpaper.raw wallpapers/index.ini \
+            icons/bifrost.settings.raw icons/bifrost.appstore.raw icons/bifrost.files.raw icons/bifrost.browser.raw; do
+  [ -s "$ASSET_SRC/$file" ] || { echo "required ISO asset missing: $ASSET_SRC/$file (prepare assets before building)" >&2; exit 1; }
+done
+ASSET_DEST="$AIROOT/usr/share/springboard/assets"
+mkdir -p "$ASSET_DEST"
+rsync -a --delete "$ASSET_SRC/" "$ASSET_DEST/"
+# Installer footage is a required live-media input. The canonical source is the archiso overlay; lab builds can point
+# at the already-published payload explicitly without depending on an old AIROOT tree.
+VIDEO_SRC=${BIFROST_ISO_VIDEO_DIR:-packaging/archiso/airootfs/usr/share/bifrost/video}
+[ -d "$VIDEO_SRC" ] || [ ! -d out/video-new ] || VIDEO_SRC=out/video-new
+for file in Godafoss_1080.mp4 Svartifoss_1080.mp4; do
+  [ -s "$VIDEO_SRC/$file" ] || { echo "required installer video missing: $VIDEO_SRC/$file (set BIFROST_ISO_VIDEO_DIR to a prepared source directory)" >&2; exit 1; }
+done
+VIDEO_DEST="$AIROOT/usr/share/bifrost/video"
+mkdir -p "$VIDEO_DEST"
+install -m644 "$VIDEO_SRC/Godafoss_1080.mp4" "$VIDEO_DEST/Godafoss_1080.mp4"
+install -m644 "$VIDEO_SRC/Svartifoss_1080.mp4" "$VIDEO_DEST/Svartifoss_1080.mp4"
 rustc --edition 2021 -O -C target-feature=+crt-static -C strip=symbols packaging/arch/recovery/guard.rs -o out/bifrost-update-guard-iso
 install -Dm755 out/bifrost-update-guard-iso "$AIROOT/usr/bin/bifrost-update-guard"
 install -Dm644 packaging/arch/recovery/bifrost-update-guard.service "$AIROOT/usr/lib/systemd/system/bifrost-update-guard.service"
@@ -46,9 +109,6 @@ install -Dm755 packaging/arch/wayland/open-url "$AIROOT/usr/bin/bifrost-open-url
 install -Dm644 packaging/arch/wayland/bifrost-browser.desktop "$AIROOT/usr/share/applications/bifrost-browser.desktop"
 install -Dm644 packaging/arch/wayland/mimeapps.list "$AIROOT/etc/xdg/mimeapps.list"
 install -Dm755 packaging/arch/wayland/apps "$AIROOT/usr/bin/bifrost-apps"
-for file in environment autostart rc.xml; do
-  install -Dm644 "packaging/arch/wayland/$file" "$AIROOT/usr/share/bifrost/wayland/$file"
-done
 W="$AIROOT/etc/systemd/system"
 mkdir -p "$W/graphical.target.wants" "$W/multi-user.target.wants"
 

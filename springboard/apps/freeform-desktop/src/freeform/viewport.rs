@@ -73,13 +73,13 @@ impl Freeform {
     }
 
     /// Paints the items as they appear into `px`, a picture of the canvas size. `editing` is the item and cell that
-    /// shows the caret (none for an export).
+    /// shows the caret, at the caret position (none for an export).
     pub(super) fn paint_items(&self, px: &mut [u32], ui: &Ui, editing: Option<(u32, usize)>) {
         if self.view_is_plain() {
-            items::paint(px, self.cw, self.ch, ui, &self.items, &self.pics.scaled, editing, 1.0);
+            items::paint(px, self.cw, self.ch, ui, &self.items, &self.pics.scaled, editing, self.caret, 1.0);
         } else {
             let shown = self.items.viewed(self.zoom, self.pan);
-            items::paint(px, self.cw, self.ch, ui, &shown, &self.pics.scaled, editing, self.zoom);
+            items::paint(px, self.cw, self.ch, ui, &shown, &self.pics.scaled, editing, self.caret, self.zoom);
         }
     }
 
@@ -369,7 +369,7 @@ mod tests {
         assert!(app.key(&ui, &KeyInput::Code(38)));
         assert_eq!(app.pan, (0.0, 0.0));
         app.insert_note(&ui);
-        assert!(!app.key(&ui, &KeyInput::Code(39)), "typing owns the keys");
+        assert!(app.key(&ui, &KeyInput::Code(39)), "typing owns the arrow keys");
         assert_eq!(app.pan, (0.0, 0.0));
     }
 

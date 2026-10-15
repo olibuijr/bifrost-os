@@ -129,6 +129,13 @@ impl Queue {
         self.outbox.len() != before
     }
 
+    /// Drops the reminders of one message (Message > Ignore Follow-Up). Returns how many were dropped.
+    pub fn drop_reminders(&mut self, account: &str, message_id: &str) -> usize {
+        let before = self.reminders.len();
+        self.reminders.retain(|r| !(r.account == account && r.message_id == message_id));
+        before - self.reminders.len()
+    }
+
     /// The time the next queued message or reminder is due.
     pub fn next_due(&self) -> Option<i64> {
         self.outbox.iter().map(|q| q.due).chain(self.reminders.iter().map(|r| r.due)).min()

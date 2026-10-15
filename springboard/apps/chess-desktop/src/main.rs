@@ -8,10 +8,10 @@ mod game;
 mod moves;
 
 use ai::Level;
-use board::{sq, Colour, Kind, Piece, Position, Sq};
+use board::{name as square_name, parse_square, sq, Colour, Kind, Piece, Position, Sq};
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, SEGMENT_ON};
-use bifrost_app::kit::{pack, Damage, Surface};
+use bifrost_app::kit::ui::{Ui, Weight, CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SYSTEM_YELLOW, WHITE, BLACK};
+use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use game::{describe, Game};
@@ -30,14 +30,6 @@ const BUTTON_H: f32 = 26.0;
 const GAP: f32 = 8.0;
 const MOVE_ROW_H: f32 = 20.0;
 
-const LIGHT_SQUARE: u32 = pack(240, 217, 181, 255);
-const DARK_SQUARE: u32 = pack(181, 136, 99, 255);
-const TINT_LAST_MOVE: u32 = pack(205, 210, 60, 120);
-const TINT_SELECTED: u32 = pack(40, 120, 230, 120);
-const TINT_CHECK: u32 = pack(230, 40, 40, 170);
-const TARGET_DOT: u32 = pack(30, 30, 30, 90);
-const INK_WHITE: u32 = pack(255, 255, 255, 255);
-const INK_BLACK: u32 = pack(25, 25, 25, 255);
 
 /// What a tap does. The hit list is rebuilt on every frame, so a tap always meets the layout on screen.
 #[derive(Clone, Copy, PartialEq)]
@@ -75,6 +67,7 @@ struct ChessApp {
     /// A pawn move to the last rank, waiting for the piece it becomes: the from and to squares.
     pending: Option<(Sq, Sq)>,
     hits: Vec<Hit>,
+    save_path: Option<std::path::PathBuf>,
 }
 
 /// Pointer position in points: input is in pixels, and the layout is in points.
@@ -118,8 +111,8 @@ fn button(canvas: &mut dyn Canvas, ui: &Ui, hits: &mut Vec<Hit>, r: Rect, text: 
 /// square colours.
 fn draw_piece(canvas: &mut dyn Canvas, ui: &Ui, piece: Piece, square: Rect) {
     let (ink, outline) = match piece.colour {
-        Colour::White => (INK_WHITE, INK_BLACK),
-        Colour::Black => (INK_BLACK, INK_WHITE),
+        Colour::White => (WHITE, BLACK),
+        Colour::Black => (BLACK, WHITE),
     };
     let pt = square.w * 0.62;
     let text = glyph(piece.kind);
@@ -135,7 +128,7 @@ fn draw_piece(canvas: &mut dyn Canvas, ui: &Ui, piece: Piece, square: Rect) {
 
 impl ChessApp {
     fn new() -> ChessApp {
-        ChessApp { game: Game::new(), opponent: Some(Level::Medium), selected: None, pending: None, hits: Vec::new() }
+        ChessApp { game: Game::new(), opponent: Some(Level::Medium), selected: None, pending: None, hits: Vec::new(), save_path: None }
     }
 
     /// True when it is the person's turn: always, in two-player mode; otherwise when it is not the computer's move.
@@ -233,6 +226,10 @@ impl ChessApp {
     }
 
     fn draw_board(&mut self, canvas: &mut dyn Canvas, ui: &Ui, x0: f32, y0: f32, square: f32) {
+        let light_square = CARD_BG.now();
+        let dark_square = FIELD_BG.now();
+        let last_move_tint = ROW_PRESSED.now();
+        let selected_tint = MATERIAL_SELECTION.now();
         let pos: Position = *self.game.position();
         let last = self.game.last_move();
         let targets: Vec<Sq> = match self.selected {
@@ -254,24 +251,24 @@ impl ChessApp {
                 let light = (file + rank) % 2 == 1;
                 canvas.fill_rect(
                     RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)),
-                    if light { LIGHT_SQUARE } else { DARK_SQUARE },
+                    if light { light_square } else { dark_square },
                 );
                 if let Some(m) = last {
                     if m.from == s || m.to == s {
-                        canvas.fill_rect(RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)), TINT_LAST_MOVE);
+                        canvas.fill_rect(RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)), last_move_tint);
                     }
                 }
                 if self.selected == Some(s) {
-                    canvas.fill_rect(RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)), TINT_SELECTED);
+                    canvas.fill_rect(RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)), selected_tint);
                 }
                 if king_in_check == Some(s) {
-                    canvas.fill_rect(RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)), TINT_CHECK);
+                    canvas.fill_rect(RectF::new(ui.pt(cell.x), ui.pt(cell.y), ui.pt(cell.w), ui.pt(cell.h)), SYSTEM_YELLOW);
                 }
                 if targets.contains(&s) {
                     let cx = ui.pt(cell.x + square / 2.0);
                     let cy = ui.pt(cell.y + square / 2.0);
                     let r = ui.pt(square * 0.16);
-                    canvas.fill_rrect(RectF::new(cx - r, cy - r, 2.0 * r, 2.0 * r), r, TARGET_DOT);
+                    canvas.fill_rrect(RectF::new(cx - r, cy - r, 2.0 * r, 2.0 * r), r, LABEL_2.now());
                 }
                 if let Some(piece) = pos.at(s) {
                     draw_piece(canvas, ui, piece, cell);
@@ -350,13 +347,29 @@ impl App for ChessApp {
         "is.olibuijr.chess.desktop"
     }
 
+    fn configure(&mut self, ctx: &Ctx) {
+        let path = ctx.data_dir.join("game.txt");
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            if let Some((level, game)) = restore_game(&contents) {
+                self.opponent = level;
+                self.game = game;
+            }
+        }
+        self.save_path = Some(path);
+        if self.persist() {
+            ctx.enable_sudden_termination();
+        }
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
             Input::Touch { kind: TouchKind::Up, x, y, .. } => {
                 let (px, py) = to_points(ctx, x, y);
                 match self.hit(px, py) {
                     Some(act) => {
+                        ctx.disable_sudden_termination();
                         self.perform(act);
+                        if self.persist() { ctx.enable_sudden_termination(); }
                         true
                     }
                     None => false,
@@ -379,7 +392,8 @@ impl App for ChessApp {
         vec![AppMenu { title: "Game".into(), items }]
     }
 
-    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        ctx.disable_sudden_termination();
         match id {
             MENU_NEW => self.new_game(),
             MENU_UNDO => self.undo(),
@@ -390,6 +404,7 @@ impl App for ChessApp {
             }
             _ => return false,
         }
+        if self.persist() { ctx.enable_sudden_termination(); }
         true
     }
 
@@ -421,6 +436,57 @@ impl App for ChessApp {
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
         self.draw_canvas(ctx, s, t)
     }
+}
+
+impl ChessApp {
+    fn persist(&self) -> bool {
+        let Some(path) = &self.save_path else { return false };
+        let Some(parent) = path.parent() else { return false };
+        if std::fs::create_dir_all(parent).is_err() { return false; }
+        let mut body = String::new();
+        body.push_str(match self.opponent {
+            None => "two\n",
+            Some(Level::Beginner) => "beginner\n",
+            Some(Level::Easy) => "easy\n",
+            Some(Level::Medium) => "medium\n",
+            Some(Level::Hard) => "hard\n",
+        });
+        for mv in self.game.moves_played_list() {
+            body.push_str(&square_name(mv.from));
+            body.push_str(&square_name(mv.to));
+            if let Some(kind) = mv.promotion {
+                body.push(match kind { Kind::Queen => 'q', Kind::Rook => 'r', Kind::Bishop => 'b', Kind::Knight => 'n', _ => return false });
+            }
+            body.push('\n');
+        }
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, body).and_then(|_| std::fs::rename(&tmp, path)).is_ok()
+    }
+}
+
+fn restore_game(contents: &str) -> Option<(Option<Level>, Game)> {
+    let mut lines = contents.lines();
+    let opponent = match lines.next()? {
+        "two" => None,
+        "beginner" => Some(Level::Beginner),
+        "easy" => Some(Level::Easy),
+        "medium" => Some(Level::Medium),
+        "hard" => Some(Level::Hard),
+        _ => return None,
+    };
+    let mut game = Game::new();
+    for line in lines {
+        let bytes = line.as_bytes();
+        if bytes.len() != 4 && bytes.len() != 5 { return None; }
+        let from = parse_square(line.get(..2)?)?;
+        let to = parse_square(line.get(2..4)?)?;
+        let mv = if bytes.len() == 5 {
+            let kind = match bytes[4] { b'q' => Kind::Queen, b'r' => Kind::Rook, b'b' => Kind::Bishop, b'n' => Kind::Knight, _ => return None };
+            Move::promoting(from, to, kind)
+        } else { Move::new(from, to) };
+        if !game.play(mv) { return None; }
+    }
+    Some((opponent, game))
 }
 
 fn main() {

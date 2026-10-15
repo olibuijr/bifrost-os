@@ -1,9 +1,12 @@
 [package]
 name = "bifrost-dictionary"
-version = "0.3.0"
+version = "0.5.4"
 edition = "2021"
 
 [dependencies]
 bifrost-app = { path = "../../sdk" }
 bifrost-core = { path = "../../core" }
 bifrost-ui = { path = "../../ui" }
+
+[dev-dependencies]
+springboard = { path = "../..", features = ["testkit"] }

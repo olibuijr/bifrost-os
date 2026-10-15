@@ -56,6 +56,7 @@ Rule IDs are the gate's own and stable; the third column names the bifrost-hig r
 | APP-08 | warning | GG-01 | full-size window with old min_shell | full-size windows need min_shell >= 0.4.84 |
 | APP-09 | error | APP-01 | upstream package incomplete | upstream.toml needs repo, url, sha256, binary, licenses; manifest needs publisher and license |
 | APP-10 | error | APP-01 | icon is not a 180x180 PNG | export the manifest icon as a square 180x180 PNG (PNG signature and IHDR size are read; no re-encoding needed) |
+| APP-11 | error | APP-01 | manifest declares an app without an executable target | add a binary target before publishing this app |
 | RES-01 | warning | CTL-04 | raw thread::spawn | use bifrost_app::dispatch (DispatchQueue::global(Qos).async_, serial queue, DispatchGroup); see docs/bifrost-ui.md "Migrating thread::spawn" |
 | RES-02 | warning | CTL-04 | polling next_wake with a worker thread | finish work on the main queue (DispatchQueue::main().async_) or wake_fd; return None from next_wake when idle |
 | RES-03 | warning | CTL-04 | no ctx.enable_sudden_termination() but no unsaved state | call ctx.enable_sudden_termination() once in configure (docs/bifrost-ui.md "Sudden termination") |
@@ -75,14 +76,15 @@ It runs only when the icon file exists (APP-03 covers a missing one). Other form
 180 x 120, are reported with the measured size. The `*craft` apps are prebuilt upstream packages (`upstream.toml`): only
 the manifest, CHANGELOG and upstream rules (APP-*) apply to them.
 
-Permissions the gate knows (`KNOWN_PERMS` in the script): `network`, `storage`, `audio`, `notifications`, `documents`,
-`keychain`, `remote-desktop`. The shell also accepts `accessibility` and `display-config`
-([app-isolation.md](app-isolation.md)); the gate reports those as unknown until the list is extended.
+Permissions the gate knows (KNOWN_PERMS in the script): network, storage, audio, camera, screen, notifications,
+documents, keychain, and remote-desktop. Camera is restricted to Photo Booth and screen sampling to Color Meter, as
+described in [app-isolation.md](app-isolation.md). The shell also accepts accessibility and display-config; the gate
+reports those as unknown until the list is extended.
 
-Status (2026-10-13): the ratchet fails. The baseline was last written on 2026-10-12 and 56 apps exist now; it reports 139
-regressions in 33 apps (new apps with no baseline entry, plus `weather-desktop` COL-03 10 against 3). The per-app table below
-is regenerated from the current code, not from the baseline. Fixing the findings and running `--update-baseline --write-doc`
-is the way out; never raise the baseline to hide them.
+Status (2026-10-14): the scan now separates runnable app packages from model-only workspace crates. Locate is an
+unpackaged model crate; Screenshot has a draft manifest but no executable. Files retains one baseline RES-02 watcher
+deadline finding. The current ratchet and table below reflect the repaired app set; the incomplete packages remain
+visible as release blockers rather than being hidden by a baseline update.
 
 ## Runtime checks (`tests/compliance.rs` in each app crate)
 
@@ -102,6 +104,10 @@ Dark, and asserts:
 `known gap` and do not fail; delete the id when the app is fixed. The system keyboard has `FRAME_REQUIRED = false`
 (it draws only after `keyboard_config`). Apps without a `tests/compliance.rs` yet show TST-01; generate it with `--gen-tests --write`,
 triage with `COMPLIANCE_SOFT=1` and bless the first goldens.
+
+The generic harness checks the app's initial launch state. Preview's source-list sidebar is document-contextual, and
+Journal's timeline is empty until an entry is created, so their empty-launch cases do not require sidebar rows. Preview's
+variable-height page thumbnails remain a custom gallery.
 
 ## SDK change trigger
 
@@ -126,61 +132,72 @@ Worst first. Regenerate with `--update-baseline --write-doc`.
 
 | App | Score | Findings | Top 3 rules |
 |---|---:|---:|---|
-| videoplayer-desktop | 70 | 19 | COL-01 x5, LAY-04 x3, LAY-05 x3 |
-| photobooth-desktop | 73 | 16 | COL-03 x6, COL-01 x3, APP-10 x1 |
-| stickies-desktop | 73 | 15 | CHR-02 x4, COL-01 x3, LAY-05 x3 |
-| mail-desktop | 78 | 12 | RES-01 x3, CHR-01 x1, TST-01 x1 |
-| preview-desktop | 79 | 13 | COL-02 x5, COL-01 x3, CHR-01 x1 |
-| audio-setup-desktop | 81 | 10 | LAY-07 x3, APP-03 x1, TST-01 x1 |
-| diskutil-desktop | 82 | 9 | APP-10 x1, TST-01 x1, LAY-03 x2 |
-| messages-desktop | 82 | 9 | APP-10 x1, TST-01 x1, LAY-02 x2 |
-| textedit-desktop | 82 | 10 | CHR-01 x2, LAY-03 x4, COL-01 x2 |
-| screen-sharing | 83 | 8 | APP-03 x1, TST-01 x1, RES-01 x2 |
-| passwords-desktop | 84 | 8 | COL-02 x4, APP-03 x1, TST-01 x1 |
-| activity-desktop | 86 | 6 | CHR-01 x1, TST-01 x1, LAY-03 x2 |
-| image-capture-desktop | 86 | 6 | APP-03 x1, TST-01 x1, LAY-03 x1 |
-| keyboard | 86 | 16 | COL-01 x9, TYP-01 x5, COL-02 x1 |
-| fontbook-desktop | 87 | 12 | COL-02 x9, TST-01 x1, GG-04 x1 |
-| calculator-desktop | 88 | 15 | LAY-04 x11, COL-01 x3, GG-04 x1 |
-| dictionary-desktop | 88 | 5 | APP-10 x1, TST-01 x1, LAY-05 x1 |
-| printers-desktop | 88 | 5 | APP-03 x1, TST-01 x1, LAY-03 x1 |
-| setup-assistant | 88 | 5 | APP-10 x1, TST-01 x1, COL-03 x1 |
-| weather-desktop | 88 | 15 | COL-03 x10, LAY-04 x4, LAY-05 x1 |
-| colormeter-desktop | 89 | 4 | APP-10 x1, TST-01 x1, APP-06 x1 |
-| freeform-desktop | 90 | 6 | CHR-02 x4, CHR-01 x1, GG-04 x1 |
-| archive-desktop | 92 | 4 | TST-01 x1, COL-02 x1, RES-01 x1 |
-| screenshot-desktop | 93 | 3 | APP-03 x1, APP-06 x1, RES-03 x1 |
-| sysinfo-desktop | 93 | 3 | TST-01 x1, LAY-03 x1, LAY-07 x1 |
-| files | 96 | 3 | COL-01 x1, RES-01 x1, RES-02 x1 |
-| maps-desktop | 96 | 1 | APP-01 x1 |
-| news-desktop | 96 | 1 | CHR-01 x1 |
-| notes-desktop | 96 | 3 | COL-01 x1, RES-01 x1, RES-02 x1 |
-| games-desktop | 97 | 2 | LAY-07 x2 |
-| browser | 98 | 1 | APP-06 x1 |
-| calendar-desktop | 98 | 1 | APP-06 x1 |
-| contacts-desktop | 98 | 1 | APP-06 x1 |
-| shortcuts-desktop | 98 | 1 | LAY-02 x1 |
-| voicememos-desktop | 98 | 1 | LAY-05 x1 |
+| screenshot-desktop | 96 | 1 | APP-11 x1 |
+| activity-desktop | 100 | 0 | none |
+| archive-desktop | 100 | 0 | none |
 | assistant-desktop | 100 | 0 | none |
+| audio-setup-desktop | 100 | 0 | none |
+| automator-desktop | 100 | 0 | none |
+| bluetooth-exchange-desktop | 100 | 0 | none |
 | books-desktop | 100 | 0 | none |
+| browser | 100 | 0 | none |
 | cadcraft-desktop | 100 | 0 | none |
+| calculator-desktop | 100 | 0 | none |
+| calendar-desktop | 100 | 0 | none |
+| chess-desktop | 100 | 0 | none |
 | clock-desktop | 100 | 0 | none |
+| colormeter-desktop | 100 | 0 | none |
+| colorsync-utility-desktop | 100 | 0 | none |
 | console-desktop | 100 | 0 | none |
+| contacts-desktop | 100 | 0 | none |
 | daw | 100 | 0 | none |
 | deckcraft-desktop | 100 | 0 | none |
 | designcraft-desktop | 100 | 0 | none |
+| dictionary-desktop | 100 | 0 | none |
+| diskutil-desktop | 100 | 0 | none |
 | effectcraft-desktop | 100 | 0 | none |
+| files | 100 | 0 | none |
 | filmcraft-desktop | 100 | 0 | none |
+| fontbook-desktop | 100 | 0 | none |
+| freeform-desktop | 100 | 0 | none |
+| games-desktop | 100 | 0 | none |
+| grapher-desktop | 100 | 0 | none |
 | gridcraft-desktop | 100 | 0 | none |
+| image-capture-desktop | 100 | 0 | none |
+| journal-desktop | 100 | 0 | none |
+| keyboard | 100 | 0 | none |
 | lightcraft-desktop | 100 | 0 | none |
+| locate-desktop | 100 | 0 | none |
+| mail-desktop | 100 | 0 | none |
+| maps-desktop | 100 | 0 | none |
+| messages-desktop | 100 | 0 | none |
 | music-desktop | 100 | 0 | none |
+| news-desktop | 100 | 0 | none |
+| notes-desktop | 100 | 0 | none |
+| passwords-desktop | 100 | 0 | none |
 | pdfcraft-desktop | 100 | 0 | none |
+| photobooth-desktop | 100 | 0 | none |
 | photocraft-desktop | 100 | 0 | none |
 | podcasts-desktop | 100 | 0 | none |
+| preview-desktop | 100 | 0 | none |
+| printers-desktop | 100 | 0 | none |
 | reminders-desktop | 100 | 0 | none |
 | remote | 100 | 0 | none |
+| screen-sharing | 100 | 0 | none |
+| script-editor-desktop | 100 | 0 | none |
+| setup-assistant | 100 | 0 | none |
+| shortcuts-desktop | 100 | 0 | none |
 | soundcraft-desktop | 100 | 0 | none |
+| stickies-desktop | 100 | 0 | none |
+| stocks-desktop | 100 | 0 | none |
+| sysinfo-desktop | 100 | 0 | none |
+| textedit-desktop | 100 | 0 | none |
+| tips-desktop | 100 | 0 | none |
 | vectorcraft-desktop | 100 | 0 | none |
+| videoplayer-desktop | 100 | 0 | none |
+| voicememos-desktop | 100 | 0 | none |
+| weather-desktop | 100 | 0 | none |
+| wireless-diagnostics-desktop | 100 | 0 | none |
 | wordcraft-desktop | 100 | 0 | none |
 
 <!-- app-compliance-table:end -->

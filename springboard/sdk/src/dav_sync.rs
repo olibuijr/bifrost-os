@@ -76,6 +76,12 @@ impl Sync {
         done
     }
 
+    /// Asks for a sync on the next `poll`, not waiting for the interval (View > Refresh Calendars). A sync that is
+    /// already running finishes first and the next one starts after it.
+    pub fn refresh(&mut self) {
+        self.last = None;
+    }
+
     /// Call from `service_reply`. True when `request` was the password this sync asked for.
     pub fn reply(&mut self, request: u32, result: &Result<Json, String>) -> bool {
         match &self.asking {
@@ -175,6 +181,14 @@ mod tests {
     fn a_reply_for_another_request_is_not_the_password() {
         let mut s = Sync::new(Service::Contacts);
         assert!(!s.reply(7, &Err("x".into())));
+    }
+
+    #[test]
+    fn refresh_makes_the_next_sync_due_at_once() {
+        let mut s = Sync::new(Service::Calendars);
+        s.last = Some(1_000_000.0);
+        s.refresh();
+        assert!(s.last.is_none(), "the interval no longer holds the next sync back");
     }
 
     #[test]

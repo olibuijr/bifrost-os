@@ -19,8 +19,8 @@
    "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Spatial computing shader of an Apple XR compositor or spatial media stack; BifrOSt has no XR hardware or compositor to run it.",
    "rea": [],
    "method": "assessed"
   },
@@ -39,9 +39,9 @@
    "description": "",
    "role": "Effects shader of WeatherMaps (app or system UI animation)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "WeatherMaps UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/colormap.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "Colour ramps and gradients exist as CPU pixel code; the weather map layer and its animation shader do not.",
    "rea": [],
    "method": "assessed"
   }

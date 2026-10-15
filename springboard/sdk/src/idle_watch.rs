@@ -39,6 +39,12 @@ impl IdleWatch {
         self.monitor.idle_for_ms(now_ms)
     }
 
+    /// The time in milliseconds at which the next `poll` reports idle, or None when it will not (idle detection is off, or
+    /// the watch is already idle). An app can schedule its check for this time.
+    pub fn next_check_at(&self) -> Option<u64> {
+        self.monitor.next_check_at()
+    }
+
     /// Records user input at `now_ms`. Input that ends an idle period queues `BecameActive`.
     pub fn input(&mut self, now_ms: u64) {
         if let Some(event) = self.monitor.note_activity(now_ms) {

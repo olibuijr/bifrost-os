@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.3 — 2026-10-14
+
+- Require shell 0.8.0 for the launcher's screen permission.
+- Use configured content size instead of a fixed-resolution initial geometry.
+
+## 0.5.2
+
+- Added the SDK and design compliance test harness.
+
+## 0.5.1
+
+- Exported the app icon at the required 180 x 180 pixel size.
+
+## 0.5.0
+
+- Changed: the aperture is always odd (1 to 31 pixels). An even square had no centre pixel, so its mean was offset from the pointer; an even size now rounds up to the odd size above it. The slider, the assistive steps and the View menu step between odd sizes (two pixels at a time).
+- Changed: the matrix citations for the Color Meter rows point at the current file and line of each symbol, and the aperture note describes the centred square.
+
+## 0.4.0
+
+- Changed: the aperture model that was kept beside the window (an odd-size aperture type, its bounds and an update gate) is removed. The window already reads the aperture, the loupe outline and Update Continuously through its own tested state, so the unused copy only duplicated them.
+- Changed: the matrix notes for the aperture, Update Continuously and the menu rows describe what the window does now. The aperture slider, the loupe outline and the View menu are wired; the checks on Midget remain.
+
 ## 0.3.0
 
 - New: View and Color menus. View has Update Continuously, Display In (Native, sRGB, Display P3, Adobe RGB, Generic RGB), Display Values (hexadecimal, 8-bit and 16-bit decimal, percent), Magnification, Show Mouse Location, Lock Position (cmd+L), Lock X Coordinate (cmd+X), Lock Y Coordinate (cmd+Y) and aperture size steps. Color has Copy Color as Text (shift+cmd+C) and Copy Color as Image (alt+cmd+C). The menus and the toolbar share the same actions.

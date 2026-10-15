@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.8.0
+
+- Upstream lightcraft v0.8.0.
+  ## What's Changed
+  * Integration batch 32a: 8 reviewed contributor PRs by @echelon in https://github.com/storytold/lightcraft/pull/1426
+  * Issue #989: clippy 1.99, fill_box reads its buffer with as_chunks::<3>() (item 4) by @snofla in https://github.com/storytold/lightcraft/pull/997
+  * LR-LIB-ALBUM: "Include selected photos" option in New Album by @MarkusFriedel in https://github.com/storytold/lightcraft/pull/1250
+  * Scroll the filmstrip when the same photo is opened in another source. by @vbasky in https://github.com/storytold/lightcraft/pull/1253
+
+## 0.7.2
+
+- Upstream lightcraft v0.7.1.
+  ## What's Changed
+  * Add shared docking while preserving photo tools and catalog drops by @skylartaylor in https://github.com/storytold/lightcraft/pull/869
+  * Integration batch 26: 31 reviewed contributor PRs by @bflatastic in https://github.com/storytold/lightcraft/pull/975
+  * Brush mask: holding the brush still adds no coverage; flow builds up by passes (#518) by @bitshiftza in https://github.com/storytold/lightcraft/pull/767
+  * KEY-ESC: Esc leaves the crop tool before leaving Detail by @PiMinusMax in https://github.com/storytold/lightcraft/pull/772
+
 ## 0.7.1
 
 - Upstream lightcraft v0.7.1.

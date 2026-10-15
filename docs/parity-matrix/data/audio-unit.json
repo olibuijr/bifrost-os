@@ -10,9 +10,9 @@
     {
       "feature": "Hosting third-party AU v2 and v3 plug-ins",
       "apple": "AUAudioUnit, AudioUnit instantiation (Audio Unit framework landing page)",
-      "bifrost": "springboard/ui/src/plugin_host.rs (Instance",
+      "bifrost": "springboard/ui/src/plugin_host.rs (Instance, Instance::new, PluginVersion); springboard/ui/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no code loads an external plug-in binary; grep for audio unit, AUv2/AUv3, clap, lv2, vst, dlopen of plug-ins returned only system library loads (springboard/src/media/dl.rs, springboard/src/gpu/egl.rs)"
+      "note": "A plug-in instance ties a render unit to its parameters, presets and buses, and both AUv2 and AUv3 versions are modelled; its parameters, presets and buses are tested headless in parity_sdk-complete-43.rs, and Instance itself is covered by the host unit tests. Gap: no code loads an external plug-in binary or starts an extension process, because this system has no plug-in loader, so the row needs that loader before it can go further."
     },
     {
       "feature": "Implementing AU v3 plug-in extensions",
@@ -38,9 +38,9 @@
     {
       "feature": "Parameters and presets",
       "apple": "AudioUnitParameter, AUParameterTree, presets",
-      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params); wired: springboard/apps/daw/src/rack.rs, springboard/apps/daw/src/params.rs (tree_from_extra, write_back), springboard/apps/daw/src/main.rs (draw_rack, rack_slide, rack_save_preset, rack_load_preset)",
+      "bifrost": "springboard/apps/daw/src/devices/mod.rs, springboard/apps/daw/src/store.rs (plugin ids and params); wired: springboard/apps/daw/src/rack.rs, springboard/apps/daw/src/params.rs (tree_from_extra, write_back), springboard/apps/daw/src/main.rs (draw_rack, rack_slide, rack_save_preset, rack_load_preset); tests: springboard/apps/daw/tests/parity_wire.rs",
       "status": "partial",
-      "note": "parameters are defined per built-in device; no parameter tree or preset API for external processors Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Built-in devices expose a parameter tree with write-back, and presets are saved, applied and written to JSON, tested headless in daw tests parity_wire. Gap: external processors, with their parameter trees and presets, are not hosted, and the rack controls are checked only on the lab machine."
     },
     {
       "feature": "Audio rendering and offline render",
@@ -52,22 +52,22 @@
     {
       "feature": "System audio service",
       "apple": "Audio Unit host and Core Audio I/O (not a separate Apple feature row)",
-      "bifrost": "springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/speaker.rs (ALSA output through dl.rs)",
-      "status": "os",
-      "note": "the service exists, but the SDK has no audio module (springboard/sdk/src/ has no audio file)"
+      "bifrost": "springboard/sdk/src/system_audio.rs (Command, AudioClient); springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/speaker.rs (ALSA output through dl.rs)",
+      "status": "partial",
+      "note": "The SDK client checks each command before it is sent (volume, seek, queue sources, recording path) and frames it in the service's wire format; tested over a socket pair in springboard/sdk/tests/parity_sdk-rest-16.rs. Gap: no app uses the client yet, and the round trip against audiod has not run on Midget."
     },
     {
       "feature": "MIDI input and note data",
       "apple": "MIDI events delivered to instrument units",
-      "bifrost": "springboard/ui/src/midi_events.rs; wired: springboard/apps/daw/src/midi_file.rs, springboard/apps/daw/src/midi.rs",
+      "bifrost": "springboard/ui/src/midi_events.rs; springboard/sdk/src/midi.rs (hub, events, ump); wired: springboard/apps/daw/src/midi_file.rs, springboard/apps/daw/src/midi.rs; tests: springboard/ui/tests/parity_sdk-complete-17.rs, springboard/sdk/tests/parity_sdk-complete-17.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-audio-unit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. note data is internal to the DAW; no MIDI device input or MIDI event API found Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "The MIDI 1.0 parser, encoder and sustain pedal tracker, the shared routing hub and UMP conversion are tested headless, and the DAW records and schedules notes through them. Gap: no device is opened in this repository, so a real keyboard is checked only on the lab machine."
     }
   ],
   "gaps": [
     "No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app.",
     "No app-facing audio unit or render API; the DAW's rendering and devices are internal.",
     "No MIDI input or MIDI event API.",
-    "The audio service (springboard/audiod) has no SDK module for apps."
+    "The audio service (springboard/audiod) has an SDK client (springboard/sdk/src/system_audio.rs), but no app uses it yet."
   ]
 }

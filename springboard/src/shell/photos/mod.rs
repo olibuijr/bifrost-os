@@ -8,12 +8,15 @@
 //! whose results arrive through a pipe the shell polls, like Deildu.
 
 pub mod albums;
+pub mod bursts;
+pub mod commands;
 pub mod dupes;
 pub mod edit;
 pub mod entry;
 pub mod exif;
 mod extras;
 pub mod export;
+pub mod folders;
 pub mod grid;
 pub mod import;
 pub mod library;
@@ -29,7 +32,13 @@ pub mod undo;
 pub mod viewer;
 pub mod zoom;
 #[cfg(test)]
+mod commands_tests;
+#[cfg(test)]
+mod adjust_tests;
+#[cfg(test)]
 mod favorites_tests;
+#[cfg(test)]
+mod selection_tests;
 #[cfg(test)]
 mod sort_tests;
 
@@ -319,7 +328,8 @@ impl EditPane {
 const EDIT_SLIDER_ROWS: usize = 5;
 
 /// The editor panel's height in rows: aspect, filters, tabs, then the sliders.
-const EDIT_PANEL_ROWS: f32 = 3.0 + EDIT_SLIDER_ROWS as f32;
+/// The Adjust pane's Auto button sits in the row under its sliders.
+const EDIT_PANEL_ROWS: f32 = 4.0 + EDIT_SLIDER_ROWS as f32;
 
 /// The edit mode's sliders.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -495,6 +505,10 @@ pub struct Photos {
     /// the active month filter: its title and `[start, end)` in Unix seconds
     filter: Option<(String, (i64, i64))>,
     selection: Selection,
+    /// the photo the last tap in selection mode landed on: a Shift tap selects the run from it
+    anchor: Option<PathBuf>,
+    /// whether Shift is held, as the shell last reported it on a key event
+    shift: bool,
     /// the first tap on a permanent multi-delete asks to confirm
     confirm_purge: bool,
     /// the text card on screen, the photo it is about, the finger on it and why it refused the text
@@ -578,7 +592,24 @@ pub struct Photos {
     /// a picture the user chose to send; the shell opens the share sheet
     share_req: Option<PathBuf>,
     camera_req: bool,
+    /// the open photo a Print command handed over; the shell takes it once and opens the print sheet
+    print_req: Option<Image>,
     dirty: bool,
+}
+
+/// The cache key of the letterboxed grid thumbnail of a photo whose plain key is `key`.
+fn thumb_key_fit(key: &str) -> String {
+    format!("{key}-fit")
+}
+
+/// The rectangle a `w` by `h` picture takes inside `cell` when it keeps its shape: centred, with bars on the spare sides.
+pub fn fit_rect(cell: Rect, w: usize, h: usize) -> Rect {
+    if w == 0 || h == 0 {
+        return cell;
+    }
+    let k = (cell.w as f32 / w as f32).min(cell.h as f32 / h as f32);
+    let (fw, fh) = ((w as f32 * k).round() as i32, (h as f32 * k).round() as i32);
+    Rect { x: cell.x + (cell.w - fw) / 2, y: cell.y + (cell.h - fh) / 2, w: fw, h: fh }
 }
 
 /// Top of the scrolling grid: below the status and navigation bars.
@@ -625,6 +656,8 @@ impl Photos {
             view: vec![],
             filter: None,
             selection: Selection::default(),
+            anchor: None,
+            shift: false,
             confirm_purge: false,
             entry: None,
             entry_photo: None,
@@ -682,6 +715,7 @@ impl Photos {
             effects: vec![],
             share_req: None,
             camera_req: false,
+            print_req: None,
             dirty: true,
             data,
         };
@@ -759,7 +793,7 @@ impl Photos {
     /// The albums the picker lists: the fixed ones, then the user's.
     fn menu_albums(&self) -> Vec<Album> {
         let mut v = vec![Album::All, Album::Recents, Album::Favorites, Album::Screenshots, Album::Trash];
-        if !self.hidden.is_empty() {
+        if !self.hidden.is_empty() || self.shows_hidden() {
             v.push(Album::Hidden);
         }
         if !self.duplicates.is_empty() {
@@ -836,7 +870,11 @@ impl Photos {
     /// Deletes user album `slot`; later albums move down so the slots stay contiguous.
     fn delete_album(&mut self, slot: usize) {
         let entries: Vec<(String, String)> = self.prefs.entries().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-        let writes = albums::delete_album_writes(&entries, slot);
+        let mut writes = albums::delete_album_writes(&entries, slot);
+        let mut album_folders = folders::decode(|k| self.prefs.get(k));
+        let stored = album_folders.len();
+        folders::album_deleted(&mut album_folders, slot);
+        writes.extend(folders::writes(&album_folders, stored));
         let pairs: Vec<(&str, &str)> = writes.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
         let mut next = self.prefs.clone();
         match next.set_many(&pairs) {
@@ -1036,7 +1074,7 @@ impl Photos {
         let present: HashSet<PathBuf> = self.visible.iter().map(|p| p.path.clone()).collect();
         let twins: HashSet<PathBuf> = dupes::members(&self.dupe_groups, &present).into_iter().flatten().collect();
         self.duplicates = self.visible.iter().filter(|p| twins.contains(&p.path)).cloned().collect();
-        if (self.album == Album::Hidden && self.hidden.is_empty()) || (self.album == Album::Duplicates && self.duplicates.is_empty()) {
+        if (self.album == Album::Hidden && self.hidden.is_empty() && !self.shows_hidden()) || (self.album == Album::Duplicates && self.duplicates.is_empty()) {
             self.album = Album::All;
         }
         self.favorites = models::smart_album(SmartAlbum::Favourites, &self.visible, |p| self.is_favourite(p), now);
@@ -1249,7 +1287,8 @@ impl Photos {
         let more: Vec<usize> = self.grid.visible(ahead.0, ahead.1).into_iter().filter(|i| !near.contains(i)).collect();
         let order = [near, more].concat();
         let wanted: Vec<Photo> = order.into_iter().filter_map(|i| self.photos().get(i).cloned()).collect();
-        let keys: Vec<String> = wanted.iter().map(Photo::key).collect();
+        let fit = self.fit_grid();
+        let keys: Vec<String> = wanted.iter().map(|p| self.thumb_key(p)).collect();
         // jobs still queued for cells that scrolled away give way
         *self.thumb_wanted.lock().unwrap_or_else(|p| p.into_inner()) = keys.iter().cloned().collect();
         // the caching manager keeps the same window as its preparations; the ones that scrolled away stop
@@ -1273,7 +1312,7 @@ impl Photos {
                     }
                     let image = disk.read(&key).or_else(|| {
                         let img = decode_edited(&std::fs::read(&photo.path).ok()?, recipe)?;
-                        let thumb = imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE);
+                        let thumb = if fit { imgdec::contain(&img, thumbs::SIZE, thumbs::SIZE) } else { imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE) };
                         disk.write(&key, &thumb);
                         Some(thumb)
                     });
@@ -1765,10 +1804,7 @@ impl Photos {
         match target {
             Target::Cell(i) => {
                 if self.selection.active {
-                    if let Some(p) = self.photos().get(i).cloned() {
-                        self.selection.toggle(&p.path);
-                        self.confirm_purge = false;
-                    }
+                    self.select_cell(i);
                 } else {
                     self.open_viewer(i);
                 }
@@ -1790,6 +1826,7 @@ impl Photos {
                 } else {
                     self.selection.begin();
                 }
+                self.anchor = None;
                 self.confirm_purge = false;
             }
             Target::SelShare => {
@@ -2310,6 +2347,7 @@ impl Photos {
                 5 => Some(if x < w / 2.0 { Target::EditCopy } else { Target::EditPaste }),
                 _ => None,
             },
+            row if pane == EditPane::Adjust && row == 3 + EDIT_SLIDER_ROWS => Some(Target::EditTool(Tool::AutoEnhance)),
             row => pane.sliders().get(row - 3).map(|&s| Target::Slide(s)),
         }
     }
@@ -2405,12 +2443,27 @@ impl Photos {
 
     /// Drops the cached pictures of `p` so the next request decodes it with its current edit.
     fn invalidate(&mut self, p: &Photo) {
-        let key = p.key();
-        self.thumbs.remove(&key);
-        self.cells.remove(&key);
-        self.full.remove(&key);
-        self.thumb_failed.remove(&key);
-        let _ = std::fs::remove_file(self.disk.path(&key));
+        for key in [p.key(), thumb_key_fit(&p.key())] {
+            self.thumbs.remove(&key);
+            self.cells.remove(&key);
+            self.full.remove(&key);
+            self.thumb_failed.remove(&key);
+            let _ = std::fs::remove_file(self.disk.path(&key));
+        }
+    }
+
+    /// The key of the grid thumbnail of `p`: the aspect-ratio grid keeps its own, letterboxed ones.
+    fn thumb_key(&self, p: &Photo) -> String {
+        if self.fit_grid() {
+            thumb_key_fit(&p.key())
+        } else {
+            p.key()
+        }
+    }
+
+    /// Whether the grid shows whole pictures letterboxed in their cells (View > Aspect Ratio Grid).
+    pub(super) fn fit_grid(&self) -> bool {
+        self.prefs.get("grid") == Some("fit")
     }
 
     /// "12 days left" for a photo in Recently Deleted.
@@ -2463,7 +2516,7 @@ impl Photos {
         }
         let Some(thumb) = self.thumbs.get(key) else { return };
         if thumb.w != size || thumb.h != size {
-            let scaled = imgdec::cover(thumb, size, size);
+            let scaled = if self.prefs.get("grid") == Some("fit") { imgdec::contain(thumb, size, size) } else { imgdec::cover(thumb, size, size) };
             self.cells.insert(key, scaled);
         }
     }
@@ -2474,7 +2527,8 @@ impl Photos {
         let pressed = self.pressed;
         let empty = self.photos().is_empty();
         let selecting = self.selection.active;
-        let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, p.key(), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
+        let fit = self.fit_grid();
+        let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, self.thumb_key(p), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
         {
             let mut band = s.rows(top as usize, bottom as usize);
             for (si, y) in self.grid.headers(off, off + bottom - top) {
@@ -2487,7 +2541,10 @@ impl Photos {
                 let r = Rect { x: x as i32, y: (top + y - off) as i32, w: cw as i32, h: ch as i32 };
                 self.prepare_cell(&key, cw as usize);
                 match self.cells.get(&key).or_else(|| self.thumbs.get(&key)) {
-                    Some(img) => super::switcher::draw_scaled(&mut band, img, r, 0.0, 255),
+                    Some(img) => {
+                        let target = if fit { fit_rect(r, img.w, img.h) } else { r };
+                        super::switcher::draw_scaled(&mut band, img, target, 0.0, 255)
+                    }
                     None => band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, CELL),
                 }
                 if pressed == Some(Target::Cell(i)) {
@@ -2889,6 +2946,11 @@ impl Photos {
             let kx = edit::slider_pos(slider.value(&cur), x0, x1, lo, hi);
             s.fill_rrect(kx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(22.0), flat(ui), WHITE);
         }
+        if pane == EditPane::Adjust {
+            let auto = Tool::AutoEnhance;
+            let color = if auto.is_on(&cur) { BLUE } else { WHITE };
+            self.label(s, ui, auto.label(), 15.0, if auto.is_on(&cur) { Weight::Semibold } else { Weight::Regular }, tint(Target::EditTool(auto), color), w / 2.0, panel + row * (3.5 + EDIT_SLIDER_ROWS as f32));
+        }
         if pane == EditPane::Tools {
             let third = w / 3.0;
             for (i, t) in [Tool::RotateLeft, Tool::FlipHorizontal, Tool::FlipVertical].into_iter().enumerate() {
@@ -2946,21 +3008,53 @@ impl Photos {
     /// along) and rescans so the copy shows.
     fn duplicate_current(&mut self) {
         let Some(p) = self.viewing().cloned() else { return };
-        match library::duplicate(&p.path) {
-            Ok(copy) => {
-                let (from, to) = (p.path.display().to_string(), copy.display().to_string());
-                for key in ["edit", "rate"] {
-                    if let Some(v) = self.prefs.get(&format!("{key}:{from}")).map(str::to_string).filter(|v| !v.is_empty()) {
-                        let _ = self.pref_set(&format!("{key}:{to}"), &v);
+        self.duplicate_photos(&[p]);
+    }
+
+    /// Copies each photo with its edit, rating and details (Image > Duplicate, for the open photo or the selection),
+    /// then rescans once so the copies are listed.
+    fn duplicate_photos(&mut self, photos: &[Photo]) {
+        let mut copied = false;
+        for p in photos {
+            match library::duplicate(&p.path) {
+                Ok(copy) => {
+                    copied = true;
+                    let (from, to) = (p.path.display().to_string(), copy.display().to_string());
+                    for key in ["edit", "rate"] {
+                        if let Some(v) = self.prefs.get(&format!("{key}:{from}")).map(str::to_string).filter(|v| !v.is_empty()) {
+                            let _ = self.pref_set(&format!("{key}:{to}"), &v);
+                        }
                     }
+                    // the title, caption, keywords, place and corrected time come along too
+                    let writes = meta::transfer_writes(&self.prefs, &p.path, &copy, true);
+                    self.write_prefs(&writes);
                 }
-                // the title, caption, keywords, place and corrected time come along too
-                let writes = meta::transfer_writes(&self.prefs, &p.path, &copy, true);
-                self.write_prefs(&writes);
-                self.rescan();
+                Err(e) => eprintln!("photos: could not duplicate {}: {e}", p.name()),
             }
-            Err(e) => eprintln!("photos: could not duplicate {}: {e}", p.name()),
         }
+        if copied {
+            self.rescan();
+        }
+    }
+
+    /// Tells Photos whether Shift is held. The shell calls this on every key event, before the touch it modifies.
+    pub fn set_shift(&mut self, held: bool) {
+        self.shift = held;
+    }
+
+    /// Selects or deselects grid cell `i` in selection mode. With Shift held, every photo from the last one tapped
+    /// through `i` is selected instead, and a tap that is not a range toggles just its own photo.
+    fn select_cell(&mut self, i: usize) {
+        let Some(path) = self.view.get(i).map(|p| p.path.clone()) else { return };
+        let from = self.anchor.as_ref().and_then(|a| self.view.iter().position(|p| &p.path == a));
+        match from {
+            Some(from) if self.shift => self.selection.select_range(&self.view, from, i),
+            _ => {
+                self.selection.toggle(&path);
+            }
+        }
+        self.anchor = Some(path);
+        self.confirm_purge = false;
     }
 
     fn save_to_files(&mut self) {
@@ -3740,7 +3834,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
         assert_eq!(p.sheet, Some(Sheet::Info));
         let labels: Vec<&str> = p.info.iter().map(|(l, _)| l.as_str()).collect();
-        assert_eq!(labels, ["Name", "Date", "File Size"], "a PNG has no EXIF");
+        assert_eq!(labels, ["Name", "Date", "Size", "File Size"], "PNG dimensions are available without EXIF");
         assert_eq!(p.info[0].1, "IMG_0000.png");
         frame(&mut p, &ui);
         tap(&mut p, &ui, 100.0, 100.0, 2000.0);

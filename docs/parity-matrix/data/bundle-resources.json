@@ -1,82 +1,82 @@
 {
-  "framework": "Bundle Resources",
-  "doc": "https://developer.apple.com/documentation/bundleresources",
-  "macos_since": "10.0",
-  "status": "partial",
-  "bifrost": "springboard/src/shell/apphost.rs (Manifest), springboard/src/shell/store/install.rs (parse_manifest, install_archive), springboard/src/bare/app_policy.rs (Policy::with_entitlements, Policy::from_permissions, prepare_data), springboard/sdk/src/locale.rs (Bundle, set_main_bundle), springboard/ui/src/launch.rs (Handler), springboard/sdk/src/workspace.rs, springboard/sdk/src/bundle_resources.rs (association file model); springboard/sdk/src/package_layout.rs (placement rules); springboard/sdk/src/container_layout.rs (container folders)",
-  "summary": "BifrOSt covers the app package manifest, permission and entitlement gating, a fixed package layout with placement rules for libraries and plug-ins, a per-app container layout model, localized string bundles, a privacy declaration model, and a model of domain association files for universal links. It has no Info.plist, and the universal links model is not yet fetched, verified or wired into the shell.",
-  "rea_evidence": "ev_245e8b8557d7a64dd4d2b2b588dff39b3c6f7443c6959b6b4c47f2a11448de12",
-  "features": [
-    {
-      "feature": "Entitlements",
-      "apple": "Entitlements (com.apple.security.* keys in a signed entitlements file)",
-      "bifrost": "springboard/src/shell/apphost.rs (Manifest.entitlements); springboard/src/bare/app_policy.rs (Policy::with_entitlements)",
-      "status": "partial",
-      "note": "Only the log-store entitlement exists. It is honoured only for is.olibuijr.* packages of kind system-app. Entitlements are a manifest list, not a signed file."
-    },
-    {
-      "feature": "Information property list (bundle identity and configuration)",
-      "apple": "Information Property List (Info.plist): CFBundleIdentifier, CFBundleVersion, CFBundleURLTypes, CFBundleDocumentTypes",
-      "bifrost": "springboard/src/shell/store/install.rs (Manifest, parse_manifest); springboard/src/shell/apphost.rs (Manifest); springboard/docs/apps.md (Package section)",
-      "status": "partial",
-      "note": "manifest.toml carries id, name, version, exec, icon, min_shell, summary, category, permissions, window and kind. It is TOML, not a plist. There are no per-language InfoPlist strings and no plist-based bundle keys."
-    },
-    {
-      "feature": "Privacy manifest: permission declarations",
-      "apple": "Privacy manifest files (NSPrivacyAccessedAPITypes and tracking declarations), with the app's permission use listed in the bundle",
-      "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain, remote-desktop)",
-      "status": "partial",
-      "note": "Apps declare permissions in manifest.toml and the shell enforces them. Unknown permission names are rejected. Nothing is shown to the user as a privacy label, and no tracking domains are declared."
-    },
-    {
-      "feature": "Privacy manifest: data collection and required-reason API declarations",
-      "apple": "Privacy manifest files: App Privacy Configuration, collected data types, required reason APIs",
-      "bifrost": "springboard/ui/src/privacy.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file describes the data an app collects or the reason it uses a required-reason API. springboard/core/src/log.rs has a <private> redaction marker for log values; it is not a manifest declaration."
-    },
-    {
-      "feature": "Placing content in a bundle (package layout)",
-      "apple": "Placing content in a bundle: fixed locations for executables, resources, frameworks and plug-ins",
-      "bifrost": "springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py; springboard/sdk/src/package_layout.rs (classify, check_package)",
-      "status": "partial",
-      "note": "A .aap is a tar with manifest.toml, the exec binary, the icon and an optional assets/ tree. It installs under apps/<id>/<version> with a current symlink. springboard/sdk/src/package_layout.rs sets the placement rules: flat libs/<name>.so and plugins/<name>.so modules, resources under assets/, and refusal of unsafe or unplaced names. install_archive does not call it yet, so the rules are not enforced at install. built on parity/team-n-bundle-resources; not yet verified on Midget."
-    },
-    {
-      "feature": "Per-app data directory",
-      "apple": "Container directories in the app sandbox (Library, Documents, Caches)",
-      "bifrost": "springboard/src/bare/app_policy.rs (prepare_data); springboard/src/shell/apphost.rs (shell data dir as apps' asset dir); springboard/src/bare/docbroker.rs (document grants); springboard/sdk/src/container_layout.rs (ContainerLayout, Folder)",
-      "status": "partial",
-      "note": "Each app gets a data directory owned by its account. Files outside it need a document grant from the shell. springboard/sdk/src/container_layout.rs models the Documents, Library, Library/Caches and tmp folders (backed-up and purgeable rules, relative path resolution that refuses escapes, and a creation step that refuses symlinks). The shell does not create or use these folders yet, so apps still write to the flat data directory. built on parity/team-n-bundle-resources; not yet verified on Midget."
-    },
-    {
-      "feature": "Localized bundle resources (Bundle.main, Localizable.strings)",
-      "apple": "Bundle, NSLocalizedString, <lang>.lproj/Localizable.strings",
-      "bifrost": "springboard/sdk/src/locale.rs (Bundle::load, set_main_bundle, localized!)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Reads <app>/<lang>.lproj/Localizable.strings with en fallback, as documented in docs/bifrost-ui.md. Built-in formatting data covers en and is only. No asset catalogs, storyboards or nib-style resources."
-    },
-    {
-      "feature": "URL schemes and document types declared by the app",
-      "apple": "CFBundleURLTypes and CFBundleDocumentTypes in Info.plist; Launch Services handler registry",
-      "bifrost": "springboard/ui/src/launch.rs (Handler::opens, Handler::scheme); springboard/src/shell/defaultapps.rs (builtin handlers); springboard/sdk/src/workspace.rs (open); wired: springboard/src/shell/defaultapps.rs (manifest_handler, Email category)",
-      "status": "partial",
-      "note": "The registry and default-app choice exist. docs/default-apps.md says open-url routing by scheme and the Open With menu are not done. Only http and https reach the browser through packaging/arch/wayland/open-url. URLType (CFBundleURLTypes: name, schemes, role, rank) parses in bundle_resources.rs and the launch service answers application_for_url (declaring app plus all candidates, user default first). No universal links. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "Universal links service (applinks)",
-      "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
-      "bifrost": "springboard/sdk/src/bundle_resources.rs (AssociationFile::parse, AssociationFile::route, split_https)",
-      "status": "partial",
-      "note": "Pure model of the domain association file: parses the applinks details (app ids, path rules with * and ? and exclude, and the older paths list) and routes an https path to the installed app that claims it. Query and fragment rules are not evaluated. Not wired: the file is not fetched or verified over https, nothing calls the model, and the shell does not send https links to apps yet. springboard/core/src/app_links.rs holds a separate host and prefix claim registry that is not connected to this model. The browser still claims http and https by default (springboard/src/shell/defaultapps.rs builtin). built on parity/team-a-06; not yet verified on Midget."
-    }
-  ],
-  "gaps": [
-    "Privacy declarations are a model only: the shell does not load privacy.toml from installed packages, nothing shows it to people, and the store does not check it (springboard/ui/src/privacy.rs).",
-    "Universal links are not live: the association file is not fetched or verified over https, and the shell does not route https links to apps (springboard/sdk/src/bundle_resources.rs holds only the model).",
-    "No Info.plist equivalent with CFBundle-style keys; manifest.toml is the only identity file and it is not a plist.",
-    "URL-scheme routing by the shell is not wired for non-web schemes (docs/default-apps.md, Not done yet).",
-    "Entitlements are limited to log-store; there is no general entitlements file and no signing.",
-    "The container folders (Documents, Library, Library/Caches, tmp) and the package placement rules are models; the shell and install_archive do not enforce them yet (springboard/sdk/src/container_layout.rs, springboard/sdk/src/package_layout.rs)."
-  ]
+ "framework": "Bundle Resources",
+ "doc": "https://developer.apple.com/documentation/bundleresources",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "springboard/src/shell/apphost.rs (Manifest), springboard/src/shell/store/install.rs (parse_manifest, install_archive), springboard/src/bare/app_policy.rs (Policy::with_entitlements, Policy::from_permissions, prepare_data), springboard/sdk/src/locale.rs (Bundle, set_main_bundle), springboard/ui/src/launch.rs (Handler), springboard/sdk/src/workspace.rs, springboard/sdk/src/bundle_resources.rs (association file model); springboard/sdk/src/package_layout.rs (placement rules); springboard/sdk/src/container_layout.rs (container folders)",
+ "summary": "BifrOSt covers the app package manifest, permission and entitlement gating, a fixed package layout with placement rules for libraries and plug-ins, a per-app container layout model, localized string bundles, a privacy declaration model, and a model of domain association files for universal links. It has no Info.plist, and the universal links model is not yet fetched, verified or wired into the shell.",
+ "rea_evidence": "ev_245e8b8557d7a64dd4d2b2b588dff39b3c6f7443c6959b6b4c47f2a11448de12",
+ "features": [
+  {
+   "feature": "Entitlements",
+   "apple": "Entitlements (com.apple.security.* keys in a signed entitlements file)",
+   "bifrost": "springboard/src/shell/apphost.rs (Manifest.entitlements); springboard/src/bare/app_policy.rs (Policy::with_entitlements); tests: springboard/tests/parity_sdk-complete-25.rs",
+   "status": "partial",
+   "note": "Only the log-store entitlement exists. It is honoured only for is.olibuijr.* packages of kind system-app, tested headless in springboard/tests/parity_sdk-complete-25.rs. Gap: entitlements are a manifest list, not a signed file, and signing needs key infrastructure this repository does not have."
+  },
+  {
+   "feature": "Information property list (bundle identity and configuration)",
+   "apple": "Information Property List (Info.plist): CFBundleIdentifier, CFBundleVersion, CFBundleURLTypes, CFBundleDocumentTypes",
+   "bifrost": "springboard/src/shell/store/install.rs (Manifest, parse_manifest); springboard/src/shell/apphost.rs (Manifest); springboard/docs/apps.md (Package section)",
+   "status": "partial",
+   "note": "manifest.toml carries id, name, version, exec, icon, min_shell, summary, category, permissions, window and kind. It is TOML, not a plist. There are no per-language InfoPlist strings and no plist-based bundle keys."
+  },
+  {
+   "feature": "Privacy manifest: permission declarations",
+   "apple": "Privacy manifest files (NSPrivacyAccessedAPITypes and tracking declarations), with the app's permission use listed in the bundle",
+   "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain, remote-desktop); tests: springboard/tests/parity_sdk-complete-25.rs",
+   "status": "partial",
+   "note": "Apps declare permissions in manifest.toml, each name sets its own flag, and unknown names or remote-desktop outside the first-party app are refused, tested headless in springboard/tests/parity_sdk-complete-25.rs. Gap: no privacy label is shown to the user, and no tracking domains are declared because the sandbox shares the network all or nothing."
+  },
+  {
+   "feature": "Privacy manifest: data collection and required-reason API declarations",
+   "apple": "Privacy manifest files: App Privacy Configuration, collected data types, required reason APIs",
+   "bifrost": "springboard/ui/src/privacy.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file describes the data an app collects or the reason it uses a required-reason API. springboard/core/src/log.rs has a <private> redaction marker for log values; it is not a manifest declaration."
+  },
+  {
+   "feature": "Placing content in a bundle (package layout)",
+   "apple": "Placing content in a bundle: fixed locations for executables, resources, frameworks and plug-ins",
+   "bifrost": "springboard/sdk/src/package_layout.rs (classify, check_package); springboard/src/shell/store/install.rs (install_archive); springboard/docs/apps.md (Package); springboard/tools/aap.py",
+   "status": "partial",
+   "note": "The placement rules for the manifest, icon, executable, assets, flat libs and plugins and unsafe names are tested headless in springboard/sdk/tests/parity_sdk-tests-12.rs; install_archive does not call check_package yet, so the rules are not enforced when a package installs, and the row is not verified on Midget."
+  },
+  {
+   "feature": "Per-app data directory",
+   "apple": "Container directories in the app sandbox (Library, Documents, Caches)",
+   "bifrost": "springboard/src/bare/app_policy.rs (prepare_data); springboard/src/shell/apphost.rs (shell data dir as apps' asset dir); springboard/src/bare/docbroker.rs (document grants); springboard/sdk/src/container_layout.rs (ContainerLayout, Folder)",
+   "status": "partial",
+   "note": "Each app gets a data directory owned by its account. Files outside it need a document grant from the shell. springboard/sdk/src/container_layout.rs models the Documents, Library, Library/Caches and tmp folders (backed-up and purgeable rules, relative path resolution that refuses escapes, and a creation step that refuses symlinks). The shell does not create or use these folders yet, so apps still write to the flat data directory. built on parity/team-n-bundle-resources; not yet verified on Midget."
+  },
+  {
+   "feature": "Localized bundle resources (Bundle.main, Localizable.strings)",
+   "apple": "Bundle, NSLocalizedString, <lang>.lproj/Localizable.strings",
+   "bifrost": "springboard/sdk/src/locale.rs (Bundle::load, set_main_bundle, localized!)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Reads <app>/<lang>.lproj/Localizable.strings with en fallback, as documented in docs/bifrost-ui.md. Built-in formatting data covers en and is only. No asset catalogs, storyboards or nib-style resources."
+  },
+  {
+   "feature": "URL schemes and document types declared by the app",
+   "apple": "CFBundleURLTypes and CFBundleDocumentTypes in Info.plist; Launch Services handler registry",
+   "bifrost": "springboard/ui/src/launch.rs (Handler::opens, Handler::scheme); springboard/src/shell/defaultapps.rs (builtin handlers); springboard/sdk/src/workspace.rs (open); wired: springboard/src/shell/defaultapps.rs (manifest_handler, Email category)",
+   "status": "partial",
+   "note": "The registry and default-app choice exist. docs/default-apps.md says open-url routing by scheme and the Open With menu are not done. Only http and https reach the browser through packaging/arch/wayland/open-url. URLType (CFBundleURLTypes: name, schemes, role, rank) parses in bundle_resources.rs and the launch service answers application_for_url (declaring app plus all candidates, user default first). No universal links. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+  },
+  {
+   "feature": "Universal links service (applinks)",
+   "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
+   "bifrost": "springboard/core/src/app_links.rs (AppLinks::claim_from_association); springboard/sdk/src/app_links.rs; tests: springboard/core/tests/parity_sdk-complete-12.rs",
+   "status": "partial",
+   "note": "Claims are read from a site association document (applinks.details appID or appIDs, wildcard paths) and host-tested in parity_sdk-complete-12.rs; exclusion paths are refused. Not wired into the shell or apps, and the document is not fetched or verified over https; no https link routing to a non-browser app, and the browser claims http and https by default (springboard/src/shell/defaultapps.rs builtin). Needs a Midget run with a live site for verification."
+  }
+ ],
+ "gaps": [
+  "Privacy declarations are a model only: the shell does not load privacy.toml from installed packages, nothing shows it to people, and the store does not check it (springboard/ui/src/privacy.rs).",
+  "Universal links are not live: the association file is not fetched or verified over https, and the shell does not route https links to apps (springboard/sdk/src/bundle_resources.rs holds only the model).",
+  "No Info.plist equivalent with CFBundle-style keys; manifest.toml is the only identity file and it is not a plist.",
+  "URL-scheme routing by the shell is not wired for non-web schemes (docs/default-apps.md, Not done yet).",
+  "Entitlements are limited to log-store; there is no general entitlements file and no signing.",
+  "The container folders (Documents, Library, Library/Caches, tmp) and the package placement rules are models; the shell and install_archive do not enforce them yet (springboard/sdk/src/container_layout.rs, springboard/sdk/src/package_layout.rs)."
+ ]
 }

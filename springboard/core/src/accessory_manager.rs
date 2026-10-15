@@ -135,6 +135,13 @@ pub struct Session {
     pub protocol: String,
 }
 
+/// The connection ids that a bus snapshot attached and detached.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SyncReport {
+    pub attached: Vec<u32>,
+    pub detached: Vec<u32>,
+}
+
 struct Listener {
     key: u32,
     criteria: MatchingCriteria,
@@ -257,6 +264,32 @@ impl AccessoryManager {
         } else {
             Err(Error::InvalidState)
         }
+    }
+
+    /// Brings the connected set in line with a full bus snapshot. Every connected accessory whose registry id is
+    /// missing from `snapshot` is detached, and every snapshot entry that is not connected yet is attached, in
+    /// snapshot order. The report lists the connection ids that changed, so a bus source can log them.
+    pub fn sync(&mut self, snapshot: Vec<Accessory>) -> SyncReport {
+        let present: Vec<u64> = snapshot.iter().map(|a| a.registry_id).collect();
+        let gone: Vec<u64> = self
+            .connected_accessories()
+            .iter()
+            .map(|a| a.registry_id)
+            .filter(|registry_id| !present.contains(registry_id))
+            .collect();
+        let mut report = SyncReport::default();
+        for registry_id in gone {
+            if let Some(id) = self.detach(registry_id) {
+                report.detached.push(id);
+            }
+        }
+        for accessory in snapshot {
+            let known = self.connected_accessories().iter().any(|a| a.registry_id == accessory.registry_id);
+            if !known {
+                report.attached.push(self.attach(accessory));
+            }
+        }
+        report
     }
 
     /// The record for a connection id, connected or not.

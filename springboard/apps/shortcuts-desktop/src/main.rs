@@ -1,9 +1,12 @@
-//! Shortcuts as an installed BifrOSt app. The text, variable and scripting steps of a shortcut run in the app; the
-//! steps that need the shell (Wi-Fi, Low Power, DND, brightness, open app, screenshot, timer) cannot be sent over the
-//! app protocol yet and are reported as not run.
+//! Shortcuts as an installed BifrOSt app. A run walks the steps with `springboard::shortcuts::flow`: text, variables,
+//! If and Repeat blocks, copying, notifications and results happen in the app (`runner`). Actions that need the shell
+//! (Wi-Fi, Low Power, DND, brightness, open app, screenshot, timer) cannot be sent over the app protocol yet; a run
+//! that reaches one stops there and says so.
 
 mod automation;
+mod menus;
 use springboard::shortcuts as model;
+mod runner;
 mod services;
 mod widget;
 
@@ -11,34 +14,15 @@ use bifrost_app::control::RpcError;
 use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult};
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::login_items_approval as login;
-use bifrost_app::proto::DocMode;
-use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, DocumentEvent, Input, TouchKind};
+use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_core::json::Json;
+use springboard::shortcuts::flow;
 use std::io::{Read, Write};
 use std::path::Path;
 
-/// The largest shortcut file an import reads, in bytes.
-const IMPORT_MAX: u64 = 1 << 20;
-/// How often the battery is read for automations, in milliseconds.
-const POLL_MS: f64 = 60_000.0;
-
-const MENU_NEW: u32 = 1;
-const MENU_DUPLICATE: u32 = 2;
-const MENU_IMPORT: u32 = 3;
-const MENU_EXPORT: u32 = 4;
-const MENU_RUN: u32 = 5;
-const MENU_DELETE: u32 = 6;
-const MENU_FIND: u32 = 7;
-const MENU_ALL: u32 = 8;
-const MENU_GALLERY: u32 = 9;
-/// The menu item of shortcut `i` is `MENU_RUN_BASE + i`.
-const MENU_RUN_BASE: u32 = 100;
-
-/// A file panel the app has open and what it is for.
-enum Pending {
-    Import,
-    Export(String),
-}
+/// The most bytes read from a file chosen for import; a list of shortcuts is far smaller.
+const MAX_IMPORT_BYTES: u64 = 256 * 1024;
 
 struct ShortcutsApp {
     w: Option<widget::Shortcuts>,
@@ -48,27 +32,15 @@ struct ShortcutsApp {
     reminders: Option<Vec<services::Reminder>>,
     /// whether the Login Items status has been asked for
     asked_login: bool,
-    /// the file panels that are open, by request id
-    pending: Vec<(u32, Pending)>,
-    /// whether the shell was last told a text field has the keyboard
+    /// whether the shell was last told the app wants the keyboard
     keyboard: bool,
-    /// when the battery is read next for automations (ms)
-    next_poll: f64,
+    /// the export in progress: the save panel's request and the bytes to write once it answers
+    export: Option<(u32, Vec<u8>)>,
+    /// the request of the open panel an import waits for
+    import: Option<u32>,
 }
 
 impl ShortcutsApp {
-    fn new() -> ShortcutsApp {
-        ShortcutsApp {
-            w: None,
-            planner: automation::Planner::new(),
-            reminders: None,
-            asked_login: false,
-            pending: Vec::new(),
-            keyboard: false,
-            next_poll: 0.0,
-        }
-    }
-
     /// The shortcut list: the window's copy when it is open, otherwise the saved file.
     fn shortcuts(&self, data_dir: &Path) -> Vec<model::Shortcut> {
         match &self.w {
@@ -100,49 +72,33 @@ impl ShortcutsApp {
         }
     }
 
-    /// Brings the shell's reminders in line with the list. Sends only what changed, so it is cheap to call after each
-    /// input or script change.
-    fn sync(&mut self, ctx: &Ctx) {
-        let list = self.shortcuts(&ctx.data_dir);
-        self.reminders = Some(services::sync_reminders(ctx, self.reminders.as_deref(), &list));
-    }
-
-    /// Does what the last input asked of the shell: queued steps, saved files, file panels, the login toggle, the
-    /// keyboard, reminders and intents.
+    /// Does what the window asked for during the last input: runs the shortcuts it queued, opens the panels of an
+    /// import or an export, passes on the login toggle, tells the shell whether a field wants the keyboard, and runs
+    /// the intents it queued.
     fn settle(&mut self, ctx: &Ctx) {
         let Some(c) = self.w.as_mut() else { return };
         let t = c.now();
-        if !c.take_runs().is_empty() {
-            c.show_run_unavailable(t);
+        for s in c.take_run_requests() {
+            let steps = flow::run(&s.actions, &mut runner::AppHost::new(ctx));
+            c.show_run(&s.name, &steps, t);
         }
-        for (name, content) in c.take_saves() {
-            match services::save_file(&ctx.data_dir, &name, &content) {
-                Ok(_) => c.note("", &format!("Saved {name}"), t),
-                Err(e) => c.note("", &e, t),
-            }
-        }
-        let jobs = c.take_file_jobs();
         let requests = c.take_intent_requests();
         let login_request = c.take_login_request();
-        let want_keyboard = c.wants_keyboard();
+        let export = c.take_export_request();
+        let import = c.take_import_request();
+        let keyboard = c.wants_keyboard();
         if let Some(on) = login_request {
             services::set_login(ctx, on);
         }
-        if want_keyboard != self.keyboard {
-            self.keyboard = want_keyboard;
-            ctx.wants_keyboard(want_keyboard);
+        if let Some((name, text)) = export {
+            self.export = Some((ctx.save_document(&name, &["public.text"]), text.into_bytes()));
         }
-        for job in jobs {
-            match job {
-                widget::FileJob::Import => {
-                    let request = ctx.open_document(DocMode::Read, "Import Shortcut", &[model::EXPORT_EXT]);
-                    self.pending.push((request, Pending::Import));
-                }
-                widget::FileJob::Export { name, text } => {
-                    let request = ctx.save_document(&name, &[model::EXPORT_EXT]);
-                    self.pending.push((request, Pending::Export(text)));
-                }
-            }
+        if import {
+            self.import = Some(ctx.open_document(DocMode::Read, "Import Shortcuts", &["public.text"]));
+        }
+        if keyboard != self.keyboard {
+            self.keyboard = keyboard;
+            ctx.wants_keyboard(keyboard);
         }
         self.sync(ctx);
         for (id, params) in requests {
@@ -150,39 +106,19 @@ impl ShortcutsApp {
         }
     }
 
-    /// The menus: File (new, duplicate, import, export), Shortcut (run, delete and one item per shortcut with its menu
-    /// key) and View (find, all shortcuts, gallery).
-    fn menus(&self) -> Vec<AppMenu> {
-        let Some(c) = self.w.as_ref() else { return Vec::new() };
-        let open = c.open_shortcut().is_some();
-        let file = vec![
-            AppMenuItem::new(MENU_NEW, "New Shortcut").key("cmd+n").enabled(c.has_room()),
-            AppMenuItem::new(MENU_DUPLICATE, "Duplicate Shortcut").key("cmd+d").enabled(open && c.has_room()),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_IMPORT, "Import Shortcut...").key("cmd+i").enabled(c.has_room()),
-            AppMenuItem::new(MENU_EXPORT, "Export Shortcut...").key("cmd+e").enabled(open),
-        ];
-        let mut shortcut = vec![
-            AppMenuItem::new(MENU_RUN, "Run Shortcut").key("cmd+r").enabled(open),
-            AppMenuItem::new(MENU_DELETE, "Delete Shortcut").key("cmd+backspace").enabled(open),
-        ];
-        if !c.list().is_empty() {
-            shortcut.push(AppMenuItem::separator());
+    /// Shows `text` in the window for a few seconds.
+    fn say(&mut self, text: &str) {
+        if let Some(c) = self.w.as_mut() {
+            let t = c.now();
+            c.say(text, t);
         }
-        for (i, s) in c.list().iter().enumerate() {
-            shortcut.push(AppMenuItem::new(MENU_RUN_BASE + i as u32, &s.name).key(&s.hotkey));
-        }
-        let view = vec![
-            AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_ALL, "All Shortcuts"),
-            AppMenuItem::new(MENU_GALLERY, "Gallery"),
-        ];
-        vec![
-            AppMenu { title: "File".into(), items: file },
-            AppMenu { title: "Shortcut".into(), items: shortcut },
-            AppMenu { title: "View".into(), items: view },
-        ]
+    }
+
+    /// Brings the shell's reminders in line with the list. Sends only what changed, so it is cheap to call after each
+    /// input or script change.
+    fn sync(&mut self, ctx: &Ctx) {
+        let list = self.shortcuts(&ctx.data_dir);
+        self.reminders = Some(services::sync_reminders(ctx, self.reminders.as_deref(), &list));
     }
 }
 
@@ -205,7 +141,7 @@ impl App for ShortcutsApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
-        let Some(c) = &mut self.w else { return false };
+        let Some(c) = self.w.as_mut() else { return false };
         match ev {
             Input::Touch { kind, x, y, t, .. } => {
                 let e = match kind {
@@ -216,13 +152,7 @@ impl App for ShortcutsApp {
                 c.touch(&ctx.ui, e, t);
             }
             Input::Key(key) => {
-                if !c.key(&key) {
-                    return false;
-                }
-            }
-            Input::Command(Command::Paste) => {
-                let text = ctx.pasteboard_string().unwrap_or_default();
-                if !c.paste(&text) {
+                if !c.key(key) {
                     return false;
                 }
             }
@@ -232,81 +162,63 @@ impl App for ShortcutsApp {
         true
     }
 
-    fn commands(&self, _ctx: &Ctx) -> bifrost_app::Commands {
-        bifrost_app::Commands::default().with(Command::Paste, self.keyboard)
-    }
-
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        self.menus()
+        match &self.w {
+            Some(c) => menus::build(c.list(), c.in_editor()),
+            None => Vec::new(),
+        }
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        let Some(c) = self.w.as_mut() else { return false };
-        match id {
-            MENU_NEW => c.new_shortcut(),
-            MENU_DUPLICATE => c.duplicate_open(),
-            MENU_IMPORT => c.request_import(),
-            MENU_EXPORT => c.request_export(),
-            MENU_RUN => c.run_open(),
-            MENU_DELETE => c.delete_open(),
-            MENU_FIND => c.focus_search(),
-            MENU_ALL => c.show_all(),
-            MENU_GALLERY => c.show_gallery(),
-            id if id >= MENU_RUN_BASE => c.run_index((id - MENU_RUN_BASE) as usize),
-            _ => return false,
-        }
+        let (Some(command), Some(c)) = (menus::command(id), self.w.as_mut()) else { return false };
+        c.command(command);
         self.settle(ctx);
         true
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         match ev {
-            DocumentEvent::Opened(mut doc) => {
-                let Some(pos) = self.pending.iter().position(|(r, p)| *r == doc.request && matches!(p, Pending::Import)) else { return false };
-                self.pending.remove(pos);
-                let mut text = String::new();
-                let read = (&mut doc.file).take(IMPORT_MAX).read_to_string(&mut text);
-                // one import is one use of the file: the app keeps no grant to it
-                ctx.release_document(doc.grant);
-                if let Some(c) = self.w.as_mut() {
-                    match read {
-                        Ok(_) => {
-                            c.import(&text);
-                        }
-                        Err(e) => c.failed(&format!("Could not read the file: {e}")),
-                    }
-                }
-                self.settle(ctx);
-                true
-            }
-            DocumentEvent::SaveTo(mut doc) => {
-                let Some(pos) = self.pending.iter().position(|(r, p)| *r == doc.request && matches!(p, Pending::Export(_))) else { return false };
-                let (_, Pending::Export(text)) = self.pending.remove(pos) else { return false };
-                match doc.file.write_all(text.as_bytes()) {
-                    Ok(()) => ctx.commit_document(doc.request),
+            DocumentEvent::SaveTo(mut doc) => match self.export.take() {
+                Some((request, bytes)) if request == doc.request => match doc.file.write_all(&bytes) {
+                    Ok(()) => ctx.commit_document(request),
                     Err(e) => {
-                        ctx.abort_document(doc.request);
+                        ctx.log(&format!("export shortcuts: {e}"));
+                        ctx.abort_document(request);
+                        self.say("The shortcuts could not be written.");
+                    }
+                },
+                other => self.export = other,
+            },
+            DocumentEvent::Saved(_) => self.say("Exported"),
+            DocumentEvent::Opened(mut doc) if self.import == Some(doc.request) => {
+                self.import = None;
+                let mut text = String::new();
+                let read = (&mut doc.file).take(MAX_IMPORT_BYTES).read_to_string(&mut text);
+                match read {
+                    Ok(_) => {
                         if let Some(c) = self.w.as_mut() {
-                            c.failed(&format!("Could not export: {e}"));
+                            let t = c.now();
+                            c.import_text(&text, t);
                         }
                     }
+                    Err(_) => self.say("That file could not be read as text."),
                 }
-                true
             }
-            DocumentEvent::Saved(doc) => {
-                ctx.release_document(doc.grant);
-                if let Some(c) = self.w.as_mut() {
-                    c.exported();
+            DocumentEvent::Failed { request, code } => {
+                if self.import == Some(request) {
+                    self.import = None;
                 }
-                true
+                if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
+                    self.export = None;
+                }
+                if code != DocErrorCode::Cancelled {
+                    ctx.log(&format!("document: {code:?}"));
+                    self.say("The file could not be used.");
+                }
             }
-            DocumentEvent::Failed { request, .. } => {
-                // the person closed the panel, or the shell refused it: nothing more to do for that request
-                self.pending.retain(|(r, _)| *r != request);
-                false
-            }
-            _ => false,
+            _ => {}
         }
+        true
     }
 
     fn service_reply(&mut self, _ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
@@ -330,28 +242,11 @@ impl App for ShortcutsApp {
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        let mut dirty = self.w.as_mut().is_some_and(|c| c.tick(&ctx.ui, t));
-        if t >= self.next_poll {
-            self.next_poll = t + POLL_MS;
-            if self.w.as_ref().is_some_and(|c| c.has_battery_trigger()) {
-                let battery = services::battery_percent();
-                let started = self.w.as_mut().map(|c| c.check_triggers(battery)).unwrap_or_default();
-                if !started.is_empty() {
-                    self.settle(ctx);
-                    dirty = true;
-                }
-            }
-        }
-        dirty
+        self.w.as_mut().is_some_and(|c| c.tick(&ctx.ui, t))
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        let widget = self.w.as_ref().and_then(|c| c.next_wake(t));
-        let poll = self.w.as_ref().filter(|c| c.has_battery_trigger()).map(|_| self.next_poll);
-        match (widget, poll) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        self.w.as_ref().and_then(|c| c.next_wake(t))
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
@@ -412,5 +307,13 @@ impl App for ShortcutsApp {
 }
 
 fn main() {
-    bifrost_app::run(ShortcutsApp::new());
+    bifrost_app::run(ShortcutsApp {
+        w: None,
+        planner: automation::Planner::new(),
+        reminders: None,
+        asked_login: false,
+        keyboard: false,
+        export: None,
+        import: None,
+    });
 }

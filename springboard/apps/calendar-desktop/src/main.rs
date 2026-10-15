@@ -4,17 +4,22 @@
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
-use bifrost_app::proto::DocMode;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use bifrost_app::control::RpcError;
+use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult};
+use bifrost_app::print::{PrintError, PrintOperation};
+use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_calendar::calendar::archive;
+use bifrost_calendar::calendar::extras;
+use bifrost_calendar::calendar::subscribe::{self, Fetcher};
+use std::collections::HashMap;
+use std::io::Write;
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
+use bifrost_calendar::calendar::prefs::{self, Setting};
 use bifrost_calendar::calendar::{self, Command};
 use bifrost_core::json::Json;
 use springboard::shell::clock::Wall;
 use springboard::shell::keyboard::Out;
-use std::io::Read;
-
-/// The largest calendar file File > Import reads.
-const MAX_IMPORT: u64 = 8 * 1024 * 1024;
 
 struct CalendarApp {
     cal: Option<calendar::Calendar>,
@@ -23,6 +28,24 @@ struct CalendarApp {
     connect: Connect,
     /// Internet Accounts: the CalDAV calendars switched on for Calendars are read in the background.
     dav: bifrost_app::dav_sync::Sync,
+    /// Open and save panels waiting for the user's answer, by request.
+    jobs: HashMap<u32, Job>,
+    /// Reads the subscribed calendars in the background.
+    fetcher: Fetcher,
+}
+
+/// Menu ids of File > Unsubscribe from, one per subscription, clear of the commands and the settings.
+const UNSUBSCRIBE_BASE: u32 = 300;
+/// Menu ids of File > Rename Calendar and File > Delete Calendar: the calendar's id added to the base.
+const RENAME_BASE: u32 = 400;
+const DELETE_BASE: u32 = 500;
+
+/// What an open or save panel is for.
+enum Job {
+    /// File > Import... or Import Archive...: the text of the chosen file goes to `Calendar::import_file`.
+    Import,
+    /// File > Export Archive...: the archive text, written to the chosen place.
+    Export(Vec<u8>),
 }
 
 /// Writes a phone number the editor asked to copy to the pasteboard.
@@ -30,6 +53,55 @@ fn share_copy(c: &mut calendar::Calendar, ctx: &Ctx) {
     if let Some(text) = c.take_copied() {
         ctx.set_pasteboard_string(&text);
     }
+}
+
+/// File > Subscribe to Calendar from Clipboard, and a submenu to unsubscribe from each calendar that is subscribed to.
+fn subscription_items(c: &calendar::Calendar, entry: &AppMenuItem) -> Vec<AppMenuItem> {
+    let mut items = vec![AppMenuItem::separator(), entry.clone()];
+    let names = c.subscription_names();
+    if !names.is_empty() {
+        items.push(AppMenuItem::submenu("Unsubscribe from"));
+        items.extend(names.iter().enumerate().map(|(i, name)| AppMenuItem::new(UNSUBSCRIBE_BASE + i as u32, name).enabled(c.settings_enabled()).depth(1)));
+    }
+    items
+}
+
+/// The Settings menu: the week start, then a submenu of radio choices for each default.
+fn settings_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
+    let choice = |s: Setting| AppMenuItem::new(s.id(), &s.title()).checked(c.setting_checked(s)).enabled(c.settings_enabled()).depth(1);
+    let mut items = vec![AppMenuItem::new(Setting::MondayFirst.id(), &Setting::MondayFirst.title())
+        .checked(c.setting_checked(Setting::MondayFirst))
+        .enabled(c.settings_enabled())];
+    items.push(AppMenuItem::separator());
+    items.push(AppMenuItem::submenu("Default Event Length"));
+    items.extend((0..prefs::DURATIONS.len()).map(|i| choice(Setting::Length(i))));
+    items.push(AppMenuItem::submenu("Day Starts at"));
+    items.extend((0..prefs::DAY_STARTS.len()).map(|i| choice(Setting::DayStart(i))));
+    items.push(AppMenuItem::submenu("Default Alert"));
+    items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::Alert(v))));
+    items.push(AppMenuItem::submenu("Default All-Day Alert"));
+    items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::AllDayAlert(v))));
+    // the calendar new events go to: one choice per calendar, the built-in one first
+    items.push(AppMenuItem::submenu("Default Calendar"));
+    let calendars = c.extras().choices();
+    items.extend(calendars.iter().map(|(id, name)| {
+        let s = Setting::DefaultCalendar(*id);
+        AppMenuItem::new(s.id(), name).checked(c.setting_checked(s)).enabled(c.settings_enabled()).depth(1)
+    }));
+    items
+}
+
+/// File > Rename Calendar and File > Delete Calendar, one choice per calendar the user made. Empty when there is none.
+fn calendar_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
+    let made = &c.extras().calendars;
+    if made.is_empty() {
+        return Vec::new();
+    }
+    let mut items = vec![AppMenuItem::separator(), AppMenuItem::submenu("Rename Calendar")];
+    items.extend(made.iter().map(|k| AppMenuItem::new(RENAME_BASE + k.id, &k.name).enabled(c.settings_enabled()).depth(1)));
+    items.push(AppMenuItem::submenu("Delete Calendar"));
+    items.extend(made.iter().map(|k| AppMenuItem::new(DELETE_BASE + k.id, &k.name).enabled(c.settings_enabled()).depth(1)));
+    items
 }
 
 impl App for CalendarApp {
@@ -71,20 +143,37 @@ impl App for CalendarApp {
         vec![
             AppMenu {
                 title: "File".into(),
-                items: vec![item(Command::NewEventFromText), item(Command::ImportCalendar)],
+                items: vec![
+                    item(Command::NewEventFromText),
+                    AppMenuItem::separator(),
+                    item(Command::NewCalendar),
+                ]
+                .into_iter()
+                .chain(subscription_items(c, &item(Command::Subscribe)))
+                .chain(calendar_items(c))
+                .chain([
+                    AppMenuItem::separator(),
+                    item(Command::Import),
+                    item(Command::ImportArchive),
+                    item(Command::ExportArchive),
+                    AppMenuItem::separator(),
+                    item(Command::Print),
+                ])
+                .collect(),
             },
             AppMenu {
                 title: "Event".into(),
                 items: vec![
                     item(Command::NewEvent),
+                    item(Command::QuickEvent),
                     item(Command::Save),
                     item(Command::Duplicate),
-                    item(Command::CopyEvent),
-                    item(Command::PasteEvent),
                     item(Command::ExportEvent),
                     item(Command::Delete),
                     AppMenuItem::separator(),
                     item(Command::ExportCalendar),
+                    AppMenuItem::separator(),
+                    item(Command::Search),
                 ],
             },
             AppMenu {
@@ -100,72 +189,127 @@ impl App for CalendarApp {
                     item(Command::ShowMonth),
                     item(Command::ShowYear),
                     AppMenuItem::separator(),
-                    item(Command::ZoomIn),
-                    item(Command::ZoomOut),
-                    AppMenuItem::separator(),
                     item(Command::WeekNumbers),
                     item(Command::CalendarList),
                 ],
             },
+            // merges into the shell's View menu
+            AppMenu {
+                title: "View".into(),
+                items: vec![item(Command::ZoomIn), item(Command::ZoomOut), AppMenuItem::separator(), item(Command::RefreshCalendars)],
+            },
+            AppMenu { title: "Settings".into(), items: settings_items(c) },
         ]
     }
 
+    /// The Edit menu: Cut, Copy and Paste act on events, or on the focused field of the event editor.
+    fn commands(&self, ctx: &Ctx) -> Commands {
+        self.cal.as_ref().map_or_else(Commands::default, |c| c.edit_commands(ctx.pasteboard_string().as_deref()))
+    }
+
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if let Some(setting) = Setting::from_id(id) {
+            return self.cal.as_mut().is_some_and(|c| c.change_setting(&ctx.ui, setting));
+        }
+        if let Some(i) = id.checked_sub(UNSUBSCRIBE_BASE).filter(|i| (*i as usize) < subscribe::MAX_SUBSCRIPTIONS) {
+            return self.cal.as_mut().is_some_and(|c| c.unsubscribe(i as usize));
+        }
+        if let Some(cal) = id.checked_sub(RENAME_BASE).filter(|i| (2..=extras::MAX_CALENDARS).contains(i)) {
+            return self.cal.as_mut().is_some_and(|c| c.open_rename(cal));
+        }
+        if let Some(cal) = id.checked_sub(DELETE_BASE).filter(|i| (2..=extras::MAX_CALENDARS).contains(i)) {
+            return self.cal.as_mut().is_some_and(|c| c.delete_calendar(cal));
+        }
         let Some(cmd) = Command::from_id(id) else { return false };
+        // the CalDAV sync runs on its own thread; asking for a refresh only makes the next poll start it now
+        if cmd == Command::RefreshCalendars {
+            self.dav.refresh();
+            return true;
+        }
         let t = bifrost_app::proto::sys::now_ms();
-        let done = match &mut self.cal {
+        match &mut self.cal {
+            // the address on the pasteboard is where the sheet starts; Done subscribes to it
+            Some(c) if cmd == Command::Subscribe => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let text = ctx.pasteboard_string().unwrap_or_default();
+                c.open_subscription(&text);
+                true
+            }
+            Some(c) if matches!(cmd, Command::Import | Command::ImportArchive) => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let (title, filters): (&str, &[&str]) = if cmd == Command::Import {
+                    ("Import Calendar", &["ics", "vcs", archive::EXTENSION])
+                } else {
+                    ("Import Calendar Archive", &[archive::EXTENSION])
+                };
+                let request = ctx.open_document(DocMode::Read, title, filters);
+                self.jobs.insert(request, Job::Import);
+                false
+            }
+            Some(c) if cmd == Command::ExportArchive => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let request = ctx.save_document(&c.archive_name(), &[archive::EXTENSION]);
+                self.jobs.insert(request, Job::Export(c.archive_text().into_bytes()));
+                false
+            }
+            Some(c) if cmd == Command::Print => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let (job, text) = c.print_job();
+                match PrintOperation::text(job, text).run() {
+                    Ok(_) => c.show_notice("Sent to the printer"),
+                    Err(PrintError::NoCups) => c.show_error("The printing service is not running"),
+                    Err(PrintError::NoPrinter) => c.show_error("No printer is set up"),
+                    Err(PrintError::Failed(why)) => c.show_error(&format!("Printing failed: {why}")),
+                }
+                true
+            }
             // the sentence is the pasteboard's text, read when the command runs
             Some(c) if cmd == Command::NewEventFromText => {
                 let text = ctx.pasteboard_string().unwrap_or_default();
                 c.enabled(cmd) && c.new_event_from_text(&ctx.ui, &text, t)
             }
-            // the pasteboard holds an event copied with Copy Event (or any calendar text)
-            Some(c) if cmd == Command::PasteEvent => {
-                if !c.enabled(cmd) {
-                    return false;
-                }
-                let text = ctx.pasteboard_string().unwrap_or_default();
-                if let Err(e) = c.paste_event(&text) {
-                    c.show_error(e);
-                }
-                true
-            }
-            Some(c) if cmd == Command::ImportCalendar => {
-                if !c.enabled(cmd) {
-                    return false;
-                }
-                let options = OpenOptions { mode: DocMode::Read, title: "Import".into(), filters: vec!["ics".into(), "vcs".into()], ..Default::default() };
-                ctx.open_panel(&options);
-                true
-            }
             Some(c) => c.perform(&ctx.ui, cmd, t),
             None => false,
-        };
-        if let Some(c) = &mut self.cal {
-            share_copy(c, ctx);
         }
-        done
-    }
-
-    /// The file chosen in File > Import...: read and added to the calendar.
-    fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
-        let docs = match ev {
-            DocumentEvent::Opened(doc) => vec![doc],
-            DocumentEvent::OpenedMany { docs, .. } => docs,
-            _ => return false,
-        };
-        let Some(c) = &mut self.cal else { return false };
-        for doc in docs {
-            let mut bytes = Vec::new();
-            match (&doc.file).take(MAX_IMPORT).read_to_end(&mut bytes) {
-                Ok(_) => c.import_report(&doc.name, &String::from_utf8_lossy(&bytes)),
-                Err(e) => c.show_error(format!("Could not read {}: {e}", doc.name)),
-            }
-        }
-        true
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // a calendar file opened from Files, or dropped on the app: its events are imported
+        if let Input::Open(url) = &ev {
+            // a webcal link subscribes to the calendar it names
+            if subscribe::is_calendar_link(url) {
+                let Some(c) = &mut self.cal else { return false };
+                match c.subscribe(url) {
+                    Ok(name) => c.show_notice(&format!("Subscribed to {name}")),
+                    Err(e) => c.show_error(&e),
+                }
+                return true;
+            }
+            let (Some(c), Some(path)) = (&mut self.cal, archive::path_from_open(url)) else { return false };
+            match std::fs::File::open(&path).map_err(|e| e.to_string()).and_then(archive::read_text) {
+                Ok(text) => {
+                    c.import_file(&text);
+                }
+                Err(e) => c.show_error(&format!("Could not open the file: {e}")),
+            }
+            return true;
+        }
+        // Edit menu commands: events are copied as .ics text and pasted from the pasteboard
+        if let Input::Command(cmd) = &ev {
+            let Some(c) = &mut self.cal else { return false };
+            let text = ctx.pasteboard_string();
+            let done = c.edit_command(&ctx.ui, *cmd, text.as_deref(), bifrost_app::proto::sys::now_ms());
+            share_copy(c, ctx);
+            return done;
+        }
         // a published toolbar control (accessibility, `bifrost pc midget tap-window`): a click at its centre
         if let (Some(c), Input::Activate(id)) = (&mut self.cal, &ev) {
             let Some(node) = c.controls(&ctx.ui).into_iter().find(|n| n.id == *id && n.enabled) else { return false };
@@ -229,7 +373,7 @@ impl App for CalendarApp {
         let gen = c.store_generation();
         if self.connect.is_stale(gen, day) {
             let rich = c.rich_events();
-            self.connect.sync(ctx, &Snap { events: c.events(), rich: &rich, now, offset: wall.offset }, gen, day);
+            self.connect.sync(ctx, &Snap { events: c.events(), rich: &rich, extras: c.extras(), now, offset: wall.offset }, gen, day);
         }
         // Without the alert service (an older shell), the app posts its own alerts as before.
         if self.connect.fallback() {
@@ -245,8 +389,82 @@ impl App for CalendarApp {
                 }
             }
         }
+        self.fetcher.poll(c, t);
         share_copy(c, ctx);
         c.tick(&ctx.ui, t)
+    }
+
+    fn intents(&self) -> Vec<Intent> {
+        calendar::intents::declared()
+    }
+
+    fn perform_intent(&mut self, ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+        let (Some(ctx), Some(c)) = (ctx, self.cal.as_mut()) else { return Err(intents::failed("Calendar is not running yet")) };
+        calendar::intents::perform(c, &ctx.ui, id, params)
+    }
+
+    fn entities(&mut self, _data_dir: &std::path::Path, ty: &str, query: &EntityQuery) -> Result<Vec<Entity>, RpcError> {
+        match (&self.cal, ty) {
+            (Some(c), calendar::intents::EVENT) => Ok(c.event_entities(query)),
+            (None, calendar::intents::EVENT) => Ok(Vec::new()),
+            _ => Err(RpcError::new(bifrost_app::control::INVALID_PARAMS, format!("unknown entity type {ty}"))),
+        }
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let Some(c) = &mut self.cal else { return false };
+        match ev {
+            DocumentEvent::Opened(mut doc) => {
+                if !matches!(self.jobs.remove(&doc.request), Some(Job::Import)) {
+                    ctx.release_document(doc.grant);
+                    return false;
+                }
+                let text = archive::read_text(&mut doc.file);
+                // one import is one use of the file: the app keeps no grant to it
+                ctx.release_document(doc.grant);
+                match text {
+                    Ok(text) => {
+                        c.import_file(&text);
+                    }
+                    Err(e) => c.show_error(&format!("Could not read {}: {e}", doc.name)),
+                }
+                true
+            }
+            DocumentEvent::SaveTo(mut doc) => match self.jobs.remove(&doc.request) {
+                Some(Job::Export(bytes)) => {
+                    match doc.file.write_all(&bytes) {
+                        Ok(()) => ctx.commit_document(doc.request),
+                        Err(e) => {
+                            ctx.log(&format!("export archive: {e}"));
+                            ctx.abort_document(doc.request);
+                            c.show_error(&format!("Could not export: {e}"));
+                        }
+                    }
+                    true
+                }
+                other => {
+                    if let Some(job) = other {
+                        self.jobs.insert(doc.request, job);
+                    }
+                    false
+                }
+            },
+            DocumentEvent::Saved(doc) => {
+                ctx.release_document(doc.grant);
+                c.show_notice(&format!("Exported {}", doc.name));
+                true
+            }
+            DocumentEvent::Failed { request, code } => {
+                self.jobs.remove(&request);
+                if code != DocErrorCode::Cancelled {
+                    ctx.log(&format!("document: {code:?}"));
+                    c.show_error("The file could not be opened or saved");
+                    return true;
+                }
+                false
+            }
+            DocumentEvent::OpenedMany { .. } => false,
+        }
     }
 
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
@@ -267,13 +485,17 @@ impl App for CalendarApp {
         let Some(c) = &self.cal else { return false };
         let wall = Wall::sample(0.0);
         let rich = c.rich_events();
-        let snap = Snap { events: c.events(), rich: &rich, now: wall.unix, offset: wall.offset };
+        let snap = Snap { events: c.events(), rich: &rich, extras: c.extras(), now: wall.unix, offset: wall.offset };
         self.connect.refresh_up_next(ctx, &snap);
         false
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        self.cal.as_ref().and_then(|c| c.next_wake(t))
+        let c = self.cal.as_ref()?;
+        match (c.next_wake(t), self.fetcher.wake(c)) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
@@ -287,5 +509,5 @@ impl App for CalendarApp {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars) });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default() });
 }

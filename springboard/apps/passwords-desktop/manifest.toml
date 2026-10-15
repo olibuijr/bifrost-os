@@ -1,6 +1,6 @@
 id = "is.olibuijr.passwords.desktop"
 name = "Passwords"
-version = "0.2.0"
+version = "0.2.5"
 exec = "bifrost-passwords"
 icon = "icon.png"
 min_shell = "0.4.84"

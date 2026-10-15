@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 const NOTE_PT: f64 = 14.0;
 /// Highlight opacity, as the multiply blend of a highlighter.
 const HIGHLIGHT_ALPHA: f64 = 0.45;
+/// The size of a text box's type, in points.
+const TEXT_PT: f64 = 12.0;
 
 /// The edits that save `marks`, the page `order` (display order, as source page indices) and `turns` (quarter turns
 /// of each source page). Marks on pages that are not in the order are left out.
@@ -40,19 +42,30 @@ pub fn edits(pages: &[PdfPage], order: &[usize], turns: &[u8], marks: &[Mark]) -
     Ok(out)
 }
 
+/// Writes `author` as the author (`/T`) of every annotation in `plan`. A blank author leaves them as they are.
+pub fn stamp_author(plan: &mut Edits, author: &str) {
+    if author.trim().is_empty() {
+        return;
+    }
+    for a in &mut plan.annotations {
+        a.entries.insert("T".into(), text_string(author));
+    }
+}
+
 /// Writes the edited PDF to `target`: the file at `source` with the edits appended. Runs on the worker, which holds
 /// the parsed file, so the edits are made there. Returns `target`.
-pub fn write_edited(pdf: &Pdf, source: &Path, target: &Path, order: &[usize], turns: &[u8], marks: &[Mark]) -> Result<PathBuf, String> {
+pub fn write_edited(pdf: &Pdf, source: &Path, target: &Path, order: &[usize], turns: &[u8], marks: &[Mark], author: &str) -> Result<PathBuf, String> {
     let base = std::fs::read(source).map_err(|e| e.to_string())?;
-    let plan = edits(&pdf.pages, order, turns, marks)?;
+    let mut plan = edits(&pdf.pages, order, turns, marks)?;
+    stamp_author(&mut plan, author);
     let bytes = writer::save(&base, &pdf.doc, &plan)?;
     std::fs::write(target, bytes).map_err(|e| e.to_string())?;
     Ok(target.to_path_buf())
 }
 
 /// A job that writes the edited PDF to `target` (see `write_edited`) and replies with the file written.
-pub fn save_job(source: PathBuf, target: PathBuf, order: Vec<usize>, turns: Vec<u8>, marks: Vec<Mark>) -> Job {
-    pdfjob::run(move |pdf: &Pdf| Reply::Written(write_edited(pdf, &source, &target, &order, &turns, &marks)))
+pub fn save_job(source: PathBuf, target: PathBuf, order: Vec<usize>, turns: Vec<u8>, marks: Vec<Mark>, author: String) -> Job {
+    pdfjob::run(move |pdf: &Pdf| Reply::Written(write_edited(pdf, &source, &target, &order, &turns, &marks, &author)))
 }
 
 /// The annotation for one mark, or None when the mark cannot be placed on its page. `quarters` is how far the page is
@@ -141,6 +154,50 @@ fn annotation(page: &PdfPage, m: &Mark, quarters: u8) -> Option<Annotation> {
             a.entries.insert("BS".into(), Obj::Dict(width_border(2)));
             a.appearance = content.into_bytes();
         }
+        MarkKind::Star | MarkKind::Polygon | MarkKind::Bubble => {
+            let pts = model::outline(m.kind, r)
+                .iter()
+                .map(|&(u, v)| writer::user_point(page, u as f64, v as f64))
+                .collect::<Option<Vec<(f64, f64)>>>()?;
+            a.subtype = "Polygon".into();
+            a.rect = bounds(&pts, 1.0);
+            let flat: Vec<f64> = pts.iter().flat_map(|p| [p.0, p.1]).collect();
+            a.entries.insert("Vertices".into(), real_array(&flat));
+            a.entries.insert("BS".into(), Obj::Dict(width_border(2)));
+            let mut content = format!("{rgb_op} RG 2 w 1 j");
+            for (k, (x, y)) in pts.iter().enumerate() {
+                content.push_str(&format!(" {} {} {}", n(*x), n(*y), if k == 0 { "m" } else { "l" }));
+            }
+            content.push_str(" h S");
+            a.appearance = content.into_bytes();
+        }
+        MarkKind::Text => {
+            // a text box with no text is not kept; the window drops it when the typing ends
+            if m.text.is_empty() {
+                return None;
+            }
+            let rect = writer::user_rect(page, u0, v0, u1, v1)?;
+            let [x0, _, _, y1] = rect;
+            a.subtype = "FreeText".into();
+            a.rect = rect;
+            a.entries.insert("Contents".into(), text_string(&m.text));
+            a.entries.insert("DA".into(), Obj::Str(format!("/F1 {} Tf {rgb_op} rg", n(TEXT_PT)).into_bytes()));
+            let mut content: Vec<u8> = format!("BT /F1 {} Tf {rgb_op} rg {} {} Td ", n(TEXT_PT), n(x0 + 2.0), n(y1 - TEXT_PT - 2.0)).into_bytes();
+            writer::text_literal(&m.text, &mut content);
+            content.extend_from_slice(b" Tj ET");
+            a.appearance = content;
+            // the standard Helvetica face, in the WinAnsi encoding the text is written in
+            let mut font = Dict::new();
+            font.insert("Type".into(), Obj::Name("Font".into()));
+            font.insert("Subtype".into(), Obj::Name("Type1".into()));
+            font.insert("BaseFont".into(), Obj::Name("Helvetica".into()));
+            font.insert("Encoding".into(), Obj::Name("WinAnsiEncoding".into()));
+            let mut fonts = Dict::new();
+            fonts.insert("F1".into(), Obj::Dict(font));
+            a.resources.insert("Font".into(), Obj::Dict(fonts));
+        }
+        // a redaction is burned into the picture it covers; a PDF keeps what is under it, so none is written
+        MarkKind::Redact => return None,
         MarkKind::Underline | MarkKind::Strike => {
             let rect = writer::user_rect(page, u0, v0, u1, v1)?;
             let [x0, y0, x1, y1] = rect;
@@ -381,6 +438,55 @@ mod tests {
         let tokens: Vec<f64> = turned.split_whitespace().filter_map(|t| t.parse().ok()).collect();
         // the numbers are r g b, the width 2, then x1 y1 x2 y2, so the two x values match for a vertical line
         assert!((tokens[4] - tokens[6]).abs() < 1e-6, "{turned}");
+    }
+
+    #[test]
+    fn a_text_box_becomes_a_free_text_annotation_and_needs_text() {
+        let doc = Doc::open(one_page()).unwrap();
+        let pages = page::pages(&doc);
+        let mut m = mark(MarkKind::Text, 0, Norm { x: 0.1, y: 0.1, w: 0.4, h: 0.1 });
+        assert!(edits(&pages, &[0], &[0], std::slice::from_ref(&m)).unwrap().annotations.is_empty());
+        m.text = "Hello (draft)".into();
+        let e = edits(&pages, &[0], &[0], std::slice::from_ref(&m)).unwrap();
+        let a = &e.annotations[0];
+        assert_eq!(a.subtype, "FreeText");
+        let text = String::from_utf8_lossy(&a.appearance).into_owned();
+        assert!(text.contains("(Hello \\(draft\\)) Tj"), "{text}");
+        assert!(a.resources.contains_key("Font"));
+    }
+
+    #[test]
+    fn stars_and_bubbles_become_closed_polygon_annotations() {
+        let doc = Doc::open(one_page()).unwrap();
+        let pages = page::pages(&doc);
+        let star = mark(MarkKind::Star, 0, Norm { x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
+        let e = edits(&pages, &[0], &[0], std::slice::from_ref(&star)).unwrap();
+        let a = &e.annotations[0];
+        assert_eq!(a.subtype, "Polygon");
+        assert_eq!(a.entries["Vertices"].array().unwrap().len(), 20, "ten points");
+        assert!(String::from_utf8(a.appearance.clone()).unwrap().ends_with(" h S"));
+        let bubble = mark(MarkKind::Bubble, 0, Norm { x: 0.1, y: 0.1, w: 0.5, h: 0.2 });
+        assert_eq!(edits(&pages, &[0], &[0], std::slice::from_ref(&bubble)).unwrap().annotations[0].subtype, "Polygon");
+    }
+
+    #[test]
+    fn a_redaction_is_not_written_to_a_pdf_because_the_text_under_it_would_stay() {
+        let doc = Doc::open(one_page()).unwrap();
+        let pages = page::pages(&doc);
+        let m = mark(MarkKind::Redact, 0, Norm { x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
+        assert!(edits(&pages, &[0], &[0], std::slice::from_ref(&m)).unwrap().annotations.is_empty());
+    }
+
+    #[test]
+    fn the_author_is_stamped_on_every_annotation_unless_it_is_blank() {
+        let doc = Doc::open(one_page()).unwrap();
+        let pages = page::pages(&doc);
+        let m = mark(MarkKind::Highlight, 0, Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 });
+        let mut e = edits(&pages, &[0], &[0], std::slice::from_ref(&m)).unwrap();
+        stamp_author(&mut e, "   ");
+        assert!(!e.annotations[0].entries.contains_key("T"));
+        stamp_author(&mut e, "Ana");
+        assert_eq!(e.annotations[0].entries["T"], text_string("Ana"));
     }
 
     #[test]

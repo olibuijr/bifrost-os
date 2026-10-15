@@ -8,12 +8,14 @@ mod model;
 mod organize;
 mod quick;
 mod repeat;
+mod smartdef;
 mod settings;
 mod store;
 mod system;
 mod zones;
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::share::INBOUND;
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::proto::{DocErrorCode, DocMode};
@@ -46,6 +48,7 @@ const MENU_NO_SECTION: u32 = 17;
 const MENU_NEW_SMART: u32 = 18;
 const MENU_SETTINGS: u32 = 19;
 const MENU_URGENT: u32 = 24;
+const MENU_SAVE_AS: u32 = 25;
 /// Item ids of the menus that list things: the base plus the position in the list.
 const MENU_MARK_BASE: u32 = 20;
 const MENU_SORT_BASE: u32 = 30;
@@ -85,6 +88,8 @@ struct RemindersApp {
     quick: Option<StatusItem>,
     /// The open panel asked for by a reminder form's Add Image.
     pick: Option<u32>,
+    /// The save panel asked for by File > Save List As, with the checklist it will write.
+    save: Option<(u32, String)>,
 }
 
 /// The menu bar extra: New Quick Reminder opens the new reminder form (the title takes the quick-add words, such as
@@ -232,7 +237,8 @@ impl App for RemindersApp {
                 items: vec![
                     AppMenuItem::new(MENU_NEW_SMART, "New Smart List...").enabled(on_items),
                     AppMenuItem::new(MENU_IMPORT, "Import List...").key("cmd+o").enabled(on_items),
-                    AppMenuItem::new(MENU_PRINT, "Print List...").key("cmd+p").enabled(list),
+                    AppMenuItem::new(MENU_SAVE_AS, "Save List As...").enabled(list),
+                    AppMenuItem::new(MENU_PRINT, "Print List...").key("cmd+p").enabled(a.can_print()),
                 ],
             },
             AppMenu { title: "View".into(), items: view },
@@ -272,6 +278,13 @@ impl App for RemindersApp {
         if id == MENU_IMPORT {
             if self.app.as_ref().is_some_and(|a| a.on_items()) {
                 self.import = Some(ctx.open_document(DocMode::Read, "Import List", &["public.text"]));
+            }
+            return false;
+        }
+        if id == MENU_SAVE_AS {
+            if let Some((name, text)) = self.app.as_ref().and_then(|a| a.list_export()) {
+                let request = ctx.save_document(&format!("{name}.md"), &["md", "txt"]);
+                self.save = Some((request, text));
             }
             return false;
         }
@@ -489,10 +502,33 @@ impl App for RemindersApp {
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
-        use std::io::Read;
+        use std::io::{Read, Write};
         match ev {
-            DocumentEvent::Opened(mut doc) if self.import == Some(doc.request) => {
-                self.import = None;
+            // File > Save List As: the chosen file gets the checklist, and the commit makes it the saved file
+            DocumentEvent::SaveTo(mut doc) => {
+                let Some((_, text)) = self.save.take_if(|(r, _)| *r == doc.request) else {
+                    ctx.abort_document(doc.request);
+                    return false;
+                };
+                match doc.file.write_all(text.as_bytes()) {
+                    Ok(()) => ctx.commit_document(doc.request),
+                    Err(e) => {
+                        ctx.abort_document(doc.request);
+                        ctx.log(&format!("save list: {e}"));
+                    }
+                }
+                false
+            }
+            // the app keeps no grant to a file it only wrote
+            DocumentEvent::Saved(doc) => {
+                ctx.release_document(doc.grant);
+                false
+            }
+            // a checklist chosen in File > Import List, or a Markdown file shared or opened from Files (INBOUND)
+            DocumentEvent::Opened(mut doc) if self.import == Some(doc.request) || doc.request & INBOUND != 0 => {
+                if self.import == Some(doc.request) {
+                    self.import = None;
+                }
                 if doc.size > IMPORT_MAX {
                     ctx.log(&format!("import: {} is too large ({} bytes)", doc.name, doc.size));
                     ctx.release_document(doc.grant);
@@ -530,6 +566,9 @@ impl App for RemindersApp {
                 }
                 if self.pick == Some(request) {
                     self.pick = None;
+                }
+                if self.save.as_ref().is_some_and(|(r, _)| *r == request) {
+                    self.save = None;
                 }
                 if code != DocErrorCode::Cancelled {
                     ctx.log(&format!("document request {request}: {code:?}"));
@@ -638,5 +677,5 @@ fn tip_store(data_dir: &Path) -> bifrost_app::controls::tips::Datastore {
 }
 
 fn main() {
-    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None });
+    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None, save: None });
 }

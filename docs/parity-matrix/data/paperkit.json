@@ -12,21 +12,21 @@
       "apple": "PaperMarkupViewController, MarkupEditViewController, MarkupToolbarViewController",
       "bifrost": "springboard/src/shell/markup.rs (Markup struct, touch, draw); opened from springboard/src/shell/mod.rs:3782 and :3801",
       "status": "os",
-      "note": "Shell-only editor for screenshot captures. Apps get no view controller or SDK type for it."
+      "note": "Shell-only editor for screenshot captures. Left as os in sdk-rest-02: the interactive canvas needs pointer input and drawing from the shell's touch handler in springboard/src/shell/markup.rs, which is not split into a pure model yet. The element model (bifrost_ui::markup) and the non-interactive canvas (springboard/sdk/src/markup.rs) exist."
     },
     {
       "feature": "Freehand drawing tools",
       "apple": "PaperKit drawings on PencilKit (PKDrawing content)",
-      "bifrost": "springboard/src/shell/markup.rs:20 (Tool: Pen, Marker, Pencil, Eraser), :29 (brush widths and opacity); springboard/apps/freeform-desktop/src/freeform.rs:42 (Tool: Pen, Marker, Eraser); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (pen only, in the note sketch pad)",
+      "bifrost": "springboard/src/shell/markup.rs:20 (Tool: Pen, Marker, Pencil, Eraser), :31 (brush widths and opacity); springboard/tests/parity_sdk-tests-05.rs; springboard/apps/freeform-desktop/src/freeform.rs:183 (Tool: Pen, Pencil, Marker, Eraser, plus lasso and shapes); wired: springboard/apps/notes-desktop/src/notes/sketch.rs (pen only, in the note sketch pad)",
       "status": "partial",
-      "note": "Stroke widths and opacity are fixed per tool. No stylus pressure, tilt or stroke editing. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "The markup editor's four tools draw with their own widths and opacity, tested headless in springboard/tests/parity_sdk-tests-05.rs. Stroke widths are fixed per tool, with no stylus pressure, tilt or stroke editing. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Undo for markup edits",
       "apple": "Undo of markup changes through the view controller and its undo manager",
-      "bifrost": "springboard/src/shell/markup.rs:215 (undo), test at :331; springboard/apps/freeform-desktop/src/freeform.rs:207 (push_undo)",
+      "bifrost": "springboard/src/shell/markup.rs:215 (undo), test at :331; springboard/tests/parity_sdk-tests-05.rs; springboard/apps/freeform-desktop/src/freeform.rs:583 (undo_step), :599 (redo_step), :1354 (push_undo)",
       "status": "partial",
-      "note": "Undo only. No redo found."
+      "note": "The markup editor undoes strokes, tested headless in springboard/tests/parity_sdk-tests-05.rs, and has no redo. Freeform's board has undo and redo (undo_step, redo_step), which no headless test covers yet."
     },
     {
       "feature": "Insertion menu for markup elements",
@@ -73,9 +73,9 @@
     {
       "feature": "Adornments over markup",
       "apple": "MarkupAdornment",
-      "bifrost": "springboard/src/shell/markup.rs:99 (bar), :104 (tray), :124 (button): shell chrome only",
-      "status": "gap",
-      "note": "Shell chrome is drawn by the shell and is not an app-facing adornment type."
+      "bifrost": "springboard/ui/src/markup_adornment.rs (Adornment::frame_in, place_all, hit_test); springboard/src/shell/markup.rs:99 (bar), :104 (tray), :124 (button): shell chrome only",
+      "status": "partial",
+      "note": "Adornments are placed by anchor and inset inside a canvas, clipped to it, and hit-tested topmost first; tested headless in springboard/ui/tests/parity_sdk-gaps-03.rs. Gap: no SDK view draws an adornment over a markup canvas, and the shell's own chrome does not use this model."
     },
     {
       "feature": "Auto-resizing of markup",

@@ -45,9 +45,9 @@
     {
       "feature": "On-device model updates",
       "apple": "MLUpdateTask, MLTask, personalization sample",
-      "bifrost": "springboard/ui/src/ml_update.rs",
+      "bifrost": "springboard/ui/src/ml_update.rs (update, Parameters, Report); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-core-ml, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no training or fine-tuning path in the SDK"
+      "note": "Headless tests in parity_sdk-tests-18 cover one gradient step on the last dense layer, the loss before and after, frozen earlier layers, input checks and deterministic reports. Gap: the update runs on the caller's thread, is not wired into any app, and trains only the last dense layer."
     },
     {
       "feature": "Downloading and compiling a model at runtime",
@@ -59,23 +59,23 @@
     {
       "feature": "Model encryption",
       "apple": "Generating a Model Encryption Key, Encrypting a Model in Your App",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no model encryption; the keychain module (springboard/sdk/src/keychain.rs) could hold a key but nothing uses it for models"
+      "bifrost": "springboard/ui/src/model_seal.rs (seal_with_password, open_with_password, seal_with_key)",
+      "status": "partial",
+      "note": "A model's text form is sealed in the sealed-box container (PBKDF2 with a password, or a raw key) and parsed only after authentication; tested headless in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no key generation or keychain wiring, and no build step encrypts models."
     },
     {
       "feature": "Custom layers and custom models",
       "apple": "MLCustomLayer, MLCustomModel, Creating and Integrating a Model with Custom Layers",
-      "bifrost": "springboard/ui/src/cnn_layers.rs (CustomLayer",
+      "bifrost": "springboard/ui/src/cnn_layers.rs (CustomLayer, Layer::Custom, Network); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no model graph runtime to extend"
+      "note": "An app layer implements CustomLayer, states its output shape and runs inside a Network, all tested headless. Gap: there is no model file format, no custom model loading and no graph runtime to host a custom model, and the code is not wired into apps or the shell."
     },
     {
       "feature": "Domain frameworks built on Core ML",
       "apple": "Vision, Natural Language, Speech, Sound Analysis (named in the Core ML overview)",
-      "bifrost": "springboard/sdk/src/spellcheck.rs (spelling only); springboard/src/media/hwdec/vaapi.rs (video decode, not inference)",
-      "status": "gap",
-      "note": "no image classification, speech, sound or sentiment API; the spellcheck module is dictionary-based"
+      "bifrost": "springboard/ui/src/text_classifier.rs (TextClassifier::sentiment), springboard/ui/src/sound_classify.rs, springboard/ui/src/embedding.rs; tests: springboard/ui/tests/parity_sdk-complete-25.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (text_classifier.rs, sound_classify.rs, embedding.rs); not wired into the shell or apps, not tested on Midget. Sentiment is a two-label word-list preset (TextClassifier::sentiment) tested headless in ui/tests/parity_sdk-complete-25.rs. Gap: no image classification or speech API, and the spellcheck module is dictionary-based."
     },
     {
       "feature": "Text prediction on the on-screen keyboard",

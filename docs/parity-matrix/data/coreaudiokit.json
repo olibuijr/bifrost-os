@@ -10,9 +10,9 @@
     {
       "feature": "Audio unit custom UI (view controller, view configuration, generic view)",
       "apple": "AUViewController, AUAudioUnitViewConfiguration, AUGenericView, AUCustomViewPersistentData",
-      "bifrost": "springboard/ui/src/param_view.rs; wired: springboard/apps/daw/src/rack.rs (slider mapping over springboard/ui/src/param_view.rs)",
+      "bifrost": "springboard/ui/src/param_view.rs (ParamSpec, GenericView); wired: springboard/apps/daw/src/rack.rs (slider mapping over springboard/ui/src/param_view.rs); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-coreaudiokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Audio Unit host and no plugin view controller. The DAW plugins are an in-house instrument/effect format with built-in device UIs. The generic ViewController in springboard/sdk/src/view/app.rs is not audio-specific. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-tests-18 cover the generic parameter view: expert filtering, clamping, linear and logarithmic slider positions, invalid ranges and reset. The DAW rack maps its sliders through the model. Gap: no Audio Unit host and no plugin view controller; the DAW plugins use built-in device UIs, and the generic ViewController in springboard/sdk/src/view/app.rs is not audio-specific."
     },
     {
       "feature": "Panner audio unit view",
@@ -24,9 +24,9 @@
     {
       "feature": "Bluetooth MIDI peripheral picker and advertising",
       "apple": "CABTLEMIDIWindowController, CABTMIDICentralViewController, CABTMIDILocalPeripheralViewController",
-      "bifrost": "springboard/ui/src/midi_ble_picker.rs",
+      "bifrost": "springboard/ui/src/midi_ble_picker.rs (MidiPicker, MidiAdvertiser::scan_response); springboard/ui/src/midi_ble.rs (BLE MIDI packets); tests: springboard/ui/tests/parity_sdk-complete-13.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-04, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Bluetooth module lists audio profiles (A2DP sink/source, headset) and has no MIDI service UUID handling or BLE MIDI peripheral. Bluetooth audio streaming itself is out of the module (bluetooth.rs:18)."
+      "note": "The MIDI service UUID, the advertisement and scan response that complete a shortened name, the picker's list and selection, and BLE MIDI packet encoding are tested headless (parity_sdk-complete-13.rs and the picker's unit tests). Gap: the GATT connection and the peripheral role need the Bluetooth radio, so they are checked only on the lab machine, and the picker is not wired into apps or the shell."
     },
     {
       "feature": "Network audio device browser",
@@ -45,9 +45,9 @@
     {
       "feature": "Audio playback service shared by apps",
       "apple": "Not part of CoreAudioKit (AVFoundation and Core Audio); listed because CoreAudioKit device views depend on it",
-      "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/audioplayer.rs",
-      "status": "os",
-      "note": "Service owns the speaker and microphone; apps reach it over the service socket. The SDK has no audio API of its own (springboard/sdk/src/lib.rs has no audio module)."
+      "bifrost": "springboard/src/svc.rs (audio::Client); springboard/sdk/src/lib.rs (audio re-export, bifrost_app::audio); springboard/audiod/src/main.rs",
+      "status": "partial",
+      "note": "Apps share the audio service through bifrost_app::audio::Client, used by the music, podcasts, video player and voice memos apps. Headless tests in sdk/tests/parity_sdk-rest-12.rs drive it over a Unix socket with a fake service: handshake, state, transport and queue commands, volume clamping and reconnect. Gap: the service itself owns the speaker and plays sound only on the lab machine."
     },
     {
       "feature": "Inter-device audio picker",

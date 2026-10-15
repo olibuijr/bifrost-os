@@ -695,7 +695,12 @@ fn import_reads_a_checklist_into_a_new_list_and_print_gives_it_back() {
     assert!(!app.import_checklist(&ui, "nothing to read here", "x"));
     assert_eq!(app.notice.as_deref(), Some("Nothing to import"));
     app.activate(&ui, Target::Smart(Smart::All), 5.0);
-    assert!(app.printable_list().is_none(), "a smart list is not printed");
+    let (name, body) = app.printable_list().unwrap();
+    assert_eq!(name, "All");
+    assert_eq!(body, "# All\n\n- [ ] Socks\n- [x] Wool (2026-10-08 09:05)\n- [ ] Shoes\n", "a smart list prints its rows flat");
+    assert!(app.can_print());
+    app.activate(&ui, Target::Smart(Smart::Today), 5.0);
+    assert_eq!(app.printable_list().unwrap().1, "# Today\n\n", "a smart list with no rows prints its title");
     assert_eq!(app.edit_titles().0, "Undo Import List");
     cleanup(&path);
 }
@@ -866,7 +871,7 @@ fn settings_apply_at_once_are_saved_beside_the_reminders_and_load_again() {
     assert_eq!(app.settings.default_list, None, "back to Automatic");
     app.activate(&ui, Target::Setting(SettingRow::DefaultList), 15.0);
     app.activate(&ui, Target::Setting(SettingRow::AllDayAlert), 16.0);
-    assert_eq!(app.all_day_min(), 10 * 60);
+    assert_eq!(app.all_day_min(), 9 * 60 + 30);
     app.activate(&ui, Target::Setting(SettingRow::Badge), 17.0);
     assert_eq!(app.badge_count(), 0, "the badge is off");
     assert_eq!(app.due_count(), 1, "the reminders themselves are unchanged");
@@ -877,7 +882,7 @@ fn settings_apply_at_once_are_saved_beside_the_reminders_and_load_again() {
 
     // a new run reads them back from settings.tsv, and the default list is in force
     let again = Reminders::new(&ui, 1200, 1920, path.clone(), Wall { unix: 1_791_073_380, offset: 0, at: 0.0 });
-    assert_eq!((again.settings.default_list, again.all_day_min(), again.settings.badge), (Some(1), 10 * 60, false));
+    assert_eq!((again.settings.default_list, again.all_day_min(), again.settings.badge), (Some(1), 9 * 60 + 30, false));
     assert_eq!(again.opts.default_list, Some(1));
     // the View Options list chooser writes the same setting
     app.activate(&ui, Target::OptDefaultList(Some(2)), 20.0);

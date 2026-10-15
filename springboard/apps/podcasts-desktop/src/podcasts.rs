@@ -6,6 +6,7 @@
 use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT};
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
+use crate::chapters;
 use crate::feed::{self, Show, Store};
 use crate::info;
 use crate::library::{self, Library};
@@ -68,11 +69,16 @@ const CHAPTER_ROW_PT: f32 = 30.0;
 const TRANSCRIPTS_KEPT: usize = 4;
 const TRANSCRIPT_LIMIT: usize = 4 << 20;
 const SEARCH_LIMIT: usize = 1 << 20;
+/// The largest chapters file read, and how many episodes are remembered as already asked for theirs.
+const CHAPTERS_LIMIT: usize = 1 << 20;
+const CHAPTERS_ASKED: usize = 256;
 /// Two clicks on a row this close together play the episode, in milliseconds.
 const DOUBLE_CLICK_MS: f64 = 450.0;
 /// One line of notes or transcript text, and the top of the episode page's buttons, in points.
 const LINE_PT: f32 = 20.0;
 const DETAIL_BUTTONS_PT: f32 = 64.0;
+/// Time interval for checking the playback service clock while connected; this is media polling, not window geometry.
+const AUDIO_WAKE_INTERVAL_S: f64 = 1.0;
 const BAR_TITLE: u32 = 1;
 const BAR_ADD: u32 = 2;
 const BAR_REMOVE: u32 = 3;
@@ -113,6 +119,7 @@ const M_EP_DETAILS: u32 = 57;
 const M_EP_UP: u32 = 58;
 const M_EP_DOWN: u32 = 59;
 const M_CLEAR_QUEUE: u32 = 60;
+const M_SHOW_PLAYED: u32 = 61;
 const POLL_MS: f64 = 250.0;
 const FEED_LIMIT: usize = 8 << 20;
 const EPISODE_LIMIT: usize = 160 << 20;
@@ -125,6 +132,8 @@ const SPEED_ROW_PT: f32 = 26.0;
 const SAVE_EVERY_MS: f64 = 5_000.0;
 /// how long a started episode may take to show up as playing in the service
 const START_TIMEOUT_MS: f64 = 5_000.0;
+/// how long a press on an Up Next row must stay still before the row can be dragged to a new place
+const HOLD_MS: f64 = 500.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Target {
@@ -162,6 +171,8 @@ enum Target {
     Chapter(usize),
     /// the sheet's transcript area (it scrolls)
     Panel,
+    /// one line of the sheet's transcript, by the cue it belongs to; tapping it seeks to the cue
+    Line(usize),
     /// the Follow button of a search result
     Follow(usize),
     /// the search field above the results
@@ -233,6 +244,8 @@ enum Msg {
     Search(Result<Vec<search::Hit>, String>),
     /// the transcript cues of an episode (by URL)
     Transcript(String, Result<Vec<Cue>, String>),
+    /// the chapters of an episode (by URL), read from the JSON file its feed links to
+    Chapters(String, Result<Vec<feed::Chapter>, String>),
 }
 
 /// The wrapped lines of the open detail or transcript: what they are for, the width (bits), and each line with the
@@ -332,6 +345,9 @@ pub struct Podcasts {
     sheet_panel: SheetPanel,
     transcripts: Vec<(String, Vec<Cue>)>,
     transcript_loading: Option<String>,
+    /// chapters read from linked JSON files (episode URL, chapters), and the episodes whose file was already asked for
+    json_chapters: Vec<(String, Vec<feed::Chapter>)>,
+    chapters_asked: Vec<String>,
     /// wrapped lines of the open detail or transcript, and the width they were wrapped for (bits), cached
     wrapped: Option<Wrapped>,
     /// pixels from the list top to the end of the scrolling content of a panel
@@ -354,6 +370,10 @@ pub struct Podcasts {
     last_click: (usize, f64),
     /// the transcript cue the panel last scrolled to
     followed: Option<usize>,
+    /// an Up Next row pressed and still held: its episode, when the press began, and where it was pressed
+    hold: Option<(String, f64, f32)>,
+    /// the Up Next episode being dragged to a new place
+    reordering: Option<String>,
 }
 
 impl Podcasts {
@@ -423,6 +443,8 @@ impl Podcasts {
             sheet_panel: SheetPanel::None,
             transcripts: Vec::new(),
             transcript_loading: None,
+            json_chapters: Vec::new(),
+            chapters_asked: Vec::new(),
             wrapped: None,
             body_h: 0.0,
             import: None,
@@ -435,6 +457,8 @@ impl Podcasts {
             selected_key: None,
             last_click: (usize::MAX, 0.0),
             followed: None,
+            hold: None,
+            reordering: None,
         }
         .with_rows()
     }
@@ -673,6 +697,7 @@ impl Podcasts {
                                 }
                                 show.episodes = episodes;
                                 self.store.save(&self.shows);
+                                self.apply_chapters();
                                 self.after_refresh(&url);
                             }
                         }
@@ -726,6 +751,18 @@ impl Podcasts {
                         Err(e) => self.error = format!("Cannot load the transcript: {e}"),
                     }
                     self.wrapped = None;
+                }
+                Msg::Chapters(url, r) => {
+                    // a missing or unreadable chapters file is not worth an error line: the episode just has none
+                    if let Some(list) = r.ok().filter(|l| !l.is_empty()) {
+                        self.json_chapters.retain(|(u, _)| *u != url);
+                        self.json_chapters.push((url, list));
+                        if self.json_chapters.len() > chapters::KEPT {
+                            self.json_chapters.remove(0);
+                        }
+                        self.apply_chapters();
+                        self.wrapped = None;
+                    }
                 }
             }
         }
@@ -922,7 +959,12 @@ impl Podcasts {
 
     /// The sidebar column width in pixels.
     fn side(&self, ui: &Ui) -> f32 {
-        ui.pt(SIDEBAR_W)
+        ui.pt(self.side_pt(ui))
+    }
+
+    /// Keep the stock sidebar width on desktop, but let content take over on compact windows.
+    fn side_pt(&self, ui: &Ui) -> f32 {
+        SIDEBAR_W.min((self.w as f32 / ui.pt(1.0)) * 0.4).max(0.0)
     }
 
     fn content_w(&self, ui: &Ui) -> f32 {
@@ -1278,6 +1320,18 @@ impl Podcasts {
         self.dirty = true;
     }
 
+    /// Marks every episode of the show on screen played, or unplayed when they are all played already.
+    fn mark_show_played(&mut self) {
+        let View::Episodes(si) = self.view else { return };
+        let Some(show) = self.shows.get(si) else { return };
+        let urls: Vec<&str> = show.episodes.iter().map(|e| e.url.as_str()).collect();
+        let played = !urls.iter().all(|u| self.library.is_played(u));
+        self.library.set_all_played(urls, played);
+        self.save_library();
+        self.rebuild();
+        self.dirty = true;
+    }
+
     // search, transcripts, files ---------------------------------------
 
     fn run_search(&mut self) {
@@ -1319,6 +1373,40 @@ impl Podcasts {
             let r = net.get(&url, TRANSCRIPT_LIMIT).map_err(|e| e.to_string()).map(|bytes| transcript::parse(&String::from_utf8_lossy(&bytes)));
             deliver(&inbox, Msg::Transcript(url, r));
         });
+    }
+
+    /// Fetches the chapters file of the playing episode and of the open episode page when the feed links to one
+    /// instead of listing the chapters itself.
+    fn want_chapters(&mut self) {
+        let mut want: Vec<(String, String)> = Vec::new();
+        let open = self.detail_episode().map(|(_, e)| e);
+        for ep in self.playing_episode().into_iter().chain(open) {
+            if chapters::wanted(ep, &self.chapters_asked) && !want.iter().any(|(u, _)| *u == ep.url) {
+                want.push((ep.url.clone(), ep.chapters_url.clone()));
+            }
+        }
+        for (episode, link) in want {
+            self.chapters_asked.push(episode.clone());
+            if self.chapters_asked.len() > CHAPTERS_ASKED {
+                self.chapters_asked.remove(0);
+            }
+            let (net, inbox) = (self.net.clone(), self.inbox.clone());
+            DispatchQueue::global(Qos::Utility).async_(move || {
+                let r = net.get(&link, CHAPTERS_LIMIT).map_err(|e| e.to_string()).map(|bytes| chapters::parse(&String::from_utf8_lossy(&bytes)));
+                deliver(&inbox, Msg::Chapters(episode, r));
+            });
+        }
+    }
+
+    /// Gives the episodes the chapters read from their linked files (a feed refresh replaces the episodes).
+    fn apply_chapters(&mut self) {
+        for (url, list) in &self.json_chapters {
+            for show in &mut self.shows {
+                for ep in show.episodes.iter_mut().filter(|e| e.url == *url && e.chapters.is_empty()) {
+                    ep.chapters = list.clone();
+                }
+            }
+        }
     }
 
     /// Opens or closes a panel of the Now Playing sheet.
@@ -1411,6 +1499,12 @@ impl Podcasts {
         let (downloaded, played, queued) = url.as_deref().map_or((false, false, false), |u| (self.store.downloaded(u), self.library.is_played(u), self.library.in_queue(u)));
         let playing = self.playing.is_some();
         let has_queue = !self.library.queue().is_empty();
+        let show = match self.view {
+            View::Episodes(si) => self.shows.get(si),
+            _ => None,
+        };
+        let show_has_eps = show.is_some_and(|s| !s.episodes.is_empty());
+        let show_all_played = show.is_some_and(|s| s.episodes.iter().all(|e| self.library.is_played(&e.url)));
         let st = self.prefs.settings;
         let file = AppMenu {
             title: "File".into(),
@@ -1473,6 +1567,7 @@ impl Podcasts {
                 AppMenuItem::new(M_CLEAR_QUEUE, "Clear Up Next").enabled(has_queue),
                 AppMenuItem::separator(),
                 AppMenuItem::new(M_EP_PLAYED, if played { "Mark as Unplayed" } else { "Mark as Played" }).key("cmd+shift+u").enabled(has_ep),
+                AppMenuItem::new(M_SHOW_PLAYED, if show_all_played { "Mark All as Unplayed" } else { "Mark All as Played" }).enabled(show_has_eps),
             ],
         };
         vec![file, view, AppMenu { title: "Controls".into(), items: controls }, episode]
@@ -1544,6 +1639,7 @@ impl Podcasts {
             M_EP_DETAILS => self.episode_action(EpAction::Details),
             M_EP_UP => self.episode_action(EpAction::MoveUp),
             M_EP_DOWN => self.episode_action(EpAction::MoveDown),
+            M_SHOW_PLAYED => self.mark_show_played(),
             _ => {
                 if let Some(i) = id.checked_sub(M_RATE).map(|i| i as usize).filter(|&i| i < transport::RATES.len()) {
                     self.rate = transport::RATES[i];
@@ -1608,7 +1704,7 @@ impl Podcasts {
     /// The search field's frame (the capsule is drawn a little wider).
     fn search_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let m = self.margin(ui);
-        (self.side(ui) + m + ui.pt(SPACE_L), self.list_top(ui) + ui.pt(SPACE_S), self.content_w(ui) - 2.0 * m - ui.pt(2.0 * SPACE_L), ui.pt(32.0))
+        (self.side(ui) + m + ui.pt(SPACE_L), self.list_top(ui) + ui.pt(SPACE_S), self.content_w(ui) - 2.0 * m - ui.pt(2.0 * SPACE_L), ui.pt(SPACE_XXXL))
     }
 
     /// The floating mini player capsule (Golden Gate Podcasts and Music).
@@ -1711,6 +1807,20 @@ impl Podcasts {
 
     // hit testing and input ---------------------------------------------
 
+    /// The transcript cue whose text is under `y`, when the transcript panel shows timed lines.
+    fn transcript_cue_at(&self, ui: &Ui, y: f32) -> Option<usize> {
+        let link = self.playing_episode()?.transcript.clone();
+        let (key, _, lines) = self.wrapped.as_ref()?;
+        if *key != format!("t:{link}") {
+            return None;
+        }
+        let p = self.panel_rect(ui);
+        let line = transcript::line_at(y - p.1 - ui.pt(SPACE_L) + self.panel_scroll.offset(), ui.pt(LINE_PT), lines.len())?;
+        let cue = lines.get(line)?.1?;
+        let cues = &self.transcripts.iter().find(|(u, _)| *u == link)?.1;
+        transcript::start_of(cues, cue).map(|_| cue)
+    }
+
     fn title(&self) -> String {
         if self.field.is_some() {
             "New Podcast".into()
@@ -1733,7 +1843,7 @@ impl Podcasts {
 
     /// The unified toolbar (`NativeToolbar`): the title, then the actions for the current screen.
     fn bar(&self, ui: &Ui) -> Toolbar {
-        let room = (self.w as f32 / ui.s - SIDEBAR_W - 220.0).max(40.0);
+        let room = (self.w as f32 / ui.pt(1.0) - self.side_pt(ui) - 220.0).max(0.0);
         let title_w = (ui.measure(&self.title(), MAC_TITLE3_PT, Weight::Bold) / ui.s + 4.0).min(room);
         let panel = matches!(self.view, View::Settings | View::ShowSettings(_) | View::Detail(..));
         let mut items = Vec::new();
@@ -1761,7 +1871,7 @@ impl Podcasts {
 
     /// The toolbar rectangle in points.
     fn bar_bounds(&self, ui: &Ui) -> Rect {
-        let x = SIDEBAR_W + widgets::TOOLBAR_GAP_PT + SPACE_XS;
+        let x = self.side_pt(ui) + widgets::TOOLBAR_GAP_PT + SPACE_XS;
         let h = widgets::CAPSULE_PT;
         Rect { x, y: (UNIFIED_BAR_PT - h) / 2.0, w: (self.w as f32 / ui.s - x - SPACE_L).max(0.0), h }
     }
@@ -1798,7 +1908,7 @@ impl Podcasts {
     }
 
     fn sidebar_bounds(&self, ui: &Ui) -> Rect {
-        Rect { x: 0.0, y: 0.0, w: SIDEBAR_W, h: self.h as f32 / ui.s }
+        Rect { x: 0.0, y: 0.0, w: self.side_pt(ui), h: self.h as f32 / ui.s }
     }
 
     /// The toolbar buttons as semantic controls, so the shell does not treat them as the window's drag band.
@@ -1855,6 +1965,11 @@ impl Podcasts {
                     let row = ((y - p.1 - ui.pt(SPACE_S) + self.panel_scroll.offset()) / ui.pt(CHAPTER_ROW_PT)).floor();
                     if row >= 0.0 && (row as usize) < count {
                         return Some(Target::Chapter(row as usize));
+                    }
+                }
+                if self.sheet_panel == SheetPanel::Transcript {
+                    if let Some(cue) = self.transcript_cue_at(ui, y) {
+                        return Some(Target::Line(cue));
                     }
                 }
                 return Some(Target::Panel);
@@ -2046,6 +2161,15 @@ impl Podcasts {
                 }
             }
             Target::Panel => {}
+            Target::Line(cue) => {
+                let ms = self.playing_episode().map(|e| e.transcript.clone()).and_then(|link| {
+                    let cues = &self.transcripts.iter().find(|(u, _)| *u == link)?.1;
+                    transcript::start_of(cues, cue)
+                });
+                if let Some(ms) = ms {
+                    self.seek_to(ms as f64);
+                }
+            }
             Target::SkipFwd => self.skip(false, self.prefs.settings.forward_s as f64),
             Target::List => {}
         }
@@ -2160,17 +2284,27 @@ impl Podcasts {
                     }
                 }
                 self.pressed = self.hit(ui, x, y);
+                self.reordering = None;
+                self.hold = match self.pressed {
+                    Some(Target::Row(i)) if self.view == View::UpNext => self.row_url(i).map(|url| (url, t, y)),
+                    _ => None,
+                };
                 if self.pressed == Some(Target::Scrub) {
                     self.scrubbing = Some(self.scrub_ms(ui, x));
                     return;
                 }
-                if matches!(self.pressed, Some(Target::Row(_) | Target::List | Target::Panel | Target::Chapter(_) | Target::Opt(_) | Target::Detail(_) | Target::Follow(_))) {
+                if matches!(self.pressed, Some(Target::Row(_) | Target::List | Target::Panel | Target::Line(_) | Target::Chapter(_) | Target::Opt(_) | Target::Detail(_) | Target::Follow(_))) {
                     self.scrolling = true;
                     self.drag_scroller().down(y, t);
                 }
             }
             Event::Move(..) => {
-                if self.field_touch {
+                if let Some(url) = self.reordering.clone() {
+                    if let Some(Target::Row(j)) = self.hit(ui, x, y) {
+                        self.move_in_up_next(&url, j);
+                    }
+                    self.dirty = true;
+                } else if self.field_touch {
                     if let Some(search) = self.field_kind() {
                         let frame = self.field_frame(ui, search);
                         if let Some(f) = self.field_mut(search) {
@@ -2196,6 +2330,13 @@ impl Podcasts {
             }
             Event::Up(..) => {
                 self.dirty = true;
+                self.hold = None;
+                if self.reordering.take().is_some() {
+                    self.save_library();
+                    self.pressed = None;
+                    self.scrolling = false;
+                    return;
+                }
                 if std::mem::take(&mut self.field_touch) {
                     if let Some(search) = self.field_kind() {
                         let frame = self.field_frame(ui, search);
@@ -2226,6 +2367,8 @@ impl Podcasts {
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.now = t;
         self.pump();
+        self.want_chapters();
+        self.check_hold(t);
         if self.refresh.pump() {
             self.dirty = true;
         }
@@ -2275,6 +2418,38 @@ impl Podcasts {
         self.dirty
     }
 
+    /// A held Up Next row turns into a drag once the press has lasted `HOLD_MS` without the list scrolling.
+    fn check_hold(&mut self, t: f64) {
+        let Some((url, at, y)) = self.hold.clone() else { return };
+        if self.pressed.is_none() || self.drag_scroller().dragging() {
+            self.hold = None;
+        } else if t - at >= HOLD_MS {
+            self.hold = None;
+            // the press never became a scroll: end its scroll touch without a fling
+            self.drag_scroller().up(y, t);
+            self.scrolling = false;
+            self.pressed = None;
+            self.reordering = Some(url);
+            self.dirty = true;
+        }
+    }
+
+    /// The address of the episode in row `i`, when that row is an episode.
+    fn row_url(&self, i: usize) -> Option<String> {
+        match self.rows.get(i)? {
+            Row::Ep(s, e) => self.episode_url((*s, *e)),
+            _ => None,
+        }
+    }
+
+    /// Drags the Up Next episode `url` to the place of row `j`.
+    fn move_in_up_next(&mut self, url: &str, j: usize) {
+        let Some(target) = self.row_url(j).and_then(|u| self.library.queue().iter().position(|q| *q == u)) else { return };
+        if self.library.move_to(url, target) {
+            self.rebuild();
+        }
+    }
+
     /// Sizes the Now Playing panel's scroll range, and keeps the spoken line of a transcript in view.
     fn tick_panel(&mut self, ui: &Ui, t: f64) {
         if !(self.sheet && self.playing.is_some()) || self.sheet_panel == SheetPanel::None {
@@ -2306,12 +2481,14 @@ impl Podcasts {
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         // a playback clock only: downloads and feeds arrive through `deliver` (a main-queue wake), not by polling
         let mut due = self.playing.is_some().then_some(t + POLL_MS);
+        let hold = self.hold.as_ref().map(|(_, at, _)| at + HOLD_MS);
         // the service socket is only read between frames: once a second while idle, to notice an episode playing
-        let listening = if self.audio.connected() { Some(t + 1000.0) } else { self.audio.next_wake(t) };
+        // This wake is a one-second media-service clock interval, not a layout/resolution constant.
+        let listening = if self.audio.connected() { Some(t + AUDIO_WAKE_INTERVAL_S) } else { self.audio.next_wake(t) };
         due = [due, listening].into_iter().flatten().reduce(f64::min);
         let refresh = self.last_refresh.zip(self.prefs.settings.refresh_ms()).map(|(at, ms)| at + ms);
         let search = if self.view == View::Search { self.search_field.as_ref().and_then(|f| f.next_wake(t)) } else { None };
-        for wake in [self.field.as_ref().and_then(|f| f.next_wake(t)), search, refresh, self.scroll.animating().then_some(t), self.panel_scroll.animating().then_some(t)] {
+        for wake in [self.field.as_ref().and_then(|f| f.next_wake(t)), search, refresh, hold, self.scroll.animating().then_some(t), self.panel_scroll.animating().then_some(t)] {
             if let Some(w) = wake {
                 due = Some(due.map_or(w, |d| d.min(w)));
             }
@@ -2386,7 +2563,7 @@ impl Podcasts {
                     }
                     let (ink, dim) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
                     let clock = springboard::shell::music::nowplaying::clock(chapter.start_ms as f64);
-                    let ty = y + (row_h - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(2.0);
+                    let ty = y + (row_h - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(SPACE_XXS);
                     self.text(s, ui, &clock, MAC_BODY_PT, Weight::Regular, dim, p.0 + pad, ty);
                     let room = p.2 - 2.0 * pad - ui.pt(64.0);
                     let title = ui.fit(&chapter.title, MAC_BODY_PT, room);
@@ -2564,7 +2741,7 @@ impl Podcasts {
             }
             if unplayed && !active {
                 // an unplayed episode carries the accent dot
-                s.fill_rrect(r.0 + ui.pt(SPACE_XS), r.1 + ui.pt(SPACE_M + 5.0), ui.pt(8.0), ui.pt(8.0), ui.pt(4.0), LINK);
+                s.fill_rrect(r.0 + ui.pt(SPACE_XS), r.1 + ui.pt(SPACE_M + 5.0), ui.pt(SPACE_S), ui.pt(SPACE_S), ui.pt(SPACE_XS), LINK);
             }
             let room = if matches!(row, Row::Hit(_)) { r.2 - ui.pt(SPACE_XXXL) - ui.pt(96.0) } else { r.2 - ui.pt(SPACE_XXXL) };
             let title = ui.fit(&title, MAC_BODY_PT, room);
@@ -2615,7 +2792,7 @@ impl Podcasts {
             } else if i + 1 < rows.len() {
                 s.fill_rect((r.0 + ui.pt(SPACE_L)) as usize, (r.1 + r.3 - 1.0).max(0.0) as usize, (r.2 - ui.pt(SPACE_L)) as usize, 1, SEPARATOR_C.now());
             }
-            let ty = r.1 + (r.3 - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(2.0);
+            let ty = r.1 + (r.3 - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(SPACE_XXS);
             self.text(s, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), r.0 + ui.pt(SPACE_L), ty);
             let value = ui.fit(value, MAC_BODY_PT, r.2 / 2.0);
             let vw = ui.measure(&value, MAC_BODY_PT, Weight::Regular);
@@ -2679,10 +2856,10 @@ impl Podcasts {
         self.text(s, ui, "Notes", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, origin + notes_y);
         let line_h = ui.pt(LINE_PT);
         if lines.iter().all(|(l, _)| l.is_empty()) {
-            self.text(s, ui, "No notes", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, origin + notes_y + ui.pt(24.0));
+            self.text(s, ui, "No notes", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, origin + notes_y + ui.pt(SPACE_XXL));
         }
         for (j, (line, _)) in lines.iter().enumerate() {
-            let y = origin + notes_y + ui.pt(24.0) + line_h * j as f32;
+            let y = origin + notes_y + ui.pt(SPACE_XXL) + line_h * j as f32;
             if line.is_empty() || y + line_h < top || y >= bottom {
                 continue;
             }
@@ -2758,7 +2935,8 @@ impl Podcasts {
         s.fill_rect((x0 - 1.0).max(0.0) as usize, 0, 1, self.h as usize, SEPARATOR_C.now());
         let w_pt = self.w as f32 / ui.s;
         s.fill_rect(x0 as usize, 0, cw as usize, ui.pt(UNIFIED_BAR_PT) as usize, CONTENT_BG.now());
-        widgets::toolbar_band(s, ui, Rect { x: SIDEBAR_W, y: 0.0, w: w_pt - SIDEBAR_W, h: UNIFIED_BAR_PT });
+        let side = self.side_pt(ui);
+        widgets::toolbar_band(s, ui, Rect { x: side, y: 0.0, w: w_pt - side, h: UNIFIED_BAR_PT });
         let pressed_bar = match self.pressed {
             Some(Target::Add) => Some(BAR_ADD),
             Some(Target::Remove) => Some(BAR_REMOVE),

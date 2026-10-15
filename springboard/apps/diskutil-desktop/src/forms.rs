@@ -157,7 +157,10 @@ impl DiskUtility {
         let picks: Vec<usize> = (0..self.nodes.len())
             .filter(|&i| {
                 let n = &self.nodes[i];
-                !n.read_only && n.mount_point.is_none() && !self.nodes.iter().any(|c| c.parent.as_deref() == Some(n.name.as_str()) && c.mount_point.is_some())
+                !n.read_only
+                    && !model::is_raid_array(&n.name)
+                    && n.mount_point.is_none()
+                    && !self.nodes.iter().any(|c| c.parent.as_deref() == Some(n.name.as_str()) && c.mount_point.is_some())
             })
             .collect();
         if picks.len() < RaidLevel::Raid0.min_members() {
@@ -523,6 +526,21 @@ mod tests {
         w.submit_form();
         assert!(w.sheet.is_none());
         assert!(w.form.as_ref().unwrap().form.error.as_deref().is_some_and(|e| e.contains("at least")));
+    }
+
+    #[test]
+    fn an_existing_array_is_listed_but_never_offered_as_a_member() {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "sdb".into(), size: 1_000_000_000, ..Node::default() },
+            Node { name: "sdc".into(), size: 1_000_000_000, ..Node::default() },
+            Node { name: "md0".into(), size: 2_000_000_000, ..Node::default() },
+        ];
+        assert!(w.open_raid_form());
+        match &w.form.as_ref().unwrap().kind {
+            FormKind::Raid { members } => assert_eq!(members, &["sdb", "sdc"].map(String::from).to_vec()),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

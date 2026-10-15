@@ -6,8 +6,8 @@ use crate::model::{Mark, MarkKind};
 use std::io::Read;
 use std::path::Path;
 
-/// How much of a JPEG is read for its EXIF block, which sits before the image data.
-const HEAD_BYTES: u64 = 256 * 1024;
+/// Byte budget for reading a JPEG's EXIF block; this is a metadata I/O limit, not a display size.
+const EXIF_SCAN_LIMIT_BYTES: u64 = 256 * 1024;
 
 /// What the file itself tells.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -29,7 +29,7 @@ pub fn read(path: &Path) -> Facts {
     if kind == "JPEG image" {
         let mut head = Vec::new();
         if let Ok(file) = std::fs::File::open(path) {
-            if file.take(HEAD_BYTES).read_to_end(&mut head).is_err() {
+            if file.take(EXIF_SCAN_LIMIT_BYTES).read_to_end(&mut head).is_err() {
                 head.clear();
             }
         }
@@ -78,7 +78,7 @@ pub fn human_size(bytes: u64) -> String {
 
 /// A count of the markup by kind: "2 highlights, 1 note", or "None".
 pub fn annotation_summary(marks: &[Mark]) -> String {
-    const KINDS: [MarkKind; 10] = [
+    const KINDS: [MarkKind; 15] = [
         MarkKind::Highlight,
         MarkKind::Note,
         MarkKind::Underline,
@@ -89,6 +89,11 @@ pub fn annotation_summary(marks: &[Mark]) -> String {
         MarkKind::Line,
         MarkKind::Arrow,
         MarkKind::Ink,
+        MarkKind::Star,
+        MarkKind::Polygon,
+        MarkKind::Bubble,
+        MarkKind::Text,
+        MarkKind::Redact,
     ];
     let parts: Vec<String> = KINDS
         .iter()
@@ -109,6 +114,22 @@ pub fn annotation_summary(marks: &[Mark]) -> String {
     }
 }
 
+/// One row per mark, in document order: its kind as the label, and its page (and text, for a note or text box) as the
+/// value, so the Inspector lists the markup itself and not only the counts.
+pub fn annotation_rows(marks: &[Mark]) -> Vec<(String, String)> {
+    marks
+        .iter()
+        .map(|m| {
+            let value = if m.text.trim().is_empty() {
+                format!("Page {}", m.page + 1)
+            } else {
+                format!("Page {}: {}", m.page + 1, m.text.trim())
+            };
+            (m.kind.label().to_string(), value)
+        })
+        .collect()
+}
+
 /// The live part of the Inspector's rows.
 pub struct Shown<'a> {
     pub pages: usize,
@@ -117,6 +138,21 @@ pub struct Shown<'a> {
     pub size: Option<(usize, usize)>,
     pub marks: &'a [Mark],
     pub bookmarks: usize,
+    /// The PDF's information rows and whether it is encrypted.
+    pub info: &'a [(&'static str, String)],
+    pub encrypted: bool,
+}
+
+/// A text string of a PDF: UTF-16 big endian when it starts with the byte order mark, otherwise one character per byte
+/// (the PDFDocEncoding that Latin text uses).
+pub fn pdf_text(bytes: &[u8]) -> String {
+    match bytes.strip_prefix(&[0xFE, 0xFF]) {
+        Some(rest) => {
+            let units: Vec<u16> = rest.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+            String::from_utf16_lossy(&units)
+        }
+        None => bytes.iter().map(|&b| b as char).collect(),
+    }
 }
 
 /// The rows the Inspector lists, as label and value.
@@ -132,8 +168,13 @@ pub fn rows(facts: &Facts, shown: &Shown) -> Vec<(String, String)> {
         out.push(("Dimensions".into(), format!("{w} x {h} pixels")));
     }
     out.push(("Annotations".into(), annotation_summary(shown.marks)));
+    out.extend(annotation_rows(shown.marks));
     if shown.bookmarks > 0 {
         out.push(("Bookmarks".into(), shown.bookmarks.to_string()));
+    }
+    if shown.is_pdf {
+        out.push(("Security".into(), if shown.encrypted { "Password protected".into() } else { "None".into() }));
+        out.extend(shown.info.iter().map(|(label, value)| (label.to_string(), value.clone())));
     }
     out.extend(facts.exif.iter().map(|(label, value)| (label.to_string(), value.clone())));
     out
@@ -171,9 +212,31 @@ mod tests {
     }
 
     #[test]
+    fn each_mark_is_listed_with_its_page_and_text() {
+        let mut note = mark(MarkKind::Note);
+        note.page = 2;
+        note.text = "  check the total  ".into();
+        let mut highlight = mark(MarkKind::Highlight);
+        highlight.page = 0;
+        let rows = annotation_rows(&[highlight, note]);
+        assert_eq!(rows[0], ("Highlight".to_string(), "Page 1".to_string()));
+        assert_eq!(rows[1], ("Note".to_string(), "Page 3: check the total".to_string()));
+        assert!(annotation_rows(&[]).is_empty());
+    }
+
+    #[test]
+    fn the_inspector_rows_hold_the_markup_list_after_the_count() {
+        let marks = [mark(MarkKind::Underline)];
+        let shown = Shown { pages: 1, is_pdf: true, size: None, marks: &marks, bookmarks: 0, info: &[], encrypted: false };
+        let rows = super::rows(&Facts { name: "c.pdf".into(), kind: "PDF document", ..Facts::default() }, &shown);
+        let at = rows.iter().position(|(l, _)| l == "Annotations").unwrap();
+        assert_eq!(rows[at + 1], ("Underline".to_string(), "Page 1".to_string()));
+    }
+
+    #[test]
     fn rows_name_the_file_and_what_is_in_it() {
         let facts = Facts { name: "a.jpg".into(), kind: "JPEG image", bytes: 2048, exif: vec![("Camera", "Cam".into()), ("Location", "64.1466 N, 21.9426 W".into())] };
-        let picture = Shown { pages: 1, is_pdf: false, size: Some((40, 30)), marks: &[], bookmarks: 0 };
+        let picture = Shown { pages: 1, is_pdf: false, size: Some((40, 30)), marks: &[], bookmarks: 0, info: &[], encrypted: false };
         let rows = rows(&facts, &picture);
         let get = |label: &str| rows.iter().find(|(l, _)| l == label).map(|(_, v)| v.as_str());
         assert_eq!(get("Name"), Some("a.jpg"));
@@ -183,11 +246,20 @@ mod tests {
         assert_eq!(get("Annotations"), Some("None"));
         assert_eq!(get("Camera"), Some("Cam"));
         assert_eq!(location(&facts), Some("64.1466 N, 21.9426 W"));
-        let pdf = Shown { pages: 9, is_pdf: true, size: None, marks: &[], bookmarks: 2 };
+        let info = [("Title", "Notes".to_string())];
+        let pdf = Shown { pages: 9, is_pdf: true, size: None, marks: &[], bookmarks: 2, info: &info, encrypted: true };
         let rows = super::rows(&Facts { name: "b.pdf".into(), kind: "PDF document", ..Facts::default() }, &pdf);
         assert!(rows.contains(&("Pages".to_string(), "9".to_string())));
         assert!(rows.contains(&("Bookmarks".to_string(), "2".to_string())));
         assert!(rows.iter().all(|(l, _)| l != "File Size" && l != "Dimensions"));
+        assert!(rows.contains(&("Security".to_string(), "Password protected".to_string())));
+        assert!(rows.contains(&("Title".to_string(), "Notes".to_string())));
+    }
+
+    #[test]
+    fn pdf_text_strings_decode_utf16_and_latin() {
+        assert_eq!(pdf_text(b"Caf\xe9"), "Caf\u{e9}");
+        assert_eq!(pdf_text(&[0xFE, 0xFF, 0x00, 0x41, 0x00, 0xF0]), "A\u{f0}");
     }
 
     #[test]

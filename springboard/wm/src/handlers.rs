@@ -22,6 +22,7 @@ use smithay::{
     utils::Serial,
     wayland::{
         buffer::BufferHandler,
+        seat::WaylandFocus,
         compositor::{get_parent, is_sync_subsurface, with_states, CompositorClientState, CompositorHandler, CompositorState},
         output::OutputHandler,
         selection::{
@@ -29,7 +30,7 @@ use smithay::{
             SelectionHandler,
         },
         shell::{
-            wlr_layer::{Layer, LayerSurface as WlrLayerSurface, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
+            wlr_layer::{KeyboardInteractivity, Layer, LayerSurface as WlrLayerSurface, LayerSurfaceCachedState, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
             xdg::{PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
@@ -150,6 +151,25 @@ impl WmState {
         map.arrange();
         if !initial {
             layer.layer_surface().send_configure();
+        }
+        let ki = with_states(surface, |states| {
+            states.cached_state.get::<LayerSurfaceCachedState>().current().keyboard_interactivity
+        });
+        if ki == KeyboardInteractivity::Exclusive {
+            let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+            if let Some(keyboard) = self.seat.get_keyboard() {
+                if keyboard.current_focus().as_ref() != Some(surface) {
+                    keyboard.set_focus(self, Some(surface.clone()), serial);
+                }
+            }
+        } else if ki == KeyboardInteractivity::None {
+            if let Some(keyboard) = self.seat.get_keyboard() {
+                if keyboard.current_focus().as_ref() == Some(surface) {
+                    let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                    let top_surface = self.wm.focused().and_then(|id| self.window(id)).and_then(|w| w.wl_surface().map(|s| s.into_owned()));
+                    keyboard.set_focus(self, top_surface, serial);
+                }
+            }
         }
         drop(map);
         self.refresh_area();
@@ -333,6 +353,13 @@ impl WlrLayerShellHandler for WmState {
             let layer = map.layers().find(|l| l.layer_surface() == &surface).cloned();
             if let Some(layer) = layer {
                 map.unmap_layer(&layer);
+            }
+        }
+        if let Some(keyboard) = self.seat.get_keyboard() {
+            if keyboard.current_focus().as_ref() == Some(surface.wl_surface()) {
+                let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                let top_surface = self.wm.focused().and_then(|id| self.window(id)).and_then(|w| w.wl_surface().map(|s| s.into_owned()));
+                keyboard.set_focus(self, top_surface, serial);
             }
         }
         self.refresh_area();

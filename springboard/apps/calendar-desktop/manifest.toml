@@ -1,12 +1,35 @@
 id = "is.olibuijr.calendar.desktop"
 name = "Calendar"
-version = "1.13.0"
+version = "1.16.1"
 exec = "bifrost-calendar"
 icon = "icon.png"
 min_shell = "0.4.84"
-summary = "Month, week and day calendar with events, repeats and alerts."
+summary = "Month, week and day calendar with events, repeats, alerts, search, holidays and subscribed calendars."
 category = "Productivity"
+kind = "system-app"
 architecture = "x86_64-linux"
-permissions = ["storage", "notifications", "keychain", "documents"]
-keychain_groups = ["is.bifrost.passwords"]
+permissions = ["storage", "documents", "notifications"]
 window = "full-size"
+handles = ["public.calendar-event:default"]
+schemes = ["webcal", "webcals"]
+
+[[intent]]
+id = "show-date"
+title = "Show Date"
+description = "Opens the calendar on a date."
+shortcut = false
+params = ["date:date"]
+
+[[intent]]
+id = "show-event"
+title = "Show Event"
+description = "Opens an event on its day."
+shortcut = false
+params = ["event:entity(Event)"]
+
+[[intent]]
+id = "create-event"
+title = "Create Event"
+description = "Adds an event to the calendar."
+shortcut = false
+params = ["title:string", "start:date?", "minutes:int?", "location:string?", "notes:string?", "all_day:bool?"]

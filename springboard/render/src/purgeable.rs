@@ -214,7 +214,10 @@ pub fn on_memory_pressure(f: impl Fn(MemoryPressure) + Send + Sync + 'static) {
     start_watcher();
 }
 
-fn notify_pressure(level: MemoryPressure) {
+/// Delivers `level` as the watcher does: `warning` and `critical` purge the live caches, then every registered
+/// listener is called. A host that reads pressure itself (through `hosted_watcher`, or from its own source) calls
+/// this to report the event, and tests call it to drive listeners without the kernel.
+pub fn notify_pressure(level: MemoryPressure) {
     match level {
         MemoryPressure::Normal => {}
         MemoryPressure::Warning => {

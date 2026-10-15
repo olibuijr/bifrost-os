@@ -208,7 +208,7 @@ mod tests {
     #[test]
     fn newline_keeps_the_indentation_of_the_line_it_splits() {
         let mut b = Buffer::from_text("  if true; then echo yes");
-        b.place(0, 23);
+        b.place(0, 24);
         b.newline();
         assert_eq!(b.lines(), &["  if true; then echo yes".to_string(), "  ".to_string()]);
         assert_eq!((b.row(), b.col()), (1, 2));

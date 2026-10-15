@@ -14,26 +14,15 @@ use springboard::shell::clock::tz;
 use springboard::shell::ui::{Ui, Weight, WHITE};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
-use super::chrome::cal_colour;
 
-const GRID0: f32 = 192.0;
+pub(super) const GRID0: f32 = 192.0;
 /// Week view: the weekday names, the day badge and the day number (points below the top).
 const WEEKDAY_Y_PT: f32 = 150.0;
 const DAY_BADGE_Y_PT: f32 = 158.0;
 const DAY_NUM_Y_PT: f32 = 173.0;
 /// Year view: the top of the month grid.
 const YEAR_TOP_PT: f32 = 140.0;
-const ALLDAY_H: f32 = 28.0;
-/// The hour row's height in points at the default zoom; View > Zoom In / Out step it by `ZOOM_STEP` between the limits.
-pub(super) const HOUR_H: f32 = 48.0;
-const ZOOM_STEP: f32 = 12.0;
-const ZOOM_MIN: f32 = 24.0;
-const ZOOM_MAX: f32 = 96.0;
-
-/// The hour height after one zoom step (`dir` > 0 zooms in, < 0 out), kept between the limits.
-pub(super) fn zoomed(hour_h: f32, dir: i32) -> f32 {
-    (hour_h + ZOOM_STEP * dir.signum() as f32).clamp(ZOOM_MIN, ZOOM_MAX)
-}
+pub(super) const ALLDAY_H: f32 = 28.0;
 const GUTTER: f32 = 52.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,44 +66,47 @@ impl Calendar {
         matches!(self.view, View::Day | View::Week)
     }
 
-    /// Days shown as columns: the selected day, or its Sunday-first week.
-    fn view_days(&self) -> Vec<Date> {
+    /// Days shown as columns: the selected day, or its week (Sunday first, or Monday with the setting).
+    pub(super) fn view_days(&self) -> Vec<Date> {
         if self.view == View::Day {
             return vec![self.selected];
         }
-        let start = self.selected.shift_days(-(self.selected.weekday() as i32));
+        let start = self.week_start();
         (0..7).map(|i| start.shift_days(i)).collect()
     }
 
-    fn week_start(&self) -> Date {
-        self.selected.shift_days(-(self.selected.weekday() as i32))
+    /// The first day of the week the selected day is in.
+    pub(super) fn week_start(&self) -> Date {
+        self.week_of(self.selected)
+    }
+
+    /// The first day of the week `day` is in.
+    pub(super) fn week_of(&self, day: Date) -> Date {
+        day.shift_days(-(self.prefs.column(day.weekday()) as i32))
     }
 
     /// Scroll range of the hour grid.
     pub(super) fn time_scroll_max(&self, ui: &Ui) -> f32 {
-        ui.pt(GRID0 + ALLDAY_H + 24.0 * self.hour_h + 16.0) - self.bottom(ui)
+        ui.pt(GRID0 + ALLDAY_H + 24.0 * self.prefs.hour_h + 16.0) - self.bottom(ui)
     }
 
-    /// Initial offset showing the morning (8 AM) at the top.
+    /// Initial offset showing the start of the day (8 AM unless the setting says otherwise) at the top.
     pub(super) fn scroll_to_morning(&mut self, ui: &Ui) {
-        self.scroll.jump_to(ui.pt(8.0 * self.hour_h));
+        self.scroll.jump_to(ui.pt(self.prefs.day_start as f32 * self.prefs.hour_h));
     }
 
-    /// View > Zoom In / Zoom Out: changes the hour height and keeps the hour at the top of the grid where it was.
-    pub(super) fn zoom(&mut self, ui: &Ui, dir: i32) {
-        let next = zoomed(self.hour_h, dir);
-        if next == self.hour_h {
+    /// View > Zoom In / Zoom Out: changes the hour height one step and keeps the same time of day at the top of the grid.
+    pub(super) fn zoom_hours(&mut self, ui: &Ui, dir: i32) {
+        let old = self.prefs.hour_h;
+        let new = super::prefs::zoom(old, dir);
+        if new == old {
             return;
         }
-        let offset = self.scroll.offset() * next / self.hour_h;
-        self.hour_h = next;
-        self.scroll.set_max(self.time_scroll_max(ui));
-        self.scroll.jump_to(offset);
-    }
-
-    /// Whether another zoom step in `dir` is possible (the menu items dim at the limits).
-    pub(super) fn can_zoom(&self, dir: i32) -> bool {
-        self.time_view() && zoomed(self.hour_h, dir) != self.hour_h
+        let hours_at_top = self.scroll.offset() / ui.pt(old);
+        self.prefs.hour_h = new;
+        self.save_prefs();
+        self.fit_scroll(ui);
+        self.scroll.jump_to(hours_at_top * ui.pt(new));
     }
 
     /// Steps by the active view's unit.
@@ -127,35 +119,35 @@ impl Calendar {
         };
     }
 
-    fn col_geometry(&self, ui: &Ui) -> (f32, f32) {
+    pub(super) fn col_geometry(&self, ui: &Ui) -> (f32, f32) {
         let n = if self.view == View::Day { 1.0 } else { 7.0 };
         let gut = ui.pt(GUTTER);
         (gut, (self.w as f32 - gut - ui.pt(SPACE_S)) / n)
     }
 
+    /// The minutes a timed event fills in the grid: its saved travel time comes before its start (`extras.rs`).
+    pub(super) fn grid_span(&self, e: &CalendarEvent) -> (u32, u32) {
+        let travel = self.extras.events.get(&e.id).map_or(0, |x| u32::from(x.travel));
+        layout::travel_span(u32::from(e.minute), u32::from(e.duration), travel)
+    }
+
     /// Screen rectangles `(id, x, y, w, h)` of every event in the grid.
-    fn time_rects(&self, ui: &Ui) -> Vec<(u64, f32, f32, f32, f32)> {
+    pub(super) fn time_rects(&self, ui: &Ui) -> Vec<(u64, f32, f32, f32, f32)> {
         let (gut, col_w) = self.col_geometry(ui);
         let top = ui.pt(GRID0) - self.scroll.offset();
         let hours_top = top + ui.pt(ALLDAY_H);
-        let hh = ui.pt(self.hour_h);
+        let hh = ui.pt(self.prefs.hour_h);
         let mut out = vec![];
         for (i, d) in self.view_days().iter().enumerate() {
             let x0 = gut + col_w * i as f32;
-            let (all, timed): (Vec<&CalendarEvent>, Vec<&CalendarEvent>) = self
-                .events
-                .iter()
-                .filter(|e| e.occurs_on(*d))
-                .partition(|e| e.all_day);
+            let (all, timed): (Vec<&CalendarEvent>, Vec<&CalendarEvent>) =
+                self.shown_events().filter(|e| self.occurs(e, *d)).partition(|e| e.all_day);
             let spans: Vec<(u32, u32)> = all.iter().map(|_| (0, 1)).collect();
             for (e, slot) in all.iter().zip(layout::layout(&spans, 1)) {
                 let (x, w) = layout::slot_x(slot, x0, col_w, ui.pt(SPACE_XXS));
                 out.push((e.id, x, top + ui.pt(SPACE_XXS), w, ui.pt(ALLDAY_H - 4.0)));
             }
-            let spans: Vec<(u32, u32)> = timed
-                .iter()
-                .map(|e| (e.minute as u32, (e.minute as u32 + e.duration as u32).min(1440)))
-                .collect();
+            let spans: Vec<(u32, u32)> = timed.iter().map(|e| self.grid_span(e)).collect();
             for ((e, span), slot) in timed.iter().zip(&spans).zip(layout::layout(&spans, 30)) {
                 let (x, w) = layout::slot_x(slot, x0, col_w, ui.pt(SPACE_XXS));
                 let y = layout::minute_y(span.0 as f32, hours_top, hh);
@@ -244,7 +236,7 @@ impl Calendar {
         let off = self.scroll.offset();
         let top = ui.pt(GRID0) - off;
         let hours_top = top + ui.pt(ALLDAY_H);
-        let hh = ui.pt(self.hour_h);
+        let hh = ui.pt(self.prefs.hour_h);
         let rects = self.time_rects(ui);
         let c = tz::civil(self.wall.now(t), self.wall.offset);
         let now_min = c.hour * 60 + c.min;
@@ -273,16 +265,23 @@ impl Calendar {
                 }
             }
             let by_id: Vec<(u64, String, u16, bool)> = self
-                .events
-                .iter()
+                .shown_events()
                 .map(|e| (e.id, e.title.clone(), e.minute, e.all_day))
                 .collect();
+            // the event being moved is drawn at the pointer instead
+            let lifted = self.drag.and_then(|d| match d.kind {
+                super::drag::Kind::Move { id, .. } | super::drag::Kind::Resize { id, .. } => Some(id),
+                super::drag::Kind::Create { .. } => None,
+            });
             for (id, x, y, rw, rh) in rects {
+                if lifted == Some(id) {
+                    continue;
+                }
                 let Some((_, title, minute, all_day)) = by_id.iter().find(|e| e.0 == id) else {
                     continue;
                 };
                 g.fill_rrect(x, y, rw, rh, ui.pt(SPACE_XS), FIELD_BG.now());
-                g.fill_rrect(x, y, ui.pt(SPACE_XS), rh, ui.pt(SPACE_XS) / 2.0, cal_colour());
+                g.fill_rrect(x, y, ui.pt(SPACE_XS), rh, ui.pt(SPACE_XS) / 2.0, self.event_colour(id));
                 let text_w = rw - ui.pt(SPACE_M);
                 if text_w > ui.pt(SPACE_L) && rh >= ui.pt(SPACE_L) {
                     let fit = ui.fit(title, MAC_CAPTION1_PT, text_w);
@@ -293,6 +292,7 @@ impl Calendar {
                     }
                 }
             }
+            self.draw_drag(&mut g, ui, hours_top, hh, gut, col_w, &days);
             if let Some(i) = days.iter().position(|d| *d == self.today) {
                 if let Some(y) = layout::now_line_y(now_min, hours_top, hh) {
                     g.fill_rrect(gut + col_w * i as f32, y, col_w, ui.pt(1.5), 0.0, red());
@@ -317,7 +317,7 @@ impl Calendar {
             } else {
                 w / 7.0 * (i as f32 + 0.5)
             };
-            let name = &WEEKDAYS[i as usize][..3].to_uppercase();
+            let name = &WEEKDAYS[self.prefs.weekday_at(i as usize)][..3].to_uppercase();
             self.centre(s, ui, name, MAC_SUBHEAD_PT, Weight::Medium, LABEL_2.now(), cx, ui.pt(WEEKDAY_Y_PT));
             let sel = d == self.selected;
             let today = d == self.today;
@@ -369,8 +369,9 @@ impl Calendar {
             let mini_w = (cw - ui.pt(SPACE_L)) / 7.0;
             let mini_h = ((ch - ui.pt(36.0)) / 6.0).min(ui.pt(SPACE_XXL));
             for day in 1..=first.month_len() {
-                let col = (first.weekday() + day as usize - 1) % 7;
-                let row = (first.weekday() + day as usize - 1) / 7;
+                let lead = self.prefs.column(first.weekday());
+                let col = (lead + day as usize - 1) % 7;
+                let row = (lead + day as usize - 1) / 7;
                 let cx = x0 + ui.pt(SPACE_S) + mini_w * (col as f32 + 0.5);
                 let cy = y0 + ui.pt(36.0) + mini_h * (row as f32 + 0.5);
                 let is_today = current && day == self.today.day;
@@ -390,19 +391,5 @@ impl Calendar {
                 );
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod zoom_tests {
-    use super::*;
-
-    #[test]
-    fn zoom_steps_and_clamps() {
-        assert_eq!(zoomed(48.0, 1), 60.0);
-        assert_eq!(zoomed(48.0, -1), 36.0);
-        assert_eq!(zoomed(96.0, 1), 96.0);
-        assert_eq!(zoomed(24.0, -1), 24.0);
-        assert_eq!(zoomed(48.0, 0), 48.0);
     }
 }

@@ -208,6 +208,95 @@ impl Interaction {
     }
 }
 
+/// Finds one subject against a plain backdrop, as a colour key. The background colour is the per-channel median
+/// of the border pixels. A pixel whose largest channel difference from it is above `tolerance` is subject. Only the
+/// largest 4-connected region of subject pixels is kept, so specks of noise drop out. The mask is fully opaque on
+/// the subject and fully transparent elsewhere. `None` when no pixel differs from the background.
+///
+/// A segmentation model handles busy scenes; this key only handles a backdrop that is close to uniform.
+pub fn segment_background(image: &Rgba, tolerance: u8) -> Option<Mask> {
+    let (w, h) = (image.width, image.height);
+    let background = border_median(image);
+    let differs: Vec<bool> = image
+        .pixels
+        .chunks_exact(4)
+        .map(|p| p[..3].iter().zip(background.iter()).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0) > tolerance)
+        .collect();
+    let region = largest_region(&differs, w, h)?;
+    let alpha = region.into_iter().map(|k| if k { 255 } else { 0 }).collect();
+    Mask::new(w, h, alpha)
+}
+
+/// The per-channel median of the pixels on the image border.
+fn border_median(image: &Rgba) -> [u8; 3] {
+    let (w, h) = (image.width, image.height);
+    let mut channels: [Vec<u8>; 3] = Default::default();
+    for y in 0..h {
+        for x in 0..w {
+            if x == 0 || y == 0 || x == w - 1 || y == h - 1 {
+                let i = (y * w + x) * 4;
+                for (c, values) in channels.iter_mut().enumerate() {
+                    values.push(image.pixels[i + c]);
+                }
+            }
+        }
+    }
+    let mut out = [0u8; 3];
+    for (c, values) in channels.iter_mut().enumerate() {
+        values.sort_unstable();
+        out[c] = values[values.len() / 2];
+    }
+    out
+}
+
+/// The cells of the largest 4-connected region of `set` (a `w` x `h` grid, row-major), or `None` when no cell is set.
+fn largest_region(set: &[bool], w: usize, h: usize) -> Option<Vec<bool>> {
+    let mut seen = vec![false; set.len()];
+    let mut best: Vec<usize> = Vec::new();
+    for start in 0..set.len() {
+        if !set[start] || seen[start] {
+            continue;
+        }
+        seen[start] = true;
+        let mut region = Vec::new();
+        let mut stack = vec![start];
+        while let Some(i) = stack.pop() {
+            region.push(i);
+            let (x, y) = (i % w, i / w);
+            let mut neighbours = Vec::with_capacity(4);
+            if x > 0 {
+                neighbours.push(i - 1);
+            }
+            if x + 1 < w {
+                neighbours.push(i + 1);
+            }
+            if y > 0 {
+                neighbours.push(i - w);
+            }
+            if y + 1 < h {
+                neighbours.push(i + w);
+            }
+            for j in neighbours {
+                if set[j] && !seen[j] {
+                    seen[j] = true;
+                    stack.push(j);
+                }
+            }
+        }
+        if region.len() > best.len() {
+            best = region;
+        }
+    }
+    if best.is_empty() {
+        return None;
+    }
+    let mut keep = vec![false; set.len()];
+    for i in best {
+        keep[i] = true;
+    }
+    Some(keep)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

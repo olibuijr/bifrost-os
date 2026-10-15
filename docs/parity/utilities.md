@@ -41,7 +41,7 @@ links, devices and unsafe member paths and reports how many it skipped; the shar
 the copy would change that safety behaviour, so it is left for a reviewed change. Candidate follow-up: move the skip
 reporting into the shared module, then delete `archive.rs`'s tar code.
 
-## System Information (`apps/sysinfo-desktop`, now 0.5.0; `core/src/sysinfo.rs`, `apps/sysinfo-desktop/src/probe.rs`)
+## System Information (`apps/sysinfo-desktop`, now 0.6.0; `core/src/sysinfo.rs`, `apps/sysinfo-desktop/src/probe.rs`)
 
 | Reference feature | BifrOSt path | State |
 |---|---|---|
@@ -60,6 +60,13 @@ reporting into the shared module, then delete `archive.rs`'s tar code.
 | Speak Serial Number | `window.rs` `speech_for_serial`, `main.rs` | Done in 0.5.0 through the announcement call, so it is spoken only while the screen reader is on |
 | Preparing system profile sheet | `window.rs` `start_load`, `poll_load`, `draw.rs` `paint_loading` | Done in 0.5.0 (worker thread, Cancel) |
 | Foldable, scrolling sidebar; toolbar search field; Window menu | `window.rs`, `draw.rs`, `main.rs` | Done in 0.5.0 |
+| Use Selection for Find, Jump to Selection (Edit menu) | `main.rs` menu, `window.rs` `use_selection_for_find`, `jump_to_selection` | Done in 0.6.0 |
+| Item list column headers and sorting; the pick survives a sort and a refresh | `window.rs` `sort_by`, `restore_pick`; `draw.rs` `paint_list_head` | Done in 0.6.0. The USB tree keeps bus order |
+| Processor clock per core, performance and efficiency cores | `probe.rs` `read_core_clocks`, `read_core_kinds` | Done in 0.6.0 (cpufreq; `devices/cpu_core` and `cpu_capacity`) |
+| Display refresh rate and scale | `main.rs` `service_reply`, `extras.rs` `ScreenFacts`, `model.rs` `display_item` | Done in 0.6.0 through the display service; matched to a connector by name |
+| Card Reader, Controller, SAS, Fibre Channel, Disc Burning, Diagnostics | `probe.rs` readers (`read_card_readers`, `read_scsi_hosts`, `read_sas_phys`, `read_fc_ports`, `read_optical_drives`, `read_diagnostics`) | Done in 0.6.0 |
+| Installations (package log), Printer Software (PPDs) | `probe.rs` `read_installations`, `read_printer_drivers` | Done in 0.6.0. Installations reads the pacman log |
+| Still open: Wi-Fi SSID and channel, SMART health, DMI slots without root, signed-package state, Preference Panes, Accessibility, Developer, Frameworks, Profiles, Sync Services, Locations, firewall rules, shift range selection, .spx report, speech without the screen reader, document types, in-shell help viewer | see the matrix rows in `docs/parity-matrix/apps/system-information.json` | Not built; each row says why |
 
 ## Shared-file edits
 

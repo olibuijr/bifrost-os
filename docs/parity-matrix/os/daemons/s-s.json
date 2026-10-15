@@ -20,9 +20,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   }
  ]
 }

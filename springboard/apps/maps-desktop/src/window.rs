@@ -6,7 +6,7 @@
 use crate::loader::TileLoader;
 use crate::net::Net;
 use crate::route::{self, Route};
-use crate::source::{MapType, TRAFFIC_MAX_AGE};
+use crate::source::{MapType, LABELS_MAX_AGE, TRAFFIC_MAX_AGE};
 use crate::state::{Act, Effect, Here, Maps, Panel};
 use crate::tiles::{TileId, TILE_SIZE};
 use crate::units::{metres_per_pt, scale_bar};
@@ -203,6 +203,9 @@ pub struct Window {
     scaled_traffic: HashMap<(TileId, usize), Image>,
     /// whether the traffic layer was on at the last tick, to ask for tiles again when it is switched on
     traffic_on: bool,
+    /// the place names drawn over the imagery in the Hybrid map type
+    map_labels: Option<TileLoader>,
+    scaled_map_labels: HashMap<(TileId, usize), Image>,
     loc: LocationManager,
     loc_calls: Vec<(u32, LocCall)>,
     /// the person is allowed to share their location with the app
@@ -212,6 +215,15 @@ pub struct Window {
     /// while the Allow sheet is up: when to stop waiting, and when to look at the permission next
     allow_until: Option<f64>,
     next_status_poll: f64,
+    /// fingers down on the map, by touch id, in pt; two of them pinch the map
+    fingers: Vec<(u32, (f32, f32))>,
+    /// the distance between the first two fingers at the last pinch step, in pt
+    pinch: Option<f32>,
+}
+
+/// The distance between two points.
+fn spread(a: (f32, f32), b: (f32, f32)) -> f32 {
+    ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
 }
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> KRect {
@@ -237,6 +249,7 @@ impl Window {
         let maps = Maps::new(&root, version, (w as f32 / pt) as f64, (h as f32 / pt) as f64);
         let loader = TileLoader::new(&root, maps.map_type.source(version), net.clone());
         let traffic = maps.traffic_source().cloned().map(|source| TileLoader::overlay(&root, source, net.clone(), TRAFFIC_MAX_AGE));
+        let map_labels = maps.map_type.labels_source(version).map(|source| TileLoader::overlay(&root, source, net.clone(), LABELS_MAX_AGE));
         Window {
             maps,
             loader,
@@ -258,12 +271,16 @@ impl Window {
             traffic,
             scaled_traffic: HashMap::new(),
             traffic_on: false,
+            map_labels,
+            scaled_map_labels: HashMap::new(),
             loc: LocationManager::new(),
             loc_calls: Vec::new(),
             granted: false,
             tracking: false,
             allow_until: None,
             next_status_poll: 0.0,
+            fingers: Vec::new(),
+            pinch: None,
         }
     }
 
@@ -580,6 +597,14 @@ impl Window {
                     v.push(Item::Gap(4.0));
                     v.push(Item::Buttons(vec![("Download".into(), Act::StartDownload, false), ("Done".into(), Act::ClosePanel, false)]));
                 }
+                if !m.areas.list.is_empty() {
+                    v.push(Item::Rule);
+                    v.push(Item::Sub("Saved for offline use".into()));
+                    for (i, a) in m.areas.list.iter().enumerate() {
+                        v.push(Item::Line(a.line()));
+                        v.push(Item::Buttons(vec![("Delete".into(), Act::DeleteArea(i), false)]));
+                    }
+                }
             }
         }
         v
@@ -702,6 +727,31 @@ impl Window {
         true
     }
 
+    /// The map as the loaded tiles show it, for printing. None while no tile has loaded.
+    fn map_picture(&self) -> Option<bifrost_app::print::PageImage> {
+        let (_, scale) = crate::tiles::tile_level(self.maps.view.zoom());
+        let side = TILE_SIZE * scale;
+        let tiles: Vec<(f64, f64, &bifrost_app::kit::Image)> =
+            self.maps.view.tiles().into_iter().filter_map(|(id, x, y)| self.loader.image(id).map(|img| (x, y, img))).collect();
+        if tiles.is_empty() {
+            return None;
+        }
+        let (w, h) = self.maps.view.size();
+        let mut picture = crate::printmap::draw_tiles(&tiles, side, w, h);
+        let view = self.maps.view;
+        // the route and the pins as the map shows them: the followed route while the directions card is open
+        if matches!(self.maps.panel, Panel::Directions | Panel::Navigation) {
+            if let Some(r) = self.maps.current_route() {
+                let line: Vec<(f64, f64)> = r.geometry.iter().map(|&(la, lo)| view.to_screen(la, lo)).collect();
+                crate::printmap::draw_line(&mut picture, &line, 5.0, [0x1e, 0x6b, 0x8a]);
+            }
+        }
+        for (_, x, y) in self.maps.pins.visible(&view) {
+            crate::printmap::draw_dot(&mut picture, x, y, 4.0, [0xd0, 0x30, 0x30]);
+        }
+        Some(picture)
+    }
+
     fn to_map_pt(&self, x: f32, y: f32) -> (f32, f32) {
         let m = self.map_rect();
         (x - m.x, y - m.y)
@@ -711,7 +761,14 @@ impl Window {
         self.maps.pins.visible(&self.maps.view).into_iter().rev().find(|&(_, x, y)| (x as f32 - mx).abs() < 14.0 && (y as f32 - 9.0 - my).abs() < 16.0).map(|(i, _, _)| i)
     }
 
+    /// A pointer or touch event with no finger id (a mouse, or one finger).
     pub fn touch(&mut self, ctx: &Ctx, ui: &Ui, kind: bifrost_app::TouchKind, px: f32, py: f32, t: f64) {
+        self.finger(ctx, ui, 0, kind, px, py, t);
+    }
+
+    /// A touch event for finger `id`. Two fingers on the map pinch the map: the zoom follows the change in the distance
+    /// between them, anchored at their midpoint.
+    pub fn finger(&mut self, ctx: &Ctx, ui: &Ui, id: u32, kind: bifrost_app::TouchKind, px: f32, py: f32, t: f64) {
         use bifrost_app::TouchKind::*;
         self.pt_px = ui.pt(1.0).max(0.01);
         let (x, y) = (px / self.pt(), py / self.pt());
@@ -733,14 +790,37 @@ impl Window {
                         self.focused = false;
                         let card_h = self.card_height();
                         let in_card = card_h > 0.0 && self.card_rect(card_h).contains(x, y);
-                        if in_card || self.map_rect().contains(x, y) {
+                        if !in_card && self.map_rect().contains(x, y) {
+                            self.fingers.retain(|f| f.0 != id);
+                            self.fingers.push((id, (x, y)));
+                            if self.fingers.len() >= 2 {
+                                // a second finger turns the drag into a pinch
+                                self.drag = None;
+                                self.pinch = Some(spread(self.fingers[0].1, self.fingers[1].1));
+                                self.last_tap = None;
+                            } else {
+                                self.drag = Some(Drag { start: (x, y), last: (x, y), moved: false, in_card });
+                            }
+                        } else if in_card {
                             self.drag = Some(Drag { start: (x, y), last: (x, y), moved: false, in_card });
                         }
                     }
                 }
             }
             Move => {
-                if let Some(d) = &mut self.drag {
+                if let Some(f) = self.fingers.iter_mut().find(|f| f.0 == id) {
+                    f.1 = (x, y);
+                }
+                if let (Some(last), true) = (self.pinch, self.fingers.len() >= 2) {
+                    let (a, b) = (self.fingers[0].1, self.fingers[1].1);
+                    let now = spread(a, b);
+                    if last > 0.0 && now > 0.0 {
+                        let (mx, my) = self.to_map_pt((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+                        self.maps.view.zoom_at(f64::from(now / last), f64::from(mx), f64::from(my));
+                        self.maps.touch_settings();
+                    }
+                    self.pinch = Some(now);
+                } else if let Some(d) = &mut self.drag {
                     let dist = ((x - d.start.0).powi(2) + (y - d.start.1).powi(2)).sqrt();
                     if dist > TAP_SLOP_PT {
                         d.moved = true;
@@ -758,6 +838,18 @@ impl Window {
                 }
             }
             Up | Cancel => {
+                self.fingers.retain(|f| f.0 != id);
+                if self.pinch.is_some() {
+                    // the pinch ends with the first lifted finger; the one left does not pan until it is lifted
+                    if self.fingers.len() < 2 {
+                        self.pinch = None;
+                    }
+                    if self.fingers.is_empty() {
+                        self.drag = None;
+                    }
+                    self.maps.persist();
+                    return;
+                }
                 if let Some(id) = self.pressed.take() {
                     if kind == Up {
                         if let Some(b) = self.buttons(ui).into_iter().find(|b| b.id == id) {
@@ -956,8 +1048,13 @@ impl Window {
                     self.share_request = Some(bifrost_app::share::show_picker(ctx, &[bifrost_app::share::Payload::Url(link)], anchor));
                 }
                 Effect::Print { title, text } => {
+                    // the map as it is on screen goes first, then the text (the place or the steps)
+                    let picture = self.map_picture();
                     self.spawn(move || {
-                        let result = bifrost_app::print::PrintOperation::text(title, text).run().map_err(|e| match e {
+                        let info = bifrost_app::print::PrintInfo::default();
+                        let pages = crate::printmap::job_pages(picture, &text, &info);
+                        let op = bifrost_app::print::PrintOperation::pages(title, pages, vec!["Helvetica"]);
+                        let result = op.run().map_err(|e| match e {
                             bifrost_app::print::PrintError::NoCups => "no print service is running".to_string(),
                             bifrost_app::print::PrintError::NoPrinter => "no printer is set up".to_string(),
                             bifrost_app::print::PrintError::Failed(m) => m,
@@ -973,6 +1070,13 @@ impl Window {
                     let root = self.maps.root().to_path_buf();
                     self.loader.switch_source(&root, self.maps.map_type.source(self.maps.version()));
                     self.scaled.clear();
+                    // a map type with a labels layer (Hybrid) gets one; the others drop it
+                    self.map_labels = self
+                        .maps
+                        .map_type
+                        .labels_source(self.maps.version())
+                        .map(|source| TileLoader::overlay(&root, source, self.net.clone(), LABELS_MAX_AGE));
+                    self.scaled_map_labels.clear();
                 }
                 Effect::StartDownload(tiles) => self.loader.start_download(tiles),
                 Effect::CancelDownload => self.loader.cancel_download(),
@@ -1116,6 +1220,9 @@ impl Window {
         if let Some(t) = &mut self.traffic {
             t.set_online(online);
         }
+        if let Some(t) = &mut self.map_labels {
+            t.set_online(online);
+        }
     }
 
     /// Applies finished work and starts what is due. True when a frame is needed.
@@ -1167,6 +1274,10 @@ impl Window {
                 changed |= layer.want(&wanted);
                 changed |= layer.pump();
             }
+        }
+        if let Some(layer) = &mut self.map_labels {
+            changed |= layer.want(&wanted);
+            changed |= layer.pump();
         }
         if let Some(p) = self.loader.download_progress() {
             if self.maps.progress != Some(p) {
@@ -1294,6 +1405,14 @@ impl Window {
                 }
             }
         }
+        // the place names of the Hybrid map type, over the imagery
+        if let Some(layer) = &self.map_labels {
+            for &(id, tx, ty) in &tiles {
+                let (x, y) = ((tx as f32 * p).round() as i32, (ty as f32 * p).round() as i32 + oy as i32);
+                let Some(img) = layer.image(id) else { continue };
+                blit_tile(&mut c, &mut self.scaled_map_labels, id, img, x, y, tile_px);
+            }
+        }
         // overlays: tracks, the route, the measurement, then markers
         let view = self.maps.view;
         let to_px = |lat: f64, lon: f64| {
@@ -1366,7 +1485,7 @@ impl Window {
             let (x, y) = to_px(h.lat, h.lon);
             let ring = (h.accuracy_m / metres_per_pt(h.lat, zoom).max(1e-9)) as f32 * p;
             if ring > ui.pt(14.0) {
-                let ring = ring.min(ui.pt(2000.0));
+                let ring = ring.min(c.w.max(c.h) as f32);
                 c.stroke_rrect(x - ring, y - ring, 2.0 * ring, 2.0 * ring, ring, 1.0, LINK);
             }
             Self::dot(&mut c, x, y, ui.pt(9.0), WHITE);
@@ -1605,6 +1724,26 @@ mod tests {
     }
 
     #[test]
+    fn two_fingers_pinch_the_map_and_lifting_them_is_not_a_tap() {
+        let (mut w, ui, ctx) = window("pinch", 1200, 780);
+        let z = w.maps.view.zoom();
+        w.finger(&ctx, &ui, 1, TouchKind::Down, 500.0, 400.0, 1000.0);
+        w.finger(&ctx, &ui, 2, TouchKind::Down, 600.0, 400.0, 1001.0);
+        // the fingers move apart from 100 to 200 pixels: twice the distance is one zoom level
+        w.finger(&ctx, &ui, 2, TouchKind::Move, 700.0, 400.0, 1010.0);
+        assert!((w.maps.view.zoom() - (z + 1.0)).abs() < 0.01, "zoom {}", w.maps.view.zoom());
+        w.finger(&ctx, &ui, 1, TouchKind::Up, 500.0, 400.0, 1020.0);
+        w.finger(&ctx, &ui, 2, TouchKind::Up, 700.0, 400.0, 1030.0);
+        assert!(w.fingers.is_empty() && w.pinch.is_none());
+        assert!(w.maps.selected.is_none(), "a pinch does not drop a selection");
+        // a single finger after the pinch pans the map again
+        let centre = w.maps.view.centre();
+        w.finger(&ctx, &ui, 3, TouchKind::Down, 500.0, 400.0, 1100.0);
+        w.finger(&ctx, &ui, 3, TouchKind::Move, 400.0, 300.0, 1110.0);
+        assert_ne!(w.maps.view.centre(), centre, "one finger pans");
+    }
+
+    #[test]
     fn a_double_click_zooms_in_at_the_pointer() {
         let (mut w, ui, ctx) = window("double", 1200, 780);
         let z = w.maps.view.zoom();
@@ -1818,7 +1957,7 @@ mod tests {
 
     /// 1000 m north of (64, -21), a right turn, 1000 m east.
     fn l_route() -> Route {
-        let b = (64.0 + 1000.0 / 111_194.9, -21.0);
+        let b: (f64, f64) = (64.0 + 1000.0 / 111_194.9, -21.0);
         let c = (b.0, b.1 + 1000.0 / (111_194.9 * b.0.to_radians().cos()));
         let step = |name: &str, maneuver: &str, distance_m: f64| route::Step { name: name.into(), maneuver: maneuver.into(), distance_m };
         Route {

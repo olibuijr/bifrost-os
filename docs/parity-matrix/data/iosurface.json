@@ -10,16 +10,16 @@
     {
       "feature": "Cross-process shared framebuffers",
       "apple": "IOSurface, IOSurfaceRef, IOSurfaceCreate",
-      "bifrost": "springboard/proto/src/sys.rs (shm_create, memfd with ashmem fallback)",
-      "status": "os",
-      "note": "memfd shared memory exists in the proto layer; no app-facing SDK type wraps it"
+      "bifrost": "springboard/proto/src/sys.rs (shm_create, shm_len, shm_resize)",
+      "status": "partial",
+      "note": "memfd shared memory (ashmem fallback) is created, sized and resized, and tested headless in springboard/proto/tests/parity_sdk-os-05.rs. Gap: no app-facing SDK type wraps a shared file, and it is not a texture or framebuffer."
     },
     {
       "feature": "Passing a buffer to another process",
       "apple": "IOSurfaceCreateMachPort, IOSurfaceLookupFromMachPort, IOSurfaceCreateXPCObject",
-      "bifrost": "springboard/proto/src/sys.rs (socketpair_pair, SCM_RIGHTS); springboard/src/shell/apphost.rs:437 (sends one descriptor)",
-      "status": "os",
-      "note": "Linux fd passing over SOCK_SEQPACKET replaces Mach ports; used by the shell, not exposed to apps"
+      "bifrost": "springboard/sdk/src/buffer_handoff.rs (SharedBuffer, send_buffer, receive_buffer); springboard/proto/src/sys.rs (socketpair_pair, SCM_RIGHTS); springboard/src/shell/apphost.rs:437 (sends one descriptor)",
+      "status": "partial",
+      "note": "An app sends a shared buffer as one descriptor over a connected channel, and the receiver maps the same memory; empty, oversized, descriptor-less, extra-descriptor and closed-peer cases are typed errors, tested headless in sdk/tests/parity_sdk-rest-10.rs. Gap: the shell does not yet relay a buffer between two apps, and there is no lookup by ID, so this needs Midget with two running apps."
     },
     {
       "feature": "Global buffer lookup by ID",
@@ -33,7 +33,7 @@
       "apple": "IOSurface as a texture or framebuffer for Metal and Core Animation",
       "bifrost": "springboard/src/bare/wayland.rs (DmaBuf wl_buffer, dmabuf_formats); springboard/src/gpu/desktop.rs:74 (GBM buffer exported as dma-buf)",
       "status": "os",
-      "note": "compositor-side only; the triage note that zero-copy from a GPU context is a follow-up is confirmed at docs/bifrost-ui.md:767"
+      "note": "Stays os. The GBM buffer is allocated and exported as a dma-buf inside the shell (springboard/src/gpu/desktop.rs, Bo), and the Wayland import is made by the shell's presenter, with the formats and modifiers it advertises. Blocker for an app-facing type: the SDK has no GPU buffer allocator or import call, although the app sandbox already grants /dev/dri (springboard/src/bare/app_policy.rs); the zero-copy follow-up is at docs/bifrost-ui.md:767"
     },
     {
       "feature": "Pixel format, stride and plane layout",
@@ -45,9 +45,9 @@
     {
       "feature": "Multi-plane video buffers",
       "apple": "IOSurfaceGetPlaneCount, IOSurfaceGetWidthOfPlane, kIOSurfacePlaneBase",
-      "bifrost": "springboard/src/media/mod.rs:134 (DmaPicture: stride, uv_offset, crop); springboard/src/media/v4l2.rs:170 (FOURCC list)",
-      "status": "os",
-      "note": "hardware decode path only; apps do not receive planes"
+      "bifrost": "springboard/ui/src/surface_layout.rs (SurfaceLayout::new, Plane); springboard/src/media/mod.rs:134 (DmaPicture: stride, uv_offset, crop)",
+      "status": "partial",
+      "note": "Plane count, width, height, row stride and offset for packed, NV12 and I420 buffers are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the decode path does not use this model, and apps do not receive decoded planes."
     },
     {
       "feature": "CPU lock and unlock of buffer memory",
@@ -73,9 +73,9 @@
     {
       "feature": "Purgeable buffer memory",
       "apple": "IOSurfaceSetPurgeable, IOSurfacePurgeabilityState",
-      "bifrost": "springboard/render/src/purgeable.rs (cache with memory-pressure eviction, docs/bifrost-ui.md NSCache section)",
+      "bifrost": "springboard/render/src/purgeable.rs (Cache, purge_all, MemoryPressure)",
       "status": "partial",
-      "note": "purgeability exists for caches, not for surface buffers"
+      "note": "Cost-bounded caches that drop the oldest entries are tested in render/tests/parity_sdk-tests-19.rs (purgeable::Cache: count and cost limits, purge, clones). Gap: no surface buffer is purgeable, and purge_all and the pressure watcher are covered only by in-module tests."
     },
     {
       "feature": "Surface attribute dictionary",

@@ -122,20 +122,35 @@ pub struct Row {
     pub summary: Summary,
 }
 
-/// One line of a sheet. `hint` shows while the value is empty; `secret` hides the value.
+/// One line of a sheet. `hint` shows while the value is empty; `secret` hides the value. A `choice` field takes no typed
+/// text: a click turns its value between `yes` and `no`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
     pub label: &'static str,
     pub hint: &'static str,
     pub value: String,
     pub secret: bool,
+    pub choice: bool,
 }
 
 impl Field {
     pub fn new(label: &'static str, hint: &'static str, value: &str) -> Field {
-        Field { label, hint, value: value.to_string(), secret: false }
+        Field { label, hint, value: value.to_string(), secret: false, choice: false }
+    }
+
+    /// A yes or no field, shown as `yes` or `no`.
+    pub fn yes_no(label: &'static str, on: bool) -> Field {
+        Field { choice: true, ..Field::new(label, "Click to change", if on { "yes" } else { "no" }) }
     }
 }
+
+/// The reading of a yes or no field: `yes` is true, anything else false.
+pub fn is_yes(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("yes")
+}
+
+/// Most matches Open Quickly lists under its field.
+pub const MAX_CHOICES: usize = 8;
 
 /// The fields of a sheet and the one that takes typed text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -925,24 +940,62 @@ impl Mail {
     /// A compose sheet: empty for a new message, or the reply to `reply`, with the original's sender as recipient.
     /// The cursor goes to the recipient field when there is none yet, otherwise to the message body.
     pub fn open_compose(&mut self, reply: Option<&Summary>) {
-        let from = self.current().map(|a| a.email.clone()).unwrap_or_default();
         let draft = match reply {
-            Some(original) => message::reply_draft(original, &from),
-            None => Draft { from, ..Draft::default() },
+            Some(original) => message::reply_draft(original, &self.sent_from(original)),
+            None => Draft { from: self.current().map(|a| a.email.clone()).unwrap_or_default(), ..Draft::default() },
         };
         self.open_draft(draft);
     }
 
+    /// Message > Reply: a reply to `original`. With `quoted` (the readable text of the original, when the setting asks
+    /// for quotes) the body starts with an attribution line and the quoted text.
+    pub fn open_reply(&mut self, original: &Summary, quoted: Option<&str>) {
+        let mut draft = message::reply_draft(original, &self.sent_from(original));
+        if let Some(text) = quoted {
+            draft.body = format!("\n\nOn {}, {} wrote:\n{}", original.date, sender_name(&original.from), message::quote_text(text));
+        }
+        self.open_draft(draft);
+    }
+
+    /// The address a reply is sent from: the one the original was addressed to when the account has it (an alias), and
+    /// the account's own address otherwise.
+    pub fn sent_from(&self, original: &Summary) -> String {
+        let own = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        let addressed: Vec<String> = message::split_addresses(&original.to)
+            .into_iter()
+            .chain(message::split_addresses(&original.cc))
+            .map(|entry| message::address_of(&entry).to_ascii_lowercase())
+            .collect();
+        self.from_choices().into_iter().find(|choice| addressed.contains(&choice.to_ascii_lowercase())).unwrap_or(own)
+    }
+
+    /// True when the reply to `original` would reach more people than its sender: another address in To or Cc, other
+    /// than the user's own. Reply All is only offered then.
+    pub fn has_other_recipients(&self, original: &Summary) -> bool {
+        let own = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        let all = message::reply_all_draft(original, &own);
+        all.to.len() + all.cc.len() > message::reply_draft(original, &own).to.len()
+    }
+
     /// Reply All: the sender and the other recipients of `original`, minus the user's own address.
     pub fn open_reply_all(&mut self, original: &Summary) {
-        let own = self.current().map(|a| a.email.clone()).unwrap_or_default();
-        self.open_draft(message::reply_all_draft(original, &own));
+        let from = self.sent_from(original);
+        let draft = message::reply_all_draft(original, &from);
+        self.open_draft(draft);
     }
 
     /// Forward: `text` (the decoded body of `original`) quoted under a `Fwd:` subject.
     pub fn open_forward(&mut self, original: &Summary, text: &str) {
+        self.open_forward_with(original, text, Vec::new());
+    }
+
+    /// Forward with the files of the original (Message > Forward): they go along as attachments, within the limits of a
+    /// message. A file that would pass a limit is left out.
+    pub fn open_forward_with(&mut self, original: &Summary, text: &str, files: Vec<Attachment>) {
         let own = self.current().map(|a| a.email.clone()).unwrap_or_default();
-        self.open_draft(message::forward_draft(original, &own, text));
+        let mut draft = message::forward_draft(original, &own, text);
+        draft.attachments = within_limits(files);
+        self.open_draft(draft);
     }
 
     /// A compose sheet that starts from `draft`. Cc, Bcc and Reply-To are shown when the View menu asks for them or
@@ -1172,6 +1225,13 @@ impl Mail {
         Ok(())
     }
 
+    /// True when message `uid` has a reminder waiting in the queue for the shown account.
+    pub fn has_reminder(&self, uid: u32) -> bool {
+        let Some(message_id) = self.row(uid).and_then(|r| r.summary.message_id.as_deref()) else { return false };
+        let Some(account) = self.current().map(|a| a.id.as_str()) else { return false };
+        self.queue.reminders.iter().any(|r| r.account == account && r.message_id == message_id)
+    }
+
     /// Message > Redirect: asks who should get the open message.
     pub fn open_redirect(&mut self) {
         self.open_prompt(PromptKind::Redirect, vec![Field::new("To", "name@example.com, other@example.com", "")]);
@@ -1214,6 +1274,9 @@ impl Mail {
                 Field::new("Signature", "Added to the end of new messages", &signature),
                 Field::new("Other addresses", "info@example.com, ana@example.org", &aliases),
                 Field::new("Undo send (seconds)", "0 sends at once", &delay),
+                Field::yes_no("Quote the original in replies", self.prefs.quote_replies),
+                Field::yes_no("Plain text messages only", self.prefs.plain_text),
+                Field::yes_no("Bold unread messages", self.prefs.bold_unread),
             ],
         );
         Ok(())
@@ -1313,6 +1376,16 @@ impl Mail {
         self.prefs.set_signature(&id, form.value("Signature"));
         self.prefs.set_aliases(&id, aliases);
         self.prefs.undo_delay = delay;
+        // a form from before the toggles (or one without them) keeps the settings as they are
+        if form.fields.iter().any(|f| f.label == "Quote the original in replies") {
+            self.prefs.quote_replies = is_yes(form.value("Quote the original in replies"));
+        }
+        if form.fields.iter().any(|f| f.label == "Plain text messages only") {
+            self.prefs.plain_text = is_yes(form.value("Plain text messages only"));
+        }
+        if form.fields.iter().any(|f| f.label == "Bold unread messages") {
+            self.prefs.bold_unread = is_yes(form.value("Bold unread messages"));
+        }
         Ok(())
     }
 
@@ -1402,7 +1475,7 @@ impl Mail {
             in_reply_to: compose.in_reply_to.clone(),
             references: compose.references.clone(),
             attachments: compose.attachments.clone(),
-            html: richtext::html_body(compose.message(), &compose.styles, &compose.signature),
+            html: if self.prefs.plain_text { None } else { richtext::html_body(compose.message(), &compose.styles, &compose.signature) },
         })
     }
 
@@ -1413,6 +1486,31 @@ impl Mail {
         self.accounts.push(account);
         self.show_account(self.accounts.len() - 1);
     }
+}
+
+/// The name in a `Name <address>` value, or the address when there is no name (the attribution line of a quoted reply).
+fn sender_name(from: &str) -> String {
+    let name = from.split('<').next().unwrap_or("").trim().trim_matches('"').trim();
+    if name.is_empty() {
+        message::address_of(from).to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+/// The files that fit a new message, in order: at most [`MAX_ATTACHMENTS`] of them and [`MAX_ATTACHMENT_BYTES`] in all.
+/// A file that would pass either limit, and every file after it, is left out.
+pub fn within_limits(files: Vec<Attachment>) -> Vec<Attachment> {
+    let mut kept = Vec::new();
+    let mut bytes = 0;
+    for file in files {
+        if kept.len() >= MAX_ATTACHMENTS || bytes + file.bytes.len() > MAX_ATTACHMENT_BYTES {
+            break;
+        }
+        bytes += file.bytes.len();
+        kept.push(file);
+    }
+    kept
 }
 
 /// Builds the mail account a setup form describes, with `id`. Hosts and ports fall back to the domain's `imap.` and `smtp.`
@@ -2212,6 +2310,66 @@ mod tests {
         assert!(mail.apply_settings(&filled(form.clone(), &[("Undo send (seconds)", "soon")])).unwrap_err().contains("number of seconds"));
         assert!(mail.apply_settings(&filled(form, &[("Undo send (seconds)", "31")])).unwrap_err().contains("at most 30"));
         assert!(Mail::new(vec![]).open_settings().is_err());
+    }
+
+    #[test]
+    fn a_reply_comes_from_the_alias_it_was_addressed_to_and_quotes_the_original() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.prefs.set_aliases("work", vec!["info@example.com".into()]);
+        let original = Summary { from: "Ana <ana@example.org>".into(), to: "Info <INFO@example.com>".into(), subject: "Hi".into(), ..Summary::default() };
+        assert_eq!(mail.sent_from(&original), "info@example.com");
+        let own = Summary { to: "olibuijr@example.com".into(), ..original.clone() };
+        assert_eq!(mail.sent_from(&own), "olibuijr@example.com", "the account's own address when it was addressed");
+        mail.open_reply(&original, Some("first line\nsecond"));
+        let form = match &mail.sheet {
+            Some(Sheet::Compose(compose)) => compose.form.clone(),
+            _ => panic!("a compose sheet"),
+        };
+        assert_eq!(form.value("From"), "info@example.com");
+        assert_eq!(form.value("To"), "ana@example.org");
+        assert!(form.value("Message").contains("Ana wrote:"), "{}", form.value("Message"));
+        assert!(form.value("Message").contains("> first line\n> second"));
+    }
+
+    #[test]
+    fn reply_all_is_offered_only_when_someone_else_is_on_the_message() {
+        let mail = Mail::new(vec![account("work")]);
+        let alone = Summary { from: "Ana <ana@example.org>".into(), to: "olibuijr@example.com".into(), ..Summary::default() };
+        assert!(!mail.has_other_recipients(&alone));
+        let group = Summary { from: "Ana <ana@example.org>".into(), to: "olibuijr@example.com, Bo <bo@example.org>".into(), ..Summary::default() };
+        assert!(mail.has_other_recipients(&group));
+        let copied = Summary { from: "ana@example.org".into(), cc: "carl@example.org".into(), ..Summary::default() };
+        assert!(mail.has_other_recipients(&copied));
+    }
+
+    #[test]
+    fn forwarding_keeps_the_files_of_the_original_within_the_message_limits() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let original = Summary { subject: "Plan".into(), from: "Ana <ana@example.org>".into(), ..Summary::default() };
+        let file = |name: &str, size: usize| Attachment { name: name.into(), mime: "application/pdf".into(), bytes: vec![0; size] };
+        let files: Vec<Attachment> = (0..10).map(|n| file(&format!("f{n}.pdf"), 1000)).collect();
+        mail.open_forward_with(&original, "text", files);
+        match &mail.sheet {
+            Some(Sheet::Compose(compose)) => assert_eq!(compose.attachments.len(), MAX_ATTACHMENTS),
+            _ => panic!("a compose sheet"),
+        }
+        let kept = within_limits(vec![file("big", MAX_ATTACHMENT_BYTES), file("more", 1)]);
+        assert_eq!(kept.len(), 1, "the second file would pass the size limit");
+        assert!(within_limits(Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn the_settings_toggle_quoting_and_plain_text() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_settings().unwrap();
+        let form = prompt_form(&mail).clone();
+        assert_eq!(form.value("Quote the original in replies"), "yes");
+        assert_eq!(form.value("Plain text messages only"), "no");
+        assert!(form.fields.iter().filter(|f| f.label.starts_with("Quote") || f.label.starts_with("Plain")).all(|f| f.choice));
+        mail.apply_settings(&filled(form.clone(), &[("Quote the original in replies", "no"), ("Plain text messages only", "yes")])).unwrap();
+        assert!(!mail.prefs.quote_replies && mail.prefs.plain_text);
+        mail.open_settings().unwrap();
+        assert_eq!(prompt_form(&mail).value("Plain text messages only"), "yes");
     }
 
     #[test]

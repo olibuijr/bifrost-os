@@ -187,6 +187,15 @@ mod tests {
     }
 
     #[test]
+    fn the_short_map_scheme_reads_like_maps() {
+        assert_eq!(parse_link("map:?q=Akureyri"), parse_link("maps:?q=Akureyri"));
+        assert_eq!(
+            parse_link("map://?saddr=64.1,-21.9&daddr=65.7,-18.1&dirflg=w"),
+            Some(LinkAction::Route { from: Some(Endpoint::Coordinate(64.1, -21.9)), to: Endpoint::Coordinate(65.7, -18.1), profile: Profile::Walking })
+        );
+    }
+
+    #[test]
     fn copied_coordinates_parse_back() {
         let text = coordinates_text(64.1466, -21.9426);
         assert_eq!(text, "64.14660, -21.94260");

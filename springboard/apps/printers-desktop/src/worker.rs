@@ -2,11 +2,11 @@
 //! window: requests go in on one channel and replies come back on another, which the window drains on each tick.
 
 use crate::model::{self, Action, Reply};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::controls::cups::{self, Client, Printer, Transport};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 /// How long a printer gets to accept a connection before it counts as offline.
@@ -24,49 +24,55 @@ pub enum Request {
     Add { device: String, label: String, info: String, location: String },
     /// Print a document on `printer`: `name` is the job name, `mime` the document type.
     Print { printer: String, name: String, mime: String, data: Vec<u8> },
+    /// Ask the device of `printer` for its options (paper, sides, colour) for the info pane.
+    Options { printer: String },
 }
 
-/// The window's end of the channels. Dropping it ends the worker thread.
+/// The window's end of the serial dispatch queue and reply buffer.
 pub struct Link {
-    tx: Sender<Request>,
-    rx: Receiver<Reply>,
+    queue: DispatchQueue,
+    client: Option<Arc<Mutex<Client<cups::HttpTransport>>>>,
+    replies: Arc<Mutex<VecDeque<Reply>>>,
 }
 
 impl Link {
-    /// Starts the worker thread for the local scheduler. If the thread cannot start, requests are dropped and no replies
-    /// come back, so the window keeps showing what it has.
+    /// Starts a serial queue for requests to the local scheduler.
     pub fn start() -> Link {
-        let (tx, requests) = mpsc::channel::<Request>();
-        let (replies, rx) = mpsc::channel::<Reply>();
-        let _ = std::thread::Builder::new().name("print-center".into()).spawn(move || serve(requests, replies));
-        Link { tx, rx }
+        Link {
+            queue: DispatchQueue::serial_qos("is.olibuijr.printers.scheduler", Qos::Utility),
+            client: Some(Arc::new(Mutex::new(Client::local()))),
+            replies: Arc::new(Mutex::new(VecDeque::new())),
+        }
     }
 
     /// A link with no worker behind it: requests are dropped and no reply comes. For tests.
     #[cfg(test)]
     pub fn detached() -> Link {
-        let (tx, _requests) = mpsc::channel::<Request>();
-        let (_replies, rx) = mpsc::channel::<Reply>();
-        Link { tx, rx }
+        Link {
+            queue: DispatchQueue::serial_qos("is.olibuijr.printers.detached", Qos::Utility),
+            client: None,
+            replies: Arc::new(Mutex::new(VecDeque::new())),
+        }
     }
 
     pub fn send(&self, request: Request) {
-        let _ = self.tx.send(request);
+        let (Some(client), replies) = (self.client.clone(), self.replies.clone()) else { return };
+        self.queue.async_(move || {
+            let reply = match client.lock() {
+                Ok(mut client) => handle(&mut client, request),
+                Err(_) => Reply::Failed("The print scheduler connection is unavailable".into()),
+            };
+            DispatchQueue::main().async_(move || {
+                if let Ok(mut queue) = replies.lock() {
+                    queue.push_back(reply);
+                }
+            });
+        });
     }
 
     /// The replies that arrived since the last call.
     pub fn drain(&self) -> Vec<Reply> {
-        self.rx.try_iter().collect()
-    }
-}
-
-fn serve(requests: Receiver<Request>, replies: Sender<Reply>) {
-    let mut client = Client::local();
-    for request in requests {
-        let reply = handle(&mut client, request);
-        if replies.send(reply).is_err() {
-            break;
-        }
+        self.replies.lock().map(|mut queue| queue.drain(..).collect()).unwrap_or_default()
     }
 }
 
@@ -115,6 +121,15 @@ pub fn handle<T: Transport>(client: &mut Client<T>, request: Request) -> Reply {
                 Err(e) => Reply::Failed(e.to_string()),
             }
         }
+        // a device that does not answer its attributes has no options to show, which is not an error to report
+        Request::Options { printer } => {
+            let options = client.get_printer_attributes(&printer).ok().map(|caps| model::Options {
+                paper: caps.default_paper.ppd_name(),
+                two_sided: caps.supports_duplex(),
+                color: caps.supports_color(),
+            });
+            Reply::Options { printer, options }
+        }
     }
 }
 
@@ -159,7 +174,7 @@ fn reachable(host: &str, port: u16) -> bool {
 }
 
 /// The printers whose device did not answer the last probe. Each listing starts a fresh probe per network device on its
-/// own thread (a name lookup can be slow), so the listing never waits for the network and shows the previous answer.
+/// own utility-queue task (a name lookup can be slow), so the listing never waits for the network and shows the previous answer.
 /// A printer not probed yet counts as reachable.
 fn offline_names(printers: &[Printer]) -> Vec<String> {
     let mut offline = Vec::new();
@@ -172,7 +187,7 @@ fn offline_names(printers: &[Printer]) -> Vec<String> {
         }
         if state.running.insert(key.clone()) {
             drop(state);
-            let _ = std::thread::Builder::new().name("print-center-probe".into()).spawn(move || {
+            DispatchQueue::global(Qos::Utility).async_(move || {
                 let ok = reachable(&host, port);
                 if let Ok(mut state) = probes().lock() {
                     state.running.remove(&key);

@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.11.3 — 2026-10-14
+
+- History uses the shared Golden Gate source-list rows; calculator geometry now names its display, menu and history
+  dimensions and takes sidebar width from the shared layout token.
+
+## 1.11.2 — 2026-10-14
+
+- Derive the wide-keypad activation width from its key grid, and align menu assertions with the app-specific Calculator menu.
+
+- The built-in app icon uses the shared named surface and label colours.
+
+## 1.11.1 — 2026-10-14
+
+- Place Copy Expression and Copy Last Result in the Calculator menu rather than duplicating the shell Edit menu.
+## 1.11.0 — 2026-10-14
+
+- Programmer readout: the value's ASCII code (0 to 127) follows the Unicode code point and the character, for example
+  `U+0041  A  ASCII 65`.
+- Parity matrix rows for the Programmer and RPN modes cite the readout and the stack line above the display, and state
+  what is still missing (Show Binary, a deep stack that truncates).
+
+## 1.10.0 — 2026-10-14
+
+- Display settings have one model: thousands separators, decimal places and scientific notation are rendered by
+  `format::Style`. The unused `options` module, a second copy of the same rules, is removed.
+- Parity matrix rows for the Programmer and RPN modes, the display settings, the second-layer keys and the history
+  list now cite the code that is wired in the UI.
+
 ## 1.9.0 — 2026-10-13
 
 - Programmer mode (toolbar segment and View menu): an integer calculator on an 8, 16, 32 or 64-bit word in binary,

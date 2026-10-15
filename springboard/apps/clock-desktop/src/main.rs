@@ -93,14 +93,20 @@ impl App for ClockApp {
     }
 
     fn intents(&self) -> Vec<Intent> {
-        vec![
+        let mut declared = clock::intent::intents();
+        declared.extend([
             Intent::new("start-stopwatch", "Start Stopwatch", "Starts the stopwatch if it is stopped.").shortcut(),
             Intent::new("stop-stopwatch", "Stop Stopwatch", "Stops the stopwatch if it is running.").shortcut(),
             Intent::new("record-lap", "Record Lap", "Records a lap while the stopwatch is running.").shortcut(),
-        ]
+        ]);
+        declared
     }
 
-    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, _params: &Json) -> Result<IntentResult, RpcError> {
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+        if id == clock::intent::TIME_INTENT {
+            let (unix, offset) = wall_time();
+            return clock::intent::perform(id, params, unix, offset);
+        }
         let t = bifrost_proto::sys::now_ms();
         let Some(c) = &mut self.clock else { return Err(intents::failed("Clock is not ready yet")) };
         let (changed, done) = match id {
@@ -129,15 +135,6 @@ impl App for ClockApp {
 
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.clock.as_ref().and_then(|c| c.next_wake(t, true))
-    }
-
-    fn intents(&self) -> Vec<bifrost_app::intents::Intent> {
-        clock::intent::intents()
-    }
-
-    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, params: &Json) -> Result<bifrost_app::intents::IntentResult, bifrost_app::control::RpcError> {
-        let (unix, offset) = wall_time();
-        clock::intent::perform(id, params, unix, offset)
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {

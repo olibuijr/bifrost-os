@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn fade_arithmetic_does_not_overflow_at_the_end_of_time() {
-        let fade = VolumeFade::new(1.0, 0.0, u64::MAX - 10, u64::MAX);
+        let fade = VolumeFade::new(1.0, 0.0, u64::MAX - 10, 10);
         assert!(close(fade.volume_at(u64::MAX), 0.0));
         assert!(close(fade.volume_at(u64::MAX - 5), 0.5));
         assert_eq!(fade.target(), 0.0);

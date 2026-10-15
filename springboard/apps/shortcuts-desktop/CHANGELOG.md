@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.11.3 — 2026-10-14
+
+- Use the shared extra-small spacing token for the shortcut step connector gap.
+
+## 1.11.2 — 2026-10-14
+
+- Move Rename and Find into the Shortcuts app menu instead of duplicating the shell Edit menu.
+
+## 1.11.1 — 2026-10-14
+
+- Use the shared grouped-card radius token for the result panel.
+
+## 1.11.0 — 2026-10-14
+
+- Automation row in the editor's Details group, under Menu Key. Each tap steps through Off, each app opening (When Notes Opens and so on) and the charge falling below 10, 20, 30 or 50 percent. The choice is saved in the list file.
+- Window menu: All Shortcuts (Command-1); Previous Shortcut and Next Shortcut (Command-[ and Command-]) while a shortcut is open in the editor.
+- Not done: the app does not feed app-open or battery events to the automations, so an automation does not run by itself yet; user-made folders, a custom colour, Choose from Menu, the Output step, Ask for Input and Get Contents of URL running in the app, live preview while dragging a step, drag-to-import of files, the share sheet, and a shell-wide hotkey.
+
+## 1.10.0 — 2026-10-14
+
+- Personal automations in the shortcut model: a shortcut can run when an app opens or when the battery charge falls below a level (5 to 95 percent). The automation is saved after the menu key in the list file; older versions read the file and ignore it. A battery change starts an automation only when the charge crosses below its level, so the first reading starts nothing. Duplicating a shortcut and importing one drop its automation.
+- Gallery: four more starters under the existing headings (Sign Off, Date Check, Eye Rest, Listen Mode), fourteen in all.
+- Help menu: Shortcuts Help opens the result panel with one row per task (make, run, menu keys, sharing, the gallery).
+- Not done: the Automation row in the editor, the battery reading and app-open events that would start an automation while the app runs, a Window menu, user-made folders, a custom colour, Choose from Menu, the Output step, Ask for Input and Get Contents of URL running in the app, live preview while dragging a step, drag-to-import of files, the share sheet, and a shell-wide hotkey.
+
+## 1.9.0 — 2026-10-14
+
+- Editor: each plain step has a grip at its right edge. Drag the grip up or down and release to move the step to that row. Openers, Otherwise and the ends keep their place so blocks keep their shape. The step moves when released; a line marks where it lands.
+- Tile menu: a long press (about half a second) on a tile opens Run, Rename, Duplicate and Delete under it. A tap anywhere else closes the menu.
+- Menu Key row in the editor: each shortcut takes one of the keys 1 to 9 (Control and Command with the digit), shown in the Shortcuts menu beside its name. Choosing a key another shortcut has moves it. Copies and imports take no key. The first four starter shortcuts keep keys 1 to 4.
+- Repeat with Each: runs its steps once for each line of the previous output, with the line as {Item}; at most 20 lines. Stop ends the shortcut at that step; the steps after it are listed as not run.
+- Insert Variable rows: while a text step is typed into, a row for each variable (Output, then the names Set Variable steps set) inserts {Name} into the text.
+- Search also filters the Add Action list (built-in actions and intents) and the gallery (name, line or heading).
+- Gallery: starters are grouped under Focus, Everyday and Tools; three more starters (Wind Down, Lunch Break, Battery Check).
+- Glyph picker has 21 symbols (eight added at the end, so saved glyph numbers keep their meaning); the colour row gains brown.
+- The list file keeps the menu key as a field after the glyph and folder; older versions ignore it.
+- Not done: user-made folders, the automations (app open and battery triggers), a shell-wide hotkey, a custom colour, Choose from Menu, the Output step, Ask for Input and Get Contents of URL running in the app, drag-to-import of files, the share sheet. The Automation row and the Menu Key row that the 1.8.0 entry describes were not in that release's code: the menu key is added here, the automations are still missing.
+
 ## 1.8.0 — 2026-10-13
 
 - New action kinds in the Add Action list, in groups: Text, Ask for Input, Set Variable and Show Result (Text and Variables); Get Contents of URL and Save File (Web and Files); If, Otherwise, Repeat, Choose from Menu, Menu Item and End (Scripting). The text, variable and scripting steps run inside the app. Show Result opens the result panel, Ask for Input and Choose from Menu ask their question in a panel before the run, and Save File writes into the app's Saved folder. Get Contents of URL is stored and listed, but the app has no network access yet, so a run says it is not available. System steps still cannot run on this device.
@@ -11,6 +49,20 @@
 - The sidebar gains Gallery (six starter shortcuts, tap to add a copy) and a Folders section with counts; selecting a folder filters the grid. The toolbar has a search field that filters the tiles.
 - Menus: File (New Shortcut, Duplicate Shortcut, Import Shortcut, Export Shortcut), Shortcut (Run Shortcut, Delete Shortcut, and one item per shortcut with its Cmd+1 to Cmd+9 key) and View (Find, All Shortcuts, Gallery). Import and Export use the open and save panels and a .shortcut file. Edit > Paste works while typing.
 - The shortcut file keeps older lines readable: folder, glyph, menu key and automation are extra fields at the end of the line. The SDK glyph set gains chevron.up.
+- Needs system 0.4.84, as before.
+
+## 1.8.0 — 2026-10-13
+
+- Steps can carry text and pass it on. New kinds in the Add Action list: Text, Ask for Input, Get Contents of URL, Save File, Show Result and Set Variable. Each step's output is the next step's input; `{Output}` in a step's text stands for the previous output and `{Name}` for a variable set with Set Variable. Tapping a step with text opens a field to type it.
+- If and Repeat add blocks. Add Action inserts the whole block (If with Otherwise and End If, Repeat with End Repeat); steps inside are indented, and removing the opener removes the block. If tests the previous output (has a value, is empty, contains, is); Repeat runs 1 to 20 times. A run is limited to 200 steps.
+- Run works inside the app. Running a shortcut walks its steps and shows each one with what happened in the result panel. Text, variables, blocks, Copy Text, Show Notification and Show Result run in the app. A step that needs the shell (Wi-Fi, Low Power, Do Not Disturb, brightness, apps, screenshots, timers) stops the shortcut with a reason, and the steps after it are listed as not run.
+- Editor: a Name row renames the shortcut, Duplicate Shortcut adds a copy after it (without the daily reminder), Export Shortcut writes it to a file, and the up and down buttons on each step reorder the steps. A Folder row files the shortcut under Favorites, Home or Work, and a Glyph row picks the glyph shown on its tile.
+- Sidebar: Gallery, with seven starter shortcuts to add, and one row per folder with the number of shortcuts in it. Import from File in the Gallery reads an exported file.
+- The grid has a search field in the toolbar. It matches names, steps and folders.
+- Menus: File (New Shortcut, Duplicate, Import, Export, Delete), Edit (Rename, Find) and Shortcuts (Run, Gallery and one item per shortcut; the first nine have Control-Command-digit keys that work while the app is in front).
+- The list file keeps the glyph and the folder as two more fields on a shortcut's line; older files read as before, and older versions of the app ignore the new fields.
+- The `shortcuts` command runs the new steps it can reach: Text, Set Variable, If and Repeat, a shell script whose output goes to the next step, Save File in Documents and Show Result.
+- Adds the documents permission, for Import and Export.
 - Needs system 0.4.84, as before.
 
 ## 1.7.0 — 2026-10-13

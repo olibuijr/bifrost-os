@@ -242,6 +242,74 @@ impl Registry {
     }
 }
 
+/// Why a message exchange step was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExchangeError {
+    /// The extension is not installed, is disabled, or has no permission for the page.
+    NotAllowed,
+    /// No open request has this id: it was never made, already answered or cancelled.
+    NoSuchRequest,
+    /// The reply came from an extension other than the one the request was sent to.
+    WrongSender,
+}
+
+/// Routes requests from pages to web extensions and their replies back. A request is possible only where the registry
+/// allows the extension for the page URL, and it is answered once, by the extension it was sent to.
+#[derive(Debug, Default)]
+pub struct Exchange {
+    next_id: u64,
+    /// Open requests: id to the bundle identifier and the page URL.
+    open: BTreeMap<u64, (String, String)>,
+}
+
+impl Exchange {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Opens a request from a page to an extension and returns the id its reply must carry.
+    pub fn request(&mut self, registry: &Registry, bundle_id: &str, page_url: &str) -> Result<u64, ExchangeError> {
+        if !registry.get(bundle_id).is_some_and(|e| e.allows(page_url)) {
+            return Err(ExchangeError::NotAllowed);
+        }
+        let id = self.next_id;
+        self.next_id += 1;
+        self.open.insert(id, (bundle_id.to_string(), page_url.to_string()));
+        Ok(id)
+    }
+
+    /// Answers request `id`. The request closes whether or not the reply is delivered, so a refused reply cannot be retried.
+    /// A reply from another extension leaves the request open.
+    pub fn reply(
+        &mut self,
+        registry: &Registry,
+        bundle_id: &str,
+        id: u64,
+        message: Message,
+    ) -> Result<Message, ExchangeError> {
+        let (sent_to, page_url) = self.open.get(&id).ok_or(ExchangeError::NoSuchRequest)?;
+        if sent_to != bundle_id {
+            return Err(ExchangeError::WrongSender);
+        }
+        let page_url = page_url.clone();
+        self.open.remove(&id);
+        if !registry.get(bundle_id).is_some_and(|e| e.allows(&page_url)) {
+            return Err(ExchangeError::NotAllowed);
+        }
+        Ok(message)
+    }
+
+    /// Closes an open request without a reply. Returns false when no such request is open.
+    pub fn cancel(&mut self, id: u64) -> bool {
+        self.open.remove(&id).is_some()
+    }
+
+    /// Requests waiting for a reply.
+    pub fn pending_count(&self) -> usize {
+        self.open.len()
+    }
+}
+
 /// Lowercase reverse-DNS tokens separated by dots, at least two labels: `com.example.app`.
 fn valid_bundle_id(id: &str) -> bool {
     let labels: Vec<&str> = id.split('.').collect();

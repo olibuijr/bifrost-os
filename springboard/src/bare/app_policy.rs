@@ -7,11 +7,115 @@ use std::{
     process::{Command, Stdio},
 };
 pub use super::account::Account;
+
+/// A policy failure with a stable domain and code. The functions here still return `io::Result`, so the error travels
+/// inside an `io::Error`; [`PolicyError::of`] reads it back for an app or a shell caller that branches on the cause.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PolicyError {
+    /// A manifest permission this shell does not know.
+    UnsupportedPermission(String),
+    /// Remote sharing needs both the network and the storage permissions.
+    RemoteNeedsNetworkAndStorage,
+    /// The app is not the remote desktop app, or it does not hold the remote grant.
+    RemoteDenied,
+    /// The remote server script resolves to a path outside its package.
+    RemoteServerEscapesPackage,
+    /// The remote service could not be started or stopped.
+    RemoteServiceFailed,
+    /// The app data directory is a symbolic link, which is refused.
+    DataIsSymlink,
+    /// The app data directory could not be handed to the app's account.
+    DataOwnershipFailed,
+    /// The executable has no containing package directory.
+    MissingPackageDirectory,
+}
+
+impl PolicyError {
+    /// The domain every policy error belongs to.
+    pub const DOMAIN: &'static str = "bifrost.app-policy";
+
+    /// The domain name, the same for every variant.
+    pub fn domain(&self) -> &'static str {
+        Self::DOMAIN
+    }
+
+    /// The code of this failure inside its domain. Codes are stable: a new failure takes a new number.
+    pub fn code(&self) -> i32 {
+        match self {
+            Self::UnsupportedPermission(_) => 1,
+            Self::RemoteNeedsNetworkAndStorage => 2,
+            Self::RemoteDenied => 3,
+            Self::RemoteServerEscapesPackage => 4,
+            Self::RemoteServiceFailed => 5,
+            Self::DataIsSymlink => 6,
+            Self::DataOwnershipFailed => 7,
+            Self::MissingPackageDirectory => 8,
+        }
+    }
+
+    /// The failure inside `err`, when `err` came from this module. `None` for any other I/O error.
+    pub fn of(err: &io::Error) -> Option<&PolicyError> {
+        err.get_ref()?.downcast_ref::<PolicyError>()
+    }
+}
+
+impl std::fmt::Display for PolicyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedPermission(name) => write!(f, "Unsupported app permission: {name}"),
+            Self::RemoteNeedsNetworkAndStorage => f.write_str("Remote sharing requires network and storage"),
+            Self::RemoteDenied => f.write_str("Remote sharing permission denied"),
+            Self::RemoteServerEscapesPackage => f.write_str("Remote server escapes package"),
+            Self::RemoteServiceFailed => f.write_str("Remote service request failed"),
+            Self::DataIsSymlink => f.write_str("App data must not be a symlink"),
+            Self::DataOwnershipFailed => f.write_str("Cannot assign app data ownership"),
+            Self::MissingPackageDirectory => f.write_str("Missing app directory"),
+        }
+    }
+}
+
+impl std::error::Error for PolicyError {}
+
+impl From<PolicyError> for io::Error {
+    fn from(err: PolicyError) -> io::Error {
+        let kind = match err {
+            PolicyError::RemoteDenied => io::ErrorKind::PermissionDenied,
+            _ => io::ErrorKind::Other,
+        };
+        io::Error::new(kind, err)
+    }
+}
+
+/// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
+/// [`Policy::held`] lists them.
+pub const ENTITLEMENT_NAMES: [&str; 12] = [
+    "network",
+    "storage",
+    "audio",
+    "camera",
+    "screen",
+    "notifications",
+    "documents",
+    "keychain",
+    "accessibility",
+    "display-config",
+    "remote-desktop",
+    bifrost_core::log::ENTITLEMENT,
+];
+
+/// First-party app identities allowed to declare capture device permissions.
+pub const CAMERA_APP_ID: &str = "is.olibuijr.photobooth.desktop";
+pub const SCREEN_APP_ID: &str = "is.olibuijr.colormeter.desktop";
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Policy {
     pub network: bool,
     pub storage: bool,
     pub audio: bool,
+    /// `camera`: binds detected V4L2 capture nodes for Photo Booth.
+    pub camera: bool,
+    /// `screen`: declaration for Color Meter; use remains consent-gated by shell services.
+    pub screen: bool,
     pub remote: bool,
     pub notifications: bool,
     /// `documents`: may ask for files through the shell's open and save panels (`docs/file-portal-design.md`).
@@ -36,6 +140,30 @@ impl Policy {
         self.log_store = id.starts_with("is.olibuijr.") && kind == crate::shell::kinds::SYSTEM_APP && entitlements.iter().any(|e| e == bifrost_core::log::ENTITLEMENT);
         self
     }
+    /// Whether the policy holds the named permission or entitlement, spelled as in the manifest. An unknown name is
+    /// held by no one. The query reports what the manifest granted; each service still checks the policy on every call.
+    pub fn holds(&self, name: &str) -> bool {
+        match name {
+            "network" => self.network,
+            "storage" => self.storage,
+            "audio" => self.audio,
+            "camera" => self.camera,
+            "screen" => self.screen,
+            "notifications" => self.notifications,
+            "documents" => self.documents,
+            "keychain" => self.keychain,
+            "accessibility" => self.accessibility,
+            "display-config" => self.display_config,
+            "remote-desktop" => self.remote,
+            other => other == bifrost_core::log::ENTITLEMENT && self.log_store,
+        }
+    }
+
+    /// The names the policy holds, in [`ENTITLEMENT_NAMES`] order.
+    pub fn held(&self) -> Vec<&'static str> {
+        ENTITLEMENT_NAMES.into_iter().filter(|name| self.holds(name)).collect()
+    }
+
     pub fn from_permissions(id: &str, permissions: &[String]) -> io::Result<Self> {
         let mut p = Self::default();
         for permission in permissions {
@@ -43,23 +171,19 @@ impl Policy {
                 "network" => p.network = true,
                 "storage" => p.storage = true,
                 "audio" => p.audio = true,
+                "camera" if id == CAMERA_APP_ID => p.camera = true,
+                "screen" if id == SCREEN_APP_ID => p.screen = true,
                 "notifications" => p.notifications = true,
                 "documents" => p.documents = true,
                 "keychain" => p.keychain = true,
                 "accessibility" => p.accessibility = true,
                 "display-config" => p.display_config = true,
                 "remote-desktop" if id == "is.olibuijr.remote.desktop" => p.remote = true,
-                _ => {
-                    return Err(io::Error::other(format!(
-                        "Unsupported app permission: {permission}"
-                    )))
-                }
+                _ => return Err(PolicyError::UnsupportedPermission(permission.clone()).into()),
             }
         }
         if p.remote && (!p.network || !p.storage) {
-            return Err(io::Error::other(
-                "Remote sharing requires network and storage",
-            ));
+            return Err(PolicyError::RemoteNeedsNetworkAndStorage.into());
         }
         Ok(p)
     }
@@ -120,7 +244,7 @@ fn drop_identity(cmd: &mut Command, account: &Account) -> io::Result<()> {
 fn prepare_data(data: &Path, account: &Account) -> io::Result<()> {
     fs::create_dir_all(data)?;
     if fs::symlink_metadata(data)?.file_type().is_symlink() {
-        return Err(io::Error::other("App data must not be a symlink"));
+        return Err(PolicyError::DataIsSymlink.into());
     }
     if unsafe { geteuid() } == 0 {
         // GNU chown -P does not traverse symlinks. Only this app's data is migrated.
@@ -130,7 +254,7 @@ fn prepare_data(data: &Path, account: &Account) -> io::Result<()> {
             .arg(data)
             .status()?;
         if !status.success() {
-            return Err(io::Error::other("Cannot assign app data ownership"));
+            return Err(PolicyError::DataOwnershipFailed.into());
         }
     }
     Ok(())
@@ -150,7 +274,7 @@ pub fn command(
     let exec = fs::canonicalize(exec)?;
     let package = exec
         .parent()
-        .ok_or_else(|| io::Error::other("Missing app directory"))?;
+        .ok_or_else(|| io::Error::from(PolicyError::MissingPackageDirectory))?;
     let mut c = Command::new("/usr/bin/bwrap");
     c.args([
         "--die-with-parent",
@@ -164,6 +288,12 @@ pub fn command(
     .arg(account.uid.to_string())
     .arg("--gid")
     .arg(account.gid.to_string());
+    if policy.camera {
+        for device in camera_capture_devices() {
+            // Bind only detected V4L2 capture nodes; no camera directory, USB tree, or unrelated device is exposed.
+            c.arg("--dev-bind").arg(&device).arg(&device);
+        }
+    }
     if policy.network {
         c.arg("--share-net");
     }
@@ -288,21 +418,41 @@ pub fn command(
     drop_identity(&mut c, &account)?;
     Ok(c)
 }
+
+/// Enumerated video nodes that can stream one of the formats supported by Photo Booth.
+/// Path and file-type checks keep the bind list limited to actual `/dev/videoN` character devices.
+fn camera_capture_devices() -> Vec<PathBuf> {
+    use std::os::unix::fs::FileTypeExt;
+
+    crate::media::v4l2::probe()
+        .into_iter()
+        .filter_map(|camera| {
+            let path = PathBuf::from(camera.path);
+            if !is_video_node_path(&path) || !fs::symlink_metadata(&path).ok()?.file_type().is_char_device() {
+                return None;
+            }
+            Some(path)
+        })
+        .collect()
+}
+
+fn is_video_node_path(path: &Path) -> bool {
+    path.parent() == Some(Path::new("/dev"))
+        && path.file_name().and_then(|name| name.to_str()).and_then(|name| name.strip_prefix("video"))
+            .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit()))
+}
 /// Permission and identity come from the authenticated app's socket/installed
 /// manifest, never from a claimed id or caller-supplied executable path.
 pub fn remote_sharing(id: &str, policy: Policy, on: bool, package: &Path) -> io::Result<()> {
     if id != "is.olibuijr.remote.desktop" || !policy.remote {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Remote sharing permission denied",
-        ));
+        return Err(PolicyError::RemoteDenied.into());
     }
     let account = Account::installed()?;
     let mut c = if on {
         let server = fs::canonicalize(package.join("assets/server.py"))?;
         let package = fs::canonicalize(package)?;
         if !server.starts_with(&package) {
-            return Err(io::Error::other("Remote server escapes package"));
+            return Err(PolicyError::RemoteServerEscapesPackage.into());
         }
         let mut c = Command::new("/usr/bin/systemd-run");
         c.args([
@@ -335,7 +485,7 @@ pub fn remote_sharing(id: &str, policy: Policy, on: bool, package: &Path) -> io:
     if status.success() {
         Ok(())
     } else {
-        Err(io::Error::other("Remote service request failed"))
+        Err(PolicyError::RemoteServiceFailed.into())
     }
 }
 #[cfg(test)]
@@ -351,6 +501,14 @@ mod tests {
     #[test]
     fn isolation_permissions_fail_closed() {
         assert!(Policy::from_permissions("example", &["system-update".into()]).is_err());
+        assert!(Policy::from_permissions("example", &["camera".into()]).is_err());
+        assert!(Policy::from_permissions("example", &["screen".into()]).is_err());
+        assert!(Policy::from_permissions(CAMERA_APP_ID, &["screen".into()]).is_err());
+        assert!(Policy::from_permissions(SCREEN_APP_ID, &["camera".into()]).is_err());
+        let camera = Policy::from_permissions(CAMERA_APP_ID, &["camera".into()]).unwrap();
+        assert!(camera.camera && !camera.screen);
+        let screen = Policy::from_permissions(SCREEN_APP_ID, &["screen".into()]).unwrap();
+        assert!(screen.screen && !screen.camera);
         assert!(Policy::from_permissions("example", &["remote-desktop".into()]).is_err());
         assert!(
             Policy::from_permissions("is.olibuijr.remote.desktop", &["remote-desktop".into()])
@@ -364,6 +522,15 @@ mod tests {
         // `documents` binds nothing: it is the picker grant, not the home
         let d = Policy::from_permissions("example", &["documents".into()]).unwrap();
         assert!(d.documents && !d.storage && !d.network);
+    }
+
+    #[test]
+    fn camera_mount_paths_are_video_nodes_only() {
+        assert!(is_video_node_path(Path::new("/dev/video0")));
+        assert!(is_video_node_path(Path::new("/dev/video12")));
+        for path in ["/dev/video", "/dev/video1x", "/dev/video2/extra", "/dev/v4l/video0", "/dev/dri/card0"] {
+            assert!(!is_video_node_path(Path::new(path)), "unexpected camera mount path: {path}");
+        }
     }
     #[test]
     fn isolation_root_accounts_rejected() {

@@ -8,20 +8,53 @@ use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::os::unix::net::UnixDatagram;
 
+/// The time zone changed.
+pub const TIME_ZONE_CHANGE: &str = "system.timezone.change";
+/// The wall clock was set.
+pub const CLOCK_SET: &str = "system.clock.set";
+/// A volume was mounted.
+pub const VOLUME_MOUNT: &str = "system.volume.mount";
+/// A volume was unmounted.
+pub const VOLUME_UNMOUNT: &str = "system.volume.unmount";
+/// A volume is nearly full.
+pub const VOLUME_LOW_DISK_SPACE: &str = "system.volume.low-disk-space";
+/// The network connection went up or down.
+pub const NETWORK_CHANGE: &str = "system.network.change";
+/// The contacts store changed.
+pub const CONTACTS_CHANGE: &str = "system.contacts.change";
+/// The events store changed.
+pub const CALENDAR_CHANGE: &str = "system.calendar.change";
+/// The host name changed.
+pub const HOSTNAME_CHANGE: &str = "system.hostname.change";
+/// Cached disk data is stale.
+pub const DISK_CACHE_INVALIDATE: &str = "system.disk-cache.invalidate";
+/// The log database was updated.
+pub const LOG_DB_UPDATE: &str = "system.log-db.update";
+
 /// Names for system changes (time zone, clock, volumes, network, host name, caches). The shell decides when to post them.
 pub const SYSTEM_EVENTS: [&str; 11] = [
-    "system.timezone.change",
-    "system.clock.set",
-    "system.volume.mount",
-    "system.volume.unmount",
-    "system.volume.low-disk-space",
-    "system.network.change",
-    "system.contacts.change",
-    "system.calendar.change",
-    "system.hostname.change",
-    "system.disk-cache.invalidate",
-    "system.log-db.update",
+    TIME_ZONE_CHANGE,
+    CLOCK_SET,
+    VOLUME_MOUNT,
+    VOLUME_UNMOUNT,
+    VOLUME_LOW_DISK_SPACE,
+    NETWORK_CHANGE,
+    CONTACTS_CHANGE,
+    CALENDAR_CHANGE,
+    HOSTNAME_CHANGE,
+    DISK_CACHE_INVALIDATE,
+    LOG_DB_UPDATE,
 ];
+
+/// The system name for a change in the number of mounted volumes, or `None` when the count is the same. The count
+/// is the only thing compared, so a mount and an unmount between two looks cancel out.
+pub fn volume_change(before: usize, after: usize) -> Option<&'static str> {
+    match after.cmp(&before) {
+        std::cmp::Ordering::Greater => Some(VOLUME_MOUNT),
+        std::cmp::Ordering::Less => Some(VOLUME_UNMOUNT),
+        std::cmp::Ordering::Equal => None,
+    }
+}
 
 #[derive(Debug)]
 struct Registration {

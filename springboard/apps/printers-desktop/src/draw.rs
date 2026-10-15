@@ -4,7 +4,7 @@
 
 use crate::discover::{detail_line, is_added};
 use crate::model::{
-    created_text, document_tag, info_lines, job_progress, job_status_text, pages_text, printer_detail, problem_line, row_summary, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
+    created_text, document_tag, info_lines, job_progress, option_lines, pages_text, printer_detail, problem_line, row_summary, share_label, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
 };
 use crate::window::{Field, PrintCenter, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT};
 use bifrost_app::controls::{Node, Rect, Role};
@@ -161,7 +161,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
             pages_text(job),
             size_text(job.size_kb),
             created_text(job.created, p.tz_offset, p.now_secs),
-            job_status_text(job),
+            p.model.job_status(job),
         ];
         let mid = r.y + JOB_ROW_PT / 2.0;
         let tile = Rect { x: cols[1], y: mid - TILE_H / 2.0, w: TILE_W, h: TILE_H };
@@ -176,7 +176,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
         if let Some(done) = job_progress(job) {
             let width = column_width(&cols, 6, x0 + w).min(110.0);
             let bar = Rect { x: cols[6], y: r.y + JOB_ROW_PT - 7.0, w: width, h: 3.0 };
-            let (track, fill_color) = if on { (pack(255, 255, 255, 90), WHITE) } else { (SEPARATOR_C.now(), TINT) };
+            let (track, fill_color) = if on { (CARD_BG.now(), WHITE) } else { (SEPARATOR_C.now(), TINT) };
             fill(s, ui, bar, 0.0, track);
             fill(s, ui, Rect { w: bar.w * done, ..bar }, 0.0, fill_color);
         }
@@ -185,7 +185,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
 
 /// A small page-shaped tile with the document's type in capitals, drawn in place of a first-page preview.
 fn document_tile(labels: &mut TextCache, s: &mut Surface, ui: &Ui, r: Rect, tag: &str, on_plate: bool) {
-    let (plate, ink) = if on_plate { (pack(255, 255, 255, 70), WHITE) } else { (SEPARATOR_C.now(), LABEL_2.now()) };
+    let (plate, ink) = if on_plate { (SELECTION.now(), WHITE) } else { (SEPARATOR_C.now(), LABEL_2.now()) };
     fill(s, ui, r, 3.0, plate);
     let img = labels.get(ui, tag, MAC_FOOTNOTE_PT, Weight::Semibold, ink);
     s.blit(img, (ui.pt(r.x + r.w / 2.0) - img.w as f32 / 2.0) as i32, (ui.pt(r.y + r.h / 2.0) - img.h as f32 / 2.0) as i32, 255, 255);
@@ -265,10 +265,20 @@ fn paint_info(p: &mut PrintCenter, s: &mut Surface, ui: &Ui, printer: &bifrost_a
         let save = p.save_rect();
         fill(s, ui, save, 6.0, TINT);
         text_mid(&mut p.labels, s, ui, "Save", MAC_BODY_PT, Weight::Semibold, WHITE, save.x + 26.0, save.y + save.h / 2.0, save.w - 30.0);
+        if p.share_shown() {
+            let share = p.share_rect();
+            fill(s, ui, share, 6.0, SEPARATOR_C.now());
+            let label = share_label(printer.shared);
+            text_mid(&mut p.labels, s, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), share.x + 14.0, share.y + share.h / 2.0, share.w - 28.0);
+        }
     }
     let mut y = p.info_lines_top();
     let offline = p.model.is_offline(&printer.name);
-    for (label, value) in info_lines(printer, offline) {
+    let mut lines = info_lines(printer, offline);
+    if let Some(options) = p.model.options_for(&printer.name) {
+        lines.extend(option_lines(options));
+    }
+    for (label, value) in lines {
         text_mid(&mut p.labels, s, ui, &label, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x0, y + 11.0, 100.0);
         text_mid(&mut p.labels, s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), x0 + 110.0, y + 11.0, w - 110.0);
         y += 22.0;

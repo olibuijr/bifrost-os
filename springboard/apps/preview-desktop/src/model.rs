@@ -2,7 +2,8 @@
 //! coordinates, the sidecar file that keeps markup, and the burn-in used by export. Everything here
 //! is plain data, so the tests run without a window.
 
-use bifrost_app::kit::{pack, Image};
+use bifrost_app::kit::ui::{BLACK, SYSTEM_BLUE, SYSTEM_RED, SYSTEM_YELLOW};
+use bifrost_app::kit::Image;
 use std::rc::Rc;
 
 /// The smallest and largest zoom factor the viewer goes to.
@@ -200,12 +201,25 @@ pub struct Adjust {
     pub saturation: f32,
     /// Contrast, 1 is unchanged.
     pub contrast: f32,
+    /// Colour temperature, from -100 (cooler) to 100 (warmer), 0 is unchanged.
+    pub temperature: f32,
+    /// Sharpness as the unsharp mask amount, from 0 (unchanged) to 2. It is applied after the filter chain.
+    pub sharpness: f32,
 }
 
 impl Default for Adjust {
     fn default() -> Self {
-        Adjust { exposure: 0.0, saturation: 1.0, contrast: 1.0 }
+        Adjust { exposure: 0.0, saturation: 1.0, contrast: 1.0, temperature: 0.0, sharpness: 0.0 }
     }
+}
+
+/// One adjustment on the Adjust Color panel: its name, the range its slider covers and its value.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Slider {
+    pub label: &'static str,
+    pub min: f32,
+    pub max: f32,
+    pub value: f32,
 }
 
 impl Adjust {
@@ -225,7 +239,34 @@ impl Adjust {
         if self.contrast != 1.0 {
             out.push(("contrast", self.contrast));
         }
+        if self.temperature != 0.0 {
+            out.push(("temperatureTint", self.temperature));
+        }
         out
+    }
+
+    /// The five sliders of the Adjust Color panel, in panel order: exposure, contrast, saturation, temperature and
+    /// sharpness. The ranges are the ones the filters accept.
+    pub fn sliders(&self) -> [Slider; 5] {
+        [
+            Slider { label: "Exposure", min: -2.0, max: 2.0, value: self.exposure },
+            Slider { label: "Contrast", min: 0.0, max: 2.0, value: self.contrast },
+            Slider { label: "Saturation", min: 0.0, max: 2.0, value: self.saturation },
+            Slider { label: "Temperature", min: -100.0, max: 100.0, value: self.temperature },
+            Slider { label: "Sharpness", min: 0.0, max: 2.0, value: self.sharpness },
+        ]
+    }
+
+    /// Sets slider `which` (its index in `sliders`) to `value`, clamped to its range. An index past the sliders does nothing.
+    pub fn set_slider(&mut self, which: usize, value: f32) {
+        match which {
+            0 => self.exposure = value.clamp(-2.0, 2.0),
+            1 => self.contrast = value.clamp(0.0, 2.0),
+            2 => self.saturation = value.clamp(0.0, 2.0),
+            3 => self.temperature = value.clamp(-100.0, 100.0),
+            4 => self.sharpness = value.clamp(0.0, 2.0),
+            _ => {}
+        }
     }
 }
 
@@ -248,6 +289,16 @@ pub enum MarkKind {
     Underline,
     /// A line through the middle of the rectangle, for striking out a line of text.
     Strike,
+    /// A five-point star inside the rectangle.
+    Star,
+    /// A hexagon inside the rectangle.
+    Polygon,
+    /// A rectangle with a tail down its bottom-left edge.
+    Bubble,
+    /// A text box: the text is `Mark::text`, drawn inside the rectangle.
+    Text,
+    /// A black box over what it covers. Only pictures can be redacted: the box is burned into saved and exported pictures.
+    Redact,
 }
 
 impl MarkKind {
@@ -263,12 +314,22 @@ impl MarkKind {
             MarkKind::Arrow => "arrow",
             MarkKind::Underline => "underline",
             MarkKind::Strike => "strike",
+            MarkKind::Star => "star",
+            MarkKind::Polygon => "polygon",
+            MarkKind::Bubble => "bubble",
+            MarkKind::Text => "text",
+            MarkKind::Redact => "redact",
         }
     }
 
     /// Whether the mark keeps its points in `Mark::ink`: a stroke, or the two ends of a line or an arrow.
     pub fn has_points(self) -> bool {
         matches!(self, MarkKind::Ink | MarkKind::Line | MarkKind::Arrow)
+    }
+
+    /// Whether the mark is a closed shape drawn from `outline`: a star, a hexagon or a speech bubble.
+    pub fn is_outline(self) -> bool {
+        matches!(self, MarkKind::Star | MarkKind::Polygon | MarkKind::Bubble)
     }
 
     /// What the markup list in the sidebar calls the mark.
@@ -284,6 +345,11 @@ impl MarkKind {
             MarkKind::Arrow => "Arrow",
             MarkKind::Underline => "Underline",
             MarkKind::Strike => "Strike-through",
+            MarkKind::Star => "Star",
+            MarkKind::Polygon => "Polygon",
+            MarkKind::Bubble => "Speech bubble",
+            MarkKind::Text => "Text",
+            MarkKind::Redact => "Redaction",
         }
     }
 
@@ -299,8 +365,44 @@ impl MarkKind {
             "arrow" => Some(MarkKind::Arrow),
             "underline" => Some(MarkKind::Underline),
             "strike" => Some(MarkKind::Strike),
+            "star" => Some(MarkKind::Star),
+            "polygon" => Some(MarkKind::Polygon),
+            "bubble" => Some(MarkKind::Bubble),
+            "text" => Some(MarkKind::Text),
+            "redact" => Some(MarkKind::Redact),
             _ => None,
         }
+    }
+}
+
+/// The inner radius of a star as a share of its outer radius.
+const STAR_INNER: f32 = 0.382;
+
+/// The closed outline of a shape mark, in source-page coordinates, inside its rectangle `r`: a five-point star, a hexagon
+/// or a speech bubble with its tail on the bottom-left. Other kinds have no outline and give an empty list.
+pub fn outline(kind: MarkKind, r: Norm) -> Vec<(f32, f32)> {
+    let (x, y, w, h) = (r.x, r.y, r.w, r.h);
+    let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+    match kind {
+        MarkKind::Star => (0..10)
+            .map(|k| {
+                // the points alternate outer and inner every 36 degrees, the first at the top
+                let t = -std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::PI / 5.0;
+                let s = if k % 2 == 0 { 1.0 } else { STAR_INNER };
+                (cx + w / 2.0 * s * t.cos(), cy + h / 2.0 * s * t.sin())
+            })
+            .collect(),
+        MarkKind::Polygon => (0..6)
+            .map(|k| {
+                let t = k as f32 * std::f32::consts::FRAC_PI_3;
+                (cx + w / 2.0 * t.cos(), cy + h / 2.0 * t.sin())
+            })
+            .collect(),
+        MarkKind::Bubble => {
+            let tail = y + h * 0.8;
+            vec![(x, y), (x + w, y), (x + w, tail), (x + w * 0.35, tail), (x + w * 0.2, y + h), (x + w * 0.25, tail), (x, tail)]
+        }
+        _ => Vec::new(),
     }
 }
 
@@ -476,12 +578,13 @@ pub fn neighbour(positions: &[usize], current: usize, forward: bool) -> Option<u
 /// A note's marker on an exported picture, in pixels.
 const NOTE_PX: usize = 14;
 
-/// Highlight colour: system yellow at about 45 per cent.
-pub const HIGHLIGHT: u32 = pack(255, 214, 10, 115);
+/// Highlight colour: system yellow; the renderer and picture burn-in apply the highlight opacity separately.
+pub const HIGHLIGHT: u32 = SYSTEM_YELLOW;
+pub const HIGHLIGHT_ALPHA: u8 = 115;
 /// Note and shape colour: system blue.
-pub const MARK_BLUE: u32 = pack(10, 132, 255, 255);
+pub const MARK_BLUE: u32 = SYSTEM_BLUE;
 /// Strike-through colour: system red.
-pub const MARK_RED: u32 = pack(255, 69, 58, 255);
+pub const MARK_RED: u32 = SYSTEM_RED;
 
 const SIDECAR_HEADER: &str = "# viewer markup 1";
 
@@ -567,12 +670,12 @@ fn parse_line(line: &str) -> Option<Mark> {
 
 /// A stroke's points as text: `x,y` pairs separated by spaces. Numbers print in their shortest form, so they read back
 /// exactly.
-fn encode_ink(points: &[(f32, f32)]) -> String {
+pub fn encode_ink(points: &[(f32, f32)]) -> String {
     points.iter().map(|(x, y)| format!("{x},{y}")).collect::<Vec<_>>().join(" ")
 }
 
 /// Reads the points `encode_ink` wrote. Malformed pairs are skipped.
-fn decode_ink(text: &str) -> Vec<(f32, f32)> {
+pub fn decode_ink(text: &str) -> Vec<(f32, f32)> {
     text.split_whitespace()
         .filter_map(|pair| {
             let (x, y) = pair.split_once(',')?;
@@ -595,7 +698,12 @@ pub fn sidecar_name(path: &str) -> String {
 
 /// Source-over of a straight-alpha colour `src` onto a premultiplied pixel `dst`.
 fn over(dst: u32, src: u32) -> u32 {
-    let sa = (src >> 24) & 0xff;
+    over_alpha(dst, src, ((src >> 24) & 0xff) as u8)
+}
+
+/// Source-over with an explicit opacity, used for highlights whose named system colour is opaque.
+fn over_alpha(dst: u32, src: u32, opacity: u8) -> u32 {
+    let sa = u32::from(opacity);
     let inv = 255 - sa;
     let ch = |shift: u32| {
         let s = (src >> shift) & 0xff;
@@ -694,6 +802,24 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
             burn_points_mark(img, m, quarters);
             continue;
         }
+        if m.kind.is_outline() {
+            let mut pts: Vec<(f32, f32)> = outline(m.kind, m.rect)
+                .iter()
+                .map(|&(u, v)| {
+                    let (a, b) = rot_point(u, v, quarters);
+                    (a * w as f32, b * h as f32)
+                })
+                .collect();
+            if let Some(&first) = pts.first() {
+                pts.push(first);
+            }
+            burn_path(img, &pts, m.color);
+            continue;
+        }
+        if m.kind == MarkKind::Text {
+            // text needs the window's font and is not burned into pictures yet
+            continue;
+        }
         let r = rot_rect(m.rect, quarters);
         let x0 = ((r.x * w as f32).round() as i64).clamp(0, w as i64) as usize;
         let y0 = ((r.y * h as f32).round() as i64).clamp(0, h as i64) as usize;
@@ -713,7 +839,7 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
                 for y in y0..y1 {
                     for x in x0..x1 {
                         let i = y * w + x;
-                        img.px[i] = over(img.px[i], m.color);
+                        img.px[i] = over_alpha(img.px[i], m.color, HIGHLIGHT_ALPHA);
                     }
                 }
             }
@@ -738,7 +864,16 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
                 let y = if m.kind == MarkKind::Underline { y1 as f32 - 2.0 } else { (y0 + y1) as f32 / 2.0 };
                 burn_path(img, &[(x0 as f32, y), (x1 as f32, y)], m.color);
             }
-            MarkKind::Ink | MarkKind::Line | MarkKind::Arrow => {}
+            MarkKind::Redact => {
+                // Redaction permanently removes picture content; black is the semantic concealment fill.
+                let black = BLACK;
+                for y in y0..y1 {
+                    for x in x0..x1 {
+                        img.px[y * w + x] = black;
+                    }
+                }
+            }
+            MarkKind::Ink | MarkKind::Line | MarkKind::Arrow | MarkKind::Star | MarkKind::Polygon | MarkKind::Bubble | MarkKind::Text => {}
         }
     }
 }
@@ -789,6 +924,7 @@ fn burn_path(img: &mut Image, pts: &[(f32, f32)], color: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::kit::pack;
 
     fn img(w: usize, h: usize) -> Image {
         // each pixel gets a distinct value so a rotation mistake shows up
@@ -894,8 +1030,36 @@ mod tests {
     fn default_adjust_adds_no_filters() {
         assert!(Adjust::default().is_identity());
         assert!(Adjust::default().settings().is_empty());
-        let a = Adjust { exposure: 0.5, saturation: 1.0, contrast: 1.2 };
+        let a = Adjust { exposure: 0.5, contrast: 1.2, ..Adjust::default() };
         assert_eq!(a.settings(), vec![("exposure", 0.5), ("contrast", 1.2)]);
+    }
+
+    #[test]
+    fn sharpness_is_not_a_filter_chain_setting() {
+        // the unsharp mask runs on the picture itself, after the chain, so it adds no named filter
+        let a = Adjust { sharpness: 1.0, ..Adjust::default() };
+        assert!(!a.is_identity());
+        assert!(a.settings().is_empty());
+    }
+
+    #[test]
+    fn the_adjust_panel_sliders_set_and_clamp_their_adjustments() {
+        let mut a = Adjust::default();
+        let sliders = a.sliders();
+        assert_eq!(sliders.iter().map(|s| s.label).collect::<Vec<_>>(), ["Exposure", "Contrast", "Saturation", "Temperature", "Sharpness"]);
+        assert_eq!(sliders[0].value, 0.0);
+        assert_eq!(sliders[1].value, 1.0, "contrast starts unchanged");
+        assert_eq!(sliders[4].value, 0.0, "sharpness starts unchanged");
+        a.set_slider(0, 9.0);
+        a.set_slider(1, -1.0);
+        a.set_slider(3, 40.0);
+        assert_eq!((a.exposure, a.contrast, a.temperature), (2.0, 0.0, 40.0));
+        assert_eq!(a.settings(), vec![("exposure", 2.0), ("contrast", 0.0), ("temperatureTint", 40.0)]);
+        a.set_slider(4, 5.0);
+        assert_eq!(a.sharpness, 2.0, "sharpness is clamped to its range");
+        a.set_slider(9, 1.0);
+        assert!(!a.is_identity());
+        assert_eq!(sliders[3].min, -100.0);
     }
 
     #[test]
@@ -1047,6 +1211,59 @@ mod tests {
         let mut strike = blank();
         burn(&mut strike, &[drag_mark(MarkKind::Strike, 0, (0.0, 0.2), (1.0, 0.6), MARK_RED)], 0, 0);
         assert_ne!(strike.px[8 * 20 + 5], white);
+    }
+
+    #[test]
+    fn a_star_has_ten_points_alternating_outer_and_inner_from_the_top() {
+        let r = Norm { x: 0.0, y: 0.0, w: 1.0, h: 1.0 };
+        let pts = outline(MarkKind::Star, r);
+        assert_eq!(pts.len(), 10);
+        // the first point is the top of the box, the outer points lie on its edge
+        assert!((pts[0].0 - 0.5).abs() < 1e-5 && pts[0].1.abs() < 1e-5, "{:?}", pts[0]);
+        let inner = (pts[1].0 - 0.5).hypot(pts[1].1 - 0.5);
+        let outer = (pts[0].0 - 0.5).hypot(pts[0].1 - 0.5);
+        assert!((inner / outer - STAR_INNER).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_hexagon_and_a_speech_bubble_are_closed_outlines_with_a_tail() {
+        let r = Norm { x: 0.2, y: 0.2, w: 0.4, h: 0.4 };
+        assert_eq!(outline(MarkKind::Polygon, r).len(), 6);
+        let bubble = outline(MarkKind::Bubble, r);
+        assert_eq!(bubble.len(), 7);
+        // the tail reaches the bottom edge and the body stops above it
+        assert!(bubble.iter().any(|p| (p.1 - 0.6).abs() < 1e-5), "the tip is on the bottom edge");
+        assert!(outline(MarkKind::Rect, r).is_empty(), "a rectangle has no outline of its own");
+    }
+
+    #[test]
+    fn shapes_and_redactions_burn_into_a_picture_and_text_boxes_do_not() {
+        let white = pack(255, 255, 255, 255);
+        let blank = || Image { w: 20, h: 20, px: vec![white; 400] };
+        let touched = |m: Mark| {
+            let mut picture = blank();
+            burn(&mut picture, &[m], 0, 0);
+            picture.px.iter().filter(|&&p| p != white).count()
+        };
+        assert!(touched(drag_mark(MarkKind::Star, 0, (0.1, 0.1), (0.9, 0.9), MARK_BLUE)) > 20);
+        assert!(touched(drag_mark(MarkKind::Polygon, 0, (0.1, 0.1), (0.9, 0.9), MARK_BLUE)) > 20);
+        let black = pack(0, 0, 0, 255);
+        let mut redacted = blank();
+        burn(&mut redacted, &[drag_mark(MarkKind::Redact, 0, (0.0, 0.0), (0.5, 0.5), MARK_BLUE)], 0, 0);
+        assert_eq!(redacted.px[5 * 20 + 5], black, "inside the box");
+        assert_eq!(redacted.px[15 * 20 + 15], white, "outside the box");
+        assert_eq!(touched(Mark { kind: MarkKind::Text, page: 0, rect: Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, color: MARK_BLUE, text: "hi".into(), ink: Vec::new() }), 0);
+    }
+
+    #[test]
+    fn the_new_kinds_round_trip_through_the_sidecar() {
+        let marks = vec![
+            drag_mark(MarkKind::Star, 1, (0.1, 0.1), (0.5, 0.5), MARK_BLUE),
+            drag_mark(MarkKind::Bubble, 0, (0.2, 0.2), (0.6, 0.4), MARK_BLUE),
+            Mark { kind: MarkKind::Text, page: 2, rect: Norm { x: 0.3, y: 0.3, w: 0.3, h: 0.06 }, color: MARK_BLUE, text: "Dear\tall".into(), ink: Vec::new() },
+            drag_mark(MarkKind::Redact, 0, (0.0, 0.0), (0.2, 0.2), pack(0, 0, 0, 255)),
+        ];
+        assert_eq!(parse_sidecar(&to_sidecar(&marks)), marks);
     }
 
     fn snap(n: usize) -> Snapshot {

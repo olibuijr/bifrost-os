@@ -13,10 +13,10 @@
  "summary": {
   "features": 46,
   "parity": 10,
-  "partial": 28,
-  "gap": 6,
+  "partial": 31,
+  "gap": 3,
   "n/a": 2,
-  "coverage_pct": 54.5
+  "coverage_pct": 58.0
  },
  "features": [
   {
@@ -33,9 +33,9 @@
    "area": "menu",
    "apple": "Edit.nib: File > Save All",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:303",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:370, springboard/apps/textedit-desktop/src/main.rs:1855",
    "note": "File > Save All (cmd+alt+s) saves every edited document; untitled ones each open their save panel. Not checked on the lab machine.",
-   "wire": "Add \"Save All\" to file_menu (main.rs:668) iterating self.docs open documents and calling the controller save for each edited one."
+   "wire": "Verify Save All on Midget with multiple edited documents, including separate save panels for untitled documents."
   },
   {
    "feature": "Rich text documents (RTF read/write)",
@@ -70,53 +70,53 @@
    "apple": "Info.plist: RTFD (Editor); Localizable: RTFD save notices",
    "status": "gap",
    "bifrost": "",
-   "note": "Pictures are skipped by the RTF reader (rtf.rs:6).",
-   "wire": "Add an RTFD package reader/writer (folder with TXT.rtf + attachments) in a new rtfd.rs; needs an inline image cell kind in text.rs and drawing in view.rs; register the type in document.rs."
+   "note": "Not done. RTFD is a folder package (TXT.rtf plus the attachment files), and the SDK document controller reads and writes one byte stream per document. Needs an SDK folder-package document type and an inline attachment cell in text.rs.",
+   "wire": "Add an SDK folder-package document type, then an RTFD reader and writer in rtfd.rs with an attachment cell kind in text.rs."
   },
   {
    "feature": "Word .docx / .doc / Word XML / ODT / web archive",
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes: Word 2007/2003 XML/97, OpenDocument Text, Web archive",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/docx.rs:1, springboard/apps/textedit-desktop/src/odt.rs:1, springboard/apps/textedit-desktop/src/document.rs:44",
-   "note": ".docx and .odt open and save (paragraphs, runs, bold/italic/underline/strike, size, colour, highlight, baseline, font family, alignment, spacing, lists) through a ZIP reader/writer (zipdoc.rs). Hyperlinks, line and page breaks and the title, subject, author and keywords are carried (docx.rs, odt.rs). Not carried: pictures, tables, headers/footers, comments, styles.xml defaults; .doc, Word XML and web archive are still missing. built on parity/team-d-textedit; not yet verified on Midget.",
-   "wire": "Start with .docx and .odt (zip + XML): new docx.rs/odt.rs mapping paragraphs, runs (b/i/u, font, size, colour) and alignment to text.rs cells; add types in document.rs read/write."
+   "bifrost": "springboard/apps/textedit-desktop/src/docx.rs:1, springboard/apps/textedit-desktop/src/odt.rs:1, springboard/apps/textedit-desktop/src/webarchive.rs:1, springboard/apps/textedit-desktop/src/document.rs:44, springboard/ui/src/uttype.rs (bifrost.web-archive)",
+   "note": ".docx, .odt and web archives (.webarchive: the page's HTML as the main resource of a binary property list) open and save. Not done: .doc (the binary Word 97 format), Word 2003 XML, pictures, tables, and headers and footers in the packages; .odt has no page break form, so a page break is written as a line break. Not yet verified on Midget.",
+   "wire": "Word 2003 XML: a WordprocessingML reader and writer beside docx.rs (the element names are close). .doc needs its own binary reader, which is a separate piece of work."
   },
   {
    "feature": "Plain text encodings (open/save encoding accessory, customize list)",
    "area": "panel",
    "apple": "EncodingAccessory.nib, SelectEncodingsPanel.nib; Localizable: encoding errors, Customize Encodings List",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/encoding.rs:124",
-   "note": "Plain text opens in its own encoding (byte order mark, UTF-8, UTF-16 without a mark, else Western single-byte) and saves in the document encoding; Format > Text Encoding sets it (UTF-8, UTF-16 either byte order, ISO Latin 1, Windows Latin 1, Classic Roman, ASCII), Format > Reinterpret As rereads the text, Preferences > Plain Text Encoding sets the default for new documents. There is no encoding accessory in the open and save panels and no customised list, and RTF, HTML and the packages keep their own fixed encodings. built on parity/team-d-textedit; not yet verified on Midget.",
-   "wire": "Add an encoding popup to the open and save panels through an SDK panel accessory (the SDK has none yet) and a customise-list sheet; the codec and the Format menu are in encoding.rs and main.rs."
+   "bifrost": "springboard/apps/textedit-desktop/src/encoding.rs:124, springboard/apps/textedit-desktop/src/main.rs:1003",
+   "note": "Plain text opens in its own encoding and saves in the document encoding. Format > Text Encoding and Reinterpret As work; Preferences > Customize Encodings List chooses the encodings the Text Encoding menu lists (the document's own encoding is always listed). Still missing: the encoding accessory in the open and save panels, because the SDK panels take no accessory view. Not yet verified on Midget.",
+   "wire": "The encoding popup in the open and save panels needs an accessory view in the SDK panels (the shell does not provide one yet)."
   },
   {
    "feature": "Export as PDF",
    "area": "menu",
    "apple": "Edit.nib: File > Export as PDF…",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:724",
-   "note": "File > Export as PDF... asks through a save panel and writes the same PDF the printer gets (main.rs export_event). Not checked on the lab machine.",
-   "wire": "Add File > Export as PDF… in file_menu (main.rs:668) that runs print.rs PDF generation and writes it through ctx.save_document with public.pdf."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1306, springboard/apps/textedit-desktop/src/main.rs:1856",
+   "note": "File > Export as PDF... asks through a save panel and writes the same PDF the printer gets. Not checked on the lab machine.",
+   "wire": "Verify the exported PDF on Midget opens and includes the same page content as the print path."
   },
   {
    "feature": "Print with page setup",
    "area": "menu",
    "apple": "Edit.nib: File > Page Setup…, Print…; PrintAccessory: header and footer, rewrap to fit page",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/print.rs:174, springboard/apps/textedit-desktop/src/main.rs:1089",
-   "note": "Header and Footer is a checked item under File (title top left, \"Page n of m\" bottom right). The Rewrap toggle is not done: the layout is always wrapped to the printable width.",
-   "wire": "Add Header and Footer (title, page n of m) and Rewrap toggles to the print path in print.rs and as checked items under the Print submenu."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1280, springboard/apps/textedit-desktop/src/print.rs:184, springboard/apps/textedit-desktop/src/main.rs:1861",
+   "note": "File > Print Header and Footer (the title top left, \"Page n of m\" bottom right) and File > Rewrap to Fit Page are checked items. With rewrap off the lines print where the window breaks them, scaled down to the page width. Not checked on the lab machine.",
+   "wire": "Verify header/footer and rewrap toggles on Midget with short and overlong lines; check a real print queue when available."
   },
   {
    "feature": "Show/Hide document properties (author, title, subject, keywords, copyright)",
    "area": "panel",
    "apple": "DocumentProperties.nib; Localizable: Show/Hide Properties, Change Author/Title/…",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/properties.rs:98",
-   "note": "File > Show Properties opens a panel with title, author, subject, keywords and copyright; the values are read and written in the RTF info group (rtf.rs:97) and the docx and odt package metadata (the packages have no copyright field). HTML files do not carry them. built on parity/team-d-textedit; not yet verified on Midget.",
-   "wire": "Carry the properties in HTML (meta elements in html.rs) and show them in the window title area or the info popover; add the creation and modification dates the reference panel lists."
+   "bifrost": "springboard/apps/textedit-desktop/src/properties.rs:98, springboard/apps/textedit-desktop/src/html.rs:50, springboard/apps/textedit-desktop/src/html.rs:231",
+   "note": "File > Show Properties opens a panel with title, author, subject, keywords and copyright. They are kept in the RTF info group, the .docx and .odt package metadata and, now, in the head of HTML files (the title element and meta elements). Still missing: the creation and modification dates the reference panel lists; no date is read from or written to a file yet.",
+   "wire": "Read the creation and modification dates (docx core properties, odt metadata, the RTF creation time), write the modified time on save, and show both in the panel's title row."
   },
   {
    "feature": "Undo / Redo",
@@ -141,18 +141,18 @@
    "area": "menu",
    "apple": "Edit.nib: Edit > Paste and Match Style",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:483",
-   "note": "Edit > Paste and Match Style (cmd+alt+shift+v) runs the paste path. The clipboard carries plain text only, so a paste already takes the style at the caret; rich pasteboard content will need a separate path.",
-   "wire": "Add Edit > Paste and Match Style (cmd+alt+shift+v) inserting plain text with the caret style; Action variant in view.rs."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:698, springboard/apps/textedit-desktop/src/main.rs:708",
+   "note": "Edit > Paste and Match Style (cmd+alt+shift+v) pastes plain text in the style at the caret. Edit > Paste keeps the formatting of text copied in this document (the app keeps its own copy next to the system clipboard text). Rich content copied from another app is pasted as plain text. Not checked on the lab machine.",
+   "wire": "Rich content from other apps needs an RTF pasteboard type in the SDK (the general pasteboard carries plain text here)."
   },
   {
    "feature": "Delete / Complete / Insert (page break, line break, paragraph break)",
    "area": "menu",
    "apple": "Edit.nib: Edit > Delete, Complete, Insert submenu",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1324",
-   "note": "Edit > Delete and Edit > Complete (alt+escape) work: Complete offers the words of the document that start with the typed prefix and steps through them on repeat. Edit > Insert adds Page Break, Line Break and Paragraph Break: breaks take no width in the layout (layout.rs:146), a page break starts a new page in print (print.rs:38) and shows a rule on screen, RTF and docx carry them, HTML and odt write them as a line break. built on parity/team-d-textedit; not yet verified on Midget.",
-   "wire": "Read HTML br and odt line-break as line breaks instead of paragraph breaks, and carry the page break through odt (paragraph break-before) and HTML (page-break-before)."
+   "bifrost": "springboard/apps/textedit-desktop/src/html.rs:310, springboard/apps/textedit-desktop/src/odt.rs:386, springboard/apps/textedit-desktop/src/main.rs:1413",
+   "note": "Edit > Delete, Complete and Insert (Page Break, Line Break, Paragraph Break) work. A line break read from HTML (br) or .odt (text:line-break) is a line break inside the paragraph again, not a new paragraph; HTML keeps the page break. .odt writes a page break as a line break. Not yet verified on Midget.",
+   "wire": "A page break in .odt as a paragraph break-before style, which needs an automatic paragraph style in odt.rs."
   },
   {
    "feature": "Attach Files / Add Link",
@@ -177,36 +177,36 @@
    "area": "menu",
    "apple": "Edit.nib: Edit > Find > Use Selection for Find, Jump to Selection",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:314, springboard/apps/textedit-desktop/src/main.rs:324",
-   "note": "Edit > Find > Use Selection for Find (cmd+E) fills the find field; Jump to Selection (cmd+J) scrolls the caret into view. The selection is not put on the shared find pasteboard.",
-   "wire": "Add both to the Find group in edit_menu: Cmd+E copies the selection into self.find; Cmd+J scrolls to caret."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:423, springboard/apps/textedit-desktop/src/main.rs:522",
+   "note": "Edit > Find > Use Selection for Find (cmd+E) puts the selection on the find pasteboard and fills the find field; the find field takes the find pasteboard's text when the find bar opens. Jump to Selection (cmd+J) scrolls the caret into view. Not checked on the lab machine.",
+   "wire": "Verify Use Selection for Find populates the find field and Jump to Selection scrolls the caret into view on Midget."
   },
   {
    "feature": "Spelling: check now, while typing, learn, ignore, correct",
    "area": "menu",
    "apple": "Edit.nib: Edit > Spelling and Grammar",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:821, springboard/apps/textedit-desktop/src/spell.rs:72",
-   "note": "Correct Spelling Automatically replaces a misspelled word with the checker guess when a space or punctuation ends it (kept in the preferences). Still missing: grammar and the Show Spelling and Grammar panel.",
-   "wire": "Add a \"Correct Spelling Automatically\" checked item applying spell.rs best guess on word end in type_into (main.rs:454); grammar is out of scope."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:596, springboard/apps/textedit-desktop/src/main.rs:1028, springboard/apps/textedit-desktop/src/spell.rs:72",
+   "note": "Check Document Now, Check Spelling While Typing, Correct Spelling Automatically, Correct Spelling, Learn, Ignore, and Show Spelling and Grammar (a panel that steps through the misspelled words with Ignore, Learn, Change and Find Next). Still missing: grammar checking.",
+   "wire": "Grammar checking needs a grammar checker in the SDK, which does not exist yet."
   },
   {
    "feature": "Substitutions (smart quotes, dashes, links, text replacement, data detectors)",
    "area": "menu",
    "apple": "Edit.nib: Edit > Substitutions; Preferences.nib: Smart quotes/dashes/links",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1096",
-   "note": "Edit > Substitutions has Smart Quotes, Smart Dashes (curly quotes, -- to an em dash) and Smart Links (a web or mail address becomes a link when the word ends, links.rs:72), applied while typing and kept in the preferences. Text Replacement and data detectors are not done. built on parity/team-d-textedit; not yet verified on Midget.",
-   "wire": "Add an Edit > Substitutions submenu with checked Smart Quotes / Smart Dashes; apply in type_into (main.rs:454) when typing quotes or \"--\"; persist in preferences."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1444, springboard/apps/textedit-desktop/src/replace.rs:1",
+   "note": "Smart Quotes, Smart Dashes, Smart Links and Text Replacement are on the Substitutions submenu and kept in the preferences. Text Replacement turns a fixed list of shortcuts (such as (c), ... and 1/2, replace.rs) into their symbols when a blank ends the word; the desktop's own replacement list is not read. Data detectors are not done.",
+   "wire": "Read the desktop's replacement list through the text services (replacements) so the list is the one the user keeps; data detectors (dates and addresses to links) remain."
   },
   {
    "feature": "Transformations (uppercase, lowercase, capitalise)",
    "area": "menu",
    "apple": "Edit.nib: Edit > Transformations",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:561, springboard/apps/textedit-desktop/src/main.rs:502",
-   "note": "Edit > Transformations: Make Upper Case, Make Lower Case and Capitalize act on the selection as one undo entry.",
-   "wire": "Add three items in edit_menu that replace the selection with its transformed string through the text.rs undoable replace."
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:702 (transform), springboard/apps/textedit-desktop/src/main.rs:1726",
+   "note": "Edit > Transformations: Make Upper Case, Make Lower Case and Capitalize act on the selection as one undo entry (text.rs transformations_change_case_in_one_undo). Not yet verified on Midget.",
+   "wire": "Verify all three text transformations on Midget and confirm each operation is undone as one step."
   },
   {
    "feature": "Speech",
@@ -214,8 +214,8 @@
    "apple": "Edit.nib: Edit > Speech > Start/Stop Speaking",
    "status": "gap",
    "bifrost": "",
-   "note": "No TTS.",
-   "wire": "Start/Stop Speaking items calling the SDK speech service with the selection or document."
+   "note": "No speech output. The SDK speech module models utterances but has no audio engine behind it, and the device rules forbid sound that the user did not ask for.",
+   "wire": "Start/Stop Speaking items calling an audio speech service once one exists."
   },
   {
    "feature": "Bold / Italic / Underline",
@@ -240,9 +240,9 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Font > Show Fonts, Bigger, Smaller",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:632",
-   "note": "Fixed list of families (text::FAMILIES) and step sizes; no font panel with all system fonts.",
-   "wire": "Replace the FAMILIES submenu with the SDK font panel (Cmd+T) listing installed fonts; store family name in cells."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1754",
+   "note": "Fixed list of the three built-in families (text::FAMILIES) and step sizes; no font panel with all system fonts. Preferences > Default Font sets the family new text takes.",
+   "wire": "Replace the families submenu with the SDK font panel (Cmd+T) listing installed fonts; store the family name in cells."
   },
   {
    "feature": "Text colour / Highlight (Show Colours)",
@@ -258,9 +258,9 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Font > Copy Style, Paste Style",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:329, springboard/apps/textedit-desktop/src/main.rs:519",
-   "note": "Format > Copy Style (cmd+alt+c) keeps the character formatting at the caret; Paste Style (cmd+alt+v) applies it to the selection or the typing style. Paragraph formatting is not copied.",
-   "wire": "Store the caret style in the app on Copy Style; apply to the selection on Paste Style (format_menu)."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:761, springboard/apps/textedit-desktop/src/text.rs:674",
+   "note": "Format > Copy Style (cmd+alt+c) keeps the caret's character and paragraph formatting. Paste Style (cmd+alt+v) applies both to the selection (or the typing style and the paragraph at the caret) as one undo entry. Not checked on the lab machine.",
+   "wire": "Verify character and paragraph style copy/paste on Midget for both a selection and a caret insertion point."
   },
   {
    "feature": "Alignment (left, centre, right, justify)",
@@ -276,9 +276,9 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Spacing…",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:645",
-   "note": "Preset line spacings only; no before/after paragraph spacing sheet.",
-   "wire": "Add a Spacing… sheet with line height multiple and paragraph before/after values stored in paragraph props (text.rs:68)."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1170, springboard/apps/textedit-desktop/src/main.rs:1188, springboard/apps/textedit-desktop/src/layout.rs:112, springboard/apps/textedit-desktop/src/rtf.rs:296, springboard/apps/textedit-desktop/src/docx.rs (paragraph_xml, parse), springboard/apps/textedit-desktop/src/odt.rs (paragraph_properties, para_styles)",
+   "note": "Format > Text > Spacing... sets the line spacing (a number from 1 to 3, the nearest preset is kept) and the space before and after each paragraph in points. The space is kept in RTF (sb and sa), in HTML (margins), in .docx (w:before, w:after) and in .odt (fo:margin-top and fo:margin-bottom), with unit tests in docx.rs and odt.rs, and laid out and printed. Line spacing is one of the presets, not any multiple. Not yet verified on Midget.",
+   "wire": "Arbitrary line multiples need a fractional value in Style.spacing; the presets are the only line spacing kept today."
   },
   {
    "feature": "Lists (bullets, numbers)",
@@ -293,28 +293,28 @@
    "feature": "Tables",
    "area": "menu",
    "apple": "Edit.nib: Format > Table…",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No tables.",
-   "wire": "Large: table cell blocks in the text model and RTF \\trowd; defer."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/text_table.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/text_table.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Add table blocks to the text model and RTF \\trowd; lay out with bifrost_ui::text_table."
   },
   {
    "feature": "Writing direction (left-to-right / right-to-left)",
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Writing Direction",
-   "status": "gap",
-   "bifrost": "",
-   "note": "LTR only.",
-   "wire": "Add a paragraph direction prop and right-aligned bidi layout in layout.rs; menu items under Text."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:569 (set_writing_direction), springboard/apps/textedit-desktop/src/layout.rs:199 (x_offset), springboard/apps/textedit-desktop/src/rtf.rs:309 (\\rtlpar), springboard/apps/textedit-desktop/src/docx.rs (w:bidi), springboard/apps/textedit-desktop/src/odt.rs (style:writing-mode), springboard/apps/textedit-desktop/src/main.rs:1770",
+   "note": "Format > Text > Left to Right and Right to Left set the paragraph direction on the selected paragraphs (one undo entry); a right to left paragraph's left-aligned lines start at the right edge, and the direction is kept in RTF (\\rtlpar) and in .docx (w:bidi) and .odt (style:writing-mode), with unit tests. Not done: the direction in HTML, and the bidi reordering of mixed-direction runs (the kit model ui/src/bidi.rs is not used by the app yet). Tested in text.rs and layout.rs unit tests; not yet verified on Midget.",
+   "wire": "Run bifrost_ui::bidi visual order in layout.rs for mixed runs; carry the direction in html.rs (dir)."
   },
   {
    "feature": "Show/Hide Ruler, Copy/Paste Ruler",
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Show Ruler, Copy Ruler, Paste Ruler; Preferences: Show ruler",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:340, springboard/apps/textedit-desktop/src/view.rs:337",
-   "note": "View > Show Ruler / Hide Ruler (cmd+R) toggles the ruler and is kept in the preferences. Copy Ruler, Paste Ruler and first-line/left indent markers are not done.",
-   "wire": "Add Format > Text > Show Ruler (cmd+r) toggling geometry(..., ruler) in main.rs:125; add first-line/left indent markers."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:716, springboard/apps/textedit-desktop/src/main.rs:721, springboard/apps/textedit-desktop/src/view.rs (draw_ruler)",
+   "note": "View > Show Ruler (cmd+r) toggles the ruler and is kept in the preferences. Format > Text > Copy Ruler and Paste Ruler copy and apply the tab stop distance. Still missing: the first-line and left indent markers on the ruler.",
+   "wire": "Indent markers need per-paragraph indent properties in text.rs and layout.rs, and drag handles on the ruler in view.rs."
   },
   {
    "feature": "Make Plain Text / Make Rich Text",
@@ -330,27 +330,27 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Prevent Editing / Allow Editing",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:335, springboard/apps/textedit-desktop/src/document.rs:15",
-   "note": "Format > Prevent Editing / Allow Editing sets read_only on the window document: typing, deleting, paste, undo, replace, transformations and formatting refuse with a status note. It is not stored in the file.",
-   "wire": "Add a read_only flag on TextDocument; Format > Prevent Editing toggles it; type_into/backspace/perform refuse edits when set."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:441, springboard/apps/textedit-desktop/src/document.rs:15",
+   "note": "Format > Prevent Editing / Allow Editing sets read_only on the window document: typing, deleting, paste, undo, replace, transformations, formatting and the panels that change the document refuse with a status note. It is not stored in the file. Not checked on the lab machine.",
+   "wire": "Verify read-only mode blocks edits, undo and formatting on Midget, and Allow Editing restores input."
   },
   {
    "feature": "Wrap to Page / Wrap to Window",
    "area": "menu",
    "apple": "Edit.nib: Format > Wrap to Page; Localizable: Wrap to Window",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:345, springboard/apps/textedit-desktop/src/view.rs:337",
-   "note": "View > Wrap to Window / Wrap to Page widens the text column to the window; kept in the preferences.",
-   "wire": "Add a wrap mode to the layout width in ensure_layout (main.rs:187) and a Format item that switches between page and window width."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:451, springboard/apps/textedit-desktop/src/main.rs:1790",
+   "note": "Format > Wrap to Page and View > Wrap to Window toggle the text column width (the window or the readable width); kept in the preferences.",
+   "wire": "Verify both wrap modes change the text column as expected and persist across relaunch on Midget."
   },
   {
    "feature": "Allow Hyphenation",
    "area": "menu",
    "apple": "Edit.nib: Format > Allow Hyphenation",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No hyphenation.",
-   "wire": "Low priority; soft-hyphen breaking in layout.rs."
+   "status": "partial",
+   "bifrost": "springboard/ui/src/textbreak.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/textbreak.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Use bifrost_ui::textbreak line-break opportunities plus soft hyphens in layout.rs."
   },
   {
    "feature": "Vertical layout",
@@ -366,54 +366,54 @@
    "area": "menu",
    "apple": "Edit.nib: View > Zoom In, Zoom Out, Actual Size",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:351, springboard/apps/textedit-desktop/src/main.rs:114",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:459, springboard/apps/textedit-desktop/src/main.rs:1807",
    "note": "View > Zoom In (cmd+alt+=), Zoom Out (cmd+alt+-) and Actual Size (cmd+0) scale the text 50% to 400% (sizes are scaled for layout and drawing; the page width stays). Not checked on the lab machine.",
-   "wire": "Add a View menu with Zoom In/Out/Actual Size scaling the page in view.rs geometry and draw_canvas (main.rs:837)."
+   "wire": "Verify zoom bounds, shortcuts and Actual Size on Midget, including layout at the smallest and largest supported sizes."
   },
   {
    "feature": "Full screen and dark background for windows",
    "area": "menu",
    "apple": "Edit.nib: View > Enter Full Screen, Use Dark Background for Windows",
    "status": "partial",
-   "bifrost": "",
-   "note": "Full screen is shell window chrome; no dark page option.",
-   "wire": "Add View > Use Dark Background for Windows toggling the page fill in view.rs."
+   "bifrost": "springboard/apps/textedit-desktop/src/view.rs:906, springboard/apps/textedit-desktop/src/main.rs:472",
+   "note": "View > Use Dark Background for Windows: the page is dark and text with no colour of its own is white; kept in the preferences. Full screen is the window chrome of the shell, not the app, so the app has nothing to add.",
+   "wire": "Verify dark page background and automatic white text on Midget; full-screen window behaviour is owned by the shell."
   },
   {
    "feature": "Go to line (Select Line…)",
    "area": "panel",
    "apple": "SelectLinePanel.nib, LinePanel strings",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:656, springboard/apps/textedit-desktop/src/text.rs:608",
-   "note": "Edit > Find > Select Line... (cmd+L) selects a line or range such as 12-20 typed in the find field (the first press opens the find bar). There is no separate panel.",
-   "wire": "Add Edit > Find > Select Line… (cmd+L) sheet taking \"n\" or \"n-m\" and selecting those lines via text.rs line index."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1159, springboard/apps/textedit-desktop/src/main.rs:1224, springboard/apps/textedit-desktop/src/text.rs:740",
+   "note": "Edit > Find > Select Line... (cmd+L) opens a panel for a line number or a range such as 12-20; Select selects those lines, and a line the document does not have keeps the panel open with the number of lines.",
+   "wire": "Verify selecting a line and range on Midget and that an out-of-range entry keeps the panel open with its validation message."
   },
   {
    "feature": "Settings: new document format, window size, fonts",
    "area": "settings",
    "apple": "Preferences.nib: New Document tab (format, wrap to page, window size, fonts)",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1079, springboard/apps/textedit-desktop/src/prefs.rs:1",
-   "note": "No settings window API exists in the SDK, so a Preferences menu holds the new-document format (rich or plain) and the other options are kept in the preferences. Default fonts and window size in characters are not done.",
-   "wire": "Add a Settings window (SDK settings pane): default rich/plain, default fonts, window width/height in characters; apply on New in the controller."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:988, springboard/apps/textedit-desktop/src/prefs.rs:138",
+   "note": "Preferences (cmd+,) opens a panel with the new document format (rich or plain), the default font and the plain text encoding. Window size in characters is not done: the window size belongs to the shell.",
+   "wire": "Window size is a shell window setting, not an app setting; not planned for the app."
   },
   {
    "feature": "Settings: open and save options (HTML/RTF as code, encodings, HTML saving, .txt extension)",
    "area": "settings",
    "apple": "Preferences.nib: Open and Save tab",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1423",
-   "note": "Preferences > Show RTF and HTML Files as Code opens those files as plain text, and Preferences > Plain Text Encoding sets the encoding of new plain text documents (prefs.rs). The HTML saving options (document type, style handling) and the add-.txt-extension option are not done. built on parity/team-d-textedit; not yet verified on Midget.",
-   "wire": "Add the HTML saving options (doctype, CSS or inline styles, preserve white space) to prefs.rs and html.rs write, and the add .txt option to the document controller save path."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:988, springboard/apps/textedit-desktop/src/main.rs:1003, springboard/apps/textedit-desktop/src/prefs.rs:138",
+   "note": "Preferences: Show RTF and HTML Files as Code, Plain Text Encoding and Customize Encodings List. Still missing: the HTML saving options (document type, style sheet or inline styles) and the add-.txt-extension option.",
+   "wire": "HTML saving: a document type and a style-sheet mode in html.rs write, chosen in the preferences; add-.txt: a preference the save path applies to the suggested name."
   },
   {
    "feature": "Settings: spelling and substitution defaults",
    "area": "settings",
    "apple": "Preferences.nib: Options (check spelling as you type, grammar, correct automatically, smart quotes/dashes/links)",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/prefs.rs:1, springboard/apps/textedit-desktop/src/main.rs:190",
-   "note": "Check Spelling While Typing, Correct Spelling Automatically, Smart Quotes, Smart Dashes, ruler, wrapping and print header/footer are saved to the preferences and restored at launch (main.rs configure). Exposed through the menus, not a settings window.",
-   "wire": "Persist spelling.enabled and substitutions defaults in preferences and expose them in the Settings window."
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:988, springboard/apps/textedit-desktop/src/prefs.rs:138",
+   "note": "Check Spelling While Typing, Correct Spelling Automatically, Smart Quotes, Smart Dashes, Smart Links, Text Replacement, the ruler, wrapping, the header and footer, rewrap and the dark background are listed in the Preferences panel and saved to the preferences.",
+   "wire": "Verify preference toggles persist across relaunch on Midget and affect spelling, substitutions, wrapping and print defaults as described."
   },
   {
    "feature": "Services: new window with selection / open selected file",
@@ -421,8 +421,8 @@
    "apple": "Info.plist NSServices: New window containing selection; Open selected file",
    "status": "gap",
    "bifrost": "",
-   "note": "No services provider.",
-   "wire": "Register two text services in the app manifest that create a new document with the text or open the named path through the controller; needs SDK services."
+   "note": "No services provider. The shell's Services list (springboard/ui/src/services_menu.rs) is fixed, and the document controller opens files only through the panel, so the two services need a shell change and a controller path that opens a named file.",
+   "wire": "Add the two services to the shell's Services list, routed to a text intent that creates a document with the text or opens the named path; needs the SDK controller path."
   },
   {
    "feature": "Help",

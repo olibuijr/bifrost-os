@@ -2,10 +2,15 @@
 //! or make a thumbnail that fits a box. The header is read before any pixel is decoded, so an
 //! oversized picture is refused without allocating its pixels, and a layout can ask for the
 //! thumbnail size before the decode. Every format of `cg::imageio` is read; other data is `NotImage`.
+//!
+//! The stored size is the size of the pixels in the file. A picture whose EXIF orientation turns it a quarter turn is
+//! shown with its sides swapped, so `upright_size`, `thumbnail_size`, `decode_upright` and `thumbnail` follow the
+//! orientation, while `size` and `decode` keep the stored pixels.
 use bifrost_render::gfx::Image;
-use bifrost_render::cg::imageio::{self, MAX_SIDE};
+use bifrost_render::cg::imageio::{self, orient_image, ImageSource as CodecSource, MAX_SIDE};
 use bifrost_render::imgdec;
 use bifrost_render::pixel_layout::unpremultiply;
+use std::path::Path;
 pub use bifrost_render::cg::imageio::Format;
 
 /// Why a picture could not be read, decoded or made into a thumbnail.
@@ -15,37 +20,49 @@ pub enum SourceError {
     NotImage,
     /// The data ends before the size fields of the header.
     Truncated,
-    /// The picture is wider or taller than the decode limit (`MAX_SIDE`).
+    /// The picture is wider or taller than the decode limit (`MAX_SIDE`), or has more pixels than the caller allows.
     TooLarge { width: usize, height: usize },
     /// The header is present but the pixel data does not decode, or the size is zero.
     Undecodable,
     /// A thumbnail box with a zero side.
     EmptyBox,
+    /// The file is missing, is not a regular file, or cannot be read.
+    Unreadable,
+    /// The file is larger than the byte limit given to `read_file`. Its size is reported without reading it.
+    FileTooLarge { bytes: u64 },
 }
 
-/// A picture held as bytes by the caller. Its format and size are known before any decode.
+/// A picture held as bytes by the caller. Its format, size and orientation are known before any decode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ImageSource<'a> {
     bytes: &'a [u8],
     format: Format,
     width: usize,
     height: usize,
+    orientation: u8,
 }
 
 impl<'a> ImageSource<'a> {
-    /// Reads the format and size from the header. Pictures wider or taller than `MAX_SIDE`
-    /// are refused here, before decoding.
+    /// Reads the format and size from the header. Pictures wider or taller than `MAX_SIDE` are refused here, before
+    /// decoding.
     pub fn new(bytes: &'a [u8]) -> Result<Self, SourceError> {
+        Self::with_max_pixels(bytes, usize::MAX)
+    }
+
+    /// Like [`ImageSource::new`], and also refuses a picture with more than `max_pixels` pixels. An app that makes
+    /// thumbnails on a small budget passes its own limit; the decoded picture takes four bytes per pixel.
+    pub fn with_max_pixels(bytes: &'a [u8], max_pixels: usize) -> Result<Self, SourceError> {
         let format = Format::detect(bytes).ok_or(SourceError::NotImage)?;
         let (width, height) = match imageio::pixel_size(bytes) {
             Some(s) if s.0 > 0 && s.1 > 0 => s,
             _ if bytes.len() < 64 => return Err(SourceError::Truncated),
             _ => return Err(SourceError::Undecodable),
         };
-        if width > MAX_SIDE || height > MAX_SIDE {
+        if width > MAX_SIDE || height > MAX_SIDE || width.saturating_mul(height) > max_pixels {
             return Err(SourceError::TooLarge { width, height });
         }
-        Ok(ImageSource { bytes, format, width, height })
+        let orientation = CodecSource::new(bytes.to_vec()).properties_at(0).map_or(1, |p| p.orientation);
+        Ok(ImageSource { bytes, format, width, height, orientation })
     }
 
     /// The container format.
@@ -53,9 +70,18 @@ impl<'a> ImageSource<'a> {
         self.format
     }
 
-    /// The pixel size from the header.
+    /// The pixel size of the stored pixels, from the header.
     pub fn size(&self) -> (usize, usize) {
         (self.width, self.height)
+    }
+
+    /// The pixel size the picture is shown at: the stored size, with the sides swapped for a quarter turn.
+    pub fn upright_size(&self) -> (usize, usize) {
+        if (5..=8).contains(&self.orientation) {
+            (self.height, self.width)
+        } else {
+            (self.width, self.height)
+        }
     }
 
     /// The size of a thumbnail that fits `max_w` x `max_h`, computed from the header alone.
@@ -64,19 +90,38 @@ impl<'a> ImageSource<'a> {
         if max_w == 0 || max_h == 0 {
             return Err(SourceError::EmptyBox);
         }
-        Ok(imgdec::fit_dims(self.width, self.height, max_w, max_h))
+        let (w, h) = self.upright_size();
+        Ok(imgdec::fit_dims(w, h, max_w, max_h))
     }
 
-    /// Decodes the whole picture into premultiplied RGBA.
+    /// Decodes the whole picture into premultiplied RGBA, as stored.
     pub fn decode(&self) -> Result<Image, SourceError> {
         imageio::decode(self.bytes).ok_or(SourceError::Undecodable)
     }
 
-    /// Decodes the picture scaled to fit `max_w` x `max_h`, keeping the aspect. Never enlarged.
+    /// Decodes the whole picture and turns it upright by its EXIF orientation.
+    pub fn decode_upright(&self) -> Result<Image, SourceError> {
+        Ok(orient_image(&self.decode()?, self.orientation))
+    }
+
+    /// Decodes the picture upright and scaled to fit `max_w` x `max_h`, keeping the aspect. Never enlarged.
     pub fn thumbnail(&self, max_w: usize, max_h: usize) -> Result<Image, SourceError> {
         self.thumbnail_size(max_w, max_h)?;
-        Ok(imgdec::contain(&self.decode()?, max_w, max_h))
+        Ok(imgdec::contain(&self.decode_upright()?, max_w, max_h))
     }
+}
+
+/// Reads a picture file so that it can be given to [`ImageSource::new`]. A file larger than `max_bytes` is refused from
+/// its size, before any of it is read. Directories and missing files are `Unreadable`.
+pub fn read_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, SourceError> {
+    let meta = std::fs::metadata(path).map_err(|_| SourceError::Unreadable)?;
+    if !meta.is_file() {
+        return Err(SourceError::Unreadable);
+    }
+    if meta.len() > max_bytes {
+        return Err(SourceError::FileTooLarge { bytes: meta.len() });
+    }
+    std::fs::read(path).map_err(|_| SourceError::Unreadable)
 }
 
 /// A file type a bitmap can be written as (`representation(using:properties:)`).

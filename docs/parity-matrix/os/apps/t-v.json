@@ -19,8 +19,8 @@
    "role": "no TV app. Build: video library, Up Next, playback through videoplayer-desktop; store service out of scope",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no TV app. Build: video library, Up Next, playback through videoplayer-desktop; store service out of scope",
+   "status": "n/a",
+   "note": "The reference TV app is a store-backed video service, and BifrOSt has no video store, so there is no store service to map. Local playback is in springboard/apps/videoplayer-desktop; a video library and Up Next view are not built.",
    "rea": [],
    "method": "assessed"
   },

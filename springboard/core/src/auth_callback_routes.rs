@@ -9,7 +9,7 @@
 //! receives redirects. The browser app does not act as an SSO broker for other apps (see the matrix row); this table is
 //! the shared part that a broker would need.
 
-use crate::auth_session::scheme_of;
+use crate::auth_session::{scheme_of, SessionError, WebSession};
 use std::fmt;
 
 /// Schemes that belong to the web platform or to the browser itself. No app may register them as a callback.
@@ -108,6 +108,35 @@ impl CallbackRoutes {
     pub fn routes(&self) -> &[Route] {
         &self.routes
     }
+}
+
+/// Why a redirect could not complete a web session: the route table refused it, or the session did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CompletionError {
+    Route(RouteError),
+    Session(SessionError),
+}
+
+impl fmt::Display for CompletionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CompletionError::Route(error) => fmt::Display::fmt(error, f),
+            CompletionError::Session(error) => fmt::Display::fmt(error, f),
+        }
+    }
+}
+
+/// Completes `session` with `redirect` on behalf of `requesting_app`. The redirect must be routed to that app and must
+/// use the session's callback scheme; when either check fails the session keeps running, so the real callback can still
+/// arrive.
+pub fn complete_session(
+    routes: &CallbackRoutes,
+    requesting_app: &str,
+    session: &mut WebSession,
+    redirect: &str,
+) -> Result<String, CompletionError> {
+    routes.deliver(redirect, requesting_app).map_err(CompletionError::Route)?;
+    session.complete(redirect).map_err(CompletionError::Session)
 }
 
 /// Checks and lower-cases a scheme name given by an app.

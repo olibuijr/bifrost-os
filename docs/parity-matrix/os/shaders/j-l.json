@@ -19,8 +19,8 @@
    "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "GPU developer tooling of Apple's Metal stack (capture, replay, debug or paravirtual GPU support); BifrOSt has no Metal stack and no use for this component.",
    "rea": [],
    "method": "assessed"
   },
@@ -40,8 +40,8 @@
    "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "BifrOSt ships no GPU developer capture tools or paravirtual GPU driver, which are the only users of this shader.",
    "rea": [],
    "method": "assessed"
   },
@@ -61,8 +61,8 @@
    "role": "Effects shader of TSReading (app or system UI animation)",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "TSReading UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Presentation effects belong to a presentation app that BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   }

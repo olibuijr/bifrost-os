@@ -59,7 +59,9 @@ pub fn hlg_oetf(linear: f64) -> f64 {
 /// HLG inverse: a coded value in 0..=1 to scene-linear light in 0..=1.
 pub fn hlg_eotf(coded: f64) -> f64 {
     let c = coded.clamp(0.0, 1.0);
-    if c <= 0.5 {
+    if c == 1.0 {
+        1.0
+    } else if c <= 0.5 {
         c * c / 3.0
     } else {
         (((c - (0.5 - HLG_A * (4.0 * HLG_A).ln())) / HLG_A).exp() + HLG_B) / 12.0

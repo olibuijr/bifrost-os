@@ -84,10 +84,10 @@ impl ColorMeter {
             M_LOCK_X => self.pointer.toggle_lock_x(),
             M_LOCK_Y => self.pointer.toggle_lock_y(),
             M_APERTURE_UP => {
-                self.set_aperture(self.aperture.saturating_add(1));
+                self.set_aperture(self.aperture.saturating_add(2));
             }
             M_APERTURE_DOWN => {
-                self.set_aperture(self.aperture.saturating_sub(1));
+                self.set_aperture(self.aperture.saturating_sub(2));
             }
             M_COPY_TEXT => return self.copy(self.format),
             M_COPY_IMAGE => return self.copy_swatch(),
@@ -234,14 +234,14 @@ mod tests {
         let mut m = meter();
         assert!(!item(&m.menus(), M_APERTURE_DOWN).enabled);
         m.perform_menu(M_APERTURE_UP);
-        assert_eq!(m.aperture, APERTURE_MIN + 1);
+        assert_eq!(m.aperture, APERTURE_MIN + 2, "the menu steps between odd sizes");
         assert!(item(&m.menus(), M_APERTURE_DOWN).enabled);
         m.set_aperture(APERTURE_MAX);
         assert!(!item(&m.menus(), M_APERTURE_UP).enabled);
         m.perform_menu(M_APERTURE_UP);
         assert_eq!(m.aperture, APERTURE_MAX);
         m.perform_menu(M_APERTURE_DOWN);
-        assert_eq!(m.aperture, APERTURE_MAX - 1);
+        assert_eq!(m.aperture, APERTURE_MAX - 2);
     }
 
     #[test]

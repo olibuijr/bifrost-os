@@ -22,11 +22,11 @@ use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, Tip
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{
-    Ui, Weight, BLACK, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT,
+    Ui, Weight, BLACK, DETAIL_BG, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT,
     TOAST_FILL, WHITE,
 };
 use bifrost_app::kit::ui::{SPACE_L, SPACE_S, SPACE_XXL, SPACE_XXXL};
-use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, SEPARATOR_C, SIDEBAR_BG, LABEL_2};
+use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, SEPARATOR_C, LABEL_2};
 use bifrost_app::kit::{Event, Surface, TextCache};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
@@ -80,7 +80,7 @@ const GRID_DOT_PT: f32 = 2.0;
 const PANEL_PT: f32 = 220.0;
 /// Inspector layout (points, below the toolbar): the heading band, then one row per setting.
 const HEAD_PT: f32 = 40.0;
-const CAPTION_PT: f32 = 16.0;
+const CAPTION_GAP_PT: f32 = 16.0;
 const CONTROL_PT: f32 = 24.0;
 const ROW_PT: f32 = 60.0;
 
@@ -324,6 +324,8 @@ pub struct Freeform {
     pick: Option<Pick>,
     /// The item and cell the keyboard types into.
     edit: Option<(u32, usize)>,
+    /// The character the caret is before in that text; `usize::MAX` is the end, and it is clamped to the text.
+    caret: usize,
     /// An item is being dragged.
     item_drag: Option<ItemDrag>,
     /// A connector is being drawn.
@@ -341,6 +343,8 @@ pub struct Freeform {
     pan: (f32, f32),
     /// The hand tool is dragging the view; the last pointer point (window pixels).
     panning: Option<(f32, f32)>,
+    /// The last press or move on the window (window pixels): a paste lands where the pointer is.
+    pointer: Option<(f32, f32)>,
     /// The picture must be painted again before it is next drawn (an undo or redo brought back one made at another view).
     repaint_due: bool,
 }
@@ -463,6 +467,7 @@ impl Freeform {
             items: Items::default(),
             pick: None,
             edit: None,
+            caret: usize::MAX,
             item_drag: None,
             linking: None,
             last_tap: None,
@@ -472,6 +477,7 @@ impl Freeform {
             zoom: 1.0,
             pan: (0.0, 0.0),
             panning: None,
+            pointer: None,
             repaint_due: false,
         }
     }
@@ -499,6 +505,7 @@ impl Freeform {
         self.pics = Pictures::default();
         self.pick = None;
         self.edit = None;
+        self.caret = usize::MAX;
         self.item_drag = None;
         self.linking = None;
         self.last_tap = None;
@@ -613,8 +620,16 @@ impl Freeform {
         self.mark_changed();
     }
 
-    /// Puts `copies` on the board as new strokes, moved by one paste offset, and selects them (one undo step).
-    fn add_copies(&mut self, ui: &Ui, copies: Vec<(Stroke, Style)>) {
+    /// Where a paste lands: the board point under the last press or move on the canvas, or `None` when the pointer
+    /// was over the toolbar or has not touched the window yet.
+    fn paste_anchor(&self, ui: &Ui) -> Option<(f32, f32)> {
+        let (x, y) = self.pointer?;
+        (y >= self.canvas_top(ui) as f32).then(|| self.canvas_point(ui, x, y))
+    }
+
+    /// Puts `copies` on the board as new strokes and selects them (one undo step). With `at`, their box is centred on
+    /// that board point; without it they are moved by one paste offset.
+    fn add_copies(&mut self, ui: &Ui, copies: Vec<(Stroke, Style)>, at: Option<(f32, f32)>) {
         if copies.is_empty() {
             return;
         }
@@ -622,7 +637,14 @@ impl Freeform {
         self.sync_styles();
         let base = self.model.strokes().len();
         let n = copies.len();
-        let off = Affine::translate(ui.pt(PASTE_OFFSET_PT), ui.pt(PASTE_OFFSET_PT));
+        let (dx, dy) = match at {
+            Some(p) => {
+                let boxes: Vec<Rect> = copies.iter().filter_map(|(s, _)| s.bounds()).collect();
+                arrange::union_of(&boxes).map_or((0.0, 0.0), |b| arrange::centre_on(b, p))
+            }
+            None => (ui.pt(PASTE_OFFSET_PT), ui.pt(PASTE_OFFSET_PT)),
+        };
+        let off = Affine::translate(dx, dy);
         for (stroke, _) in copies.iter() {
             let mut moved = stroke.clone();
             moved.transform(off);
@@ -670,13 +692,14 @@ impl Freeform {
             .filter(|(i, _)| sel.contains_stroke(*i))
             .map(|(_, (s, st))| (s.clone(), *st))
             .collect();
-        self.add_copies(ui, copies);
+        self.add_copies(ui, copies, None);
     }
 
-    /// Edit > Paste: strokes read from the pasteboard land on the board, selected.
+    /// Edit > Paste: strokes read from the pasteboard land on the board at the pointer, selected.
     pub fn paste_strokes(&mut self, ui: &Ui, strokes: &Drawing) {
         let copies = strokes.strokes().iter().map(|s| (s.clone(), Style::default())).collect();
-        self.add_copies(ui, copies);
+        let at = self.paste_anchor(ui);
+        self.add_copies(ui, copies, at);
     }
 
     /// Arrange > Bring to Front / Send to Back: the selected strokes move to the top or the bottom of the drawing
@@ -1109,7 +1132,7 @@ impl Freeform {
     fn row_control(&self, ui: &Ui, i: usize) -> Rect {
         Rect {
             x: self.panel_x(ui) + SPACE_M,
-            y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT + CAPTION_PT,
+            y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT + CAPTION_GAP_PT,
             w: self.panel_width(ui) - 2.0 * SPACE_M,
             h: CONTROL_PT,
         }
@@ -1159,7 +1182,13 @@ impl Freeform {
     fn draw_inspector(&self, s: &mut Surface, ui: &Ui) {
         let top = self.canvas_top(ui);
         let x = self.board_px(ui);
-        s.fill_rrect(x as f32, top as f32, (self.w - x) as f32, (self.h - top).max(0) as f32, 0.0, SIDEBAR_BG.now());
+        widgets::material(
+            s,
+            ui,
+            Rect { x: x as f32 / ui.pt(1.0), y: top as f32 / ui.pt(1.0), w: (self.w - x) as f32 / ui.pt(1.0), h: (self.h - top).max(0) as f32 / ui.pt(1.0) },
+            0.0,
+            widgets::Material::Sidebar,
+        );
         s.fill_rect(x as usize, top as usize, ui.pt(1.0).max(1.0) as usize, (self.h - top).max(0) as usize, SEPARATOR_C.now());
         let head = ui.text("Inspector", MAC_CALLOUT_PT, Weight::Semibold, LABEL.now());
         s.blit(&head, ui.pt(self.panel_x(ui) + SPACE_M) as i32, ui.pt(UNIFIED_BAR_PT + SPACE_M) as i32, 255, 255);
@@ -1168,7 +1197,7 @@ impl Freeform {
         for (i, (row, caption, labels)) in ROWS.iter().enumerate() {
             let r = self.row_control(ui, i);
             let cap = ui.text(caption, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-            s.blit(&cap, ui.pt(r.x) as i32, ui.pt(r.y - CAPTION_PT) as i32, 255, 255);
+            s.blit(&cap, ui.pt(r.x) as i32, ui.pt(r.y - CAPTION_GAP_PT) as i32, 255, 255);
             let current = look.as_ref().and_then(|(st, ink)| Self::current_index(*row, st, ink)).unwrap_or(labels.len());
             widgets::segmented(s, ui, r, *labels, current, enabled);
         }
@@ -1839,6 +1868,9 @@ impl Freeform {
 
     pub fn touch(&mut self, ui: &Ui, event: Event, t: f64) {
         self.now = t;
+        if let Event::Down(x, y) | Event::Move(x, y) = event {
+            self.pointer = Some((x, y));
+        }
         self.ensure_canvas(ui);
         if self.search.is_some() {
             // the board search takes every press until it closes
@@ -1957,7 +1989,7 @@ impl Freeform {
         for (_, (x, y)) in arrange::handle_points(b, gap) {
             let (x0, y0) = (x - side / 2.0, y + top - side / 2.0);
             s.fill_rrect(x0, y0, side, side, 0.0, TINT);
-            s.fill_rrect(x0 + line, y0 + line, side - 2.0 * line, side - 2.0 * line, 0.0, WHITE);
+            s.fill_rrect(x0 + line, y0 + line, side - 2.0 * line, side - 2.0 * line, 0.0, DETAIL_BG.now());
         }
     }
 
@@ -2229,21 +2261,21 @@ mod model_tests {
         let top = app.canvas_top(&ui) as f32;
         app.model = Drawing::from_strokes(vec![Stroke {
             ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
-            points: vec![StrokePoint::at(5.0, 5.0)],
+            points: vec![StrokePoint::at(5.0, 5.0), StrokePoint::at(105.0, 45.0)],
         }]);
         // the selection is dragged with the lasso tool active, as a user does
         app.tool = Tool::Lasso;
         app.selection = Some(Selection::default());
         app.lassoing = true;
-        for (x, y) in [(0.0, 0.0), (30.0, 0.0), (30.0, 30.0), (0.0, 30.0)] {
+        for (x, y) in [(0.0, 0.0), (110.0, 0.0), (110.0, 50.0), (0.0, 50.0)] {
             app.lasso.add(x, y);
         }
         app.canvas_up(&ui, 0.0, top);
         assert!(app.selection_contains(5.0, 5.0));
 
-        app.canvas_down(&ui, 5.0, top + 5.0);
-        app.canvas_move(&ui, 15.0, top + 5.0);
-        app.canvas_up(&ui, 15.0, top + 5.0);
+        app.canvas_down(&ui, 55.0, top + 25.0);
+        app.canvas_move(&ui, 65.0, top + 25.0);
+        app.canvas_up(&ui, 65.0, top + 25.0);
         assert_eq!(app.model.strokes()[0].points[0].x, 15.0);
     }
 
@@ -2389,11 +2421,14 @@ mod model_tests {
         assert_eq!(app.pointer_for(&ui, 10.0, top + 10.0), Kind::DisappearingItem);
         app.tool = Tool::Lasso;
         assert_eq!(app.pointer_for(&ui, 10.0, top + 10.0), Kind::Arrow);
-        app.model = two_lines();
-        select_at(&mut app, 5.0, 5.0);
-        assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::OpenHand, "over the selected stroke");
+        app.model = Drawing::from_strokes(vec![Stroke {
+            ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 },
+            points: vec![StrokePoint::at(5.0, 5.0), StrokePoint::at(105.0, 45.0)],
+        }]);
+        app.selection = Some(Selection::from_indices(vec![0]));
+        assert_eq!(app.pointer_for(&ui, 55.0, top + 25.0), Kind::OpenHand, "over the selected stroke, away from its handles");
         app.moving = Some((0.0, 0.0));
-        assert_eq!(app.pointer_for(&ui, 5.0, top + 5.0), Kind::ClosedHand, "while it is dragged");
+        assert_eq!(app.pointer_for(&ui, 55.0, top + 25.0), Kind::ClosedHand, "while it is dragged");
     }
 
     #[test]
@@ -2533,6 +2568,29 @@ mod model_tests {
         assert_eq!(app.model.strokes().len(), 2);
         assert_eq!(app.selection.as_ref().unwrap().indices(), &[0, 1]);
         assert_eq!(app.tool, Tool::Lasso);
+    }
+
+    #[test]
+    fn paste_centres_the_strokes_on_the_pointer_on_the_board() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        let top = app.canvas_top(&ui) as f32;
+        app.pointer = Some((300.0, top + 200.0));
+        app.paste_strokes(&ui, &two_lines());
+        let boxes: Vec<Rect> = app.model.strokes().iter().filter_map(|s| s.bounds()).collect();
+        let all = arrange::union_of(&boxes).unwrap();
+        let want = app.canvas_point(&ui, 300.0, top + 200.0);
+        assert!((all.x + all.w / 2.0 - want.0).abs() < 0.01, "the box centre lands on the pointer's x");
+        assert!((all.y + all.h / 2.0 - want.1).abs() < 0.01, "the box centre lands on the pointer's y");
+    }
+
+    #[test]
+    fn paste_keeps_the_offset_when_the_pointer_is_over_the_toolbar() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.pointer = Some((10.0, 0.0));
+        app.paste_strokes(&ui, &two_lines());
+        assert_eq!(app.model.strokes()[0].points[0].x, 5.0 + ui.pt(PASTE_OFFSET_PT));
     }
 
     #[test]

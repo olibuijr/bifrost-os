@@ -1,11 +1,56 @@
 # Changelog
 
+## 1.7.3 — 2026-10-14
+
+- Wind and pressure dial tick spacing uses the shared extra-small spacing token.
+
+## 1.7.2
+
+- Named the dial extent as geometry rather than spacing so the wind and pressure diagrams keep their intended dimensions.
+
+## 1.7.1 — 2026-10-14
+
+- Forecast charts use named scheme colours and scale their day-row layout with the card width; chart marks and spacing follow the appearance and shared spacing tokens.
+
+## 1.7.0 — 2026-10-14
+
+- Air quality card names the main pollutant (PM2.5, PM10, ozone, nitrogen dioxide or sulphur dioxide, whichever is furthest
+  over its European Good limit) with its concentration, and the advice for the band.
+- Pressure tile draws a trend dial: a needle swings toward rising or falling with the three-hour change.
+- Rain tomorrow: a place with notifications on is told once a day when tomorrow's chance of precipitation is 60 percent or more.
+- Precipitation tile says how much of today's total is snow.
+- A "Current Weather" intent for Search and the assistant answers with the selected place's summary. It is a shortcut
+  with no parameters.
+
 ## 1.6.0 — 2026-10-13
 
 - Detail tiles: wind direction and gusts with a compass dial, dew point under humidity, a sun path on the sunrise tile, and new Precipitation, Visibility and Pressure tiles that follow the unit setting.
 - A Next Hour card with a summary sentence and quarter-hour precipitation bars; precipitation chance under each hour and each day.
 - The Locations sidebar shows each place's temperature; Delete removes the selected place.
 - The forecast request asks for the extra columns (wind, dew point, pressure, visibility, precipitation, minutely_15).
+
+## 1.6.0 — 2026-10-13
+
+- New detail tiles: Precipitation (the day's total and the next 24 hours), Visibility, Pressure (with a rising, falling
+  or steady note) and Averages (today's high against the mean high of this date over the last ten years). Amounts
+  follow the unit setting: mm, km and hPa with Celsius; in, mi and inHg with Fahrenheit.
+- Air Quality card with the European index, its band and PM2.5, over a scale from good to extremely poor. It comes from
+  Open-Meteo's air-quality service and is kept in the cache like the forecast.
+- Next Hour card: the minute forecast (15-minute steps) as bars, under a line such as "Rain starting in 30 minutes".
+  The footer no longer lists the minute forecast as missing; weather alerts are still not served by the data source.
+- Wind tile: gusts, the bearing the wind comes from and a compass dial. Humidity tile: the dew point. Sunrise tile: the
+  sun's day arc with the sun at its place.
+- Hourly forecast: the chance of precipitation under each hour, and a column for the sunrise or sunset where it falls.
+  10-day forecast: the chance of precipitation under each day's glyph.
+- Locations sidebar: each place shows its sky glyph, the sky in words and its temperature. Places can be dragged to
+  reorder them (the order is saved), removed with the Delete key and removed or switched with a secondary click.
+- Rain notifications: a Notify switch per place on the Locations page. When a refresh shows rain starting within the
+  hour at such a place, the app posts one notification for that spell of rain. New permission: notifications.
+- Share button in the toolbar sends the place, temperature, sky and range as text to the share menu.
+- `weather://` links: `weather://Akureyri` shows a saved place or looks the name up and adds the first match;
+  `weather://?lat=65.68&lon=-18.1&name=Akureyri` adds that position directly.
+- Control methods `weather.places`, `weather.current` and `weather.forecast` return what the window shows as JSON, with
+  an optional `place` parameter naming a saved place.
 
 ## 1.5.3 — 2026-10-12
 

@@ -48,7 +48,14 @@ fn rfind(hay: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 impl Doc {
+    /// Opens a PDF whose user password is empty (or which has no encryption).
     pub fn open(data: Vec<u8>) -> Result<Doc, String> {
+        Doc::open_with_password(data, b"")
+    }
+
+    /// Opens a PDF with the user password `password`. An encrypted document that the password does not open reports
+    /// `crypt::PASSWORD_NEEDED`, so the caller can ask for the password and try again.
+    pub fn open_with_password(data: Vec<u8>, password: &[u8]) -> Result<Doc, String> {
         if find(&data[..data.len().min(1024)], b"%PDF-", 0).is_none() {
             return Err("not a PDF file".into());
         }
@@ -57,7 +64,7 @@ impl Doc {
         if !ok {
             doc.rebuild();
         }
-        doc.setup_crypt()?;
+        doc.setup_crypt(password)?;
         if !ok && doc.crypt.is_some() {
             doc.rebuild();
         }
@@ -74,8 +81,8 @@ impl Doc {
         }
     }
 
-    /// Reads the Encrypt dictionary (if any) and starts decrypting objects with the empty user password.
-    fn setup_crypt(&mut self) -> Result<(), String> {
+    /// Reads the Encrypt dictionary (if any) and starts decrypting objects with the user password `password`.
+    fn setup_crypt(&mut self, password: &[u8]) -> Result<(), String> {
         let Some(e) = self.trailer.get("Encrypt").cloned() else { return Ok(()) };
         self.encrypt_obj = if let Obj::Ref(n, _) = e { Some(n) } else { None };
         let Obj::Dict(enc) = self.get(&e) else { return Err("this PDF is encrypted in a way this reader cannot open (bad Encrypt dictionary)".into()) };
@@ -91,7 +98,7 @@ impl Doc {
             },
             _ => Vec::new(),
         };
-        let crypt = Crypt::open(&flat, &id0)?;
+        let crypt = Crypt::open_with(&flat, &id0, password)?;
         // everything loaded so far was read in the clear; forget it
         let keep = self.encrypt_obj.and_then(|n| self.cache.borrow().get(&n).cloned().map(|o| (n, o)));
         self.cache.borrow_mut().clear();

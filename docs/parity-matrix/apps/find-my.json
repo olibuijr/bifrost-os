@@ -9,10 +9,10 @@
   "summary": {
     "features": 18,
     "parity": 0,
-    "partial": 0,
-    "gap": 15,
+    "partial": 8,
+    "gap": 7,
     "n/a": 3,
-    "coverage_pct": 0.0
+    "coverage_pct": 26.7
   },
   "features": [
     {
@@ -21,52 +21,52 @@
       "apple": "Find My app with People, Devices, Items and Me tabs",
       "status": "gap",
       "bifrost": "",
-      "note": "BifrOSt has no such app and no listing in the app list.",
+      "note": "The locator model crate exists in springboard/apps/locate-desktop, but there is no window, manifest or shell listing yet.",
       "wire": "Create springboard/apps/findmy-desktop (new crate; copy the layout of apps/weather-desktop: manifest.toml, Cargo.toml, src/main.rs, src/window.rs) with a source_list sidebar (People, Devices, Items) and a map pane using the bifrost-maps model crate (apps/maps-desktop), registered in the shell app list."
     },
     {
       "feature": "Devices tab: locate own devices",
       "area": "devices",
       "apple": "List of the account's devices with last known location on a map and battery state",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Devices sign in to BifrOSt Account (bifrost-cloud) but report no location.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::report, Devices::get)",
+      "note": "The device model keeps the newest position fix and battery level per device, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no cloud endpoint delivers positions and there is no device list or map view.",
       "wire": "Add POST /api/cloud/devices/{id}/location (latitude, longitude, accuracy, battery, timestamp) and GET /api/cloud/devices to ~/Projects/bifrost-cloud, have the shell upload its location when a location service exists, and list them in the app."
     },
     {
       "feature": "Play a sound on a device",
       "area": "devices",
       "apple": "Play Sound (PlaySoundIntent) to find a nearby device",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No remote commands to a device.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::request, Device::take_commands)",
+      "note": "The command queue accepts Play Sound once per device and hands it to the sync, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no button in a window and no cloud delivery yet.",
       "wire": "Add a command queue to the cloud device record (play_sound, lock, erase) polled by the shell's cloud sync, and a Play Sound button in the device card; honour the no-unasked-sound rule by requiring the person to press the button."
     },
     {
       "feature": "Lost mode",
       "area": "devices",
       "apple": "Mark as lost with a contact message and lock",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No remote lock.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::mark_lost, Device::clear_lost)",
+      "note": "Lost mode keeps the message and contact number and queues a lock, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: the lock screen does not show the message yet and nothing is delivered to a device.",
       "wire": "Add a lost flag and message to the cloud device record; the shell lock screen shows the message and phone number when the flag is set."
     },
     {
       "feature": "Erase a device remotely",
       "area": "devices",
       "apple": "Erase This Device",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No remote erase.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/devices.rs (Device::request, CommandError::NeedsConfirmation)",
+      "note": "Erase is queued only after an explicit confirmation, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: the factory reset path and cloud delivery are not wired.",
       "wire": "Add an erase command to the queue; the shell confirms the signed command and runs the factory reset path of the installer."
     },
     {
       "feature": "Directions to a device",
       "area": "devices",
       "apple": "Directions button opens the maps app",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No maps window and no device positions.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/links.rs (directions)",
+      "note": "The driving directions link uses the maps app's link format, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no button opens it yet.",
       "wire": "Open the Maps app with a route request (the maps: URL scheme from the Maps inventory) to the device position."
     },
     {
@@ -82,18 +82,18 @@
       "feature": "People tab: share location",
       "area": "people",
       "apple": "Share location with contacts for an hour, a day or indefinitely (ToggleLocationSharingIntent)",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No location sharing.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/share.rs (Shares::share, Shares::stop, Shares::active)",
+      "note": "Share grants last an hour, a day or indefinitely, replace earlier grants and check the address, tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no Share My Location sheet and no cloud storage of grants.",
       "wire": "Add share grants (from, to, until) to the cloud account API and a Share My Location sheet that picks Contacts entries by BifrOSt Account address."
     },
     {
       "feature": "People tab: follow friends",
       "area": "people",
       "apple": "Friends on a map with distance, and notifications when someone arrives or leaves",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No friend locations.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/friends.rs (friend_distance, distance_text, rule_fires)",
+      "note": "Friend distances and arrival or departure rules are tested headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no friend positions come from the cloud and no notification is posted.",
       "wire": "Return granted friends' latest positions from the cloud API and draw them as pins with name and distance; add Notify Me rules (arrives, leaves) per friend."
     },
     {
@@ -154,9 +154,9 @@
       "feature": "URL schemes",
       "area": "system",
       "apple": "findmy:, findmyfriends:, fmf1:, fmip1:, grenada: schemes",
-      "status": "gap",
-      "bifrost": "",
-      "note": "None registered.",
+      "status": "partial",
+      "bifrost": "springboard/apps/locate-desktop/src/links.rs (parse, device_link)",
+      "note": "The locate: link form for a device or a person parses headless in springboard/apps/locate-desktop/tests/parity_app-find-my.rs. Gap: no app manifest registers the scheme yet, and the scheme is named for this app, not the reference scheme.",
       "wire": "Register a findmy: scheme in the new manifest that opens a device or person by id."
     },
     {

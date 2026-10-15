@@ -46,9 +46,9 @@
    "area": "panel",
    "apple": "Up Next panel, song context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1258",
-   "note": "Reorder is move-up only; no drag, no History",
-   "wire": "Add drag reorder and a History list (played ids recorded in Music::sync_now_playing) to draw_queue (music.rs:1821)"
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_queue",
+   "note": "Play Next and Play Last in the Song menu; a drag handle reorders the upcoming songs, each row has move-up and remove, Clear Up Next ends the queue, and History (the last 100 starts) opens from the Up Next toolbar and the View menu. Not yet checked on Midget.",
+   "wire": "Verify queue insertion, drag reordering, removal, clearing, and History on Midget; check track changes and history persistence across relaunch."
   },
   {
    "feature": "Playlists: new, add to, remove from, rename, delete",
@@ -63,19 +63,19 @@
    "feature": "Smart Playlists with rules",
    "area": "menu",
    "apple": "File > New > Smart Playlist",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a rule model (field/op/value, live update) next to Playlists in music.rs; a New Smart Playlist row in draw_playlists (music.rs:1775); a rules editor sheet"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_rules",
+   "note": "New Smart Playlist opens a rules editor (match all or any, field, operator, value, add and remove); the songs come from SmartPlaylist::select over the library and the listening data, and follow new ratings and plays. Not yet checked on Midget.",
+   "wire": "Verify on Midget that saved all/any rules select the expected songs and update when ratings or play counts change."
   },
   {
    "feature": "Playlist folders",
    "area": "menu",
    "apple": "File > New > Playlist Folder",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Folder nodes in the Playlists store, nested rows in the Playlists tab"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/folders.rs (Folders::rename, Folders::delete, rows)",
+   "note": "File > New Playlist Folder and the New Playlist Folder row make folders; Move to Folder on a playlist page puts the playlist in one; the Playlists tab nests the playlists under their folder, and Show or Hide collapses it. Folders can be renamed and deleted in the model, tested headless in tests/parity_app-music_w8.rs. Not yet: a folder page that offers rename and delete, folders in the sidebar, a check on Midget.",
+   "wire": "Folder page with Rename and Delete buttons over Folders::rename and Folders::delete; folder rows in the sidebar"
   },
   {
    "feature": "Search library",
@@ -91,36 +91,36 @@
    "area": "view",
    "apple": "View > Sort By, column headers",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1472",
-   "note": "The Songs header cycles one sort key; no column table",
-   "wire": "Add a column table (title, artist, album, time, plays) with header-click sort in draw_song_rows"
+   "bifrost": "springboard/apps/music-desktop/src/music/browse.rs (view_in_order, SortKey)",
+   "note": "Sort orders include Rating, Plays and Recently Played besides Title, Artist, Album and Recently Added, and View > Sort Songs By > Descending reverses any of them. The order is tested headless in tests/parity_app-music_w10.rs. Not yet: column headers that sort, and a column browser.",
+   "wire": "Still one sort key cycled by the toolbar button (View > Sort Songs By picks one); no column table with header-click sort"
   },
   {
    "feature": "Get Info editor (tags, artwork, lyrics)",
    "area": "panel",
    "apple": "Song > Get Info",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a Get Info item to MenuItem (music.rs:169) opening a sheet that edits tags through the library store and writes them to the file"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/info.rs::Info",
+   "note": "Song > Get Info and a song's ... menu open a page that edits Title, Artist and Album. The edits are kept by path in info.txt and laid over the tags at each scan. The audio files are not written, and artwork and lyrics cannot be edited yet.",
+   "wire": "Write the edited tags into the files (needs a tag writer in the media crate); then artwork and lyrics"
   },
   {
    "feature": "Favourite songs",
    "area": "menu",
    "apple": "Song > Favorite",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:75",
+   "bifrost": "springboard/apps/music-desktop/src/music/stats.rs:146",
    "note": "Song menu and Song > Favourite flag a song (kept by path); heart in song rows; Favourite Songs sidebar list. Not yet written into file tags.",
-   "wire": ""
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Star ratings",
    "area": "menu",
    "apple": "Song > Rating",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:90",
-   "note": "Song > Rating 1-5 for the playing song and a Top Rated list (4+ stars). No rating from the song menu, no sortable column.",
-   "wire": ""
+   "bifrost": "springboard/apps/music-desktop/src/music/stats.rs:133",
+   "note": "Song > Rating sets 0 to 5 stars for the playing song, and a song's ... menu steps its rating; stars show under each song's length and Sort By Rating orders the list. Ratings are kept in stats.txt, not in file tags. Not yet checked on Midget.",
+   "wire": "Verify rating changes and ordering on Midget, including that zero stars clears the displayed rating."
   },
   {
    "feature": "Internet radio stations",
@@ -136,54 +136,54 @@
    "area": "menu",
    "apple": "File > Import",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/app.rs:425",
-   "note": "Library is a scan of ~/Music; opening a file plays it without adding it",
-   "wire": "Add File > Import that copies files into the library root and calls start_scan (music.rs:1177)"
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs:228",
+   "note": "built on parity/team-d-music; not yet verified on Midget. File > Import copies chosen songs into Music/Imported and scans again",
+   "wire": "Folders cannot be chosen yet, and files cannot be dropped onto the window"
   },
   {
    "feature": "Full player and MiniPlayer",
    "area": "view",
    "apple": "Window > MiniPlayer / Full Screen Player",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:2026",
-   "note": "Player sheet and mini bar; no separate MiniPlayer window",
-   "wire": "Add a compact MiniPlayer window mode from a Window menu item"
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_sheet",
+   "note": "Player sheet and mini bar, with the route button in the bar; no separate MiniPlayer window, because apps have no window size request in the SDK yet.",
+   "wire": "Add a compact MiniPlayer window mode from a Window menu item, once the SDK can resize an app window"
   },
   {
    "feature": "Lyrics view",
    "area": "panel",
    "apple": "View > Lyrics",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Read embedded or .lrc lyrics in the library scan; a Lyrics panel in the player sheet with the current line highlighted"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_lyrics",
+   "note": "A .lrc file beside a song adds a Lyrics switch on the Now Playing sheet; the line being sung is highlighted and follows the song. View > Show Lyrics does the same. Plain-text lyrics are listed without highlight. Not yet checked on Midget.",
+   "wire": "Verify timed .lrc highlighting and plain-text lyrics in the Now Playing sheet on Midget."
   },
   {
    "feature": "Equalizer",
    "area": "panel",
    "apple": "Window > Equalizer",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "EQ presets and a 10-band gain stage in the audio engine; an Equalizer panel from the Window menu"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/equalizer.rs",
+   "note": "The ten-band model with presets and peaking filters is tested on the host (equalizer.rs). Not wired: the audio service (springboard/audiod) has no gain stage to run it in, and there is no Equalizer panel yet.",
+   "wire": "Equalizer gain stage in the audio service, and an Equalizer panel from the Window menu"
   },
   {
    "feature": "Playback settings: crossfade, Sound Check",
    "area": "settings",
    "apple": "Settings > Playback",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Settings window with crossfade seconds and loudness normalisation wired into the engine"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/playback.rs (Playback::gain, crossfade_gains, parse, to_text)",
+   "note": "The crossfade length (up to 12 seconds), the Sound Check gain toward -16 dB with a 9 dB limit, the settings file and the equal-power crossfade curve are tested headless in tests/parity_app-music_w8.rs. Not yet: no Settings page sets them, and the audio service has no crossfade or gain command, so the engine does not use them.",
+   "wire": "Settings page with the crossfade seconds and a Sound Check switch; crossfade and gain commands in the audio service"
   },
   {
    "feature": "Recently Added / Recently Played",
    "area": "view",
    "apple": "sidebar Recently Added",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:150",
-   "note": "Recently Added (date added) and Recently Played (play log) sidebar lists.",
-   "wire": ""
+   "bifrost": "springboard/apps/music-desktop/src/music/stats.rs:173",
+   "note": "Recently Added and Recently Played lists under Songs; Recently Played comes from the play log in stats.txt, and Favourite Songs is listed beside them. Not yet checked on Midget.",
+   "wire": "Verify Recently Added and Recently Played lists on Midget, including play history after relaunch."
   },
   {
    "feature": "System Now Playing and media keys",
@@ -199,27 +199,27 @@
    "area": "integration",
    "apple": "output route picker",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/app.rs:139",
-   "note": "Follows route changes; no picker in the app",
-   "wire": "Add an output picker in the player bar that lists the audio devices service and sets the route"
+   "bifrost": "springboard/apps/music-desktop/src/music.rs::show_outputs",
+   "note": "The route button on the Now Playing sheet and in the mini player bar lists the output devices and makes the chosen one the default output. Not yet checked on Midget.",
+   "wire": "Per-app output: the audio service keeps one default output"
   },
   {
    "feature": "App menus: Song, Controls, View with shortcuts",
    "area": "menu",
    "apple": "MainMenu Song/Controls/View",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/app.rs:main_menu",
-   "note": "Song (Favourite, Rating) and Controls (Play/Pause, Next, Previous, Shuffle, Repeat, Volume) menus with shortcuts. No Get Info or Add to Playlist items, no View menu.",
-   "wire": ""
+   "bifrost": "springboard/apps/music-desktop/src/music/menus.rs::build",
+   "note": "File (Import, New Playlist Folder), Song (Play Next, Play Last, Add to Playlist, Rating, Favourite, Get Info), Controls and View menus, with shortcuts; View > Sort Songs By > Descending is in the View menu, and the menu's commands and ids are tested headless in music/menus.rs. Not yet checked on Midget.",
+   "wire": "Window menu (MiniPlayer, Equalizer, Visualizer) once those exist"
   },
   {
    "feature": "Visualizer",
    "area": "menu",
    "apple": "Window > Visualizer",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Full-window visualizer driven by the engine spectrum"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/visualizer.rs (band_levels, bars, smooth)",
+   "note": "The band levels of the ten equalizer bands (a Goertzel filter per band) and the rise and fall of the bars are tested headless in tests/parity_app-music_w8.rs. Not yet: the audio service publishes no spectrum, and no window draws the bars.",
+   "wire": "Audio service spectrum, and a full-window visualizer that draws the bars from it"
   },
   {
    "feature": "Streaming catalogue, subscription store, cloud library",
@@ -239,5 +239,13 @@
    "note": "Optical drive hardware",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 26,
+  "parity": 8,
+  "partial": 16,
+  "gap": 0,
+  "n/a": 2,
+  "coverage_pct": 66.7
+ }
 }

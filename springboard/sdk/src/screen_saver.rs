@@ -3,13 +3,16 @@
 //! module gives them an SDK path and adds [`SaverRunner`], which advances a view from the caller's clock. The
 //! preference store for a module is [`crate::screen_saver_defaults::ScreenSaverDefaults`].
 //!
-//! Nothing here loads a `.saver` bundle or draws a frame. The caller owns the clock and the drawing.
+//! [`SaverManifest`] reads a module's text descriptor (name, interval, fade, backing store and options). Nothing here
+//! loads a saver's code from a `.saver` bundle or draws a frame. The caller owns the clock and the drawing.
 
 pub use bifrost_ui::screensaver::{
     preview_rect, ss_centered_rect_in_rect, ss_random_float_between, ss_random_int_between,
     ss_random_point_for_size_within_rect, BackingStoreType, ConfigureSheet, SaverValue, ScreenSaverView,
     DEFAULT_FRAME_INTERVAL, MAX_CATCH_UP_FRAMES, MIN_FRAME_INTERVAL,
 };
+pub use bifrost_ui::saver_random::SaverRandom;
+pub use bifrost_ui::screensaver_manifest::{ManifestError, SaverManifest};
 pub use bifrost_ui::Rect;
 
 /// Drives one [`ScreenSaverView`] from a caller's clock in seconds. `advance` reports the frames due at that time and

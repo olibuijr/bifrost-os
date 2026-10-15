@@ -55,6 +55,21 @@ pub fn active(cues: &[Cue], position_ms: u64) -> Option<usize> {
     cues.iter().rposition(|c| c.start_ms.is_some_and(|s| s <= position_ms))
 }
 
+/// Where playback jumps when line `cue` of the transcript is tapped: its start time. None for untimed text.
+pub fn start_of(cues: &[Cue], cue: usize) -> Option<u64> {
+    cues.get(cue)?.start_ms
+}
+
+/// The wrapped line under a point `y` pixels below the top of the lines (scrolling already added), for lines
+/// `line_h` pixels high. None above the first line and below the last of `count`.
+pub fn line_at(y: f32, line_h: f32, count: usize) -> Option<usize> {
+    if y < 0.0 || line_h <= 0.0 {
+        return None;
+    }
+    let line = (y / line_h).floor() as usize;
+    (line < count).then_some(line)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,5 +102,25 @@ mod tests {
         assert_eq!(active(&cues, 1_000), Some(0));
         assert_eq!(active(&cues, 9_999), Some(0));
         assert_eq!(active(&cues, 10_000), Some(1));
+    }
+
+    #[test]
+    fn a_tapped_cue_seeks_to_its_start_and_untimed_text_does_not() {
+        let cues = parse("00:00:01.000 --> 00:00:02.000\na\n\n00:00:10.500 --> 00:00:12.000\nb\n");
+        assert_eq!(start_of(&cues, 0), Some(1_000));
+        assert_eq!(start_of(&cues, 1), Some(10_500));
+        assert_eq!(start_of(&cues, 2), None);
+        assert_eq!(start_of(&parse("Just text"), 0), None);
+    }
+
+    #[test]
+    fn a_point_maps_to_the_wrapped_line_under_it() {
+        assert_eq!(line_at(0.0, 20.0, 3), Some(0));
+        assert_eq!(line_at(19.9, 20.0, 3), Some(0));
+        assert_eq!(line_at(20.0, 20.0, 3), Some(1));
+        assert_eq!(line_at(59.9, 20.0, 3), Some(2));
+        assert_eq!(line_at(60.0, 20.0, 3), None);
+        assert_eq!(line_at(-1.0, 20.0, 3), None);
+        assert_eq!(line_at(5.0, 0.0, 3), None);
     }
 }

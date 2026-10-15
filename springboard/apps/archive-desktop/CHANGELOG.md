@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.5 — 2026-10-14
+
+- Stage archive creation and extraction in hidden sibling paths, publishing complete outputs atomically without replacing existing files or folders.
+
+## 0.2.4 — 2026-10-14
+
+- Use the appearance-aware separator color in the progress bar.
+
+## 0.2.3 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.2.2 — 2026-10-14
+
+- Use the appearance-aware separator for archive progress.
+
+## 0.2.1 — 2026-10-14
+
+- Schedule archive work through the shared utility queue.
+
 ## 0.2.0
 
 - Expands .tar.xz, .tar.bz2, .tar.zst and single .gz/.bz2/.xz/.zst files through the shared archive module, the same one Files uses; xz is no longer refused.

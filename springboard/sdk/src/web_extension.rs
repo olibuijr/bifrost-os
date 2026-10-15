@@ -2,4 +2,4 @@
 //! content blocker declares. The model lives in `bifrost_ui::web_extension` so the shell and apps share one format; this
 //! module re-exports it for `bifrost_app`. See `docs/bifrost-ui.md` for the decisions.
 
-pub use bifrost_ui::web_extension::{Extension, HostPattern, Kind, Message, Registry, Error};
+pub use bifrost_ui::web_extension::{Error, Exchange, ExchangeError, Extension, HostPattern, Kind, Message, Registry};

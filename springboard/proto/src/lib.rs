@@ -448,7 +448,7 @@ pub enum ToApp {
     StatusItemAction { item: u32, id: u32 },
     /// Guided Access started (`active`) or ended (`ToShell::GuidedAccessRequest`). Tag 0x171.
     GuidedAccessState { active: bool },
-    /// The user changed one restriction of the running Guided Access session (`UIGuidedAccessRestrictionDelegate`). Tag 0x172.
+    /// The user changed one restriction of the active guided-access session. Tag 0x172.
     GuidedRestriction { id: String, allowed: bool },
     /// A `DistributedNotificationCenter` post by another app, relayed by the shell.
     DistNotify { name: String, user_info: Vec<(String, String)> },

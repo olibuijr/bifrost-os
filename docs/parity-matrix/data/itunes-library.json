@@ -17,9 +17,9 @@
     {
       "feature": "Media items (tracks)",
       "apple": "ITLibMediaItem: title, artist, album, totalTime, trackNumber, location, year",
-      "bifrost": "springboard/apps/music-desktop/src/music/library.rs:16 (Song: title, artist, album, album_artist, track, year, duration_ms, path)",
+      "bifrost": "springboard/apps/music-desktop/src/music/library.rs:16 (Song: title, artist, album, album_artist, track, year, duration_ms, path); springboard/apps/music-desktop/src/music/stats.rs (SongStats: rating, plays, last_played per file)",
       "status": "partial",
-      "note": "Covers title, artist, album, duration, track number, year and file path. Missing rating, playCount, lastPlayedDate, genre, composer, BPM, comments and content rating."
+      "note": "Covers title, artist, album, duration, track number, year and file path, and keeps a star rating, play count and last-played time per file in stats.rs. Gap: genre, composer, BPM, comments and content rating are not read from tags."
     },
     {
       "feature": "Albums and artists",
@@ -38,9 +38,9 @@
     {
       "feature": "Artwork",
       "apple": "ITLibArtwork, artwork(forMediaFile:), ITLibArtworkFormat",
-      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Scanned.has_cover, Library.covers, MAX_COVER); springboard/render/src/imgdec.rs (PNG/JPEG decode)",
+      "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Scanned.has_cover, Library::cover_of, artwork_of, artwork_format, MAX_COVER); springboard/render/src/imgdec.rs (PNG/JPEG decode); springboard/apps/music-desktop/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "Album covers are read from tags and kept encoded, with a size cap. No public image or imageData accessor and no artwork lookup for an arbitrary file."
+      "note": "Album covers are read from tags and kept encoded under a size cap; Library::cover_of returns an album's picture, artwork_of reads the picture of any file, and artwork_format names PNG or JPEG, all tested headless in parity_sdk-complete-43.rs. Gap: apps get no imageData accessor in the SDK, and artwork is never written back to files."
     },
     {
       "feature": "Change notification (DidChangeLibraryMessage)",
@@ -52,9 +52,9 @@
     {
       "feature": "Video media info (ITLibMediaItemVideoInfo)",
       "apple": "ITLibMediaItemVideoInfo",
-      "bifrost": "springboard/ui/src/video_info.rs",
+      "bifrost": "springboard/ui/src/video_info.rs; springboard/ui/tests/parity_sdk-complete-24.rs",
       "status": "partial",
-      "note": "Pure video track model: frame size, duration, frame rate and codec, validated, with the resolution label, aspect ratio and duration text. Host unit tests (6). It has no caller yet. Built on parity/team-a-03; not yet verified on Midget. No library holds video items yet."
+      "note": "Pure video track model: frame size, duration, frame rate and codec, validated, with the resolution label (4K from 2160 lines), aspect ratio, HD test and duration text. Host unit tests (6) and parity_sdk-complete-24 cover every validation error and the label and duration rules. Gap: it has no caller yet, and no library holds video items, so wiring waits for a library model. Not yet verified on Midget."
     },
     {
       "feature": "Access rules (code signing, read-only, iTunes version gate)",

@@ -49,6 +49,27 @@ pub fn parse_pane_url(url: &str) -> Option<PaneLink> {
     Some(PaneLink { identifier: identifier.to_string(), anchor })
 }
 
+/// Where a link leads: a pane the host opens, a well-formed link to a pane the host does not list, or text that is not a
+/// pane link at all.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Route {
+    /// The identifier is one of the panes the host opens. The anchor, if any, is for the pane to scroll to.
+    Open(PaneLink),
+    /// A well-formed link whose identifier the host does not list.
+    UnknownPane(PaneLink),
+    /// The text is not a pane link.
+    Invalid,
+}
+
+/// Routes `url` against the identifiers the host can open.
+pub fn route(url: &str, known: &[&str]) -> Route {
+    match parse_pane_url(url) {
+        None => Route::Invalid,
+        Some(link) if known.contains(&link.identifier.as_str()) => Route::Open(link),
+        Some(link) => Route::UnknownPane(link),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

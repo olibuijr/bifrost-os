@@ -96,6 +96,67 @@ impl Renewal {
     }
 }
 
+/// How a customer moves from one product of a subscription group to another (`SubscriptionInfo` upgrade and downgrade
+/// rules). An upgrade takes effect at once; a downgrade waits for the next renewal, so the paid period is not cut short.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Change {
+    Same,
+    Upgrade,
+    Downgrade,
+}
+
+impl Change {
+    /// Whether the new product takes effect now rather than at the next renewal.
+    pub fn takes_effect_now(self) -> bool {
+        self != Change::Downgrade
+    }
+}
+
+/// The products of one service that a customer holds one at a time, each at a level. A higher level is a higher tier.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Group {
+    levels: Vec<(String, u32)>,
+}
+
+impl Group {
+    /// An empty group.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a product at a level. False when the product is already in the group or another product holds the level, so
+    /// that every level names one product and the order of the tiers is never ambiguous.
+    pub fn add(&mut self, product: &str, level: u32) -> bool {
+        if self.levels.iter().any(|(p, l)| p == product || *l == level) {
+            return false;
+        }
+        self.levels.push((product.to_string(), level));
+        self.levels.sort_by_key(|(_, l)| *l);
+        true
+    }
+
+    /// The level of a product in the group.
+    pub fn level_of(&self, product: &str) -> Option<u32> {
+        self.levels.iter().find(|(p, _)| p == product).map(|(_, l)| *l)
+    }
+
+    /// The change from one product to another. None when either product is not in the group.
+    pub fn change(&self, from: &str, to: &str) -> Option<Change> {
+        let from_level = self.level_of(from)?;
+        let to_level = self.level_of(to)?;
+        Some(match to_level.cmp(&from_level) {
+            std::cmp::Ordering::Equal => Change::Same,
+            std::cmp::Ordering::Greater => Change::Upgrade,
+            std::cmp::Ordering::Less => Change::Downgrade,
+        })
+    }
+
+    /// The products of the group, from the lowest level to the highest.
+    pub fn products(&self) -> Vec<&str> {
+        self.levels.iter().map(|(p, _)| p.as_str()).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

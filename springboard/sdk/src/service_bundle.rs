@@ -2,9 +2,10 @@
 //! and the launch agent and launch daemon property lists (`Contents/Library/LaunchAgents`, `Contents/Library/LaunchDaemons`).
 //!
 //! This is the pure lookup behind `SMAppService.loginItem(identifier:)`, `agent(plistName:)` and `daemon(plistName:)`. The
-//! caller lists the files of the app bundle and reads each helper's bundle identifier; nothing here touches the disk. The
-//! handles in `service_management` do not use it yet: they still answer `NotFound` and `JobPlistNotFound`, because no
-//! bundle is scanned at launch. Wiring it in needs the shell to report the enabled helpers, which it does not do yet.
+//! caller lists the files of the app bundle and reads each helper's bundle identifier; nothing here touches the disk.
+//! [`BundleServices`] holds that listing and answers the three lookups. The handles in `service_management` still answer
+//! `NotFound` and `JobPlistNotFound`: BifrOSt apps are manifest packages without a `Contents/` tree, so no bundle is
+//! scanned at launch, and the shell does not report helper state yet.
 
 use crate::service_management::{valid_plist_name, ServiceError, Status};
 
@@ -76,6 +77,44 @@ pub fn helper_status(identifier: &str, items: &[HelperItem], enabled: &[&str]) -
         Err(_) => Status::NotFound,
         Ok(item) if enabled.contains(&item.bundle_id.as_str()) => Status::Enabled,
         Ok(_) => Status::NotRegistered,
+    }
+}
+
+/// The Service Management items of one app bundle: the embedded helpers with their identifiers, and the file list the
+/// launch agent and launch daemon lookups search. The caller reads the bundle; this type only answers the lookups.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BundleServices {
+    helpers: Vec<HelperItem>,
+    files: Vec<String>,
+}
+
+impl BundleServices {
+    /// Builds the model from the bundle's file paths (relative to its root) and, for each helper application, the
+    /// bundle identifier it declares. A helper that fails [`helper_path_ok`] or has no identifier is left out.
+    pub fn new(files: &[&str], helper_ids: &[(&str, &str)]) -> Self {
+        let helpers = helper_ids.iter().filter_map(|&(path, id)| helper_from_entry(path, Some(id))).collect();
+        BundleServices { helpers, files: files.iter().map(|f| f.to_string()).collect() }
+    }
+
+    /// The helpers the bundle embeds, in the order they were listed.
+    pub fn helpers(&self) -> &[HelperItem] {
+        &self.helpers
+    }
+
+    /// `SMAppService.loginItem(identifier:)` against this bundle: `JobNotFound` when no embedded helper has the identifier.
+    pub fn login_item(&self, identifier: &str) -> Result<&HelperItem, ServiceError> {
+        find_login_item(identifier, &self.helpers)
+    }
+
+    /// The status of an embedded login item; `enabled` lists the identifiers the user has switched on.
+    pub fn login_item_status(&self, identifier: &str, enabled: &[&str]) -> Status {
+        helper_status(identifier, &self.helpers, enabled)
+    }
+
+    /// `SMAppService.agent(plistName:)` or `daemon(plistName:)` against this bundle: the bundle path of the property list.
+    pub fn job_plist(&self, kind: JobKind, plist_name: &str) -> Result<String, ServiceError> {
+        let files: Vec<&str> = self.files.iter().map(String::as_str).collect();
+        locate_job_plist(kind, plist_name, &files)
     }
 }
 

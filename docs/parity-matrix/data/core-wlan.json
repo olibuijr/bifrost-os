@@ -10,23 +10,23 @@
     {
       "feature": "Client and shared instance (CWWiFiClient)",
       "apple": "CWWiFiClient, CWWiFiClient.shared()",
-      "bifrost": "springboard/src/net/wifi.rs:106 (Wifi::start, snapshot, sender); netd owns the supplicant (springboard/docs/services.md:49)",
-      "status": "os",
-      "note": "one owner process (netd) runs the supplicant; no SDK client object for apps"
+      "bifrost": "springboard/sdk/src/wifi_status.rs (WifiStatus, WifiState); springboard/sdk/src/wlan_events.rs (Watch, diff)",
+      "status": "partial",
+      "note": "The connection snapshot and its change events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: there is no shared client object; netd runs the supplicant and apps build their snapshot from what the shell sends."
     },
     {
       "feature": "Interfaces (CWInterface)",
       "apple": "CWInterface, interfaceNames, powerOn, interfaceMode",
-      "bifrost": "springboard/src/net/wifi.rs:690 (wireless_iface, sysfs /sys/class/net/*/wireless); springboard/src/shell/desktop_network.rs:9 (Interface)",
-      "status": "os",
-      "note": "only the first wireless interface is used; power is Cmd::Enable(bool); no per-interface API for apps"
+      "bifrost": "springboard/sdk/src/wifi_status.rs (WifiState, WifiStatus::has_address, signal_bars)",
+      "status": "partial",
+      "note": "The state, address and signal of the one wireless link are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no interface names, interface mode or power control reach apps, and the shell uses only the first wireless interface."
     },
     {
       "feature": "Scan and network list (CWNetwork)",
       "apple": "CWNetwork: ssid, bssid, rssi, channel, security, ibss, countryCode; scanForNetworks",
-      "bifrost": "springboard/src/net/wpa.rs:8 (ScanResult: ssid, bssid, freq, signal, secure, enterprise); Cmd::Scan in springboard/src/net/wifi.rs:83",
-      "status": "os",
-      "note": "frequency is in place of a CWChannel; no ibss or country code; scan list is in Status.scan"
+      "bifrost": "springboard/sdk/src/wlan.rs (merge, Network, Band, Phy, SecurityClass, channel_for_freq)",
+      "status": "partial",
+      "note": "Scan results merge by network name and report channel, band, PHY and security, tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no IBSS flag, no country code, and no channel width, which the scan flags do not carry."
     },
     {
       "feature": "Channel, band, width and PHY mode (CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode)",
@@ -45,9 +45,9 @@
     {
       "feature": "Security types (CWSecurity)",
       "apple": "CWSecurity: none, WEP, WPA personal and enterprise, WPA2 personal and enterprise, WPA3 personal and transition, and others",
-      "bifrost": "springboard/src/net/wifi_config.rs:29 (Security: Open, Wpa2, Wpa3, Wpa2Wpa3, Enterprise(Eap)); wired: springboard/src/shell/desktop_network.rs (security_of maps NetworkManager key-mgmt onto springboard/src/net/wifi_config.rs Security)",
+      "bifrost": "springboard/src/net/wifi_config.rs (Security, Eap, NetworkConfig::fields, conf, parse_conf)",
       "status": "partial",
-      "note": "no WEP and no WPA-only personal; enterprise uses PEAP or TTLS with MSCHAPv2 inner method Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "WEP (one shared key, open authentication) and WPA Personal (WPA1 with TKIP, no RSN) are modelled with their key rules, supplicant fields and config round trip, tested headless in springboard/tests/parity_sdk-complete-45.rs. Gap: the Other Network sheet still offers the five common choices because its cycle is pinned by parity_sdk-tests-01e, so the two new types are not selectable there yet; enterprise uses PEAP or TTLS with MSCHAPv2 only. Host tests the_security_choice_cycles_through_the_five_choices, a_wpa2_network_writes_a_pre_shared_key_and_a_wpa3_one_writes_sae, an_enterprise_network_uses_the_inner_mschapv2_method_and_no_ca_check and the_config_file_reads_back_the_same_networks_in_joining_order (springboard/tests/parity_sdk-tests-01e.rs). The mapping from NetworkManager key management (security_of in springboard/src/shell/desktop_network.rs) is shell wiring and not part of this evidence. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Configuration (CWConfiguration, CWMutableConfiguration)",
@@ -59,9 +59,9 @@
     {
       "feature": "Join, select and forget",
       "apple": "CWInterface.associate(to:password:), associateToEnterpriseNetwork, commitConfiguration",
-      "bifrost": "Cmd::Join, Cmd::Select, Cmd::JoinOther, Cmd::Forget in springboard/src/net/wifi.rs:83; WifiAction in springboard/src/shell/mod.rs:302",
-      "status": "os",
-      "note": "join and forget run in netd; the Settings page and the shell issue them; apps have no call path"
+      "bifrost": "springboard/sdk/src/wlan_keychain.rs (check_passphrase, password_item, eap_item); springboard/sdk/src/wifi_secrets.rs (WifiSecrets)",
+      "status": "partial",
+      "note": "The passphrase, enterprise credential and per-network secret rules are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no app call joins, selects or forgets a network; netd does those when the shell asks."
     },
     {
       "feature": "Wi-Fi events (CWEventDelegate, CWEventType)",

@@ -111,6 +111,28 @@ pub fn scale(samples: &mut [i16], gain: f32) {
     }
 }
 
+/// The integrated loudness, in dB relative to full scale, that normalization moves every track towards.
+pub const NORMALIZATION_TARGET_DB: f32 = -16.0;
+/// The most a quiet track is raised by normalization, in dB. A larger lift would also raise the noise floor of
+/// old recordings.
+pub const NORMALIZATION_MAX_BOOST_DB: f32 = 6.0;
+
+/// The gain in dB that moves a track measured at `measured_db` to `target_db`. A louder track is turned down by the
+/// difference; a quieter one is raised by the difference, but by no more than `max_boost_db`. A track with no finite
+/// measurement (silence, or not measured yet) gets 0 dB, so nothing changes.
+pub fn normalization_gain_db(measured_db: f32, target_db: f32, max_boost_db: f32) -> f32 {
+    if !measured_db.is_finite() || !target_db.is_finite() {
+        return 0.0;
+    }
+    (target_db - measured_db).min(max_boost_db.max(0.0))
+}
+
+/// The sample multiplier for a volume and a normalization gain together. Muted stays silent. The result is not clamped,
+/// so a gain above unity is returned as is: `scale` only attenuates, and a caller that boosts must clamp the samples.
+pub fn normalized_linear(volume: Volume, normalization_db: f32) -> f32 {
+    volume.linear() * 10f32.powf(normalization_db / 20.0)
+}
+
 /// Device-scalar steps a volume change walks through (`ramp_path`).
 pub const RAMP_STEPS: u32 = 8;
 

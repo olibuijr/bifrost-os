@@ -1,159 +1,159 @@
 {
-  "framework": "SwiftUI (Views, View layout)",
-  "doc": "https://developer.apple.com/documentation/swiftui",
-  "macos_since": "10.15",
-  "status": "partial",
-  "bifrost": "springboard/sdk/src/view/ (retained views, Stack, Form, ScrollView), springboard/ui/src/ (stack, table, collection, sidebar, constraint)",
-  "summary": "BifrOSt has an imperative, retained-view toolkit with stacks, grids, forms, scroll views, source lists, tables and animation, plus Auto Layout style constraints. It has no declarative View protocol, modifier chain, state-driven body, shapes or custom Layout protocol.",
-  "rea_evidence": "ev_1a882830e38c95f440f0bd336bd00c74fb8bc2a84fc97d1342e354040edb662e",
-  "features": [
-    {
-      "feature": "View fundamentals (View protocol, composition)",
-      "apple": "https://developer.apple.com/documentation/swiftui/view-fundamentals",
-      "bifrost": "springboard/sdk/src/view/mod.rs (View trait, ViewBase)",
-      "status": "partial",
-      "note": "retained imperative views, no declarative body or modifier chain"
-    },
-    {
-      "feature": "View configuration (environment, modifiers, state)",
-      "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
-      "bifrost": "springboard/ui/src/environment.rs (Environment, EnvValue); springboard/sdk/src/view/app.rs",
-      "status": "partial",
-      "note": "built on parity/team-a-08; not yet verified on Midget. Environment values set by a node and read by its descendants, with nested scopes that end when the node is left. The model has no caller yet: no view reads it. No generic view modifiers or state-driven bindings yet; properties are set on each view."
-    },
-    {
-      "feature": "View styles",
-      "apple": "https://developer.apple.com/documentation/swiftui/view-styles",
-      "bifrost": "springboard/sdk/src/view/forms.rs (ProgressStyle)",
-      "status": "partial",
-      "note": "a few fixed styles per control, no style protocols"
-    },
-    {
-      "feature": "Animations",
-      "apple": "https://developer.apple.com/documentation/swiftui/animations",
-      "bifrost": "springboard/sdk/src/view/animation.rs, springboard/ui/src/anim.rs",
-      "status": "partial",
-      "note": "springs and timing curves exist; no implicit animation tied to state changes, no matchedGeometry"
-    },
-    {
-      "feature": "Text input and output",
-      "apple": "https://developer.apple.com/documentation/swiftui/text-input-and-output",
-      "bifrost": "springboard/sdk/src/view/forms.rs (TextField), springboard/ui/src/text.rs",
-      "status": "partial",
-      "note": "text fields and text layout; no Text formatting views or TextEditor parity checked"
-    },
-    {
-      "feature": "Images and symbols",
-      "apple": "https://developer.apple.com/documentation/swiftui/images",
-      "bifrost": "springboard/sdk/src/glyphs.rs",
-      "status": "partial",
-      "note": "symbol glyphs; no AsyncImage or Image resizing modifiers"
-    },
-    {
-      "feature": "Controls and indicators",
-      "apple": "https://developer.apple.com/documentation/swiftui/controls-and-indicators",
-      "bifrost": "springboard/sdk/src/view/forms.rs (Checkbox, Stepper, ProgressIndicator, PopUpButton), springboard/sdk/src/view/controls.rs",
-      "status": "partial",
-      "note": "toggle, stepper, progress, picker; fewer than SwiftUI's set (no DatePicker/ColorPicker views checked)"
-    },
-    {
-      "feature": "Menus and commands",
-      "apple": "https://developer.apple.com/documentation/swiftui/menus-and-commands",
-      "bifrost": "springboard/ui/src/menu.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. menu model exists; no Commands builder"
-    },
-    {
-      "feature": "Shapes",
-      "apple": "https://developer.apple.com/documentation/swiftui/shapes",
-      "bifrost": "springboard/ui/src/shape.rs, springboard/ui/src/stack.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Shape protocol or Path trim/stroke API for apps"
-    },
-    {
-      "feature": "Drawing and graphics (effects, Canvas)",
-      "apple": "https://developer.apple.com/documentation/swiftui/drawing-and-graphics",
-      "bifrost": "springboard/render/src/glass.rs",
-      "status": "partial",
-      "note": "glass/vibrancy materials in renderer; no blur, shadow, mask modifiers or Canvas for apps"
-    },
-    {
-      "feature": "Layout fundamentals (stacks, grids)",
-      "apple": "https://developer.apple.com/documentation/swiftui/layout-fundamentals",
-      "bifrost": "springboard/ui/src/stack.rs, springboard/sdk/src/view/controls.rs (Stack)",
-      "status": "partial",
-      "note": "HStack/VStack, grid, adaptive columns; no ZStack, LazyVGrid, ViewThatFits"
-    },
-    {
-      "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
-      "apple": "https://developer.apple.com/documentation/swiftui/layout-adjustments",
-      "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/geometry.rs (EdgeInsets), springboard/sdk/src/view/autolayout.rs",
-      "status": "partial",
-      "note": "insets, alignment, distribution, constraints; no alignment guides or layout priority modifiers"
-    },
-    {
-      "feature": "Custom layout (Layout protocol)",
-      "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
-      "bifrost": "springboard/ui/src/layout_protocol.rs; wired: springboard/ui/src/layout_protocol.rs (FlowLayout) via Arrange in springboard/apps/freeform-desktop/src/freeform.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b15, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. constraint solver exists, no Layout protocol or AnyLayout transitions Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
-    },
-    {
-      "feature": "Lists",
-      "apple": "https://developer.apple.com/documentation/swiftui/lists",
-      "bifrost": "springboard/ui/src/sidebar.rs, springboard/ui/src/collection.rs, springboard/ui/src/diff.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 14 tests. source list, card grid, diffable snapshots; no generic List with swipe actions or edit mode"
-    },
-    {
-      "feature": "Tables",
-      "apple": "https://developer.apple.com/documentation/swiftui/tables",
-      "bifrost": "springboard/ui/src/table.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. columns, sort descriptors, header hits; no TableColumn builder"
-    },
-    {
-      "feature": "View groupings (Form, Group, ControlGroup, split)",
-      "apple": "https://developer.apple.com/documentation/swiftui/view-groupings",
-      "bifrost": "springboard/sdk/src/view/forms.rs (Form, Section), springboard/ui/src/split.rs",
-      "status": "partial",
-      "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views"
-    },
-    {
-      "feature": "Scroll views",
-      "apple": "https://developer.apple.com/documentation/swiftui/scroll-views",
-      "bifrost": "springboard/sdk/src/view/scroll.rs, springboard/ui/src/scroll.rs",
-      "status": "partial",
-      "note": "scrolling with model; no ScrollViewReader, scroll targets or scroll position binding"
-    },
-    {
-      "feature": "Shader effects (Shader, ShaderLibrary, colorEffect, distortionEffect, layerEffect, visualEffect)",
-      "apple": "Shader, ShaderLibrary, View.colorEffect(_:isEnabled:), View.distortionEffect(_:maxSampleOffset:isEnabled:), View.layerEffect(_:maxSampleOffset:isEnabled:), View.visualEffect(_:)",
-      "bifrost": "springboard/ui/src/shader_library.rs (shader function table model); springboard/gpu/src/shader.rs (Vulkan shaders, not app-facing)",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    },
-    {
-      "feature": "Liquid Glass effect (glassEffect, GlassEffectContainer, glassEffectID)",
-      "apple": "View.glassEffect(_:in:), Glass, GlassEffectContainer, View.glassEffectID(_:in:)",
-      "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs (live dual-Kawase blur in the window server); springboard/render/src/glass.rs",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    },
-    {
-      "feature": "Materials (ultra thin to ultra thick, bar)",
-      "apple": "Material.ultraThin, .thin, .regular, .thick, .ultraThick, .bar; View.background(_:in:)",
-      "bifrost": "springboard/sdk/src/widgets.rs (visual_effect with Material); springboard/render/src/glass.rs",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    }
-  ],
-  "gaps": [
-    "Declarative View protocol with body, modifiers and state/binding updates",
-    "Style protocols",
-    "Layout protocol and ZStack, lazy grids, ViewThatFits",
-    "Shape, Path and Canvas drawing API for apps",
-    "Generic List with swipe actions, TabView, GroupBox, ControlGroup",
-    "ScrollViewReader and scroll position APIs"
-  ]
+ "framework": "SwiftUI (Views, View layout)",
+ "doc": "https://developer.apple.com/documentation/swiftui",
+ "macos_since": "10.15",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/view/ (retained views, Stack, Form, ScrollView), springboard/ui/src/ (stack, table, collection, sidebar, constraint)",
+ "summary": "BifrOSt has an imperative, retained-view toolkit with stacks, grids, forms, scroll views, source lists, tables and animation, plus Auto Layout style constraints. It has no declarative View protocol, modifier chain, state-driven body, shapes or custom Layout protocol.",
+ "rea_evidence": "ev_1a882830e38c95f440f0bd336bd00c74fb8bc2a84fc97d1342e354040edb662e",
+ "features": [
+  {
+   "feature": "View fundamentals (View protocol, composition)",
+   "apple": "https://developer.apple.com/documentation/swiftui/view-fundamentals",
+   "bifrost": "springboard/sdk/src/view/mod.rs (View trait, ViewBase)",
+   "status": "partial",
+   "note": "retained imperative views, no declarative body or modifier chain"
+  },
+  {
+   "feature": "View configuration (environment, modifiers, state)",
+   "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
+   "bifrost": "springboard/ui/src/environment.rs (Environment::with_value, scoped, typed int/float/text reads)",
+   "status": "partial",
+   "note": "Environment values with scoped overrides, typed reads and a with_value modifier for one subtree work and are tested headless in springboard/ui/tests/parity_sdk-complete-32.rs. Gap: the model is not wired into the shell or apps, and views still take their properties on each view instead of reading a generic modifier chain; the lab machine is needed only to confirm a shell view reads the environment on Midget."
+  },
+  {
+   "feature": "View styles",
+   "apple": "https://developer.apple.com/documentation/swiftui/view-styles",
+   "bifrost": "springboard/sdk/src/view/forms.rs (ProgressStyle)",
+   "status": "partial",
+   "note": "a few fixed styles per control, no style protocols"
+  },
+  {
+   "feature": "Animations",
+   "apple": "https://developer.apple.com/documentation/swiftui/animations",
+   "bifrost": "springboard/sdk/src/view/animation.rs, springboard/ui/src/anim.rs",
+   "status": "partial",
+   "note": "springs and timing curves exist; Window::animate animates frame, opacity and background for any change made inside it (headless_swatch_is_drawn_where_the_animation_has_moved_it, headless_underdamped_spring_passes_its_target_then_rests_on_it in springboard/sdk/src/view/animation.rs); animation is opt-in per closure, not tied to state changes; no matchedGeometry"
+  },
+  {
+   "feature": "Text input and output",
+   "apple": "https://developer.apple.com/documentation/swiftui/text-input-and-output",
+   "bifrost": "springboard/sdk/src/view/forms.rs (TextField), springboard/ui/src/text.rs",
+   "status": "partial",
+   "note": "text fields and text layout; no Text formatting views or TextEditor parity checked"
+  },
+  {
+   "feature": "Images and symbols",
+   "apple": "https://developer.apple.com/documentation/swiftui/images",
+   "bifrost": "springboard/sdk/src/glyphs.rs",
+   "status": "partial",
+   "note": "Symbol glyphs draw headless into an offscreen surface (springboard/sdk/tests/parity_sdk-tests-10-w7.rs); no AsyncImage or Image resizing modifiers"
+  },
+  {
+   "feature": "Controls and indicators",
+   "apple": "https://developer.apple.com/documentation/swiftui/controls-and-indicators",
+   "bifrost": "springboard/sdk/src/view/forms.rs (Checkbox, Stepper, ProgressIndicator, PopUpButton), springboard/sdk/src/view/controls.rs",
+   "status": "partial",
+   "note": "toggle, stepper, progress, picker; fewer than SwiftUI's set (no DatePicker/ColorPicker views checked)"
+  },
+  {
+   "feature": "Menus and commands",
+   "apple": "https://developer.apple.com/documentation/swiftui/menus-and-commands",
+   "bifrost": "springboard/ui/src/menu.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. menu model exists; no Commands builder"
+  },
+  {
+   "feature": "Shapes",
+   "apple": "https://developer.apple.com/documentation/swiftui/shapes",
+   "bifrost": "springboard/ui/src/shape.rs, springboard/ui/src/stack.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Shape protocol or Path trim/stroke API for apps"
+  },
+  {
+   "feature": "Drawing and graphics (effects, Canvas)",
+   "apple": "https://developer.apple.com/documentation/swiftui/drawing-and-graphics",
+   "bifrost": "springboard/render/src/glass.rs",
+   "status": "partial",
+   "note": "glass/vibrancy materials in renderer; no blur, shadow, mask modifiers or Canvas for apps"
+  },
+  {
+   "feature": "Layout fundamentals (stacks, grids)",
+   "apple": "https://developer.apple.com/documentation/swiftui/layout-fundamentals",
+   "bifrost": "springboard/ui/src/stack.rs (stack, distribute, grid, adaptive_columns, overlay, first_fitting); springboard/ui/src/lazy_stack.rs (visible_rows, visible_items, content_height: the lazy list and grid windows)",
+   "status": "partial",
+   "note": "Stack and grid layout as pure functions: HStack/VStack spacing and flexible items, the four fixed distributions, adaptive columns, grid, a ZStack-style overlay and a ViewThatFits-style first_fitting. The SDK Stack view arranges its children with stack and distribute. Lazy list and grid windows (the rows or items under a viewport, with overscan) are tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: no SDK view yet builds only the visible rows of a lazy stack or grid, so the windowing is not wired into the Stack view. Tests: spare_space_is_shared_by_flexible_items_in_proportion_to_their_weight, equal_centering_keeps_the_centres_equally_far_apart, adaptive_columns_fit_as_many_minimum_cells_as_the_width_allows, a_grid_fills_rows_left_to_right, an_overlay_aligns_each_layer_to_the_anchor, view_that_fits_picks_the_first_candidate_that_fits_the_constrained_axes (springboard/ui/tests/parity_sdk-tests-10.rs)"
+  },
+  {
+   "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
+   "apple": "https://developer.apple.com/documentation/swiftui/layout-adjustments",
+   "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/geometry.rs (EdgeInsets), springboard/sdk/src/view/autolayout.rs (Spec::priority, Constraints::guide)",
+   "status": "partial",
+   "note": "Insets, alignment, distribution, constraints with priorities, layout guides and hugging and compression priorities are solved headless (sdk/tests/parity_sdk-complete-31.rs). Gap: there are no baseline alignment anchors."
+  },
+  {
+   "feature": "Custom layout (Layout protocol)",
+   "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
+   "bifrost": "springboard/ui/src/layout_protocol.rs; wired: springboard/ui/src/layout_protocol.rs (FlowLayout) via Arrange in springboard/apps/freeform-desktop/src/freeform.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b15, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. constraint solver exists, no Layout protocol or AnyLayout transitions Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+  },
+  {
+   "feature": "Lists",
+   "apple": "https://developer.apple.com/documentation/swiftui/lists",
+   "bifrost": "springboard/ui/src/sidebar.rs, springboard/ui/src/collection.rs, springboard/ui/src/diff.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 14 tests. source list, card grid, diffable snapshots; no generic List with swipe actions or edit mode"
+  },
+  {
+   "feature": "Tables",
+   "apple": "https://developer.apple.com/documentation/swiftui/tables",
+   "bifrost": "springboard/ui/src/table.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 5 tests. columns, sort descriptors, header hits; no TableColumn builder"
+  },
+  {
+   "feature": "View groupings (Form, Group, ControlGroup, split)",
+   "apple": "https://developer.apple.com/documentation/swiftui/view-groupings",
+   "bifrost": "springboard/sdk/src/view/forms.rs (Form, Section), springboard/ui/src/split.rs",
+   "status": "partial",
+   "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views"
+  },
+  {
+   "feature": "Scroll views",
+   "apple": "https://developer.apple.com/documentation/swiftui/scroll-views",
+   "bifrost": "springboard/ui/src/scroll.rs (Scroller), springboard/sdk/src/view/scroll.rs",
+   "status": "partial",
+   "note": "scrolling with model; scroll targets work headless: offset_for_rect places a row at the leading, centre or trailing edge of the viewport, clamped to the scrollable range, and ScrollView::reveal applies it (ui/tests/parity_sdk-complete-05.rs). Still missing: a scroll position binding to app state and per-item scroll identity, and the reveal path has not run on Midget. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_short_drag_does_not_scroll_and_a_tap_is_reported_as_a_tap, a_drag_follows_the_finger_past_the_slop, pulling_past_the_end_rubber_bands_beyond_the_maximum, jumps_and_range_changes_clamp_the_offset, a_released_bounce_springs_back_to_the_edge, a_fling_decelerates_and_stops_below_the_threshold)."
+  },
+  {
+   "feature": "Shader effects (Shader, ShaderLibrary, colorEffect, distortionEffect, layerEffect, visualEffect)",
+   "apple": "Shader, ShaderLibrary, View.colorEffect(_:isEnabled:), View.distortionEffect(_:maxSampleOffset:isEnabled:), View.layerEffect(_:maxSampleOffset:isEnabled:), View.visualEffect(_:)",
+   "bifrost": "springboard/ui/src/shader_library.rs (shader function table model); springboard/ui/src/effect_shader.rs (ShaderEffect: colorEffect, distortionEffect, layerEffect and visualEffect bound to a fragment function with checked uniforms); springboard/gpu/src/shader.rs (Vulkan shaders, not app-facing)",
+   "status": "partial",
+   "note": "The four effect modifiers are modelled and validated against the library (the function must exist and run in the fragment stage, and the uniforms are checked), tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: the per-shader inventory is pending the macOS 27 Golden Gate 26A434 extraction (InstallAssistant.pkg, docs/macos-os-inventory.md), and no effect runs in an app until a GPU pipeline is built from it, which needs the lab machine."
+  },
+  {
+   "feature": "Liquid Glass effect (glassEffect, GlassEffectContainer, glassEffectID)",
+   "apple": "View.glassEffect(_:in:), Glass, GlassEffectContainer, View.glassEffectID(_:in:)",
+   "bifrost": "springboard/layers/src/layer.rs (Material::Glass); springboard/wm/src/render_server/material.rs (live dual-Kawase blur in the window server); springboard/render/src/glass.rs",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md). Headless tests: layers/tests/parity_sdk-tests-01a.rs (a_new_layer_has_no_material, a_glass_material_keeps_its_blur_tint_and_saturation, glass_materials_compare_by_all_their_parameters); wm/tests/parity_sdk-tests-01a.rs covers the blur pass arithmetic."
+  },
+  {
+   "feature": "Materials (ultra thin to ultra thick, bar)",
+   "apple": "Material.ultraThin, .thin, .regular, .thick, .ultraThick, .bar; View.background(_:in:)",
+   "bifrost": "springboard/render/src/glass.rs (Kind, Look), springboard/sdk/src/widgets.rs (visual_effect with Material)",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md). Headless tests: render/tests/parity_sdk-tests-01a.rs (chrome_and_title_bars_share_the_title_bar_recipe_and_chrome_is_the_default, sidebars_are_thinner_glass_than_window_backgrounds, an_identity_look_leaves_the_backdrop_unchanged, mixing_looks_follows_the_scheme_position)."
+  }
+ ],
+ "gaps": [
+  "Declarative View protocol with body, modifiers and state/binding updates",
+  "Style protocols",
+  "Layout protocol and ZStack, lazy grids, ViewThatFits",
+  "Shape, Path and Canvas drawing API for apps",
+  "Generic List with swipe actions, TabView, GroupBox, ControlGroup",
+  "ScrollViewReader and scroll position APIs"
+ ]
 }

@@ -106,6 +106,52 @@ impl IncomingCard {
     }
 }
 
+/// The ringing cards the shell holds, oldest first. The oldest card that still rings is the one on screen; the others
+/// wait behind it. The stack keeps no call state of its own: [`CardStack::prune`] drops the cards whose calls the
+/// call controller no longer reports as ringing.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CardStack {
+    cards: Vec<IncomingCard>,
+}
+
+impl CardStack {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a card at the back. Returns `false` when a card for the same call is already held.
+    pub fn push(&mut self, card: IncomingCard) -> bool {
+        if self.cards.iter().any(|held| held.call_id == card.call_id) {
+            return false;
+        }
+        self.cards.push(card);
+        true
+    }
+
+    /// The card on screen: the oldest one held.
+    pub fn on_screen(&self) -> Option<&IncomingCard> {
+        self.cards.first()
+    }
+
+    /// The cards waiting behind the one on screen, oldest first.
+    pub fn waiting(&self) -> &[IncomingCard] {
+        self.cards.get(1..).unwrap_or(&[])
+    }
+
+    /// Drops every card whose call no longer rings in `center`, and returns how many were dropped.
+    pub fn prune(&mut self, center: &CallCenter) -> usize {
+        let before = self.cards.len();
+        self.cards.retain(|card| card.is_showing(center));
+        before - self.cards.len()
+    }
+
+    /// The call request a button press on the card on screen sends. The card stays until [`CardStack::prune`] sees
+    /// that its call has left the ringing state, so a request the controller refuses leaves the card in place.
+    pub fn press(&self, button: CardButton) -> Option<(u64, CallAction)> {
+        self.on_screen().map(|card| card.press(button))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

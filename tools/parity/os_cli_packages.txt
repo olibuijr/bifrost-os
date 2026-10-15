@@ -89,6 +89,8 @@ libtiff
 libxml2
 # libxslt: xslt-config, xsltproc
 libxslt
+# logrotate: newsyslog->logrotate
+logrotate
 # lsof: lsof
 lsof
 # man-db: apropos, makewhatis->mandb, makewhatis.local->mandb

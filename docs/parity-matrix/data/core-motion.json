@@ -52,9 +52,9 @@
     {
       "feature": "Recorded sensor data and batched history",
       "apple": "CMSensorRecorder, CMSensorDataList, CMRecordedAccelerometerData, CMBatchedSensorManager, CMLogItem",
-      "bifrost": "springboard/core/src/motion.rs, springboard/core/src/sensor_log.rs, springboard/render/src/gfx/rotate.rs",
+      "bifrost": "springboard/core/src/motion.rs, springboard/core/src/sensor_log.rs (SensorLog::between, SensorLog::batches); springboard/core/tests/parity_sdk-complete-15.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sensor recording or history store."
+      "note": "SensorLog keeps a bounded, time-ordered history, queries it by time range and hands it back in batches of a given size, tested headless in springboard/core/tests/parity_sdk-complete-15.rs. Gap: no sensor feeds the log, and there is no SDK recorder or history store on disk, so nothing is recorded across launches."
     },
     {
       "feature": "Motion activity (walking, running, stationary, automotive)",

@@ -11,10 +11,12 @@
 mod model;
 
 use bifrost_app::keychain::Error as KeychainError;
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::Rect;
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{clipboard, Damage, Surface};
 use bifrost_app::passwords::{kind_of, name_of, Kind};
-use bifrost_app::{keychain_groups, passwords, App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{keychain_groups, passwords, widgets, App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use model::{Entry, Item};
 use std::collections::HashMap;
@@ -60,7 +62,9 @@ struct PasswordsApp {
     pending: HashMap<u32, Pending>,
     export_rows: Vec<Entry>,
     export_left: usize,
+    export_failure: Option<String>,
     imported: usize,
+    import_failed: usize,
     status: String,
 }
 
@@ -75,6 +79,26 @@ impl PasswordsApp {
         model::filter(&self.items, self.tab, &self.query).into_iter().cloned().collect()
     }
 
+    /// The filtered password rows, with their current selection, for the shared source-list widget.
+    fn source_list(&self) -> (Vec<Item>, SourceList) {
+        let shown = self.shown();
+        let rows = shown.iter().enumerate().map(|(i, item)| {
+            let symbol = match item.kind {
+                Kind::Login => "person.crop.circle",
+                Kind::SecureNote => "doc",
+                Kind::Certificate => "checkmark.circle",
+            };
+            SidebarItem::row(i as u32, item.name()).with_symbol(symbol).with_subtitle(subtitle(item))
+        }).collect();
+        let mut list = SourceList::new(rows, ROW_PT - 16.0, 22.0);
+        list.two_line_h = ROW_PT;
+        let selected = self.selected.as_ref().and_then(|(service, account)| {
+            shown.iter().position(|item| item.service == *service && item.account == *account)
+        });
+        list.set_selected(selected.map(|i| i as u32));
+        (shown, list)
+    }
+
     fn select(&mut self, service: String, account: String) {
         self.selected = Some((service, account));
         self.revealed = None;
@@ -87,10 +111,19 @@ impl PasswordsApp {
     }
 
     fn import(&mut self, ctx: &Ctx, path: &str) {
+        if self.pending.values().any(|p| matches!(p, Pending::Import { .. } | Pending::ImportUpdate)) {
+            self.status = "An import is already in progress.".into();
+            return;
+        }
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| model::parse_import(&t)) {
             Ok(got) => {
                 self.imported = 0;
+                self.import_failed = 0;
                 let count = got.entries.len();
+                if count == 0 {
+                    self.status = format!("No logins to import{}.", skipped_text(got.skipped));
+                    return;
+                }
                 for entry in got.entries {
                     let id = passwords::save(ctx, &entry.site, &entry.account, &entry.password);
                     self.pending.insert(id, Pending::Import { entry });
@@ -103,12 +136,17 @@ impl PasswordsApp {
 
     /// Asks for the password of every login; the CSV is written once they have all come back.
     fn export(&mut self, ctx: &Ctx) {
+        if self.export_left > 0 {
+            self.status = "An export is already in progress.".into();
+            return;
+        }
         let logins: Vec<Item> = self.items.iter().filter(|i| i.kind == Kind::Login).cloned().collect();
         if logins.is_empty() {
             self.status = "No logins to export.".into();
             return;
         }
         self.export_rows.clear();
+        self.export_failure = None;
         self.export_left = logins.len();
         for l in logins {
             let id = passwords::fill(ctx, &l.service, &l.account);
@@ -119,13 +157,18 @@ impl PasswordsApp {
 
     /// Writes the export once every password has come back; a failed write is shown in the status line.
     fn finish_export(&mut self) {
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-        let dir = home.join("Downloads");
         let text = model::render_export(&self.export_rows);
         let rows = self.export_rows.len();
-        self.status = match write_private(&dir.join("passwords.csv"), text.as_bytes()) {
-            Ok(()) => format!("Exported {rows} logins to Downloads."),
-            Err(e) => format!("Could not export: {e}"),
+        self.status = if let Some(reason) = self.export_failure.take() {
+            format!("Could not export; {reason}. No file was changed.")
+        } else {
+            match std::env::var_os("HOME") {
+                Some(home) => match write_private(&PathBuf::from(home).join("Downloads/passwords.csv"), text.as_bytes()) {
+                    Ok(()) => format!("Exported {rows} logins to Downloads."),
+                    Err(e) => format!("Could not export: {e}"),
+                },
+                None => "Could not export: HOME is unavailable.".into(),
+            }
         };
         self.export_rows.clear();
     }
@@ -166,15 +209,30 @@ fn empty_text(kind: Kind) -> &'static str {
     }
 }
 
-/// Creates the file for the owner only, then writes it (the export holds passwords in clear text).
+/// Atomically replaces the clear-text export with an owner-only file. A sibling temporary file means interruption
+/// cannot truncate the previous export or leave a partially written CSV at the published path.
 fn write_private(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SERIAL: AtomicU64 = AtomicU64::new(0);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
-    f.write_all(data)
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+    let tmp = dir.join(format!(".passwords-{}-{}.tmp", std::process::id(), SERIAL.fetch_add(1, Ordering::Relaxed)));
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp)?;
+    let written = (|| {
+        f.write_all(data)?;
+        f.sync_all()
+    })();
+    if let Err(e) = written.and_then(|()| std::fs::rename(&tmp, path)) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    // Directory sync is best effort because some supported filesystems reject it.
+    let _ = std::fs::File::open(dir).and_then(|d| d.sync_all());
+    Ok(())
 }
 
 /// The kind tab at point `(x, y)` in the list column, if any.
@@ -200,6 +258,8 @@ impl App for PasswordsApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        // Keychain edits persist as they are made, and CSV export replaces its destination atomically.
+        ctx.enable_sudden_termination();
         if !self.listed {
             self.listed = true;
             self.ask_list(ctx);
@@ -226,12 +286,12 @@ impl App for PasswordsApp {
                         self.set_tab(kind);
                         return true;
                     }
-                    if y < HEADER_PT {
-                        return false;
-                    }
-                    let index = ((y - HEADER_PT) / ROW_PT).floor() as usize;
-                    if let Some(item) = self.shown().get(index).cloned() {
-                        self.select(item.service, item.account);
+                    let (shown, list) = self.source_list();
+                    let bounds = Rect { x: 0.0, y: HEADER_PT, w: LIST_PT, h: ctx.cfg.h as f32 / ctx.ui.s - HEADER_PT };
+                    if let Some(index) = list.hit(bounds, 0.0, x, y).map(|i| i as usize) {
+                        if let Some(item) = shown.get(index) {
+                            self.select(item.service.clone(), item.account.clone());
+                        }
                         return true;
                     }
                     return false;
@@ -337,16 +397,22 @@ impl App for PasswordsApp {
                     self.pending.insert(id, Pending::ImportUpdate);
                     return true;
                 }
-                Err(e) => self.status = format!("Could not import {}: {e}", entry.site),
+                Err(e) => {
+                    self.import_failed += 1;
+                    self.status = format!("Could not import {}: {e}", entry.site);
+                }
             },
             Pending::ImportUpdate => match passwords::decode_password(result) {
                 Ok(_) => self.imported += 1,
-                Err(e) => self.status = format!("Could not update a login: {e}"),
+                Err(e) => {
+                    self.import_failed += 1;
+                    self.status = format!("Could not update a login: {e}");
+                }
             },
             Pending::Export { service, account } => {
                 match passwords::decode_password(result) {
                     Ok(password) => self.export_rows.push(Entry { site: service, account, password }),
-                    Err(e) => self.status = format!("Could not read {service}: {e}"),
+                    Err(e) => self.export_failure = Some(format!("could not read {service}: {e}")),
                 }
                 self.export_left = self.export_left.saturating_sub(1);
                 if self.export_left == 0 {
@@ -355,10 +421,19 @@ impl App for PasswordsApp {
                 return true;
             }
         }
-        if self.imported > 0 && self.pending.values().all(|p| !matches!(p, Pending::Import { .. } | Pending::ImportUpdate)) {
-            self.status = format!("Imported {} logins.", self.imported);
+        if (self.imported > 0 || self.import_failed > 0)
+            && self.pending.values().all(|p| !matches!(p, Pending::Import { .. } | Pending::ImportUpdate))
+        {
+            self.status = if self.import_failed == 0 {
+                format!("Imported {} logins.", self.imported)
+            } else {
+                format!("Imported {}; {} failed. Keychain changes are not transactional.", self.imported, self.import_failed)
+            };
+            if self.imported > 0 {
+                self.ask_list(ctx);
+            }
             self.imported = 0;
-            self.ask_list(ctx);
+            self.import_failed = 0;
         }
         true
     }
@@ -389,37 +464,25 @@ impl App for PasswordsApp {
             let on = kind == self.tab;
             let colour = if on { ui::LABEL.now() } else { ui::LINK };
             if on {
-                s.fill_rect(p(x), p(TABS_Y_PT), p(width), p(TABS_H_PT), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(x), p(TABS_Y_PT), p(width), p(TABS_H_PT), ui::ROW_PRESSED.now());
             }
             let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, colour);
             s.blit_colored(&img, pi(x + 6.0), pi(TABS_Y_PT + 5.0), colour, 255);
         }
         let search = if self.query.is_empty() { "Search".to_string() } else { self.query.clone() };
         let search_colour = if self.query.is_empty() { ui::LABEL_2.now() } else { ui::LABEL.now() };
-        s.fill_rect(p(PAD_PT), p(SEARCH_Y_PT), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::SEPARATOR);
+        s.fill_rect(p(PAD_PT), p(SEARCH_Y_PT), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::FIELD_BG.now());
         let img = ui.text(&ui.fit(&search, ui::MAC_BODY_PT, ui.pt(LIST_PT - 4.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, search_colour);
         s.blit_colored(&img, pi(PAD_PT + 8.0), pi(SEARCH_Y_PT + 5.0), search_colour, 255);
-        let shown = self.shown();
-        for (i, item) in shown.iter().enumerate() {
-            let y = HEADER_PT + i as f32 * ROW_PT;
-            if y > h as f32 / scale {
-                break;
-            }
-            let selected = self.selected.as_ref().is_some_and(|(service, account)| *service == item.service && *account == item.account);
-            if selected {
-                s.fill_rect(p(6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT - 4.0), ui::SIDEBAR_SELECTED);
-            }
-            let img = ui.text(&ui.fit(item.name(), ui::MAC_BODY_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, pi(PAD_PT), pi(y + 5.0), ui::LABEL.now(), 255);
-            let img = ui.text(&ui.fit(subtitle(item), ui::MAC_FOOTNOTE_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, pi(PAD_PT), pi(y + 24.0), ui::LABEL_2.now(), 255);
-        }
+        let (shown, list) = self.source_list();
+        let bounds = Rect { x: 0.0, y: HEADER_PT, w: LIST_PT, h: h as f32 / scale - HEADER_PT };
+        widgets::source_list(s, ui, bounds, &list, 0.0, None);
         if shown.is_empty() {
             let text = if self.items.iter().any(|i| i.kind == self.tab) { "No Matches" } else { empty_text(self.tab) };
             let img = ui.text(text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
             s.blit_colored(&img, pi(PAD_PT), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
         }
-        s.fill_rect(p(LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR);
+        s.fill_rect(p(LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR_C.now());
         // detail column
         let px = LIST_PT + PAD_PT;
         match &self.selected {
@@ -470,4 +533,26 @@ impl App for PasswordsApp {
 
 fn main() {
     bifrost_app::run(PasswordsApp::default());
+}
+
+#[cfg(test)]
+mod private_export_tests {
+    use super::write_private;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn replaces_export_atomically_with_owner_only_permissions() {
+        let dir = std::env::temp_dir().join(format!("bifrost-passwords-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("passwords.csv");
+        std::fs::write(&path, b"old,complete,export\n").unwrap();
+
+        write_private(&path, b"new,complete,export\n").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"new,complete,export\n");
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no temporary export remains");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

@@ -10,16 +10,16 @@
     {
       "feature": "3D asset container and object hierarchy",
       "apple": "MDLAsset, MDLObject, MDLObjectContainer, MDLNamed",
-      "bifrost": "springboard/ui/src/scene_object.rs",
+      "bifrost": "springboard/ui/src/scene_object.rs (SceneObjects::add_root, add_child, find, descendants, is_rendered); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scene graph of 3D objects anywhere in springboard/"
+      "note": "Headless tests in parity_sdk-tests-18 cover the named-node arena: paths, hidden subtrees, depth-first order and refused names. The module is not wired into apps or the shell, and it has no asset loader, so no 3D file format is read."
     },
     {
       "feature": "Transforms (local coordinate space)",
       "apple": "MDLTransform, MDLTransformStack, MDLTransformOp and its rotate/scale/translate/matrix subclasses",
-      "bifrost": "springboard/ui/src/scene_object.rs",
+      "bifrost": "springboard/ui/src/scene_object.rs (TransformOp, SceneObjects::local_matrix, SceneObjects::world_matrix); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:892 lists 'no CALayer tree, transforms' as a decided gap"
+      "note": "Headless tests in parity_sdk-tests-18 cover operation order, translation, scale, rotation, matrix operations and parent composition of local transforms. Gap: no renderer consumes the transform stack, and the rotate, scale and translate forms are one enum rather than separate types."
     },
     {
       "feature": "Mesh and vertex buffers",
@@ -38,9 +38,9 @@
     {
       "feature": "Materials and shading models",
       "apple": "MDLMaterial, MDLMaterialProperty, MDLScatteringFunction, MDLPhysicallyPlausibleScatteringFunction",
-      "bifrost": "springboard/ui/src/scene_material.rs",
+      "bifrost": "springboard/ui/src/scene_material.rs (AssetMaterial, MaterialProperty); springboard/ui/src/shading.rs (Material, shade)",
       "status": "partial",
-      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. window vibrancy materials (docs/bifrost-ui.md 'Window vibrancy') are compositor effects, not surface materials"
+      "note": "Named material properties with base inheritance and the CPU shading model are tested in ui/tests/parity_sdk-tests-19.rs. Gap: the material and shading models are not joined, textures are stored as paths only, and window vibrancy stays a compositor effect."
     },
     {
       "feature": "Textures as 3D material inputs",
@@ -52,16 +52,16 @@
     {
       "feature": "Lights",
       "apple": "MDLLight, MDLAreaLight, MDLPhotometricLight, MDLPhysicallyPlausibleLight, MDLLightProbe",
-      "bifrost": "springboard/ui/src/scene_light.rs",
+      "bifrost": "springboard/ui/src/scene_light.rs; springboard/ui/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. name match only"
+      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; headless tests in springboard/ui/tests/parity_sdk-tests-04.rs cover the point, spot, directional and ambient falloff and the types left uncomputed. Not wired into apps or the shell, not yet tested on the VM or Midget. Name match only"
     },
     {
       "feature": "Cameras",
       "apple": "MDLCamera, MDLStereoscopicCamera",
-      "bifrost": "springboard/ui/src/view_camera.rs",
+      "bifrost": "springboard/ui/src/view_camera.rs; springboard/ui/tests/parity_sdk-complete-42.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. webcam capture is not a 3D view camera"
+      "note": "Projection validity, the look and framing operations and the view and projection matrices are tested headless in ui/tests/parity_sdk-complete-42.rs. Not yet wired into apps or the shell and not tested on Midget; webcam capture is not a 3D view camera."
     },
     {
       "feature": "File format import and export",
@@ -94,9 +94,9 @@
     {
       "feature": "Sharing buffers with the GPU framework",
       "apple": "interop with MetalKit, GLKit and SceneKit (framework overview)",
-      "bifrost": "springboard/src/gpu/egl.rs (OpenGL ES through EGL on Linux)",
-      "status": "gap",
-      "note": "MetalKit, GLKit and SceneKit are Apple-only; the Linux GL path has no 3D consumer"
+      "bifrost": "springboard/sdk/src/buffer_share.rs (BufferLayout, choose_import_format); springboard/gpu/src/dmabuf.rs (DmaBufFormat); springboard/sdk/tests/parity_sdk-rest-15.rs",
+      "status": "partial",
+      "note": "The layout of a buffer shared with the GPU (size, pixel format, row stride, exact length) and the fourcc and modifier pair a device imports it with are tested headless. Gap: no export or import call is wired to a device, and no 3D consumer exists on Linux, so the lab machine must confirm the dma-buf round trip."
     }
   ],
   "gaps": [

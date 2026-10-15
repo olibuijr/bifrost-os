@@ -10,23 +10,23 @@
     {
       "feature": "Browse for services by type (DNSServiceBrowse)",
       "apple": "DNSServiceBrowse, DNSServiceBrowseReply",
-      "bifrost": "springboard/src/net/share.rs:370-400 (Peer, Peers); wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs (dnssdBrowse, dnssdInstances) and springboard/sdk/src/network_path.rs (dnssd_browse, dnssd_instances)",
+      "bifrost": "springboard/src/net/share.rs (peer_from_datagram, Peers); springboard/tests/parity_sdk-complete-18.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs (dnssdBrowse, dnssdInstances) and springboard/sdk/src/network_path.rs (dnssd_browse, dnssd_instances)",
       "status": "partial",
-      "note": "Peer list is built from the TSB1 beacon only. Finds BifrOSt peers with the same secret, not arbitrary DNS-SD service types. No app API. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Beacon datagrams are filtered by secret and by this device's own port, and peers expire after the TTL, all tested headless. Finds BifrOSt peers with the same secret only, not arbitrary DNS-SD service types. Gap: a browse of arbitrary service types needs the lab machine and a multicast responder on the network."
     },
     {
       "feature": "Resolve a service to host, port and TXT (DNSServiceResolve)",
       "apple": "DNSServiceResolve, DNSServiceResolveReply",
-      "bifrost": "springboard/src/net/share.rs:61-104 (Beacon encode/decode)",
+      "bifrost": "springboard/src/net/share.rs (Beacon encode/decode, peer_from_datagram); springboard/tests/parity_sdk-complete-18.rs",
       "status": "partial",
-      "note": "The beacon gives address, TCP port and device name. There is no TXT data and no resolve call that apps can make."
+      "note": "A beacon resolves to a host address, TCP port and device name, tested headless through decode and peer_from_datagram. Gap: the beacon carries no TXT data, and the shell has no resolve call that apps can make; both need a wire change and the lab machine."
     },
     {
       "feature": "Register and advertise a service (DNSServiceRegister)",
       "apple": "DNSServiceRegister, DNSServiceRegisterReply",
-      "bifrost": "springboard/src/net/share.rs:394-462 (Service::start)",
+      "bifrost": "springboard/src/net/share.rs (advertised_beacon, Service::start); springboard/tests/parity_sdk-complete-18.rs",
       "status": "partial",
-      "note": "Advertises a fixed beacon with name, port and fingerprint every 2 s. Only the share service registers; apps cannot advertise their own service type or name."
+      "note": "The advertised beacon is validated before the listener opens (a blank name or port 0 is refused) and decodes at a peer with the same secret, tested headless. Gap: only the share service registers, so apps cannot advertise their own service type or name."
     },
     {
       "feature": "Custom records on a service (AddRecord, UpdateRecord, RemoveRecord, RegisterRecord)",
@@ -59,9 +59,9 @@
     {
       "feature": "Connection and reference lifecycle (DNSServiceRef, ProcessResult, RefSockFD, SetDispatchQueue, RefDeallocate)",
       "apple": "DNSServiceRef, DNSServiceProcessResult, DNSServiceRefSockFD, DNSServiceSetDispatchQueue, DNSServiceRefDeallocate, DNSServiceCreateConnection",
-      "bifrost": "springboard/core/src/dnssd_ref.rs; wired: springboard/core/src/dnssd_ref.rs via springboard/src/shell/services/network_path.rs (dnssdNext, dnssdClose) and springboard/sdk/src/network_path.rs (dnssd_next, dnssd_close)",
+      "bifrost": "springboard/core/src/dnssd_ref.rs; springboard/core/tests/parity_sdk-tests-05.rs; wired: springboard/core/src/dnssd_ref.rs via springboard/src/shell/services/network_path.rs (dnssdBrowse, dnssdNext, dnssdClose) and springboard/sdk/src/network_path.rs (dnssd_next, dnssd_close)",
       "status": "partial",
-      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No DNSServiceRef or daemon connection exists. The SDK dispatch module does not drive DNS-SD sockets. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "The reference lifecycle (numbering, oldest-first replies, pending replies dropped on deallocation, refusal after deallocation) is tested headless in core/tests/parity_sdk-tests-05.rs. The shell's network service holds its browse references in this model. No connection reference type, socket descriptor or dispatch queue exists and no daemon is connected; the reference number stands in for the descriptor. Verify on Midget for parity."
     },
     {
       "feature": "NAT port mapping (DNSServiceNATPortMappingCreate)",

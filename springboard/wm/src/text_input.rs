@@ -75,10 +75,10 @@ fn own_uid() -> Option<u32> {
 
 /// The global filter of the privileged protocols: true for the clients `trust` admits.
 ///
-/// The user id comes from the client's own data (`ClientState::uid`, read when it connected). `Client::get_credentials`
+/// The user id comes from the client's own data (`ClientState::peer_uid`, read when it connected). `Client::get_credentials`
 /// would deadlock: the backend runs global filters with its state lock held and that call takes the lock again.
 fn client_filter(trust: Trust, own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
-    move |client: &Client| trust.admits(client.get_data::<ClientState>().and_then(|state| state.uid), own)
+    move |client: &Client| trust.admits(client.get_data::<ClientState>().and_then(|data| data.peer_uid), own)
 }
 
 /// Where a popup of `size` (w, h) goes for a text cursor at `cursor`, inside `bounds` (all output pixels): left edges

@@ -24,16 +24,16 @@
     {
       "feature": "Scenes",
       "apple": "Scene, WindowGroup, scenePhase",
-      "bifrost": "springboard/sdk/src/view/app.rs",
+      "bifrost": "springboard/ui/src/scene_phase.rs (ScenePhase, SceneTracker); springboard/sdk/src/view/app.rs; tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "One window per app declared in the manifest; no multi-scene composition or scenePhase value"
+      "note": "The active, inactive and background phases and the once-per-change tracker are tested headless. Gap: the shell does not yet send window visibility and focus to apps, and there is one window per app with no multi-scene composition."
     },
     {
       "feature": "Windows",
       "apple": "Window, WindowGroup, openWindow, window styles and sizing",
-      "bifrost": "springboard/sdk/src/layout.rs, springboard/src/shell/desk.rs",
+      "bifrost": "springboard/sdk/src/layout.rs, springboard/src/shell/desk.rs, springboard/sdk/src/scene_session.rs (SceneSessions), springboard/src/shell/services/scene_services.rs",
       "status": "partial",
-      "note": "Manifest window = full-size, layout constants; no openWindow API for several windows of one app"
+      "note": "Several windows of one app work: SceneSessions opens (request), focuses, lists and closes each window with its own state, user info and a limit, and the shell serves those calls (sdk/tests/parity_sdk-complete-31.rs). Gap: a restored window's frame after a relaunch is checked only on Midget."
     },
     {
       "feature": "Immersive spaces",
@@ -66,23 +66,23 @@
     {
       "feature": "Toolbars",
       "apple": "toolbar, ToolbarItem, ToolbarItemGroup, toolbar customization",
-      "bifrost": "springboard/sdk/src/widgets.rs, springboard/ui/src/nav.rs",
+      "bifrost": "springboard/ui/src/nav.rs (Toolbar, ToolbarLayout); springboard/ui/src/toolbar_customization.rs (ToolbarCustomization); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/ui/tests/parity_sdk-complete-26.rs; springboard/sdk/src/widgets.rs (toolbar)",
       "status": "partial",
-      "note": "widgets::toolbar with groups and overflow; no user toolbar customization"
+      "note": "Groups, overflow, validation and menu anchors are tested headless (headless_toolbar_* in ui/tests). Hiding, showing, moving and resetting items, with required items kept, are tested headless in parity_sdk-complete-26.rs. Gap: no customization sheet draws the choice, and the toolbar does not yet save the order between launches."
     },
     {
       "feature": "Search",
       "apple": "searchable, search suggestions, search scopes",
-      "bifrost": "springboard/ui/src/search.rs, springboard/sdk/src/widgets.rs; wired: springboard/apps/news-desktop/src/news.rs (BAR_SEARCH, key, search_focused), springboard/apps/news-desktop/src/wire.rs (search_rows), springboard/ui/src/textfind.rs, springboard/sdk/src/widgets.rs (search_field)",
+      "bifrost": "springboard/ui/src/search.rs; springboard/ui/src/search_scope.rs (SearchBar); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/ui/tests/parity_sdk-complete-26.rs; springboard/sdk/src/widgets.rs; wired: springboard/apps/news-desktop/src/news.rs (BAR_SEARCH, key, search_focused), springboard/apps/news-desktop/src/wire.rs (search_rows), springboard/ui/src/textfind.rs, springboard/sdk/src/widgets.rs (search_field)",
       "status": "partial",
-      "note": "search_field control; no scopes, tokens or suggestions modifier Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Field geometry, the clear button and its hit area are tested headless (headless_search_field_* in ui/tests). The scope choice, the tokens and the prefix suggestions are tested headless in parity_sdk-complete-26.rs. Gap: the scopes, tokens and suggestions are not yet drawn by the search_field widget. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "App extensions",
       "apple": "WidgetBundle, Widget, widget configuration",
-      "bifrost": "springboard/sdk/src/intents.rs",
-      "status": "gap",
-      "note": "App Intents exist; no desktop widgets or extension points"
+      "bifrost": "springboard/ui/src/extensions.rs",
+      "status": "partial",
+      "note": "A scene registry lists what a host may present, keeps the user's approval per app and scene, and round-trips that choice through prefs lines, tested in the host unit tests of ui/src/extensions.rs. Gap: the only consumer is the file sync model, the shell draws no approval list yet and no app declares a scene, so no desktop widget is shown; Midget is needed to check the list."
     },
     {
       "feature": "Model data",
@@ -108,9 +108,9 @@
     {
       "feature": "Persistent storage",
       "apple": "AppStorage, SceneStorage, SwiftData-backed storage",
-      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/coding.rs",
+      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/coding.rs; springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "UserDefaults and state restoration cover AppStorage and SceneStorage; no SwiftData/Core Data object graph store"
+      "note": "UserDefaults and state restoration cover AppStorage and SceneStorage, and Codable values include Data (headless tests in parity_sdk-complete-19.rs); no SwiftData/Core Data object graph store is wired to apps."
     }
   ],
   "gaps": [

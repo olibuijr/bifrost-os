@@ -40,8 +40,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Wi-Fi Aware peer discovery needs NAN-capable hardware and a service path that BifrOSt does not implement.",
    "rea": [],
    "method": "heuristic"
   },
@@ -82,10 +82,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Workout session data from wearables has no BifrOSt counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WPDaemon.framework",

@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.12.2 — 2026-10-14
+
+- Draw and hit-test the mailbox toolbar and sidebar with the shared Golden Gate widgets.
+- Move message-specific writing and search commands into a Writing menu to avoid duplicating the shell Edit menu.
+
+## 0.12.1
+
+- Removed the duplicate Edit menu; message specific text actions now appear in Message. Added the SDK and design compliance test harness.
+## 0.12.0 — 2026-10-14
+
+Reminders:
+
+- Message > Ignore Follow-Up drops the reminders of the open message, so it does not come back on its own. The item is
+  offered only while a reminder is waiting for the message.
+
+Reading:
+
+- Mail Settings has a "Bold unread messages" switch (on by default). Unread senders are drawn in semibold and read ones
+  in regular type; with the switch off every sender is regular.
+
+Removing attachments:
+
+- Message > Remove Attachments leaves a line "[Attachment removed: name]" where each file was, so the text still says
+  what the message carried.
+
+Parity records:
+
+- The mail matrix rows cite the modules the window calls (schedule, findbar, category, prefs, mime). The header-block
+  models in organize.rs are not called by the window yet and are still covered by the headless tests.
+
+## 0.11.0 — 2026-10-14
+
+Testing and parity records (no change in the window):
+
+- tests/parity_app-mail.rs covers the signature model, mailbox file reading and writing (From-line escaping, file and
+  mailbox names), the body find with Icelandic capitals, categories, and the Remind Me times and due queues, headless.
+- The mailbox import and export rows now cite the code that calls mbox::read and mbox::write.
+
+## 0.10.0 — 2026-10-14
+
+Reading:
+
+- View > All Headers shows every header line above the text of the open message. The choice is remembered.
+- The Reply All button and Message > Reply All are offered only when the message has recipients besides the sender and you.
+- Messages sent with high or low priority carry a "High priority" or "Low priority" tag in the list.
+- The toolbar shows a chip with the filter in use (Unread, Flagged, ...) while a filter is applied; a tap moves to the next
+  filter, and All takes the chip away. The menu still holds every filter.
+
+Writing:
+
+- Replies start with the original quoted under an "On <date>, <name> wrote:" line. Mail Settings has a "Quote the original in
+  replies" switch (on by default).
+- Mail Settings has a "Plain text messages only" switch: such messages are sent without the HTML part.
+- A reply is sent from the address the original was sent to when that address is one of the account's aliases.
+- Message > Forward carries the files of the original along, within the limits of a message (8 files, 20 MB).
+- Message > Paste and Match Style (Edit menu) pastes the text in the style of the text typed so far.
+
+Saving:
+
+- Message > Save Attachments asks for one folder and writes every file of the message into it, under the names the files
+  had. Without a folder panel the files go into the app's data directory.
+- Message > Export as PDF writes the subject and the text of the message to a PDF file through the save panel.
+
+Finding:
+
+- Open Quickly lists the mailboxes its field matches under the field, the best match first. A click opens one of them;
+  Return still opens the first.
+
 ## 0.9.0 — 2026-10-13
 
 Sending and receiving files:

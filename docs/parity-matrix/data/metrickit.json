@@ -17,9 +17,9 @@
     {
       "feature": "Immediate diagnostic reports (DiagnosticReport)",
       "apple": "DiagnosticReport, MetricManager diagnostic delivery (iOS 15+, macOS 12+)",
-      "bifrost": "springboard/src/bare/crashlog.rs, springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs; wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, DailySource)",
-      "status": "os",
-      "note": "The shell writes crash.log (panics and watchdog exits, rotated at 256 KB) and lists entries under Settings > Privacy > Analytics & Diagnostics. Apps are not notified and get no report object. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/sdk/src/diagnostic_report.rs (DiagnosticReport::from_crash_log); springboard/src/shell/diag.rs (parse_log); springboard/src/bare/crashlog.rs; wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, DailySource)",
+      "status": "partial",
+      "note": "The shell writes crash.log (panics and watchdog exits, rotated at 256 KB) and lists entries under Settings > Privacy > Analytics & Diagnostics. Panic and stall records of that text are read into typed reports, tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: the shell does not deliver a report to an app when it is written, and apps cannot read the shell's log file. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Crash diagnostics (CrashDiagnostic, call stacks)",
@@ -31,9 +31,9 @@
     {
       "feature": "Hang diagnostics and UI stall detection (HangDiagnostic, HangTimeMetric)",
       "apple": "HangDiagnostic, HangTimeMetric",
-      "bifrost": "springboard/src/bare/heartbeat.rs (STALL_MS 20 s, exit status 5), springboard/src/shell/diag.rs (watchdog line parsing); wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, hang_rows); springboard/src/shell/diag.rs",
-      "status": "os",
-      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. It covers the shell loop only, records no hang duration histogram, and reports nothing to an app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/sdk/src/diagnostic_report.rs (DiagnosticKind::Stall, longest_stall); springboard/src/bare/heartbeat.rs (STALL_MS 20 s, exit status 5); wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, hang_rows)",
+      "status": "partial",
+      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. Each stall record carries the whole seconds logged, and longest_stall gives the longest one; both are tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: the watcher covers the shell loop only, there is no hang duration histogram, and no callback reaches an app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Animation hitch and slow-frame measurement (HitchTimeMetric, HitchTimeRatio)",
@@ -117,7 +117,7 @@
       "apple": "Feedback and diagnostic submission in Settings (MetricKit reports are read by the app, not shared by the system)",
       "bifrost": "springboard/src/shell/diag.rs (bundle, upload_url, post), springboard/src/shell/diagnostics_page.rs (Share with Developer)",
       "status": "os",
-      "note": "The shell uploads a bundle of build stamp, crash.log, heartbeat and perf files to the developer update server on user request. Apps have no access to this path."
+      "note": "The shell uploads a bundle of build stamp, crash.log, heartbeat and perf files to the developer update server only when the user presses Share with Developer. Apps have no SDK call for it on purpose: an app upload would send its own data without the user choosing it, so the blocker is that consent rule, not a missing API."
     }
   ],
   "gaps": [

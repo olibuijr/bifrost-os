@@ -3,7 +3,7 @@
  "doc": "https://developer.apple.com/documentation/coregraphics",
  "macos_since": "10.8",
  "status": "partial",
- "bifrost": "springboard/render/src/cg/ (path, raster, surface, context, color, image, paint, reusable_layer, pdf), springboard/render/src/gfx.rs (Surface, Image), springboard/sdk/src/graphics_*.rs, springboard/sdk/src/lib.rs (kit::cg re-export), springboard/ui/src/print.rs",
+ "bifrost": "springboard/render/src/cg/ (path, raster, surface, context, color, image, paint, reusable_layer, pdf), springboard/render/src/gfx.rs (Surface, Image), springboard/sdk/src/graphics_context.rs, springboard/sdk/src/graphics_stroke.rs, springboard/sdk/src/graphics_gradient.rs, springboard/sdk/src/graphics_color.rs, springboard/sdk/src/graphics_imageio.rs, springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/graphics_pattern.rs, springboard/sdk/src/graphics_layer.rs, springboard/sdk/src/lib.rs (kit::cg re-export), springboard/ui/src/print.rs",
  "summary": "The render crate's cg tree is public to apps as bifrost_app::kit::cg, and the SDK adds graphics_context, graphics_stroke, graphics_gradient, graphics_color, graphics_imageio and graphics_pdf wrappers. Paths, stroking, lines, ellipses and arcs, clipping, transforms, colour ramps, shadings, patterns, CgImage, PNG and JPEG decode and encode, and PDF read and write exist as models. Apps reach only part of it (freeform gradients, Preview PDF read, draw and write); there is no full bitmap context that apps can use for PDF pages, and no display or window services.",
  "rea_evidence": "ev_e2f6dca18811442125b738d69847b79d2f8bcf1c54968869813f2e931ef0283b",
  "features": [
@@ -24,9 +24,9 @@
   {
    "feature": "Primitive shapes (rects, rounded rects, lines, ellipses, arcs)",
    "apple": "CGContextFillRect, CGContextStrokeRect, CGContextAddEllipseInRect, CGContextAddArc, lines",
-   "bifrost": "springboard/render/src/cg/surface.rs (stroke_line, fill_ellipse, stroke_ellipse, stroke_arc, fill_arc), springboard/render/src/gfx.rs (fill_rect, fill_rrect, stroke_rrect)",
+   "bifrost": "springboard/render/src/cg/surface.rs (stroke_line, fill_ellipse, stroke_ellipse, stroke_arc, fill_arc), springboard/render/src/gfx.rs (fill_rect, fill_rrect, stroke_rrect); springboard/sdk/src/graphics_context.rs (stroke_line, stroke_arc)",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Lines, ellipses and arcs draw on the Surface through the scan converter, with line caps for lines and arcs. Rounded rectangles and squircles are anti-aliased. Lines and arcs have no SDK wrapper call yet."
+   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Lines, ellipses and arcs draw on the Surface through the scan converter, with line caps for lines and arcs. The SDK context strokes one line segment and one arc with its stroke colour and line width, tested headless in sdk/tests/parity_sdk-complete-02.rs. Gap: no app calls the new line and arc wrappers yet; verify on Midget."
   },
   {
    "feature": "Clipping",
@@ -66,9 +66,9 @@
   {
    "feature": "Patterns (CGPattern)",
    "apple": "CGPattern, CGContextSetFillPattern",
-   "bifrost": "springboard/render/src/cg/paint.rs (Pattern, Tiling, PatternPaint, invert_matrix)",
+   "bifrost": "springboard/render/src/cg/paint.rs (Pattern, Tiling, PatternPaint, invert_matrix); springboard/sdk/src/graphics_pattern.rs (CgPattern, PatternTiling)",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Tiled pattern model with a cell and tiling settings and a pattern matrix. No pattern fill is connected to the Surface or to the SDK."
+   "note": "The SDK CgPattern wraps the cell model: it samples the cell in user space with the pattern matrix, repeats it every step, and fits the step to device pixels for each tiling mode; headless tests are in sdk/tests/parity_sdk-complete-02.rs. Gap: no pattern fill is connected to the Surface or to a context's fill call, and coloured-cell callbacks and uncoloured tinting are not in the SDK; verify the fill on Midget."
   },
   {
    "feature": "Images and bitmaps (CGImage, image masks, cropping)",
@@ -87,44 +87,44 @@
   {
    "feature": "Text and fonts (CGFont, glyph drawing)",
    "apple": "CGFont, CGContextShowGlyphsAtPoints, CGFontCreateWithDataProvider",
-   "bifrost": "springboard/render/src/font.rs, springboard/render/src/cff.rs:137 Cff and :225 outline, springboard/render/src/gvar.rs, springboard/render/src/fontprefs.rs (font selection)",
+   "bifrost": "springboard/render/src/font.rs, springboard/render/src/cff.rs:137 Cff and :225 outline, springboard/render/src/gvar.rs, springboard/render/src/fontprefs.rs (font selection), springboard/render/src/fontobj.rs, springboard/sdk/src/font_descriptor.rs (UserFonts); springboard/render/tests/parity_sdk-complete-17.rs; springboard/sdk/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "The font engine parses CFF and variable outlines and draws text through the UI text path. Apps get text drawing through the UI kit, not through a glyph-level CGFont API, and no font loading from data is exposed."
+   "note": "Apps load fonts from data through FontObject::from_data and read the packed system and monospaced faces through UserFonts; the CFF and variable outlines, table copies and metrics are tested headless. Gap: text is drawn through the UI text path, with no glyph-level CGFont drawing call."
   },
   {
    "feature": "PDF documents (CGPDFDocument, PDF reading)",
    "apple": "CGPDFDocument, CGPDFPage, CGContextDrawPDFPage",
-   "bifrost": "springboard/sdk/src/graphics_pdf.rs (Document), springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/draw.rs (render_page), springboard/apps/preview-desktop/src/pdfjob.rs",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs (Document), springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/draw.rs (render_page), springboard/apps/preview-desktop/src/pdfjob.rs; tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. Apps can open a PDF, read the page count and page size, and render a page to an image. Preview reads pages through kit::cg::pdf. Vector drawing from the reader is reached through draw.rs, not through a public document type."
+   "note": "Document opens a PDF, reports the page count and crop size, and renders a page into a pixel buffer; headless tests in sdk/tests/parity_sdk-tests-09.rs read writer output back and assert pixels. Gap: vector drawing from the reader is reached through draw.rs, not through a public document type, and the Team-k refresh is not verified on Midget."
   },
   {
    "feature": "PDF creation and printing (CGPDFContext, print to PDF)",
    "apple": "CGPDFContextCreate, CGPDFContextBeginPage, print operations to PDF",
-   "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs (write, save, Annotation, Edits), springboard/ui/src/print.rs, springboard/apps/preview-desktop/src/export.rs",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs (PdfWriter, PdfPage), springboard/render/src/cg/pdf/writer.rs (write, save, Annotation, Edits), springboard/ui/src/print.rs, springboard/apps/preview-desktop/src/export.rs; tests sdk/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Team-k (parity/team-k-quartz) refresh: built on parity/team-k-quartz; not yet verified on Midget. PdfWriter builds new files from pages with filled and stroked rectangles, lines and raster images. Preview saves edited PDFs with annotations through writer::save. No pagination and no print-to-PDF filter pipeline; the print sheet's Save as PDF still copies the file."
+   "note": "PdfWriter builds files from pages of filled and stroked rectangles, lines and raster images; headless tests in sdk/tests/parity_sdk-tests-09.rs read the output back and check its pages and pixels. Gap: no pagination, no text and no print-to-PDF filter pipeline; the print sheet's Save as PDF still copies the file."
   },
   {
    "feature": "Layers and offscreen reusable content (CGLayer)",
    "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
-   "bifrost": "springboard/render/src/cg/reusable_layer.rs; springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
+   "bifrost": "springboard/render/src/cg/reusable_layer.rs; springboard/sdk/src/graphics_layer.rs (CgLayer); springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object. new_layer_context makes an offscreen context and draw_layer_at composites it with clip, alpha and blend; draw_layer draws a group. Host tests only; verify on Midget."
+   "note": "CgLayer is the app-facing reusable layer: it keeps offscreen pixels and a draw count, is drawn into by a closure over a context, and is composited into any context with draw_layer_at (clip, alpha and blend apply); headless tests are in sdk/tests/parity_sdk-complete-02.rs. Gap: no shell or app draws through a CgLayer yet; verify on Midget."
   },
   {
    "feature": "Display services (Quartz Display Services)",
    "apple": "CGGetActiveDisplayList, CGDisplayBounds, CGDisplayCopyDisplayMode, display configuration",
-   "bifrost": "springboard/src/gpu/wl.rs (presenter, outputs), springboard/src/bare/scanout.rs",
-   "status": "os",
-   "note": "The window server handles display modes and outputs. Apps get no display list, bounds or mode API in the SDK."
+   "bifrost": "springboard/ui/src/display_info.rs (DisplayInfo, DisplayMode, main_display, at_point, diff); springboard/sdk/src/displays.rs (list, info, modes, reconfigured); springboard/src/gpu/wl.rs (presenter, outputs)",
+   "status": "partial",
+   "note": "Apps read the display list, bounds, pixel size, modes and reconfiguration changes, tested headless in parity_sdk-os-01. Gap: the mode switch and its keep or revert step run in the shell, and live reconfiguration is not verified on the lab machine."
   },
   {
    "feature": "Window services (Quartz Window Services, CGWindowList)",
    "apple": "CGWindowListCopyWindowInfo, window levels, CGWindowLevelForKey",
-   "bifrost": "springboard/ui/src/window_list.rs",
+   "bifrost": "springboard/ui/src/window_list.rs (WindowInfo, window_list, WindowLevelKey)",
    "status": "partial",
-   "note": "Wave 5 (w5-core-graphics, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Windows are managed by the Wayland window server and the shell. No app can list other windows or read window levels through the SDK."
+   "note": "Window records, stacking-order scopes, desktop-element filtering, levels, title redaction and the wire form are tested in ui/tests/parity_sdk-tests-19.rs. The SDK re-exports the model and the shell fills records from its window state; a live window list has not been checked on Midget."
   },
   {
    "feature": "Event services (Quartz Event Services, CGEventTap, synthetic events)",

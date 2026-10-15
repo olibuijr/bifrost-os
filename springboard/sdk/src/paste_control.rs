@@ -1,4 +1,4 @@
-//! `UIPasteControl` for BifrOSt apps: the paste read behind a paste button. The button's look and enabled state come from
+//! A paste control for BifrOSt apps: the paste read behind a paste button. The button's look and enabled state come from
 //! `bifrost_ui::paste_control`; this module reads the pasteboard when the person taps the button.
 //!
 //! No access prompt is shown. The tap is the consent, and the read takes only the items that conform to the control's

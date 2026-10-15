@@ -60,12 +60,22 @@ pub mod distortion_filters;
 pub mod stylize_filters;
 pub mod halftone_tile_filters;
 pub mod filter_catalogue;
+pub mod filter_input;
 pub mod gamma_fade;
 pub mod video_transfer;
+pub mod clip;
+pub mod affine;
+pub mod transform_stack;
 pub mod block_motion;
 pub mod kernel;
 pub mod gaussian_filter;
+pub mod laplacian_pyramid;
 pub mod lanczos;
+pub mod generators;
+pub mod spot_light;
+pub mod comic_filter;
+pub mod morphology;
+pub mod histogram;
 
 #[cfg(test)]
 mod tests {
@@ -90,9 +100,11 @@ pub mod hdr_transfer;
 pub mod hdr_metadata;
 pub mod bayer;
 pub mod lazy_image;
+pub mod depth_blur;
+pub mod render_intent;
 pub mod color_curve;
 pub mod photo_effects;
 pub mod feature_detect;
-pub mod depth_blur;
+pub mod masked_blur;
 pub mod displacement_filters;
 pub mod edge_tone_filters;

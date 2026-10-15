@@ -1,11 +1,12 @@
 id = "is.olibuijr.fontbook.desktop"
 name = "Fonts"
-version = "0.4.0"
+version = "0.6.4"
 exec = "bifrost-fontbook"
 icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Browse, preview, install and turn off fonts, with collections and smart collections."
 category = "Utilities"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 schemes = ["fontbook"]

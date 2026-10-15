@@ -10,9 +10,9 @@
     {
       "feature": "Sample buffers",
       "apple": "CMSampleBuffer, CMSampleBufferCreate*, CMSampleBufferGetSampleTimingInfo (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
-      "bifrost": "springboard/src/media/demux/mod.rs:89 (Sample: track, pts_us, dts_us, duration_us, keyframe, data); springboard/src/media/mp4.rs:46 (Sample)",
-      "status": "os",
-      "note": "Samples are owned Vec<u8> values. No shared buffer object, no data-ready callbacks, no invalidation, no sample attachments."
+      "bifrost": "springboard/sdk/src/sample_buffer.rs (SampleBuffer, SampleTiming, from_demuxed); springboard/src/media/demux/mod.rs:89 (Sample: track, pts_us, dts_us, duration_us, keyframe, data); springboard/src/media/mp4.rs:46 (Sample)",
+      "status": "partial",
+      "note": "SampleBuffer gives apps a coded sample with presentation, decode and duration times, a sync flag and presentation ordering, tested headless in springboard/sdk/tests/parity_sdk-os-03.rs. Gap: samples are owned Vec<u8> values with no shared buffer object, no data-ready callbacks, no invalidation and no sample attachments."
     },
     {
       "feature": "Block buffers",
@@ -31,9 +31,9 @@
     {
       "feature": "Time representation",
       "apple": "CMTime (rational value/timescale, invalid/indefinite/infinity), CMTimeRange, CMTimeMapping (https://developer.apple.com/documentation/coremedia/cmtime)",
-      "bifrost": "springboard/src/media/demux/mod.rs:89 (i64 microseconds); springboard/src/media/mp4.rs:46 (f64 milliseconds); springboard/src/media/player.rs:47 (Clock, f64 ms)",
+      "bifrost": "springboard/src/media/demux/mod.rs:89 (i64 microseconds); springboard/src/media/mp4.rs:46 (f64 milliseconds); springboard/src/media/player.rs:47 (Clock, f64 ms); springboard/src/media/time.rs (MediaTime, TimeRange)",
       "status": "partial",
-      "note": "Two internal units (microseconds in the demuxer, milliseconds in the mp4 sample and player clock). No rational time, no timescale conversion, no invalid or indefinite values, no time ranges type for apps."
+      "note": "MediaTime is a rational value and timescale with invalid, indefinite and infinite states, exact addition, rounding conversions to microseconds and milliseconds, and TimeRange tests containment and overlap (tests in media::time). The demuxer, sample table and player still keep their own units and do not yet use MediaTime, and apps get no time type."
     },
     {
       "feature": "Reference clocks and timebases",
@@ -59,37 +59,37 @@
     {
       "feature": "Video decoding and picture hand-off (image buffers)",
       "apple": "CMSampleBuffer image buffer path, CMSampleBufferGetImageBuffer, CMVideoFormatDescription matching (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
-      "bifrost": "springboard/src/media/mod.rs:226 (VideoDecoder trait); springboard/src/media/mod.rs:212 (Frame with pts_us and pixels); springboard/src/media/mod.rs:173 (VideoLayer for the GPU); springboard/src/media/hwdec/ffmpeg.rs; springboard/src/media/hwdec/vaapi.rs",
-      "status": "os",
-      "note": "Hardware decode through libavcodec and VA-API on the DRM render node, with software fallback. Decoded pictures reach the shell as VideoLayer. The player is used by the Deildu app; no SDK API for apps."
+      "bifrost": "springboard/sdk/src/video_frame.rs (VideoFormat, VideoFrame, FrameStream); springboard/src/media/mod.rs:226 (VideoDecoder trait); springboard/src/media/mod.rs:212 (Frame with pts_us and pixels); springboard/src/media/mod.rs:173 (VideoLayer for the GPU); springboard/src/media/hwdec/ffmpeg.rs; springboard/src/media/hwdec/vaapi.rs",
+      "status": "partial",
+      "note": "Apps can check a decoded picture against its negotiated format and queue pictures in presentation order (tested headless in springboard/sdk/tests/parity_sdk-rest-02.rs). Gap: the decoder and VideoLayer stay in the shell, so no decoded picture reaches an app process yet; the hand-off path needs the lab machine to verify."
     },
     {
       "feature": "Audio sample decode and conversion",
       "apple": "CMSampleBufferCopyPCMDataIntoAudioBufferList, CMAudioSampleBuffer packet descriptions (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
-      "bifrost": "springboard/src/media/aac.rs; springboard/src/media/aacstream.rs (Frame at :37); springboard/src/media/convert.rs; springboard/src/media/sbr.rs",
+      "bifrost": "springboard/src/media/aac.rs; springboard/src/media/aacstream.rs (Frame at :37); springboard/src/media/convert.rs; springboard/src/media/sbr.rs; springboard/src/media/pcm_channels.rs (ChannelBuffers)",
       "status": "partial",
-      "note": "AAC-LC decode and conversion to 48 kHz stereo S16. Packet descriptions and PCM copy into an AudioBufferList equivalent are not exposed. Codec coverage is AAC-only in the audio path."
+      "note": "AAC-LC decode and conversion to 48 kHz stereo S16. Interleaved PCM splits into per-channel buffers and joins back (ChannelBuffers, tested in media::pcm_channels). Packet descriptions are not exposed, and codec coverage is AAC-only in the audio path."
     },
     {
       "feature": "Audio output to the speaker",
       "apple": "Playback through CMAudioClock-synchronized sinks (https://developer.apple.com/documentation/coremedia/cmaudioclock)",
       "bifrost": "springboard/src/media/audio_out.rs; springboard/src/media/speaker.rs; springboard/audiod/ (is.olibuijr.audio service)",
       "status": "os",
-      "note": "Output goes through ALSA's default PCM so PipeWire or PulseAudio can mix. Apps reach it through the audio service, not through a media API."
+      "note": "Output goes through ALSA's default PCM so PipeWire or PulseAudio can mix. Apps reach it through the audio service, not through a media API. Left as os in sdk-rest-02: no typed SDK client was added because the audio service's request protocol must be checked on the lab machine first."
     },
     {
       "feature": "Media capture",
       "apple": "CMSampleBuffer delivery from capture devices (https://developer.apple.com/documentation/coremedia/cmsamplebuffer-api)",
       "bifrost": "springboard/src/media/capture.rs; springboard/src/media/v4l2.rs (Frame at :212)",
       "status": "os",
-      "note": "V4L2 capture for the camera. No SDK sample-buffer type for apps."
+      "note": "V4L2 capture for the camera. Left as os in sdk-rest-02: a camera frame reaches apps only through the shell's camera permission flow, and no shell channel that carries frames to an app process exists yet. The ui video_device model covers node selection only."
     },
     {
       "feature": "Container metadata and tags",
       "apple": "CMMetadata, CMTag, CMTagCollection, metadata identifiers and data-type registry (https://developer.apple.com/documentation/coremedia/cmmetadata)",
-      "bifrost": "springboard/src/media/id3.rs; springboard/src/media/ilst.rs",
+      "bifrost": "springboard/src/media/id3.rs; springboard/src/media/ilst.rs; springboard/src/media/metadata.rs (KeySpace, Identifier, Collection)",
       "status": "partial",
-      "note": "ID3 and iTunes-style tag readers exist. No metadata identifier or key-space registry, no tag collections, no typed tags."
+      "note": "ID3 and MP4 item readers map onto common identifiers in a key-space registry, with typed values checked by identifier and unknown keys counted (tests in media::metadata). The readers still return their own fields, the collection is not yet used by the apps, and no other container has metadata."
     },
     {
       "feature": "Text markup for legible media",

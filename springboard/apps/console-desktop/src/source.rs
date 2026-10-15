@@ -71,6 +71,7 @@ fn pinned_entries() -> Vec<LogEntry> {
         category: "general".into(),
         level,
         message: message.into(),
+        ..LogEntry::default()
     };
     vec![
         row(0, "springboard", Level::Notice, "shell ready"),

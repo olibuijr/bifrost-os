@@ -10,51 +10,51 @@
     {
       "feature": "Accessory manager",
       "apple": "AAUSBAccessoryManager (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorymanager)",
-      "bifrost": "springboard/sdk/src/accessory_access.rs (AccessoryManager), springboard/core/src/accessory_manager.rs (AccessoryManager)",
+      "bifrost": "springboard/sdk/src/accessory_access.rs (AccessoryManager), springboard/core/src/accessory_manager.rs (AccessoryManager::sync); tests: springboard/core/tests/parity_sdk-complete-14.rs, springboard/sdk/tests/parity_sdk-complete-14.rs",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. Apps reach the manager through the SDK module; no bus source calls attach or detach yet."
+      "note": "AccessoryManager::sync takes a full bus snapshot, detaches what is missing, attaches what is new and reports the connection ids it changed; apps reach the manager through the SDK module, and both behaviours are tested headless. Gap: no bus source feeds sync with real enumeration yet, which needs hardware and a lab check on Midget."
     },
     {
       "feature": "Accessory object",
       "apple": "AAUSBAccessory (https://developer.apple.com/documentation/accessoryaccess/aausbaccessory)",
       "bifrost": "springboard/sdk/src/accessory_access.rs (Accessory), springboard/core/src/accessory_manager.rs (Accessory)",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. The device descriptors, configuration and strings are public fields for apps. No bus source fills them yet."
+      "note": "The device descriptors, configuration and strings are public fields, and a detached accessory keeps its identity record, tested headless in core/tests/parity_sdk-complete-14.rs. Gap: no bus source fills the strings and configuration yet, which needs hardware."
     },
     {
       "feature": "Matching criteria",
       "apple": "AAUSBAccessoryMatchingCriteria (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorymatchingcriteria)",
       "bifrost": "springboard/sdk/src/accessory_access.rs (MatchingCriteria, DeviceMatch, InterfaceMatch), springboard/core/src/usb_descriptors.rs",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. Criteria select by vendor, product, class, subclass and protocol, and by interface."
+      "note": "Criteria select by vendor, product, class, subclass and protocol, and by interface; a device with no configuration read does not match an interface criterion, tested in core/tests and sdk/tests parity_sdk-complete-14.rs. Gap: the criteria can only be checked against descriptors the caller has read, which needs hardware."
     },
     {
       "feature": "Listener events (attach and detach)",
       "apple": "AAUSBAccessoryListener protocol (https://developer.apple.com/documentation/accessoryaccess/aausbaccessorylistener)",
       "bifrost": "springboard/sdk/src/accessory_access.rs (Event), springboard/core/src/accessory_manager.rs (register, take_events, Event)",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. Events are queued per listener key; no bus hotplug source feeds them yet."
+      "note": "Events are queued per listener key, a detach reaches only the listeners told of the attach, and sync produces them from a snapshot; all tested headless in core/tests/parity_sdk-complete-14.rs. Gap: no hotplug source on a real bus feeds them yet, which needs hardware."
     },
     {
       "feature": "Kernel USB enumeration and system visibility",
       "apple": "IOUSBHost (underlies the framework, per the landing page)",
-      "bifrost": "springboard/src/bare/app_policy.rs:245 (binds /sys and /run/udev read-only into the app sandbox); springboard/src/installer/plan.rs:186 (raises the USB interrupt thread priority)",
-      "status": "os",
-      "note": "Linux udev and sysfs run on the system and the sandbox can read them. Apps get no SDK API for this, and the sandbox binding is read-only."
+      "bifrost": "springboard/sdk/src/accessory_access.rs (AccessoryManager, MatchingCriteria, attach and detach events); springboard/ui/src/device_browser.rs (USB device snapshots, add and remove events); springboard/src/bare/app_policy.rs:245 (binds /sys and /run/udev read-only into the app sandbox); springboard/src/installer/plan.rs:186 (raises the USB interrupt thread priority)",
+      "status": "partial",
+      "note": "Apps match accessories by criteria and receive attach and detach events, and the device browser reports which USB devices came and went, both tested inline in their pure models. Gap: the sandbox binds no USB device nodes, so no app reaches a real accessory, and the shell supplies the bus snapshots."
     },
     {
       "feature": "Permission and access grant for USB devices",
       "apple": "Accessory Access authorization (accessory matching and listener registration)",
-      "bifrost": "springboard/core/src/accessory_manager.rs (open",
+      "bifrost": "springboard/core/src/accessory_manager.rs (AccessoryManager::open, AccessoryManager::close)",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docbroker grants file access only. The permission manifest has no USB device permission, so an app cannot request one."
+      "note": "Exclusive open by one owner, close only by that owner, and refusal of a disconnected accessory are modelled and tested headless. Gap: the permission manifest has no USB device permission and no prompt, so an app cannot request a grant yet, which needs the sandbox and hardware."
     },
     {
       "feature": "Errors",
       "apple": "AAError, AAErrorDomain (https://developer.apple.com/documentation/accessoryaccess/aaerror)",
       "bifrost": "springboard/sdk/src/accessory_access.rs (Error), springboard/core/src/accessory_manager.rs (Error, Display)",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. Error values have readable messages and are exposed to apps."
+      "note": "Error values have readable messages and are exposed to apps; the open and state messages are checked in sdk/tests/parity_sdk-complete-14.rs and core/tests/parity_sdk-complete-14.rs. Not yet verified on Midget."
     }
   ],
   "gaps": [

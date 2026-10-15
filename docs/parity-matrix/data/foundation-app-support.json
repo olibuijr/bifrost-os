@@ -10,9 +10,9 @@
     {
       "feature": "Task Management (ProcessInfo activities, sudden termination, thermal state, user activities)",
       "apple": "ProcessInfo, NSUserActivity, Progress, ProgressManager",
-      "bifrost": "springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs; springboard/ui/src/progress.rs",
+      "bifrost": "springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs; springboard/ui/src/progress.rs; springboard/ui/src/progress_rate.rs",
       "status": "partial",
-      "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel, pause and resume that reach children with cancellation, pausing and resuming handlers, addChild, and current/becomeCurrent/resignCurrent (bifrost_ui::progress, reached as bifrost_app::controls::progress). No ProgressManager, no publishing progress to other processes, no Handoff.",
+      "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel, pause and resume that reach children with cancellation, pausing and resuming handlers, addChild, and current/becomeCurrent/resignCurrent (bifrost_ui::progress, reached as bifrost_app::controls::progress). Average throughput and seconds remaining come from progress_rate (headless tests in springboard/ui/tests/parity_sdk-complete-36.rs). Gap: no shared ProgressManager, no publishing progress to other processes, and no Handoff.",
       "rea_evidence": "ev_e2ff5d55d77a4e9024c3fe26224756e2a348cab8ef8b4488a19a55f20b160e51"
     },
     {

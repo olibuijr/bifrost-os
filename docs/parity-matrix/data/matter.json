@@ -17,16 +17,16 @@
     {
       "feature": "Controller initialization (fabric, certificates, storage)",
       "apple": "MTRDeviceController, MTRDeviceControllerFactory, MTRFabricInfo, MTRStorage, MTRKeypair",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No fabric or operational certificate issuer. Link keys are stored in bluetooth.ini (springboard/src/bare/bluetooth.rs), which is not a Matter credential store."
+      "bifrost": "springboard/core/src/matter_fabric.rs (Fabric, compressed_fabric_id, Controller::initialize, Controller::allocate_node_id, Controller::encode, Controller::decode)",
+      "status": "partial",
+      "note": "Fabric identifier and root key checks, the compressed fabric identifier (HKDF-SHA256, not yet checked against a published vector), node identifier allocation and the credential record's text form are tested headless in core/tests/parity_sdk-rest-09.rs. Gap: no key pair generation, no operational certificate signing and no service writes the record to disk; those need elliptic-curve code and the lab machine."
     },
     {
       "feature": "Accessory commissioning (network credentials, Thread dataset)",
       "apple": "MTRCommissioningParameters, MTRThreadOperationalDataset, MTRDeviceAttestationInfo",
-      "bifrost": "springboard/src/net/wifi.rs, springboard/src/net/wifi_config.rs (Wi-Fi only)",
+      "bifrost": "springboard/src/net/wifi.rs, springboard/src/net/wifi_config.rs (Wi-Fi only); springboard/src/net/thread_dataset.rs (Thread operational dataset); tests: springboard/tests/parity_sdk-complete-27.rs",
       "status": "partial",
-      "note": "Wi-Fi join and saved network configuration exist. There is no Thread network, no Thread border router and no device attestation."
+      "note": "Wi-Fi join, saved network configuration and the Thread operational dataset (hex and TLV parsing, record checks, attach checklist) are tested headless in tests/parity_sdk-complete-27.rs. Gap: there is no Thread border router, no network on the radio and no device attestation; those need hardware and a commissioner service."
     },
     {
       "feature": "Accessory control (attribute read/write, command invoke, subscriptions)",

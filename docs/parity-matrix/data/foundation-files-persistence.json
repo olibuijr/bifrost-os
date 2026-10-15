@@ -38,9 +38,9 @@
     {
       "feature": "Archives and Serialization: JSON and property lists",
       "apple": "JSONEncoder/Decoder, PropertyListEncoder/Decoder, JSONSerialization",
-      "bifrost": "springboard/sdk/src/coding.rs, springboard/sdk/src/binary_plist.rs",
+      "bifrost": "springboard/sdk/src/coding.rs (Data, Value::Data), springboard/sdk/src/binary_plist.rs; springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Added later, host tests only: JSON, XML plist and binary plist (bplist00 read and write: all int widths, real, date, data, ascii/utf-16 strings, uid, arrays, dicts; PropertyListEncoder.encode_binary and decode_binary). Data has no Codable form yet, few strategies. Host tests only."
+      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Added later, host tests only: JSON, XML plist and binary plist (bplist00 read and write: all int widths, real, date, data, ascii/utf-16 strings, uid, arrays, dicts; PropertyListEncoder.encode_binary and decode_binary). The Data type is Codable: base64 in JSON and XML, a data object in binary, tested headless in parity_sdk-complete-19.rs. Gap: only the ISO 8601 and seconds date strategies exist, and no data encoding strategies. Host tests only."
     },
     {
       "feature": "Archives and Serialization: keyed archiving",
@@ -59,23 +59,23 @@
     {
       "feature": "State restoration data",
       "apple": "NSUserActivity restoration, app state",
-      "bifrost": "springboard/sdk/src/restoration.rs",
+      "bifrost": "springboard/sdk/src/restoration.rs; springboard/sdk/tests/parity_sdk-complete-19.rs",
       "status": "partial",
-      "note": "One restorable window per app, JSON file."
+      "note": "One restorable window per app in one JSON file; restored state keeps Data fields and a broken file is discarded (headless tests in parity_sdk-complete-19.rs). Gap: the app hook takes one identifier, so several windows per app need a new hook and a shell change."
     },
     {
       "feature": "Spotlight: indexing app content",
       "apple": "CSSearchableIndex",
       "bifrost": "springboard/sdk/src/quicksearch.rs",
       "status": "partial",
-      "note": "Per-app JSON index, capped at 1000 items."
+      "note": "Per-app JSON index in the shell. The SDK checks identifiers before sending (IndexError) and sends items in chunks of at most MAX_ITEMS (8). Headless tests: sdk/tests/parity_sdk-tests-01a.rs (an_indexed_item_needs_an_identifier_within_its_limits, a_search_over_the_app_items_finds_the_matching_title)."
     },
     {
       "feature": "Spotlight: metadata queries",
       "apple": "NSMetadataQuery, MDQuery",
-      "bifrost": "springboard/sdk/src/metadata_query.rs (file system), springboard/ui/src/metaquery.rs",
+      "bifrost": "springboard/sdk/src/metadata_query.rs (file system, MetadataSortDescriptor), springboard/ui/src/metaquery.rs; tests: springboard/sdk/tests/parity_sdk-complete-04.rs",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 17 tests (earlier part). Added later, host tests only: MetadataQuery over search scopes: predicate (compare, like, and, or, not on name, path, size, change date, content type, is-directory), gathering then update notifications through fswatch, MetadataItem attributes, disable and enable updates. Host tests only; no sort descriptors, grouping, predicate parser or content attributes."
+      "note": "verified on Midget 0.7.25 by 17 tests (earlier part). Host tests only: MetadataQuery over search scopes with predicates, gathering then update notifications through fswatch, MetadataItem attributes, disable and enable updates, and sort descriptors (ascending and descending by any attribute, ties broken by later keys then path, re-sorted when set on a running query). Still missing: grouping, a predicate text parser and content attributes, and the lab machine has not run these sorts."
     },
     {
       "feature": "iCloud documents and key-value store",
@@ -87,9 +87,9 @@
     {
       "feature": "Backup exclusion and purgeable data",
       "apple": "URLResourceKey isExcludedFromBackup, purgeable",
-      "bifrost": "springboard/sdk/src/file_metadata.rs (xattr, set_excluded_from_backup, backup_items), springboard/sdk/src/file_manager.rs (IsExcludedFromBackup key), springboard/render/src/purgeable.rs",
+      "bifrost": "springboard/sdk/src/file_metadata.rs (xattr, set_excluded_from_backup, backup_items), springboard/sdk/src/file_manager.rs (IsExcludedFromBackup key), springboard/render/src/purgeable.rs; tests: springboard/sdk/tests/parity_sdk-tests-06.rs, springboard/render/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "isExcludedFromBackup is stored as the user.bifrost.exclude-from-backup xattr and honoured by backup_items (an excluded directory is skipped with its contents). Memory caches purge on pressure; no on-disk purgeable data yet. Host tests only."
+      "note": "isExcludedFromBackup is stored as the user.bifrost.exclude-from-backup xattr: backup_items skips an excluded directory with its contents and never enters a symbolic link, and the file manager reports the flag as a resource value (a_backup_walk_lists_items..., an_excluded_directory_is_skipped..., the_file_manager_reports_the_backup_exclusion...). The purgeable Cache drops its oldest cost under pressure and on limits (a_partial_purge_drops_the_oldest_half...), tested headless in render/tests. Gap: no on-disk purgeable data, and the purge runs only on memory pressure in the process."
     },
     {
       "feature": "File versions",

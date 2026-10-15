@@ -13,6 +13,7 @@ use bifrost_core::disk_scan::Entry;
 use bifrost_core::disk_session::Session;
 use bifrost_core::json::Json;
 use bifrost_core::privd_wire;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
@@ -112,9 +113,10 @@ pub fn spawn(plan: Vec<Command>) -> Receiver<Result<(), String>> {
 /// runs `e2fsck` first).
 pub fn spawn_with(plan: Vec<Command>, repairing: bool) -> Receiver<Result<(), String>> {
     let (tx, rx) = channel();
-    std::thread::spawn(move || {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let result = disk_run::run_plan(&plan, repairing).map(|_| ());
         let _ = tx.send(result);
+        DispatchQueue::main().async_(|| {});
     });
     rx
 }
@@ -135,8 +137,9 @@ pub fn check_request(request: &DiskRequest, nodes: &[Node]) -> Result<(), String
 /// sentence for the footer.
 pub fn spawn_request(request: DiskRequest) -> Receiver<Result<(), String>> {
     let (tx, rx) = channel();
-    std::thread::spawn(move || {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let _ = tx.send(send_request(&request));
+        DispatchQueue::main().async_(|| {});
     });
     rx
 }

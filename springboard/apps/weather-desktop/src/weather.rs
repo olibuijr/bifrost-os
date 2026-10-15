@@ -27,11 +27,15 @@ use springboard::shell::textfield::TextField;
 use springboard::shell::weather::data::{self, Forecast, Location, Quote, Sky, Store, Summary, Units};
 use springboard::shell::weather::glyph;
 use bifrost_app::controls::geo::{format_distance, Coordinate, DistanceUnits};
+use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
+use bifrost_app::ContextItem;
+use bifrost_core::json::Json;
 use bifrost_app::controls::chart_marks::Frame;
 use bifrost_app::controls::location_auth::AuthorizationStatus;
-use crate::details;
-use crate::insights;
-use bifrost_app::controls::weather_model::{illuminated_fraction, MoonPhase, Wind, WeatherError};
+use crate::control;
+use crate::insights::{self, wind_text, Column};
+use crate::notify::{self, Notice, RainWatch};
+use bifrost_app::controls::weather_model::{illuminated_fraction, MoonPhase, WeatherError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -39,6 +43,10 @@ use std::sync::{Arc, Mutex};
 
 use bifrost_app::kit::ui::SYSTEM_GREEN as GREEN;
 use bifrost_app::kit::ui::SYSTEM_ORANGE as ORANGE;
+use bifrost_app::kit::ui::SYSTEM_YELLOW as YELLOW;
+use bifrost_app::kit::ui::SYSTEM_RED as RED;
+use bifrost_app::kit::ui::SYSTEM_PURPLE as PURPLE;
+use bifrost_app::kit::ui::SYSTEM_TEAL as TEAL;
 /// The content starts under the unified toolbar band (full-size window).
 fn nav_bottom_pt() -> f32 { UNIFIED_BAR_PT }
 /// Width of the Locations sidebar, and the window width below which it hides (points).
@@ -61,6 +69,22 @@ const BAR_LOCATIONS: u32 = 1;
 const BAR_STOCKS: u32 = 2;
 const BAR_DONE: u32 = 3;
 const BAR_BACK: u32 = 4;
+const BAR_SHARE: u32 = 5;
+/// Per-place Notifications switch on the Locations page (`NOTIFY_ID + index`).
+const NOTIFY_ID: u64 = 5000;
+/// Context menu items of a place in the sidebar or the Locations page.
+const CTX_REMOVE: u32 = 1;
+const CTX_NOTIFY: u32 = 2;
+/// The Notifications switch's width (points) between the temperature and the remove button.
+const NOTIFY_W: f32 = 64.0;
+/// Extent of the two compact weather dials (not UI spacing).
+const DIAL_EXTENT_PT: f32 = 32.0;
+/// A finger must move this far (points) on a sidebar row before the row is dragged instead of tapped.
+const DRAG_START_PT: f32 = 6.0;
+/// The leading glyph slot of a sidebar row: its centre, from the row's left edge and middle (points). The list
+/// reserves the slot with an invisible dot; the weather glyph is drawn over it.
+const SIDE_GLYPH_X: f32 = 28.0;
+const SIDE_GLYPH_R: f32 = 9.0;
 
 /// The translucent scrim under the forecast cards: black at 25% over the sky artwork (a fixed colour, not chrome).
 const SKY_SCRIM: u32 = 64 << 24;
@@ -80,12 +104,10 @@ const ROW: f32 = 56.0;
 const HEAD: f32 = 28.0;
 const QUOTE_ROW: f32 = 60.0;
 const REMOVE_W: f32 = 48.0;
-/// The Next Hour card (precipitation by quarter hour) sits above the hourly strip.
+/// The Next Hour card (minute-by-minute rain) above the hourly strip.
 const NEXT_TOP: f32 = 296.0;
-const NEXT_H: f32 = 112.0;
-const NEXT_BARS_TOP: f32 = 56.0;
-const NEXT_BAR_H: f32 = 28.0;
-const HOURLY_TOP: f32 = NEXT_TOP + NEXT_H + 16.0;
+const NEXT_H: f32 = 100.0;
+const HOURLY_TOP: f32 = NEXT_TOP + NEXT_H + 12.0;
 const HOURLY_H: f32 = 136.0;
 const HOUR_W: f32 = 60.0;
 const DAILY_TOP: f32 = HOURLY_TOP + HOURLY_H + 12.0;
@@ -94,11 +116,19 @@ const DAILY_H: f32 = 28.0 + 10.0 * DAY_ROW + 8.0;
 const DETAILS_TOP: f32 = DAILY_TOP + DAILY_H + 16.0;
 const TILE_H: f32 = 104.0;
 const TILE_GAP: f32 = 12.0;
-/// Nine tiles in two columns: five rows.
+/// Detail tiles in two columns: UV, sunrise, wind, humidity, feels like, precipitation, visibility, pressure,
+/// averages and the moon.
 const TILE_ROWS: f32 = 5.0;
 const DETAILS_H: f32 = TILE_ROWS * TILE_H + (TILE_ROWS - 1.0) * TILE_GAP;
-/// The temperature chart card, below the detail tiles: its plot area and the axis labels' room, in points.
-const CHART_TOP: f32 = DETAILS_TOP + DETAILS_H + 16.0;
+/// A tile at least this wide (points) also draws the sun's day arc or the wind dial.
+const TILE_GRAPHIC_MIN_W: f32 = 260.0;
+/// The room (points) the sun arc or the wind dial takes at the right of its tile.
+const TILE_GRAPHIC_W: f32 = 100.0;
+/// The air quality card, below the detail tiles.
+const AIR_TOP: f32 = DETAILS_TOP + DETAILS_H + 16.0;
+const AIR_H: f32 = 132.0;
+/// The temperature chart card, below the air quality card: its plot area and the axis labels' room, in points.
+const CHART_TOP: f32 = AIR_TOP + AIR_H + 16.0;
 const CHART_H: f32 = 176.0;
 const CHART_AXIS: f32 = 40.0;
 const CHART_PLOT_TOP: f32 = 36.0;
@@ -141,10 +171,15 @@ enum Target {
     Result(usize),
     RemoveQuote(usize),
     Hourly,
+    Share,
+    /// the Notifications switch of a place on the Locations page
+    Notify(usize),
 }
 
 enum Done {
     Forecast { key: String, result: Result<Forecast, WeatherError> },
+    /// a place named by a `weather:` link, looked up by name
+    Linked { name: String, result: Result<Vec<Location>, String> },
     Places { query: String, result: Result<Vec<Location>, String> },
     Quotes(Result<Vec<Quote>, String>),
 }
@@ -159,6 +194,16 @@ enum Row {
 enum SideTarget {
     Search,
     Place(usize),
+}
+
+/// A finger that went down on a sidebar place row: a tap, or after `DRAG_START_PT` a drag to reorder.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SideDrag {
+    from: usize,
+    start_y: f32,
+    /// where the finger is now (pixels)
+    y: f32,
+    active: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -195,6 +240,9 @@ pub struct Weather {
     side_query: SearchQuery,
     /// a sidebar target under the finger
     side_pressed: Option<SideTarget>,
+    side_drag: Option<SideDrag>,
+    /// the place a context menu was opened for
+    ctx_place: Option<usize>,
     h: i32,
     store: Store,
     fetcher: Arc<dyn Fetch>,
@@ -210,6 +258,15 @@ pub struct Weather {
     error: Option<WeatherError>,
     /// whether the network path lets the app reach the forecast service (true until the shell says otherwise)
     online: bool,
+    /// place keys with the rain Notifications switch on, and the rain spells already announced
+    notify_on: HashSet<String>,
+    rain: RainWatch,
+    /// notifications waiting for the app to post them (`take_notices`)
+    notices: Vec<Notice>,
+    /// the Share button was pressed (`take_share`)
+    share_pending: bool,
+    /// a place a `weather:` link asked for, selected on the next tick
+    pending_open: Option<Location>,
     /// set when the saved summary changed (a forecast for the selected place, a new selection or units); the app
     /// reads it with `take_summary_changed` and reloads the widget timeline
     summary_changed: bool,
@@ -247,6 +304,7 @@ impl Weather {
         let forecasts = places.iter().filter_map(|p| Some((p.key(), store.load_forecast(p)?.0))).collect();
         let mut field = TextField::new(ui, "Search city", MAC_BODY_PT, false, 64);
         field.focused = false;
+        let notify_on = notify::load(store.dir());
         Weather {
             w,
             full_w: w,
@@ -254,6 +312,8 @@ impl Weather {
             pt_px: ui.pt(1.0),
             side_query: SearchQuery::new(),
             side_pressed: None,
+            side_drag: None,
+            ctx_place: None,
             h,
             watch: store.load_watchlist(),
             selected: selected.min(places.len() - 1),
@@ -267,6 +327,11 @@ impl Weather {
             pending: HashSet::new(),
             error: None,
             online: true,
+            notify_on,
+            rain: RainWatch::default(),
+            notices: vec![],
+            share_pending: false,
+            pending_open: None,
             summary_changed: false,
             results: vec![],
             searching: false,
@@ -310,16 +375,19 @@ impl Weather {
 
     // ---- Golden Gate chrome: sidebar and toolbar ----
 
+    /// The sidebar's rows: the place, its sky in words under the name, and its temperature at the right. The slot
+    /// before the name is reserved by an invisible dot; `draw_sidebar` draws the sky glyph in it. A place with no
+    /// forecast yet shows its region and no temperature.
     fn sidebar(&self) -> SourceList {
         let items = self
             .places
             .iter()
             .enumerate()
             .map(|(i, p)| {
-                let row = SidebarItem::row(PLACE_ID + i as u32, &p.name);
+                let row = SidebarItem::row(PLACE_ID + i as u32, &p.name).with_dot(0);
                 match self.forecasts.get(&p.key()) {
-                    Some(f) => row.with_trailing(&self.units.degrees(f.current.temp)),
-                    None => row,
+                    Some(f) => row.with_subtitle(Sky::from_code(f.current.code).label()).with_trailing(&self.units.degrees(f.current.temp)),
+                    None => row.with_subtitle(p.subtitle()),
                 }
             })
             .collect();
@@ -362,6 +430,7 @@ impl Weather {
                     items.push(ToolbarItem::icon(BAR_LOCATIONS, "Locations", "list.bullet"));
                 }
                 items.push(ToolbarItem::flexible_space());
+                items.push(ToolbarItem::icon(BAR_SHARE, "Share", "square.and.arrow.up").enabled(self.shareable()));
                 items.push(ToolbarItem::button(BAR_STOCKS, "Stocks"));
             }
             Screen::Places => {
@@ -455,6 +524,10 @@ impl Weather {
                             let name = self.places[i].name.clone();
                             let value = if i == self.selected { "selected".to_string() } else { String::new() };
                             nodes.push(node(PLACE_ROW_ID + i as u64, Role::Button, name.clone(), value, rect(x, y, card_w, rh - 4.0)));
+                            let remove_w = if self.places.len() > 1 { REMOVE_W } else { 0.0 };
+                            let on = self.notify_on.contains(&self.places[i].key());
+                            let state = if on { "on" } else { "off" };
+                            nodes.push(node(NOTIFY_ID + i as u64, Role::Button, format!("Notifications for {name}"), state.to_string(), rect(x + card_w - remove_w - NOTIFY_W, y, NOTIFY_W, rh - 4.0)));
                             if self.places.len() > 1 {
                                 nodes.push(node(REMOVE_ID + i as u64, Role::Button, format!("Remove {name}"), String::new(), rect(x + card_w - REMOVE_W, y, REMOVE_W, rh - 4.0)));
                             }
@@ -489,6 +562,7 @@ impl Weather {
         let target = match id {
             _ if id == BAR_LOCATIONS as u64 => Target::Places,
             _ if id == BAR_STOCKS as u64 => Target::Stocks,
+            _ if id == BAR_SHARE as u64 => Target::Share,
             _ if id == BAR_DONE as u64 || id == BAR_BACK as u64 => Target::Back,
             UNITS_CELSIUS => Target::Units(Units::Celsius),
             UNITS_FAHRENHEIT => Target::Units(Units::Fahrenheit),
@@ -500,6 +574,7 @@ impl Weather {
                 self.activate(ui, Target::Field, at, t);
                 return true;
             }
+            _ if id >= NOTIFY_ID => Target::Notify((id - NOTIFY_ID) as usize),
             _ if id >= QUOTE_REMOVE_ID => Target::RemoveQuote((id - QUOTE_REMOVE_ID) as usize),
             _ if id >= RESULT_ID => Target::Result((id - RESULT_ID) as usize),
             _ if id >= REMOVE_ID => Target::Remove((id - REMOVE_ID) as usize),
@@ -507,7 +582,7 @@ impl Weather {
             _ if id >= PLACE_ID as u64 => Target::Place((id - PLACE_ID as u64) as usize),
             _ => return false,
         };
-        if let Target::Place(i) = target {
+        if let Target::Place(i) | Target::Notify(i) = target {
             if i >= self.places.len() {
                 return false;
             }
@@ -521,8 +596,31 @@ impl Weather {
         let pressed = match self.side_pressed { Some(SideTarget::Place(i)) => Some(PLACE_ID + i as u32), _ => None };
         widgets::source_list(s, ui, KRect { x: 0.0, y: 0.0, w: self.side / p, h: self.h as f32 / p }, &SourceList::new(vec![], SIDEBAR_ROW_PT, SIDEBAR_ROW_PT), 0.0, None);
         widgets::search_field(s, ui, &self.side_query, self.side_search(), "Search", false);
-        widgets::source_list(s, ui, self.side_list(), &self.sidebar(), 0.0, pressed);
+        let (list, bounds) = (self.sidebar(), self.side_list());
+        widgets::source_list(s, ui, bounds, &list, 0.0, pressed);
+        // the sky glyph of each place in the slot its row reserves
+        for (i, place) in self.places.iter().enumerate() {
+            let Some(f) = self.forecasts.get(&place.key()) else { continue };
+            let r = list.item_rect(i, bounds, 0.0);
+            if r.y + r.h > bounds.y + bounds.h {
+                continue;
+            }
+            glyph::draw(s, Sky::from_code(f.current.code), f.current.day, (ui.pt(r.x + SIDE_GLYPH_X), ui.pt(r.y + r.h / 2.0)), ui.pt(SIDE_GLYPH_R));
+        }
+        // a row being dragged: a line where it will be dropped
+        if let Some(drag) = self.side_drag.filter(|d| d.active) {
+            let to = insights::drop_index(&self.side_row_spans(), drag.y / p);
+            let r = list.item_rect(to, bounds, 0.0);
+            let y = if to > drag.from { r.y + r.h } else { r.y };
+            s.fill_rect(ui.pt(r.x + SPACE_M) as usize, (ui.pt(y) as usize).saturating_sub(1), ui.pt(r.w - 2.0 * SPACE_M).max(0.0) as usize, 2, LINK);
+        }
         s.fill_rect((self.side - 1.0) as usize, 0, 1, self.h as usize, SEPARATOR_C.now());
+    }
+
+    /// The `(top, height)` in points of each place's sidebar row.
+    fn side_row_spans(&self) -> Vec<(f32, f32)> {
+        let (list, bounds) = (self.sidebar(), self.side_list());
+        (0..self.places.len()).map(|i| list.item_rect(i, bounds, 0.0)).map(|r| (r.y, r.h)).collect()
     }
 
     fn draw_bar(&mut self, s: &mut Surface, ui: &Ui) {
@@ -534,6 +632,7 @@ impl Weather {
         let pressed = match self.pressed {
             Some(Target::Places) => Some(BAR_LOCATIONS),
             Some(Target::Stocks) => Some(BAR_STOCKS),
+            Some(Target::Share) => Some(BAR_SHARE),
             Some(Target::Back) => Some(if self.screen == Screen::Places { BAR_DONE } else { BAR_BACK }),
             _ => None,
         };
@@ -616,6 +715,16 @@ impl Weather {
                     self.pending.remove(&key);
                     match result {
                         Ok(f) => {
+                            if let Some(place) = self.places.iter().find(|p| p.key() == key) {
+                                let enabled = self.notify_on.contains(&key);
+                                if let Some(notice) = self.rain.check(&key, &place.name, &f.minutes, enabled) {
+                                    self.notices.push(notice);
+                                }
+                                let tomorrow = f.days.get(1).map_or(0, |d| d.precip_prob);
+                                if let Some(notice) = self.rain.check_tomorrow(&key, &place.name, &f.date, tomorrow, enabled) {
+                                    self.notices.push(notice);
+                                }
+                            }
                             self.forecasts.insert(key.clone(), f);
                             self.error = None;
                             if key == self.place().key() {
@@ -623,6 +732,12 @@ impl Weather {
                             }
                         }
                         Err(e) => self.error = Some(e),
+                    }
+                }
+                Done::Linked { result, .. } => {
+                    // the first match of the name in a `weather:` link is shown on the next tick
+                    if let Ok(list) = result {
+                        self.pending_open = list.into_iter().next();
                     }
                 }
                 Done::Places { query, result } => {
@@ -814,8 +929,8 @@ impl Weather {
     fn fit_scroll(&mut self, ui: &Ui) {
         let view = (self.bottom(ui) - ui.pt(self.list_top())).max(0.0);
         self.scroll.set_max((ui.pt(self.content_h()) - view).max(0.0));
-        let hours = self.forecasts.get(&self.place().key()).map_or(0, |f| f.hours.len());
-        self.hscroll.set_max((hours as f32 * ui.pt(HOUR_W) + ui.pt(SPACE_L) - self.card_w(ui)).max(0.0));
+        let columns = self.forecasts.get(&self.place().key()).map_or(0, |f| insights::strip_columns(&f.hours).len());
+        self.hscroll.set_max((columns as f32 * ui.pt(HOUR_W) + ui.pt(SPACE_L) - self.card_w(ui)).max(0.0));
     }
 
     fn go(&mut self, ui: &Ui, screen: Screen, t: f64) {
@@ -844,6 +959,7 @@ impl Weather {
             return match self.bar_layout(ui).hit(x / p, y / p)? {
                 BAR_LOCATIONS => Some(Target::Places),
                 BAR_STOCKS => Some(Target::Stocks),
+                BAR_SHARE => self.shareable().then_some(Target::Share),
                 BAR_DONE | BAR_BACK => Some(Target::Back),
                 _ => None,
             };
@@ -866,6 +982,7 @@ impl Weather {
                 let at = at.max(0.0);
                 self.place_rows().into_iter().find(|&(_, t, h)| at >= t && at < t + h).and_then(|(row, _, _)| match row {
                     Row::Place(i) if x >= self.w as f32 - ui.pt(MARGIN + REMOVE_W) && self.places.len() > 1 => Some(Target::Remove(i)),
+                    Row::Place(i) if x >= self.notify_left(ui) && x < self.notify_left(ui) + ui.pt(NOTIFY_W) => Some(Target::Notify(i)),
                     Row::Place(i) => Some(Target::Place(i)),
                     Row::Result(i) => Some(Target::Result(i)),
                     Row::Head(_) => None,
@@ -913,6 +1030,9 @@ impl Weather {
                 if self.places.len() > 1 && i < self.places.len() {
                     let gone = self.places.remove(i);
                     self.forecasts.remove(&gone.key());
+                    if self.notify_on.remove(&gone.key()) {
+                        notify::save(self.store.dir(), &self.notify_on);
+                    }
                     if self.selected > i || self.selected >= self.places.len() {
                         self.selected = self.selected.saturating_sub(1);
                     }
@@ -945,15 +1065,178 @@ impl Weather {
                     self.fit_scroll(ui);
                 }
             }
+            Target::Share => self.share_pending = self.shareable(),
+            Target::Notify(i) => self.toggle_notifications(i),
             Target::Hourly => {}
         }
+    }
+
+    /// Whether the Share button has a forecast to send.
+    fn shareable(&self) -> bool {
+        self.forecasts.contains_key(&self.place().key())
+    }
+
+    /// True once after the Share button was pressed with a forecast to send.
+    pub fn take_share(&mut self) -> bool {
+        std::mem::take(&mut self.share_pending)
+    }
+
+    /// The dialog of the current-conditions intent for the selected place; None until its forecast has loaded.
+    pub fn intent_dialog(&self) -> Option<String> {
+        let place = self.place();
+        Some(control::intent_dialog(&place.name, self.forecasts.get(&place.key())?, self.units))
+    }
+
+    /// The text to share for the selected place (see `control::share_text`).
+    pub fn share_text(&self) -> Option<String> {
+        let place = self.place();
+        Some(control::share_text(&place.name, self.forecasts.get(&place.key())?, self.units))
+    }
+
+    /// Where the Share button is, in window points, for the share menu to open under it.
+    pub fn share_anchor(&self, ui: &Ui) -> KRect {
+        let dx = self.side / ui.pt(1.0);
+        self.bar_layout(ui).rect_of(BAR_SHARE).map_or(KRect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 }, |r| KRect { x: r.x + dx, ..r })
+    }
+
+    /// Notifications waiting to be posted; the app posts them to the shell.
+    pub fn take_notices(&mut self) -> Vec<Notice> {
+        std::mem::take(&mut self.notices)
+    }
+
+    /// Switches the rain Notifications of place `i` on or off and saves the choice.
+    fn toggle_notifications(&mut self, i: usize) {
+        let Some(key) = self.places.get(i).map(Location::key) else { return };
+        if !self.notify_on.remove(&key) {
+            self.notify_on.insert(key);
+        }
+        notify::save(self.store.dir(), &self.notify_on);
+    }
+
+    /// The left edge (pixels) of the Notifications switch on a Locations row.
+    fn notify_left(&self, ui: &Ui) -> f32 {
+        let remove = if self.places.len() > 1 { ui.pt(REMOVE_W) } else { 0.0 };
+        self.w as f32 - ui.pt(MARGIN) - remove - ui.pt(NOTIFY_W)
+    }
+
+    /// Moves the place at `from` to position `to` in the list, keeps the same place selected and saves the order.
+    fn reorder_places(&mut self, from: usize, to: usize) -> bool {
+        if !insights::move_item(&mut self.places, from, to) {
+            return false;
+        }
+        self.selected = insights::follow_selection(self.selected, from, to);
+        self.store.save_locations(&self.places);
+        self.store.save_settings(self.units, self.selected);
+        self.dirty = true;
+        true
+    }
+
+    /// The place under a secondary click at window pixel `(x, y)`: a sidebar row, or a row of the Locations page.
+    fn place_at(&self, ui: &Ui, x: f32, y: f32) -> Option<usize> {
+        let found = if x < self.side {
+            match self.side_hit(ui, x, y) {
+                Some(SideTarget::Place(i)) => Some(i),
+                _ => None,
+            }
+        } else if self.screen == Screen::Places {
+            match self.hit(ui, x - self.side, y) {
+                Some(Target::Place(i) | Target::Remove(i) | Target::Notify(i)) => Some(i),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        found.filter(|i| *i < self.places.len())
+    }
+
+    /// The context menu of the place at `(x, y)`: its Notifications switch and Remove. Empty when no place is there.
+    pub fn context_items(&mut self, ui: &Ui, x: f32, y: f32) -> Vec<ContextItem> {
+        self.ctx_place = self.place_at(ui, x, y);
+        let Some(i) = self.ctx_place else { return vec![] };
+        let label = if self.notify_on.contains(&self.places[i].key()) { "Turn Off Notifications" } else { "Turn On Notifications" };
+        vec![
+            ContextItem { id: CTX_NOTIFY, label: label.to_string(), enabled: true },
+            ContextItem { id: CTX_REMOVE, label: "Remove".to_string(), enabled: self.places.len() > 1 },
+        ]
+    }
+
+    /// The user chose item `id` of the menu `context_items` returned. True when a frame is needed.
+    pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
+        let Some(i) = self.ctx_place.take() else { return false };
+        match id {
+            CTX_REMOVE => self.activate(ui, Target::Remove(i), 0.0, t),
+            CTX_NOTIFY => self.toggle_notifications(i),
+            _ => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// Shows `place`: selects it when it is saved, and adds it first when there is room. A full list leaves the
+    /// selection alone.
+    fn show_place(&mut self, ui: &Ui, place: Location, t: f64) {
+        let index = match self.places.iter().position(|q| q.key() == place.key()) {
+            Some(i) => i,
+            None if self.places.len() < data::MAX_LOCATIONS => {
+                self.places.push(place);
+                self.store.save_locations(&self.places);
+                self.places.len() - 1
+            }
+            None => return,
+        };
+        self.activate(ui, Target::Place(index), 0.0, t);
+    }
+
+    /// A `weather:` link asks for a place (see `insights::place_from_url`). A saved place of that name, or a link
+    /// with a position, is shown at once; any other name is looked up first and the first match shown. True when
+    /// the link names a place.
+    pub fn open_link(&mut self, ui: &Ui, url: &str, t: f64) -> bool {
+        let Some(link) = insights::place_from_url(url) else { return false };
+        self.maintain_at = f64::NEG_INFINITY;
+        self.dirty = true;
+        let wanted = link.name.to_lowercase();
+        if let Some(saved) = self.places.iter().find(|p| p.name.to_lowercase() == wanted).cloned() {
+            self.show_place(ui, saved, t);
+        } else if let Some((lat, lon)) = link.coordinate {
+            self.show_place(ui, Location { name: link.name, region: String::new(), lat, lon }, t);
+        } else {
+            let net = self.fetcher.clone();
+            let name = link.name;
+            self.spawn(move || Done::Linked { result: data::search_places(&name, &*net).map_err(|_| "Search unavailable".to_string()), name });
+        }
+        true
+    }
+
+    /// Answers a control method (`control::METHODS`) from the forecasts the app holds. `place` in `params` names a
+    /// saved place; without it the selected place answers.
+    pub fn rpc(&self, method: &str, params: &Json) -> Result<Json, RpcError> {
+        if method == "weather.places" {
+            return Ok(Json::Arr(self.places.iter().map(|p| Json::Str(p.name.clone())).collect()));
+        }
+        if !control::METHODS.contains(&method) {
+            return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}")));
+        }
+        let named = params.str_field("place").map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let place = match &named {
+            Some(name) => self
+                .places
+                .iter()
+                .find(|p| p.name.to_lowercase() == name.to_lowercase())
+                .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no saved place named {name}")))?,
+            None => self.place(),
+        };
+        let forecast = self.forecasts.get(&place.key()).ok_or_else(|| RpcError::new(INTERNAL_ERROR, format!("no forecast for {} yet", place.name)))?;
+        Ok(match method {
+            "weather.current" => control::current_json(&place.name, forecast, self.units),
+            _ => control::forecast_json(&place.name, forecast, self.units),
+        })
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.maintain_at = f64::NEG_INFINITY;
         self.dirty = true;
-        // Edit > Delete: with no field being edited, Delete or Backspace removes the selected place
-        if !self.field.focused && self.screen == Screen::Main && matches!(out, Out::Backspace | Out::Named("Delete")) {
+        // Delete with no field being typed in removes the selected place; so does Backspace on the forecast page
+        if !self.field.focused && self.screen != Screen::Stocks && (out == Out::Named("Delete") || (self.screen == Screen::Main && out == Out::Backspace)) {
             self.activate(ui, Target::Remove(self.selected), 0.0, t);
             return;
         }
@@ -1005,22 +1288,39 @@ impl Weather {
         // the sidebar: the search capsule opens Locations with its field focused; a row shows that place
         if matches!(ev, Event::Down(..)) && x < self.side {
             self.side_pressed = self.side_hit(ui, x, y);
+            // a press on a row can become a drag that reorders the places
+            self.side_drag = match self.side_pressed {
+                Some(SideTarget::Place(from)) if self.places.len() > 1 => Some(SideDrag { from, start_y: y, y, active: false }),
+                _ => None,
+            };
             return;
         }
         if let Some(pressed) = self.side_pressed {
-            if let Event::Up(..) = ev {
-                self.side_pressed = None;
-                if self.side_hit(ui, x, y) == Some(pressed) {
-                    match pressed {
-                        SideTarget::Search => {
-                            if self.screen != Screen::Places {
-                                self.activate(ui, Target::Places, 0.0, t);
-                            }
-                            self.activate(ui, Target::Field, self.field_rect(ui).0 + ui.pt(SPACE_M), t);
-                        }
-                        SideTarget::Place(i) => self.activate(ui, Target::Place(i), 0.0, t),
+            match ev {
+                Event::Move(..) => {
+                    if let Some(d) = &mut self.side_drag {
+                        d.y = y;
+                        d.active |= (y - d.start_y).abs() > ui.pt(DRAG_START_PT);
                     }
                 }
+                Event::Up(..) => {
+                    self.side_pressed = None;
+                    if let Some(d) = self.side_drag.take().filter(|d| d.active) {
+                        let to = insights::drop_index(&self.side_row_spans(), y / ui.pt(1.0));
+                        self.reorder_places(d.from, to);
+                    } else if self.side_hit(ui, x, y) == Some(pressed) {
+                        match pressed {
+                            SideTarget::Search => {
+                                if self.screen != Screen::Places {
+                                    self.activate(ui, Target::Places, 0.0, t);
+                                }
+                                self.activate(ui, Target::Field, self.field_rect(ui).0 + ui.pt(SPACE_M), t);
+                            }
+                            SideTarget::Place(i) => self.activate(ui, Target::Place(i), 0.0, t),
+                        }
+                    }
+                }
+                _ => {}
             }
             return;
         }
@@ -1084,6 +1384,9 @@ impl Weather {
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.relayout(ui);
         self.pump();
+        if let Some(place) = self.pending_open.take() {
+            self.show_place(ui, place, t);
+        }
         self.maintain(t);
         self.fit_scroll(ui);
         let was_moving = self.scroll.animating() || self.hscroll.animating();
@@ -1175,44 +1478,58 @@ impl Weather {
         let dim = fade(WHITE, 160);
         let (card_x, card_w) = (ui.pt(MARGIN), self.card_w(ui));
         let card = SKY_SCRIM;
-        // next hour: the precipitation of the coming quarter hours as bars under a summary sentence
+        let rain = rain_blue();
+        // next hour: the minute-by-minute rain as one bar per 15-minute step, under a line that says what is coming
         c.fill_rrect(card_x, p(NEXT_TOP), card_w, ui.pt(NEXT_H), ui.pt(RADIUS), card);
         self.put(&mut c, ui, "NEXT HOUR", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(NEXT_TOP + 16.0));
-        let summary = ui.fit(&details::next_hour_summary(&f.minutes), MAC_BODY_PT, card_w - ui.pt(2.0 * SPACE_L));
+        let summary = ui.fit(&insights::next_hour_summary(&f.minutes), MAC_BODY_PT, card_w - ui.pt(2.0 * SPACE_L));
         self.put(&mut c, ui, &summary, MAC_BODY_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), p(NEXT_TOP + 38.0));
-        let bars = details::next_hour_bars(&f.minutes);
-        if !bars.is_empty() {
+        if !f.minutes.is_empty() {
             let area_x = card_x + ui.pt(SPACE_L);
-            let slot = (card_w - ui.pt(2.0 * SPACE_L)) / bars.len() as f32;
-            for (i, h) in bars.iter().enumerate() {
-                let bh = (ui.pt(NEXT_BAR_H) * h).max(ui.pt(SPACE_XXS));
-                let wet = f.minutes[i] >= details::WET_MM;
-                let colour = if wet { WHITE } else { fade(WHITE, 60) };
-                let bx = area_x + i as f32 * slot;
-                c.fill_rrect(bx, p(NEXT_TOP + NEXT_BARS_TOP) + ui.pt(NEXT_BAR_H) - bh, slot - ui.pt(SPACE_XS), bh, ui.pt(SPACE_XXS), colour);
-                let label = if i == 0 { "Now".to_string() } else { format!("{} min", i * 15) };
-                self.put(&mut c, ui, &label, MAC_CAPTION1_PT, Weight::Regular, dim, Align::Left, bx, p(NEXT_TOP + NEXT_BARS_TOP + NEXT_BAR_H + 14.0));
+            let slot = (card_w - ui.pt(2.0 * SPACE_L)) / f.minutes.len() as f32;
+            let bar_w = (slot - ui.pt(SPACE_S)).max(1.0);
+            let (base, tallest) = (p(NEXT_TOP + NEXT_H - 24.0), ui.pt(28.0));
+            for (k, mm) in f.minutes.iter().enumerate() {
+                let h = (insights::rain_bar(*mm) * tallest).max(ui.pt(SPACE_XXS));
+                let color = if *mm >= insights::WET_STEP_MM { rain } else { fade(WHITE, 60) };
+                let left = area_x + k as f32 * slot;
+                c.fill_rrect(left, base - h, bar_w, h, ui.pt(SPACE_XXS), color);
+                let label = if k == 0 { "Now".to_string() } else { format!("{} min", k * 15) };
+                self.put(&mut c, ui, &label, MAC_CAPTION1_PT, Weight::Regular, dim, Align::Left, left, base + ui.pt(SPACE_M));
             }
         }
-        // hourly strip: drawn into its own image so the columns clip at the card
+        // hourly strip: drawn into its own image so the columns clip at the card. An hour with a sunrise or sunset
+        // is followed by a column for it.
         c.fill_rrect(card_x, p(HOURLY_TOP), card_w, ui.pt(HOURLY_H), ui.pt(RADIUS), card);
         self.put(&mut c, ui, "HOURLY FORECAST", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(HOURLY_TOP + 16.0));
         let mut strip = Image { w: card_w as usize, h: ui.pt(HOURLY_H - 30.0) as usize, px: vec![0; card_w as usize * ui.pt(HOURLY_H - 30.0) as usize] };
         {
             let mut ss = Surface { w: strip.w, h: strip.h, stride: strip.w, px: &mut strip.px, y0: 0 };
-            for (i, hr) in f.hours.iter().enumerate() {
-                let mid = ui.pt(SPACE_S) + (i as f32 + 0.5) * ui.pt(HOUR_W) - self.hscroll.offset();
+            for (ci, column) in insights::strip_columns(&f.hours).into_iter().enumerate() {
+                let mid = ui.pt(SPACE_S) + (ci as f32 + 0.5) * ui.pt(HOUR_W) - self.hscroll.offset();
                 if mid < -ui.pt(HOUR_W) || mid > card_w + ui.pt(HOUR_W) {
                     continue;
                 }
-                let label = if i == 0 { "Now".to_string() } else { hr.label.clone() };
-                self.put(&mut ss, ui, &label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
-                glyph::draw(&mut ss, Sky::from_code(hr.code), hr.day, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_L));
-                let chance = details::hour_chance(hr.precip_prob);
-                if !chance.is_empty() {
-                    self.put(&mut ss, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, fade(WHITE, 200), Align::Centre, mid, ui.pt(62.0));
+                match column {
+                    Column::Hour(i) => {
+                        let hr = &f.hours[i];
+                        let label = if i == 0 { "Now".to_string() } else { hr.label.clone() };
+                        self.put(&mut ss, ui, &label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
+                        glyph::draw(&mut ss, Sky::from_code(hr.code), hr.day, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_L));
+                        if let Some(chance) = insights::chance_text(hr.precip_prob) {
+                            self.put(&mut ss, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, rain, Align::Centre, mid, ui.pt(64.0));
+                        }
+                        self.put(&mut ss, ui, &units.degrees(hr.temp), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(88.0));
+                    }
+                    Column::Sun(i) => {
+                        if let Some(event) = &f.hours[i].sun {
+                            let name = if event.rise { "Sunrise" } else { "Sunset" };
+                            self.put(&mut ss, ui, name, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
+                            glyph::draw(&mut ss, Sky::Clear, true, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_M));
+                            self.put(&mut ss, ui, &event.time, MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(88.0));
+                        }
+                    }
                 }
-                self.put(&mut ss, ui, &units.degrees(hr.temp), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(84.0));
             }
         }
         c.blit(&strip, card_x as i32, p(HOURLY_TOP + 30.0) as i32, 255, 255);
@@ -1222,27 +1539,28 @@ impl Weather {
         let lo = f.days.iter().map(|d| d.min).fold(f64::MAX, f64::min);
         let hi = f.days.iter().map(|d| d.max).fold(f64::MIN, f64::max);
         let span = (hi - lo).max(1.0) as f32;
-        let (bar_x, bar_w) = (card_x + ui.pt(176.0), card_w - ui.pt(176.0 + 80.0));
+        let (bar_x, bar_w) = (card_x + card_w * 0.36, card_w * 0.48);
         for (i, d) in f.days.iter().enumerate() {
             let mid = p(28.0 + DAILY_TOP + (i as f32 + 0.5) * DAY_ROW);
             if i > 0 {
-                c.fill_rrect(card_x + ui.pt(SPACE_L), mid - ui.pt(DAY_ROW / 2.0), card_w - ui.pt(28.0), 1.0, 0.0, fade(WHITE, 40));
+                c.fill_rrect(card_x + ui.pt(SPACE_L), mid - ui.pt(DAY_ROW / 2.0), card_w - ui.pt(28.0), 1.0, 0.0, fade(LABEL.now(), 40));
             }
             let label = if i == 0 { "Today" } else { d.label.as_str() };
             self.put(&mut c, ui, label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), mid);
-            let chance = details::day_chance(d.precip_prob);
-            let glyph_y = if chance.is_empty() { mid } else { mid - ui.pt(SPACE_XS) };
-            glyph::draw(&mut c, Sky::from_code(d.code), true, (card_x + ui.pt(100.0), glyph_y), ui.pt(SPACE_M));
-            if !chance.is_empty() {
-                self.put(&mut c, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, fade(WHITE, 200), Align::Centre, card_x + ui.pt(100.0), mid + ui.pt(SPACE_L));
+            // the chance of precipitation sits under the glyph, which moves up to make room
+            let chance = insights::chance_text(d.precip_prob);
+            let glyph_y = if chance.is_some() { mid - ui.pt(5.0) } else { mid };
+            glyph::draw(&mut c, Sky::from_code(d.code), true, (card_x + card_w * 0.20, glyph_y), ui.pt(SPACE_M));
+            if let Some(chance) = chance {
+                self.put(&mut c, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, rain, Align::Centre, card_x + card_w * 0.20, mid + ui.pt(15.0));
             }
             self.put(&mut c, ui, &units.degrees(d.min), MAC_BODY_PT, Weight::Medium, dim, Align::Right, bar_x - ui.pt(SPACE_M), mid);
-            c.fill_rrect(bar_x, mid - ui.pt(SPACE_XXS), bar_w, ui.pt(SPACE_XS), ui.pt(SPACE_XXS), fade(WHITE, 60));
+            c.fill_rrect(bar_x, mid - ui.pt(SPACE_XXS), bar_w, ui.pt(SPACE_XS), ui.pt(SPACE_XXS), fade(LABEL.now(), 60));
             let (x0, x1) = (((d.min - lo as f64) as f32 / span).clamp(0.0, 1.0), ((d.max - lo as f64) as f32 / span).clamp(0.0, 1.0));
             c.fill_rrect(bar_x + bar_w * x0, mid - ui.pt(SPACE_XXS), (bar_w * (x1 - x0)).max(ui.pt(SPACE_XS)), ui.pt(SPACE_XS), ui.pt(SPACE_XXS), ORANGE);
             if i == 0 {
                 let k = ((f.current.temp - lo) as f32 / span).clamp(0.0, 1.0);
-                c.fill_rrect(bar_x + bar_w * k - ui.pt(SPACE_XS), mid - ui.pt(SPACE_XS), ui.pt(SPACE_S), ui.pt(SPACE_S), ui.pt(SPACE_XS), WHITE);
+                c.fill_rrect(bar_x + bar_w * k - ui.pt(SPACE_XS), mid - ui.pt(SPACE_XS), ui.pt(SPACE_S), ui.pt(SPACE_S), ui.pt(SPACE_XS), LABEL.now());
             }
             self.put(&mut c, ui, &units.degrees(d.max), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Right, card_x + card_w - ui.pt(SPACE_L), mid);
         }
@@ -1261,64 +1579,88 @@ impl Weather {
         let sun = |d: Option<&data::Day>, rise: bool| d.map(|d| if rise { d.sunrise.clone() } else { d.sunset.clone() }).filter(|s| !s.is_empty()).unwrap_or_else(|| "--:--".into());
         let delta = f.current.feels.round() - f.current.temp.round();
         let feels_note = if delta.abs() < 1.0 { "Similar to the actual temperature" } else if delta < 0.0 { "Wind makes it feel colder" } else { "Humidity makes it feel warmer" };
-        let next_24h: f64 = f.hours.iter().take(24).map(|h| h.precip_mm).sum();
-        let tomorrow = f.days.get(1).map_or(0.0, |d| d.precip_mm);
-        let visibility = f.hours.first().map_or(0.0, |h| h.visibility_m);
+        let next_24h_mm: f64 = f.hours.iter().map(|h| h.precip_mm).sum();
+        let snow_today = today.map_or(0.0, |d| d.snow_sum);
+        let precip_note = if snow_today >= 0.05 {
+            format!("Snow: {} of it", insights::snow_text(snow_today, units))
+        } else if next_24h_mm >= 0.05 {
+            format!("{} in the next 24 hours", insights::precipitation_text(next_24h_mm, units))
+        } else {
+            "None expected in the next 24 hours".to_string()
+        };
+        let visibility = f.hours.first().and_then(|h| h.visibility_m);
+        let pressure = f.current.pressure_hpa.or_else(|| f.hours.first().and_then(|h| h.pressure_hpa));
+        let (average_value, average_note) = insights::average_text(today.map_or(f.current.temp, |d| d.max), f.average_high, units);
         let tiles = [
             ("UV INDEX", format!("{}", uv.round() as i32), uv_note.to_string()),
             ("SUNRISE", sun(today, true), format!("Sunset: {}", sun(today, false))),
-            ("WIND", wind, details::wind_note(f.current.wind_dir, f.current.gust_kmh, f.current.wind_kmh, units)),
-            ("HUMIDITY", format!("{}%", f.current.humidity), details::dew_note(f.current.dew, units)),
+            ("WIND", wind, insights::wind_note(f.current.wind_gust_kmh, f.current.wind_dir, units)),
+            ("HUMIDITY", format!("{}%", f.current.humidity), insights::humidity_note(f.current.dew_point, units)),
             ("FEELS LIKE", units.degrees(f.current.feels), feels_note.to_string()),
+            ("PRECIPITATION", insights::precipitation_text(today.map_or(0.0, |d| d.precip_sum), units), precip_note),
+            ("VISIBILITY", visibility.map_or("--".to_string(), |m| insights::visibility_text(m, units)), visibility.map_or("Not reported".to_string(), |m| insights::visibility_note(m).to_string())),
+            ("PRESSURE", pressure.map_or("--".to_string(), |h| insights::pressure_text(h, units)), insights::pressure_note(&f.hours)),
+            ("AVERAGES", average_value, average_note),
             ("MOON", moon_value, moon_note),
-            ("PRECIPITATION", details::precip_text(next_24h, units), details::precip_note(tomorrow, units)),
-            ("VISIBILITY", details::visibility_text(visibility, units), details::visibility_note(visibility).to_string()),
-            ("PRESSURE", details::pressure_text(f.current.pressure_hpa, units), details::pressure_note(f.pressure_change).to_string()),
         ];
         let tile_w = (card_w - ui.pt(TILE_GAP)) / 2.0;
+        let graphic = tile_w > ui.pt(TILE_GRAPHIC_MIN_W);
         for (i, (name, value, note)) in tiles.iter().enumerate() {
             let tx = card_x + (i % 2) as f32 * (tile_w + ui.pt(TILE_GAP));
             let ty = p(DETAILS_TOP + (i / 2) as f32 * (TILE_H + TILE_GAP));
             c.fill_rrect(tx, ty, tile_w, ui.pt(TILE_H), ui.pt(RADIUS), card);
             self.put(&mut c, ui, name, MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(SPACE_XL));
             self.put(&mut c, ui, value, MAC_LARGE_TITLE_PT, Weight::Medium, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(54.0));
-            let note = ui.fit(note, MAC_FOOTNOTE_PT, tile_w - ui.pt(28.0));
+            // the sun's day arc and the wind dial take the right of their tile, so the note stops short of them
+            let has_graphic = graphic && matches!(*name, "SUNRISE" | "WIND" | "PRESSURE");
+            let note_w = tile_w - ui.pt(28.0) - if has_graphic { ui.pt(TILE_GRAPHIC_W) } else { 0.0 };
+            let note = ui.fit(note, MAC_FOOTNOTE_PT, note_w);
             self.put(&mut c, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(86.0));
-            match i {
-                // the sun's path: a half-circle of dots from sunrise to sunset with the sun on it
-                1 => {
-                    let (cx, cy, r) = (tx + tile_w - ui.pt(56.0), ty + ui.pt(64.0), ui.pt(32.0));
-                    c.fill_rrect(cx - r - ui.pt(SPACE_S), cy, 2.0 * r + ui.pt(2.0 * SPACE_S), 1.0, 0.0, fade(WHITE, 90));
-                    let dot = ui.pt(2.0);
-                    for k in 0..=20 {
-                        let (x, y) = details::sun_position(k as f32 / 20.0, cx, cy, r);
-                        c.fill_rrect(x - dot / 2.0, y - dot / 2.0, dot, dot, dot / 2.0, fade(WHITE, 90));
+            if has_graphic {
+                let centre = (tx + tile_w - ui.pt(TILE_GRAPHIC_W / 2.0), ty);
+                match *name {
+                    "SUNRISE" => {
+                        let (rise, set) = today.map_or((String::new(), String::new()), |d| (d.sunrise.clone(), d.sunset.clone()));
+                        draw_sun_arc(&mut c, ui, centre, insights::sun_progress(&f.time, &rise, &set));
                     }
-                    let now = details::clock_minutes(&f.current.clock);
-                    if let (Some(d), Some(now)) = (today, now) {
-                        if let Some(k) = details::sun_progress(&d.sunrise, &d.sunset, now) {
-                            let (x, y) = if k > 0.0 && k < 1.0 { details::sun_position(k, cx, cy, r) } else { (cx, cy) };
-                            let sun_d = ui.pt(SPACE_M);
-                            if k > 0.0 && k < 1.0 {
-                                c.fill_rrect(x - sun_d / 2.0, y - sun_d / 2.0, sun_d, sun_d, sun_d / 2.0, ORANGE);
-                            }
-                        }
+                    "WIND" => {
+                        draw_wind_dial(&mut c, ui, centre, f.current.wind_dir);
+                        self.put(&mut c, ui, "N", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Centre, centre.0, ty + ui.pt(15.0));
                     }
+                    _ => draw_pressure_dial(&mut c, ui, centre, insights::pressure_dial_angle(&f.hours)),
                 }
-                // the compass: a ring of dots with the point the wind comes from marked
-                2 => {
-                    let (cx, cy, r) = (tx + tile_w - ui.pt(44.0), ty + ui.pt(52.0), ui.pt(26.0));
-                    let dot = ui.pt(2.0);
-                    for k in 0..24 {
-                        let a = k as f32 * std::f32::consts::TAU / 24.0;
-                        c.fill_rrect(cx + r * a.sin() - dot / 2.0, cy - r * a.cos() - dot / 2.0, dot, dot, dot / 2.0, fade(WHITE, 90));
-                    }
-                    self.put(&mut c, ui, "N", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Centre, cx, cy - r + ui.pt(SPACE_M));
-                    let a = (f.current.wind_dir as f32).to_radians();
-                    let mark = ui.pt(SPACE_S);
-                    c.fill_rrect(cx + r * a.sin() - mark / 2.0, cy - r * a.cos() - mark / 2.0, mark, mark, mark / 2.0, WHITE);
+            }
+        }
+        // air quality: the index and its word, over a scale from good to extremely poor with a marker
+        c.fill_rrect(card_x, p(AIR_TOP), card_w, ui.pt(AIR_H), ui.pt(RADIUS), card);
+        self.put(&mut c, ui, "AIR QUALITY", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 16.0));
+        match &f.air {
+            Some(air) => {
+                let value = format!("{}", air.aqi);
+                let after = card_x + ui.pt(SPACE_L) + ui.measure(&value, MAC_LARGE_TITLE_PT, Weight::Medium) + ui.pt(SPACE_S);
+            let bands = [GREEN, YELLOW, ORANGE, RED, PURPLE, bifrost_app::kit::ui::system::SYSTEM_INDIGO.now()];
+                self.put(&mut c, ui, &value, MAC_LARGE_TITLE_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 44.0));
+                // the band's colour as a dot before its word
+                let dot = ui.pt(SPACE_S);
+                c.fill_rrect(after, p(AIR_TOP + 44.0) - dot / 2.0, dot, dot, dot / 2.0, bands[insights::air_band(air.aqi)]);
+                self.put(&mut c, ui, air.category(), MAC_TITLE3_PT, Weight::Semibold, WHITE, Align::Left, after + dot + ui.pt(SPACE_S), p(AIR_TOP + 44.0));
+                let (pollutant, concentration) = air.main_pollutant();
+                let detail = ui.fit(&format!("Main pollutant: {} {:.0} \u{b5}g/m\u{b3}", pollutant.name(), concentration), MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
+                self.put(&mut c, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 66.0));
+                let advice = ui.fit(air.advice(), MAC_FOOTNOTE_PT, card_w - ui.pt(2.0 * SPACE_L));
+                self.put(&mut c, ui, &advice, MAC_FOOTNOTE_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 84.0));
+                let (bar_x, bar_w, bar_y) = (card_x + ui.pt(SPACE_L), card_w - ui.pt(2.0 * SPACE_L), p(AIR_TOP + AIR_H - 20.0));
+                let seg = bar_w / bands.len() as f32;
+                for (b, color) in bands.iter().enumerate() {
+                    c.fill_rrect(bar_x + b as f32 * seg, bar_y, seg + 1.0, ui.pt(SPACE_XS), 0.0, *color);
                 }
-                _ => {}
+                let marker = ui.pt(SPACE_M);
+                let mx = bar_x + bar_w * insights::air_position(air.aqi);
+                c.fill_rrect(mx - marker / 2.0, bar_y + ui.pt(SPACE_XS) / 2.0 - marker / 2.0, marker, marker, marker / 2.0, LABEL.now());
+            }
+            None => {
+                let text = ui.fit("Air quality is not available for this place.", MAC_BODY_PT, card_w - ui.pt(2.0 * SPACE_L));
+                self.put(&mut c, ui, &text, MAC_BODY_PT, Weight::Regular, WHITE, Align::Left, card_x + ui.pt(SPACE_L), p(AIR_TOP + 50.0));
             }
         }
         // temperature chart: the hours as a line over labelled rules (points are in the card's own frame)
@@ -1330,7 +1672,7 @@ impl Weather {
             let plot = insights::temperature_plot(&scale, f.hours.len(), frame);
             for &tick in &scale.ticks {
                 let y = plot.y.map(tick) as f32;
-                c.fill_rrect(card_x + ui.pt(CHART_AXIS), p(CHART_TOP + y), ui.pt(frame.w as f32), 1.0, 0.0, fade(WHITE, 40));
+                c.fill_rrect(card_x + ui.pt(CHART_AXIS), p(CHART_TOP + y), ui.pt(frame.w as f32), 1.0, 0.0, fade(LABEL.now(), 40));
                 self.put(&mut c, ui, &units.degrees(tick), MAC_CAPTION1_PT, Weight::Regular, dim, Align::Right, card_x + ui.pt(CHART_AXIS - SPACE_S), p(CHART_TOP + y));
             }
             // area mark: the fill from the line down to the plot's bottom edge, one column per point
@@ -1340,22 +1682,22 @@ impl Weather {
             for (x, top) in insights::area_columns(&line, 1.0) {
                 let top_px = p(CHART_TOP + top as f32);
                 let bottom_px = p(CHART_TOP + base);
-                c.fill_rrect(card_x + ui.pt(x as f32), top_px, col, bottom_px - top_px, 0.0, fade(WHITE, 40));
+                c.fill_rrect(card_x + ui.pt(x as f32), top_px, col, bottom_px - top_px, 0.0, fade(LABEL.now(), 40));
             }
-            let d = ui.pt(2.0);
+            let d = ui.pt(SPACE_XXS);
             for pair in line.windows(2) {
                 let ((ax, ay), (bx, by)) = (pair[0], pair[1]);
                 let steps = ((bx - ax).abs().max((by - ay).abs()) / 0.5).ceil().max(1.0) as usize;
                 for k in 0..=steps {
                     let t = k as f64 / steps as f64;
                     let (x, y) = ((ax + (bx - ax) * t) as f32, (ay + (by - ay) * t) as f32);
-                    c.fill_rrect(card_x + ui.pt(x) - d / 2.0, p(CHART_TOP + y) - d / 2.0, d, d, d / 2.0, WHITE);
+                    c.fill_rrect(card_x + ui.pt(x) - d / 2.0, p(CHART_TOP + y) - d / 2.0, d, d, d / 2.0, LABEL.now());
                 }
             }
             for (x, y) in insights::temperature_points(&f.hours) {
                 let (px, py) = plot.position(x, y);
                 let dot = ui.pt(5.0);
-                c.fill_rrect(card_x + ui.pt(px as f32) - dot / 2.0, p(CHART_TOP + py as f32) - dot / 2.0, dot, dot, dot / 2.0, WHITE);
+                c.fill_rrect(card_x + ui.pt(px as f32) - dot / 2.0, p(CHART_TOP + py as f32) - dot / 2.0, dot, dot, dot / 2.0, LABEL.now());
             }
             let n = f.hours.len();
             if n > 1 {
@@ -1374,7 +1716,7 @@ impl Weather {
         if let Some(view) = insights::map_view(plat, plon, area_w as f64, MAP_AREA_H as f64) {
             let (ax, ay) = (card_x + ui.pt(SPACE_L), p(MAP_TOP + MAP_AREA_TOP));
             let (aw, ah) = (ui.pt(area_w), ui.pt(MAP_AREA_H));
-            c.fill_rrect(ax, ay, aw, ah, ui.pt(SPACE_S), fade(WHITE, 24));
+            c.fill_rrect(ax, ay, aw, ah, ui.pt(SPACE_S), fade(LABEL.now(), 24));
             let grid = insights::grid(&view);
             let line = fade(WHITE, 90);
             for &(y, lat) in &grid.rows {
@@ -1390,11 +1732,11 @@ impl Weather {
                 self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Left, xx + ui.pt(SPACE_XS), ay + ah - ui.pt(SPACE_L));
             }
             let mark = ui.pt(10.0);
-            c.fill_rrect(ax + aw / 2.0 - mark / 2.0, ay + ah / 2.0 - mark / 2.0, mark, mark, mark / 2.0, WHITE);
+            c.fill_rrect(ax + aw / 2.0 - mark / 2.0, ay + ah / 2.0 - mark / 2.0, mark, mark, mark / 2.0, LABEL.now());
             if let Some(bar) = view.camera().scale_bar(insights::SCALE_MAX_PT) {
                 let bw = ui.pt(bar.width_px as f32);
                 let (bx, by) = (ax + aw - ui.pt(SPACE_S) - bw, ay + ah - ui.pt(SPACE_M));
-                c.fill_rrect(bx, by, bw, ui.pt(3.0), 0.0, WHITE);
+                c.fill_rrect(bx, by, bw, ui.pt(3.0), 0.0, LABEL.now());
                 let text = insights::scale_text(bar.length_m, self.units);
                 self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Right, bx - ui.pt(SPACE_XS), by + ui.pt(1.5));
             }
@@ -1433,11 +1775,20 @@ impl Weather {
                         if i == self.selected {
                             c.fill_rect(x as usize, (y + ui.pt(SPACE_S)) as usize, ui.pt(SPACE_XS) as usize, ui.pt(rh - 20.0) as usize, LINK);
                         }
-                        let name = ui.fit(&p.name, MAC_BODY_PT, w - ui.pt(150.0));
+                        let room = (w - ui.pt(150.0 + NOTIFY_W)).max(ui.pt(SPACE_HUGE));
+                        let name = ui.fit(&p.name, MAC_BODY_PT, room);
                         self.put(&mut c, ui, &name, MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
-                        let region = ui.fit(&self.subtitle_with_distance(&p), MAC_FOOTNOTE_PT, w - ui.pt(150.0));
+                        let region = ui.fit(&self.subtitle_with_distance(&p), MAC_FOOTNOTE_PT, room);
                         self.put(&mut c, ui, &region, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(37.0));
                         let right = if self.places.len() > 1 { x + w - ui.pt(REMOVE_W) } else { x + w - ui.pt(SPACE_L) };
+                        // the Notifications switch: a flat chip, filled when rain alerts are on for the place
+                        let on = self.notify_on.contains(&p.key());
+                        let chip_w = ui.pt(NOTIFY_W - SPACE_S);
+                        let chip_x = right - ui.pt(NOTIFY_W) + ui.pt(SPACE_XS);
+                        let chip_y = y + ui.pt((rh - 4.0 - 24.0) / 2.0);
+                        c.fill_rrect(chip_x, chip_y, chip_w, ui.pt(SPACE_XXL), ui.pt(SPACE_XS), if on { LINK } else { SEPARATOR_C.now() });
+                        self.put(&mut c, ui, "Notify", MAC_FOOTNOTE_PT, Weight::Semibold, if on { WHITE } else { LABEL_2.now() }, Align::Centre, chip_x + chip_w / 2.0, chip_y + ui.pt(SPACE_M));
+                        let right = right - ui.pt(NOTIFY_W);
                         let temp = self.forecasts.get(&p.key()).map_or("\u{2013}".to_string(), |f| self.units.degrees(f.current.temp));
                         self.put(&mut c, ui, &temp, MAC_TITLE1_PT, Weight::Regular, LABEL.now(), Align::Right, right - ui.pt(SPACE_S), y + ui.pt(26.0));
                         if self.places.len() > 1 {
@@ -1523,12 +1874,77 @@ impl Weather {
     }
 }
 
-/// Wind speed as the detail tile shows it: km/h with the Celsius setting, mph with Fahrenheit (the imperial set).
-fn wind_text(kmh: f64, units: Units) -> String {
-    match units {
-        Units::Celsius => format!("{} km/h", kmh.round() as i32),
-        Units::Fahrenheit => format!("{} mph", Wind::new(kmh, 0.0, None).speed_mph().round() as i32),
+/// The colour of the precipitation chances and bars: a light blue that reads on every sky.
+fn rain_blue() -> u32 {
+    TEAL
+}
+
+/// The sun's day arc in a detail tile. `origin` is the arc's centre x and the tile's top, in pixels. A horizon, an arc
+/// of dots from sunrise on the left to sunset on the right and, while the sun is up (`progress` is its share of
+/// the day), the sun at its place on the arc.
+fn draw_sun_arc(c: &mut Surface, ui: &Ui, origin: (f32, f32), progress: Option<f32>) {
+    let (cx, top) = origin;
+    let (radius, horizon, dot) = (ui.pt(34.0), top + ui.pt(70.0), ui.pt(SPACE_XXS));
+    c.fill_rrect(cx - radius - ui.pt(SPACE_S), horizon, 2.0 * radius + ui.pt(2.0 * SPACE_S), 1.0, 0.0, fade(LABEL.now(), 110));
+    for step in 0..=24 {
+        let (x, y) = insights::arc_point(step as f32 / 24.0, cx, horizon, radius);
+        c.fill_rrect(x - dot / 2.0, y - dot / 2.0, dot, dot, dot / 2.0, fade(LABEL.now(), 110));
     }
+    if let Some(k) = progress {
+        let (x, y) = insights::arc_point(k, cx, horizon, radius);
+        let sun = ui.pt(10.0);
+        c.fill_rrect(x - sun / 2.0, y - sun / 2.0, sun, sun, sun / 2.0, YELLOW);
+    }
+}
+
+/// The wind dial in a detail tile, centred on `origin.0` and 56 points under the tile's top (`origin.1`): sixteen
+/// ticks around the rim with the four compass points larger, and a pointer from the centre toward the bearing
+/// the wind comes from (`from`, degrees clockwise from north) when the service gave one.
+fn draw_wind_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), from: Option<f64>) {
+    let (cx, top) = origin;
+    let (cy, radius) = (top + ui.pt(56.0), ui.pt(DIAL_EXTENT_PT));
+    for k in 0..16 {
+        let (x, y) = insights::dial_point(k as f64 * 22.5, cx, cy, radius);
+        let (size, alpha) = if k % 4 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(SPACE_XXS), 100) };
+        c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(LABEL.now(), alpha));
+    }
+    if let Some(degrees) = from {
+        let size = ui.pt(SPACE_XXS);
+        for step in 1..=10 {
+            let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
+            c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, LABEL.now());
+        }
+        let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8);
+        let tip = ui.pt(SPACE_S);
+        c.fill_rrect(x - tip / 2.0, y - tip / 2.0, tip, tip, tip / 2.0, ORANGE);
+    }
+    let hub = ui.pt(SPACE_XS);
+    c.fill_rrect(cx - hub / 2.0, cy - hub / 2.0, hub, hub, hub / 2.0, LABEL.now());
+}
+
+/// The pressure trend dial in a detail tile, centred on `origin.0` and 56 points under the tile's top (`origin.1`):
+/// seven ticks over the half circle from falling (left) through steady (straight up) to rising (right), and a
+/// needle at `angle` degrees from straight up when the service gave the change (see `insights::pressure_dial_angle`).
+fn draw_pressure_dial(c: &mut Surface, ui: &Ui, origin: (f32, f32), angle: Option<f64>) {
+    let (cx, top) = origin;
+    let (cy, radius) = (top + ui.pt(56.0), ui.pt(DIAL_EXTENT_PT));
+    for k in 0..7 {
+        let (x, y) = insights::dial_point(-90.0 + k as f64 * 30.0, cx, cy, radius);
+        let (size, alpha) = if k % 3 == 0 { (ui.pt(3.5), 200) } else { (ui.pt(SPACE_XXS), 100) };
+        c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, fade(LABEL.now(), alpha));
+    }
+    if let Some(degrees) = angle {
+        let size = ui.pt(SPACE_XXS);
+        for step in 1..=10 {
+            let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8 * step as f32 / 10.0);
+            c.fill_rrect(x - size / 2.0, y - size / 2.0, size, size, size / 2.0, LABEL.now());
+        }
+        let (x, y) = insights::dial_point(degrees, cx, cy, radius * 0.8);
+        let tip = ui.pt(SPACE_S);
+        c.fill_rrect(x - tip / 2.0, y - tip / 2.0, tip, tip, tip / 2.0, ORANGE);
+    }
+    let hub = ui.pt(SPACE_XS);
+    c.fill_rrect(cx - hub / 2.0, cy - hub / 2.0, hub, hub, hub / 2.0, LABEL.now());
 }
 
 /// The distance from one saved or found place to another, such as "343 km away", in the unit system of the
@@ -1686,6 +2102,274 @@ mod tests {
             Some((Row::Head(text), _, _)) => assert!(text.starts_with("Location: not asked"), "{text}"),
             _ => panic!("the list should end with the location note"),
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An app over `names` as saved places (the first selected), with the window wide enough for the sidebar.
+    fn app_with(tag: &str, names: &[&str]) -> (Weather, Ui, PathBuf) {
+        let dir = temp(tag);
+        let places: Vec<Location> = names.iter().enumerate().map(|(i, n)| place(n, 60.0 + i as f64)).collect();
+        Store::new(dir.clone()).save_locations(&places);
+        let ui = test_ui();
+        let mut app = Weather::new(&ui, 1200, 780, dir.clone(), Arc::new(Offline));
+        app.relayout(&ui);
+        (app, ui, dir)
+    }
+
+    fn names(app: &Weather) -> Vec<&str> {
+        app.places.iter().map(|p| p.name.as_str()).collect()
+    }
+
+    /// A forecast whose minute block has these precipitation values for the steps from 13:15.
+    fn forecast_with_minutes(minutes: &str) -> Forecast {
+        let text = format!(
+            r#"{{"current":{{"time":"2026-10-04T13:20","temperature_2m":7.4,"weather_code":3,"is_day":1}},
+            "hourly":{{"time":["2026-10-04T13:00"],"temperature_2m":[7.0],"weather_code":[3]}},
+            "daily":{{"time":["2026-10-04"],"weather_code":[3],"temperature_2m_max":[8.0],"temperature_2m_min":[2.0]}},
+            "minutely_15":{{"time":["2026-10-04T13:15","2026-10-04T13:30","2026-10-04T13:45","2026-10-04T14:00"],"precipitation":{minutes}}}}}"#
+        );
+        data::parse_forecast(&text).unwrap()
+    }
+
+    #[test]
+    fn dragging_a_sidebar_row_reorders_the_places_and_keeps_the_selection() {
+        let (mut app, ui, dir) = app_with("drag", &["A", "B", "C"]);
+        assert!(app.side > 0.0, "the window is wide enough for the sidebar");
+        let spans = app.side_row_spans();
+        let mid = |i: usize| ui.pt(spans[i].0 + spans[i].1 / 2.0);
+        let x = ui.pt(40.0);
+        app.touch(&ui, Event::Down(x, mid(0)), 0.0);
+        app.touch(&ui, Event::Move(x, mid(1)), 0.1);
+        assert!(app.side_drag.is_some_and(|d| d.active), "a move past the threshold becomes a drag");
+        app.touch(&ui, Event::Up(x, mid(2)), 0.2);
+        assert_eq!(names(&app), ["B", "C", "A"]);
+        assert_eq!(app.selected, 2, "A stays selected where it was dropped");
+        assert_eq!(app.screen, Screen::Main, "a drop is not a tap on the row");
+        let store = Store::new(dir.clone());
+        assert_eq!(store.load_locations().iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["B", "C", "A"], "the order is saved");
+        assert_eq!(store.load_settings().1, 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tap_on_a_sidebar_row_still_selects_it() {
+        let (mut app, ui, dir) = app_with("tap", &["A", "B", "C"]);
+        let spans = app.side_row_spans();
+        let (x, y) = (ui.pt(40.0), ui.pt(spans[1].0 + spans[1].1 / 2.0));
+        app.touch(&ui, Event::Down(x, y), 0.0);
+        app.touch(&ui, Event::Up(x, y), 0.1);
+        assert_eq!((app.selected, names(&app)), (1, vec!["A", "B", "C"]));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_delete_key_removes_the_selected_place_but_never_the_last() {
+        let (mut app, ui, dir) = app_with("delete", &["A", "B"]);
+        app.key(&ui, Out::Named("Delete"), 0.0);
+        assert_eq!(names(&app), ["B"]);
+        assert_eq!(Store::new(dir.clone()).load_locations().len(), 1, "the removal is saved");
+        app.key(&ui, Out::Named("Delete"), 0.1);
+        assert_eq!(names(&app), ["B"], "the last place stays");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_does_not_remove_a_place_while_a_field_is_being_typed_in() {
+        let (mut app, ui, dir) = app_with("delete-field", &["A", "B"]);
+        app.activate(&ui, Target::Places, 0.0, 0.0);
+        app.activate(&ui, Target::Field, 0.0, 0.0);
+        assert!(app.field.focused);
+        app.key(&ui, Out::Named("Delete"), 0.1);
+        assert_eq!(names(&app), ["A", "B"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_context_menu_of_a_sidebar_row_offers_notifications_and_remove() {
+        let (mut app, ui, dir) = app_with("context", &["A", "B"]);
+        let spans = app.side_row_spans();
+        let (x, y) = (ui.pt(40.0), ui.pt(spans[1].0 + spans[1].1 / 2.0));
+        let items = app.context_items(&ui, x, y);
+        assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Turn On Notifications", "Remove"]);
+        assert!(items.iter().all(|i| i.enabled));
+        assert!(app.context_action(&ui, CTX_NOTIFY, 0.0));
+        assert!(app.notify_on.contains(&app.places[1].key()), "the menu switched notifications on for the row it opened on");
+        let again = app.context_items(&ui, x, y);
+        assert_eq!(again[0].label, "Turn Off Notifications");
+        assert!(app.context_action(&ui, CTX_REMOVE, 0.0));
+        assert_eq!(names(&app), ["A"]);
+        assert!(app.notify_on.is_empty(), "a removed place keeps no notification switch");
+        assert!(app.context_items(&ui, x, ui.pt(700.0)).is_empty(), "nothing is under the finger below the rows");
+        assert!(!app.context_action(&ui, CTX_REMOVE, 0.0), "no menu is open");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_last_place_cannot_be_removed_from_its_context_menu() {
+        let (mut app, ui, dir) = app_with("context-last", &["A"]);
+        let spans = app.side_row_spans();
+        let items = app.context_items(&ui, ui.pt(40.0), ui.pt(spans[0].0 + spans[0].1 / 2.0));
+        assert_eq!(items[1].label, "Remove");
+        assert!(!items[1].enabled);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_notifications_switch_is_saved_per_place() {
+        let (mut app, ui, dir) = app_with("notify", &["A", "B"]);
+        let key = app.places[1].key();
+        app.activate(&ui, Target::Notify(1), 0.0, 0.0);
+        assert!(app.notify_on.contains(&key));
+        assert!(notify::load(&dir).contains(&key), "saved");
+        let restarted = Weather::new(&ui, 1200, 780, dir.clone(), Arc::new(Offline));
+        assert!(restarted.notify_on.contains(&key), "and loaded on the next start");
+        app.activate(&ui, Target::Notify(1), 0.0, 0.0);
+        assert!(notify::load(&dir).is_empty());
+        app.activate(&ui, Target::Notify(9), 0.0, 0.0);
+        assert!(app.notify_on.is_empty(), "an index past the list changes nothing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rain_starting_within_the_hour_posts_one_notice_for_a_place_with_notifications_on() {
+        let (mut app, ui, dir) = app_with("rain", &["A", "B"]);
+        let (a, b) = (app.places[0].key(), app.places[1].key());
+        app.activate(&ui, Target::Notify(0), 0.0, 0.0);
+        let soon = forecast_with_minutes("[0.0,0.0,0.4,0.4]");
+        assert_eq!(soon.minutes, vec![0.0, 0.0, 0.4, 0.4]);
+        for key in [&a, &b] {
+            app.done.lock().unwrap().push(Done::Forecast { key: key.clone(), result: Ok(soon.clone()) });
+        }
+        app.pump();
+        let notices = app.take_notices();
+        assert_eq!(notices.len(), 1, "only the place with the switch on: {notices:?}");
+        assert_eq!(notices[0].title, "Rain soon in A");
+        assert_eq!(notices[0].body, "Rain is expected to start in about 30 minutes.");
+        app.done.lock().unwrap().push(Done::Forecast { key: a.clone(), result: Ok(soon) });
+        app.pump();
+        assert!(app.take_notices().is_empty(), "the next refresh does not repeat it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_sidebar_shows_each_places_sky_and_temperature_once_its_forecast_is_known() {
+        let (mut app, _ui, dir) = app_with("rows", &["A", "B"]);
+        let row = |app: &Weather, i: usize| match &app.sidebar().items[i] {
+            SidebarItem::Row { subtitle, trailing, .. } => (subtitle.clone(), trailing.clone()),
+            other => panic!("a row, not {other:?}"),
+        };
+        assert_eq!(row(&app, 0), (Some("Test".to_string()), None), "no forecast yet: the region, no temperature");
+        let key = app.places[0].key();
+        app.forecasts.insert(key, forecast_with_minutes("[0.0,0.0,0.0,0.0]"));
+        assert_eq!(row(&app, 0), (Some("Cloudy".to_string()), Some("7\u{b0}".to_string())));
+        app.units = Units::Fahrenheit;
+        assert_eq!(row(&app, 0).1.as_deref(), Some("45\u{b0}"), "the temperature follows the unit setting");
+        assert_eq!(row(&app, 1).1, None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_weather_link_selects_a_saved_place_or_adds_one_by_position() {
+        let (mut app, ui, dir) = app_with("link", &["Akureyri", "Reykjavik"]);
+        assert!(app.open_link(&ui, "weather://reykjavik", 0.0), "names match without regard to case");
+        assert_eq!(app.selected, 1);
+        assert_eq!(names(&app), ["Akureyri", "Reykjavik"]);
+        assert!(app.open_link(&ui, "weather://?lat=63.4&lon=-20.3&name=Vestmannaeyjar", 0.1));
+        assert_eq!(names(&app), ["Akureyri", "Reykjavik", "Vestmannaeyjar"]);
+        assert_eq!(app.selected, 2);
+        assert_eq!(Store::new(dir.clone()).load_locations().len(), 3, "the new place is saved");
+        assert!(app.open_link(&ui, "weather://?lat=63.4&lon=-20.3&name=Vestmannaeyjar", 0.2));
+        assert_eq!(app.places.len(), 3, "the same position is not added twice");
+        assert!(!app.open_link(&ui, "https://example.com", 0.3), "other links are not ours");
+        assert!(!app.open_link(&ui, "weather://", 0.4));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_weather_link_to_an_unknown_name_is_looked_up_and_the_first_match_shown() {
+        let (mut app, ui, dir) = app_with("link-search", &["Akureyri"]);
+        assert!(app.open_link(&ui, "weather://Oslo", 0.0), "the lookup starts");
+        assert_eq!(names(&app), ["Akureyri"], "nothing is added before the answer");
+        let found = Location { name: "Oslo".into(), region: "Norway".into(), lat: 59.91, lon: 10.75 };
+        app.done.lock().unwrap().push(Done::Linked { name: "Oslo".into(), result: Ok(vec![found, place("Oslo, Texas", 30.0)]) });
+        app.tick(&ui, 1.0);
+        assert_eq!(names(&app), ["Akureyri", "Oslo"]);
+        assert_eq!(app.selected, 1);
+        app.done.lock().unwrap().push(Done::Linked { name: "Nowhere".into(), result: Ok(vec![]) });
+        app.tick(&ui, 2.0);
+        assert_eq!(names(&app), ["Akureyri", "Oslo"], "no match, no change");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_full_list_ignores_a_link_to_a_new_place() {
+        let names_list: Vec<String> = (0..data::MAX_LOCATIONS).map(|i| format!("P{i}")).collect();
+        let refs: Vec<&str> = names_list.iter().map(String::as_str).collect();
+        let (mut app, ui, dir) = app_with("link-full", &refs);
+        assert!(app.open_link(&ui, "weather://?lat=1.5&lon=2.5&name=Extra", 0.0));
+        assert_eq!(app.places.len(), data::MAX_LOCATIONS);
+        assert_eq!(app.selected, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn control_methods_answer_for_the_selected_or_a_named_place() {
+        let (mut app, _ui, dir) = app_with("rpc", &["A", "B"]);
+        let none = Json::Obj(vec![]);
+        let named = |n: &str| Json::Obj(vec![("place".to_string(), Json::Str(n.to_string()))]);
+        let places = app.rpc("weather.places", &none).unwrap();
+        assert_eq!(places, Json::Arr(vec![Json::Str("A".into()), Json::Str("B".into())]));
+        assert_eq!(app.rpc("weather.current", &none).unwrap_err().code, INTERNAL_ERROR, "no forecast loaded yet");
+        assert_eq!(app.rpc("weather.nope", &none).unwrap_err().code, METHOD_NOT_FOUND);
+        let key = app.places[1].key();
+        app.forecasts.insert(key, forecast_with_minutes("[0.0,0.0,0.0,0.0]"));
+        let current = app.rpc("weather.current", &named("b")).unwrap();
+        assert_eq!(current.str_field("place").as_deref(), Some("B"));
+        assert_eq!(current.str_field("condition").as_deref(), Some("Cloudy"));
+        assert_eq!(app.rpc("weather.current", &none).unwrap_err().code, INTERNAL_ERROR, "the selected place A has none");
+        assert_eq!(app.rpc("weather.forecast", &named("Z")).unwrap_err().code, INVALID_PARAMS);
+        app.selected = 1;
+        let forecast = app.rpc("weather.forecast", &none).unwrap();
+        assert_eq!(forecast.get("days").and_then(Json::as_array).map(|d| d.len()), Some(1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_share_button_needs_a_forecast_and_sends_its_text_once() {
+        let (mut app, ui, dir) = app_with("share", &["A"]);
+        assert!(!app.shareable());
+        app.activate(&ui, Target::Share, 0.0, 0.0);
+        assert!(!app.take_share(), "nothing to share yet");
+        assert_eq!(app.share_text(), None);
+        let key = app.place().key();
+        app.forecasts.insert(key, forecast_with_minutes("[0.0,0.0,0.0,0.0]"));
+        assert!(app.shareable());
+        app.activate(&ui, Target::Share, 0.0, 0.0);
+        assert!(app.take_share());
+        assert!(!app.take_share(), "the request is taken once");
+        assert_eq!(app.share_text().as_deref(), Some("A: 7\u{b0} Cloudy, H:8\u{b0} L:2\u{b0}\nWeather data from Open-Meteo"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_toolbar_has_a_share_button_on_the_forecast_page_only() {
+        let (mut app, ui, dir) = app_with("share-bar", &["A"]);
+        let labels = |app: &Weather| app.bar().items.iter().map(|i| i.label.clone()).collect::<Vec<_>>();
+        assert!(labels(&app).contains(&"Share".to_string()));
+        app.activate(&ui, Target::Places, 0.0, 0.0);
+        assert!(!labels(&app).contains(&"Share".to_string()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_locations_page_has_a_notifications_hit_zone_between_the_temperature_and_remove() {
+        let (mut app, ui, dir) = app_with("zone", &["A", "B"]);
+        app.activate(&ui, Target::Places, 0.0, 0.0);
+        let y = ui.pt(places_list_top_pt() + ROW / 2.0);
+        let left = app.notify_left(&ui);
+        assert_eq!(app.hit(&ui, left + ui.pt(10.0), y), Some(Target::Notify(0)));
+        assert_eq!(app.hit(&ui, left - ui.pt(10.0), y), Some(Target::Place(0)));
+        assert_eq!(app.hit(&ui, app.w as f32 - ui.pt(MARGIN + 10.0), y), Some(Target::Remove(0)));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

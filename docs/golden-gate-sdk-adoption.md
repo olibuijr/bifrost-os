@@ -1,6 +1,8 @@
 # Golden Gate (macOS 27) UI SDK adoption
 
-> Status 2026-10-13: batches 1 and the rounds after it moved apps onto the kit. `bifrost pc adoption` now reports
+> Status 2026-10-14: Preview now uses the shared Golden Gate toolbar and publishes its visible buttons as controls;
+> its page-thumbnail gallery remains custom because rows have document-specific heights. The blank-launch compliance
+> fixture does not require Preview's document-contextual sidebar. Batches 1 and the rounds after it moved apps onto the kit. `bifrost pc adoption` now reports
 > 28 of 44 apps with no fixed dark colours, and 41 of 44 use `window = "full-size"` (not `keyboard`, `maps-desktop`,
 > `photobooth-desktop`). The tables below are the 2026-10-10 history; the live count comes from the command.
 > The reference captures (`goldengate_refimages/`) are not in the repository.

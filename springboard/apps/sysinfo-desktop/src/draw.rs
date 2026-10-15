@@ -2,10 +2,10 @@
 //! resolved with `now()`, so Light and Dark follow the appearance. Text is cached per string in `TextCache`.
 
 use crate::model::Row;
-use crate::window::{SysInfo, B_CANCEL, B_REFRESH, B_SEARCH, KEY_PT, LINE_PT, PAD_PT, SECTION_BASE, SIDE_PT};
+use crate::window::{list_rows, Column, SysInfo, B_CANCEL, B_REFRESH, B_SEARCH, B_SORT_DETAILS, B_SORT_NAME, KEY_PT, LINE_PT, LIST_HEAD_PT, PAD_PT, SECTION_BASE, SIDE_PT};
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_TITLE1_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -65,7 +65,7 @@ fn paint_detail(w: &mut SysInfo, s: &mut Surface, ui: &Ui) {
     let cw = w.content_w();
     let y0 = UNIFIED_BAR_PT + PAD_PT;
     let title = w.selected.title();
-    text_mid(&mut w.labels, s, ui, title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
+    text_mid(&mut w.labels, s, ui, title, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
     let subtitle = w.subtitle();
     text_mid(&mut w.labels, s, ui, &subtitle, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
 
@@ -74,11 +74,33 @@ fn paint_detail(w: &mut SysInfo, s: &mut Surface, ui: &Ui) {
     if let Some(list) = panes.list {
         let lines: Vec<Row> = view.content.summary_rows();
         let picked: Vec<bool> = (0..lines.len()).map(|i| i == view.item).collect();
-        paint_rows(&mut w.labels, s, ui, list, &lines, w.list_scroll, &picked);
+        paint_list_head(w, s, ui, list);
+        paint_rows(&mut w.labels, s, ui, list_rows(list), &lines, w.list_scroll, &picked);
     }
     let rows = view.detail();
     let picked: Vec<bool> = (0..rows.len()).map(|i| w.is_selected(i)).collect();
     paint_rows(&mut w.labels, s, ui, panes.detail, rows, w.scroll, &picked);
+}
+
+/// The column header of an item list: "Name" over the key column and "Details" over the value column, in secondary
+/// grey, the sorted column in the label colour with a rule under it in the link colour.
+fn paint_list_head(w: &mut SysInfo, s: &mut Surface, ui: &Ui, list: Rect) {
+    fill(s, ui, list, CARD_R, CARD_BG.now());
+    let mid = list.y + LIST_HEAD_PT / 2.0;
+    let sorted = w.sort.map(|(column, _)| column);
+    let columns: [(Column, &str, f32, f32); 2] = [(Column::Name, "Name", list.x + 16.0, KEY_PT - 16.0), (Column::Details, "Details", list.x + KEY_PT + 8.0, list.w - KEY_PT - 40.0)];
+    for (column, label, x, width) in columns {
+        let color = if sorted == Some(column) { LABEL.now() } else { LABEL_2.now() };
+        text_mid(&mut w.labels, s, ui, label, MAC_CALLOUT_PT, Weight::Semibold, color, x, mid, width);
+    }
+    if let Some(column) = sorted {
+        let (x, width) = match column {
+            Column::Name => (list.x + 16.0, KEY_PT - 32.0),
+            Column::Details => (list.x + KEY_PT + 8.0, list.w - KEY_PT - 40.0),
+        };
+        fill(s, ui, Rect { x, y: list.y + LIST_HEAD_PT - 3.0, w: width.max(0.0), h: 2.0 }, 1.0, LINK);
+    }
+    rule(s, ui, list.x + 16.0, list.y + LIST_HEAD_PT - 1.0, list.w - 32.0, 0.0);
 }
 
 /// One card of key and value rows in `pane`, scrolled by `scroll`; `picked` rows sit on the selection plate.
@@ -140,6 +162,25 @@ pub fn controls(w: &SysInfo, ui: &Ui) -> Vec<Node> {
             nodes.push(Node { id: id as u64, role: Role::Button, label: "Refresh".into(), value: String::new(), bounds: r, enabled: true });
         } else if id == B_SEARCH {
             nodes.push(Node { id: id as u64, role: Role::TextField, label: "Search".into(), value: w.query().to_string(), bounds: r, enabled: true });
+        }
+    }
+    let view = w.view();
+    if let Some(head) = w.panes(&view).list {
+        let sorted = w.sort;
+        let state = |column: Column| match sorted {
+            Some((c, descending)) if c == column => {
+                if descending {
+                    "sorted descending"
+                } else {
+                    "sorted ascending"
+                }
+            }
+            _ => "",
+        };
+        let columns = [(B_SORT_NAME, "Name", Column::Name, head.x, KEY_PT), (B_SORT_DETAILS, "Details", Column::Details, head.x + KEY_PT, head.w - KEY_PT)];
+        for (id, label, column, x, width) in columns {
+            let bounds = Rect { x, y: head.y, w: width.max(0.0), h: LIST_HEAD_PT };
+            nodes.push(Node { id: id as u64, role: Role::Button, label: label.into(), value: state(column).into(), bounds, enabled: w.can_sort() });
         }
     }
     let list = w.sidebar();

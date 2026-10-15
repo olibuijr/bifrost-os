@@ -10,9 +10,9 @@
     {
       "feature": "Audio processing taps",
       "apple": "MTAudioProcessingTapCreate, MTAudioProcessingTapCreateWithPreferredFormat, MTAudioProcessingTapGetSourceAudio, MTAudioProcessingTapGetStorage, MTAudioProcessingTapFlags",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. No API lets an app inspect or process audio from a playing mix. The ALSA mixer in audio/alsa/src/ctl.rs sets volume controls and is not a tap."
+      "bifrost": "springboard/sdk/src/audio_process.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (audio_process.rs); not wired into the shell or apps, not tested on Midget. The pure model had no caller and was removed. No API lets an app inspect or process audio from a playing mix. The ALSA mixer in audio/alsa/src/ctl.rs sets volume controls and is not a tap."
     },
     {
       "feature": "Professional video format reader registration",
@@ -24,16 +24,16 @@
     {
       "feature": "Video decoder seam",
       "apple": "No public Media Toolbox counterpart (decoding is internal to the framework)",
-      "bifrost": "springboard/src/media/mod.rs (VideoDecoder trait, default_decoder), springboard/src/media/hwdec/mod.rs, hwdec/ffmpeg.rs, hwdec/vaapi.rs",
-      "status": "os",
-      "note": "Hardware decode through libavcodec and VA-API with a software fallback. Used by the player and the wowstream video code, not exposed as an SDK API."
+      "bifrost": "springboard/ui/src/video_decoder_plan.rs (choose, DecodePath::fallback, VideoCodec::from_sample_entry); springboard/src/media/mod.rs (VideoDecoder trait, default_decoder), springboard/src/media/hwdec/mod.rs, hwdec/ffmpeg.rs, hwdec/vaapi.rs",
+      "status": "partial",
+      "note": "The decode-path rule (hardware when allowed and supported, one software fallback) and the sample entry codec names are tested headless in ui/tests/parity_sdk-rest-12.rs. Gap: the shell's decoder still makes its own choice in hwdec, the GPU probe in vaapi.rs needs the lab machine, and apps get no decoder API."
     },
     {
       "feature": "Playback engine",
       "apple": "No direct Media Toolbox counterpart (playback goes through AVFoundation and Core Media)",
-      "bifrost": "springboard/src/media/player.rs (Player::open_with, open_parts), springboard/src/media/audioplayer.rs, springboard/sdk/src/widgets.rs (Player view, line 842)",
-      "status": "os",
-      "note": "The shell plays audio and video. The SDK Player is a drawing control, not a playback engine, so apps cannot drive a player through an SDK call."
+      "bifrost": "springboard/ui/src/av_player.rs (player item, rate, seek, time observers); springboard/ui/src/av_queue_player.rs; springboard/sdk/src/audio_player_control.rs (pan, rate, timed fade); springboard/src/media/player.rs (Player::open_with, open_parts), springboard/src/media/audioplayer.rs, springboard/sdk/src/widgets.rs (Player view, line 842)",
+      "status": "partial",
+      "note": "The playback model (items, rate, seeking, observers, queue) is tested headless in ui/tests/av_playback.rs, driven by a caller clock and silent until play. Gap: the shell's decoder and audio output do not run it, so an app cannot start sound through the SDK and the Player view stays a drawing control."
     },
     {
       "feature": "Localized media type and subtype names",

@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "springboard/audiod/src/main.rs (single audio service), springboard/src/media/route.rs (Speaker/Headphones output route), springboard/apps/music-desktop/src/music.rs (route glyph only)",
-  "summary": "AVRouting lets an app add third-party media receivers to the system route picker (AirPlay-style) through custom routing controllers, routing events and action items, and arbitrates playback between participants. BifrOSt has no route picker, no third-party receiver discovery and no playback arbitration API; the only routing is a local speaker/headphone switch in the audio layer.",
+ "summary": "AVRouting lets an app add third-party media receivers to the system route picker (AirPlay-style) through custom routing controllers, routing events and action items, and arbitrates playback between participants. BifrOSt has pure models for route rows, authorization, events, arbitration and a receiver-discovery feed, but no running network browse service or shell receiver picker; the audio layer also switches local speaker/headphone output.",
   "rea_evidence": "ev_14110f8179b556b56f5de61c07bede4c7dfac89ff255facccf244207b2b7d697",
   "features": [
     {
@@ -24,9 +24,9 @@
     {
       "feature": "Route addresses on the local network",
       "apple": "AVCustomRoutingController.knownRouteIPs, AVCustomRoutingPartialIP",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no receiver address registry in the SDK; network state is in netd only"
+      "bifrost": "springboard/ui/src/route_address.rs (RouteAddress, KnownRoutes)",
+      "status": "partial",
+      "note": "Full and partial (network) receiver addresses are parsed, compared and matched in a registry, tested headless in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no shell or netd feed fills the registry and no app-facing setter exists yet."
     },
     {
       "feature": "Custom action items in the picker",
@@ -45,9 +45,9 @@
     {
       "feature": "Device discovery extension",
       "apple": "Media Device Discovery Extension entitlement (per the AVRouting landing page)",
-      "bifrost": "springboard/src/shell/extras.rs (extension host shell, not a discovery extension point)",
-      "status": "gap",
-      "note": "no extension point that lets an app report a receiver to the shell; springboard/src/shell/extras.rs was not read in depth"
+      "bifrost": "springboard/sdk/src/route_discovery.rs (discovery_point, ReceiverFeed); springboard/ui/src/network_audio_browser.rs",
+      "status": "partial",
+      "note": "The SDK models a namespaced discovery point, validated receiver reports, TTL expiry and authorized route-picker rows, with headless tests. It sends no network browse packets, runs no extension process and is not wired to a system picker or shell browse service; not yet verified on Midget."
     },
     {
       "feature": "Playback arbitration between participants",
@@ -59,9 +59,9 @@
     {
       "feature": "Output route switching (local)",
       "apple": "not part of AVRouting (AVAudioSession / AVRouteDetector in other frameworks)",
-      "bifrost": "springboard/src/media/route.rs (Router: Speaker and Headphones with per-route volume)",
-      "status": "os",
-      "note": "a system-layer capability for the built-in card only; no SDK API and no Bluetooth or network output in the same model"
+      "bifrost": "springboard/ui/src/os_services/output_route.rs (Router, Route, RouteChange, HEADPHONE_CAP); springboard/src/media/route.rs (Router: Speaker and Headphones with per-route volume)",
+      "status": "partial",
+      "note": "Jack-driven route changes, the headphone volume cap and per-route volumes are tested headless. Gap: only the built-in card is modelled, with no Bluetooth or network output, and the mixer is not driven from this model."
     }
   ],
   "gaps": [

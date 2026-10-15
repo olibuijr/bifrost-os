@@ -40,28 +40,28 @@
       "apple": "VZVirtualMachineView",
       "bifrost": "springboard/core/src/guest_display.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tools/arch-vm-iso.sh opens QEMU in a Hyprland window; the desktop has no embeddable guest view"
+      "note": "GuestView (core/src/guest_display.rs) places a guest picture in a view, maps view points to guest pixels and routes keys with click and release-key capture; these are tested headless in core/tests/parity_sdk-complete-05.rs. Still missing: it is not wired into apps or the shell, and no guest has been shown on the VM or Midget; tools/arch-vm-iso.sh opens QEMU in a Hyprland window, and the desktop has no embeddable guest view."
     },
     {
       "feature": "Graphics device for guests",
       "apple": "Graphics (virtio GPU configuration)",
-      "bifrost": "tools/arch-vm.sh uses virtio-gpu for the guest shell",
+      "bifrost": "springboard/core/src/guest_vm.rs (GraphicsDevice, Scanout, Device::Graphics, GuestConfig::validate, GuestConfig::graphics, GraphicsDevice::framebuffer_bytes); tools/arch-vm.sh uses virtio-gpu for the guest shell",
       "status": "partial",
-      "note": "Only the dev harness configures a virtio-gpu; no app-facing device configuration"
+      "note": "GuestConfig can describe a graphics device with one to four scanouts of one to 8192 pixels per side (BifrOSt limits), and validate refuses a device with no scanout, too many, a bad size or a second device. Tests: a_graphics_device_with_one_display_is_valid, a_graphics_device_may_drive_up_to_the_scanout_limit, a_display_side_must_be_between_one_and_the_pixel_limit (springboard/core/tests/parity_sdk-tests-10.rs). The framebuffer bytes of each scanout and the device lookup are tested headless in springboard/core/tests/parity_sdk-complete-06.rs. Nothing starts a guest from this model yet (that needs the hypervisor on the lab machine), and only the dev harness configures a virtio-gpu; not yet tested on Midget"
     },
     {
       "feature": "Network devices",
       "apple": "Network (VZNATNetworkDeviceAttachment and similar)",
-      "bifrost": "tools/arch-vm.sh uses user-mode networking with a virtio-net device and an ssh hostfwd",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Network, NetworkDevice, NetworkAttachment, GuestConfig::validate); tools/arch-vm.sh uses user-mode networking with a virtio-net device and an ssh hostfwd",
       "status": "partial",
-      "note": "Dev harness only; netd (Wi-Fi, DHCP) has no VM attachment API"
+      "note": "The guest model describes NAT and host-only interfaces and checks addresses and the interface limit, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: netd (Wi-Fi, DHCP) has no VM attachment API and no launcher attaches these interfaces."
     },
     {
       "feature": "Storage devices",
       "apple": "Storage (block-storage devices, disk images)",
-      "bifrost": "tools/arch-vm.sh creates a raw ext4 image and passes it to QEMU; tools/arch-vm-iso.sh adds a blank target disk",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Storage, StorageAttachment); springboard/core/src/disk_image.rs (create_raw); tools/arch-vm.sh creates a raw ext4 image and passes it to QEMU; tools/arch-vm-iso.sh adds a blank target disk",
       "status": "partial",
-      "note": "Dev harness creates raw disk images; no SDK API for guest disk images"
+      "note": "Raw disk images are created and attached with caching, sync and read-only modes, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: no ext4 formatting, and no launcher attaches the images to a running guest."
     },
     {
       "feature": "Shared directories",
@@ -80,23 +80,23 @@
     {
       "feature": "Keyboard and pointing devices",
       "apple": "Keyboards and pointing devices (USB and virtio input)",
-      "bifrost": "tools/vm-click.py sends QMP input events; tools/arch-vm.sh key/tap/swipe",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Input, InputKind); tools/vm-click.py sends QMP input events; tools/arch-vm.sh key/tap/swipe",
       "status": "partial",
-      "note": "Dev automation only; the input path is not a reusable SDK feature"
+      "note": "The guest model allows one keyboard and one pointing device, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: the QMP input path is dev automation only and no app can send input to a guest."
     },
     {
       "feature": "Audio devices",
       "apple": "Audio (virtio sound, host audio)",
-      "bifrost": "springboard/core/src/guest_audio.rs",
+      "bifrost": "springboard/core/src/guest_audio.rs (StreamConfig, GuestStream, Request); springboard/core/tests/parity_sdk-complete-07.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No guest audio; springboard/audiod has no VM route"
+      "note": "A guest PCM stream takes its parameters, then prepare, start, stop and release requests in order, and refuses out-of-order ones; tested headless in parity_sdk-complete-07. Gap: no guest audio route exists, springboard/audiod has no VM route, and the host side needs the lab machine."
     },
     {
       "feature": "Memory balloon",
       "apple": "Memory (VZMemoryBalloonDevice)",
-      "bifrost": "tools/arch-vm.sh virtio-balloon-pci with free-page-reporting",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::MemoryBalloon, MemoryBalloon); tools/arch-vm.sh virtio-balloon-pci with free-page-reporting",
       "status": "partial",
-      "note": "Dev harness only; no runtime resize API"
+      "note": "The guest model has at most one balloon with a free page reporting flag, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: no runtime resize API and no balloon target is applied to a running guest."
     },
     {
       "feature": "Randomization",
@@ -108,9 +108,9 @@
     {
       "feature": "Serial ports and consoles",
       "apple": "Serial ports, Consoles",
-      "bifrost": "tools/arch-vm.sh -serial file:... and the SERIAL log path",
+      "bifrost": "springboard/core/src/guest_vm.rs (Device::Serial, SerialPort, SerialAttachment); tools/arch-vm.sh -serial file:... and the SERIAL log path",
       "status": "partial",
-      "note": "Serial output goes to a log file for debugging; no host-side console API"
+      "note": "The guest model describes serial ports that discard output or append it to an absolute file, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: there is no host-side console API and the harness writes its log through QEMU."
     },
     {
       "feature": "Sockets",
@@ -124,7 +124,7 @@
       "apple": "USB Devices (VZXHCIController)",
       "bifrost": "springboard/core/src/guest_usb.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. usbhost access is not exposed to VMs"
+      "note": "The passthrough policy (ordered rules with default deny, hub refusal, the attach limit, detach and reattach, host keys for identical devices) is tested headless in core/tests/parity_sdk-complete-08.rs. Gap: usbhost access is not exposed to VMs, and host bus enumeration and hot-plug need the lab machine."
     },
     {
       "feature": "Rosetta for Linux",

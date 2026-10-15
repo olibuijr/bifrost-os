@@ -182,7 +182,7 @@ pub fn save(path: &Path, values: &Extras) -> io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
-fn escape(text: &str) -> String {
+pub(crate) fn escape(text: &str) -> String {
     let mut out = String::new();
     for c in text.chars() {
         match c {
@@ -196,7 +196,7 @@ fn escape(text: &str) -> String {
     out
 }
 
-fn unescape(text: &str) -> String {
+pub(crate) fn unescape(text: &str) -> String {
     let mut out = String::new();
     let mut chars = text.chars();
     while let Some(c) = chars.next() {

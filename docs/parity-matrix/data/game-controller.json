@@ -10,30 +10,30 @@
     {
       "feature": "Controller discovery and hot-plug",
       "apple": "GCController, GCDevice, GCController.controllers(), controllerDidConnectNotification",
-      "bifrost": "springboard/core/src/gamepad.rs, springboard/ui/src/gamepad.rs; wired: springboard/src/shell/services/gamepad_service.rs (views, snapshot); springboard/src/shell/game_controllers_page.rs (list page)",
+      "bifrost": "springboard/core/src/gamepad.rs (Capabilities::is_game_controller, Registry::connected, Registry::disconnected); wired: springboard/src/shell/services/gamepad_service.rs (views, snapshot); springboard/src/shell/game_controllers_page.rs (list page); springboard/core/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The kernel-level hot-plug watch exists, but it only serves the recovery chord. No controller list or connect event reaches apps. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-tests-18 cover the controller test, id assignment, connect and disconnect events and rumble detection. The shell's gamepad service keeps a Registry and the controllers page lists the pads. Gap: apps receive no connect or disconnect event, and the hot-plug path is not yet verified on Midget."
     },
     {
       "feature": "Input events (polling and callbacks)",
       "apple": "GCController input profiles, valueChangedHandler, GCDevicePhysicalInput",
-      "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput); wired: springboard/src/shell/services/gamepad_service.rs (tick, remap_change)",
+      "bifrost": "springboard/ui/src/gamepad.rs (ControllerInput); springboard/sdk/src/gamepad_input.rs (describe, button_name, axis_name); wired: springboard/src/shell/services/gamepad_service.rs (tick, remap_change)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decoding handles pointer, touch and keyboard only. No gamepad axes, buttons, triggers or hats are mapped, and no SDK type exposes input state. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The model maps 13 buttons, two sticks with clicks, two triggers and the direction pad, with dead zones, change callbacks, a polling queue and a plain-text description per change; the SDK exposes it as bifrost_app::gamepad_input (headless tests in sdk/tests/parity_sdk-complete-34.rs). Needs hardware: no real controller has been read on Midget, and the shell's event decoder still treats the stick axes as a pointer until the event loop feeds this model (see ui/src/gamepad.rs)."
     },
     {
       "feature": "Button, axis, switch and direction-pad elements",
       "apple": "GCButtonElement, GCAxisElement, GCSwitchElement, GCDirectionPadElement, GCPhysicalInputElementCollection",
-      "bifrost": "springboard/core/src/gamepad.rs, springboard/ui/src/gamepad.rs; wired: springboard/apps/games-desktop/src/games.rs (gamepad_slide, gamepad_new_game) fed by springboard/apps/games-desktop/src/system.rs; wired: springboard/src/shell/game_controllers_page.rs (Remap, controller_spec, live_rows)",
+      "bifrost": "springboard/ui/src/gamepad.rs (element, Gamepad::feed, ControllerInput); wired: springboard/apps/games-desktop/src/games.rs (gamepad_slide, gamepad_new_game) fed by springboard/apps/games-desktop/src/system.rs; wired: springboard/src/shell/game_controllers_page.rs (Remap, controller_spec, live_rows); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No element abstraction exists. Standard gamepad element names (BTN_SOUTH, ABS_HAT0X and similar) are not used anywhere in the repo. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-tests-18 cover the Linux gamepad codes mapped to buttons, sticks, triggers and the direction pad, button edges, dead zones and the queued change stream. Gap: switch elements are not modelled, and apps receive mapped actions rather than raw elements. The shell's controllers page uses the model; verify on Midget for parity."
     },
     {
       "feature": "Keyboard and mouse as game input",
       "apple": "GCKeyboard, GCMouse",
-      "bifrost": "springboard/src/shell/hwkeys.rs (hardware-keyboard shortcuts); springboard/src/shell/evkeys.rs (evdev key to character); springboard/src/bare/input.rs (pointer decoding)",
-      "status": "os",
-      "note": "The shell reads keyboards and mice itself for its own shortcuts. Apps get no GCKeyboard or GCMouse style profile in the SDK."
+      "bifrost": "springboard/ui/src/game_input.rs (KeyboardProfile, MouseProfile); springboard/src/shell/hwkeys.rs (hardware-keyboard shortcuts, read separately by the shell)",
+      "status": "partial",
+      "note": "KeyboardProfile and MouseProfile turn evdev key and relative records into edges, a held set, per-frame motion and wheel steps, with release on focus loss; headless tests in ui/tests/parity_sdk-rest-09.rs. Gap: the shell's event loop does not feed these models and the SDK has no app-facing profile yet; checking a real keyboard and mouse needs the lab machine."
     },
     {
       "feature": "Haptics and rumble",
@@ -45,9 +45,9 @@
     {
       "feature": "Battery and light on controllers",
       "apple": "GCDeviceBattery, GCDeviceLight",
-      "bifrost": "springboard/ui/src/controller_power.rs (Battery; wired: springboard/src/shell/services/gamepad_service.rs (read_battery); game_controllers_page.rs (battery_text)",
+      "bifrost": "springboard/ui/src/controller_power.rs (Battery, Color, Light); wired: springboard/src/shell/services/gamepad_service.rs (read_battery); springboard/src/shell/game_controllers_page.rs (battery_text); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-16, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No controller battery or light query. springboard/src/bare/bluetooth.rs is the Bluetooth adapter and would be the transport for a wireless pad, but it does not read pad profiles. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-tests-18 cover battery levels and states, colour clamping and the light's stored colour. The shell reads each pad's battery and shows it on the controllers page. Gap: no light is written to a pad, and no light query exists."
     },
     {
       "feature": "Motion sensing (gyro and accelerometer)",
@@ -73,9 +73,9 @@
     {
       "feature": "Gamepad input in web content",
       "apple": "Not part of Game Controller (web Gamepad API)",
-      "bifrost": "springboard/apps/browser/engine/Cargo.toml (Servo built with the gamepad feature)",
+      "bifrost": "springboard/ui/src/web_gamepad.rs (snapshot, standard_button); springboard/apps/browser/engine/Cargo.toml (Servo gamepad feature flag)",
       "status": "partial",
-      "note": "The browser engine is compiled with Servo's gamepad feature. Whether that feature receives evdev controller events is not verified in this pass, so this row is not confirmed for web pages."
+      "note": "snapshot lays a controller's state out in the web standard mapping (17 buttons, 4 axes) with slot and name checks, tested in ui/tests/parity_sdk-rest-09.rs. Gap: no code passes the snapshot to the browser engine, so page scripts still see no gamepads; confirm on Midget with a controller once the engine is wired."
     }
   ],
   "gaps": [

@@ -8,8 +8,11 @@
 //! editor's own cells and carries all of it.
 
 use crate::links;
+use crate::properties::Properties;
 use crate::rtf::{nearest_color, nearest_spacing};
-use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_TAB, FAMILIES, MAX_SIZE, MAX_TAB, MIN_SIZE, MIN_TAB, SPACINGS};
+use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_TAB, FAMILIES, MAX_PARAGRAPH_SPACE, MAX_SIZE, MAX_TAB, MIN_SIZE, MIN_TAB, SPACINGS};
+
+const BOLD_WEIGHT_THRESHOLD: u32 = 400 + 200;
 
 /// Whether `bytes` look like an HTML file.
 pub fn is_html(bytes: &[u8]) -> bool {
@@ -39,9 +42,25 @@ fn align_css(a: Align) -> &'static str {
 }
 
 /// Writes the cells as an HTML document. `tab` is the distance between tab stops in points.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
+    write_with(cells, tab, &Properties::default())
+}
+
+/// Writes the cells as an HTML document, with the document's properties in the head: the title element, and meta
+/// elements for the author, description (the subject), keywords and copyright.
+pub fn write_with(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> {
     let mut out = String::from("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\">");
-    out += &format!("<meta name=\"tab-stop\" content=\"{tab}\"><title></title>");
+    out += &format!("<meta name=\"tab-stop\" content=\"{tab}\"><title>");
+    props.title.chars().for_each(|ch| escape(ch, &mut out));
+    out += "</title>";
+    for (name, value) in [("author", &props.author), ("description", &props.subject), ("keywords", &props.keywords), ("copyright", &props.copyright)] {
+        if !value.is_empty() {
+            out += &format!("<meta name=\"{name}\" content=\"");
+            value.chars().for_each(|ch| escape(ch, &mut out));
+            out += "\">";
+        }
+    }
     out += "<style>p{margin:0;min-height:1em;white-space:pre-wrap}ul,ol{margin:0}</style></head><body>\n";
     let mut open_list: Option<ListKind> = None;
     let mut start = 0;
@@ -68,6 +87,12 @@ pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
         let mut css = format!("text-align:{};white-space:pre-wrap", align_css(style.align));
         if style.spacing > 0 {
             css += &format!(";line-height:{}", SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0));
+        }
+        if style.space_before > 0 {
+            css += &format!(";margin-top:{}pt", style.space_before);
+        }
+        if style.space_after > 0 {
+            css += &format!(";margin-bottom:{}pt", style.space_after);
         }
         out += &format!("<{tag} style=\"{css}\">");
         let mut i = 0;
@@ -203,6 +228,37 @@ pub fn read(bytes: &[u8]) -> (Vec<Cell>, f32) {
     (r.cells, r.tab.clamp(MIN_TAB, MAX_TAB))
 }
 
+/// The document properties in an HTML head: the title element and the meta elements the writer uses (author,
+/// description as the subject, keywords and copyright). Other pages' meta elements that match those names count too.
+pub fn read_properties(bytes: &[u8]) -> Properties {
+    let text = String::from_utf8_lossy(bytes);
+    let lower = text.to_ascii_lowercase();
+    let mut props = Properties::default();
+    if let Some(start) = lower.find("<title") {
+        if let Some(open_end) = lower[start..].find('>').map(|i| start + i + 1) {
+            if let Some(close) = lower[open_end..].find("</title").map(|i| open_end + i) {
+                props.title = crate::properties::clean(&decode(&text[open_end..close]));
+            }
+        }
+    }
+    let mut from = 0;
+    while let Some(i) = lower[from..].find("<meta") {
+        let at = from + i;
+        let end = lower[at..].find('>').map_or(lower.len(), |e| at + e);
+        let tag = &text[at + "<meta".len()..end];
+        from = end.max(at + 1);
+        let (Some(name), Some(content)) = (attribute(tag, "name"), attribute(tag, "content")) else { continue };
+        match name.to_ascii_lowercase().as_str() {
+            "author" => props.set_named("author", &content),
+            "description" => props.set_named("subject", &content),
+            "keywords" => props.set_named("keywords", &content),
+            "copyright" => props.set_named("copyright", &content),
+            _ => {}
+        }
+    }
+    props
+}
+
 impl Reader {
     fn run(&mut self, text: &str) {
         let mut rest = text;
@@ -286,6 +342,8 @@ impl Reader {
             c.style.align = para.align;
             c.style.spacing = para.spacing;
             c.style.list = para.list;
+            c.style.space_before = para.space_before;
+            c.style.space_after = para.space_after;
         }
         self.para_start = self.cells.len();
         self.space = true;
@@ -305,8 +363,11 @@ impl Reader {
         let (mut pre, mut list) = (self.pre, false);
         let style_attr = attribute(attrs, "style").unwrap_or_default().to_ascii_lowercase();
         match name {
+            // a break inside a paragraph is a line break; a page break is the form the writer uses for one
             "br" => {
-                self.end_paragraph();
+                let page = style_attr.contains("page-break");
+                self.push(if page { crate::text::PAGE_BREAK } else { crate::text::LINE_BREAK });
+                self.space = false;
                 return;
             }
             "a" => {
@@ -357,6 +418,16 @@ impl Reader {
                             }
                         }
                         "white-space" if v.starts_with("pre") => pre = true,
+                        "margin-top" => {
+                            if let Some(points) = space_of(&v) {
+                                self.para.space_before = points;
+                            }
+                        }
+                        "margin-bottom" => {
+                            if let Some(points) = space_of(&v) {
+                                self.para.space_after = points;
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -383,7 +454,7 @@ impl Reader {
                     }
                     "font-family" => self.cur.font = family_of(&v),
                     "color" => self.cur.color = color_of(&v),
-                    "font-weight" => self.cur.bold = v == "bold" || v.parse::<u32>().is_ok_and(|w| w >= 600),
+                    "font-weight" => self.cur.bold = v == "bold" || v.parse::<u32>().is_ok_and(|w| w >= BOLD_WEIGHT_THRESHOLD),
                     "font-style" => self.cur.italic = v == "italic" || v == "oblique",
                     "text-decoration" | "text-decoration-line" => self.cur.underline = v.contains("underline"),
                     _ => {}
@@ -491,6 +562,20 @@ fn size_of(v: &str) -> Option<f32> {
         return None;
     };
     Some(pt.clamp(MIN_SIZE, MAX_SIZE))
+}
+
+/// A paragraph's space from a margin value: points, or pixels at 0.75 point each. Negative and unreadable values are
+/// no space.
+fn space_of(v: &str) -> Option<u8> {
+    let v = v.trim();
+    let points = if let Some(n) = v.strip_suffix("pt") {
+        n.trim().parse::<f32>().ok()?
+    } else if let Some(n) = v.strip_suffix("px") {
+        n.trim().parse::<f32>().ok()? * 0.75
+    } else {
+        return None;
+    };
+    Some(points.round().clamp(0.0, MAX_PARAGRAPH_SPACE as f32) as u8)
 }
 
 /// The palette colour for `#rgb`, `#rrggbb` or `rgb(r, g, b)`; the default colour for black, white and anything else.
@@ -606,6 +691,21 @@ mod tests {
     }
 
     #[test]
+    fn line_and_page_breaks_are_breaks_inside_a_paragraph() {
+        let cells = vec![
+            cell('a', Style::default()),
+            cell(crate::text::LINE_BREAK, Style::default()),
+            cell('b', Style::default()),
+            cell(crate::text::PAGE_BREAK, Style::default()),
+            cell('c', Style::default()),
+            cell('\n', Style::default()),
+        ];
+        let html = String::from_utf8(write(&cells, 36.0)).unwrap();
+        assert!(html.contains("<br>") && html.contains("page-break-after"), "{html}");
+        assert_eq!(read(html.as_bytes()).0, cells, "a break is not a new paragraph");
+    }
+
+    #[test]
     fn a_trailing_break_and_an_empty_document_survive() {
         let cells = vec![cell('a', Style::default()), cell('\n', Style::default())];
         assert_eq!(read(&write(&cells, 36.0)).0, cells);
@@ -615,7 +715,7 @@ mod tests {
     #[test]
     fn reads_common_markup_from_other_writers() {
         let (cells, _) = read(b"<html><head><title>t</title><style>p{}</style></head><body><h1>Title</h1><p>one <b>two</b>&nbsp;&amp; <i>three</i><br>four</p><ul><li>a</li><li>b</li></ul></body></html>");
-        assert_eq!(text_of(&cells), "Title\none two\u{a0}& three\nfour\na\nb");
+        assert_eq!(text_of(&cells), "Title\none two\u{a0}& three\u{2028}four\na\nb");
         assert!(cells[0].style.bold && cells[0].style.size == 24.0);
         let a = cells.iter().rposition(|c| c.ch == 'a').unwrap();
         assert_eq!(cells[a].style.list, ListKind::Bullet);
@@ -644,6 +744,26 @@ mod tests {
         let first = cells.iter().find(|c| c.style.link != 0).unwrap();
         assert_eq!(links::url(first.style.link).as_deref(), Some("https://example.org/x"));
         assert!(cells.iter().filter(|c| c.style.bold).all(|c| c.style.link != 0), "the bold text inside the anchor keeps the link");
+    }
+
+    #[test]
+    fn the_document_properties_are_head_elements_and_read_back() {
+        let props = Properties { title: "Plan & <notes>".into(), author: "Ada".into(), subject: "Q3".into(), keywords: "a, b".into(), copyright: "2026".into() };
+        let html = write_with(&[cell('x', Style::default())], 36.0, &props);
+        assert!(String::from_utf8_lossy(&html).contains("<title>Plan &amp; &lt;notes&gt;</title>"));
+        assert_eq!(read_properties(&html), props);
+        assert!(read_properties(b"<p>no head</p>").is_empty());
+    }
+
+    #[test]
+    fn paragraph_space_round_trips_as_margins() {
+        let spaced = Style { space_before: 10, space_after: 4, ..Style::default() };
+        let cells = vec![cell('a', spaced), cell('\n', spaced), cell('b', Style::default())];
+        let html = String::from_utf8(write(&cells, 36.0)).unwrap();
+        assert!(html.contains("margin-top:10pt") && html.contains("margin-bottom:4pt"), "{html}");
+        assert_eq!(read(html.as_bytes()).0, cells);
+        let (px, _) = read(b"<p style=\"margin-top:20px\">x</p>");
+        assert_eq!(px[0].style.space_before, 15, "a pixel is three quarters of a point");
     }
 
     #[test]

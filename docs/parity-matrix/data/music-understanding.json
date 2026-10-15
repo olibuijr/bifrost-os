@@ -38,9 +38,9 @@
     {
       "feature": "Loudness (integrated, momentary, short-term, peak)",
       "apple": "LoudnessResult, loudnessResults async sequence, AnalysisType.loudness",
-      "bifrost": "springboard/apps/daw/src/lab.rs (integrated_lufs at line 81, measure at line 110, true peak, band energy); used by springboard/apps/daw/src/bin/daw-render.rs and daw-ai.rs",
+      "bifrost": "springboard/apps/daw/src/lab.rs (integrated_lufs, max_momentary_lufs, max_short_term_lufs, measure: true peak, band energy)",
       "status": "partial",
-      "note": "integrated LUFS and true peak exist as ITU-R BS.1770 code for the DAW lab only; no momentary or short-term values, no streaming results, no SDK API"
+      "note": "Integrated LUFS with both gates, maximum momentary and maximum short-term LUFS, and true peak are ITU-R BS.1770 code for the DAW lab, tested in springboard/apps/daw/tests/parity_sdk-tests-08.rs. Gap: no live momentary or short-term meter, no streaming results, and no SDK API."
     },
     {
       "feature": "Pace",
@@ -59,9 +59,9 @@
     {
       "feature": "Instrument activity",
       "apple": "InstrumentActivityResult, AnalysisType.instrumentActivity",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no source separation or per-instrument level detection"
+      "bifrost": "springboard/sdk/src/music_understanding.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (music_understanding.rs); not wired into the shell or apps, not tested on Midget. no source separation or per-instrument level detection"
     },
     {
       "feature": "Result and support types (TimedValue, RangedValue, errors)",

@@ -14,6 +14,7 @@ pub mod touch_frames;
 pub mod intents;
 pub mod media_intents;
 pub mod kinds;
+pub mod app_usage;
 mod apps;
 mod appgrid;
 pub mod overview;
@@ -1054,14 +1055,37 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// Whether any desktop animations, window effects or floating overlays require frames.
+    pub fn desk_animating(&self, t: f64) -> bool {
+        bifrost_render::appearance::fading()
+            || self.anim.is_some()
+            || self.turning()
+            || self.cc_active()
+            || self.cc.animating()
+            || self.center_active()
+            || self.notify.animating()
+            || self.quicksearch.active()
+            || self.desktop_menu.is_some()
+            || self.assistive_visible()
+            || self.quick_look.is_visible()
+            || self.overview_active()
+            || self.keyboard.shown()
+            || self.keyboard.animating()
+            || self.fx_animating(t)
+            || self.desk.as_ref().is_some_and(|d| d.dock_vis_anim.is_some() || !d.dock_bounce.is_empty())
+            || self.desk.as_ref().is_some_and(|d| d.dock_slide.borrow().active(t / 1000.0))
+    }
+
     pub fn needs_frame(&self) -> bool {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
-        self.screen_on && (self.dirty || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files)
+        let desk_anim = self.desk_active() && self.desk_animating(0.0);
+        self.screen_on && (self.dirty || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
     }
 
     /// Why `needs_frame` holds, for the frame trace: the first condition that does ("-" when none).
     pub fn frame_reason(&self) -> String {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
+        let desk_anim = self.desk_active() && self.desk_animating(0.0);
         let reasons = [
             (!self.screen_on, "screen-off"),
             (self.dirty, "dirty"),
@@ -1077,6 +1101,7 @@ impl Shell {
             (self.today.animating(), "today"),
             (self.home_animating(), "home"),
             (files, "files"),
+            (desk_anim, "desk-anim"),
         ];
         let screen = format!("{:?}", self.screen).to_lowercase();
         let why: Vec<&str> = reasons.iter().filter(|r| r.0).map(|r| r.1).collect();
@@ -3088,10 +3113,15 @@ impl Shell {
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
         self.audio.arm();
-        self.dirty = false;
+        let was_dirty = std::mem::replace(&mut self.dirty, false);
         let mut damage = std::mem::take(&mut self.damage);
         let mut rows = std::mem::take(&mut self.rows);
         damage.clear();
+        if self.desk_active() && self.desk_drawn && !was_dirty && !self.desk_animating(t) {
+            self.damage = damage;
+            self.rows = rows;
+            return &self.damage;
+        }
         if self.saver_draw(s, t) {
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3814,6 +3844,7 @@ impl Shell {
         self.perf_only = false;
         self.desk_regions = None;
         self.drawn = Drawn::Nothing;
+        self.desk_drawn = false;
         self.dirty = true;
     }
 
@@ -4130,6 +4161,7 @@ impl Shell {
             Ok(mut term) => {
                 term.appearance(self.terminal_ui.settings.theme, size);
                 term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
+                term.set_mouse_reporting(self.terminal_ui.mouse_reporting);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
                 self.term.push(term);
                 self.term_touch = termtouch::TermTouch::default();

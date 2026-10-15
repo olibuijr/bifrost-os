@@ -142,6 +142,38 @@ pub fn waveform_card(name: &str, px: u32) -> Option<ThumbArt> {
     c.into_pixels().map(ThumbArt::Pixels)
 }
 
+/// Headless model tests: the tiers of a request are pure values, with no drawing and no file read.
+#[cfg(test)]
+mod headless_tier_tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_request_asks_for_every_tier_cheapest_first() {
+        assert_eq!(tiers(&[], 128), [(RepresentationType::Icon, 128), (RepresentationType::LowQualityThumbnail, 32), (RepresentationType::Thumbnail, 128)]);
+    }
+
+    #[test]
+    fn the_low_quality_tier_is_a_quarter_of_the_edge_and_never_below_its_minimum() {
+        assert_eq!(tiers(&[RepresentationType::LowQualityThumbnail], 40), [(RepresentationType::LowQualityThumbnail, LOW_QUALITY_MIN_PX)]);
+        assert_eq!(tiers(&[RepresentationType::LowQualityThumbnail], 256), [(RepresentationType::LowQualityThumbnail, 64)]);
+    }
+
+    #[test]
+    fn a_request_gets_each_asked_tier_once_in_the_fixed_order() {
+        let asked = [RepresentationType::Thumbnail, RepresentationType::Icon, RepresentationType::Thumbnail];
+        assert_eq!(tiers(&asked, 64), [(RepresentationType::Icon, 64), (RepresentationType::Thumbnail, 64)]);
+    }
+
+    #[test]
+    fn representation_names_round_trip_and_order_from_cheapest() {
+        for t in [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail] {
+            assert_eq!(RepresentationType::parse(t.as_str()), Some(t));
+        }
+        assert_eq!(RepresentationType::parse("poster"), None);
+        assert!(RepresentationType::Icon < RepresentationType::Thumbnail);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

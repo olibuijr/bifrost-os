@@ -59,9 +59,9 @@
     {
       "feature": "Schedulers",
       "apple": "Scheduler, ImmediateScheduler, RunLoop, DispatchQueue schedulers",
-      "bifrost": "springboard/sdk/src/dispatch.rs",
-      "status": "os",
-      "note": "GCD queues exist, but no receive(on:)/subscribe(on:) integration; Observable is Rc and single-threaded"
+      "bifrost": "springboard/sdk/src/schedulers.rs (Scheduler, ImmediateScheduler, DispatchQueue impl)",
+      "status": "partial",
+      "note": "A Scheduler trait with schedule and schedule_after, an immediate scheduler and every dispatch queue as a scheduler; tested headless in sdk/tests/parity_sdk-rest-08.rs. Gap: no receive(on:) or subscribe(on:) operators, because Observable is Rc and single-threaded; the run loop is the main queue, not a separate type."
     },
     {
       "feature": "Foundation publishers",

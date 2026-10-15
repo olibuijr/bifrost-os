@@ -11,6 +11,7 @@ pub mod layout;
 pub mod narrate;
 pub mod quote;
 pub mod search_index;
+pub mod share;
 pub mod store;
 
 mod draw;
@@ -50,6 +51,10 @@ mod connect_tests;
 mod narrate_tests;
 #[cfg(test)]
 mod library_tests;
+#[cfg(test)]
+mod parity_app_books_tests;
+#[cfg(test)]
+mod share_tests;
 
 
 /// The unified toolbar band of the full-size window (Golden Gate: no title row).
@@ -1519,7 +1524,11 @@ impl Books {
         let sort = self.store.library.sort;
         // the shelf is already in the order of last opening; the other orders sort the books shown
         if sort != SortBy::Recent {
-            shown.sort_by_cached_key(|&i| store::sort_key(sort, &self.shelf[i].title, &self.shelf[i].author));
+            shown.sort_by_cached_key(|&i| {
+                let cover = &self.shelf[i];
+                let progress = self.store.entry(&cover.path).map_or(0, |e| e.progress);
+                store::sort_key(sort, &cover.title, &cover.author, progress)
+            });
         }
         shown
     }

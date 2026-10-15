@@ -378,7 +378,7 @@ impl Caps {
 
 impl Roles {
     /// Power and lid devices stay shared with logind (it owns suspend and shutdown).
-    fn grabbable(&self) -> bool {
+    pub fn grabbable(&self) -> bool {
         !self.power && !self.lid
     }
 }

@@ -8,7 +8,7 @@ use bifrost_core::json::Json;
 use bifrost_maps::geocode::{Geocoder, DEFAULT_BASE};
 use bifrost_maps::net::{Live, Net, Offline};
 use bifrost_maps::source::user_agent;
-use bifrost_maps::state::Act;
+use bifrost_maps::state::{Act, MENU_COLLECTIONS};
 use bifrost_maps::units::UnitsSetting;
 use bifrost_maps::window::Window;
 use bifrost_maps::rpc;
@@ -42,6 +42,38 @@ fn item(w: &Window, act: Act, title: &str, key: &str) -> AppMenuItem {
     it
 }
 
+/// The Go menu: finding places and routes, the saved places, and the collections. The collection slots are named after
+/// the collections the person has made; a slot with no collection behind it is greyed out.
+fn go_items(w: &Window) -> Vec<AppMenuItem> {
+    let sub = |it: AppMenuItem| AppMenuItem { depth: 1, ..it };
+    let mut items = vec![
+        item(w, Act::Search, "Search", "cmd+f"),
+        item(w, Act::Directions, "Directions", "cmd+r"),
+        item(w, Act::StartNavigation, "Start Navigation", ""),
+        item(w, Act::EndNavigation, "End Navigation", ""),
+        AppMenuItem::separator(),
+        item(w, Act::Locate, "Current Location", "cmd+l"),
+        item(w, Act::DropPin, "Drop Pin", "cmd+shift+p"),
+        item(w, Act::RemovePin, "Remove Pin", "cmd+delete"),
+        AppMenuItem::separator(),
+        item(w, Act::GoHome, "Go to Home", "cmd+shift+h"),
+        item(w, Act::GoWork, "Go to Work", ""),
+        item(w, Act::SetHome, "Set Home", ""),
+        item(w, Act::SetWork, "Set Work", ""),
+        AppMenuItem::separator(),
+        item(w, Act::ToggleFavorite, "Favorite", "cmd+d"),
+        item(w, Act::NewCollection, "New Collection", "cmd+shift+n"),
+        AppMenuItem::submenu("Add Place to Collection"),
+    ];
+    for i in 0..MENU_COLLECTIONS {
+        let title = w.maps.library.collections.get(i).map_or_else(|| format!("Collection {}", i + 1), |c| c.name.clone());
+        items.push(sub(item(w, Act::AddToCollection(i), &title, "")));
+    }
+    items.push(AppMenuItem::separator());
+    items.push(item(w, Act::ClearRecents, "Clear Recents", ""));
+    items
+}
+
 impl MapsApp {
     fn sync_keyboard(&mut self, ctx: &Ctx) {
         let on = self.w.as_ref().is_some_and(|w| w.keyboard_shown());
@@ -73,8 +105,8 @@ impl App for MapsApp {
         let Some(w) = &mut self.w else { return false };
         let now = bifrost_app::proto::sys::now_ms();
         let handled = match ev {
-            Input::Touch { kind, x, y, t, .. } => {
-                w.touch(ctx, &ctx.ui, kind, x, y, t);
+            Input::Touch { kind, id, x, y, t } => {
+                w.finger(ctx, &ctx.ui, id, kind, x, y, t);
                 true
             }
             Input::Key(k) => w.key(ctx, k, now),
@@ -83,6 +115,7 @@ impl App for MapsApp {
             Input::Context { x, y } => w.context(&ctx.ui, x, y),
             Input::Open(url) => w.open_link(ctx, &url, now),
             Input::ContextAction(_) => false,
+            Input::QuickAction(_) => false,
         };
         self.sync_keyboard(ctx);
         handled
@@ -111,9 +144,10 @@ impl App for MapsApp {
                 items: vec![
                     item(w, Act::OpenGpx, "Open GPX File\u{2026}", "cmd+o"),
                     AppMenuItem::separator(),
-                    item(w, Act::CopyLink, "Copy Link", "cmd+shift+c"),
-                    item(w, Act::CopyCoordinates, "Copy Coordinates", "cmd+alt+c"),
-                    item(w, Act::Share, "Share\u{2026}", ""),
+                    AppMenuItem::submenu("Share"),
+                    sub(item(w, Act::CopyLink, "Copy Link", "cmd+shift+c")),
+                    sub(item(w, Act::CopyCoordinates, "Copy Coordinates", "cmd+alt+c")),
+                    sub(item(w, Act::Share, "Share\u{2026}", "")),
                     AppMenuItem::separator(),
                     item(w, Act::Print, "Print\u{2026}", "cmd+p"),
                 ],
@@ -123,6 +157,7 @@ impl App for MapsApp {
                 items: vec![
                     item(w, Act::MapType(bifrost_maps::source::MapType::Standard), "Map", "cmd+1"),
                     item(w, Act::MapType(bifrost_maps::source::MapType::Satellite), "Satellite", "cmd+2"),
+                    item(w, Act::MapType(bifrost_maps::source::MapType::Hybrid), "Hybrid", "cmd+3"),
                     item(w, Act::ToggleTraffic, "Show Traffic", "cmd+t"),
                     AppMenuItem::separator(),
                     item(w, Act::ZoomIn, "Zoom In", "cmd++"),
@@ -137,28 +172,7 @@ impl App for MapsApp {
                     item(w, Act::Download, "Download Map\u{2026}", "cmd+shift+d"),
                 ],
             },
-            AppMenu {
-                title: "Go".into(),
-                items: vec![
-                    item(w, Act::Search, "Search", "cmd+f"),
-                    item(w, Act::Directions, "Directions", "cmd+r"),
-                    item(w, Act::StartNavigation, "Start Navigation", ""),
-                    item(w, Act::EndNavigation, "End Navigation", ""),
-                    AppMenuItem::separator(),
-                    item(w, Act::Locate, "Current Location", "cmd+l"),
-                    item(w, Act::DropPin, "Drop Pin", "cmd+shift+p"),
-                    item(w, Act::RemovePin, "Remove Pin", "cmd+delete"),
-                    AppMenuItem::separator(),
-                    item(w, Act::GoHome, "Go to Home", "cmd+shift+h"),
-                    item(w, Act::GoWork, "Go to Work", ""),
-                    item(w, Act::SetHome, "Set Home", ""),
-                    item(w, Act::SetWork, "Set Work", ""),
-                    AppMenuItem::separator(),
-                    item(w, Act::ToggleFavorite, "Favorite", "cmd+d"),
-                    item(w, Act::NewCollection, "New Collection", "cmd+shift+n"),
-                    item(w, Act::ClearRecents, "Clear Recents", ""),
-                ],
-            },
+            AppMenu { title: "Go".into(), items: go_items(w) },
         ]
     }
 

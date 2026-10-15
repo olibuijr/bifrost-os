@@ -4,8 +4,9 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::Arc;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 
 /// The shell every script runs in.
 pub const SHELL: &str = "/bin/sh";
@@ -53,7 +54,12 @@ impl Run {
         let pid = Arc::new(AtomicU32::new(0));
         let worker_pid = Arc::clone(&pid);
         let script = script.to_string();
-        std::thread::spawn(move || work(&script, &cwd, &worker_pid, &tx));
+        DispatchQueue::global(Qos::Utility).async_(move || {
+            let report = work(&script, &cwd, &worker_pid);
+            DispatchQueue::main().async_(move || {
+                let _ = tx.send(report);
+            });
+        });
         Run { rx, pid }
     }
 
@@ -79,7 +85,7 @@ impl Run {
     }
 }
 
-fn work(script: &str, cwd: &PathBuf, pid: &AtomicU32, tx: &Sender<Report>) {
+fn work(script: &str, cwd: &PathBuf, pid: &AtomicU32) -> Report {
     let spawned = Command::new(SHELL)
         .arg("-c")
         .arg(script)
@@ -107,8 +113,7 @@ fn work(script: &str, cwd: &PathBuf, pid: &AtomicU32, tx: &Sender<Report>) {
         }
         Err(e) => Report::failed(format!("Could not start {SHELL}: {e}")),
     };
-    // the window may have closed while the script ran; nothing to tell then
-    let _ = tx.send(report);
+    report
 }
 
 fn clip(bytes: &[u8]) -> String {

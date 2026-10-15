@@ -12,7 +12,7 @@
       "apple": "IOUSBHostDevice, IOUSBHostObject",
       "bifrost": "springboard/sdk/src/usb_device.rs (plan_claim, ClaimPlan), springboard/core/src/usb_claim.rs, springboard/core/src/usb_descriptors.rs",
       "status": "partial",
-      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. An app can plan a claim (configuration and alternate-setting requests in order, and the pipes the interface opens). Nothing sends the requests; the sandbox binds no /dev/bus/usb."
+      "note": "An app can plan a claim (configuration and alternate-setting requests in order, and the pipes the interface opens), and the setup packets and descriptors are encoded and parsed in the inline tests of usb_claim.rs and usb_descriptors.rs. Gap: nothing sends the requests and the sandbox binds no /dev/bus/usb, which needs hardware and a Midget check."
     },
     {
       "feature": "Interface, pipe and stream I/O (control, bulk, interrupt, isochronous)",
@@ -31,37 +31,37 @@
     {
       "feature": "Matching and IOServicePlane device and interface properties",
       "apple": "IOUSBHostMatchingPropertyKey, IOUSBHostDevicePropertyKey, IOUSBHostInterfacePropertyKey, IOUSBHostPropertyKey",
-      "bifrost": "springboard/src/bare/input.rs (device discovery by capability, kept current on hotplug)",
-      "status": "os",
-      "note": "The system layer tracks hotplug for input devices. No app SDK exposes USB properties or matching."
+      "bifrost": "springboard/ui/src/os_services/usb.rs (Matching, Device, DeviceClass, parse_id, parse_code); springboard/sdk/src/os_services.rs; springboard/src/bare/input.rs (device discovery by capability, kept current on hotplug)",
+      "status": "partial",
+      "note": "Matching by vendor, product, class, interface subclass and protocol, and sysfs identifier parsing, are tested headless in tests/parity_sdk-os-06.rs. Gap: the device monitor does not hand live descriptors to apps, so callers must supply the Device values."
     },
     {
       "feature": "Keyboards, mice and pointing devices",
       "apple": "IOUSBHost (HID devices via USB)",
-      "bifrost": "springboard/src/bare/input.rs",
-      "status": "os",
-      "note": "Input works in the shell. Apps get events through the window system, not USB descriptors."
+      "bifrost": "springboard/ui/src/os_services/usb.rs (Device::is_keyboard, Device::is_pointer); springboard/src/bare/input.rs",
+      "status": "partial",
+      "note": "Keyboard and pointer interfaces are recognised from the HID protocol codes and tested headless. Gap: input events still reach apps only through the window system, and no live device list is exposed."
     },
     {
       "feature": "Video cameras (UVC)",
       "apple": "IOUSBHost (camera devices via USB)",
-      "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/mod.rs",
-      "status": "os",
-      "note": "Cameras are reached through kernel V4L2 by the shell camera code, not through a USB API."
+      "bifrost": "springboard/ui/src/os_services/usb.rs (Device::is_camera); springboard/src/media/v4l2.rs, springboard/src/shell/camera/mod.rs",
+      "status": "partial",
+      "note": "Video streaming interfaces are recognised from the UVC class codes and tested headless. Gap: cameras are still reached through kernel V4L2 in the shell, and apps get no frames from this model."
     },
     {
       "feature": "Audio devices (USB audio class)",
       "apple": "IOUSBHost (audio devices via USB)",
-      "bifrost": "springboard/audiod",
-      "status": "os",
-      "note": "Audio service handles playback and capture. Apps do not open USB audio endpoints directly."
+      "bifrost": "springboard/ui/src/os_services/usb.rs (Device::is_audio); springboard/audiod",
+      "status": "partial",
+      "note": "Audio streaming interfaces are recognised from the USB audio class codes and tested headless. Gap: audiod does not take a USB endpoint from this model, and apps cannot select one."
     },
     {
       "feature": "Scanners and printers over USB",
       "apple": "IOUSBHost (scanner and printer devices)",
-      "bifrost": "springboard/core/src/usb_printer.rs, springboard/sdk/src/usb_printer.rs",
+      "bifrost": "springboard/core/src/usb_printer.rs (can_print, DeviceId::display_name), springboard/sdk/src/usb_printer.rs; springboard/core/tests/parity_sdk-complete-45.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-iousbhost, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The print API does not expose a USB transport. No scanner API exists."
+      "note": "Wave 5 (w5-iousbhost, parity/integration 93f283b0): pure model with host unit tests, now including can_print (a printer interface needs a bulk-out endpoint) and the printer name for a list, tested headless in parity_sdk-complete-45.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. The print API does not expose a USB transport. No scanner API exists: most USB scanners use vendor-specific protocols, so scanner support needs per-model drivers and a device."
     },
     {
       "feature": "Host controller interface and state machines (hubs, controller, port, endpoint)",

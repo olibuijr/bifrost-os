@@ -6,10 +6,12 @@
 use flate2::read::GzDecoder;
 use springboard::files::{archive as shared, zip};
 use std::cell::Cell;
-use std::fs::File;
+use std::ffi::CString;
+use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The archive formats the app knows by name. `TarXz` is recognised so it can be refused with a clear message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,6 +77,87 @@ pub fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
         dir.join(file)
     };
     (1..).map(make).find(|p| p.symlink_metadata().is_err()).expect("an unused name exists")
+}
+
+static STAGE_ID: AtomicU64 = AtomicU64::new(0);
+
+/// A hidden sibling directory for in-progress output. Keeping it beside the destination allows the final rename
+/// to be atomic and means a crash can leave only a clearly marked staging directory, never a partial result under
+/// its normal name.
+struct StageDir(PathBuf);
+
+impl StageDir {
+    fn new(parent: &Path) -> io::Result<Self> {
+        loop {
+            let id = STAGE_ID.fetch_add(1, Ordering::Relaxed);
+            let path = parent.join(format!(".archive-{}-{id}.partial", std::process::id()));
+            match fs::create_dir(&path) {
+                Ok(()) => return Ok(Self(path)),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+    }
+}
+
+impl Drop for StageDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Renames only when the destination does not exist. Output names are user data; even a collision with an empty
+/// directory must not replace it. The app is packaged for Linux, where renameat2 provides this atomically.
+#[cfg(target_os = "linux")]
+fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::raw::{c_char, c_int, c_uint};
+
+    extern "C" {
+        fn renameat2(oldfd: c_int, oldpath: *const c_char, newfd: c_int, newpath: *const c_char, flags: c_uint) -> c_int;
+    }
+
+    let from = CString::new(from.as_os_str().as_bytes()).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid staging path"))?;
+    let to = CString::new(to.as_os_str().as_bytes()).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid output path"))?;
+    // Linux AT_FDCWD and RENAME_NOREPLACE. The output parent is the same for both paths.
+    let result = unsafe { renameat2(-100, from.as_ptr(), -100, to.as_ptr(), 1) };
+    if result == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+    // Archive is currently distributed only for Linux; retain a conservative fallback for host-side compilation.
+    if to.symlink_metadata().is_ok() {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Output already exists"));
+    }
+    fs::rename(from, to)
+}
+
+fn publish_dir(stage: &Path, parent: &Path, stem: &str) -> io::Result<PathBuf> {
+    for n in 1usize.. {
+        let name = if n == 1 { stem.to_string() } else { format!("{stem} {n}") };
+        let out = parent.join(name);
+        match rename_noreplace(stage, &out) {
+            Ok(()) => return Ok(out),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("an unused output name exists")
+}
+
+fn publish_file(stage: &Path, parent: &Path, file_name: &str) -> io::Result<PathBuf> {
+    let (stem, ext) = file_name.strip_suffix(".zip").map_or((file_name, ""), |s| (s, ".zip"));
+    for n in 1usize.. {
+        let name = if n == 1 { format!("{stem}{ext}") } else { format!("{stem} {n}{ext}") };
+        let out = parent.join(name);
+        match rename_noreplace(stage, &out) {
+            Ok(()) => return Ok(out),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("an unused output name exists")
 }
 
 // ------------------------------------------------------------------ tar
@@ -313,16 +396,11 @@ fn expand_tar(path: &Path, kind: Kind, progress: &mut dyn FnMut(u64, u64) -> boo
     };
     let parent = path.parent().unwrap_or(Path::new("."));
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let out = unique_path(parent, &stem_of(&name), "");
-    std::fs::create_dir(&out)?;
+    let stage = StageDir::new(parent)?;
     let mut tick = || progress(raw.get(), total);
-    match unpack_tar(&mut *reader, &out, &mut tick) {
-        Ok((files, skipped)) => Ok(Outcome { path: out, files, skipped: skipped.len() }),
-        Err(e) => {
-            let _ = std::fs::remove_dir_all(&out);
-            Err(e)
-        }
-    }
+    let (files, skipped) = unpack_tar(&mut *reader, &stage.0, &mut tick)?;
+    let out = publish_dir(&stage.0, parent, &stem_of(&name))?;
+    Ok(Outcome { path: out, files, skipped: skipped.len() })
 }
 
 /// Runs one job. Expand unpacks the archive at `path`; Compress zips the folder at `path` into its parent folder.
@@ -330,7 +408,10 @@ pub fn run(op: Op, path: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> i
     match op {
         Op::Compress => {
             let parent = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-            let made = zip::create(&[path.to_path_buf()], &parent, progress)?;
+            let stage = StageDir::new(&parent)?;
+            let staged = zip::create(&[path.to_path_buf()], &stage.0, progress)?;
+            let file_name = zip::archive_name(&[path.to_path_buf()]);
+            let made = publish_file(&staged, &parent, &file_name)?;
             Ok(Outcome { path: made, files: 0, skipped: 0 })
         }
         Op::Expand => {
@@ -338,15 +419,21 @@ pub fn run(op: Op, path: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> i
             match kind_of(&name) {
                 Some(Kind::Zip) => {
                     let parent = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-                    let done = zip::extract(path, &parent, progress)?;
-                    Ok(Outcome { path: done.dir, files: done.files, skipped: done.skipped.len() })
+                    let stage = StageDir::new(&parent)?;
+                    let done = zip::extract(path, &stage.0, progress)?;
+                    let name = done.dir.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| stem_of(&name));
+                    let out = publish_dir(&done.dir, &parent, &name)?;
+                    Ok(Outcome { path: out, files: done.files, skipped: done.skipped.len() })
                 }
                 Some(k @ (Kind::Tar | Kind::TarGz)) => expand_tar(path, k, progress),
                 // xz, bzip2, zstd and single compressed files go through the shared archive module (system tools)
                 Some(Kind::TarXz) | None if shared::is_archive(&name) => {
                     let parent = path.parent().unwrap_or(Path::new("."));
-                    let done = shared::extract(path, parent, progress)?;
-                    Ok(Outcome { path: done.dir, files: done.files, skipped: done.skipped.len() })
+                    let stage = StageDir::new(parent)?;
+                    let done = shared::extract(path, &stage.0, progress)?;
+                    let stem = done.dir.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| stem_of(&name));
+                    let out = publish_dir(&done.dir, parent, &stem)?;
+                    Ok(Outcome { path: out, files: done.files, skipped: done.skipped.len() })
                 }
                 _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "Not an archive")),
             }
@@ -503,6 +590,46 @@ mod tests {
         let dir = scratch("cancel");
         let r = unpack_tar(&mut Cursor::new(sample_tar()), &dir, &mut || false);
         assert_eq!(r.unwrap_err().kind(), io::ErrorKind::Interrupted);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cancelled_expand_keeps_existing_output_and_cleans_its_stage() {
+        let dir = scratch("atomic-cancel");
+        let archive = dir.join("photos.tar");
+        std::fs::write(&archive, sample_tar()).unwrap();
+        let existing = dir.join("photos");
+        std::fs::create_dir(&existing).unwrap();
+        std::fs::write(existing.join("keep.txt"), b"original").unwrap();
+
+        let result = run(Op::Expand, &archive, &mut |_, _| false);
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Interrupted);
+        assert_eq!(std::fs::read(existing.join("keep.txt")).unwrap(), b"original");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2, "failed jobs leave neither output nor staging debris");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn publication_never_replaces_existing_files_or_directories() {
+        let dir = scratch("no-replace");
+        let existing_dir = dir.join("Output");
+        std::fs::create_dir(&existing_dir).unwrap();
+        std::fs::write(existing_dir.join("keep.txt"), b"original").unwrap();
+        let stage_dir = dir.join("stage-dir");
+        std::fs::create_dir(&stage_dir).unwrap();
+        std::fs::write(stage_dir.join("new.txt"), b"complete").unwrap();
+        let published_dir = publish_dir(&stage_dir, &dir, "Output").unwrap();
+        assert_eq!(published_dir, dir.join("Output 2"));
+        assert_eq!(std::fs::read(existing_dir.join("keep.txt")).unwrap(), b"original");
+
+        let existing_file = dir.join("Archive.zip");
+        std::fs::write(&existing_file, b"original").unwrap();
+        let staged_file = dir.join("staged.zip");
+        std::fs::write(&staged_file, b"complete").unwrap();
+        let published_file = publish_file(&staged_file, &dir, "Archive.zip").unwrap();
+        assert_eq!(published_file, dir.join("Archive 2.zip"));
+        assert_eq!(std::fs::read(existing_file).unwrap(), b"original");
+        assert_eq!(std::fs::read(published_file).unwrap(), b"complete");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

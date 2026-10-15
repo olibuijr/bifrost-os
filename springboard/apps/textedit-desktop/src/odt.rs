@@ -7,10 +7,12 @@
 use crate::links;
 use crate::properties::{self, Properties};
 use crate::rtf;
-use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, FAMILY_NAMES, SPACINGS};
+use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, FAMILY_NAMES, MAX_PARAGRAPH_SPACE, SPACINGS};
 use crate::xml::{self, Token};
 use crate::zipdoc;
 use std::collections::HashMap;
+
+const BOLD_WEIGHT_THRESHOLD: u32 = 400 + 200;
 
 /// The document's file type.
 pub const TYPE: &str = "org.oasis-open.opendocument.text";
@@ -38,6 +40,10 @@ struct Props {
     font: Option<u8>,
     align: Option<Align>,
     spacing: Option<u8>,
+    /// paragraph space before and after, in points, and the right to left writing mode
+    space_before: Option<u8>,
+    space_after: Option<u8>,
+    rtl: Option<bool>,
     /// the link of an anchor, set by `text:a` and carried like a span's properties
     link: Option<u16>,
 }
@@ -61,6 +67,9 @@ impl Props {
         pick(&mut self.font, &over.font);
         pick(&mut self.align, &over.align);
         pick(&mut self.spacing, &over.spacing);
+        pick(&mut self.space_before, &over.space_before);
+        pick(&mut self.space_after, &over.space_after);
+        pick(&mut self.rtl, &over.rtl);
         pick(&mut self.link, &over.link);
     }
 
@@ -148,7 +157,7 @@ fn on(value: &str) -> bool {
 fn text_properties(attrs: &[(String, String)], props: &mut Props) {
     for (key, value) in attrs {
         match key.as_str() {
-            "fo:font-weight" => props.bold = Some(value == "bold" || value.parse::<u32>().is_ok_and(|w| w >= 600)),
+            "fo:font-weight" => props.bold = Some(value == "bold" || value.parse::<u32>().is_ok_and(|w| w >= BOLD_WEIGHT_THRESHOLD)),
             "fo:font-style" => props.italic = Some(value == "italic" || value == "oblique"),
             "style:text-underline-style" => props.underline = Some(on(value)),
             "style:text-line-through-style" => props.strike = Some(on(value)),
@@ -195,6 +204,9 @@ fn paragraph_properties(attrs: &[(String, String)], props: &mut Props) {
                     props.spacing = Some(rtf::nearest_spacing(percent / 100.0));
                 }
             }
+            "fo:margin-top" => props.space_before = points(value).map(|p| p.round().min(MAX_PARAGRAPH_SPACE as f32) as u8),
+            "fo:margin-bottom" => props.space_after = points(value).map(|p| p.round().min(MAX_PARAGRAPH_SPACE as f32) as u8),
+            "style:writing-mode" => props.rtl = Some(value == "rl-tb"),
             _ => {}
         }
     }
@@ -343,6 +355,9 @@ fn parse(content: &str, defs: &HashMap<String, StyleDef>, lists: &HashMap<String
                         para_style = Style {
                             align: props.align.unwrap_or(Align::Left),
                             spacing: props.spacing.unwrap_or(0),
+                            space_before: props.space_before.unwrap_or(0),
+                            space_after: props.space_after.unwrap_or(0),
+                            rtl: props.rtl.unwrap_or(false),
                             list: list_stack.last().copied().unwrap_or(ListKind::None),
                             ..Style::default()
                         };
@@ -384,7 +399,7 @@ fn parse(content: &str, defs: &HashMap<String, StyleDef>, lists: &HashMap<String
                         last_space = false;
                     }
                     "text:line-break" if in_paragraph => {
-                        cells.push(Cell { ch: '\n', style: current(&para_style, &para_props, spans.as_slice()) });
+                        cells.push(Cell { ch: crate::text::LINE_BREAK, style: current(&para_style, &para_props, spans.as_slice()) });
                         last_space = true;
                     }
                     _ => {}
@@ -527,9 +542,9 @@ pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
         }
         start = end + 1;
     }
-    // character styles in order of first use, paragraph styles for non-default alignment or spacing
+    // character styles in order of first use, paragraph styles for paragraphs that differ from the default ones
     let mut text_styles: Vec<Style> = Vec::new();
-    let mut para_styles: Vec<(Align, u8)> = Vec::new();
+    let mut para_styles: Vec<Style> = Vec::new();
     let mut body = String::new();
     let mut open_list: Option<ListKind> = None;
     for (para, style) in &paragraphs {
@@ -548,8 +563,15 @@ pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
         if want.is_some() {
             body.push_str("<text:list-item>");
         }
-        let key = (style.align, style.spacing);
-        let attr = if key == (Align::Left, 0) {
+        let key = Style {
+            align: style.align,
+            spacing: style.spacing,
+            space_before: style.space_before,
+            space_after: style.space_after,
+            rtl: style.rtl,
+            ..Style::default()
+        };
+        let attr = if key == Style::default() {
             String::new()
         } else {
             let at = para_styles.iter().position(|k| *k == key).unwrap_or_else(|| {
@@ -604,18 +626,27 @@ pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
     for (i, style) in text_styles.iter().enumerate() {
         styles += &format!("<style:style style:name=\"T{}\" style:family=\"text\"><style:text-properties{}/></style:style>", i + 1, text_style_attrs(style));
     }
-    for (i, (align, spacing)) in para_styles.iter().enumerate() {
+    for (i, key) in para_styles.iter().enumerate() {
         let mut attrs = String::new();
-        let align = match align {
+        let align = match key.align {
             Align::Left => "start",
             Align::Center => "center",
             Align::Right => "end",
             Align::Justified => "justify",
         };
         attrs += &format!(" fo:text-align=\"{align}\"");
-        if *spacing > 0 {
-            let multiple = SPACINGS.get(*spacing as usize).copied().unwrap_or(1.0);
+        if key.spacing > 0 {
+            let multiple = SPACINGS.get(key.spacing as usize).copied().unwrap_or(1.0);
             attrs += &format!(" fo:line-height=\"{}%\"", (multiple * 100.0).round() as i32);
+        }
+        if key.space_before > 0 {
+            attrs += &format!(" fo:margin-top=\"{}pt\"", key.space_before);
+        }
+        if key.space_after > 0 {
+            attrs += &format!(" fo:margin-bottom=\"{}pt\"", key.space_after);
+        }
+        if key.rtl {
+            attrs += " style:writing-mode=\"rl-tb\"";
         }
         styles += &format!("<style:style style:name=\"P{}\" style:family=\"paragraph\"><style:paragraph-properties{attrs}/></style:style>", i + 1);
     }
@@ -692,6 +723,31 @@ mod tests {
     }
 
     #[test]
+    fn paragraph_space_and_writing_direction_round_trip() {
+        let spaced = Style { space_before: 12, space_after: 6, spacing: 1, rtl: true, ..Style::default() };
+        let mut cells = styled("a", spaced);
+        cells.push(cell('\n', spaced));
+        cells.push(cell('b', Style::default()));
+        let package = write(&cells);
+        let back = read(&package).unwrap();
+        assert_eq!(back, cells);
+        assert!(back[0].style.rtl && back[0].style.space_before == 12 && back[0].style.space_after == 6);
+        assert!(!back[2].style.rtl && back[2].style.space_before == 0, "a paragraph without the properties has none");
+    }
+
+    #[test]
+    fn a_line_break_is_a_break_inside_the_paragraph() {
+        let mut cells = styled("one", Style::default());
+        cells.push(cell(crate::text::LINE_BREAK, Style::default()));
+        cells.extend(styled("two", Style::default()));
+        cells.push(cell('\n', Style::default()));
+        cells.extend(styled("three", Style::default()));
+        let back = read(&write(&cells)).unwrap();
+        assert_eq!(back, cells);
+        assert_eq!(text_of(&back).matches('\n').count(), 1, "only the paragraph break is a newline");
+    }
+
+    #[test]
     fn links_are_anchors_around_spans_and_round_trip() {
         let id = links::intern("https://example.com/a?x=1&y=2");
         let other = links::intern("mailto:ada@example.com");
@@ -748,7 +804,7 @@ mod tests {
         ]);
         assert!(is_odt(&package));
         let cells = read(&package).unwrap();
-        assert_eq!(text_of(&cells), "Head\nquoted text bold  end\tt\nl\nitem");
+        assert_eq!(text_of(&cells), "Head\nquoted text bold  end\tt\u{2028}l\nitem");
         let head = &cells[0];
         assert!(head.style.bold && head.style.size == 20.0);
         let quoted = cells.iter().find(|c| c.ch == 'q').unwrap();

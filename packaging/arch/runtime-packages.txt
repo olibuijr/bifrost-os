@@ -37,6 +37,7 @@ avahi
 bc
 bind
 bzip2
+cifs-utils
 chrony
 coreutils
 cpio
@@ -65,9 +66,9 @@ libsecret
 libtiff
 libxml2
 libxslt
+logrotate
 lsof
 man-db
-mandoc
 mg
 nano
 ncompress
@@ -106,6 +107,7 @@ tk
 traceroute
 unzip
 usd
+valgrind
 vim
 which
 whois

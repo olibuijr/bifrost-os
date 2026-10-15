@@ -119,17 +119,17 @@ pub fn decode_as(bytes: &[u8], encoding: Encoding) -> String {
     }
 }
 
-/// Finds the encoding of a plain text file and decodes it: a byte order mark decides, then valid UTF-8, then text with
-/// a zero byte in every other position (UTF-16 without a mark); anything else is Western single-byte text.
+/// Finds the encoding of a plain text file and decodes it: a byte order mark decides, then a UTF-16 zero-byte pattern,
+/// then valid UTF-8; anything else is Western single-byte text.
 pub fn detect(bytes: &[u8]) -> (String, Encoding) {
     let encoding = if bytes.starts_with(&[0xff, 0xfe]) {
         Encoding::Utf16Le
     } else if bytes.starts_with(&[0xfe, 0xff]) {
         Encoding::Utf16Be
-    } else if std::str::from_utf8(bytes).is_ok() {
-        Encoding::Utf8
     } else if let Some(utf16) = guess_utf16(bytes) {
         utf16
+    } else if std::str::from_utf8(bytes).is_ok() {
+        Encoding::Utf8
     } else {
         Encoding::Windows1252
     };

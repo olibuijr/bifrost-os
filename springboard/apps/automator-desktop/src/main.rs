@@ -37,14 +37,21 @@ struct AutomatorApp {
 
 impl AutomatorApp {
     fn new() -> AutomatorApp {
-        AutomatorApp { auto: Automator::default(), started: false, open: None, save: None }
+        AutomatorApp {
+            auto: Automator::default(),
+            started: false,
+            open: None,
+            save: None,
+        }
     }
 
     /// Does what a request from the window asks of the shell. Always asks for a frame.
     fn perform(&mut self, ctx: &Ctx, request: Request) -> bool {
         match request {
             Request::None => {}
-            Request::Open => self.open = Some(ctx.open_document(DocMode::Read, "Open Workflow", &[])),
+            Request::Open => {
+                self.open = Some(ctx.open_document(DocMode::Read, "Open Workflow", &[]))
+            }
             Request::Save => {
                 let name = self.auto.suggested_file_name();
                 let request = ctx.save_document(&name, &[]);
@@ -106,6 +113,10 @@ impl App for AutomatorApp {
         self.auto.wake_at(t)
     }
 
+    fn wake_fd(&self) -> Option<i32> {
+        self.auto.wake_fd()
+    }
+
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
         draw::controls(&self.auto, &ctx.ui)
     }
@@ -146,16 +157,18 @@ impl App for AutomatorApp {
             }
             DocumentEvent::SaveTo(mut doc) => {
                 match self.save.take() {
-                    Some((request, bytes)) if request == doc.request => match doc.file.write_all(&bytes) {
-                        Ok(()) => {
-                            ctx.commit_document(request);
-                            self.auto.named_after(&doc.name);
+                    Some((request, bytes)) if request == doc.request => {
+                        match doc.file.write_all(&bytes) {
+                            Ok(()) => {
+                                ctx.commit_document(request);
+                                self.auto.named_after(&doc.name);
+                            }
+                            Err(e) => {
+                                ctx.abort_document(request);
+                                self.auto.status = format!("Could not save: {e}");
+                            }
                         }
-                        Err(e) => {
-                            ctx.abort_document(request);
-                            self.auto.status = format!("Could not save: {e}");
-                        }
-                    },
+                    }
                     other => {
                         self.save = other;
                         ctx.abort_document(doc.request);

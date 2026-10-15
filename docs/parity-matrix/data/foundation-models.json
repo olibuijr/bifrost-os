@@ -10,16 +10,16 @@
     {
       "feature": "On-device system language model (SystemLanguageModel)",
       "apple": "SystemLanguageModel, LanguageModelError",
-      "bifrost": "none; wired: springboard/apps/assistant-desktop/src/view.rs (banner, draw_banner): network and service availability banner; local model availability remains a gap",
-      "status": "gap",
-      "note": "no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_session.rs, model_provider.rs); not wired into the shell or apps, not tested on Midget. no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Sessions and prompts",
       "apple": "LanguageModelSession, Instructions, Prompt, GenerationOptions",
-      "bifrost": "springboard/ui/src/model_session.rs (Session::prompt; wired: springboard/apps/assistant-desktop/src/session.rs (session, request) used by src/view.rs send; model springboard/ui/src/model_session.rs",
+      "bifrost": "springboard/ui/src/model_session.rs (Session::prompt, Session::respond); wired: springboard/apps/assistant-desktop/src/session.rs (session, request)",
       "status": "partial",
-      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the Assistant builds Messages API requests by hand; no reusable session type in bifrost_app Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Pure session model, tested headless in parity_sdk-tests-09 (a_session_records_prompts_and_responses_in_order, switching_profiles_keeps_history_and_changes_the_next_instructions) and in model_session::tests. It runs no model; the Assistant builds its own Messages API requests on top of it, and on-device sessions are not verified on Midget."
     },
     {
       "feature": "Streaming responses",
@@ -31,9 +31,9 @@
     {
       "feature": "Guided generation (Generable, Guide, GenerationSchema)",
       "apple": "Generable, Guide(description:), GenerationSchema, DynamicGenerationSchema, GeneratedContent",
-      "bifrost": "springboard/ui/src/context_window.rs, springboard/ui/src/generation_schema.rs, springboard/ui/src/transcript.rs",
+      "bifrost": "springboard/ui/src/generation_schema.rs (Kind, Property, validate, parse, instructions, read_reply)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. typed decoding exists for stored data, but nothing constrains model output to a schema"
+      "note": "The schema becomes the instruction a model gets (instructions), and a reply is read back against it (read_reply), which accepts a Markdown code fence and reports either a parse failure or each member that does not fit; tested headless in springboard/ui/tests/parity_sdk-tests-09.rs and springboard/ui/tests/parity_sdk-complete-06.rs. Nothing constrains a model while it writes, so output is only checked after the reply, and the model call needs the lab machine."
     },
     {
       "feature": "Tool calling (Tool)",
@@ -52,9 +52,9 @@
     {
       "feature": "Context window and token budget",
       "apple": "ContextOptions, managing the context window",
-      "bifrost": "springboard/ui/src/context_window.rs, springboard/ui/src/generation_schema.rs, springboard/ui/src/transcript.rs; wired: springboard/apps/assistant-desktop/src/session.rs (request_within, BUDGET_TOKENS) over springboard/ui/src/context_window.rs",
+      "bifrost": "springboard/ui/src/context_window.rs (estimate_tokens, fit); wired: springboard/apps/assistant-desktop/src/session.rs (request_within, BUDGET_TOKENS)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no token counting or context management in the SDK; the Assistant sends its full message list Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Token budget fitting is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (the_token_estimate_rounds_up_per_four_characters, fit_keeps_the_reserve_free_for_the_answer, fit_never_starts_the_history_with_an_answer). The estimate counts characters, not model tokens, because no tokenizer runs in the SDK."
     },
     {
       "feature": "Session transcripts",
@@ -73,23 +73,23 @@
     {
       "feature": "Dynamic instructions and profiles",
       "apple": "LanguageModelSession.Profile, DynamicProfile, DynamicInstructions",
-      "bifrost": "springboard/ui/src/model_session.rs (Profile; wired: springboard/apps/assistant-desktop/src/session.rs (profile, fixed instructions only) over springboard/ui/src/model_session.rs",
+      "bifrost": "springboard/ui/src/model_session.rs (Profile, DynamicInstructions, Session::switch_profile); wired: springboard/apps/assistant-desktop/src/session.rs (profile, fixed instructions only)",
       "status": "partial",
-      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Dynamic parts that read the turn and the session properties are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (dynamic_instructions_see_the_turn_and_empty_parts_are_left_out, switching_profiles_keeps_history_and_changes_the_next_instructions). The Assistant uses only fixed instructions; app-level dynamic profiles are not verified on Midget."
     },
     {
       "feature": "Custom language model provider",
       "apple": "LanguageModel, LanguageModelExecutor, LanguageModelCapabilities",
-      "bifrost": "springboard/ui/src/model_provider.rs",
+      "bifrost": "springboard/ui/src/model_provider.rs (ModelProvider, run_turn)",
       "status": "partial",
-      "note": "Wave 4 (w4-foundation-models, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the Assistant is hard-wired to the Anthropic Messages API"
+      "note": "run_turn against a scripted provider is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_tool_call_runs_the_tool_records_its_output_and_asks_again, a_turn_stops_when_the_model_keeps_asking_for_tools, a_provider_failure_and_an_empty_tool_request_are_both_reported). No app implements the trait yet: the Assistant is hard-wired to the Anthropic Messages API."
     },
     {
       "feature": "Session properties",
       "apple": "SessionPropertyKey, SessionPropertyValues, LanguageModelSession.SessionProperty",
-      "bifrost": "springboard/ui/src/model_session.rs (PropertyKey",
+      "bifrost": "springboard/ui/src/model_session.rs (PropertyKey, PropertyValue, SessionProperties)",
       "status": "partial",
-      "note": "Wave 2 (theme-03, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent"
+      "note": "Typed properties with defaults and refusal of a value of another kind are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_property_reads_its_default_and_refuses_a_value_of_another_kind, session_properties_store_each_key_separately). No app reads a session property yet."
     },
     {
       "feature": "Safety guardrails for generated output",

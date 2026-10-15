@@ -1,11 +1,11 @@
-//! Open documents. A picture (PNG or JPEG) is one page, decoded when it opens. A PDF is opened on its own worker thread
+//! Open documents. A picture (PNG or JPEG) is one page, decoded when it opens. A PDF opens on its serial utility queue
 //! (`pdfjob`), which reports the page sizes and outline at once; pages and sidebar thumbnails are drawn by the worker
 //! when the window asks for them, and kept here until they are evicted. The page order, deletions and turns are kept
 //! for the session and written by Export PDF. Markup lives in a sidecar file under the app's data directory, keyed by
 //! the document's path.
 
 use crate::model::{self, fit_box, Adjust, Mark};
-use crate::pdfjob::{self, Inbox, Job, Key, Opened, Outline, Reply, PAGE_BOX};
+use crate::pdfjob::{self, Inbox, Job, Jobs, Key, Opened, Outline, Reply, DOCUMENT_RENDER_BOUNDS};
 use bifrost_app::image_filter::{Filter, FilterChain};
 use bifrost_app::image_source::ImageSource;
 use bifrost_app::kit::Image;
@@ -13,7 +13,6 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::mpsc::Sender;
 
 /// Thumbnails fit a box this many pixels wide and twice as tall.
 pub const THUMB_W: usize = 132;
@@ -24,8 +23,8 @@ const PDF_KEPT: usize = 6;
 enum Source {
     /// A decoded picture, the only page of a PNG or JPEG.
     Picture(Rc<Image>),
-    /// A PDF: its worker takes the jobs, and its replies come back through the inbox.
-    Pdf { jobs: Sender<Job>, inbox: Inbox },
+/// A PDF: its utility queue takes the jobs, and its replies come back through the inbox.
+    Pdf { jobs: Jobs, inbox: Inbox },
 }
 
 /// An open document: its pages and the markup saved for it.
@@ -47,6 +46,10 @@ pub struct Document {
     pub outline: Vec<Outline>,
     /// The bookmarked source pages, kept beside the markup.
     pub bookmarks: Vec<usize>,
+    /// The PDF's document information (title, author, subject, keywords), as label and value. Empty for a picture.
+    pub info: Vec<(&'static str, String)>,
+    /// Whether the PDF is encrypted (it opened with its password).
+    pub encrypted: bool,
     source: Source,
     /// A picture as it was opened, for Revert to Original after pixel edits. None for a PDF.
     original: Option<Rc<Image>>,
@@ -76,6 +79,8 @@ impl Document {
             marks: load_marks(data_dir, path),
             outline,
             bookmarks: load_bookmarks(data_dir, path),
+            info: Vec::new(),
+            encrypted: false,
             source,
             original,
             revision: 0,
@@ -206,7 +211,7 @@ impl Document {
         match &self.source {
             Source::Picture(img) => Some(img.clone()),
             Source::Pdf { .. } => {
-                let key = Key { thumb: false, page: src, w: PAGE_BOX.0, h: PAGE_BOX.1 };
+                let key = Key { thumb: false, page: src, w: DOCUMENT_RENDER_BOUNDS.0, h: DOCUMENT_RENDER_BOUNDS.1 };
                 if let Some(img) = self.drawn.borrow().get(&key) {
                     return Some(img.clone());
                 }
@@ -283,8 +288,11 @@ pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
 }
 
 /// The document of a PDF whose worker has opened it. `jobs` and `inbox` are the worker's.
-pub fn from_pdf(path: &Path, data_dir: &Path, opened: Opened, jobs: Sender<Job>, inbox: Inbox) -> Document {
-    Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true)
+pub fn from_pdf(path: &Path, data_dir: &Path, opened: Opened, jobs: Jobs, inbox: Inbox) -> Document {
+    let mut doc = Document::new(path, data_dir, opened.sizes, Source::Pdf { jobs, inbox }, opened.outline, true);
+    doc.info = opened.info;
+    doc.encrypted = opened.encrypted;
+    doc
 }
 
 /// The sidecar file for `path` under `data_dir`.
@@ -316,6 +324,25 @@ pub fn load_bookmarks(data_dir: &Path, path: &Path) -> Vec<usize> {
     std::fs::read_to_string(bookmarks_path(data_dir, path)).map(|t| model::parse_bookmarks(&t)).unwrap_or_default()
 }
 
+/// The file the page a document was last shown on is kept in, beside its markup.
+fn position_path(data_dir: &Path, path: &Path) -> PathBuf {
+    sidecar_path(data_dir, path).with_extension("page")
+}
+
+/// The source page `path` was last shown on, when that was saved.
+pub fn load_position(data_dir: &Path, path: &Path) -> Option<usize> {
+    std::fs::read_to_string(position_path(data_dir, path)).ok()?.trim().parse().ok()
+}
+
+/// Saves the source page `path` is shown on, so it opens there again.
+pub fn save_position(data_dir: &Path, path: &Path, src: usize) -> std::io::Result<()> {
+    let file = position_path(data_dir, path);
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(file, format!("{src}\n"))
+}
+
 /// Saves the bookmarks for `path`. With none left the file is removed.
 pub fn save_bookmarks(data_dir: &Path, path: &Path, pages: &[usize]) -> std::io::Result<()> {
     let file = bookmarks_path(data_dir, path);
@@ -331,7 +358,8 @@ pub fn save_bookmarks(data_dir: &Path, path: &Path, pages: &[usize]) -> std::io:
     std::fs::write(file, model::to_bookmarks(pages))
 }
 
-/// `img` with the colour adjustments applied. Returns a copy unchanged when nothing is set.
+/// `img` with the colour adjustments applied: the filter chain first, then the sharpening. Returns a copy unchanged
+/// when nothing is set.
 pub fn adjusted(img: &Image, adjust: &Adjust) -> Image {
     let mut chain = FilterChain::new();
     for (name, value) in adjust.settings() {
@@ -342,10 +370,12 @@ pub fn adjusted(img: &Image, adjust: &Adjust) -> Image {
             chain.push(filter);
         }
     }
-    if chain.is_empty() {
-        return img.clone();
+    let filtered = if chain.is_empty() { img.clone() } else { chain.apply(img).unwrap_or_else(|| img.clone()) };
+    if adjust.sharpness > 0.0 {
+        crate::pixels::sharpen(&filtered, adjust.sharpness)
+    } else {
+        filtered
     }
-    chain.apply(img).unwrap_or_else(|| img.clone())
 }
 
 /// Documents for the tests of other modules.
@@ -459,6 +489,16 @@ mod tests {
         assert_eq!(doc.sizes, vec![(4, 2)]);
         assert_eq!(doc.revision, 2);
         assert_eq!(doc.picture_rc().map(|i| (i.w, i.h)), Some((4, 2)));
+    }
+
+    #[test]
+    fn the_shown_page_is_remembered_beside_the_markup() {
+        let dir = std::env::temp_dir().join(format!("viewer-position-{}", std::process::id()));
+        let path = Path::new("/a/c.pdf");
+        assert_eq!(load_position(&dir, path), None);
+        save_position(&dir, path, 4).expect("saved");
+        assert_eq!(load_position(&dir, path), Some(4));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

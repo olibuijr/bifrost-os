@@ -52,9 +52,9 @@
     {
       "feature": "User discovery and identity",
       "apple": "CKUserIdentity",
-      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/main.rs (accounts, users)",
-      "status": "os",
-      "note": "accounts exist, no app discovery API"
+      "bifrost": "springboard/sdk/src/cloud_identity.rs (identity_from_me, UserIdentity); ~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (GET /me)",
+      "status": "partial",
+      "note": "The signed-in user's identity (record name, display name, sign-up address, admin flag) is read from the cloud answer to GET /me and mapped to typed errors, tested headless in springboard/sdk/tests/parity_sdk-rest-07.rs. Gap: the service has no lookup by address, so an app cannot discover another user, and the caller performs the request."
     },
     {
       "feature": "Web auth tokens",
@@ -66,9 +66,9 @@
     {
       "feature": "Privacy: encryption and data export/delete",
       "apple": "encrypted values, access and deletion articles",
-      "bifrost": "springboard/src/shell/backup.rs (local backup and restore); springboard/sdk/src/keychain.rs",
+      "bifrost": "springboard/src/shell/backup.rs (encode, decode, create, restore, stage, apply_pending); springboard/sdk/src/keychain.rs; tests: springboard/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "local backup only; keychain has no iCloud sync (docs/bifrost-ui.md)"
+      "note": "The archive format, its checksums, the name rules, restore and the staged restore are tested headless in springboard/tests/parity_sdk-tests-15.rs. Backup is local only and export is a file in the data directory; there is no delete action and the keychain has no iCloud sync (docs/bifrost-ui.md)"
     },
     {
       "feature": "Errors",
@@ -81,8 +81,8 @@
       "feature": "Local key-value storage (complementary)",
       "apple": "app local persistence",
       "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/coding.rs",
-      "status": "os",
-      "note": "local only, not a CloudKit counterpart"
+      "status": "partial",
+      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices."
     }
   ],
   "gaps": [

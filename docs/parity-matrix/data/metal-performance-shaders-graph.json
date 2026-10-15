@@ -45,16 +45,16 @@
     {
       "feature": "Execution and scheduling (MPSGraphExecutionDescriptor, completion and scheduled handlers, shared-event stages)",
       "apple": "MPSGraphExecutionDescriptor, MPSGraphExecutableExecutionDescriptor, MPSGraphCompletionHandler, MPSGraphExecutionStage",
-      "bifrost": "springboard/src/gpu/wl.rs (presenter frame submission, not app compute)",
-      "status": "os",
-      "note": "frame timing and submission exist for the compositor; apps get no compute submission or completion callback"
+      "bifrost": "springboard/src/gpu/wl.rs (presenter frame submission, not app compute); springboard/ui/src/compute_dispatch.rs (grid and threadgroup arithmetic, CPU reference walk)",
+      "status": "partial",
+      "note": "Grid and threadgroup arithmetic and the serial reference walk are tested headless in springboard/ui/tests/parity_sdk-os-10.rs. Gap: no compute work is submitted to the GPU for apps, and no completion or scheduled callback exists."
     },
     {
       "feature": "Devices (MPSGraphDevice, MPSGraphDeviceType)",
       "apple": "MPSGraphDevice, MPSGraphDeviceType",
-      "bifrost": "springboard/src/gpu/plan.rs (what the GPU can do right now); springboard/src/gpu/egl.rs",
-      "status": "os",
-      "note": "the system knows the GPU capabilities, but no app-facing device object for compute"
+      "bifrost": "springboard/src/gpu/plan.rs (what the GPU can do right now); springboard/src/gpu/egl.rs; springboard/ui/src/compute.rs (Device, Policy, place)",
+      "status": "partial",
+      "note": "Device kinds, placement policies and the placement order are tested headless in springboard/ui/tests/parity_sdk-os-10.rs. Gap: the GPU is not reported to apps as a device with its limits, so placement uses no hardware facts."
     },
     {
       "feature": "Neural Engine and Apple-silicon compute blocks",

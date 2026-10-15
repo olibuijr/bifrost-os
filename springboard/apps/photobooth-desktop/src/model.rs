@@ -3,6 +3,7 @@
 
 use bifrost_app::image_filter::{Filter, FilterChain};
 use bifrost_app::kit::{pack, Image};
+use crate::warp;
 use springboard::shell::photos::library::Date;
 use std::path::{Path, PathBuf};
 
@@ -16,8 +17,10 @@ pub const CLIP_SECS: f64 = 3.0;
 pub const CLIP_FPS: u32 = 10;
 /// The flash overlay lasts this long, in ms.
 pub const FLASH_MS: f64 = 260.0;
+/// While no camera is open the camera list is read again this often, in ms, so a camera plugged in later appears.
+pub const CAMERA_RETRY_MS: f64 = 2000.0;
 /// The widest the live preview is drawn, in pixels; the viewfinder never asks the camera for more.
-pub const PREVIEW_MAX_W: usize = 960;
+pub const PREVIEW_PIXEL_LIMIT: usize = 960;
 /// Bar heights from the bottom of the window, in points.
 pub const CONTROLS_PT: f32 = 64.0;
 pub const STRIP_PT: f32 = 84.0;
@@ -139,10 +142,15 @@ impl Effect {
         }
     }
 
+    /// True for the effects that move pixels (`warp.rs`) instead of changing their colour.
+    pub fn is_distortion(self) -> bool {
+        matches!(self, Effect::Bulge | Effect::Twirl | Effect::Mirror)
+    }
+
     /// The filters of this preset in order: name, then (input key, value) pairs.
     fn steps(self) -> &'static [(&'static str, &'static [(&'static str, f32)])] {
         match self {
-            Effect::None | Effect::Bulge | Effect::Twirl | Effect::Mirror => &[],
+            Effect::None => &[],
             Effect::Mono => &[("saturation", &[("amount", 0.0)])],
             Effect::Noir => &[("saturation", &[("amount", 0.0)]), ("contrast", &[("amount", 1.6)])],
             Effect::Sepia => &[("sepia", &[("amount", 1.0)])],
@@ -152,25 +160,7 @@ impl Effect {
             Effect::Posterize => &[("posterize", &[("levels", 5.0)])],
             Effect::Vignette => &[("vignette", &[("strength", 0.6)])],
             Effect::Invert => &[("invert", &[])],
-        }
-    }
-
-    /// The geometric warp of this preset, if it is a distortion rather than a colour chain.
-    pub fn warp(self) -> Option<Warp> {
-        match self {
-            Effect::Bulge => Some(Warp::Bulge),
-            Effect::Twirl => Some(Warp::Twirl),
-            Effect::Mirror => Some(Warp::Mirror),
-            _ => None,
-        }
-    }
-
-    /// The preset applied to `img`: the colour chain, then the warp.
-    pub fn apply(self, img: &Image) -> Image {
-        let coloured = if self.steps().is_empty() { img.clone() } else { self.chain().apply(img).unwrap_or_else(|| img.clone()) };
-        match self.warp() {
-            Some(warp) => warp_image(&coloured, warp),
-            None => coloured,
+            Effect::Bulge | Effect::Twirl | Effect::Mirror => &[],
         }
     }
 
@@ -187,78 +177,18 @@ impl Effect {
         }
         chain
     }
-}
 
-/// A distortion of the picture geometry (the effects browser's warps).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Warp {
-    /// magnifies the middle like a fisheye lens
-    Bulge,
-    /// rotates the picture more the closer it is to the middle
-    Twirl,
-    /// the left half is reflected onto the right half
-    Mirror,
-}
-
-/// `img` with `warp` applied: each output pixel samples its source by inverse mapping (nearest), so the size is kept.
-pub fn warp_image(img: &Image, warp: Warp) -> Image {
-    let (w, h) = (img.w, img.h);
-    if w == 0 || h == 0 || img.px.len() < w * h {
-        return img.clone();
-    }
-    let (cx, cy) = (w as f32 / 2.0, h as f32 / 2.0);
-    let radius = cx.min(cy).max(1.0);
-    let mut px = Vec::with_capacity(w * h);
-    for y in 0..h {
-        for x in 0..w {
-            let (sx, sy) = match warp {
-                Warp::Mirror => (if (x as f32 + 0.5) >= cx { (w - 1 - x) as f32 } else { x as f32 }, y as f32),
-                Warp::Bulge | Warp::Twirl => {
-                    let (dx, dy) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
-                    let r = (dx * dx + dy * dy).sqrt() / radius;
-                    if r >= 1.0 {
-                        (x as f32, y as f32)
-                    } else if warp == Warp::Bulge {
-                        let k = r.powf(0.8);
-                        (cx + dx * k, cy + dy * k)
-                    } else {
-                        let a = (1.0 - r) * (1.0 - r) * 2.0;
-                        let (s, c) = a.sin_cos();
-                        (cx + dx * c - dy * s, cy + dx * s + dy * c)
-                    }
-                }
-            };
-            let ix = (sx as i64).clamp(0, w as i64 - 1) as usize;
-            let iy = (sy as i64).clamp(0, h as i64 - 1) as usize;
-            px.push(img.px[iy * w + ix]);
+    /// The picture with this effect: the colour filters first, then the distortion if the effect has one, pulled as far
+    /// as `strength` says. Mirror has no strength.
+    pub fn apply(self, img: Image, strength: warp::Strength) -> Image {
+        let img = if self.steps().is_empty() { img } else { self.chain().apply(&img).unwrap_or(img) };
+        match self {
+            Effect::Bulge => warp::bulge(&img, strength),
+            Effect::Twirl => warp::twirl(&img, strength),
+            Effect::Mirror => warp::mirror_left(&img),
+            _ => img,
         }
     }
-    Image { w, h, px }
-}
-
-/// `img` reflected left to right (Auto Flip, so the picture reads like a mirror).
-pub fn flip_horizontal(img: &Image) -> Image {
-    let mut px = Vec::with_capacity(img.px.len());
-    if img.w > 0 {
-        for row in img.px.chunks(img.w) {
-            px.extend(row.iter().rev());
-        }
-    }
-    Image { w: img.w, h: img.h, px }
-}
-
-/// Where the slideshow goes after `index` among `total` captures, wrapping; `forward` false steps back.
-pub fn slide_step(index: usize, total: usize, forward: bool) -> usize {
-    if total == 0 {
-        return 0;
-    }
-    if forward { (index + 1) % total } else { (index + total - 1) % total }
-}
-
-/// The selection after the capture at `removed` leaves a strip of `remaining` captures: the one that took its place,
-/// else the new last one, else none.
-pub fn selection_after_delete(removed: usize, remaining: usize) -> Option<usize> {
-    if remaining == 0 { None } else { Some(removed.min(remaining - 1)) }
 }
 
 /// A rectangle in points, from the top-left of the window.
@@ -296,6 +226,14 @@ pub fn layout(w: f32, h: f32) -> Layout {
     Layout { viewfinder, effects, strip, controls }
 }
 
+/// The layout while the viewfinder fills the window: the other bars have no area, so nothing in them can be hit.
+pub fn layout_full_screen(w: f32, h: f32) -> Layout {
+    let w = w.max(0.0);
+    let h = h.max(0.0);
+    let none = Rect { x: 0.0, y: h, w: 0.0, h: 0.0 };
+    Layout { viewfinder: Rect { x: 0.0, y: 0.0, w, h }, effects: none, strip: none, controls: none }
+}
+
 /// The equal-width cells of the effects row, one per preset in `Effect::ALL`.
 pub fn effect_cells(row: Rect) -> Vec<(Effect, Rect)> {
     let n = Effect::ALL.len() as f32;
@@ -313,14 +251,28 @@ pub enum Button {
 }
 
 pub fn button_rect(bar: Rect, button: Button) -> Rect {
-    let slot_w = 96.0;
-    let shutter: f32 = 52.0;
+    const SLOT_MAX: f32 = 96.0;
+    const EDGE_GAP: f32 = 12.0;
+    const BUTTON_GAP: f32 = 8.0;
+    const SHUTTER_MAX: f32 = 52.0;
+    let shutter = SHUTTER_MAX.min(bar.w * 0.24);
     let y = bar.y + (bar.h - shutter.min(bar.h)) / 2.0;
+    let centre = bar.x + bar.w / 2.0;
+    let left = bar.x + EDGE_GAP.min(bar.w / 10.0);
+    let right = bar.x + bar.w - EDGE_GAP.min(bar.w / 10.0);
+    let left_end = (centre - shutter / 2.0 - BUTTON_GAP).max(left);
+    let right_start = (centre + shutter / 2.0 + BUTTON_GAP).min(right);
+    let left_width = (left_end - left - BUTTON_GAP).max(0.0) / 2.0;
+    let left_width = left_width.min(SLOT_MAX);
+    let mode_x = left;
+    let timer_x = (left + left_width + BUTTON_GAP).min(left_end);
+    let export_width = (right - right_start).max(0.0).min(SLOT_MAX);
+    let export_x = right_start + ((right - right_start - export_width).max(0.0) / 2.0);
     match button {
-        Button::Mode => Rect { x: 12.0, y: bar.y + (bar.h - 28.0) / 2.0, w: slot_w, h: 28.0 },
-        Button::Timer => Rect { x: 12.0 + slot_w + 8.0, y: bar.y + (bar.h - 28.0) / 2.0, w: slot_w, h: 28.0 },
-        Button::Export => Rect { x: (bar.w - 12.0 - slot_w).max(0.0), y: bar.y + (bar.h - 28.0) / 2.0, w: slot_w, h: 28.0 },
-        Button::Shutter => Rect { x: bar.w / 2.0 - shutter / 2.0, y, w: shutter, h: shutter.min(bar.h) },
+        Button::Mode => Rect { x: mode_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0_f32.min(bar.h) },
+        Button::Timer => Rect { x: timer_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: left_width, h: 28.0_f32.min(bar.h) },
+        Button::Export => Rect { x: export_x, y: bar.y + (bar.h - 28.0).max(0.0) / 2.0, w: export_width, h: 28.0_f32.min(bar.h) },
+        Button::Shutter => Rect { x: centre - shutter / 2.0, y, w: shutter, h: shutter.min(bar.h) },
     }
 }
 
@@ -331,6 +283,21 @@ pub fn capture_stem(date: &Date, suffix: &str) -> String {
         "Photo Booth {:04}-{:02}-{:02} at {:02}.{:02}.{:02}{}",
         date.year, date.month, date.day, date.hour, date.min, date.sec, suffix
     )
+}
+
+/// True once the screen flash that began at `started` (ms on the app clock) has lasted `FLASH_MS` at time `t`.
+pub fn flash_over(started: f64, t: f64) -> bool {
+    t - started >= FLASH_MS
+}
+
+/// True when the camera list is due to be read again: `CAMERA_RETRY_MS` after the last read, or later.
+pub fn camera_retry_due(last_read: f64, now: f64) -> bool {
+    now - last_read >= CAMERA_RETRY_MS
+}
+
+/// The position of the camera at device node `chosen` in a freshly read list, or none once it has been unplugged.
+pub fn position_of_camera(chosen: &str, listed: &[&str]) -> Option<usize> {
+    listed.iter().position(|path| *path == chosen)
 }
 
 /// The first of `stem.ext`, `stem 2.ext`, `stem 3.ext`... that `exists` does not report as taken.
@@ -356,7 +323,7 @@ pub fn library_dir(home: &Path) -> PathBuf {
 
 /// A 2 by 2 contact sheet of up to four images, each scaled into its cell of a `w` by `h` sheet. Empty cells stay black.
 pub fn contact_sheet(frames: &[Image], w: usize, h: usize) -> Image {
-    let mut px = vec![pack(0, 0, 0, 255); w * h];
+    let mut px = vec![bifrost_app::kit::ui::BLACK; w * h];
     let (cw, ch) = (w / 2, h / 2);
     for (i, frame) in frames.iter().take(4).enumerate() {
         if cw == 0 || ch == 0 {
@@ -380,6 +347,22 @@ pub fn fit_size(w: usize, h: usize, max_w: usize, max_h: usize) -> (usize, usize
     }
     let r = (max_w as f32 / w as f32).min(max_h as f32 / h as f32).min(1.0);
     (((w as f32 * r) as usize).max(1), ((h as f32 * r) as usize).max(1))
+}
+
+/// The size an image of `w` by `h` takes when it is scaled, up or down, to fill as much of `max_w` by `max_h` as its
+/// aspect allows; at least one pixel each way.
+pub fn fit_inside(w: usize, h: usize, max_w: usize, max_h: usize) -> (usize, usize) {
+    if w == 0 || h == 0 {
+        return (max_w.max(1), max_h.max(1));
+    }
+    let r = (max_w as f32 / w as f32).min(max_h as f32 / h as f32);
+    (((w as f32 * r) as usize).clamp(1, max_w.max(1)), ((h as f32 * r) as usize).clamp(1, max_h.max(1)))
+}
+
+/// Which capture is selected after the one at `deleted` left the strip, which then holds `remaining` captures: the one
+/// that took its place, or the last one when the newest was deleted, or none when the strip is empty.
+pub fn selection_after_delete(deleted: usize, remaining: usize) -> Option<usize> {
+    remaining.checked_sub(1).map(|last| deleted.min(last))
 }
 
 #[cfg(test)]
@@ -409,67 +392,68 @@ mod tests {
     }
 
     #[test]
-    fn original_is_an_empty_chain_and_the_others_are_not() {
+    fn original_is_an_empty_chain_and_the_colour_effects_are_not() {
         assert!(Effect::None.chain().is_empty());
-        for effect in Effect::ALL.iter().skip(1).filter(|e| e.warp().is_none()) {
+        for effect in Effect::ALL.iter().skip(1).filter(|e| !e.is_distortion()) {
             assert!(!effect.chain().is_empty(), "{effect:?}");
         }
     }
 
-    fn ramp(w: usize, h: usize) -> Image {
-        Image { w, h, px: (0..w * h).map(|i| pack((i % 251) as u8, (i / 3 % 251) as u8, 7, 255)).collect() }
-    }
-
     #[test]
-    fn warps_keep_the_size_and_change_the_picture() {
-        let img = ramp(16, 12);
-        for effect in [Effect::Bulge, Effect::Twirl, Effect::Mirror] {
-            let out = effect.apply(&img);
-            assert_eq!((out.w, out.h, out.px.len()), (16, 12, 192), "{effect:?}");
+    fn the_distortion_effects_have_no_colour_filters_and_change_the_picture() {
+        let mut px = Vec::new();
+        for y in 0..40usize {
+            for x in 0..60usize {
+                px.push(pack(x as u8 * 4, y as u8 * 6, 90, 255));
+            }
+        }
+        let img = Image { w: 60, h: 40, px };
+        let distortions: Vec<Effect> = Effect::ALL.iter().copied().filter(|e| e.is_distortion()).collect();
+        assert_eq!(distortions, [Effect::Bulge, Effect::Twirl, Effect::Mirror]);
+        for effect in distortions {
+            assert!(effect.chain().is_empty(), "{effect:?}");
+            let out = effect.apply(img.clone(), warp::Strength::Normal);
+            assert_eq!((out.w, out.h), (60, 40), "{effect:?}");
             assert_ne!(out, img, "{effect:?}");
         }
-        assert_eq!(Effect::None.apply(&img), img);
     }
 
     #[test]
-    fn mirror_reflects_the_left_half_onto_the_right() {
-        let img = ramp(8, 2);
-        let out = warp_image(&img, Warp::Mirror);
-        assert_eq!(out.px[0], img.px[0]);
-        assert_eq!(out.px[7], img.px[0]);
-        assert_eq!(out.px[4], img.px[3]);
-    }
-
-    #[test]
-    fn bulge_and_twirl_leave_the_corners_alone() {
-        let img = ramp(20, 20);
-        for warp in [Warp::Bulge, Warp::Twirl] {
-            let out = warp_image(&img, warp);
-            assert_eq!(out.px[0], img.px[0]);
-            assert_eq!(out.px[399], img.px[399]);
+    fn the_strength_changes_the_bulge_and_the_twirl_but_not_the_mirror() {
+        let mut px = Vec::new();
+        for y in 0..40usize {
+            for x in 0..40usize {
+                px.push(pack(x as u8 * 6, y as u8 * 6, 90, 255));
+            }
         }
+        let ramp = Image { w: 40, h: 40, px };
+        assert_ne!(Effect::Bulge.apply(ramp.clone(), warp::Strength::Subtle), Effect::Bulge.apply(ramp.clone(), warp::Strength::Strong));
+        assert_ne!(Effect::Twirl.apply(ramp.clone(), warp::Strength::Subtle), Effect::Twirl.apply(ramp.clone(), warp::Strength::Strong));
+        assert_eq!(Effect::Mirror.apply(ramp.clone(), warp::Strength::Subtle), Effect::Mirror.apply(ramp, warp::Strength::Strong));
     }
 
     #[test]
-    fn flipping_twice_is_the_identity_and_once_reverses_rows() {
-        let img = ramp(5, 3);
-        let f = flip_horizontal(&img);
-        assert_eq!(f.px[0], img.px[4]);
-        assert_eq!(flip_horizontal(&f), img);
+    fn apply_runs_the_colour_chain_and_leaves_the_original_alone() {
+        let img = solid(3, 3, pack(10, 20, 30, 255));
+        assert_eq!(Effect::None.apply(img.clone(), warp::Strength::Normal), img);
+        assert_ne!(Effect::Invert.apply(img.clone(), warp::Strength::Normal), img);
     }
 
     #[test]
-    fn slideshow_steps_wrap_both_ways() {
-        assert_eq!(slide_step(2, 3, true), 0);
-        assert_eq!(slide_step(0, 3, false), 2);
-        assert_eq!(slide_step(0, 0, true), 0);
+    fn effect_titles_are_distinct() {
+        let mut titles: Vec<&str> = Effect::ALL.iter().map(|e| e.title()).collect();
+        titles.sort_unstable();
+        titles.dedup();
+        assert_eq!(titles.len(), Effect::ALL.len());
     }
 
     #[test]
-    fn deleting_selects_the_neighbour_or_nothing() {
-        assert_eq!(selection_after_delete(1, 2), Some(1));
-        assert_eq!(selection_after_delete(2, 2), Some(1));
-        assert_eq!(selection_after_delete(0, 0), None);
+    fn the_full_screen_layout_gives_the_viewfinder_the_whole_window_and_hides_the_bars() {
+        let l = layout_full_screen(1200.0, 780.0);
+        assert_eq!(l.viewfinder, Rect { x: 0.0, y: 0.0, w: 1200.0, h: 780.0 });
+        for bar in [l.effects, l.strip, l.controls] {
+            assert!(!bar.contains(10.0, 779.0) && !bar.contains(0.0, 780.0) && !bar.contains(600.0, 400.0));
+        }
     }
 
     #[test]
@@ -553,6 +537,24 @@ mod tests {
     }
 
     #[test]
+    fn controls_stay_inside_the_bar_and_do_not_overlap_at_compact_widths() {
+        for width in [160.0, 240.0, 360.0, 640.0] {
+            let bar = layout(width, 420.0).controls;
+            let mode = button_rect(bar, Button::Mode);
+            let timer = button_rect(bar, Button::Timer);
+            let shutter = button_rect(bar, Button::Shutter);
+            let export = button_rect(bar, Button::Export);
+            for r in [mode, timer, shutter, export] {
+                assert!(r.x >= bar.x && r.x + r.w <= bar.x + bar.w);
+                assert!(r.y >= bar.y && r.y + r.h <= bar.y + bar.h);
+            }
+            assert!(mode.x + mode.w <= timer.x);
+            assert!(timer.x + timer.w <= shutter.x);
+            assert!(shutter.x + shutter.w <= export.x);
+        }
+    }
+
+    #[test]
     fn contact_sheet_places_each_frame_in_its_cell() {
         let a = solid(4, 4, pack(255, 0, 0, 255));
         let b = solid(4, 4, pack(0, 255, 0, 255));
@@ -569,6 +571,45 @@ mod tests {
         assert_eq!(fit_size(1280, 720, 640, 480), (640, 360));
         assert_eq!(fit_size(100, 50, 640, 480), (100, 50));
         assert_eq!(fit_size(4, 3, 2, 100), (2, 1));
+    }
+
+    #[test]
+    fn fit_inside_scales_up_and_down_and_keeps_the_aspect() {
+        assert_eq!(fit_inside(960, 540, 1920, 1200), (1920, 1080));
+        assert_eq!(fit_inside(960, 540, 480, 480), (480, 270));
+        assert_eq!(fit_inside(100, 100, 100, 100), (100, 100));
+        assert_eq!(fit_inside(0, 0, 50, 40), (50, 40));
+    }
+
+    #[test]
+    fn deleting_selects_the_capture_that_moves_up_or_the_last_one() {
+        assert_eq!(selection_after_delete(1, 3), Some(1));
+        assert_eq!(selection_after_delete(0, 3), Some(0));
+        assert_eq!(selection_after_delete(3, 3), Some(2));
+        assert_eq!(selection_after_delete(0, 0), None);
+    }
+
+    #[test]
+    fn the_screen_flash_is_on_until_its_time_runs_out() {
+        assert!(!flash_over(1000.0, 1000.0));
+        assert!(!flash_over(1000.0, 1000.0 + FLASH_MS - 1.0));
+        assert!(flash_over(1000.0, 1000.0 + FLASH_MS));
+        assert!(flash_over(1000.0, 1000.0 + FLASH_MS * 4.0));
+    }
+
+    #[test]
+    fn the_camera_list_is_read_again_every_retry_interval() {
+        assert!(!camera_retry_due(1000.0, 1000.0 + CAMERA_RETRY_MS - 1.0));
+        assert!(camera_retry_due(1000.0, 1000.0 + CAMERA_RETRY_MS));
+        assert!(camera_retry_due(0.0, 1_000_000.0));
+    }
+
+    #[test]
+    fn a_chosen_camera_is_found_only_while_it_is_still_listed() {
+        let listed = ["/dev/video0", "/dev/video2"];
+        assert_eq!(position_of_camera("/dev/video2", &listed), Some(1));
+        assert_eq!(position_of_camera("/dev/video1", &listed), None);
+        assert_eq!(position_of_camera("/dev/video0", &[]), None);
     }
 
     #[test]

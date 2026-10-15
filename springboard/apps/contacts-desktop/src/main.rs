@@ -1,6 +1,8 @@
 //! Contacts as an installed BifrOSt app in the Golden Gate full-size window: sidebar, list and card under a unified toolbar.
 
+mod archive;
 mod contacts;
+mod details;
 mod display_file;
 mod dupes;
 mod exchange;
@@ -8,15 +10,22 @@ mod extras;
 mod group_file;
 mod history;
 mod names;
+mod printing;
 mod services;
 mod smart;
+mod tabular;
+mod textimport;
 
-use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::controls::Node;
+use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
+use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, AppMenu, Commands, Ctx, Input, KeyInput, TouchKind};
+use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 struct ContactsApp {
     app: Option<contacts::Contacts>,
@@ -135,10 +144,73 @@ impl App for ContactsApp {
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id == contacts::MENU_REFRESH {
+            // the CardDAV sync starts on the next tick
+            self.dav.refresh();
+            if let Some(c) = &mut self.app {
+                c.show_status("Refreshing the CardDAV accounts...".into());
+            }
+            return true;
+        }
         let Some(c) = &mut self.app else { return false };
         let handled = c.menu_action(&ctx.ui, id);
         self.after_input(ctx);
         handled
+    }
+
+    fn intents(&self) -> Vec<Intent> {
+        vec![
+            Intent::new("view-card", "View Card", "Opens the card of a contact, given its name or identifier.")
+                .param(Param::new("contact", "Contact", ParamType::String)),
+            Intent::new("create-contact", "Create Contact", "Adds a contact and opens its card.")
+                .param(Param::new("name", "Name", ParamType::String))
+                .param(Param::new("phone", "Phone", ParamType::String).optional())
+                .param(Param::new("email", "Email", ParamType::String).optional())
+                .param(Param::new("company", "Company", ParamType::String).optional()),
+            Intent::new("search-contacts", "Search Contacts", "Shows the contacts that match the text and lists them.")
+                .param(Param::new("query", "Query", ParamType::String)),
+        ]
+    }
+
+    fn perform_intent(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+        let (Some(ctx), Some(c)) = (ctx, self.app.as_mut()) else { return Err(intents::failed("Contacts is not running yet")) };
+        let optional = |name: &str| params.get(name).and_then(Json::as_str).unwrap_or("").to_string();
+        let result = match id {
+            "view-card" => {
+                let query = intents::str_param(params, "contact")?;
+                let (found, title) = c.open_card(&ctx.ui, query).map_err(intents::failed)?;
+                Ok(IntentResult::value(Json::Num(found as f64)).with_dialog(&format!("Opened {title}")))
+            }
+            "create-contact" => {
+                let name = intents::str_param(params, "name")?;
+                let created = c.create_contact(&ctx.ui, name, &optional("phone"), &optional("email"), &optional("company"));
+                created
+                    .map(|found| IntentResult::value(Json::Num(found as f64)).with_dialog(&format!("Added {}", name.trim())))
+                    .map_err(intents::failed)
+            }
+            "search-contacts" => {
+                let query = intents::str_param(params, "query")?;
+                let found = c.search_contacts(&ctx.ui, query);
+                let list = Json::Arr(
+                    found
+                        .iter()
+                        .map(|(found, name, phone, email)| {
+                            Json::Obj(vec![
+                                ("id".into(), Json::Num(*found as f64)),
+                                ("name".into(), Json::Str(name.clone())),
+                                ("phone".into(), Json::Str(phone.clone())),
+                                ("email".into(), Json::Str(email.clone())),
+                            ])
+                        })
+                        .collect(),
+                );
+                let dialog = if found.len() == 1 { "1 contact matches".to_string() } else { format!("{} contacts match", found.len()) };
+                Ok(IntentResult::value(list).with_dialog(&dialog))
+            }
+            _ => Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}"))),
+        };
+        self.after_input(ctx);
+        result
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {

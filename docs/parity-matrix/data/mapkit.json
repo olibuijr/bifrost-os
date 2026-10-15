@@ -31,9 +31,9 @@
     {
       "feature": "Forward geocoding (place name to coordinate)",
       "apple": "MKGeocodingRequest",
-      "bifrost": "springboard/src/shell/weather/data.rs:248 (geocode_url), :253 (parse_places), :456 (search_places)",
+      "bifrost": "springboard/src/shell/weather/data.rs (geocode_url, parse_places, search_places)",
       "status": "partial",
-      "note": "text search via Open-Meteo, returns up to 6 places with name, region, lat and lon; not Apple's geocoder and no map display"
+      "note": "Place-name text search asks for six matches and returns places with name, region, lat and lon; tested headless in springboard/tests/parity_sdk-tests-21.rs. Not the reference geocoder: no placemark or address parts, no map display and no reverse geocoding."
     },
     {
       "feature": "Reverse geocoding (coordinate to address)",
@@ -45,9 +45,9 @@
     {
       "feature": "Local search and search completion",
       "apple": "MKLocalSearch, MKLocalSearchCompleter, MKLocalPointsOfInterestRequest",
-      "bifrost": "springboard/src/shell/weather/data.rs:456 (search_places)",
+      "bifrost": "springboard/src/shell/weather/data.rs (search_places)",
       "status": "partial",
-      "note": "city and place text search only; no points-of-interest search, nearby search or completion list"
+      "note": "City and place text search is tested headless in springboard/tests/parity_sdk-tests-21.rs: the query is trimmed, and a failed or non-list answer is an error. Gap: no points-of-interest search, nearby search or completion list."
     },
     {
       "feature": "Points of interest and map features",
@@ -66,23 +66,23 @@
     {
       "feature": "Map snapshots (static images)",
       "apple": "MKMapSnapshotter, MKMapSnapshotter.Snapshot",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "would need a map renderer first; the renderer has no map layer"
+      "bifrost": "springboard/ui/src/map_snapshot.rs (Snapshot::tiles, Snapshot::point, Snapshot::fit_zoom, tile_path)",
+      "status": "partial",
+      "note": "The tiles that cover a snapshot, the pixel placement of tiles and pins, and the zoom that fits a set of coordinates are modelled and tested in map_snapshot and springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no tile source and no renderer that composes the image, so no snapshot is produced yet."
     },
     {
       "feature": "Map controls (compass, zoom, scale, user tracking)",
       "apple": "MKCompassButton, MKZoomControl, MKScaleView, MKPitchControl, MKUserTrackingButton, MapZoomStepper, MapScaleView",
-      "bifrost": "springboard/ui/src/mapview.rs (scale_bar; wired: springboard/apps/weather-desktop/src/weather.rs MAP block (MapCamera::scale_bar)",
+      "bifrost": "springboard/ui/src/map_controls.rs (MapControls); springboard/ui/src/mapview.rs (scale_bar, compass_visible, MapView flags); wired: springboard/apps/weather-desktop/src/weather.rs MAP block (MapCamera::scale_bar); tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no map controls exist to adapt Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "MapControls reports which controls show: the compass while the map is turned, zoom in and out with their limits and the zoom switch, the scale bar, and the tracking and pitch buttons. Tested headless in parity_sdk-complete-26.rs. Gap: the shell draws these controls only on the weather map, and the controls have not been checked on Midget."
     },
     {
       "feature": "User location on a map",
       "apple": "UserAnnotation, MapUserLocationButton, DefaultUserAnnotationContent",
-      "bifrost": "springboard/ui/src/mapview.rs (UserTracking",
+      "bifrost": "springboard/ui/src/map_user_location.rs (UserLocation); springboard/ui/src/mapview.rs (UserTracking, MapCamera::follow); springboard/ui/src/location_auth.rs; springboard/ui/src/location.rs (LocationFix); tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no location service API was found in the SDK index (searched for location and geolocation terms)"
+      "note": "UserLocation joins location authorization, the latest valid fix and the tracking button: tracking stays off without access, follows only a fix of at most 120 s age and 1000 m accuracy, and turns the camera to the heading in the heading state, all tested headless. Gap: no location sensor or location service feeds fixes into the model, and the user marker is not drawn; both need the lab machine."
     },
     {
       "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",

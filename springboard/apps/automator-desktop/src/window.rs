@@ -6,9 +6,13 @@
 use crate::model::{self, Kind, LogLine, Step, Value, Workflow, KINDS, MAX_FIELDS};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::Rect;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::{widgets, TouchKind};
+use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
+use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 /// The library column (points).
@@ -31,8 +35,8 @@ pub const HINT_LINE_PT: f32 = 15.0;
 pub const LOG_LINE_PT: f32 = 16.0;
 /// Padding between the blocks of the editor (points).
 pub const PAD_PT: f32 = 8.0;
-/// How soon the loop comes back while a run is in progress (milliseconds).
-const RUN_WAKE_MS: f64 = 50.0;
+/// Fallback only if the worker wake socket cannot be created (milliseconds).
+const RUN_WAKE_FALLBACK_MS: f64 = 50.0;
 
 pub const B_NEW: u32 = 1;
 pub const B_OPEN: u32 = 2;
@@ -83,6 +87,9 @@ pub struct Automator {
     pub log: Vec<LogLine>,
     /// The messages of the run in progress, while one runs.
     running: Option<Receiver<Message>>,
+    /// Worker progress signals wake the shell through this nonblocking socket pair.
+    wake_rx: Option<UnixStream>,
+    wake_tx: Option<UnixStream>,
     /// The last result as the footer says it: an error, or how the run finished.
     pub status: String,
     /// The window size, in points.
@@ -107,14 +114,21 @@ fn home_folder() -> String {
 
 impl Automator {
     pub fn new(home: String) -> Automator {
+        let (wake_rx, wake_tx) = UnixStream::pair()
+            .ok()
+            .filter(|(rx, tx)| rx.set_nonblocking(true).is_ok() && tx.set_nonblocking(true).is_ok())
+            .map_or((None, None), |(rx, tx)| (Some(rx), Some(tx)));
         Automator {
             workflow: Workflow::default(),
             selected: None,
             focus: None,
             log: Vec::new(),
             running: None,
+            wake_rx,
+            wake_tx,
             status: String::new(),
-            size: (1000.0, 640.0),
+            // The app host configures the actual client size before the first frame.
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
             home,
@@ -132,11 +146,21 @@ impl Automator {
     // ----- geometry, in points -----
 
     pub fn bar_rect(&self) -> Rect {
-        Rect { x: 0.0, y: 0.0, w: self.size.0, h: UNIFIED_BAR_PT }
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: self.size.0,
+            h: UNIFIED_BAR_PT,
+        }
     }
 
     pub fn footer_rect(&self) -> Rect {
-        Rect { x: 0.0, y: (self.size.1 - FOOT_PT).max(0.0), w: self.size.0, h: FOOT_PT }
+        Rect {
+            x: 0.0,
+            y: (self.size.1 - FOOT_PT).max(0.0),
+            w: self.size.0,
+            h: FOOT_PT,
+        }
     }
 
     /// The height between the toolbar and the footer.
@@ -145,16 +169,31 @@ impl Automator {
     }
 
     pub fn library_rect(&self) -> Rect {
-        Rect { x: 0.0, y: UNIFIED_BAR_PT, w: LIB_PT.min(self.size.0), h: self.body_h() }
+        Rect {
+            x: 0.0,
+            y: UNIFIED_BAR_PT,
+            w: LIB_PT.min(self.size.0),
+            h: self.body_h(),
+        }
     }
 
     pub fn library_row(&self, i: usize) -> Rect {
-        Rect { x: 0.0, y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT, w: LIB_PT.min(self.size.0), h: ROW_PT }
+        Rect {
+            x: 0.0,
+            y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT,
+            w: LIB_PT.min(self.size.0),
+            h: ROW_PT,
+        }
     }
 
     pub fn sequence_rect(&self) -> Rect {
         let x = LIB_PT.min(self.size.0);
-        Rect { x, y: UNIFIED_BAR_PT, w: SEQ_PT.min((self.size.0 - x).max(0.0)), h: self.body_h() }
+        Rect {
+            x,
+            y: UNIFIED_BAR_PT,
+            w: SEQ_PT.min((self.size.0 - x).max(0.0)),
+            h: self.body_h(),
+        }
     }
 
     /// How many step rows fit under the sequence header.
@@ -164,17 +203,32 @@ impl Automator {
 
     pub fn step_row(&self, i: usize) -> Rect {
         let s = self.sequence_rect();
-        Rect { x: s.x, y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT, w: s.w, h: ROW_PT }
+        Rect {
+            x: s.x,
+            y: UNIFIED_BAR_PT + HEAD_PT + i as f32 * ROW_PT,
+            w: s.w,
+            h: ROW_PT,
+        }
     }
 
     pub fn detail_rect(&self) -> Rect {
         let x = (LIB_PT + SEQ_PT).min(self.size.0);
-        Rect { x, y: UNIFIED_BAR_PT, w: (self.size.0 - x).max(0.0), h: self.body_h() }
+        Rect {
+            x,
+            y: UNIFIED_BAR_PT,
+            w: (self.size.0 - x).max(0.0),
+            h: self.body_h(),
+        }
     }
 
     pub fn field_row(&self, k: usize) -> Rect {
         let d = self.detail_rect();
-        Rect { x: d.x, y: UNIFIED_BAR_PT + HEAD_PT + k as f32 * FIELD_PT, w: d.w, h: FIELD_PT }
+        Rect {
+            x: d.x,
+            y: UNIFIED_BAR_PT + HEAD_PT + k as f32 * FIELD_PT,
+            w: d.w,
+            h: FIELD_PT,
+        }
     }
 
     /// The top of the hint under the editor's fields.
@@ -190,7 +244,12 @@ impl Automator {
     pub fn log_rect(&self) -> Rect {
         let d = self.detail_rect();
         let top = self.log_top();
-        Rect { x: d.x, y: top, w: d.w, h: (UNIFIED_BAR_PT + self.body_h() - top).max(0.0) }
+        Rect {
+            x: d.x,
+            y: top,
+            w: d.w,
+            h: (UNIFIED_BAR_PT + self.body_h() - top).max(0.0),
+        }
     }
 
     /// How many log lines fit under the log header.
@@ -230,7 +289,11 @@ impl Automator {
         if self.workflow.steps.is_empty() {
             return "Add actions from the library to build a workflow".into();
         }
-        format!("{} · {} actions", self.workflow.name, self.workflow.steps.len())
+        format!(
+            "{} · {} actions",
+            self.workflow.name,
+            self.workflow.steps.len()
+        )
     }
 
     // ----- hit testing -----
@@ -251,7 +314,11 @@ impl Automator {
         }
         let row = ((y - top) / ROW_PT) as usize;
         if x < LIB_PT {
-            return if row < KINDS.len() { Target::Library(row) } else { Target::Nothing };
+            return if row < KINDS.len() {
+                Target::Library(row)
+            } else {
+                Target::Nothing
+            };
         }
         if x < LIB_PT + SEQ_PT {
             return if row < self.workflow.steps.len() && row < self.visible_steps() {
@@ -262,7 +329,9 @@ impl Automator {
         }
         let field = ((y - top) / FIELD_PT) as usize;
         match self.selected_step() {
-            Some(step) if field < step.kind.fields().len() && field < MAX_FIELDS => Target::Field(field),
+            Some(step) if field < step.kind.fields().len() && field < MAX_FIELDS => {
+                Target::Field(field)
+            }
             _ => Target::Nothing,
         }
     }
@@ -273,7 +342,13 @@ impl Automator {
             .visible
             .iter()
             .find(|(_, r)| r.contains(x, y))
-            .and_then(|(id, _)| bar.items.iter().find(|i| i.id == *id).filter(|i| i.enabled).map(|i| Target::Toolbar(i.id)))
+            .and_then(|(id, _)| {
+                bar.items
+                    .iter()
+                    .find(|i| i.id == *id)
+                    .filter(|i| i.enabled)
+                    .map(|i| Target::Toolbar(i.id))
+            })
             .unwrap_or(Target::Nothing)
     }
 
@@ -306,7 +381,9 @@ impl Automator {
     pub fn activate_id(&mut self, id: u64) -> Request {
         let target = match id {
             1..=7 => Target::Toolbar(id as u32),
-            _ if (LIBRARY_ID..LIBRARY_ID + KINDS.len() as u64).contains(&id) => Target::Library((id - LIBRARY_ID) as usize),
+            _ if (LIBRARY_ID..LIBRARY_ID + KINDS.len() as u64).contains(&id) => {
+                Target::Library((id - LIBRARY_ID) as usize)
+            }
             _ if (STEP_ID..STEP_ID + 100).contains(&id) => Target::Step((id - STEP_ID) as usize),
             _ => Target::Nothing,
         };
@@ -362,8 +439,15 @@ impl Automator {
     /// A tap on a field: a choice field moves to its next choice, a text field takes the focus.
     fn field_tapped(&mut self, k: usize) {
         let Some(i) = self.selected else { return };
-        let Some(step) = self.workflow.steps.get_mut(i) else { return };
-        if step.kind.fields().get(k).is_some_and(|f| !f.choices.is_empty()) {
+        let Some(step) = self.workflow.steps.get_mut(i) else {
+            return;
+        };
+        if step
+            .kind
+            .fields()
+            .get(k)
+            .is_some_and(|f| !f.choices.is_empty())
+        {
             step.cycle(k);
             self.focus = None;
         } else {
@@ -387,7 +471,9 @@ impl Automator {
 
     /// Tab and Enter move the focus to the next field of the selected step (and wrap).
     pub fn next_field(&mut self) {
-        let Some(step) = self.selected_step() else { return };
+        let Some(step) = self.selected_step() else {
+            return;
+        };
         let count = step.kind.fields().len();
         if count == 0 {
             return;
@@ -439,7 +525,11 @@ impl Automator {
         }
         self.workflow.steps.remove(i);
         self.focus = None;
-        self.selected = if self.workflow.steps.is_empty() { None } else { Some(i.min(self.workflow.steps.len() - 1)) };
+        self.selected = if self.workflow.steps.is_empty() {
+            None
+        } else {
+            Some(i.min(self.workflow.steps.len() - 1))
+        };
     }
 
     /// Moves the selected step up (`-1`) or down (`1`) one place; the selection follows it.
@@ -472,7 +562,11 @@ impl Automator {
         }
         let workflow = Workflow::from_file(text)?;
         self.status = format!("Opened {}", workflow.name);
-        self.selected = if workflow.steps.is_empty() { None } else { Some(0) };
+        self.selected = if workflow.steps.is_empty() {
+            None
+        } else {
+            Some(0)
+        };
         self.focus = None;
         self.log.clear();
         self.workflow = workflow;
@@ -493,12 +587,22 @@ impl Automator {
             .map(|c| if c == '/' || c.is_control() { ' ' } else { c })
             .collect();
         let clean = clean.trim();
-        format!("{}.automator", if clean.is_empty() { model::UNTITLED } else { clean })
+        format!(
+            "{}.automator",
+            if clean.is_empty() {
+                model::UNTITLED
+            } else {
+                clean
+            }
+        )
     }
 
     /// The workflow takes the name of the file it was saved to.
     pub fn named_after(&mut self, file_name: &str) {
-        let stem = file_name.strip_suffix(".automator").unwrap_or(file_name).trim();
+        let stem = file_name
+            .strip_suffix(".automator")
+            .unwrap_or(file_name)
+            .trim();
         if !stem.is_empty() {
             self.workflow.name = stem.to_string();
         }
@@ -516,18 +620,27 @@ impl Automator {
         self.status.clear();
         let steps = self.workflow.steps.clone();
         let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
+        let wake_tx = self.wake_tx.as_ref().and_then(|wake| wake.try_clone().ok());
+        DispatchQueue::global(Qos::UserInitiated).async_(move || {
             let result = model::execute(&steps, &mut |line: LogLine| {
                 let _ = tx.send(Message::Log(line));
+                signal_worker(&wake_tx);
             });
             let _ = tx.send(Message::Done(result));
+            signal_worker(&wake_tx);
         });
         self.running = Some(rx);
     }
 
     /// Takes what the run has reported since the last look. True when the screen needs a frame.
     pub fn poll(&mut self) -> bool {
-        let Some(rx) = &self.running else { return false };
+        if let Some(wake) = &mut self.wake_rx {
+            let mut bytes = [0u8; 64];
+            while wake.read(&mut bytes).is_ok_and(|n| n > 0) {}
+        }
+        let Some(rx) = &self.running else {
+            return false;
+        };
         let mut changed = false;
         let mut finished = None;
         loop {
@@ -558,9 +671,20 @@ impl Automator {
         changed
     }
 
-    /// When the loop should come back: soon while a run is in progress.
+    /// The shell polls this descriptor for worker progress and completion.
+    pub fn wake_fd(&self) -> Option<i32> {
+        self.wake_rx.as_ref().map(AsRawFd::as_raw_fd)
+    }
+
+    /// When the loop should come back: only use a timer if wake-fd setup failed.
     pub fn wake_at(&self, t: f64) -> Option<f64> {
-        self.is_running().then_some(t + RUN_WAKE_MS)
+        (self.is_running() && self.wake_rx.is_none()).then_some(t + RUN_WAKE_FALLBACK_MS)
+    }
+}
+
+fn signal_worker(wake: &Option<UnixStream>) {
+    if let Some(wake) = wake {
+        let _ = (&*wake).write(&[1]);
     }
 }
 
@@ -569,7 +693,10 @@ mod tests {
     use super::*;
 
     fn window() -> Automator {
-        Automator::new("/home/u".into())
+        let mut app = Automator::new("/home/u".into());
+        // Test-only fixture size for geometry assertions; runtime size comes from Configure.
+        app.resize(1000.0, 640.0);
+        app
     }
 
     /// Points on the middle of the sequence row `i`.
@@ -683,11 +810,20 @@ mod tests {
     #[test]
     fn field_taps_need_a_selected_step() {
         let mut a = window();
-        assert_eq!(a.hit_body(600.0, UNIFIED_BAR_PT + HEAD_PT + 5.0), Target::Nothing);
+        assert_eq!(
+            a.hit_body(600.0, UNIFIED_BAR_PT + HEAD_PT + 5.0),
+            Target::Nothing
+        );
         a.add_step(Kind::Find);
-        assert_eq!(a.hit_body(600.0, UNIFIED_BAR_PT + HEAD_PT + 5.0), Target::Field(0));
+        assert_eq!(
+            a.hit_body(600.0, UNIFIED_BAR_PT + HEAD_PT + 5.0),
+            Target::Field(0)
+        );
         // Find has three fields; a fourth row is nothing
-        assert_eq!(a.hit_body(600.0, UNIFIED_BAR_PT + HEAD_PT + 3.0 * FIELD_PT + 5.0), Target::Nothing);
+        assert_eq!(
+            a.hit_body(600.0, UNIFIED_BAR_PT + HEAD_PT + 3.0 * FIELD_PT + 5.0),
+            Target::Nothing
+        );
     }
 
     #[test]
@@ -697,7 +833,8 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         a.running = Some(rx);
         tx.send(Message::Log(LogLine::info("Step 1 of 1"))).unwrap();
-        tx.send(Message::Done(Err("stopped at step 1".into()))).unwrap();
+        tx.send(Message::Done(Err("stopped at step 1".into())))
+            .unwrap();
         assert!(a.poll());
         assert_eq!(a.log.len(), 1);
         assert!(!a.is_running());
@@ -715,14 +852,18 @@ mod tests {
         a.add_step(Kind::Transform);
         a.start_run();
         assert!(a.is_running());
-        assert_eq!(a.wake_at(100.0), Some(100.0 + RUN_WAKE_MS));
+        assert_eq!(a.wake_at(100.0), None);
     }
 
     #[test]
     fn opening_replaces_the_workflow_and_save_names_the_file() {
         let mut a = window();
         a.add_step(Kind::Find);
-        let text = Workflow { name: "Shots".into(), steps: vec![Step::new(Kind::Resize, "/")] }.to_file();
+        let text = Workflow {
+            name: "Shots".into(),
+            steps: vec![Step::new(Kind::Resize, "/")],
+        }
+        .to_file();
         a.open_text(&text).unwrap();
         assert_eq!(a.workflow.name, "Shots");
         assert_eq!(a.selected, Some(0));

@@ -10,9 +10,9 @@
     {
       "feature": "Built-in music playback",
       "apple": "MPMusicPlayerController, MPMediaPlayback, MPSystemMusicPlayerController",
-      "bifrost": "springboard/sdk/src/lib.rs:88 (audio::Client), springboard/src/svc.rs (audio module, PlayQueue/Play/Pause/Toggle/Next/Prev/SeekMs commands), springboard/apps/music-desktop/src/music/engine.rs",
+      "bifrost": "springboard/proto/src/svc.rs (audio module: Cmd and Evt wire for PlayQueue, Play, Pause, Toggle, Next, Prev, JumpTo, SeekMs and the State event); springboard/sdk/src/lib.rs (audio::Client); springboard/apps/music-desktop/src/music/engine.rs",
       "status": "partial",
-      "note": "app-facing playback over the audio service; no controller object with playback state notifications for media items, and no system music app handoff"
+      "note": "The transport command wire, play queue order and state event are tested headless in proto/tests/parity_sdk-tests-02.rs; the audio client and the music engine have no test yet. No controller object with playback state notifications for media items, and no system music app handoff."
     },
     {
       "feature": "Player queues",
@@ -45,16 +45,16 @@
     {
       "feature": "Item artwork and animated artwork",
       "apple": "MPMediaItemArtwork, MPMediaItemAnimatedArtwork",
-      "bifrost": "springboard/sdk/src/widgets.rs:842 (Player artwork slot, app draws into it), springboard/src/shell/music/nowplaying.rs",
+      "bifrost": "springboard/sdk/src/widgets.rs (PlayerLayout, player: the square artwork slot the app draws into), springboard/src/shell/music/nowplaying.rs",
       "status": "partial",
-      "note": "static artwork is drawn into the player slot by the app; no artwork object for the lock screen and no animated artwork"
+      "note": "The artwork slot geometry and the drawn capsule are tested headless in sdk/tests/parity_sdk-tests-02.rs (artwork module). Static artwork is drawn into the slot by the app; there is no artwork object for the lock screen and no animated artwork."
     },
     {
       "feature": "Media picker",
       "apple": "MPMediaPickerController",
       "bifrost": "springboard/ui/src/media_picker.rs",
       "status": "partial",
-      "note": "built on parity/team-a-10; not yet verified on Midget. Pure model of a library picker: kinds accepted, one or many selection with a limit, playable filter, title and fuzzy search, and a confirmed choice returned to the app. No SDK widget or shell sheet draws it yet."
+      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify."
     },
     {
       "feature": "Volume control and route button",
@@ -75,14 +75,14 @@
       "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent",
       "bifrost": "springboard/ui/src/remote_command.rs (CommandCenter), springboard/sdk/src/lib.rs (remote_command); wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped. Headless tests: ui/tests/parity_sdk-tests-01a.rs (remote_actions_are_dispatched_to_the_newest_handler, an_action_without_a_handler_or_switched_off_is_refused, rating_command_refuses_values_outside_its_range). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Track navigation and seeking",
       "apple": "MPChangePlaybackPositionCommand, MPSeekCommandEvent, MPSkipIntervalCommand",
-      "bifrost": "springboard/src/svc.rs (SeekMs, Next, Prev), springboard/docs/services.md; wired: springboard/src/shell/control_center.rs, springboard/src/shell/services/now_playing.rs",
+      "bifrost": "springboard/src/svc.rs (SeekMs, Next, Prev), springboard/docs/services.md; models: springboard/ui/src/remote_command.rs (SkipIntervalCommand, seek_target); tests: springboard/ui/tests/parity_sdk-complete-38.rs; wired: springboard/src/shell/control_center.rs, springboard/src/shell/services/now_playing.rs",
       "status": "partial",
-      "note": "seek and next or previous exist on the audio service; no skip-interval command object and no app-side command events Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "The skip-interval and position requests are modelled and tested headless, with clamping at both ends of an item. Gap: apps cannot yet receive skip or seek command events, and the shell's own seek and next or previous run on the audio service. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Playback mode: repeat and shuffle",
@@ -108,16 +108,16 @@
     {
       "feature": "Now Playing sessions and focus",
       "apple": "MPNowPlayingSession, MPNowPlayingInfoCenter multi-player handling",
-      "bifrost": "springboard/src/svc.rs (one queue, one speaker: latest player wins), springboard/docs/services.md",
-      "status": "os",
-      "note": "the audio service arbitrates which app plays; apps do not register as now-playing sessions"
+      "bifrost": "springboard/sdk/src/now_playing.rs (publish, clear, transport commands); springboard/ui/src/media_session.rs (session, content, playback, command table); springboard/ui/src/playback_arbiter.rs (which participant may play); springboard/src/shell/services/now_playing.rs (newest session on the tile); springboard/src/svc.rs (one queue, one speaker: latest player wins), springboard/docs/services.md",
+      "status": "partial",
+      "note": "Apps publish a session to Control Center, which shows the newest one, and receive its transport commands; the session and arbitration rules are tested in their models. Gap: the audio service still decides which app plays, and the shell does not yet apply the arbiter to the session it shows."
     },
     {
       "feature": "External player items",
       "apple": "MPContentItem, MPPlayableContentManager",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no API for apps to publish content items to the system; the playable content manager is deprecated by Apple"
+      "bifrost": "springboard/ui/src/content_items.rs (ContentItem, ContentTree)",
+      "status": "partial",
+      "note": "The item tree (containers, playable items, streaming and explicit flags, clamped playback progress, playback resolution) is tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: no SDK call publishes items to the shell and no player reads them."
     },
     {
       "feature": "Deprecated movie player",

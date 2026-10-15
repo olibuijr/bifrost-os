@@ -17,9 +17,9 @@
     {
       "feature": "Audio stream analyzer",
       "apple": "SNAudioStreamAnalyzer (init(format:), analyze(_:atAudioFramePosition:), completeAnalysis())",
-      "bifrost": "springboard/audiod/src/main.rs; springboard/src/media/capture.rs (Recorder)",
-      "status": "os",
-      "note": "The audio service owns the microphone and records takes (RecordStart and RecordStop in springboard/proto/src/svc.rs). Apps get no SDK access to the buffer stream"
+      "bifrost": "springboard/ui/src/sound_stream.rs (StreamAnalyzer, StreamFormat); springboard/ui/src/sound_classify.rs (ClassifyRequest)",
+      "status": "partial",
+      "note": "StreamAnalyzer takes ordered interleaved buffers at frame positions, averages channels to mono and classifies each full window with a caller-supplied classifier, tested headless in tests/parity_sdk-rest-05.rs. Gap: the audio service (springboard/audiod) does not yet feed live microphone buffers to apps, and no label model exists."
     },
     {
       "feature": "Built-in sound classifier request",
@@ -45,16 +45,16 @@
     {
       "feature": "Results observer callbacks",
       "apple": "SNResultsObserving, SNRequest, add(_:withObserver:), remove(_:), removeAllRequests()",
-      "bifrost": "springboard/ui/src/sound_analyzer.rs (SoundResultsObserving)",
+      "bifrost": "springboard/ui/src/sound_analyzer.rs (SoundResultsObserving, ResultLog); tests: springboard/ui/tests/parity_sdk-complete-25.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-sound-analysis, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK callback patterns exist, but nothing delivers sound results to an observer"
+      "note": "Wave 3 (w3-sound-analysis, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The analyzer delivers each window result, failure and completion to the observer, and ResultLog keeps those records readable by the caller (tested headless in ui/tests/parity_sdk-complete-25.rs). Gap: no shell or app client yet, which needs Midget."
     },
     {
       "feature": "Live audio classification sample",
       "apple": "Classifying Live Audio Input with a Built-in Sound Classifier (sample code)",
-      "bifrost": "springboard/apps/voicememos-desktop (recording only)",
-      "status": "gap",
-      "note": "Voice Memos records audio and has no classification"
+      "bifrost": "springboard/ui/src/sound_analyzer.rs, springboard/ui/src/sound_classify.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (sound_analyzer.rs, sound_classify.rs); not wired into the shell or apps, not tested on Midget. Voice Memos records audio and has no classification. Gap: the analyzer takes audio blocks from the caller, but no live microphone capture feeds it here; that needs an audio input device on Midget."
     },
     {
       "feature": "Errors",

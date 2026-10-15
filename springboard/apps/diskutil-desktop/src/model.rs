@@ -49,9 +49,15 @@ pub struct Mount {
     pub fs_type: String,
 }
 
-/// Device names that are never shown: memory disks, loop devices, device-mapper and software RAID.
+/// Device names that are never shown: memory disks, loop devices and device-mapper devices. Software RAID arrays (`md`)
+/// are shown, so an array the RAID Assistant made, or one assembled at boot, can be selected and erased or inspected.
 pub fn is_hidden_device(name: &str) -> bool {
-    ["loop", "ram", "zram", "dm-", "md", "fd", "nbd", "rbd"].iter().any(|p| name.starts_with(p))
+    ["loop", "ram", "zram", "dm-", "fd", "nbd", "rbd"].iter().any(|p| name.starts_with(p))
+}
+
+/// A software RAID array's device name: `md` and then digits (the kernel's `mdN`, and `mdNpM` for its partitions).
+pub fn is_raid_array(name: &str) -> bool {
+    name.strip_prefix("md").is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
 }
 
 /// A size in decimal units, as the sizes in a disk's own label read (1 GB is 1000 MB).
@@ -62,6 +68,7 @@ pub fn format_size(bytes: u64) -> String {
     }
     let mut value = bytes as f64 / 1000.0;
     let mut unit = 0;
+    // compliance-allow: LAY-03 Decimal bytes-per-unit threshold for capacity formatting, not window size.
     while value >= 1000.0 && unit + 1 < UNITS.len() {
         value /= 1000.0;
         unit += 1;
@@ -464,8 +471,19 @@ mod tests {
     fn hidden_devices_are_filtered() {
         assert!(is_hidden_device("loop3"));
         assert!(is_hidden_device("dm-0"));
+        assert!(!is_hidden_device("md0"), "a RAID array is a disk the user can select");
         assert!(!is_hidden_device("sdb"));
         assert!(!is_hidden_device("nvme0n1"));
+    }
+
+    #[test]
+    fn raid_arrays_are_md_and_a_number_and_nothing_else() {
+        assert!(is_raid_array("md0"));
+        assert!(is_raid_array("md127"));
+        assert!(is_raid_array("md0p1"));
+        assert!(!is_raid_array("mmcblk0"), "an SD card is not an array");
+        assert!(!is_raid_array("md"));
+        assert!(!is_raid_array("sdb"));
     }
 
     #[test]

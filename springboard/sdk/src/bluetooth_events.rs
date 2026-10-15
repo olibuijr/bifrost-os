@@ -4,12 +4,16 @@
 //!
 //! `DeviceEvents::register` returns a `Registration`. Each registration has its own queue of at most
 //! `QUEUE_CAPACITY` events; when a queue is full, its oldest event is dropped and counted. `post` offers an event to
-//! every registration whose filter matches and returns how many took it. This is the model only: the shell handles
-//! its own connect and disconnect events, and nothing feeds this queue yet, so the matrix row that uses it is partial.
+//! every registration whose filter matches and returns how many took it. `notice_for` and `notices_for_registration`
+//! turn queued events into user notifications, only for an app whose authorization allows posting. This is the model
+//! only: the shell handles its own connect and disconnect events, and nothing feeds this queue yet, so the matrix row
+//! that uses it is partial.
 
 use std::collections::{BTreeMap, VecDeque};
 
 use bifrost_core::bt_address::BdAddr;
+
+use crate::usernotif_model::AuthorizationStatus;
 
 /// Most events one registration keeps before the oldest is dropped.
 pub const QUEUE_CAPACITY: usize = 64;
@@ -128,6 +132,39 @@ impl DeviceEvents {
     pub fn dropped(&self, reg: Registration) -> usize {
         self.slots.get(&reg.0).map_or(0, |s| s.dropped)
     }
+}
+
+/// The user notification shown for one device event: a title and a body, both plain text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeviceNotice {
+    pub title: String,
+    pub body: String,
+}
+
+/// The notice for `event`. The body names the device when `name` is known and not blank, and shows its address otherwise.
+pub fn notice_for(event: &DeviceEvent, name: Option<&str>) -> DeviceNotice {
+    let verb = match event.kind {
+        DeviceEventKind::Connected => "connected",
+        DeviceEventKind::Disconnected => "disconnected",
+    };
+    let body = match name.map(str::trim).filter(|n| !n.is_empty()) {
+        Some(known) => known.to_string(),
+        None => event.address.to_string(),
+    };
+    DeviceNotice { title: format!("Bluetooth device {verb}"), body }
+}
+
+/// The notices for the queued `events` of one registration, oldest first. An app that may not post notifications gets
+/// none; `name_of` supplies the known name of each device address.
+pub fn notices_for_registration(
+    events: Vec<DeviceEvent>,
+    status: AuthorizationStatus,
+    name_of: impl Fn(&BdAddr) -> Option<String>,
+) -> Vec<DeviceNotice> {
+    if !status.allows_posting() {
+        return Vec::new();
+    }
+    events.iter().map(|event| notice_for(event, name_of(&event.address).as_deref())).collect()
 }
 
 #[cfg(test)]

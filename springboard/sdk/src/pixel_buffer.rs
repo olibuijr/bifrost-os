@@ -1,5 +1,5 @@
 //! Pixel buffers and their pool (Core Video's `CVPixelBuffer`, `CVPixelBufferLockBaseAddress`, `CVPixelBufferGetBaseAddress`,
-//! `CVPixelBufferGetBytesPerRow`, `CVPixelBufferPool`).
+//! `CVPixelBufferGetBytesPerRow`, `CVPixelBufferPool`), and the plane layouts that media and frame conversion write.
 //!
 //! A [`PixelBuffer`] owns its planes in main memory. The layout comes from the format table in
 //! `bifrost_render::pixel_format`: tight row strides, one plane per component group, odd chroma sizes rounded up.
@@ -7,12 +7,121 @@
 //! releases one, and [`PixelBuffer::base_address`] returns None while no lock is held. A read-only lock denies
 //! [`PixelBuffer::base_address_mut`]. [`PixelBufferPool`] recycles buffers of one format and size through
 //! `bifrost_render::buffer_pool`. Nothing here touches the GPU: buffers the presenter renders into stay in the system layer.
+//!
+//! [`Layout`] is the separate plain description of where each byte of a BGRA or NV12 frame lives. It holds no pixels,
+//! and the media layer uses it to address frames it writes.
 
 use bifrost_render::buffer_attach::Rect;
-use bifrost_render::pixel_format::{self, FourCc, PixelFormat};
+use bifrost_render::pixel_format::{self, FourCc, PixelFormat as RenderFormat};
 
 pub use bifrost_render::buffer_attach::{Attachments, Primaries, Transfer, YcbcrMatrix};
 pub use bifrost_render::buffer_pool::{Config as PoolConfig, PoolError};
+
+/// The pixel formats a [`Layout`] may use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixelFormat {
+    /// Four bytes per pixel in blue, green, red, alpha order.
+    Bgra8888,
+    /// Two planes in 4:2:0 layout: a full-size luma plane, then one interleaved chroma plane at half size in each
+    /// direction. Both dimensions must be even.
+    Nv12,
+}
+
+impl PixelFormat {
+    /// The planes of a `width` by `height` buffer as (width, height, bytes per pixel, minimum bytes per row).
+    fn planes(self, width: u32, height: u32) -> Vec<(u32, u32, usize, usize)> {
+        match self {
+            PixelFormat::Bgra8888 => vec![(width, height, 4, width as usize * 4)],
+            PixelFormat::Nv12 => vec![(width, height, 1, width as usize), (width / 2, height / 2, 2, width as usize)],
+        }
+    }
+}
+
+/// Where one plane sits in the buffer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Plane {
+    /// Width in samples of this plane (chroma pairs for the chroma plane of NV12).
+    pub width: u32,
+    /// Height in rows of this plane.
+    pub height: u32,
+    /// Bytes of one sample in this plane.
+    pub bytes_per_pixel: usize,
+    /// Bytes from the start of one row to the start of the next, padding included.
+    pub bytes_per_row: usize,
+    /// Byte offset of the plane from the start of the buffer.
+    pub offset: usize,
+}
+
+/// Why a layout was refused.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PixelError {
+    /// The width or height is zero.
+    EmptySize,
+    /// The row alignment is zero or not a power of two.
+    BadAlignment(u32),
+    /// The format needs even dimensions and the size is odd.
+    OddSize,
+    /// The buffer would not fit in memory addressing.
+    TooLarge,
+}
+
+impl std::fmt::Display for PixelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PixelError::EmptySize => write!(f, "a pixel buffer needs a width and a height above zero"),
+            PixelError::BadAlignment(a) => write!(f, "a row alignment must be a power of two, not {a}"),
+            PixelError::OddSize => write!(f, "this format needs an even width and height"),
+            PixelError::TooLarge => write!(f, "the pixel buffer is too large to address"),
+        }
+    }
+}
+
+impl std::error::Error for PixelError {}
+
+/// A checked buffer layout.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Layout {
+    pub format: PixelFormat,
+    pub width: u32,
+    pub height: u32,
+    pub planes: Vec<Plane>,
+    /// The size of the whole buffer in bytes.
+    pub total_bytes: usize,
+}
+
+impl Layout {
+    /// Lays out a buffer. Each row is padded up to a multiple of `row_alignment` bytes, which must be a power of two.
+    pub fn new(format: PixelFormat, width: u32, height: u32, row_alignment: u32) -> Result<Layout, PixelError> {
+        if width == 0 || height == 0 {
+            return Err(PixelError::EmptySize);
+        }
+        if row_alignment == 0 || !row_alignment.is_power_of_two() {
+            return Err(PixelError::BadAlignment(row_alignment));
+        }
+        if format == PixelFormat::Nv12 && (width % 2 != 0 || height % 2 != 0) {
+            return Err(PixelError::OddSize);
+        }
+        let alignment = row_alignment as usize;
+        let mut planes = Vec::new();
+        let mut offset = 0usize;
+        for (plane_width, plane_height, bytes_per_pixel, minimum_row) in format.planes(width, height) {
+            let bytes_per_row = minimum_row.div_ceil(alignment).checked_mul(alignment).ok_or(PixelError::TooLarge)?;
+            let len = bytes_per_row.checked_mul(plane_height as usize).ok_or(PixelError::TooLarge)?;
+            planes.push(Plane { width: plane_width, height: plane_height, bytes_per_pixel, bytes_per_row, offset });
+            offset = offset.checked_add(len).ok_or(PixelError::TooLarge)?;
+        }
+        Ok(Layout { format, width, height, planes, total_bytes: offset })
+    }
+
+    /// The byte offset of sample (`x`, `y`) in plane `plane`, or None when the sample is outside the plane.
+    pub fn offset_of(&self, plane: usize, x: u32, y: u32) -> Option<usize> {
+        let p = self.planes.get(plane)?;
+        if x >= p.width || y >= p.height {
+            return None;
+        }
+        Some(p.offset + y as usize * p.bytes_per_row + x as usize * p.bytes_per_pixel)
+    }
+}
 
 /// Why a pixel buffer could not be made or unlocked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,7 +137,7 @@ pub enum PixelBufferError {
 /// A buffer of pixels in main memory, one byte vector per plane.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PixelBuffer {
-    layout: &'static PixelFormat,
+    layout: &'static RenderFormat,
     width: usize,
     height: usize,
     planes: Vec<Vec<u8>>,
@@ -49,7 +158,7 @@ impl PixelBuffer {
     }
 
     /// Allocates a zeroed buffer. The caller has checked the size against the format (`buffer_len`).
-    fn alloc(layout: &'static PixelFormat, width: usize, height: usize) -> Self {
+    fn alloc(layout: &'static RenderFormat, width: usize, height: usize) -> Self {
         let planes: Vec<Vec<u8>> = (0..layout.planes.len())
             .map(|i| {
                 let len = layout.plane_size(i, width, height).map_or(0, |(row, rows)| row * rows);
@@ -195,7 +304,7 @@ impl PixelBuffer {
 /// from [`PoolConfig`]. Times are tick counts the caller supplies, as in `bifrost_render::buffer_pool`.
 #[derive(Debug)]
 pub struct PixelBufferPool {
-    layout: &'static PixelFormat,
+    layout: &'static RenderFormat,
     width: usize,
     height: usize,
     pool: bifrost_render::buffer_pool::Pool<PixelBuffer>,

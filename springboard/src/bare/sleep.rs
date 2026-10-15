@@ -82,6 +82,36 @@ fn sleep_blockers() -> Vec<String> {
     out.map(|o| parse_sleep_blockers(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default()
 }
 
+/// The apps that hold `ProcessInfo.ActivityOptions.idleSystemSleepDisabled`, by app id. The shell
+/// fills it from each app's `ToShell::Activity` and empties it when the app is dropped.
+static APP_SLEEP_HOLDS: std::sync::Mutex<std::collections::BTreeSet<String>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+fn app_sleep_holds() -> std::sync::MutexGuard<'static, std::collections::BTreeSet<String>> {
+    APP_SLEEP_HOLDS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Records the activity union an app reported: the app holds a system sleep block while the
+/// `idleSystemSleepDisabled` bit is set.
+pub fn note_app_activity(app: &str, options: u32) {
+    let mut holds = app_sleep_holds();
+    if options & bifrost_proto::activity::IDLE_SYSTEM_SLEEP_DISABLED != 0 {
+        holds.insert(app.to_string());
+    } else {
+        holds.remove(app);
+    }
+}
+
+/// Drops an app's sleep block when the app goes away.
+pub fn forget_app(app: &str) {
+    app_sleep_holds().remove(app);
+}
+
+/// One blocker entry per app holding a sleep block, in the same form as logind's lock list.
+pub fn app_sleep_blockers() -> Vec<String> {
+    app_sleep_holds().iter().map(|app| format!("app {app}")).collect()
+}
+
 /// Suspends through logind; returns once the machine has resumed.
 fn logind_suspend() -> io::Result<()> {
     crate::privd_client::connect().power("suspend")
@@ -188,7 +218,8 @@ impl PowerSys for Host {
         match self {
             // no wake locks or wakeup_count handshake: logind is the arbiter
             Host::Logind if file == "state" => {
-                let blockers = sleep_blockers();
+                let mut blockers = sleep_blockers();
+                blockers.extend(app_sleep_blockers());
                 if blockers.is_empty() {
                     logind_suspend()
                 } else {
@@ -207,7 +238,11 @@ impl PowerSys for Host {
     }
     fn active_sources(&mut self) -> Vec<String> {
         match self {
-            Host::Logind => sleep_blockers(),
+            Host::Logind => {
+                let mut blockers = sleep_blockers();
+                blockers.extend(app_sleep_blockers());
+                blockers
+            }
             Host::Inert => Vec::new(),
         }
     }

@@ -11,7 +11,9 @@
 
 use crate::analyzer_input::{AnalyzerInput, AudioFormat};
 use crate::sound_result::{SoundClassification, SoundClassificationResult, TimeRange};
+use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 
 /// Window length, in seconds, used when a request is given no valid window duration.
 pub const DEFAULT_WINDOW_SECONDS: f64 = 3.0;
@@ -77,6 +79,63 @@ pub trait SoundResultsObserving {
     fn did_produce(&mut self, result: &SoundClassificationResult);
     fn did_fail(&mut self, error: SoundAnalysisError);
     fn request_did_complete(&mut self);
+}
+
+/// What a [`ResultLog`] has recorded: the results in arrival order, the errors and whether the request completed.
+#[derive(Debug, Default)]
+struct LogState {
+    results: Vec<SoundClassificationResult>,
+    errors: Vec<SoundAnalysisError>,
+    completed: bool,
+}
+
+/// A results observer whose records stay readable by the caller after the analyzer takes ownership of the observer.
+/// Every clone shares the same records: pass [`ResultLog::observer`] to [`SoundAnalyzer::add`] and keep the log to read
+/// what the analyzer delivered.
+#[derive(Clone, Debug, Default)]
+pub struct ResultLog {
+    state: Rc<RefCell<LogState>>,
+}
+
+impl ResultLog {
+    /// An empty log.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// An observer that records into this log.
+    pub fn observer(&self) -> Box<dyn SoundResultsObserving> {
+        Box::new(self.clone())
+    }
+
+    /// The results delivered so far, oldest first.
+    pub fn results(&self) -> Vec<SoundClassificationResult> {
+        self.state.borrow().results.clone()
+    }
+
+    /// The failure codes delivered so far, oldest first.
+    pub fn errors(&self) -> Vec<SoundAnalysisError> {
+        self.state.borrow().errors.clone()
+    }
+
+    /// Whether the request reported completion.
+    pub fn completed(&self) -> bool {
+        self.state.borrow().completed
+    }
+}
+
+impl SoundResultsObserving for ResultLog {
+    fn did_produce(&mut self, result: &SoundClassificationResult) {
+        self.state.borrow_mut().results.push(result.clone());
+    }
+
+    fn did_fail(&mut self, error: SoundAnalysisError) {
+        self.state.borrow_mut().errors.push(error);
+    }
+
+    fn request_did_complete(&mut self) {
+        self.state.borrow_mut().completed = true;
+    }
 }
 
 /// Handle for a request added to an analyzer.

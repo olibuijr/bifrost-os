@@ -10,44 +10,44 @@
     {
       "feature": "PDFView (display and navigation)",
       "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling",
-      "bifrost": "springboard/ui/src/pdfview.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages, goto_page); wired: springboard/apps/books-desktop/src/books/mod.rs (set_two_pages, turn, metrics); draw.rs (draw_reader two-page branch); main.rs (View menu)",
+      "bifrost": "springboard/ui/src/pdfview.rs (PdfView, DisplayMode, page frames, scroll, navigation)",
       "status": "partial",
-      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing view. Books reflows text into its own page model, so page geometry and scaling are not Apple's Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs cover continuous and two-up page frames, visible and current pages, scroll clamping, scale factor and limits, autoscaling, go_to_page and next and previous page. Tests: continuous_pages_stack_one_per_row_with_the_page_gap_between_rows, visible_pages_are_the_frames_that_meet_the_viewport, current_page_is_the_row_that_crosses_the_middle_of_the_viewport, go_to_page_scrolls_the_row_to_the_top_and_refuses_unknown_pages, a_fixed_scale_scales_the_frames_and_the_content, a_fixed_scale_is_clamped_into_the_scale_limits, an_empty_view_has_no_pages_and_no_current_page. Not wired into apps or the shell; Books reflows text into its own page model, so Apple page geometry is not used; verify on Midget for parity."
     },
     {
       "feature": "PDFThumbnailView and page thumbnails",
       "apple": "PDFThumbnailView, PDFPage.thumbnail(of:for:)",
-      "bifrost": "springboard/ui/src/pdfpage.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (Panel::Pages, panel_rows, activate Row); springboard/apps/books-desktop/src/books/draw.rs (draw_rows Pages arm)",
+      "bifrost": "springboard/ui/src/pdfpage.rs (PdfPage, PageBoxes, rotation, thumbnail_size, fit_scale, fit_transform)",
       "status": "partial",
-      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No PDF page thumbnail generator Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Pure page geometry in springboard/ui/src/pdfpage.rs, tested in springboard/ui/tests/parity_sdk-tests-03.rs: unset boxes fall back along the chain (unset_boxes_fall_back_along_the_chain_to_the_media_box, setting_the_crop_box_moves_the_boxes_that_fall_back_to_it), rotation and displayed size (rotation_is_normalised_to_a_quarter_turn_and_odd_angles_are_refused, displayed_size_swaps_width_and_height_on_quarter_turns), aspect-fit thumbnail sizes (fit_scale_keeps_the_aspect_ratio_inside_the_target, a_rotated_thumbnail_fits_its_landscape_size_inside_a_square) and fit_transform_centres_the_page_in_the_target. No thumbnail image is rendered and no thumbnail view exists; the Books page panel (springboard/apps/books-desktop/src/books/mod.rs) is not covered by these tests; verify on Midget for parity."
     },
     {
       "feature": "PDFDocument loading (URL, data)",
       "apple": "PDFDocument init(url:), init(data:), init()",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:300 (load(data: Vec<u8>) -> Result<Book, String>); springboard/render/src/cg/pdf/doc.rs (Doc::open)",
+      "bifrost": "springboard/render/src/cg/pdf/doc.rs (Doc::open)",
       "status": "partial",
-      "note": "Loads from bytes inside Books only; no SDK call, and no PDFDocument-like object for apps round 75, host only: shared loader for Books and Viewer."
+      "note": "Opens a document from bytes in memory, repairs a broken startxref and refuses bytes without a PDF header. Headless tests in springboard/render/tests/parity_sdk-tests-03.rs: bytes_without_a_pdf_header_are_refused, a_document_with_a_correct_cross_reference_lists_its_objects, a_broken_startxref_is_repaired_by_scanning_the_objects. No URL loading and no app-facing PDFDocument object; Books loads through its own engine (springboard/src/shell/books/engine/pdf/mod.rs), which these tests do not cover; verify on Midget for parity."
     },
     {
       "feature": "Document structure: xref repair, objects",
       "apple": "PDFDocument read operations, page count, attributes",
       "bifrost": "springboard/render/src/cg/pdf/doc.rs (xref, object scan when the xref is bad), springboard/render/src/cg/pdf/obj.rs",
       "status": "partial",
-      "note": "Reader only; no attribute or metadata API for apps"
+      "note": "Headless tests in springboard/render/tests/parity_sdk-tests-03.rs: a_document_with_a_correct_cross_reference_lists_its_objects (object numbers and object loading) and a_broken_startxref_is_repaired_by_scanning_the_objects. Reader only; the document information dictionary is read by page::info, and no attribute or metadata API is exposed to apps; verify on Midget for parity."
     },
     {
       "feature": "PDFPage: page tree and text extraction",
       "apple": "PDFPage string, attributedString, characterBounds(at:), characterIndex(at:), numberOfCharacters",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (walk, page tree), springboard/render/src/cg/pdf/extract.rs (Extractor, reading order text)",
+      "bifrost": "springboard/render/src/cg/pdf/page.rs (pages, Page, page tree walk with inherited boxes), springboard/render/src/cg/pdf/extract.rs (Extractor, reading order text)",
       "status": "partial",
-      "note": "Text is extracted in reading order. No per-character bounds or index lookup"
+      "note": "Headless tests in springboard/render/tests/parity_sdk-tests-03.rs: the_page_tree_walk_inherits_the_media_box_and_reads_the_rotation, a_crop_box_is_reported_for_its_page_and_falls_back_to_the_media_box_elsewhere, text_drawn_on_a_written_page_is_extracted_in_reading_order, an_empty_written_document_has_no_text_pieces. Text is extracted in reading order. No per-character bounds or index lookup."
     },
     {
       "feature": "PDFPage: rendering and drawing",
       "apple": "PDFPage draw(with:to:), transformContext(for:), thumbnail, display boxes, rotation",
       "bifrost": "springboard/ui/src/pdfpage.rs; springboard/render/src/cg/pdf/interpret.rs, draw.rs; springboard/apps/preview-desktop/src/document.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No page rasterisation or drawing into a context. Books draws reflowed content, and JPEG 2000, CCITT and JBIG2 images are not shown round 75, host only: engine renders pages; no SDK PDF page API."
+      "note": "Offscreen page rasterisation in the engine is tested headless in springboard/render/tests/parity_sdk-tests-03.rs (a_filled_rectangle_is_rasterised_into_an_offscreen_picture, an_offscreen_picture_keeps_the_page_aspect_inside_the_requested_box); page geometry in springboard/ui/src/pdfpage.rs is tested in springboard/ui/tests/parity_sdk-tests-03.rs. Not built: drawing a PDF page into an app-provided context (no PDFPage draw API) and page thumbnails. JPEG 2000, CCITT and JBIG2 images are not shown; there is no SDK PDF page API."
     },
     {
       "feature": "PDFPage: page image and PDF creation",
@@ -59,9 +59,9 @@
     {
       "feature": "Annotations",
       "apple": "PDFAnnotation, PDFPage addAnnotation(_:), removeAnnotation(_:), annotation(at:), displaysAnnotations, ink and stamp types",
-      "bifrost": "springboard/ui/src/annotation.rs (Annotation; wired: springboard/apps/books-desktop/src/books/store.rs (Entry::notes, set_note, note_of, N lines); springboard/apps/books-desktop/src/books/mod.rs (add_note, save_note, notes_list, Panel::Notes); wired: springboard/apps/books-desktop/src/books/mod.rs (pdf_highlights); draw.rs (draw_page annotation pass)",
+      "bifrost": "springboard/ui/src/annotation.rs (Annotation, PageAnnotations: stacking, hit testing, visibility, set_contents, move_to, set_color, ids_of, Subtype::is_markup); springboard/ui/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "Wave 3 (theme-25, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. pdfcraft-desktop is an upstream package with no source here, so its annotation support cannot be checked Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The page annotation model keeps annotations in stacking order, hit-tests points, hides them as a whole, edits contents, colour and position in place, and lists annotations by kind. Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs and springboard/ui/tests/parity_sdk-complete-43.rs. Gap: the model does not read or write PDF annotation objects, and the Books notes wiring (springboard/apps/books-desktop/src/books/mod.rs) is not covered; verify on Midget for parity."
     },
     {
       "feature": "Widgets and form fields",
@@ -73,9 +73,9 @@
     {
       "feature": "Outline (table of contents)",
       "apple": "PDFOutline: child(at:), label, destination, action, isOpen",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:139-179 (outline() reads /Outlines into (title, page, level)); used at mod.rs:320 for the Books table of contents",
+      "bifrost": "springboard/render/src/cg/pdf/page.rs (outline(): /Outlines flattened into title, destination page and level); springboard/render/src/cg/pdf/outline_tree.rs (outline_tree: nested OutlineNode)",
       "status": "partial",
-      "note": "Titles, page targets and levels are read for the Books TOC. No outline tree object, no actions, no editing"
+      "note": "Headless test the_outline_is_flattened_in_reading_order_with_levels_and_page_targets in springboard/render/tests/parity_sdk-tests-03.rs covers the flattened outline, and springboard/render/tests/parity_sdk-complete-42.rs covers the nested tree built from it. Books builds its table of contents from its own copy in springboard/src/shell/books/engine/pdf/mod.rs, which these tests do not cover. No outline item actions or editing."
     },
     {
       "feature": "Selection and find",
@@ -94,9 +94,9 @@
     {
       "feature": "Printing PDF documents",
       "apple": "NSPrintOperation with PDFDocument printing (PDFDocument drawing into print context)",
-      "bifrost": "springboard/ui/src/print.rs (PrintOperation::new(file).to(Destination::Printer(..)).run() submits with lp), docs/bifrost-ui.md:1322-1333 (Printing section)",
+      "bifrost": "springboard/ui/src/print.rs (PrintOperation::new, PrintOperation::document, document_format)",
       "status": "partial",
-      "note": "The file is sent to CUPS as is. No page-level pagination, no print sheet, and no page range applied to PDF pages. Whether the Midget image ships CUPS is unchecked"
+      "note": "A PDF file job sends the file's own bytes with the application/pdf format, and a file job is named after its file: a_pdf_file_job_sends_the_file_bytes_unchanged and a_file_job_is_named_after_its_file_and_a_missing_file_is_refused in springboard/ui/tests/parity_sdk-tests-03.rs. Submission to CUPS (PrintOperation::run) is not covered; there is no page-level pagination or page range for PDF content (see docs/bifrost-ui.md:1322-1333); whether the Midget image ships CUPS is unchecked."
     },
     {
       "feature": "Page overlay and markup mode",

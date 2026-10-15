@@ -17,9 +17,9 @@
     {
       "feature": "Crash reason (CrashedProcess.reason, CrashReason)",
       "apple": "CrashedProcess.reason, CrashReason",
-      "bifrost": "springboard/src/shell/diag.rs (CrashEntry signature, from crash.log); springboard/apps/console-desktop/src/model.rs (parse_coredump_list: SIG mapped to Fault)",
-      "status": "os",
-      "note": "The reason is recorded by the shell and by systemd-coredump, but apps get it only through the Console and dev tooling, not through the SDK."
+      "bifrost": "springboard/sdk/src/crash_report.rs (CrashReason, ProcessCrash::reason); springboard/src/shell/diag.rs (CrashEntry signature, from crash.log); springboard/apps/console-desktop/src/model.rs (parse_coredump_list: SIG mapped to Fault)",
+      "status": "partial",
+      "note": "The SDK's ProcessCrash carries the reason text and CrashReason displays it, tested headless in springboard/sdk/tests/parity_sdk-os-03.rs. Gap: the shell does not pass a crashed app's reason to an app's reporter, so the reason reaches an app only when the caller builds the record."
     },
     {
       "feature": "Binary images and symbolication (binaryImages, symbolicateAddress(es), SymbolicatedFrame)",
@@ -38,16 +38,16 @@
     {
       "feature": "Sending a report to the developer",
       "apple": "Extension sends its report to the developer's own server after collection",
-      "bifrost": "springboard/src/shell/diag.rs (bundle shared with the developer: build info, crash.log, heartbeat); springboard/src/shell/diagnostics_page.rs (Diagnostics page)",
+      "bifrost": "springboard/src/shell/diag.rs (bundle shared with the developer, parse_log, upload_url, post); springboard/src/shell/diagnostics_page.rs (Diagnostics page)",
       "status": "partial",
-      "note": "A manual bundle the user shares. It covers the shell only. No app can send its own crash report through an SDK API."
+      "note": "The crash log parsing, the bundle layout and its HTTPS-only upload rule are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the bundle covers the shell only, and no app can send its own crash report through an SDK API."
     },
     {
       "feature": "Crash record written by the shell and the runtime",
       "apple": "Framework-level crash data, collected by the system on crash",
-      "bifrost": "springboard/src/bare/crashlog.rs (crash.log panics, last_exit, last_start, unclean-run note); springboard/mcp/src/dev.rs (panic_log)",
-      "status": "os",
-      "note": "Covers the shell's own panics and watchdog exits. Other apps' crashes come from systemd-coredump, not from this file."
+      "bifrost": "springboard/sdk/src/crash_record.rs (parse_entry, parse_log, parse_panic, parse_last_exit, ended_uncleanly); springboard/src/bare/crashlog.rs (writer: crash.log, last_exit, last_start, unclean-run note); springboard/mcp/src/dev.rs (panic_log)",
+      "status": "partial",
+      "note": "Typed readers for crash.log entries, panic locations, the last_exit marker and the unclean-run check are tested headless in springboard/sdk/tests/parity_sdk-rest-07.rs. Gap: the shell's writer does not use these readers, and no app is granted its own records."
     },
     {
       "feature": "Crashed web content process notice",
@@ -61,7 +61,7 @@
       "apple": "Not part of the framework (Console and Xcode Organizer read crash reports)",
       "bifrost": "springboard/apps/console-desktop/src/source.rs (coredump source); springboard/apps/console-desktop/src/model.rs (parse_coredump_list test)",
       "status": "os",
-      "note": "A system app reads the coredump list. No SDK API exposes it to third-party apps."
+      "note": "A system app reads the coredump list. No SDK API exposes it to third-party apps: a core dump holds another app's memory image, and no sandbox grant lets an app read one yet."
     }
   ],
   "gaps": [

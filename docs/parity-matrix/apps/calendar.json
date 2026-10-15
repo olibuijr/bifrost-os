@@ -14,7 +14,7 @@
    "area": "menu",
    "apple": "MainMenu.nib File > New Event",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:77",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:138",
    "note": "",
    "wire": ""
   },
@@ -23,16 +23,16 @@
    "area": "menu",
    "apple": "PreferencesPanel.nib natural-language creation; File > New Event",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:550",
-   "note": "Parses the pasteboard sentence; no inline quick-entry field",
-   "wire": "Add an inline quick-entry text field (toolbar + button long-press or New Event popover) in calendar/chrome.rs that feeds Calendar::new_event_from_text instead of only the pasteboard."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/quick.rs::split_notes; springboard/apps/calendar-desktop/src/calendar/quickentry.rs::preview",
+   "note": "Event > Quick Event... (Cmd+Shift+N) opens a sheet with one line; it previews the title, day, time, place and notes read from the sentence (text after the note marker), and Add saves the event at once. The reading is tested headless in tests/parity_app-calendar.rs. File > New Event from Text still reads the pasteboard; not yet verified on Midget. Left: invitees are not read from the sentence, and the line is a sheet rather than a toolbar popover.",
+   "wire": "Move the line into a toolbar popover opened by the New Event button, and read notes and invitees from the sentence."
   },
   {
    "feature": "Day / Week / Month / Year views (Cmd+1..4)",
    "area": "view",
    "apple": "MainMenu.nib View > By Day/Week/Month/Year",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:91",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:158",
    "note": "",
    "wire": ""
   },
@@ -41,7 +41,7 @@
    "area": "menu",
    "apple": "MainMenu.nib View > Go to Today, Next, Previous",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:87",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:153",
    "note": "",
    "wire": ""
   },
@@ -52,14 +52,14 @@
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:766",
    "note": "Go to Date sheet (Go menu, Shift-Command-T) with year/month/day steppers, Return/Escape; no typed date or calendar-grid picker, no sheet accessibility nodes yet",
-   "wire": "Add Command::GoToDate (cmd+shift+t) in calendar.rs:1295 with a date-picker sheet that sets the shown date; list it under Go in main.rs main_menu."
+   "wire": "Replace the steppers with a month-grid date picker when the kit has one."
   },
   {
    "feature": "Event editor: title, location, notes, all-day, start/end",
    "area": "panel",
    "apple": "event inspector (Edit Event / Show Inspector)",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:346",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:601",
    "note": "",
    "wire": ""
   },
@@ -68,8 +68,8 @@
    "area": "panel",
    "apple": "event inspector repeat popup",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:867",
-   "note": "Fixed preset cycle (store::REPEATS); calendar/recur.rs supports full RRULE but there is no custom-repeat UI",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:54",
+   "note": "The Repeat row opens a picker under it: Frequency (Never, Daily, Weekly, Monthly, Yearly), Every N, the weekdays of a weekly rule, and Ends (Never, After N times, Until a date). A preset is saved as before; any other rule is saved as its RRULE in calendar-extras.txt (src/calendar/extras.rs) and worked out in Calendar::occurs (src/calendar/overlay.rs:122). Not yet verified on Midget. Left: copy and paste and the print agenda carry only the preset, so a custom rule is not copied or printed.",
    "wire": "Add a Custom repeat sheet (frequency, interval, weekdays, end after N / on date) that writes an RRULE into the rich sidecar via calendar/exchange.rs; open it from Target::Repeat."
   },
   {
@@ -77,8 +77,8 @@
    "area": "panel",
    "apple": "AlarmCustom.nib, AlarmInstance.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:868",
-   "note": "One alert from a preset cycle; delivery via notification-schedule works (calendar/connect.rs)",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:76",
+   "note": "The Alert row opens a checklist of the seven presets (several can be on), a custom alarm from 0 minutes to a week in 5-minute steps, and a row that removes each custom alarm. The alarms are kept in calendar-extras.txt and scheduled one by one through alert_calendar_with (src/calendar/alerts.rs:24). Not yet verified on Midget. Left: copy and paste and the .ics export keep only the first preset.",
    "wire": "Allow a list of alerts per event plus a Custom alert sheet (N minutes/hours/days before, or at a time); store as VALARMs in the rich sidecar and schedule each in connect.rs plan_alerts."
   },
   {
@@ -86,7 +86,7 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Duplicate",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:599",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:674",
    "note": "",
    "wire": ""
   },
@@ -95,7 +95,7 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Delete / Undo",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:653",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:728",
    "note": "Undo bar, not the shell Edit > Undo stack",
    "wire": ""
   },
@@ -104,16 +104,16 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:615",
-   "note": "Copy Event / Paste Event in the Event menu (.ics on the pasteboard, calendar/clipboard.rs); not routed through the shell Edit menu, copies only the open saved event, cut not done",
-   "wire": "Implement copy/paste of the selected event (ICS on the pasteboard via exchange.rs export_event_ics, import_ics on paste onto the selected day); route the shell Edit commands through App::commands in main.rs."
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:257",
+   "note": "Edit > Cut/Copy/Paste from the shell Edit menu now act on the saved event being edited (Cut = copy then delete with Undo; Paste adds the pasteboard event to the selected day); Event > Cut Event (Shift-Command-X). Copy/Cut work only from the open editor; the month and week grids have no selected-event state, and text selection copy inside the editor fields is not routed. A custom repeat rule and custom alarms now go with the event through copy and paste (clip.rs copy_text and paste, tested headless in tests/parity_app-calendar.rs).",
+   "wire": "Select an event with a single click (the grid opens it today) and keep custom repeat rules when pasting once the custom repeat sheet exists."
   },
   {
    "feature": "Export Event (.ics)",
    "area": "document",
    "apple": "MainMenu.nib File > Export > Export Event",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:611",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:686",
    "note": "",
    "wire": ""
   },
@@ -122,7 +122,7 @@
    "area": "document",
    "apple": "MainMenu.nib File > Export",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:686",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:760",
    "note": "",
    "wire": ""
   },
@@ -131,34 +131,34 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes ICS/vCal; File > Import; ImportProgress.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:151",
-   "note": "File > Import... open panel (.ics/.vcs) with a count notice; opening .ics files from Files and import progress UI not done",
-   "wire": "Add File > Import... (open panel filtered to .ics) calling Calendar::import_ics with a count toast, and handle opening .ics files from Files via the app open-file hook in main.rs."
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:51",
+   "note": "File > Import... plus opening .ics files from Files (Input::Open, manifest handles public.calendar-event). Still no import progress UI.",
+   "wire": "Check File > Import... and opening an .ics from Files on Midget; recurring events are expanded one year ahead, as for CalDAV."
   },
   {
    "feature": "Calendar archive backup / restore",
    "area": "document",
    "apple": "BackupRestore.nib; File > Export > Calendar Archive",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add Export/Import Calendar Archive (one file holding events.tsv + calendar.ics) under File in main.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs; springboard/apps/calendar-desktop/src/calendar/archive.rs::import_archive",
+   "note": "File > Export Calendar Archive writes Calendar Archive.bfcal (events.tsv and calendar.ics in one file, calendar/archive.rs), through the save job in main.rs. File > Import Calendar Archive... adds the events the calendar does not hold and never removes any (archive.rs merge_events), keeping events.tsv.bak.",
+   "wire": "Check File > Export Archive... and Import Archive... on Midget; an import adds what is missing and never removes, so a restore over a changed calendar is a merge."
   },
   {
    "feature": "Multiple calendars with colours: new, rename, delete, show/hide",
    "area": "menu",
    "apple": "File > New Calendar, New Calendar Group; LocalCalendarInspector.nib; Get Info",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Sidebar shows one fixed 'Calendar' row (calendar/chrome.rs:270)",
-   "wire": "Add a calendar id + colour to events (rich sidecar or store column), list calendars in the SourceList with show/hide checkboxes, File > New Calendar, a Get Info inspector for name/colour, and a calendar popup in the editor; tint events by calendar in draw_month/draw_time."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs:97",
+   "note": "File > New Calendar... makes a calendar from a line sheet; File > Rename Calendar and File > Delete Calendar work on each calendar made. Each calendar has a palette colour and its own row in the calendar list that shows or hides it, a Calendar row in the event form, and Settings > Default Calendar. Up to ten calendars, the built-in one included. Delete is refused while the calendar holds events, and the message says to delete them first. The calendars and the events' calendar ids are kept in calendar-extras.txt (src/calendar/extras.rs:56). Not yet verified on Midget. Left: Get Info, calendar groups, choosing a colour, and moving events to another calendar on delete.",
+   "wire": "Give saved events a calendar id and colour (store column or sidecar), add File > New Calendar, rename and delete, a Get Info inspector and a calendar popup in the editor."
   },
   {
    "feature": "Show / hide calendar list",
    "area": "view",
    "apple": "View > Show Calendar List",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:878",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:986",
    "note": "",
    "wire": ""
   },
@@ -167,7 +167,7 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib week numbers option",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:679",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:923",
    "note": "",
    "wire": ""
   },
@@ -176,71 +176,71 @@
    "area": "toolbar",
    "apple": "MainMenu.nib Edit > Search; toolbar search field",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs:131",
-   "note": "search() model exists and is tested; no search field or results list",
-   "wire": "Add a toolbar search field in calendar/chrome.rs bars(); show exchange.rs search hits as a list replacing the grid; clicking a hit jumps to its day and opens the editor."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs::split_range; springboard/apps/calendar-desktop/src/calendar/search.rs",
+   "note": "Go > Search Events... (Command-F) and a toolbar button open a search screen with a query field and scrolling result list; Return or a click opens the event. Saved events match on title, location and notes, and from:YYYY-MM-DD and to:YYYY-MM-DD words limit the hits to a date range (search.rs, tested headless in tests/parity_app-calendar.rs). Uses its own list rather than the kit search_field; the caret does not move by click.",
+   "wire": "Match locations and notes of saved events (the store keeps them, search.rs reads only titles for them), search by date range, and move the caret by click. The compliance snapshot needs a re-bless on Midget for the new toolbar field."
   },
   {
    "feature": "Drag to create / move events in Day and Week",
    "area": "view",
    "apple": "day/week view direct manipulation",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/layout.rs:91",
-   "note": "drag_create/drag_move geometry exists and is tested but timeview/touch handling never calls it",
-   "wire": "In Calendar::touch (calendar.rs) on Down+Move in a time column, use layout::drag_create for a new draft and layout::drag_move for a pressed event, save on Up; draw the live block in timeview.rs draw_time."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/drag.rs::begin_press; springboard/apps/calendar-desktop/src/calendar/layout.rs::drag_resize",
+   "note": "Dragging empty hour-grid space sizes a new event (15 minute snap) and opens the editor; dragging a timed event moves it across times and week days and saves; grabbing its top or bottom edge resizes it to the snapped minute (layout::drag_resize, tested headless in tests/parity_app-calendar.rs). Left: all-day events cannot be dragged, the drag starts only after a 250 ms hold, and the travel time padding is not resized with the edge.",
+   "wire": "Drag at once (no 250 ms hold) when the pointer is a mouse and scrolling has another input; drag all-day events between days."
   },
   {
    "feature": "CalDAV accounts sync",
    "area": "integration",
    "apple": "PreferencesPanel.nib Accounts; CalDAVCalendarInspector.nib; View > Refresh Calendars",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:186",
-   "note": "Read-only import from Internet Accounts; no write-back, no per-account calendars, no Refresh command",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:226",
+   "note": "CalDAV calendars are read in the background and imported into the store. View > Refresh Calendars (Cmd+R) starts a read now (springboard/sdk/src/dav_sync.rs refresh). Not yet verified on Midget. Left: writing local saves and deletes back with PUT and DELETE, and one calendar per account in the calendar list.",
    "wire": "Push local saves/deletes with dav_sync PUT/DELETE, keep each account as its own calendar in the sidebar, add Refresh Calendars (cmd+r) to View."
   },
   {
    "feature": "Subscribe to calendar (webcal URL)",
    "area": "integration",
    "apple": "Subscribe.nib; File > New Calendar Subscription; Info.plist webcal scheme",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a New Calendar Subscription sheet taking a URL, fetch the ICS on a refresh interval into a read-only calendar, and register the webcal URL scheme for the app."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/linesheet.rs:168",
+   "note": "File > New Calendar Subscription... opens a line sheet filled from the pasteboard. Return subscribes; an address that is refused keeps the sheet open with the reason. webcal:// and https:// calendars are read every hour, cached for offline start, shown or hidden from the list, and removed with File > Unsubscribe from. Not yet verified on Midget. Left: a refresh interval per calendar, and a check of a real webcal feed on Midget.",
+   "wire": "Replace File > Subscribe to Calendar from Clipboard with a New Calendar Subscription sheet (an address field), add a per-calendar refresh interval, and check a real webcal feed on Midget."
   },
   {
    "feature": "Holidays and Birthdays calendars",
    "area": "integration",
    "apple": "AddHoliday.nib; BirthdayCalendarInspector.nib; settings show Birthdays/Holidays",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a read-only Birthdays calendar fed from the contacts store and a bundled holiday set, each with a Settings toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/holidays.rs:28",
+   "note": "Holidays row in the calendar list shows Iceland's public holidays and observances (Easter computed) as read-only all-day events; no Birthdays calendar yet; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Add the Birthdays calendar from the Contacts service (needs an async contacts query from the app), a region choice for the holidays, and a Settings toggle for each."
   },
   {
    "feature": "Settings: general (week start, day start/end, days per week, default duration, default calendar)",
    "area": "settings",
    "apple": "PreferencesPanel.nib General/Advanced panes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Only week numbers is persisted",
-   "wire": "Add a Settings window (shell Settings hook) with these options persisted beside events.tsv; use them in timeview.rs week_start/scroll_to_morning and new drafts."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs; springboard/apps/calendar-desktop/src/main.rs:70",
+   "note": "File > Settings... (Command-comma) sheet: week start, day start hour, default duration; persisted in calendar-prefs.txt (calendar/prefs.rs) and used by the month grid, week view, scroll position and new events. The default calendar is a Default Calendar submenu (main.rs:85). Missing: day end, days per week, and a separate Settings window (no shell Settings hook found).",
+   "wire": "Add day end hour, days per week and a default calendar (needs multiple calendars) to the Settings menu in main.rs."
   },
   {
    "feature": "Settings: default alerts",
    "area": "settings",
    "apple": "PreferencesPanel.nib Alerts pane",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add default alert choices (timed events, all-day events, birthdays) to Settings, applied to new drafts in calendar.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs",
+   "note": "Default alert for timed and all-day events in the Settings sheet; applied to new drafts and swapped when All-day is toggled. Birthday default alert missing (no Birthdays calendar).",
+   "wire": "Add a default alert for birthdays once the Birthdays calendar exists."
   },
   {
    "feature": "Time zone support",
    "area": "settings",
    "apple": "PreferencesPanel.nib time zone support; TimeZonePickerSheet.nib; InspectorTimeZoneView.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs:1",
-   "note": "TZID/VTIMEZONE offsets read on import; no per-event zone or view-zone UI",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs:283",
+   "note": "A Time Zone row in the event form cycles the device's zone, UTC and Iceland (the fixed-offset zones; extras.rs ZONES). The zone sets the alarms (alerts.rs:24) and is written as TZID in the .ics export (extras.rs apply_zones). Not yet verified on Midget. Left: a view time-zone override in the toolbar, zones with daylight saving, and converting the displayed times to the view's zone.",
    "wire": "Add a time zone popup in the editor (TZID in the rich sidecar) and a toolbar view time-zone override in chrome.rs."
   },
   {
@@ -266,7 +266,7 @@
    "area": "panel",
    "apple": "event inspector",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:831",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:931",
    "note": "",
    "wire": ""
   },
@@ -283,10 +283,10 @@
    "feature": "Print",
    "area": "menu",
    "apple": "MainMenu.nib File > Print; PrintPanel.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add File > Print... rendering the current view through the shell print service."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/printing.rs:66",
+   "note": "File > Print... (Cmd+P) sends the shown day, week, month or year as a plain-text agenda to the printing service, not a picture of the grid; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Draw the month grid and the day and week columns onto the pages (PrintOperation::pages) instead of an agenda list; text prints in ASCII only, so accented letters need the page writer's font support."
   },
   {
    "feature": "Publish / share calendar",
@@ -310,9 +310,9 @@
    "feature": "Travel time and Time to Leave",
    "area": "settings",
    "apple": "View > Show Travel Time; Time to Leave setting",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Needs a routing service",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/layout.rs::travel_span; springboard/apps/calendar-desktop/src/calendar/timeview.rs::grid_span; springboard/apps/calendar-desktop/src/calendar/pickers.rs:287",
+   "note": "A Travel Time row in the event form (none, 15, 30, 45 or 60 minutes) saved with the event (extras.rs). The Day and Week grids pad the event block upwards by its travel time, never before midnight (layout.rs travel_span, tested headless in tests/parity_app-calendar.rs). Not used for alerts. Left: Time to Leave, which needs a routing service.",
    "wire": "Add a travel-time field in the editor that pads the event block; Time to Leave alerts once a maps routing service exists."
   },
   {
@@ -339,17 +339,17 @@
    "apple": "View > Zoom In / Zoom Out",
    "status": "partial",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:104",
-   "note": "Go > Zoom In / Zoom Out (cmd+= / cmd+-) change the hour height 24-96 pt in Day and Week; zoom level is not persisted",
-   "wire": "Add Zoom In/Out commands (cmd+= / cmd+-) changing the hour height in timeview.rs."
+   "note": "Zoom level is now saved with the settings and restored on start.",
+   "wire": "Verify Cmd+= / Cmd+- and the toolbar on Midget."
   },
   {
    "feature": "User activities / intents (show date, show event, create event)",
    "area": "intent",
    "apple": "Info.plist NSUserActivityTypes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Expose open-date, open-event and create-event methods on the app control socket and the intent registry."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/intents.rs:19; springboard/apps/calendar-desktop/src/main.rs:385",
+   "note": "Intents show-date, show-event and create-event (intents.rs), and control methods calendar.state, calendar.show_date, calendar.create_event. No user-activity handoff.",
+   "wire": "Add a continue-activity hook (Search items for events), a show-day intent that picks the view, and a reply with the event for create-event."
   }
  ]
 }

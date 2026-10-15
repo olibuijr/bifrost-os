@@ -1,11 +1,12 @@
 id = "is.olibuijr.dictionary.desktop"
 name = "Dictionary"
-version = "0.3.0"
+version = "0.5.4"
 exec = "bifrost-dictionary"
 icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Looks words up in installed StarDict dictionaries, with suggestions as you type."
 category = "Reference"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage"]
 window = "full-size"

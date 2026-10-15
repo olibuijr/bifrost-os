@@ -12,7 +12,7 @@
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-/// How hard the match finder searches. A deeper search finds longer matches and runs slower.
+/// How hard the matcher searches. A deeper search finds longer matches and runs slower.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
     /// Few candidates per position; the fastest encoding.

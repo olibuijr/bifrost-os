@@ -61,7 +61,7 @@
    "area": "view",
    "apple": "SourcesViewController.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/console.rs:353",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:391",
    "note": "This machine, crash/hang/daily/signpost/security and /var/log files; no other devices.",
    "wire": "Add a remote-device section listing devices on the LAN that expose the journal over the control socket."
   },
@@ -70,8 +70,8 @@
    "area": "view",
    "apple": "Reports sidebar, ReportViewController.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/kernel.rs:81",
-   "note": "Reports has a Kernel Reports row: each file in /sys/fs/pstore is a fault row whose detail pane shows the record, with the previous boot's kernel warnings and errors from journalctl -k -b -1. Spin reports are not built. built on parity/team-d-console; not yet verified on Midget.",
+   "bifrost": "springboard/apps/console-desktop/src/kernel.rs:81; springboard/apps/console-desktop/src/diagnostics.rs:146",
+   "note": "Reports has Crash Reports, Hang Diagnostics (each stall of the UI loop of 20 seconds or more, diagnostics.rs:146) and a Kernel Reports row: each file in /sys/fs/pstore is a fault row whose detail pane shows the record, with the previous boot's kernel warnings and errors from journalctl -k -b -1. Spin reports are not built: no data source exists yet. Not yet verified on Midget.",
    "wire": "Verify on Midget: needs a machine with a pstore record or a persistent journal. Spin reports have no data source yet."
   },
   {
@@ -79,8 +79,8 @@
    "area": "view",
    "apple": "View > Show Details",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/console.rs:520",
-   "note": "View > Show Details hides and shows the detail pane; the table takes its room. built on parity/team-d-console; not yet verified on Midget.",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:525",
+   "note": "View > Show Details hides and shows the detail pane (console.rs:807); the pane is drawn only with a row selected and enough room, and the table takes the rest. Not yet verified on Midget.",
    "wire": "Verify on Midget: toggle with a row selected."
   },
   {
@@ -88,27 +88,27 @@
    "area": "menu",
    "apple": "View > Visible Columns",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/columns.rs:88",
-   "note": "View > Visible Columns lists Type, Time, Process, PID, Subsystem, Category and Message as checked items; PID starts off and the last shown column cannot be hidden. built on parity/team-d-console; not yet verified on Midget.",
-   "wire": "Verify on Midget: switch columns on and off and check the header and cells stay aligned at 1200x780 and a narrow window."
+   "bifrost": "springboard/apps/console-desktop/src/columns.rs (ColumnSet, layout); springboard/apps/console-desktop/src/main.rs:448 (View > Visible Columns submenu); springboard/apps/console-desktop/src/console.rs:814",
+   "note": "View > Visible Columns lists the seven columns with checkmarks and toggles each one (console.rs:814); PID starts hidden and the last visible column cannot be hidden. The model and layout are tested in columns.rs. Not yet verified on Midget.",
+   "wire": "Add View > Visible Columns using columns::Visible and size the table with Visible::widths."
   },
   {
    "feature": "Show Activities / Show Sources toggles",
    "area": "menu",
    "apple": "View > Show Activities, Show Sources",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/console.rs:512",
-   "note": "View > Show Sidebar (Ctrl+Cmd+S) hides and shows the sources sidebar; the table and the toolbar move to the window's edge, clear of the traffic lights. built on parity/team-d-console; not yet verified on Midget.",
-   "wire": "Still missing: an activities view that groups messages by systemd unit invocation."
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:806 (MENU_SIDEBAR); springboard/apps/console-desktop/src/console.rs:511 (sidebar width); springboard/apps/console-desktop/src/activity.rs (shows, filter_for)",
+   "note": "View > Show Sidebar (Ctrl+Cmd+S) hides and shows the sources sidebar; the table and the toolbar move to the window's edge, clear of the traffic lights. View > Show Only This Activity narrows the table to the selected message's systemd unit invocation and again shows every activity (activity.rs, tested headless). The grouped Activities outline is not built. Not yet verified on Midget.",
+   "wire": "Still missing: the grouped activities outline that shows messages by systemd unit invocation."
   },
   {
    "feature": "Expand / Collapse selected rows",
    "area": "menu",
    "apple": "View > Expand Selected Rows, Collapse Selected Rows",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/console.rs:592",
-   "note": "View > Expand Message / Collapse Message and Collapse All Messages: the selected message wraps over up to 12 lines in the table and the rows below move down; one selected row at a time, as the table has single selection. built on parity/team-d-console; not yet verified on Midget.",
-   "wire": "Verify on Midget: expand a multi-line message, scroll and tap rows below it. Multi-row selection is not built."
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:834 (toggle_expanded); springboard/apps/console-desktop/src/console.rs:808 (MENU_EXPAND); springboard/apps/console-desktop/src/rows.rs",
+   "note": "View > Expand Message shows the selected message whole and grows its row; Collapse All Messages undoes every expansion. Tested in wire_tests.rs and rows.rs. Expansion applies to the one selected message: Apple's multi-row selection is not built. Not yet verified on Midget.",
+   "wire": "Keep a columns::Expanded set and size rows with row_lines; menu items in main.rs."
   },
   {
    "feature": "Show messages after selected / only this subsystem",
@@ -133,7 +133,7 @@
    "area": "menu",
    "apple": "File > Save",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/main.rs:104",
+   "bifrost": "springboard/apps/console-desktop/src/main.rs:104 (begin_save_messages)",
    "note": "Log > Save Messages opens the save panel and writes the selected message or every shown message to the chosen file; a shell without the panel gets the old Documents/Console file. built on parity/team-d-console; not yet verified on Midget.",
    "wire": "Verify on Midget: save from the panel, cancel it, and check the file's content."
   },
@@ -142,17 +142,17 @@
    "area": "document",
    "apple": "File > Open, Open Recent; Info.plist document types",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/main.rs:171",
-   "note": "File > Open uses the open panel; gzip files are unpacked and journal exports, JSON lines and plain text are read (opened.rs); Opened Files in the sidebar and File > Open Recent keep the logs opened in this session. built on parity/team-d-console; not yet verified on Midget.",
-   "wire": "Still missing: opening from argv or an open-document event, log and text types in the manifest, bzip2 and xz decompression, and Open Recent across sessions."
+   "bifrost": "springboard/apps/console-desktop/src/main.rs:116 (begin_open); springboard/apps/console-desktop/src/opened.rs (decode); springboard/apps/console-desktop/manifest.toml (handles)",
+   "note": "File > Open uses the open panel; gzip files are unpacked and journal exports, JSON lines and plain text are read (opened.rs); Opened Files in the sidebar and File > Open Recent keep the logs opened in this session. Files the shell hands over (inbound documents) open the same way, and the manifest declares plain text and gzip as alternate handlers. Not built: opening from the command line, bzip2 and xz, and Open Recent across sessions. Not yet verified on Midget.",
+   "wire": "Still missing: opening from argv, bzip2 and xz decompression, and Open Recent across sessions."
   },
   {
    "feature": "Reveal in file manager / Move to Trash for reports",
    "area": "menu",
    "apple": "File > Reveal, Move to Trash",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/main.rs:136",
-   "note": "File > Reveal in Files and Move to Trash act on a log the user opened or an archive the Console captured, through the workspace service and the file's document grant. built on parity/team-d-console; not yet verified on Midget.",
+   "bifrost": "springboard/apps/console-desktop/src/main.rs:136 (reveal_active); springboard/apps/console-desktop/src/main.rs:143 (trash_active)",
+   "note": "File > Reveal in Files and Move to Trash act on a log the user opened or an archive the Console captured, through the workspace service and the file's document grant. Crash reports and /var/log files have no document grant, so those are not reached. Not yet verified on Midget.",
    "wire": "Crash reports and the files in /var/log are system files the app holds no document grant for, so Reveal and Trash do not reach them: needs a shell grant for system log paths."
   },
   {
@@ -161,7 +161,7 @@
    "apple": "View > Reload",
    "status": "partial",
    "bifrost": "springboard/apps/console-desktop/src/console.rs:829",
-   "note": "View > Reload (Cmd+R) reads the current view again and keeps the search and the Info and Debug toggles. built on parity/team-d-console; not yet verified on Midget.",
+   "note": "View > Reload (Cmd+R) reads the current view again and keeps the search and the Info and Debug toggles. Not yet verified on Midget.",
    "wire": "Verify on Midget: Reload on the live journal and on a log file."
   },
   {
@@ -170,7 +170,7 @@
    "apple": "ArchiveWindowController.nib, ArchiveViewController.nib",
    "status": "partial",
    "bifrost": "springboard/apps/console-desktop/src/capture.rs:50",
-   "note": "File > Capture Archive saves this boot's journal in the journal export format to a place chosen in the save panel, streaming on a utility queue, then opens it under Opened Files with Reveal and Trash available. built on parity/team-d-console; not yet verified on Midget.",
+   "note": "File > Capture Archive saves this boot's journal in the journal export format to a place chosen in the save panel, streaming on a utility queue, then opens it under Opened Files with Reveal and Trash available. An archive window with its own time range is not built. Not yet verified on Midget.",
    "wire": "Verify on Midget: capture an archive, check the file in Files and reopen it with File > Open. An archive window with its own toolbar and time range is not built."
   },
   {
@@ -186,10 +186,10 @@
    "feature": "Customize Toolbar / Show Toolbar",
    "area": "menu",
    "apple": "View > Customize Toolbar",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Needs SDK toolbar customization sheet; wire View > Customize Toolbar."
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs (toggle_toolbar, controls); springboard/apps/console-desktop/src/draw.rs (draw_chrome)",
+   "note": "View > Hide Toolbar and Show Toolbar remove and restore the toolbar's items and search field (toolbar_tests.rs, tested headless); the table keeps its place under the empty band. Customize Toolbar, the sheet that rearranges the items, is not built.",
+   "wire": "Still missing: the Customize Toolbar sheet, which needs SDK toolbar customization."
   },
   {
    "feature": "Find Next / Previous / Use Selection for Find",
@@ -197,7 +197,7 @@
    "apple": "Edit > Find",
    "status": "partial",
    "bifrost": "springboard/apps/console-desktop/src/console.rs:862",
-   "note": "Edit > Find Next (Cmd+G), Find Previous (Shift+Cmd+G) and Use Selection for Find (Cmd+E) move the selection through matching rows, wrapping at the ends, and scroll to it without filtering. The match is the find text or the search field's text. built on parity/team-d-console; not yet verified on Midget.",
+   "note": "Edit > Find Next (Cmd+G), Find Previous (Shift+Cmd+G) and Use Selection for Find (Cmd+E) move the selection through matching rows, wrapping at the ends, and scroll to it without filtering (console.rs:862, find_step). The match is the find text or the search field's text. Not yet verified on Midget.",
    "wire": "Verify on Midget: step through a long live log and check the scroll follows the selection."
   },
   {
@@ -218,5 +218,13 @@
    "note": "Platform tracing formats.",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 23,
+  "parity": 8,
+  "partial": 13,
+  "gap": 0,
+  "n/a": 2,
+  "coverage_pct": 69.0
+ }
 }

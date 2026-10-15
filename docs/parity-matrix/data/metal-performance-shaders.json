@@ -1,138 +1,138 @@
 {
-  "framework": "Metal Performance Shaders",
-  "doc": "https://developer.apple.com/documentation/metalperformanceshaders",
-  "macos_since": "10.13",
-  "status": "partial",
-  "bifrost": "springboard/render/src/gfx.rs (CPU blur), springboard/src/gpu/wl.rs (GPU dual-Kawase blur pyramid), springboard/render/src/gfx/rotate.rs (bilinear resample), springboard/render/src/emoji.rs (area and bilinear resample), springboard/src/gpu/egl.rs (EGL/GLES compute and render path)",
-  "summary": "BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by the shell for glass and scaling. It exposes no app-facing GPU image-filter, histogram, matrix or neural-network API, and only a unary kernel base trait with a chain runner (springboard/render/src/kernel.rs), not a Metal-style kernel layer; most of the framework has no counterpart.",
-  "rea_evidence": "ev_dc16a204f342e059f1a161b951e799bfe8079a8056c0055eac0b1c2c928fba5d",
-  "features": [
-    {
-      "feature": "Device support check (MPSSupportsMTLDevice)",
-      "apple": "MPSSupportsMTLDevice(_:)",
-      "bifrost": "springboard/src/gpu/egl.rs (EGL/GLES device init on Mesa via GBM)",
-      "status": "n/a",
-      "note": "Metal-only device query. BifrOSt uses EGL/GLES on Linux, so the Apple call has no direct counterpart."
-    },
-    {
-      "feature": "Gaussian and box blur image filters",
-      "apple": "MPSImageGaussianBlur, MPSImageBox, MPSImageTent",
-      "bifrost": "springboard/render/src/gaussian_filter.rs (separable Gaussian by sigma, box and tent); springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid)",
-      "status": "partial",
-      "note": "Built on parity/team-k-metal-performance-shaders (commit 3a45ebef1): pure model with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Shell glass blur is still the separate GPU pyramid and CPU box blur; there is no app API."
-    },
-    {
-      "feature": "Morphological filters (erode, dilate, area min and max)",
-      "apple": "MPSImageErode, MPSImageDilate, MPSImageAreaMin, MPSImageAreaMax",
-      "bifrost": "springboard/render/src/filter.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No morphology code in springboard/render or springboard/ui."
-    },
-    {
-      "feature": "Convolution, median, Sobel and Laplacian filters",
-      "apple": "MPSImageConvolution, MPSImageMedian, MPSImageSobel, MPSImageLaplacian",
-      "bifrost": "springboard/render/src/filter.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-metal-performance-shaders, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. springboard/apps/daw/src/conv.rs is an audio convolver and is not an image counterpart."
-    },
-    {
-      "feature": "Pyramid filters (Gaussian, Laplacian)",
-      "apple": "MPSImageGaussianPyramid, MPSImageLaplacianPyramid, MPSImageLaplacianPyramidAdd/Subtract",
-      "bifrost": "springboard/src/gpu/wl.rs:300 (blur pyramid for the live backdrop)",
-      "status": "partial",
-      "note": "A fixed dual-Kawase down and up pyramid for glass only. No Laplacian pyramid and no app API."
-    },
-    {
-      "feature": "Thresholding",
-      "apple": "MPSImageThresholdBinary, ThresholdToZero, ThresholdTruncate and their inverses",
-      "bifrost": "springboard/render/src/filter.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No image thresholding in the repo."
-    },
-    {
-      "feature": "Histogram, histogram equalization and specification",
-      "apple": "MPSImageHistogram, MPSImageHistogramEqualization, MPSImageHistogramSpecification",
-      "bifrost": "springboard/render/src/filter.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The index and a grep for histogram found nothing in the render or shell code."
-    },
-    {
-      "feature": "Integral images and statistics (mean, variance, min and max)",
-      "apple": "MPSImageIntegral, MPSImageIntegralOfSquares, MPSImageStatisticsMean, MPSImageStatisticsMeanAndVariance, MPSImageStatisticsMinAndMax",
-      "bifrost": "springboard/render/src/plane_stats.rs (Integral",
-      "status": "partial",
-      "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No image statistics API."
-    },
-    {
-      "feature": "Scaling and resampling",
-      "apple": "MPSImageScale, MPSImageLanczosScale, MPSImageBilinearScale",
-      "bifrost": "springboard/render/src/lanczos.rs (Lanczos-3, antialiased when shrinking); springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize)",
-      "status": "partial",
-      "note": "Lanczos-3 and bilinear and area-average paths. The Lanczos model is pure, with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Not exposed through an SDK image API."
-    },
-    {
-      "feature": "Image arithmetic and pixel conversion",
-      "apple": "MPSImageAdd, MPSImageSubtract, MPSImageMultiply, MPSImageDivide, MPSImageConversion, MPSImageTranspose",
-      "bifrost": "springboard/render/src/plane_arith.rs (combine",
-      "status": "partial",
-      "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Compositing is done on the CPU in gfx.rs. No GPU arithmetic kernels or colour-space conversion API."
-    },
-    {
-      "feature": "Reduction filters (row and column min, max, sum, mean)",
-      "apple": "MPSImageReduceRowMax and the other MPSImageReduce* classes",
-      "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows",
-      "status": "partial",
-      "note": "Wave 3 (theme-02, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No reduction code."
-    },
-    {
-      "feature": "Euclidean distance transform, guided filter, keypoints",
-      "apple": "MPSImageEuclideanDistanceTransform, MPSImageGuidedFilter, MPSImageFindKeypoints",
-      "bifrost": "springboard/render/src/distance.rs (euclidean_distance), springboard/render/src/guided.rs (guided_filter)",
-      "status": "partial",
-      "note": "Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vision primitives in the repo."
-    },
-    {
-      "feature": "Neural network graphs and CNN layers",
-      "apple": "MPSNNGraph, MPSCNNConvolutionNode, MPSCNNPoolingNode, MPSCNNFullyConnectedNode and the other layer nodes",
-      "bifrost": "springboard/ui/src/cnn_layers.rs (conv2d",
-      "status": "partial",
-      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A search for inference, onnx and tensor across springboard returned nothing. No ML runtime exists."
-    },
-    {
-      "feature": "Recurrent neural network layers",
-      "apple": "MPSRNNImageInferenceLayer, MPSRNNMatrixInferenceLayer, MPSRNNMatrixTrainingLayer",
-      "bifrost": "springboard/ui/src/cnn_layers.rs (RecurrentWeights",
-      "status": "partial",
-      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No recurrent layers."
-    },
-    {
-      "feature": "Matrix and vector kernels (multiply, decomposition, solve, softmax)",
-      "apple": "MPSMatrix, MPSMatrixMultiplication, MPSMatrixDecompositionCholesky, MPSMatrixDecompositionLU, MPSMatrixSoftMax",
-      "bifrost": "springboard/ui/src/linalg.rs (cholesky",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 15 tests. Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No GPU linear algebra in springboard."
-    },
-    {
-      "feature": "Ray tracing and acceleration structures",
-      "apple": "MPSRayIntersector, MPSTriangleAccelerationStructure, MPSInstanceAccelerationStructure",
-      "bifrost": "none found",
-      "status": "n/a",
-      "note": "Ray intersection is not a desktop-shell need, and the framework's acceleration structure classes are deprecated in the Apple docs."
-    },
-    {
-      "feature": "Kernel base classes and keyed archiving",
-      "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
-      "bifrost": "springboard/render/src/kernel.rs (UnaryImageKernel, ColorMap, run_chain); springboard/sdk/src/coding.rs (serialisation, not kernels)",
-      "status": "partial",
-      "note": "UnaryImageKernel is the base trait for one-image kernels and run_chain runs a list of them in order. No MPSKernel or binary kernel base, no GPU dispatch, and no keyed archiving of kernels. Built on parity/team-a-04; not yet verified on Midget. Nothing but the colour kernel adapter implements the trait yet, and no caller outside the tests uses run_chain."
-    }
-  ],
-  "gaps": [
-    "No app-facing GPU compute or image-filter API. The GPU path (springboard/src/gpu/) serves the shell only.",
-    "No histogram, threshold, morphology, convolution or statistics filters for images.",
-    "No neural network or recurrent layers, and no ML inference runtime anywhere in springboard.",
-    "No GPU matrix or linear algebra kernels.",
-    "Resampling is bilinear or area-average in the shell. Lanczos exists only as an unwired pure model (springboard/render/src/lanczos.rs).",
-    "Blur is shell-internal. The Gaussian, box and tent model (springboard/render/src/gaussian_filter.rs) has no SDK entry point and is not used by the shell."
-  ]
+ "framework": "Metal Performance Shaders",
+ "doc": "https://developer.apple.com/documentation/metalperformanceshaders",
+ "macos_since": "10.13",
+ "status": "partial",
+ "bifrost": "springboard/render/src/gfx.rs (CPU blur), springboard/src/gpu/wl.rs (GPU dual-Kawase blur pyramid), springboard/render/src/gfx/rotate.rs (bilinear resample), springboard/render/src/emoji.rs (area and bilinear resample), springboard/src/gpu/egl.rs (EGL/GLES compute and render path)",
+ "summary": "BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by the shell for glass and scaling. It exposes no app-facing GPU image-filter, histogram, matrix or neural-network API, and only a unary kernel base trait with a chain runner (springboard/render/src/kernel.rs), not a Metal-style kernel layer; most of the framework has no counterpart.",
+ "rea_evidence": "ev_dc16a204f342e059f1a161b951e799bfe8079a8056c0055eac0b1c2c928fba5d",
+ "features": [
+  {
+   "feature": "Device support check (MPSSupportsMTLDevice)",
+   "apple": "MPSSupportsMTLDevice(_:)",
+   "bifrost": "springboard/src/gpu/egl.rs (EGL/GLES device init on Mesa via GBM)",
+   "status": "n/a",
+   "note": "Metal-only device query. BifrOSt uses EGL/GLES on Linux, so the Apple call has no direct counterpart."
+  },
+  {
+   "feature": "Gaussian and box blur image filters",
+   "apple": "MPSImageGaussianBlur, MPSImageBox, MPSImageTent",
+   "bifrost": "springboard/render/src/gaussian_filter.rs (separable Gaussian by sigma, box and tent); springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid)",
+   "status": "partial",
+   "note": "Built on parity/team-k-metal-performance-shaders (commit 3a45ebef1): pure model with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Shell glass blur is still the separate GPU pyramid and CPU box blur; there is no app API."
+  },
+  {
+   "feature": "Morphological filters (erode, dilate, area min and max)",
+   "apple": "MPSImageErode, MPSImageDilate, MPSImageAreaMin, MPSImageAreaMax",
+   "bifrost": "springboard/render/src/filter.rs",
+   "status": "partial",
+   "note": "Rectangular minimum and maximum (erode, dilate, area min and area max) are tested headless in tests/parity_sdk-complete-23.rs, including edge clamping and even-side refusal. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+  },
+  {
+   "feature": "Convolution, median, Sobel and Laplacian filters",
+   "apple": "MPSImageConvolution, MPSImageMedian, MPSImageSobel, MPSImageLaplacian",
+   "bifrost": "springboard/render/src/filter.rs",
+   "status": "partial",
+   "note": "Convolution with a caller kernel, median, Sobel magnitude and Laplacian are tested headless in tests/parity_sdk-complete-23.rs with concrete pixel values. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+  },
+  {
+   "feature": "Pyramid filters (Gaussian, Laplacian)",
+   "apple": "MPSImageGaussianPyramid, MPSImageLaplacianPyramid, MPSImageLaplacianPyramidAdd/Subtract",
+   "bifrost": "springboard/src/gpu/wl.rs:300 (blur pyramid for the live backdrop); springboard/render/src/laplacian_pyramid.rs (gaussian_pyramid, laplacian_pyramid, collapse)",
+   "status": "partial",
+   "note": "The shell's glass uses a fixed dual-Kawase pyramid on the GPU. A CPU Gaussian and Laplacian pyramid over 8-bit planes is tested headless in springboard/render/tests/parity_sdk-complete-46.rs, and collapsing a Laplacian pyramid restores the source exactly. Gap: no app API, and the pyramid is not wired into the shell or verified on Midget."
+  },
+  {
+   "feature": "Thresholding",
+   "apple": "MPSImageThresholdBinary, ThresholdToZero, ThresholdTruncate and their inverses",
+   "bifrost": "springboard/render/src/filter.rs",
+   "status": "partial",
+   "note": "The five threshold modes (binary, binary inverse, to zero, to zero inverse, truncate) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+  },
+  {
+   "feature": "Histogram, histogram equalization and specification",
+   "apple": "MPSImageHistogram, MPSImageHistogramEqualization, MPSImageHistogramSpecification",
+   "bifrost": "springboard/render/src/filter.rs",
+   "status": "partial",
+   "note": "Histogram binning, histogram equalization and histogram specification (filter::specify) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+  },
+  {
+   "feature": "Integral images and statistics (mean, variance, min and max)",
+   "apple": "MPSImageIntegral, MPSImageIntegralOfSquares, MPSImageStatisticsMean, MPSImageStatisticsMeanAndVariance, MPSImageStatisticsMinAndMax",
+   "bifrost": "springboard/render/src/plane_stats.rs (Integral, statistics)",
+   "status": "partial",
+   "note": "Integral images of values and of squares, and region mean, population variance, min and max, are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Not wired into apps or the shell, not yet tested on Midget; no image statistics API."
+  },
+  {
+   "feature": "Scaling and resampling",
+   "apple": "MPSImageScale, MPSImageLanczosScale, MPSImageBilinearScale",
+   "bifrost": "springboard/render/src/lanczos.rs (Lanczos-3, antialiased when shrinking); springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize)",
+   "status": "partial",
+   "note": "Lanczos-3 and bilinear and area-average paths. The Lanczos model is pure, with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Not exposed through an SDK image API."
+  },
+  {
+   "feature": "Image arithmetic and pixel conversion",
+   "apple": "MPSImageAdd, MPSImageSubtract, MPSImageMultiply, MPSImageDivide, MPSImageConversion, MPSImageTranspose",
+   "bifrost": "springboard/render/src/plane_arith.rs (combine, invert, convert_transfer, transpose); tests: springboard/render/tests/parity_sdk-complete-38.rs",
+   "status": "partial",
+   "note": "Pixel arithmetic, inversion, sRGB and linear transfer conversion and transposition are a pure CPU model with host tests, not wired into apps or the shell. Gap: there are no GPU arithmetic kernels, no colour matrices or multi-channel formats, and the lab machine has not verified it."
+  },
+  {
+   "feature": "Reduction filters (row and column min, max, sum, mean)",
+   "apple": "MPSImageReduceRowMax and the other MPSImageReduce* classes",
+   "bifrost": "springboard/render/src/plane_stats.rs (reduce_rows, reduce_columns)",
+   "status": "partial",
+   "note": "Row and column min, max, sum and mean are tested headless in springboard/render/tests/parity_sdk-tests-17.rs, with sums that are not clamped to the byte range. Not wired into apps or the shell, not yet tested on Midget."
+  },
+  {
+   "feature": "Euclidean distance transform, guided filter, keypoints",
+   "apple": "MPSImageEuclideanDistanceTransform, MPSImageGuidedFilter, MPSImageFindKeypoints",
+   "bifrost": "springboard/render/src/distance.rs (euclidean_distance), springboard/render/src/guided.rs (guided_filter)",
+   "status": "partial",
+   "note": "Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vision primitives in the repo."
+  },
+  {
+   "feature": "Neural network graphs and CNN layers",
+   "apple": "MPSNNGraph, MPSCNNConvolutionNode, MPSCNNPoolingNode, MPSCNNFullyConnectedNode and the other layer nodes",
+   "bifrost": "springboard/ui/src/cnn_layers.rs (Network, Layer, conv2d, pool2d, dense, relu); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
+   "status": "partial",
+   "note": "A Network chains convolution, pooling, dense, relu and custom layers, checks every shape before it runs, and is tested headless. Gap: there is no graph object, no node classes for apps, no GPU path and no serialised model."
+  },
+  {
+   "feature": "Recurrent neural network layers",
+   "apple": "MPSRNNImageInferenceLayer, MPSRNNMatrixInferenceLayer, MPSRNNMatrixTrainingLayer",
+   "bifrost": "springboard/ui/src/cnn_layers.rs (RecurrentWeights, lstm_step, gru_step); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
+   "status": "partial",
+   "note": "LSTM and GRU single steps are implemented, and the tests check a bounded LSTM state over a sequence and the refusal of a hidden state of the wrong length. Gap: there is no sequence layer that runs many steps, no training layer and no matrix inference layer for apps."
+  },
+  {
+   "feature": "Matrix and vector kernels (multiply, decomposition, solve, softmax)",
+   "apple": "MPSMatrix, MPSMatrixMultiplication, MPSMatrixDecompositionCholesky, MPSMatrixDecompositionLU, MPSMatrixSoftMax",
+   "bifrost": "springboard/ui/src/linalg.rs (cholesky",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 15 tests. Wave 4 (w4-metal-performance-shaders, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No GPU linear algebra in springboard."
+  },
+  {
+   "feature": "Ray tracing and acceleration structures",
+   "apple": "MPSRayIntersector, MPSTriangleAccelerationStructure, MPSInstanceAccelerationStructure",
+   "bifrost": "none found",
+   "status": "n/a",
+   "note": "Ray intersection is not a desktop-shell need, and the framework's acceleration structure classes are deprecated in the Apple docs."
+  },
+  {
+   "feature": "Kernel base classes and keyed archiving",
+   "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
+   "bifrost": "springboard/ui/src/image_kernels.rs (ImageKernel, apply_chain), springboard/ui/src/cnn_layers.rs; tests: springboard/ui/tests/parity_sdk-complete-22.rs",
+   "status": "partial",
+   "note": "An app defines a kernel by implementing ImageKernel with its class, the built-in kernels implement it too, and apply_chain runs kernels in order; all tested headless. Gap: there is no GPU kernel dispatch, no keyed archiving of kernels, and the code is not wired into the shell or apps."
+  }
+ ],
+ "gaps": [
+  "No app-facing GPU compute or image-filter API. The GPU path (springboard/src/gpu/) serves the shell only.",
+  "No histogram, threshold, morphology, convolution or statistics filters for images.",
+  "No neural network or recurrent layers, and no ML inference runtime anywhere in springboard.",
+  "No GPU matrix or linear algebra kernels.",
+  "Resampling is bilinear or area-average in the shell. Lanczos exists only as an unwired pure model (springboard/render/src/lanczos.rs).",
+  "Blur is shell-internal. The Gaussian, box and tent model (springboard/render/src/gaussian_filter.rs) has no SDK entry point and is not used by the shell."
+ ]
 }

@@ -8,20 +8,24 @@
 mod draw;
 mod export;
 mod extras;
+mod help;
 mod model;
 mod probe;
 mod recents;
+mod speech;
 mod window;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::proto::{AnnouncePriority, DocErrorCode, DocMode};
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::displays;
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, Document, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_core::json::Json;
 use export::Format;
 use std::io::{Read, Write};
 use window::{
-    Focus, PendingExport, SysInfo, Target, COLLAPSED_KEY, MENU_CLEAR_RECENTS, MENU_COPY, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREVIOUS, MENU_HELP, MENU_LESS, MENU_NEXT_CATEGORY, MENU_OPEN,
-    MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, STEP_PT,
+    Focus, PendingExport, SysInfo, Target, COLLAPSED_KEY, MENU_CLEAR_RECENTS, MENU_COPY, MENU_FIND, MENU_FIND_NEXT, MENU_FIND_PREVIOUS, MENU_HELP, MENU_JUMP_SELECTION, MENU_LESS, MENU_NEXT_CATEGORY, MENU_OPEN,
+    MENU_ONLINE_HELP, MENU_OVERVIEW, MENU_PREVIOUS_CATEGORY, MENU_RECENT, MENU_REFRESH, MENU_SAVE, MENU_SAVE_JSON, MENU_SAVE_RTF, MENU_SELECT_ALL, MENU_SPEAK, MENU_THIS_COMPUTER, MENU_USE_SELECTION, STEP_PT,
 };
 
 /// The help page the Help menu opens.
@@ -32,9 +36,14 @@ impl App for SysInfo {
         "is.olibuijr.sysinfo.desktop"
     }
 
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        Commands::default().with(Command::Copy, self.can_copy()).with(Command::SelectAll, true)
+    }
+
     fn configure(&mut self, ctx: &Ctx) {
         ctx.enable_sudden_termination(); // keeps no unsaved state: the facts are read again on every launch
-        self.size = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        let scale = ctx.ui.pt(1.0);
+        self.size = (ctx.cfg.w as f32 / scale, ctx.cfg.h as f32 / scale);
         if !self.started {
             if let Some(text) = ctx.defaults().string(COLLAPSED_KEY) {
                 self.set_collapsed_text(&text);
@@ -42,6 +51,7 @@ impl App for SysInfo {
             self.load_recents(ctx.defaults().string(recents::KEY));
             self.start_load();
         }
+        self.sync(ctx);
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -71,18 +81,16 @@ impl App for SysInfo {
         vec![
             AppMenu { title: "File".into(), items: file },
             AppMenu {
-                title: "Edit".into(),
+                title: "Find".into(),
                 items: vec![
-                    AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(self.can_copy()),
-                    AppMenuItem::new(MENU_SELECT_ALL, "Select All").key("cmd+a"),
-                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
                     AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(finding),
                     AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(finding),
-                    AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_SPEAK, "Speak Serial Number"),
+                    AppMenuItem::new(MENU_USE_SELECTION, "Use Selection for Find").key("cmd+e").enabled(self.selection_text().is_some()),
+                    AppMenuItem::new(MENU_JUMP_SELECTION, "Jump to Selection").key("cmd+j").enabled(self.can_jump()),
                 ],
             },
+            AppMenu { title: "Tools".into(), items: vec![AppMenuItem::new(MENU_SPEAK, "Speak Serial Number")] },
             AppMenu {
                 title: "View".into(),
                 items: vec![
@@ -99,7 +107,14 @@ impl App for SysInfo {
                     AppMenuItem::new(MENU_NEXT_CATEGORY, "Next Category").key("cmd+]").enabled(!self.mini),
                 ],
             },
-            AppMenu { title: "Help".into(), items: vec![AppMenuItem::new(MENU_HELP, "System Information Help")] },
+            AppMenu {
+                title: "Help".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_HELP, "System Information Help").checked(self.help),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_ONLINE_HELP, "System Information Online Help"),
+                ],
+            },
         ]
     }
 
@@ -146,8 +161,37 @@ impl App for SysInfo {
         self.poll_load(t)
     }
 
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        self.is_loading().then_some(t + 50.0)
+    /// The display list the display service answered with: the refresh rate and scale of each display.
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.screens_request != Some(request) {
+            return false;
+        }
+        self.screens_request = None;
+        let changed = match displays::decode_list(result) {
+            Ok(list) => {
+                self.set_screens(&list);
+                true
+            }
+            Err(e) => {
+                ctx.log(&format!("displays: {e}"));
+                false
+            }
+        };
+        self.sync(ctx);
+        changed
+    }
+
+    /// The display service says the displays changed: the list is asked for again.
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, _body: &Json) -> bool {
+        if service == displays::SERVICE && event == displays::RECONFIGURED {
+            self.screens_stale = true;
+            self.sync(ctx);
+        }
+        false
+    }
+
+    fn next_wake(&self, _t: f64) -> Option<f64> {
+        None // load completion is delivered on the main dispatch queue
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
@@ -175,6 +219,10 @@ impl SysInfo {
             ctx.wants_keyboard(wanted);
             self.keyboard_wanted = wanted;
         }
+        if self.screens_stale && self.screens_request.is_none() {
+            self.screens_request = Some(displays::list(ctx, displays::Kind::Active));
+            self.screens_stale = false;
+        }
     }
 
     fn save_recents(&self, ctx: &Ctx) {
@@ -184,6 +232,8 @@ impl SysInfo {
     /// A touch, key or published control.
     fn handle(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
+            Input::Command(Command::Copy) => self.menu(ctx, MENU_COPY),
+            Input::Command(Command::SelectAll) => self.select_all(),
             Input::Touch { kind, x, y, .. } => {
                 let scale = ctx.ui.pt(1.0);
                 let (x, y) = (x / scale, y / scale);
@@ -303,15 +353,24 @@ impl SysInfo {
             MENU_FIND => self.begin_find(),
             MENU_FIND_NEXT => self.find_step(true),
             MENU_FIND_PREVIOUS => self.find_step(false),
+            MENU_USE_SELECTION => self.use_selection_for_find(),
+            MENU_JUMP_SELECTION => self.jump_to_selection(),
             MENU_SPEAK => {
-                let text = self.serial_speech().unwrap_or_else(|| "No serial number is available".to_string());
-                ctx.announce(&text, AnnouncePriority::High);
+                let Some(text) = self.serial_speech() else {
+                    ctx.announce("No serial number is available", AnnouncePriority::High);
+                    return false;
+                };
+                // the engine speaks whether or not the screen reader is on; with no engine the reader's banner carries it
+                if self.speaker.start(&text) == Err(speech::SpeakError::NoEngine) {
+                    ctx.announce(&text, AnnouncePriority::High);
+                }
                 false
             }
             MENU_OVERVIEW => self.select(model::Category::Overview),
             MENU_PREVIOUS_CATEGORY => self.step_category(-1),
             MENU_NEXT_CATEGORY => self.step_category(1),
-            MENU_HELP => {
+            MENU_HELP => self.toggle_help(),
+            MENU_ONLINE_HELP => {
                 ctx.open_url(HELP_URL);
                 false
             }

@@ -1,3 +1,15 @@
+## 1.28.3 — 2026-10-14
+
+- Keep idle wake scheduling event-driven: folder listing and search results use the dispatch-backed `Feed`, and an idle window has no polling deadline. Add regression coverage for the idle deadline and dispatch completion.
+
+## 1.28.2 — 2026-10-14
+
+- Use the shared destructive-action color token for Empty Trash.
+
+## 1.28.1 — 2026-10-14
+
+- Run FTP server listings on the shared utility dispatch queue and wake the main queue when results arrive.
+
 ## 1.28.0 — 2026-10-13
 
 - A Files drag shows a drag image: the icon of the first item, with a count badge when the drag carries more than one item.

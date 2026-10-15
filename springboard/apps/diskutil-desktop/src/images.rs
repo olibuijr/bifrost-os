@@ -8,6 +8,7 @@ use bifrost_core::disk_commands::Command;
 use bifrost_core::disk_format::{self, Personality};
 use bifrost_core::disk_image::{self, BlockSize};
 use bifrost_core::disk_run;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::fs::File;
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::FileExt;
@@ -107,12 +108,14 @@ pub fn blank_plan(spec: &BlankSpec, path: &str) -> Result<Vec<Command>, String> 
     Ok(spec.fs.map(|fs| fs.make_command(path, &spec.label)).into_iter().collect())
 }
 
-/// The plan that attaches an image file: `hdiutil attach` binds it to a loop device and mounts it read-only.
-pub fn attach_plan(path: &str) -> Result<Vec<Command>, String> {
+/// The plan that attaches an image file: `hdiutil attach` binds it to a loop device and mounts it, read-only unless
+/// `writable` asks for read and write access (File > Open Disk Image for Writing).
+pub fn attach_plan(path: &str, writable: bool) -> Result<Vec<Command>, String> {
     if !path.starts_with('/') {
         return Err("The image's location cannot be used.".to_string());
     }
-    Ok(vec![Command { program: "hdiutil", args: vec!["attach".to_string(), path.to_string()] }])
+    let access = if writable { "-readwrite" } else { "-readonly" };
+    Ok(vec![Command { program: "hdiutil", args: vec!["attach".to_string(), access.to_string(), path.to_string()] }])
 }
 
 /// The command that turns `folder` into an ISO image at `scratch`.
@@ -147,6 +150,7 @@ pub fn convert_command(src: &str, dst: &str, format: ImageFormat) -> Command {
 
 /// Whether the first bytes of an image hold an ext2, ext3 or ext4 superblock (its magic number at byte 1080).
 pub fn is_ext_image(head: &[u8]) -> bool {
+    // compliance-allow: LAY-03 1080 is the ext superblock byte offset, not display geometry.
     head.len() >= 1082 && head[1080] == 0x53 && head[1081] == 0xEF
 }
 
@@ -170,6 +174,7 @@ pub fn resize_plan(path: &str, old: u64, new: u64, ext: bool) -> Result<Vec<Comm
     }
     // resize2fs insists on a check that has just run; -p repairs only what is safe, and -f checks a clean file system too
     let check = Command { program: "e2fsck", args: vec!["-f".to_string(), "-p".to_string(), path.to_string()] };
+    // compliance-allow: LAY-03 Converts the byte size to 1 KiB blocks for the filesystem tool.
     let resize = Command { program: "resize2fs", args: vec![path.to_string(), format!("{}K", new / 1024)] };
     Ok(if grow { vec![truncate, check, resize] } else { vec![check, resize, truncate] })
 }
@@ -232,8 +237,9 @@ where
     F: FnOnce() -> Result<(), String> + Send + 'static,
 {
     let (tx, rx) = channel();
-    std::thread::spawn(move || {
+    DispatchQueue::global(Qos::Utility).async_(move || {
         let _ = tx.send(job());
+        DispatchQueue::main().async_(|| {});
     });
     rx
 }
@@ -317,8 +323,14 @@ mod tests {
 
     #[test]
     fn attach_runs_the_image_tool_on_an_absolute_path_only() {
-        assert_eq!(words(&attach_plan("/home/me/disc.iso").unwrap()), vec![("hdiutil", s(&["attach", "/home/me/disc.iso"]))]);
-        assert!(attach_plan("disc.iso").is_err());
+        assert_eq!(words(&attach_plan("/home/me/disc.iso", false).unwrap()), vec![("hdiutil", s(&["attach", "-readonly", "/home/me/disc.iso"]))]);
+        assert!(attach_plan("disc.iso", false).is_err());
+    }
+
+    #[test]
+    fn an_image_opened_for_writing_is_attached_read_and_write() {
+        assert_eq!(words(&attach_plan("/home/me/disc.img", true).unwrap()), vec![("hdiutil", s(&["attach", "-readwrite", "/home/me/disc.img"]))]);
+        assert!(attach_plan("disc.img", true).is_err());
     }
 
     #[test]

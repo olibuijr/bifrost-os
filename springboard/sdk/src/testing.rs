@@ -95,6 +95,7 @@ impl<S: Responder> TestWindow<S> {
         let (w, h) = (self.w as usize, self.h as usize);
         let mut px = vec![0u32; w * h];
         let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
+        self.window.invalidate_all();
         self.window.draw(&mut s, &self.ui);
         px
     }

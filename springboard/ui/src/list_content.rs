@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn colours_follow_the_interaction_state() {
         let mut c = ListContentConfiguration::default();
-        c.text_color = StateValue { normal: None, highlighted: None, selected: Some(BLUE), disabled: None };
+        c.text_color = StateValue { normal: None, highlighted: None, selected: Some(Some(BLUE)), disabled: None };
         c.secondary_color = StateValue { normal: Some(RED), highlighted: None, selected: None, disabled: None };
         let selected = ConfigurationState { selected: true, ..Default::default() };
         assert_eq!(c.resolved_text_color(selected), Some(BLUE));

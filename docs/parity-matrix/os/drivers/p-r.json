@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: hardware driver, kernel side",
+   "bifrost": "glibc (Arch package; libpthread.so.0)",
+   "status": "partial",
+   "note": "POSIX threads come from glibc's NPTL, which Rust's standard library uses on Linux. It is a userspace library, not a kernel extension, and BifrOSt has no threading library of its own.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

@@ -33,6 +33,8 @@ pub struct Line {
     /// The width of the cells of the line, in points (tabs included).
     pub width: f32,
     pub align: Align,
+    /// Whether the line's paragraph is right to left: a left-aligned right to left line starts at the right edge.
+    pub rtl: bool,
     /// How far the line's text is indented (a list), and the marker hanging in that indent.
     pub indent: f32,
     pub marker: Marker,
@@ -53,9 +55,13 @@ pub struct Layout {
 #[derive(Clone, Copy)]
 struct Para {
     align: Align,
+    rtl: bool,
     indent: f32,
     marker: Marker,
     spacing: f32,
+    /// The space above the paragraph's first line and below its last, in points.
+    before: f32,
+    after: f32,
 }
 
 /// How far a tab or character at `x` (from the start of the line's text) advances.
@@ -96,6 +102,7 @@ pub fn layout_tabs(cells: &[Cell], width: f32, measure: &Measure, tab: f32) -> L
         number = if style.list == ListKind::Numbered { number + 1 } else { 0 };
         let para = Para {
             align: style.align,
+            rtl: style.rtl,
             indent: if style.list == ListKind::None { 0.0 } else { LIST_INDENT },
             marker: match style.list {
                 ListKind::None => Marker::None,
@@ -103,8 +110,12 @@ pub fn layout_tabs(cells: &[Cell], width: f32, measure: &Measure, tab: f32) -> L
                 ListKind::Numbered => Marker::Number(number),
             },
             spacing: SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0),
+            before: style.space_before as f32,
+            after: style.space_after as f32,
         };
+        top += para.before;
         wrap(cells, start, end, width, measure, tab, para, &mut top, &mut lines);
+        top += para.after;
         if end >= cells.len() {
             break;
         }
@@ -164,7 +175,7 @@ fn wrap(cells: &[Cell], start: usize, end: usize, width: f32, measure: &Measure,
 #[allow(clippy::too_many_arguments)]
 fn push_line(out: &mut Vec<Line>, cells: &[Cell], start: usize, end: usize, width: f32, para: Para, marker: Marker, top: &mut f32) {
     let height = line_height(cells, start, end) * para.spacing;
-    out.push(Line { start, end, top: *top, height, width, align: para.align, indent: para.indent, marker });
+    out.push(Line { start, end, top: *top, height, width, align: para.align, rtl: para.rtl, indent: para.indent, marker });
     *top += height;
 }
 
@@ -187,8 +198,13 @@ impl Layout {
     /// Where a line's text starts across the width: its indent and, for its alignment, the free space.
     pub fn x_offset(&self, line: &Line) -> f32 {
         let free = (self.width - line.indent - line.width).max(0.0);
+        // in a right to left paragraph the start of a line is its right edge
+        let align = match (line.align, line.rtl) {
+            (Align::Left, true) => Align::Right,
+            (align, _) => align,
+        };
         line.indent
-            + match line.align {
+            + match align {
                 Align::Center => free / 2.0,
                 Align::Right => free,
                 Align::Left | Align::Justified => 0.0,
@@ -258,6 +274,22 @@ mod tests {
 
     fn cells(s: &str) -> Vec<Cell> {
         s.chars().map(|ch| Cell { ch, style: Style::default() }).collect()
+    }
+
+    #[test]
+    fn a_right_to_left_paragraph_starts_its_lines_at_the_right_edge() {
+        let mut c = cells("ab");
+        for cell in &mut c {
+            cell.style.rtl = true;
+        }
+        let l = layout(&c, 10.0, &one);
+        assert_eq!(l.x_offset(&l.lines[0]), 8.0, "two points of text sit against the right edge of ten");
+        let mut centred = cells("ab");
+        for cell in &mut centred {
+            cell.style = Style { rtl: true, align: Align::Center, ..Style::default() };
+        }
+        let l = layout(&centred, 10.0, &one);
+        assert_eq!(l.x_offset(&l.lines[0]), 4.0, "an explicit centre is kept");
     }
 
     #[test]

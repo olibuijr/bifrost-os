@@ -54,9 +54,9 @@
    "area": "toolbar",
    "apple": "toolbar and File menu",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:MENU_MOUNT",
-   "note": "File menu items with cmd+M, cmd+U, cmd+E mirror the toolbar.",
-   "wire": "Mirror Mount/Unmount/Eject into a File menu in main.rs main_menu."
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:can_mount; springboard/apps/diskutil-desktop/src/main.rs:MENU_MOUNT",
+   "note": "File menu Mount, Unmount and Eject (cmd+M, cmd+U, cmd+E) and the toolbar read the same window predicates (can_mount, can_unmount, can_eject), tested headless in window.rs (the_mount_predicates_disable_every_mount_command_while_busy). Not yet verified on the lab machine.",
+   "wire": "Verify on the lab machine that the File menu Mount, Unmount and Eject items match the toolbar state."
   },
   {
    "feature": "Erase with name, format and scheme",
@@ -99,26 +99,26 @@
    "area": "menu",
    "apple": "Disk > Rename",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:72",
-   "note": "Disk > Rename opens a form sheet with a Name text field (limit of the volume's file system), checks the request against the disks and confirms it; DiskRequest::RenameVolume plans e2label, fatlabel, exfatlabel, ntfslabel or btrfs filesystem label (core disk_format::rename_volume, tested) and privd serves disk.rename_volume. Like erase, the helper needs an unlocked session this app does not hold yet. built on parity/team-d-disk-utility; not yet verified on Midget.",
-   "wire": "Rename inline in the sidebar (Return on a selected volume); verify the label tools on a scratch volume on the lab machine."
+   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:72 (open_rename_form); springboard/core/src/disk_commands.rs (rename)",
+   "note": "Disk > Rename opens a form sheet with the current name and sends DiskRequest::RenameVolume; mounted volumes and volumes without a file system are refused. Tested in forms.rs. Not yet verified on the lab machine.",
+   "wire": "Verify the rename on a scratch volume on the lab machine."
   },
   {
    "feature": "Create image (blank, from folder, from device)",
    "area": "menu",
    "apple": "File > New Image",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:180",
-   "note": "File > New Image > Blank Image (name, size, optional ext4, exFAT, FAT32, NTFS or btrfs with a volume name, then the save panel) sizes the file and runs mkfs on it (images.rs write_blank); Image from Folder builds an ISO with hdiutil create -srcfolder (images.rs write_folder_image). From device is not done: reading a block device needs the privileged helper. built on parity/team-d-disk-utility; not yet verified on Midget.",
-   "wire": "From device: a privileged request that reads a block device into a chosen file. Verify the blank and folder images on the lab machine."
+   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:180 (open_new_blank_form); springboard/apps/diskutil-desktop/src/images.rs (write_blank, write_folder_image); springboard/core/src/disk_image.rs",
+   "note": "File > New Image makes a blank image (a sparse raw file of a chosen size, with an optional file system and label, saved through a save panel) and an image from a folder (an ISO through the image tool). Tested in forms.rs and images.rs. Gap: there is no image from a device, which would copy a whole disk into a file.",
+   "wire": "Add File > New Image > Image from Device: a raw copy of a disk into a file chosen in the save panel, through the disk helper."
   },
   {
    "feature": "Open / attach disk image",
    "area": "menu",
    "apple": "File > Open Disk Image",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/flow.rs:97",
-   "note": "File > Open Disk Image (cmd+O) shows the open panel (documents permission) and attaches the chosen image read-only through hdiutil attach, which binds a loop device and mounts it (flow.rs opened_path, images.rs attach_plan). Detach Disk Image already existed. built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "bifrost": "springboard/apps/diskutil-desktop/src/flow.rs:97 (open_image, open_image_for_writing); springboard/apps/diskutil-desktop/src/images.rs (attach_plan)",
+   "note": "File > Open Disk Image (cmd+O) attaches the chosen image read-only (hdiutil attach -readonly); File > Open Disk Image for Writing attaches it with -readwrite. Both paths are tested in flow.rs and images.rs. Detach Disk Image already existed. Not yet verified on Midget.",
    "wire": "Verify on the lab machine that the panel's file resolves to a path the attach tool accepts; offer read-write attach."
   },
   {
@@ -126,9 +126,9 @@
    "area": "menu",
    "apple": "Images > Convert, Resize, Scan Image For Restore; File > Change Password",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:196",
-   "note": "Image > Convert Image writes raw, QCOW2, VMDK, VHDX or VDI with qemu-img convert (forms.rs:196, images.rs write_converted); Image > Resize Image runs truncate, e2fsck and resize2fs in the safe order (grow: file first; shrink: ext file system first), forms.rs:205, images.rs:156. Change Password (LUKS) is not done: it needs a secure text field and a privileged cryptsetup request. built on parity/team-d-disk-utility; not yet verified on Midget.",
-   "wire": "Change Password: a masked text field in the form kit and a privileged cryptsetup luksChangeKey request."
+   "bifrost": "springboard/apps/diskutil-desktop/src/images.rs (convert_command, resize_plan); springboard/apps/diskutil-desktop/src/forms.rs:196 (open_convert_form); springboard/core/src/disk_image.rs",
+   "note": "Image > Convert Image writes raw, QCOW2, VMDK, VHDX or VDI, and Image > Resize Image grows an image or shrinks an ext image; both are tested in images.rs and forms.rs. Gap: Change Password for an encrypted image is not in the app, and Scan Image For Restore is missing.",
+   "wire": "Add Change Password for LUKS images through a privd request, and Scan Image For Restore in the Image menu."
   },
   {
    "feature": "Container volume add/delete",
@@ -154,7 +154,7 @@
    "apple": "SURAIDAssistantWindowController.nib",
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/forms.rs:153",
-   "note": "Disk > RAID Assistant: level (RAID 0, 1, 5, 6, 10), array name and tickable members in a form sheet; DiskRequest::CreateRaid plans mdadm --create (core disk_format::create_raid: minimum members, unmounted, no overlap, free name) and privd serves disk.create_raid. A created array is not listed in the sidebar (md devices are hidden), and there is no assemble, add or remove of members. built on parity/team-d-disk-utility; not yet verified on Midget.",
+   "note": "Disk > RAID Assistant: level (RAID 0, 1, 5, 6, 10), array name and tickable members in a form sheet; DiskRequest::CreateRaid plans mdadm --create (core disk_format::create_raid: minimum members, unmounted, no overlap, free name) and privd serves disk.create_raid. Assembled arrays (md devices) are listed in the sidebar and never offered as members (model::is_raid_array, tested in forms.rs and model.rs). Gap: there is no stop, assemble, add or remove of members. Not yet verified on Midget.",
    "wire": "List assembled arrays (show md devices in the sidebar) and add stop, assemble and member add or remove actions."
   },
   {
@@ -184,5 +184,13 @@
    "note": "Platform file-system specific.",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 19,
+  "parity": 4,
+  "partial": 12,
+  "gap": 0,
+  "n/a": 3,
+  "coverage_pct": 62.5
+ }
 }

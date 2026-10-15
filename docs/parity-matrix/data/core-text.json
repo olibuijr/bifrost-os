@@ -10,44 +10,44 @@
   {
    "feature": "Font objects and descriptors",
    "apple": "CTFont, CTFontDescriptor",
-   "bifrost": "springboard/render/src/font.rs (Font::parse), springboard/render/src/fontprefs.rs (installed, map_font)",
+   "bifrost": "springboard/render/src/fontobj.rs (FontObject, FontSpec, FontManager); springboard/render/src/font.rs (Font::parse); springboard/render/src/fontprefs.rs (installed, map_font); springboard/sdk/src/font_substitution.rs; springboard/render/tests/parity_sdk-complete-17.rs; springboard/sdk/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "The renderer parses a font file into a Font; apps get no font object or descriptor type. Faces are chosen by settings (font_system, font_mono), not by app request."
+   "note": "Apps get a FontObject, a FontSpec descriptor and a FontManager through bifrost_app::fontobj; the manager registers, unregisters and matches faces, and descriptors fill in names, traits and size, all tested headless. Gap: there is no Font Book style install and validation UI, and the system roles still take their face from settings."
   },
   {
    "feature": "Font collections and font manager (registration, enumeration, activation)",
    "apple": "CTFontCollection, CTFontManager*, CTFontManagerRegisterFontsForURL, CTFontManagerCopyAvailableFontFamilyNames",
-   "bifrost": "springboard/render/src/fontobj.rs (FontManager)",
+   "bifrost": "springboard/render/src/fontobj.rs (FontManager, FontSet)",
    "status": "partial",
-   "note": "Wave 3 (w3-core-text, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. fontprefs::installed lists one face per family from a directory, for Settings only. There is no runtime register/unregister, no collections, no auto-activation and no font-changed notification."
+   "note": "Registration from bytes or a file, removal, change events, named collections and matching are tested in render/tests/parity_sdk-tests-19.rs. Gap: auto-activation is stored but nothing reads it, so no missing font is activated on demand; fontprefs::installed lists faces for Settings only."
   },
   {
    "feature": "Character to glyph mapping",
    "apple": "CTFont glyph lookup, CTGlyphInfo",
-   "bifrost": "springboard/render/src/font.rs (Font::glyph, Font::glyph_named, lookup)",
+   "bifrost": "springboard/render/src/font.rs (Font::glyph, Font::glyph_named, lookup); springboard/render/src/fontobj.rs (glyph_for_char, with_glyph_override, fallback_runs); springboard/render/src/fontfallback.rs (split); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names. Misses return .notdef (glyph 0). No CTGlyphInfo-style mapping override and no font fallback cascade."
+   "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names, with misses at glyph 0, per-font glyph overrides and cascade runs through script faces, all tested headless. Gap: the lab machine has not compared the fallback choices with the reference system."
   },
   {
    "feature": "Font metrics",
    "apple": "CTFontGetAscent, CTFontGetDescent, CTFontGetLeading, CTFontGetCapHeight, CTFontGetXHeight, CTFontGetUnderlinePosition",
-   "bifrost": "springboard/render/src/font.rs (ascent, descent from hhea; advance from hmtx; measure)",
+   "bifrost": "springboard/render/src/font.rs (line_metrics, ascent, descent from hhea; advance from hmtx; measure); springboard/render/src/fontobj.rs (FontObject metrics); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "Ascent, descent and advance widths only. Leading, cap height, x-height and underline metrics are not read."
+   "note": "Ascent, descent, leading, cap height, x-height and underline position and thickness are read from hhea, OS/2 and post, and tested on the packed face. Gap: the values are not compared with the reference system on the lab machine."
   },
   {
    "feature": "Glyph outlines and rasterising",
    "apple": "CTFontCreatePathForGlyph, CTFontDrawGlyphs",
-   "bifrost": "springboard/render/src/font.rs (render, render_glyph), springboard/render/src/cff.rs (Sink trait)",
+   "bifrost": "springboard/render/src/font.rs (render, render_glyph, glyph_segments), springboard/render/src/cff.rs (Sink trait); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "TrueType glyf and CFF Type 2 outlines are rasterised into images. No path object is exposed to apps and no direct glyph drawing API."
+   "note": "TrueType glyf and CFF Type 2 outlines are flattened to segments and rasterised; the outline of a letter is non-empty and the space has none, tested headless. Gap: no path object is exposed to apps and there is no direct glyph drawing API outside the UI text path."
   },
   {
    "feature": "Variable fonts",
    "apple": "CTFontCreateCopyWithAttributes with variation axes, kCTFontVariationAxesAttribute",
-   "bifrost": "springboard/render/src/gvar.rs, springboard/render/src/font.rs (axes, measure_var, render_var)",
+   "bifrost": "springboard/render/src/gvar.rs, springboard/render/src/font.rs (axes, measure_var, advance_var, render_var); springboard/render/src/fontobj.rs (variation_axes, with_variations); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "fvar, avar and gvar are applied in the renderer. The SDK does not expose axis values to apps; weights come from the Weight enum."
+   "note": "fvar, avar and gvar are applied; axis tags and ranges reach apps through FontObject, a later value replaces an earlier one, and a heavier weight widens glyph advances, all tested headless. Gap: rendered instances are not compared with the reference on the lab machine."
   },
   {
    "feature": "OpenType layout (kerning, ligatures, contextual forms)",
@@ -59,9 +59,9 @@
   {
    "feature": "Attributed string styling",
    "apple": "Styling Attributed Strings: kCTFontAttributeName, kCTForegroundColorAttributeName, kCTUnderlineStyleAttributeName, kCTBackgroundColorAttributeName",
-   "bifrost": "springboard/sdk/src/attributed.rs (Attribute, AttributeKey, AttributedString)",
+   "bifrost": "springboard/sdk/src/attributed.rs (Attribute, AttributeKey, AttributedString); springboard/sdk/tests/parity_sdk-tests-11.rs",
    "status": "partial",
-   "note": "Bold, italic (stored, drawn upright), size class, colour token, underline, strikethrough and link. No arbitrary font, colour, background colour or baseline attributes. Ranges count characters, not UTF-16 units."
+   "note": "Bold, italic, size class, colour token, underline, strikethrough and link are tested headless in parity_sdk-tests-11.rs, including set, get, enumerate and remove for each key. Font family, foreground and background colour, baseline and kerning values are stored and round-trip through set and get, but drawing them is not tested. Gap: the classic range methods count characters, not UTF-16 units (only the accessibility runs count UTF-16)."
   },
   {
    "feature": "Paragraph styles and tab stops",
@@ -103,7 +103,7 @@
    "apple": "CTRubyAnnotation, kCTRubyAnnotationAttributeName",
    "bifrost": "springboard/ui/src/ruby.rs",
    "status": "partial",
-   "note": "Pure geometry model: RubyAnnotation, RubyPosition, RubyAlignment, RubyOverhang and layout() give the start of each annotation character, the overhang, the padding and the advance of the base run, plus baseline_offset, side_offset and line_extra. The model was added by the ct-scripts round and recorded here by parity/team-a-04. No caller in the drawing path yet, the attributed string carries no ruby attribute, and no CTRubyAnnotation object for apps. Not yet verified on Midget."
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (ruby.rs); not wired into the shell or apps, not tested on Midget. No ruby text. Low priority outside CJK locales."
   },
   {
    "feature": "Run delegates and embedded attachments",
@@ -117,7 +117,7 @@
    "apple": "CTFontDescriptorCreateMatchingFontDescriptors, CTFontDescriptorCreateWithNameAndSize, kCTFontCascadeListAttribute, CTFontCopyDefaultCascadeListForLanguages, system design (rounded, serif, monospaced)",
    "bifrost": "springboard/sdk/src/font_substitution.rs, springboard/sdk/src/font_descriptor.rs (UserFonts::resolve, with_design, cascade_list)",
    "status": "partial",
-   "note": "A family the library lacks resolves to an open equivalent by class (grotesque, geometric, humanist, serif, slab, script, mono, rounded, CJK gothic/mincho/kai/rounded); unknown names fall back by traits. with_design maps rounded/serif/monospaced; cascade_list orders script families per language tag. Matching returns Installed records, not descriptor objects with mandatory-key sets; equivalents are other designs, and the listed open families must be installed in the font library. Not yet checked on Midget."
+   "note": "A family the library lacks resolves to an open equivalent by class (grotesque, geometric, humanist, serif, slab, script, mono, rounded, CJK gothic/mincho/kai/rounded); unknown names fall back by traits. with_design maps rounded/serif/monospaced; cascade_list orders script families per language tag (tested headless in springboard/sdk/tests/parity_sdk-tests-10-fonts-w7.rs, font_substitution tests). Matching returns Installed records, not descriptor objects with mandatory-key sets; equivalents are other designs, and the listed open families must be installed in the font library. Not yet checked on Midget."
   }
  ],
  "gaps": [

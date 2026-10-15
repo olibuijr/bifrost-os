@@ -66,6 +66,8 @@ pub struct LogEntry {
     pub category: String,
     pub level: Level,
     pub message: String,
+    /// The systemd unit invocation the message came from (`_SYSTEMD_INVOCATION_ID`), empty when there is none.
+    pub invocation: String,
 }
 
 /// The text of a journal field: a JSON string, or the bytes journald writes for a value that is not UTF-8.
@@ -115,6 +117,7 @@ pub fn entry_from_fields_in(text: &dyn Fn(&str) -> Option<String>, registry: &[b
         category: text("BIFROST_CATEGORY").unwrap_or_default(),
         level: Level::from_priority(text("PRIORITY").and_then(|p| p.parse().ok())),
         message: text("MESSAGE").unwrap_or_default(),
+        invocation: text("_SYSTEMD_INVOCATION_ID").unwrap_or_default(),
     };
     if !e.subsystem.is_empty() && !bifrost_core::log::may_log_as(registry, text("_EXE").as_deref(), &e.subsystem) {
         e.message = format!("[claimed subsystem {}] {}", e.subsystem, e.message);
@@ -165,6 +168,7 @@ pub fn parse_coredump_list(text: &str) -> Option<Vec<LogEntry>> {
                     category: row.get("corefile").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
                     level: if matches!(sig, 4 | 6 | 7 | 8 | 11 | 31) { Level::Fault } else { Level::Error },
                     message: format!("{shown} terminated by {}", signal_name(sig)),
+                    ..LogEntry::default()
                 }
             })
             .collect(),
@@ -384,7 +388,7 @@ mod tests {
     const LINE: &str = r#"{"__CURSOR":"s=1","__REALTIME_TIMESTAMP":"1760100000123456","PRIORITY":"3","_PID":"4242","SYSLOG_IDENTIFIER":"bifrost-notes","BIFROST_SUBSYSTEM":"is.olibuijr.notes","BIFROST_CATEGORY":"sync","MESSAGE":"sync failed"}"#;
 
     fn entry(process: &str, subsystem: &str, category: &str, level: Level, message: &str) -> LogEntry {
-        LogEntry { date: 1, process: process.into(), pid: 1, subsystem: subsystem.into(), category: category.into(), level, message: message.into() }
+        LogEntry { date: 1, process: process.into(), pid: 1, subsystem: subsystem.into(), category: category.into(), level, message: message.into(), ..LogEntry::default() }
     }
 
     #[test]

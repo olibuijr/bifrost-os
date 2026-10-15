@@ -52,9 +52,9 @@
     {
       "feature": "Distributed actors",
       "apple": "Distributed",
-      "bifrost": "springboard/sdk/src/notification.rs (DistributedNotificationCenter only)",
-      "status": "gap",
-      "note": "Only notification broadcast exists; no remote method calls between processes"
+      "bifrost": "springboard/sdk/src/distributed.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (distributed.rs); not wired into the shell or apps, not tested on Midget. Only notification broadcast exists; no remote method calls between processes"
     },
     {
       "feature": "Regular expression DSL",

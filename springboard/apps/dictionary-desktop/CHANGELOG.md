@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.4 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.5.3 — 2026-10-14
+
+- Export the Dictionary icon at the store's required 180 × 180 size.
+
+## 0.5.2 — 2026-10-14
+
+- Run printing on the shared utility queue and declare sudden termination safe when the app configures.
+
+## 0.5.1 — 2026-10-14
+
+- Use the shared extra-small spacing token for suggestion label fitting.
+
+## 0.5.0
+
+- The model is a library target (`src/lib.rs`), so its behaviour is tested through the public API in `tests/parity_app-dictionary.rs`: history, scope, preferences, text size, find, cross-reference words, settings drag order, the copy and print text, the folder URL and the dict: and x-dictionary: URLs.
+- The Dictionary matrix rows cite the test file; Services, New Window and the Midget checks stay open.
+
+## 0.4.0
+
+- Copy Definition and Print send the same text: each dictionary's name above its definition, from one tested routine.
+- Open Dictionaries Folder percent-encodes the folder path, so folders with spaces open correctly.
+- Headless tests cover the definition text and the folder URL in model.rs.
+
 ## 0.3.0
 
 - The manifest registers the dict: and x-dictionary: URL schemes, so the shell offers Dictionary for those links.

@@ -15,7 +15,27 @@ pub use springboard::shell::sharing::{text_from_url, Candidate, COMPOSE, COPY, I
 
 use crate::proto::{ToShell, UiRect};
 use crate::Ctx;
+use bifrost_ui::compose::{ComposeDraft, ComposeError, ComposeResult};
 use springboard::shell::sharing::{copy_text, handles, targets, with_compose};
+
+/// The compose draft that shared `items` start with: text parts joined by line breaks, each file as an image and each
+/// URL as a link, in the order given. Fails with the error of the first item the draft refuses (a URL that is not
+/// `http` or `https`, or more images or links than a post holds).
+pub fn compose_draft_from_items(items: &[Payload]) -> Result<ComposeDraft, ComposeError> {
+    let mut draft = ComposeDraft::new();
+    let mut text: Vec<&str> = Vec::new();
+    for item in items {
+        match item {
+            Payload::Text(part) => text.push(part.as_str()),
+            Payload::Url(url) => draft.add_url(url.as_str())?,
+            Payload::File { name, .. } => draft.add_image(name.as_str())?,
+        }
+    }
+    if !text.is_empty() {
+        draft.set_initial_text(&text.join("\n"));
+    }
+    Ok(draft)
+}
 
 /// `NativeSharingServicePicker.show(relativeTo:of:preferredEdge:)` for `items`, anchored under `anchor` (window points). The
 /// answer arrives in `App::share_done` with the returned request id. At most 8 items.
@@ -132,6 +152,8 @@ impl SharingService {
 pub enum ShareError {
     /// the shell answered with a target the picker never offered
     NotOffered(String),
+    /// the compose sheet was closed without a post
+    Cancelled,
 }
 
 /// `NativeSharingServicePickerDelegate`.
@@ -155,12 +177,24 @@ pub struct SharingServicePicker {
     services: Vec<SharingService>,
     /// the request of the menu on screen, until it is answered
     request: Option<u32>,
+    /// true after Compose Post was chosen, until the compose sheet reports how it closed
+    composing: bool,
 }
 
 impl SharingServicePicker {
     /// The picker for `items`, offering the services that take them (see [`SharingService::sharing_services_for_items`]).
     pub fn new(items: &[Payload], installed: &[Candidate]) -> Self {
-        SharingServicePicker { items: items.to_vec(), services: SharingService::sharing_services_for_items(items, installed), request: None }
+        SharingServicePicker {
+            items: items.to_vec(),
+            services: SharingService::sharing_services_for_items(items, installed),
+            request: None,
+            composing: false,
+        }
+    }
+
+    /// True between choosing Compose Post and the compose sheet's result (see [`Self::compose_finished`]).
+    pub fn awaiting_compose(&self) -> bool {
+        self.composing
     }
 
     /// The services offered, in menu order.
@@ -179,9 +213,11 @@ impl SharingServicePicker {
         self.request = Some(request);
     }
 
-    /// Feeds the answer of `App::share_done`. A chosen service gets `did_choose(Some)` then `did_share_items`; a dismissed
-    /// menu gets `did_choose(None)`; a target the picker did not offer gets `did_choose(None)` and a `NotOffered` failure.
-    /// Returns false when `request` is not the menu on screen (or was answered already).
+    /// Feeds the answer of `App::share_done`. A chosen app or Copy gets `did_choose(Some)` then `did_share_items`. Compose
+    /// Post gets `did_choose(Some)` only: the post is shared when the compose sheet reports `Done` to
+    /// [`Self::compose_finished`]. A dismissed menu gets `did_choose(None)`; a target the picker did not offer gets
+    /// `did_choose(None)` and a `NotOffered` failure. Returns false when `request` is not the menu on screen (or was
+    /// answered already).
     pub fn share_done(
         &mut self,
         request: u32,
@@ -196,6 +232,10 @@ impl SharingServicePicker {
         match target {
             None => picker.did_choose(None),
             Some(id) => match self.services.iter().find(|s| s.name() == id) {
+                Some(service) if service.name() == COMPOSE => {
+                    picker.did_choose(Some(service));
+                    self.composing = true;
+                }
                 Some(service) => {
                     picker.did_choose(Some(service));
                     sharer.did_share_items(&self.items);
@@ -205,6 +245,20 @@ impl SharingServicePicker {
                     sharer.did_fail_to_share_items(&self.items, ShareError::NotOffered(id.to_string()));
                 }
             },
+        }
+        true
+    }
+
+    /// The compose sheet's result for a Compose Post share (`ComposeSheet::finish`): `Done` shares the items, `Cancelled`
+    /// fails the share with [`ShareError::Cancelled`]. Returns false when no Compose Post share is waiting.
+    pub fn compose_finished(&mut self, result: ComposeResult, sharer: &mut impl SharingServiceDelegate) -> bool {
+        if !self.composing {
+            return false;
+        }
+        self.composing = false;
+        match result {
+            ComposeResult::Done => sharer.did_share_items(&self.items),
+            ComposeResult::Cancelled => sharer.did_fail_to_share_items(&self.items, ShareError::Cancelled),
         }
         true
     }

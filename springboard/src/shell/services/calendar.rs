@@ -1,6 +1,6 @@
 //! The `calendar` service: the person's events, for the apps whose manifest declares the `calendars` permission. It is
-//! the read side of EventKit (`EKEventStore` events in a date range); the store is the shared calendar file the
-//! Calendar app writes, `shell::calendar::store`.
+//! the read side of the event store (events in a date range); the store is the shared calendar file the Calendar app
+//! writes, `shell::calendar::store`.
 //!
 //! Times are local, floating civil times written `YYYY-MM-DDTHH:MM` (no time zone).
 //!
@@ -9,8 +9,8 @@
 //!   grant itself anything by asking; the manifest is the declaration.
 //! - `events {start, end}` returns `{events: [{id, title, start, end, all_day, location}]}`: every event that overlaps
 //!   `[start, end)`, sorted by start then id. Both bounds are required and `end` must be after `start`. An all-day
-//!   event spans its whole civil day. Recurring events appear once, at their base date (recurrence expansion is not
-//!   in this service yet).
+//!   event spans its whole civil day. A repeating event appears once for each occurrence that overlaps the range, all
+//!   with its id; an occurrence that starts the day before the range and runs into it is included.
 //!
 //! Without the `calendars` permission every method but `access` is an error.
 use super::{Shell, SystemService};
@@ -52,9 +52,10 @@ fn format_moment(moment: i64) -> String {
     format!("{:04}-{:02}-{:02}T{:02}:{:02}", date.year, date.month, date.day, minute / 60, minute % 60)
 }
 
-/// The moment an event starts and ends, in the same units as [`parse_moment`]. An all-day event covers its civil day.
-fn span(e: &CalendarEvent) -> (i64, i64) {
-    let start = e.date.days() * 1440;
+/// The moment an occurrence of `e` on the civil day `day` (days since 1970-01-01) starts and ends, in the same units as
+/// [`parse_moment`]. An all-day event covers its civil day.
+fn span_on(e: &CalendarEvent, day: i64) -> (i64, i64) {
+    let start = day * 1440;
     if e.all_day {
         (start, start + 1440)
     } else {
@@ -63,9 +64,25 @@ fn span(e: &CalendarEvent) -> (i64, i64) {
     }
 }
 
-/// The JSON of one event as the `events` method returns it.
-fn event_json(e: &CalendarEvent) -> Json {
-    let (start, end) = span(e);
+/// The start and end of every occurrence of `e` that overlaps `[start, end)`, in order. A plain event has one, on its
+/// own date. A repeating event has one on each day its rule names. The day before the range is checked too, because an
+/// event that starts late in that day can run into the range.
+fn occurrences(e: &CalendarEvent, start: i64, end: i64) -> Vec<(i64, i64)> {
+    if e.repeat == 0 {
+        let (from, to) = span_on(e, e.date.days());
+        return if from < end && to > start { vec![(from, to)] } else { Vec::new() };
+    }
+    let first = (start.div_euclid(1440) - 1).max(e.date.days());
+    let last = (end - 1).div_euclid(1440);
+    (first..=last)
+        .filter(|&day| e.occurs_on(Date::from_days(day)))
+        .map(|day| span_on(e, day))
+        .filter(|&(from, to)| from < end && to > start)
+        .collect()
+}
+
+/// The JSON of one occurrence of an event, given its start and end.
+fn event_json(e: &CalendarEvent, (start, end): (i64, i64)) -> Json {
     Json::Obj(vec![
         ("id".into(), Json::Num(e.id as f64)),
         ("title".into(), Json::Str(e.title.clone())),
@@ -76,6 +93,9 @@ fn event_json(e: &CalendarEvent) -> Json {
     ])
 }
 
+/// The longest range one `events` call may name, in days. It bounds the occurrences a repeating event expands to.
+pub const MAX_RANGE_DAYS: i64 = 3660;
+
 /// The `[start, end)` range named in the params.
 fn range_of(params: &Json) -> Result<(i64, i64), String> {
     let text = |key: &str| params.get(key).and_then(Json::as_str).ok_or_else(|| format!("{key} is required (YYYY-MM-DDTHH:MM)"));
@@ -83,6 +103,9 @@ fn range_of(params: &Json) -> Result<(i64, i64), String> {
     let end = parse_moment(text("end")?).ok_or("end is not a YYYY-MM-DDTHH:MM time")?;
     if end <= start {
         return Err("end must be after start".into());
+    }
+    if end - start > MAX_RANGE_DAYS * 1440 {
+        return Err(format!("the range may span at most {MAX_RANGE_DAYS} days"));
     }
     Ok((start, end))
 }
@@ -101,14 +124,12 @@ pub fn answer(app_id: &str, permitted: bool, method: &str, params: &Json, events
                 return Err(format!("{app_id} has no {PERMISSION} permission"));
             }
             let (start, end) = range_of(params)?;
-            let mut hits: Vec<(i64, &CalendarEvent)> = events
+            let mut hits: Vec<(i64, &CalendarEvent, (i64, i64))> = events
                 .iter()
-                .map(|e| (span(e), e))
-                .filter(|((from, to), _)| *from < end && *to > start)
-                .map(|((from, _), e)| (from, e))
+                .flat_map(|e| occurrences(e, start, end).into_iter().map(move |span| (span.0, e, span)))
                 .collect();
-            hits.sort_by_key(|(from, e)| (*from, e.id));
-            let rows = hits.into_iter().map(|(_, e)| event_json(e)).collect();
+            hits.sort_by_key(|(from, e, _)| (*from, e.id));
+            let rows = hits.into_iter().map(|(_, e, span)| event_json(e, span)).collect();
             Ok(Json::Obj(vec![("events".into(), Json::Arr(rows))]))
         }
         _ => Err(format!("calendar has no method {method}")),
@@ -235,6 +256,62 @@ mod tests {
         assert!(answer("is.example.cal", true, "events", &range("2026-10-13 00:00", "2026-10-14T00:00"), &book).is_err());
         assert!(answer("is.example.cal", true, "events", &range("2026-10-13T24:00", "2026-10-14T00:00"), &book).is_err());
         assert!(answer("is.example.cal", true, "events", &Json::Null, &book).is_err());
+    }
+
+    fn starts(reply: &Json) -> Vec<String> {
+        let rows = reply.get("events").and_then(Json::as_array).unwrap();
+        rows.iter().filter_map(|e| e.get("start").and_then(Json::as_str).map(str::to_string)).collect()
+    }
+
+    fn repeating(mut e: CalendarEvent, repeat: u8) -> CalendarEvent {
+        e.repeat = repeat;
+        e
+    }
+
+    #[test]
+    fn a_daily_event_appears_once_on_each_day_of_the_range() {
+        let daily = repeating(event(5, (2026, 10, 13), 9 * 60, 60, false, "Stand-up"), 1);
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-13T00:00", "2026-10-16T00:00"), &[daily]).unwrap();
+        assert_eq!(ids(&reply), vec![5, 5, 5]);
+        assert_eq!(starts(&reply), vec!["2026-10-13T09:00", "2026-10-14T09:00", "2026-10-15T09:00"]);
+    }
+
+    #[test]
+    fn a_weekly_event_skips_the_days_between_its_occurrences() {
+        let weekly = repeating(event(6, (2026, 10, 13), 12 * 60, 30, false, "Review"), 2);
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-13T00:00", "2026-10-28T00:00"), &[weekly]).unwrap();
+        assert_eq!(starts(&reply), vec!["2026-10-13T12:00", "2026-10-20T12:00", "2026-10-27T12:00"]);
+    }
+
+    #[test]
+    fn a_repeating_event_is_not_shown_before_its_first_day() {
+        let daily = repeating(event(7, (2026, 10, 13), 9 * 60, 60, false, "Start"), 1);
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-10T00:00", "2026-10-13T08:00"), &[daily]).unwrap();
+        assert_eq!(ids(&reply), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn an_occurrence_that_runs_past_midnight_is_found_from_the_day_before() {
+        let late = repeating(event(8, (2026, 10, 13), 23 * 60 + 30, 60, false, "Late"), 1);
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-14T00:00", "2026-10-14T00:30"), &[late]).unwrap();
+        assert_eq!(starts(&reply), vec!["2026-10-13T23:30"]);
+        let end = reply.get("events").and_then(Json::as_array).unwrap()[0].get("end").and_then(Json::as_str);
+        assert_eq!(end, Some("2026-10-14T00:30"));
+    }
+
+    #[test]
+    fn a_repeating_all_day_event_covers_each_civil_day_it_repeats_on() {
+        let holiday = repeating(event(9, (2026, 10, 13), 0, 15, true, "Holiday"), 1);
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-13T12:00", "2026-10-15T00:00"), &[holiday]).unwrap();
+        assert_eq!(starts(&reply), vec!["2026-10-13T00:00", "2026-10-14T00:00"]);
+    }
+
+    #[test]
+    fn a_range_longer_than_the_limit_is_refused() {
+        let within = range("2000-01-01T00:00", "2009-12-31T00:00");
+        assert!(answer("is.example.cal", true, "events", &within, &[]).is_ok());
+        let beyond = range("2000-01-01T00:00", "2011-01-01T00:00");
+        assert!(answer("is.example.cal", true, "events", &beyond, &[]).is_err());
     }
 
     #[test]

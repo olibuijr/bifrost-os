@@ -4,7 +4,7 @@
 //! into the pixel canvas, so the host tests cover it; `freeform.rs` owns the gestures and the keyboard.
 use crate::ink;
 use bifrost_app::controls::Rect;
-use bifrost_app::kit::ui::{Ui, Weight};
+use bifrost_app::kit::ui::{Ui, Weight, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, SPACE_M, SPACE_XXS};
 use bifrost_app::kit::Image;
 use std::collections::HashMap;
 
@@ -20,8 +20,6 @@ const MAX_CONNECTORS: usize = 4000;
 pub const TEXT_PT: f32 = 18.0;
 pub const NOTE_PT: f32 = 15.0;
 pub const CELL_PT: f32 = 13.0;
-const CARD_TITLE_PT: f32 = 13.0;
-const CARD_SUB_PT: f32 = 11.0;
 const PAD_PT: f32 = 8.0;
 const CELL_PAD_PT: f32 = 5.0;
 const MIN_TEXT_H_PT: f32 = 32.0;
@@ -304,24 +302,41 @@ impl Items {
         self.links.iter().position(|c| self.connector_line(c).is_some_and(|(a, b)| segment_distance((x, y), a, b) <= reach))
     }
 
-    /// Types `text` into the item (or one cell of a table). Control characters are dropped; a line break is kept
-    /// only where the field has lines (a text box or a note). Returns whether anything was added.
-    pub fn insert_text(&mut self, id: u32, cell: usize, text: &str) -> bool {
-        let Some(item) = self.get_mut(id) else { return false };
+    /// Types `text` into the item (or one cell of a table) at the caret, character `at`, which is clamped to the
+    /// text's length (`usize::MAX` types at the end). Control characters are dropped; a line break is kept only where
+    /// the field has lines (a text box or a note). Returns the caret after the new text, or None when nothing was added.
+    pub fn insert_text(&mut self, id: u32, cell: usize, at: usize, text: &str) -> Option<usize> {
+        let item = self.get_mut(id)?;
         let multiline = matches!(item.kind, Kind::Text | Kind::Sticky);
-        let Some(buf) = item.buffer(cell) else { return false };
-        let room = MAX_TEXT_CHARS.saturating_sub(buf.chars().count());
+        let buf = item.buffer(cell)?;
+        let len = buf.chars().count();
+        let room = MAX_TEXT_CHARS.saturating_sub(len);
         let add: String = text.chars().filter(|c| (*c == '\n' && multiline) || !c.is_control()).take(room).collect();
         if add.is_empty() {
-            return false;
+            return None;
         }
-        buf.push_str(&add);
-        true
+        let at = at.min(len);
+        let byte = buf.char_indices().nth(at).map_or(buf.len(), |(b, _)| b);
+        buf.insert_str(byte, &add);
+        Some(at + add.chars().count())
     }
 
-    /// Deletes the last character of the item's text (or of the cell).
-    pub fn backspace(&mut self, id: u32, cell: usize) -> bool {
-        self.get_mut(id).and_then(|i| i.buffer(cell)).is_some_and(|b| b.pop().is_some())
+    /// Deletes the character before the caret, character `at` (clamped to the text's length). Returns the caret after
+    /// the deletion, or None when the caret is at the start.
+    pub fn backspace(&mut self, id: u32, cell: usize, at: usize) -> Option<usize> {
+        let buf = self.get_mut(id)?.buffer(cell)?;
+        let at = at.min(buf.chars().count());
+        if at == 0 {
+            return None;
+        }
+        let start = buf.char_indices().nth(at - 1).map(|(b, _)| b)?;
+        buf.remove(start);
+        Some(at - 1)
+    }
+
+    /// The number of characters in the text being edited in `cell` (0 for an unknown item).
+    pub fn text_len(&self, id: u32, cell: usize) -> usize {
+        self.get(id).map_or(0, |i| i.cell_text(cell).chars().count())
     }
 
     /// Adds a row at the bottom of a table, as tall as the others.
@@ -670,21 +685,24 @@ fn blit(px: &mut [u32], cw: usize, ch: usize, img: &Image, x: i32, y: i32, clip:
     }
 }
 
-/// Draws wrapped text inside `r` (inset by `pad`), clipped to `r`. With `caret` a bar follows the last character.
+/// Draws wrapped text inside `r` (inset by `pad`), clipped to `r`. With `caret` (a character index, clamped to the text)
+/// a bar is drawn where that character would go: the end of the wrapped text before it.
 #[allow(clippy::too_many_arguments)]
-fn draw_text(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, r: Rect, pad: f32, caret: bool) {
-    let ls = lines(ui, text, pt, weight, (r.w - 2.0 * pad).max(1.0));
+fn draw_text(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, r: Rect, pad: f32, caret: Option<usize>) {
+    let width = (r.w - 2.0 * pad).max(1.0);
     let lh = line_height(ui, pt);
-    let mut end = (r.x + pad, r.y + pad);
-    for (i, l) in ls.iter().enumerate() {
-        let top = r.y + pad + i as f32 * lh;
+    for (i, l) in lines(ui, text, pt, weight, width).iter().enumerate() {
         if !l.is_empty() {
             let img = ui.text(l, pt, weight, color);
-            blit(px, cw, ch, &img, (r.x + pad).round() as i32, top.round() as i32, r);
+            blit(px, cw, ch, &img, (r.x + pad).round() as i32, (r.y + pad + i as f32 * lh).round() as i32, r);
         }
-        end = (r.x + pad + ui.measure(l, pt, weight), top);
     }
-    if caret {
+    if let Some(at) = caret {
+        let before: String = text.chars().take(at).collect();
+        let wrapped = lines(ui, &before, pt, weight, width);
+        let row = wrapped.len().saturating_sub(1);
+        let last = wrapped.last().map_or("", String::as_str);
+        let end = (r.x + pad + ui.measure(last, pt, weight), r.y + pad + row as f32 * lh);
         fill(px, cw, ch, Rect { x: end.0 + ui.pt(1.0), y: end.1, w: ui.pt(1.5).max(1.0), h: lh }, color);
     }
 }
@@ -701,25 +719,26 @@ fn draw_line(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, text: &str, pt: f32,
 }
 
 /// Paints every item and connector into `px`, a `cw` x `ch` canvas, over whatever is there. `pictures` holds each
-/// picture item's image already scaled to the item's size; `editing` is the item and cell that has the caret. The
-/// items' boxes are in canvas pixels; `zoom` is how much the board is magnified, so type, padding and line weights
-/// scale with the boxes (1 draws them at their own size).
+/// picture item's image already scaled to the item's size; `editing` is the item and cell that has the caret, and
+/// `caret` the character the caret is before in that text (`usize::MAX` for the end). The items' boxes are in canvas
+/// pixels; `zoom` is how much the board is magnified, so type, padding and line weights scale with the boxes (1 draws
+/// them at their own size).
 #[allow(clippy::too_many_arguments)]
-pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictures: &HashMap<u32, Image>, editing: Option<(u32, usize)>, zoom: f32) {
+pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictures: &HashMap<u32, Image>, editing: Option<(u32, usize)>, caret: usize, zoom: f32) {
     let z = zoom;
     for it in items.list() {
         let r = it.rect();
         let caret_cell = editing.filter(|(id, _)| *id == it.id).map(|(_, cell)| cell);
         match it.kind {
-            Kind::Text => draw_text(px, cw, ch, ui, &it.text, TEXT_PT * z, Weight::Regular, it.color, r, ui.pt(PAD_PT) * z, caret_cell.is_some()),
+            Kind::Text => draw_text(px, cw, ch, ui, &it.text, TEXT_PT * z, Weight::Regular, it.color, r, ui.pt(PAD_PT) * z, caret_cell.map(|_| caret)),
             Kind::Sticky => {
-                let off = Rect { x: r.x + ui.pt(2.0) * z, y: r.y + ui.pt(3.0) * z, w: r.w, h: r.h };
+                let off = Rect { x: r.x + ui.pt(SPACE_XXS) * z, y: r.y + ui.pt(SPACE_XXS + 1.0) * z, w: r.w, h: r.h };
                 fill(px, cw, ch, off, SHADOW);
                 fill(px, cw, ch, r, it.color);
-                draw_text(px, cw, ch, ui, &it.text, NOTE_PT * z, Weight::Regular, INK, r, ui.pt(PAD_PT) * z, caret_cell.is_some());
+                draw_text(px, cw, ch, ui, &it.text, NOTE_PT * z, Weight::Regular, INK, r, ui.pt(PAD_PT) * z, caret_cell.map(|_| caret));
             }
-            Kind::Table => paint_table(px, cw, ch, ui, it, caret_cell, z),
-            Kind::Link => paint_link(px, cw, ch, ui, it, caret_cell.is_some(), z),
+            Kind::Table => paint_table(px, cw, ch, ui, it, caret_cell, caret, z),
+            Kind::Link => paint_link(px, cw, ch, ui, it, caret_cell.map(|_| caret), z),
             Kind::File => paint_file(px, cw, ch, ui, it, z),
             Kind::Picture => match pictures.get(&it.id) {
                 Some(img) => blit(px, cw, ch, img, it.x.round() as i32, it.y.round() as i32, r),
@@ -727,7 +746,7 @@ pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictu
                     fill(px, cw, ch, r, CARD_FILL);
                     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), GRID);
                     let pad = ui.pt(PAD_PT) * z;
-                    draw_line(px, cw, ch, ui, "Picture", CARD_TITLE_PT * z, Weight::Regular, SUB_INK, r.x + pad, r.y + pad, r.w - 2.0 * pad, r);
+                    draw_line(px, cw, ch, ui, "Picture", MAC_HEADLINE_PT * z, Weight::Regular, SUB_INK, r.x + pad, r.y + pad, r.w - 2.0 * pad, r);
                 }
             },
         }
@@ -735,7 +754,8 @@ pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictu
     paint_connectors(px, cw, ch, ui, items, None, z);
 }
 
-fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_cell: Option<usize>, z: f32) {
+#[allow(clippy::too_many_arguments)]
+fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_cell: Option<usize>, caret: usize, z: f32) {
     let r = it.rect();
     fill(px, cw, ch, r, TABLE_FILL);
     let line = ui.pt(1.0).max(1.0);
@@ -746,7 +766,8 @@ fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_c
             let text = it.cells.get(row * it.cols + col).map(String::as_str).unwrap_or("");
             let editing = caret_cell == Some(row * it.cols + col);
             if !text.is_empty() || editing {
-                draw_text(px, cw, ch, ui, text, CELL_PT * z, Weight::Regular, INK, cell, ui.pt(CELL_PAD_PT) * z, editing);
+                let at = editing.then_some(caret);
+                draw_text(px, cw, ch, ui, text, CELL_PT * z, Weight::Regular, INK, cell, ui.pt(CELL_PAD_PT) * z, at);
             }
         }
     }
@@ -758,21 +779,21 @@ fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_c
     }
 }
 
-fn paint_link(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, editing: bool, z: f32) {
+fn paint_link(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret: Option<usize>, z: f32) {
     let r = it.rect();
     let pad = ui.pt(PAD_PT) * z;
     fill(px, cw, ch, r, LINK_FILL);
     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), LINK_INK);
-    if editing {
-        draw_text(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, LINK_INK, r, pad, true);
+    if let Some(caret) = caret {
+        draw_text(px, cw, ch, ui, &it.text, MAC_SUBHEAD_PT * z, Weight::Regular, LINK_INK, r, pad, Some(caret));
         return;
     }
     let max = r.w - 2.0 * pad;
     let host = link_host(&it.text);
     let title = if host.is_empty() { "Link".to_string() } else { host };
-    draw_line(px, cw, ch, ui, &title, CARD_TITLE_PT * z, Weight::Semibold, LINK_INK, r.x + pad, r.y + pad, max, r);
-    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT * z);
-    draw_line(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
+    draw_line(px, cw, ch, ui, &title, MAC_HEADLINE_PT * z, Weight::Semibold, LINK_INK, r.x + pad, r.y + pad, max, r);
+    let sub_y = r.y + pad + line_height(ui, MAC_HEADLINE_PT * z);
+    draw_line(px, cw, ch, ui, &it.text, MAC_SUBHEAD_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
 }
 
 fn paint_file(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, z: f32) {
@@ -781,9 +802,9 @@ fn paint_file(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, z: f32) 
     fill(px, cw, ch, r, CARD_FILL);
     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), GRID);
     let max = r.w - 2.0 * pad;
-    draw_line(px, cw, ch, ui, &it.text, CARD_TITLE_PT * z, Weight::Semibold, INK, r.x + pad, r.y + pad, max, r);
-    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT * z);
-    draw_line(px, cw, ch, ui, &human_size(it.size), CARD_SUB_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
+    draw_line(px, cw, ch, ui, &it.text, MAC_HEADLINE_PT * z, Weight::Semibold, INK, r.x + pad, r.y + pad, max, r);
+    let sub_y = r.y + pad + line_height(ui, MAC_HEADLINE_PT * z);
+    draw_line(px, cw, ch, ui, &human_size(it.size), MAC_SUBHEAD_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
 }
 
 /// Paints the connectors; the one at index `picked` is drawn thicker. `z` is the board's magnification.
@@ -797,7 +818,7 @@ pub fn paint_connectors(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &I
             let len = (dx * dx + dy * dy).sqrt();
             if len > 1.0 {
                 let (ux, uy) = (dx / len, dy / len);
-                let head = (ui.pt(12.0) * z).min(len);
+                let head = (ui.pt(SPACE_M) * z).min(len);
                 let (bx, by) = (b.0 - ux * head, b.1 - uy * head);
                 let (nx, ny) = (-uy * head * 0.5, ux * head * 0.5);
                 ink::stroke_polyline(px, cw, ch, &[(bx + nx, by + ny), b, (bx - nx, by - ny)], width, None, CONNECTOR_INK, 1.0);
@@ -905,12 +926,43 @@ mod tests {
     #[test]
     fn typing_adds_text_and_backspace_takes_it_back() {
         let (mut items, a, _) = two_items();
-        assert!(items.insert_text(a, 0, "Hi"));
-        assert!(items.insert_text(a, 0, "\nthere\t!"));
+        assert!(items.insert_text(a, 0, usize::MAX, "Hi").is_some());
+        assert!(items.insert_text(a, 0, usize::MAX, "\nthere\t!").is_some());
         assert_eq!(items.get(a).unwrap().text, "Hi\nthere!", "a note keeps line breaks and drops other control characters");
-        assert!(items.backspace(a, 0));
+        assert!(items.backspace(a, 0, usize::MAX).is_some());
         assert_eq!(items.get(a).unwrap().text, "Hi\nthere");
-        assert!(!items.insert_text(99, 0, "x"));
+        assert!(items.insert_text(99, 0, usize::MAX, "x").is_none());
+    }
+
+    #[test]
+    fn typing_at_the_caret_inserts_there_and_returns_the_caret_after_the_text() {
+        let (mut items, a, _) = two_items();
+        items.insert_text(a, 0, usize::MAX, "ac");
+        assert_eq!(items.insert_text(a, 0, 1, "b"), Some(2), "the caret moves past the new letter");
+        assert_eq!(items.get(a).unwrap().text, "abc");
+        assert_eq!(items.insert_text(a, 0, 0, "> "), Some(2));
+        assert_eq!(items.get(a).unwrap().text, "> abc");
+        assert_eq!(items.insert_text(a, 0, 99, "!"), Some(6), "a caret past the end is the end");
+        assert_eq!(items.get(a).unwrap().text, "> abc!");
+    }
+
+    #[test]
+    fn backspace_deletes_the_character_before_the_caret() {
+        let (mut items, a, _) = two_items();
+        items.insert_text(a, 0, usize::MAX, "abcd");
+        assert_eq!(items.backspace(a, 0, 2), Some(1), "the b goes and the caret steps back");
+        assert_eq!(items.get(a).unwrap().text, "acd");
+        assert_eq!(items.backspace(a, 0, 0), None, "nothing before the start of the text");
+        assert_eq!(items.get(a).unwrap().text, "acd");
+    }
+
+    #[test]
+    fn the_caret_counts_characters_not_bytes() {
+        let (mut items, a, _) = two_items();
+        items.insert_text(a, 0, usize::MAX, "a\u{e9}c");
+        assert_eq!(items.text_len(a, 0), 3, "an accented letter is one character");
+        assert_eq!(items.backspace(a, 0, 2), Some(1));
+        assert_eq!(items.get(a).unwrap().text, "ac");
     }
 
     #[test]
@@ -918,8 +970,8 @@ mod tests {
         let mut items = Items::default();
         let link = items.add(Item::new(Kind::Link, 0.0, 0.0, 200.0, 60.0));
         let table = items.add(Item::table(0.0, 300.0, 300.0, 90.0, 3, 3));
-        items.insert_text(link, 0, "https://a.b\nc");
-        items.insert_text(table, 4, "mid\nrow");
+        items.insert_text(link, 0, usize::MAX, "https://a.b\nc");
+        items.insert_text(table, 4, usize::MAX, "mid\nrow");
         assert_eq!(items.get(link).unwrap().text, "https://a.bc");
         assert_eq!(items.get(table).unwrap().cells[4], "midrow");
     }
@@ -928,17 +980,17 @@ mod tests {
     fn text_stops_at_the_limit() {
         let mut items = Items::default();
         let t = items.add(Item::new(Kind::Text, 0.0, 0.0, 200.0, 40.0));
-        assert!(items.insert_text(t, 0, &"a".repeat(MAX_TEXT_CHARS + 50)));
+        assert!(items.insert_text(t, 0, usize::MAX, &"a".repeat(MAX_TEXT_CHARS + 50)).is_some());
         assert_eq!(items.get(t).unwrap().text.chars().count(), MAX_TEXT_CHARS);
-        assert!(!items.insert_text(t, 0, "more"));
+        assert!(items.insert_text(t, 0, usize::MAX, "more").is_none());
     }
 
     #[test]
     fn a_picture_takes_no_typing() {
         let mut items = Items::default();
         let p = items.add(Item::new(Kind::Picture, 0.0, 0.0, 100.0, 100.0));
-        assert!(!items.insert_text(p, 0, "x"));
-        assert!(!items.backspace(p, 0));
+        assert!(items.insert_text(p, 0, usize::MAX, "x").is_none());
+        assert!(items.backspace(p, 0, usize::MAX).is_none());
         assert!(!items.get(p).unwrap().editable());
     }
 
@@ -957,7 +1009,7 @@ mod tests {
     fn a_row_and_a_column_can_be_added_to_a_table() {
         let mut items = Items::default();
         let t = items.add(Item::table(0.0, 0.0, 300.0, 90.0, 3, 3));
-        items.insert_text(t, 4, "mid");
+        items.insert_text(t, 4, usize::MAX, "mid");
         assert!(items.add_row(t));
         let it = items.get(t).unwrap();
         assert_eq!((it.rows, it.cols, it.cells.len(), it.h), (4, 3, 12, 120.0));
@@ -1008,7 +1060,7 @@ mod tests {
         let mut items = Items::default();
         let t = items.add(Item { color: rgb(255, 0, 0), text: "a\tb\nc \\ d".into(), ..Item::new(Kind::Text, 1.5, 2.5, 200.0, 40.0) });
         let table = items.add(Item::table(10.0, 20.0, 300.0, 90.0, 2, 2));
-        items.insert_text(table, 3, "x\\y");
+        items.insert_text(table, 3, usize::MAX, "x\\y");
         let file = items.add(Item { text: "report.pdf".into(), file: "3-report.pdf".into(), size: 2048, ..Item::new(Kind::File, 0.0, 0.0, 200.0, 60.0) });
         items.connect(t, table, true);
         items.connect(table, file, false);
@@ -1080,7 +1132,7 @@ mod tests {
         let id = items.add(Item { text: "Hello".into(), ..sticky(10.0, 10.0) });
         let (cw, ch) = (200, 200);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, usize::MAX, 1.0);
         assert_eq!(px[5 * cw + 5], PAPER, "outside the note stays paper");
         assert_eq!(px[105 * cw + 100], NOTE_COLORS[3], "the bottom of the note is its fill");
         let inked = (10..110).flat_map(|y| (10..110).map(move |x| (x, y))).any(|(x, y)| px[y * cw + x] != NOTE_COLORS[3]);
@@ -1095,7 +1147,7 @@ mod tests {
         items.add(Item { text: "A very long line of words that cannot all fit inside a small note at this size".into(), ..Item::new(Kind::Sticky, 10.0, 10.0, 60.0, 30.0) });
         let (cw, ch) = (200, 200);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, usize::MAX, 1.0);
         // the shadow reaches 3 px below and 2 px right of the box; nothing else is painted below it
         assert!((46..ch).all(|y| (0..cw).all(|x| px[y * cw + x] == PAPER)), "no text spills below the note");
     }
@@ -1107,11 +1159,25 @@ mod tests {
         let id = items.add(Item::new(Kind::Text, 10.0, 10.0, 200.0, 40.0));
         let (cw, ch) = (240, 80);
         let mut still = vec![PAPER; cw * ch];
-        paint(&mut still, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
+        paint(&mut still, cw, ch, &ui, &items, &HashMap::new(), None, usize::MAX, 1.0);
         assert!(still.iter().all(|&p| p == PAPER), "an empty text box is invisible");
         let mut editing = vec![PAPER; cw * ch];
-        paint(&mut editing, cw, ch, &ui, &items, &HashMap::new(), Some((id, 0)), 1.0);
+        paint(&mut editing, cw, ch, &ui, &items, &HashMap::new(), Some((id, 0)), usize::MAX, 1.0);
         assert!(editing.iter().any(|&p| p != PAPER), "the caret shows while editing");
+    }
+
+    #[test]
+    fn the_caret_is_drawn_where_the_caret_is_in_the_text() {
+        let ui = test_ui();
+        let mut items = Items::default();
+        let id = items.add(Item::new(Kind::Text, 10.0, 10.0, 200.0, 40.0));
+        items.insert_text(id, 0, usize::MAX, "ab");
+        let (cw, ch) = (240, 80);
+        let mut at_start = vec![PAPER; cw * ch];
+        paint(&mut at_start, cw, ch, &ui, &items, &HashMap::new(), Some((id, 0)), 0, 1.0);
+        let mut at_end = vec![PAPER; cw * ch];
+        paint(&mut at_end, cw, ch, &ui, &items, &HashMap::new(), Some((id, 0)), usize::MAX, 1.0);
+        assert_ne!(at_start, at_end, "a caret before the first letter is not one after the last");
     }
 
     #[test]
@@ -1121,7 +1187,7 @@ mod tests {
         items.add(Item::table(10.0, 10.0, 90.0, 60.0, 2, 3));
         let (cw, ch) = (120, 100);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, usize::MAX, 1.0);
         assert_eq!(px[40 * cw + 40], GRID, "the line between the first two columns at x = 40");
         assert_eq!(px[20 * cw + 20], TABLE_FILL, "a cell is white inside");
         assert_eq!(px[90 * cw + 20], PAPER, "below the table is paper");
@@ -1186,7 +1252,7 @@ mod tests {
             items.add(Item { text: "Hello".into(), color: INK, ..Item::new(Kind::Text, 4.0 * zoom, 4.0 * zoom, 200.0 * zoom, 60.0 * zoom) });
             let (cw, ch) = (400, 300);
             let mut px = vec![PAPER; cw * ch];
-            paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, zoom);
+            paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, usize::MAX, zoom);
             (0..ch).filter(|&y| (0..cw).any(|x| px[y * cw + x] != PAPER)).count()
         };
         let (small, big) = (ink_rows(1.0), ink_rows(2.0));
@@ -1204,11 +1270,11 @@ mod tests {
         let mut pics = HashMap::new();
         pics.insert(id, red);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &pics, None, 1.0);
+        paint(&mut px, cw, ch, &ui, &items, &pics, None, usize::MAX, 1.0);
         assert_eq!(px[20 * cw + 20], 0xFF00_00FF);
         assert_eq!(px[5 * cw + 5], PAPER);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, usize::MAX, 1.0);
         assert_eq!(px[28 * cw + 28], CARD_FILL, "the placeholder is a card");
     }
 

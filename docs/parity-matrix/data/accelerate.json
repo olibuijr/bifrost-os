@@ -4,7 +4,7 @@
   "macos_since": "10.3",
   "status": "partial",
   "bifrost": "No SDK module. Ad hoc equivalents: springboard/render/src/gfx/rotate.rs, springboard/src/media/convert.rs, springboard/apps/daw/src/conv.rs, springboard/render/src/cg/pdf/inflate.rs, springboard/src/shell/photos/edit.rs",
-  "summary": "Accelerate's vector, signal, linear algebra, sparse solver, compression and ML APIs have no BifrOSt SDK counterpart. The system and apps contain private equivalents (quarter-turn rotation, YUV to RGBA conversion, DEFLATE decoding, a radix-2 FFT convolver, brightness and contrast lookup tables), but no app can call them through the SDK.",
+  "summary": "Accelerate's vector, signal, linear algebra, sparse solver and ML APIs have no BifrOSt SDK counterpart. DEFLATE and zlib are available to apps through the SDK compression module. The system and apps contain private equivalents (quarter-turn rotation, YUV to RGBA conversion, a radix-2 FFT convolver, brightness and contrast lookup tables), but no app can call them through the SDK.",
   "rea_evidence": "ev_371efbd6465434fa7c238d2db92f2f8a9c41b8360f6013ec6863082d97dc6c3e",
   "features": [
     {
@@ -24,9 +24,9 @@
     {
       "feature": "Convolution and morphology",
       "apple": "vImage convolution kernels, dilation and erosion (Convolution, Morphology collections)",
-      "bifrost": "springboard/render/src/gfx.rs:476 (blur), springboard/render/src/gfx.rs:423 (blur_material)",
+      "bifrost": "springboard/render/src/gfx.rs:476 (blur), springboard/render/src/gfx.rs:423 (blur_material); springboard/render/src/morphology.rs (convolve, dilate, erode, open, close)",
       "status": "partial",
-      "note": "Blur exists for materials. No general kernel convolution, dilation or erosion."
+      "note": "Kernel convolution, dilation, erosion, opening and closing on 8-bit planes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: no float or multi-channel planes, no separable fast path, and no GPU filter path."
     },
     {
       "feature": "Image buffer geometry",
@@ -38,30 +38,30 @@
     {
       "feature": "Compositing and blend modes",
       "apple": "vImage alpha blending and blend modes",
-      "bifrost": "springboard/src/shell/controls.rs:82 (blend, source-over with alpha)",
+      "bifrost": "springboard/src/shell/controls.rs:82 (blend, source-over with alpha); springboard/tests/parity_sdk-tests-04.rs (tests)",
       "status": "partial",
-      "note": "Source-over alpha blend only. No blend-mode set and no SDK-level image compositing."
+      "note": "Source-over alpha blend is tested headless in springboard/tests/parity_sdk-tests-04.rs (transparent, opaque and half alpha, and the monotonic red over black). No blend-mode set and no SDK-level image compositing."
     },
     {
       "feature": "Pixel format and colour conversion",
       "apple": "vImage convert-any-to-any (CMYK, planar and interleaved formats, YUV and RGB)",
       "bifrost": "springboard/render/src/pixel_layout.rs, springboard/sdk/src/lib.rs (kit::pixel_layout)",
       "status": "partial",
-      "note": "Wave 5 (w5-accelerate, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. NV12 and RGBA to premultiplied RGBA for the video thread. No CMYK, no grayscale conversion, and no public conversion API."
+      "note": "Pure model with host unit tests in pixel_layout::tests: CMYK to RGB, grey to RGB, luma, and plane split and join are also tested headless in springboard/render/tests/parity_sdk-complete-39.rs, and the SDK re-exports the module as kit::pixel_layout. Gap: float buffers are written but not read back, and the converter is not wired into apps or the shell and not yet tested on the VM or Midget."
     },
     {
       "feature": "Tone and brightness adjustment, histogram",
       "apple": "vImage gamma, tone curves, histogram calculation, specification and equalization",
-      "bifrost": "springboard/src/shell/photos/edit.rs:287 (per-channel lookup table: contrast then brightness)",
+      "bifrost": "springboard/src/shell/photos/edit.rs:287 (per-channel lookup table: contrast then brightness); springboard/render/src/histogram.rs (histogram, equalization_lut, levels_lut, curve_lut)",
       "status": "partial",
-      "note": "A brightness and contrast lookup table inside the Photos app. No histogram, equalization or tone-curve API."
+      "note": "Histogram, equalization, level stretch and piecewise tone curves are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: the Photos app does not use these yet, and there is no gamma or histogram specification API."
     },
     {
       "feature": "Compression and decompression",
       "apple": "Compression (buffer, stream and filter APIs), Directories and Data Archives",
-      "bifrost": "springboard/render/src/cg/pdf/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
+      "bifrost": "springboard/sdk/src/compression.rs (encode_buffer, encode_buffer_threaded, decode_buffer); springboard/sdk/tests/parity_sdk-tests-20.rs; springboard/render/src/cg/pdf/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
       "status": "partial",
-      "note": "DEFLATE and zlib decoding exist inside the Books engine. There is no compressor and no SDK compression API. The PNG writer emits uncompressed blocks."
+      "note": "DEFLATE and zlib encode and decode through the SDK compression module (bifrost_app::compression); the PNG writer still emits uncompressed blocks, and no LZFSE, LZ4, LZMA or Brotli codec exists. Tests in springboard/sdk/tests/parity_sdk-tests-20.rs: zlib_header_second_byte_follows_the_level, every_codec_and_level_round_trips_every_sample, the_reference_zlib_bytes_decode_to_hello; springboard/sdk/tests/parity_sdk-tests-04.rs: zlib_reference_bytes_decode_to_hello, every_level_and_algorithm_round_trips, stored_zlib_from_the_png_writer_decodes_through_the_codec. Not yet verified on Midget."
     },
     {
       "feature": "Linear algebra (BLAS, LAPACK, sparse solvers)",
@@ -80,23 +80,23 @@
     {
       "feature": "Neural networks",
       "apple": "BNNS (neural network training and inference)",
-      "bifrost": "springboard/ui/src/cnn_layers.rs (inference only",
+      "bifrost": "springboard/ui/src/cnn_layers.rs (inference only: Network, lstm_step, gru_step); tests: springboard/ui/tests/parity_sdk-complete-22.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-12, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No neural network inference or training API for apps. Searches for neural network and tensor code found nothing."
+      "note": "Forward inference for convolution, pooling, dense, relu, custom and LSTM or GRU steps runs on the CPU and is tested headless. Gap: there is no training API and no descriptor an app can build a network from, and the code is not yet wired into apps or the shell."
     },
     {
       "feature": "Audio DSP (biquad filters, spectrogram)",
       "apple": "Biquadratic IIR filters, audio spectrogram sample (vDSP plus vImage)",
-      "bifrost": "springboard/audiod (playback service), springboard/src/media/audioplayer.rs, biquad filter chain in springboard/apps/daw/src/devices/inst/zones/mod.rs",
-      "status": "os",
-      "note": "Audio playback runs in the system daemon. Biquad filtering exists only inside the DAW instrument. No DSP filter API for apps."
+      "bifrost": "springboard/sdk/src/biquad.rs (Design, Coefficients, Biquad); springboard/audiod (playback service), springboard/src/media/audioplayer.rs, biquad filter chain in springboard/apps/daw/src/devices/inst/zones/mod.rs",
+      "status": "partial",
+      "note": "Low-pass, high-pass and peaking sections with cookbook coefficients, their magnitude response and block processing are tested headless in tests/parity_sdk-os-02.rs. Gap: no spectrogram, and the playback service does not run these filters for apps."
     },
     {
       "feature": "Core Video pixel buffer interop",
       "apple": "Core Video interoperability with vImage pixel buffers",
-      "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (hardware decode), springboard/src/media/convert.rs (frame conversion)",
-      "status": "os",
-      "note": "Video frames are converted in the media layer. Apps get no pixel buffer API."
+      "bifrost": "springboard/sdk/src/pixel_buffer.rs (Layout::offset_of); springboard/src/media/hwdec/ffmpeg.rs (hardware decode), springboard/src/media/convert.rs (frame conversion)",
+      "status": "partial",
+      "note": "Plane addressing for the BGRA and NV12 layouts is tested headless in tests/parity_sdk-os-02.rs. Gap: no pixel buffer object is tied to the hardware decoder, so apps cannot take decoded frames."
     },
     {
       "feature": "Numerical quadrature",
@@ -107,9 +107,9 @@
     }
   ],
   "gaps": [
-    "No SDK module for vDSP, vImage, BNNS, compression, BLAS/LAPACK, sparse solvers or simd.",
+    "No SDK module for vDSP, vImage, BNNS, BLAS/LAPACK, sparse solvers or simd.",
     "No app-facing FFT or DCT API. The only FFT is private to the DAW convolver (springboard/apps/daw/src/conv.rs).",
-    "No compressor. DEFLATE is decode-only and lives in the Books engine, and the PNG writer stores uncompressed blocks.",
+    "No LZFSE, LZ4, LZMA or Brotli codec. The SDK compression module covers DEFLATE and zlib only, and the PNG writer stores uncompressed blocks.",
     "No general image convolution, morphology, histogram, or arbitrary-angle geometric transform API.",
     "No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.",
     "No neural network inference or training API for apps.",

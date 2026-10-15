@@ -570,6 +570,19 @@ impl Sort {
             Self::Created => "Creation Date",
         }
     }
+    /// The word the settings file stores this order as.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::Due => "due",
+            Self::Priority => "priority",
+            Self::Title => "title",
+            Self::Created => "created",
+        }
+    }
+    pub fn from_key(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|s| s.key() == text)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -906,30 +919,42 @@ pub fn move_before(items: &mut Vec<Reminder>, id: u64, before: Option<u64>) -> b
 /// Zone offset in seconds east of UTC at a Unix time.
 pub type OffsetAt<'a> = &'a dyn Fn(i64) -> i32;
 
+/// One Markdown checklist line for `r`: `- [ ]` or `- [x]`, the title on one line, the due day (and time) in brackets.
+fn checklist_line(out: &mut String, r: &Reminder, indent: &str) {
+    let mark = if r.completed { 'x' } else { ' ' };
+    let title = r.title.split_whitespace().collect::<Vec<_>>().join(" ");
+    out.push_str(&format!("{indent}- [{mark}] {title}"));
+    if let Some(day) = r.due {
+        let (y, m, d) = civil_from_days(day);
+        out.push_str(&format!(" ({y:04}-{m:02}-{d:02}"));
+        if let Some(t) = r.time {
+            out.push_str(&format!(" {:02}:{:02}", t / 60, t % 60));
+        }
+        out.push(')');
+    }
+    out.push('\n');
+}
+
+/// The reminders of a smart list (or any flat selection) as a Markdown checklist under `title`, one line each in the
+/// order given, the way File > Print List prints a smart list.
+pub fn flat_markdown(title: &str, items: &[&Reminder]) -> String {
+    let mut out = format!("# {title}\n\n");
+    for r in items {
+        checklist_line(&mut out, r, "");
+    }
+    out
+}
+
 /// A list as Markdown checklist lines: `- [ ]` and `- [x]`, subtasks indented, the
 /// due day (and time) in brackets. Each section of the list is a `## heading` over its reminders.
 pub fn export_markdown(data: &Data, list: u64) -> String {
-    fn line(out: &mut String, r: &Reminder, indent: &str) {
-        let mark = if r.completed { 'x' } else { ' ' };
-        let title = r.title.split_whitespace().collect::<Vec<_>>().join(" ");
-        out.push_str(&format!("{indent}- [{mark}] {title}"));
-        if let Some(day) = r.due {
-            let (y, m, d) = civil_from_days(day);
-            out.push_str(&format!(" ({y:04}-{m:02}-{d:02}"));
-            if let Some(t) = r.time {
-                out.push_str(&format!(" {:02}:{:02}", t / 60, t % 60));
-            }
-            out.push(')');
-        }
-        out.push('\n');
-    }
     // the top-level reminders of one section (or of none), each followed by its subtasks
     fn block(out: &mut String, data: &Data, list: u64, known: &[Section], section: Option<u64>) {
         let placed = |r: &Reminder| r.section.filter(|s| known.iter().any(|k| k.id == *s));
         for r in data.items.iter().filter(|r| r.list == list && r.parent.is_none() && placed(r) == section) {
-            line(out, r, "");
+            checklist_line(out, r, "");
             for c in data.items.iter().filter(|c| c.parent == Some(r.id)) {
-                line(out, c, "  ");
+                checklist_line(out, c, "  ");
             }
         }
     }

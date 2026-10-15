@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3 — 2026-10-14
+
+- Draw and hit-test profile rows with the Golden Gate source-list widget.
+
+## 0.1.2
+
+- Added the SDK and design compliance test harness.
+
+## 0.1.1
+
+- Exported the app icon at the required 180 x 180 pixel size.
+
 ## 0.1.0
 
 - New app: Colour Utility lists the ICC colour profiles in the system folders (`/usr/share/color/icc`,

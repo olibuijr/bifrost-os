@@ -17,9 +17,9 @@
     {
       "feature": "Per-app permission enforcement (restrict features by manifest permission)",
       "apple": "SFAuthorization restricts a user's access to features in an app or daemon",
-      "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain; with_entitlements for first-party log-store)",
-      "status": "os",
-      "note": "the shell enforces grants from the package manifest at launch; the app cannot query or request them at run time, and there is no user prompt for a grant"
+      "bifrost": "springboard/ui/src/os_services/permissions.rs (Permission, Grants::from_manifest, Grants::require); springboard/src/bare/app_policy.rs (Policy::from_permissions: network, storage, audio, notifications, documents, keychain; with_entitlements for first-party log-store)",
+      "status": "partial",
+      "note": "Manifest permission names, rejection of unknown names and the require check are tested headless. Gap: the shell enforces grants at launch, an app has no run-time service to query them, and there is no user prompt for a grant."
     },
     {
       "feature": "Credential invalidation (invalidateCredentials())",
@@ -40,7 +40,7 @@
       "apple": "Closest related Apple surface is Keychain Services; SFAuthorization is not a keychain API",
       "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/src/keychain.rs (Error::NotPermitted)",
       "status": "partial",
-      "note": "gated by the manifest keychain permission only; no user authentication step and no per-right authorization"
+      "note": "Gated by the manifest keychain permission: without it the shell answers NotPermitted, which the SDK maps to errSecNotAvailable. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (decode_item_maps_a_failed_get_to_its_status) cover that mapping; the manifest check itself runs in the shell. Gap: there is no user authentication step and no per-right authorization, because the shell has no authentication service for secret access yet."
     }
   ],
   "gaps": [

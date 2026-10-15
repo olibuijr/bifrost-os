@@ -85,10 +85,20 @@ impl Session {
         self.items.iter().all(|i| i.types.iter().any(|t| d.registered_types().iter().any(|r| r == t)))
     }
 
-    /// The pointer moved; `dest` is the registered destination under it, if any.
-    pub fn moved(&mut self, dest: Option<&mut dyn Destination>) {
+    /// The pointer moved; `previous` is the destination it left and `dest` is the destination now under it.
+    /// Pass the previous destination so its `exited` callback can clear bindings such as `isTargeted`.
+    pub fn moved(&mut self, previous: Option<&mut dyn Destination>, dest: Option<&mut dyn Destination>) {
         if self.state != State::Dragging {
             return;
+        }
+        let next_id = dest.as_ref().map(|d| d.id());
+        if self.over.is_some() && self.over != next_id {
+            if let Some(previous) = previous {
+                if self.over == Some(previous.id()) {
+                    previous.exited();
+                }
+            }
+            self.leave();
         }
         match dest {
             Some(d) if self.accepts(d) => {
@@ -123,7 +133,7 @@ impl Session {
     }
 
     /// The button was released. Returns the operation performed (0 when nothing took it).
-    pub fn drop_on(&mut self, dest: Option<&mut dyn Destination>) -> u8 {
+    pub fn drop_on(&mut self, previous: Option<&mut dyn Destination>, dest: Option<&mut dyn Destination>) -> u8 {
         if self.state != State::Dragging {
             return op::NONE;
         }
@@ -138,7 +148,18 @@ impl Session {
                 }
                 ok
             }
-            _ => {
+            other => {
+                let over = self.over;
+                if let Some(previous) = previous {
+                    if over == Some(previous.id()) {
+                        previous.exited();
+                    }
+                }
+                if let Some(d) = other {
+                    if over == Some(d.id()) {
+                        d.exited();
+                    }
+                }
                 self.leave();
                 false
             }
@@ -150,8 +171,13 @@ impl Session {
     }
 
     /// Escape: the source gives the session up.
-    pub fn cancel(&mut self) {
+    pub fn cancel(&mut self, over: Option<&mut dyn Destination>) {
         if self.state == State::Dragging {
+            if let Some(over) = over {
+                if self.over == Some(over.id()) {
+                    over.exited();
+                }
+            }
             self.leave();
             self.state = State::Cancelled;
         }
@@ -201,10 +227,10 @@ mod tests {
     fn enter_update_perform_conclude_in_order() {
         let mut s = Session::begin(op::COPY | op::MOVE, vec![text_item()]).unwrap();
         let mut w = well(1, op::EVERY, true);
-        s.moved(Some(&mut w));
-        s.moved(Some(&mut w));
+        s.moved(None, Some(&mut w));
+        s.moved(None, Some(&mut w));
         assert_eq!(s.operation(), op::COPY, "mask intersected with the answer, one bit");
-        assert_eq!(s.drop_on(Some(&mut w)), op::COPY);
+        assert_eq!(s.drop_on(None, Some(&mut w)), op::COPY);
         assert_eq!(s.log, vec![Callback::Entered(1), Callback::Updated(1), Callback::Perform(1), Callback::Conclude(1)]);
         assert_eq!(s.state(), State::Dropped);
         assert_eq!(w.got.len(), 1);
@@ -214,16 +240,16 @@ mod tests {
     fn refusing_destination_gets_no_perform_and_leaving_exits() {
         let mut s = Session::begin(op::COPY, vec![text_item()]).unwrap();
         let mut refuse = well(1, op::NONE, true);
-        s.moved(Some(&mut refuse));
-        assert_eq!(s.drop_on(Some(&mut refuse)), op::NONE);
+        s.moved(None, Some(&mut refuse));
+        assert_eq!(s.drop_on(None, Some(&mut refuse)), op::NONE);
         assert!(!s.log.contains(&Callback::Perform(1)));
         assert_eq!(s.state(), State::Cancelled);
 
         let mut s = Session::begin(op::COPY, vec![text_item()]).unwrap();
         let (mut a, mut b) = (well(1, op::COPY, true), well(2, op::COPY, true));
-        s.moved(Some(&mut a));
-        s.moved(Some(&mut b));
-        s.moved(None);
+        s.moved(None, Some(&mut a));
+        s.moved(Some(&mut a), Some(&mut b));
+        s.moved(Some(&mut b), None);
         assert_eq!(s.log, vec![Callback::Entered(1), Callback::Exited(1), Callback::Entered(2), Callback::Exited(2)]);
         assert_eq!(s.operation(), op::NONE);
     }
@@ -233,7 +259,7 @@ mod tests {
         let item = DraggingItem { types: vec!["public.png".into()], promised_file: None };
         let mut s = Session::begin(op::COPY, vec![item]).unwrap();
         let mut w = well(1, op::COPY, true);
-        s.moved(Some(&mut w));
+        s.moved(None, Some(&mut w));
         assert!(s.log.is_empty());
     }
 
@@ -245,15 +271,15 @@ mod tests {
         };
         let mut s = Session::begin(op::COPY, vec![item]).unwrap();
         let mut w = well(1, op::COPY, true);
-        s.moved(Some(&mut w));
-        s.drop_on(Some(&mut w));
+        s.moved(None, Some(&mut w));
+        s.drop_on(None, Some(&mut w));
         assert_eq!(s.written_files[0].name, "a.txt");
 
         let mut c = Session::begin(op::COPY, vec![text_item()]).unwrap();
-        c.moved(Some(&mut w));
-        c.cancel();
+        c.moved(None, Some(&mut w));
+        c.cancel(Some(&mut w));
         assert_eq!(c.state(), State::Cancelled);
         assert_eq!(c.log.last(), Some(&Callback::Exited(1)));
-        assert_eq!(c.drop_on(Some(&mut w)), op::NONE, "a finished session ignores more input");
+        assert_eq!(c.drop_on(None, Some(&mut w)), op::NONE, "a finished session ignores more input");
     }
 }

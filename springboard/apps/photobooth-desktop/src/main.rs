@@ -1,17 +1,32 @@
 //! Photo Booth: the system camera in a viewfinder with Photo, 4-up Burst and Clip modes, a Timer with a countdown and a
 //! flash, a row of effects (Core Image style filter chains), a strip of this session's captures and Export through the
 //! save panel. Captures are saved in `~/Pictures/Photo Booth Library`; the layout, the effects, the names and the clip
-//! container are in `model.rs` and `avi.rs`.
+//! container are in `model.rs` and `avi.rs`. The menus (File, Edit, View, Camera) are in `menu.rs`; the distortion
+//! effects and the mirror flip in `warp.rs`; the slideshow's timing in `slideshow.rs`; the backdrops, which swap the
+//! room for a gradient using a picture of the empty scene, in `backdrop.rs`. Deleted captures go to the desktop Trash
+//! folder (`trash.rs`), from where Undo Delete brings them back.
 
+#[cfg(test)]
+mod scratch;
 mod avi;
+mod backdrop;
+mod menu;
 mod model;
+mod slideshow;
+mod trash;
+mod warp;
 
+use backdrop::{Backdrop, Reference};
+use bifrost_app::defaults::Value;
 use bifrost_app::kit::ui::{self, Ui, Weight};
-use bifrost_app::kit::{pack, Damage, Image, Surface};
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::kit::{Damage, Image, Surface};
+use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use menu::{Command, MenuState};
 use model::{Button, Effect, Layout, Mode, Rect, Timer};
-use springboard::media::v4l2::CameraInfo;
-use springboard::media::v4l2::{self, Device, Frame};
+use slideshow::Slideshow;
+use trash::Trashed;
+use warp::Strength;
+use springboard::media::v4l2::{self, CameraInfo, Device, Frame};
 use springboard::shell::camera::jpeg;
 use springboard::shell::photos::library::{civil, Date};
 use std::io::Write;
@@ -22,36 +37,39 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const STILL_QUALITY: u8 = 92;
 const CLIP_QUALITY: u8 = 80;
 /// The clip frames are taken at most this wide.
-const CLIP_MAX_W: usize = 640;
+const CLIP_FRAME_PIXEL_LIMIT: usize = 640;
 /// Gap between strip thumbnails, in points.
 const SLOT_GAP_PT: f32 = 8.0;
 /// Frame period while the camera streams, in ms.
 const FRAME_MS: f64 = 33.0;
-const WHITE: u32 = pack(255, 255, 255, 255);
-const BLACK: u32 = pack(0, 0, 0, 255);
-/// How long each capture shows in the slideshow, in ms.
-const SLIDE_MS: f64 = 3000.0;
-
-const MENU_TAKE: u32 = 1;
-const MENU_EXPORT: u32 = 2;
-const MENU_DELETE: u32 = 3;
-const MENU_FLIP: u32 = 4;
-const MENU_FLASH: u32 = 5;
-const MENU_SLIDESHOW: u32 = 6;
-const MENU_MODE_PHOTO: u32 = 7;
-const MENU_MODE_BURST: u32 = 8;
-const MENU_MODE_CLIP: u32 = 9;
-const MENU_TIMER_OFF: u32 = 10;
-const MENU_TIMER_3: u32 = 11;
-const MENU_TIMER_10: u32 = 12;
-/// Camera menu items: `MENU_CAMERA_BASE + index` into the list of cameras.
-const MENU_CAMERA_BASE: u32 = 100;
+const WHITE: u32 = ui::WHITE;
+/// Keys, as the evdev translation hands them to an app.
+const KEY_ESCAPE: u32 = 1;
+const KEY_BACKSPACE: u32 = 8;
+const KEY_ENTER: u32 = 13;
+const KEY_ESCAPE_ASCII: u32 = 27;
+const KEY_LEFT: u32 = 37;
+const KEY_RIGHT: u32 = 39;
+const KEY_DELETE: u32 = 46;
+/// Preference keys in the app's defaults.
+const PREF_AUTO_FLIP: &str = "autoFlip";
+const PREF_SCREEN_FLASH: &str = "screenFlash";
+const PREF_CAMERA: &str = "camera";
+const PREF_DISTORTION: &str = "distortion";
 
 /// A capture in this session: its file, a small thumbnail for the strip and the image shown when it is selected.
 struct Capture {
     path: PathBuf,
     thumb: Image,
     shown: Image,
+}
+
+/// The capture that Delete took away last: where it sat in the strip, its picture and where the Trash keeps the file,
+/// so that Undo Delete can take it back out.
+struct Removed {
+    index: usize,
+    capture: Capture,
+    trashed: Trashed,
 }
 
 struct Burst {
@@ -82,15 +100,6 @@ struct PhotoBooth {
     mode: Mode,
     timer: Timer,
     effect: Effect,
-    /// Auto Flip: the picture is mirrored like a looking glass, in the viewfinder and in every capture
-    mirror: bool,
-    /// whether the screen flashes at the shutter
-    flash: bool,
-    /// the cameras the system lists and the one in use (path)
-    cameras: Vec<CameraInfo>,
-    camera_path: Option<String>,
-    /// the slideshow: the capture shown and when it advances
-    slideshow: Option<(usize, f64)>,
     /// when the shutter fires, in ms on the app clock; set while the timer counts down
     countdown: Option<f64>,
     burst: Option<Burst>,
@@ -101,8 +110,37 @@ struct PhotoBooth {
     /// a save panel is open for this capture (request id, file)
     export: Option<(u32, PathBuf)>,
     library: PathBuf,
+    /// the desktop Trash folder that Delete moves captures into
+    trash: PathBuf,
     now: f64,
     status: String,
+    /// the cameras the system lists, and the device node of the one in use or last chosen
+    cameras: Vec<CameraInfo>,
+    camera_path: Option<String>,
+    /// when the camera list was last read, in ms on the app clock
+    probed_at: f64,
+    /// the app is shown (between resume and suspend); the camera is only looked for while it is
+    active: bool,
+    /// Edit > Auto Flip: pictures are turned left to right, in the viewfinder and in every capture
+    auto_flip: bool,
+    /// View > Screen Flash: the white flash over the viewfinder when a photo is taken
+    screen_flash: bool,
+    /// View > Full Screen Viewfinder: the bars are hidden and the picture fills the window
+    full_screen: bool,
+    /// Edit > Undo Delete: the capture Delete took away last
+    undo: Option<Removed>,
+    /// View > Distortion Strength: how far Bulge and Twirl pull
+    distortion: Strength,
+    slideshow: Option<Slideshow>,
+    /// the slide fitted to the window, kept until the slide or the window size changes: (index, width, height)
+    slide: Option<((usize, usize, usize), Image)>,
+    /// the slide that is fading out over the one on screen, and when the fade began, in ms on the app clock
+    fade: Option<(Image, f64)>,
+    /// the backdrop that replaces the room, the picture of the empty scene it needs, and when that picture is taken
+    backdrop: Backdrop,
+    reference: Option<Reference>,
+    scene_at: Option<f64>,
+    prefs_loaded: bool,
 }
 
 impl PhotoBooth {
@@ -118,11 +156,6 @@ impl PhotoBooth {
             mode: Mode::Photo,
             timer: Timer::Off,
             effect: Effect::None,
-            mirror: true,
-            flash: true,
-            cameras: Vec::new(),
-            camera_path: None,
-            slideshow: None,
             countdown: None,
             burst: None,
             clip: None,
@@ -131,29 +164,83 @@ impl PhotoBooth {
             selected: None,
             export: None,
             library: PathBuf::new(),
+            trash: PathBuf::new(),
             now: 0.0,
             status: String::new(),
+            cameras: Vec::new(),
+            camera_path: None,
+            probed_at: 0.0,
+            active: false,
+            auto_flip: true,
+            screen_flash: true,
+            full_screen: false,
+            undo: None,
+            distortion: Strength::Normal,
+            slideshow: None,
+            slide: None,
+            fade: None,
+            backdrop: Backdrop::None,
+            reference: None,
+            scene_at: None,
+            prefs_loaded: false,
         }
     }
 
-    /// Opens the first camera the system lists. Nothing is opened before the app is shown.
+    /// Lists the cameras and opens the one chosen last, or the first. Nothing is opened before the app is shown.
     fn start(&mut self) {
         if self.device.is_some() {
             return;
         }
         self.cameras = v4l2::probe();
-        let chosen = self.camera_path.as_ref().and_then(|p| self.cameras.iter().find(|c| &c.path == p)).or_else(|| self.cameras.first()).cloned();
-        match chosen.as_ref() {
-            Some(info) => match Device::open(&info.path) {
-                Ok(device) => {
-                    self.camera_path = Some(info.path.clone());
-                    self.device = Some(device);
-                    self.camera_note.clear();
-                }
-                Err(e) => self.camera_note = format!("Camera not available: {e}"),
-            },
-            None => self.camera_note = "No camera found".to_string(),
+        self.open_camera();
+    }
+
+    /// Opens the camera at the remembered device node, or the first listed one when that node is no longer listed.
+    fn open_camera(&mut self) {
+        let wanted = self.camera_path.as_ref().and_then(|path| self.cameras.iter().position(|c| &c.path == path));
+        let Some(info) = self.cameras.get(wanted.unwrap_or(0)) else {
+            self.camera_note = "No camera found".to_string();
+            return;
+        };
+        match Device::open(&info.path) {
+            Ok(device) => {
+                self.device = Some(device);
+                self.camera_path = Some(info.path.clone());
+                self.camera_note.clear();
+            }
+            Err(e) => self.camera_note = format!("Camera not available: {e}"),
         }
+    }
+
+    /// Camera menu: switches to the `index`-th camera of the list the menu showed and remembers the choice. The list is
+    /// read again first, so a camera unplugged since the menu was opened is reported instead of opened.
+    fn select_camera(&mut self, ctx: &Ctx, index: usize) -> bool {
+        let Some(path) = self.cameras.get(index).map(|c| c.path.clone()) else { return false };
+        if self.device.is_some() && self.camera_path.as_deref() == Some(path.as_str()) {
+            return false;
+        }
+        self.cameras = v4l2::probe();
+        let listed: Vec<&str> = self.cameras.iter().map(|c| c.path.as_str()).collect();
+        if model::position_of_camera(&path, &listed).is_none() {
+            self.status = "That camera is no longer connected".to_string();
+            return true;
+        }
+        ctx.defaults_mut().set_string(PREF_CAMERA, &path);
+        self.camera_path = Some(path);
+        self.stop();
+        self.open_camera();
+        // another camera sees another scene, so the empty scene has to be taken again
+        self.reference = None;
+        if self.backdrop != Backdrop::None {
+            self.schedule_scene();
+        }
+        true
+    }
+
+    /// The index in the camera list of the camera in use.
+    fn current_camera(&self) -> Option<usize> {
+        let path = self.camera_path.as_ref()?;
+        self.cameras.iter().position(|c| &c.path == path)
     }
 
     /// Releases the camera and drops the live picture; a clip in progress is cancelled.
@@ -164,19 +251,71 @@ impl PhotoBooth {
         self.clip = None;
         self.burst = None;
         self.countdown = None;
+        self.scene_at = None;
     }
 
     fn timed(&self) -> bool {
-        self.countdown.is_some() || self.burst.is_some() || self.clip.is_some() || self.flash_at.is_some()
+        self.countdown.is_some()
+            || self.burst.is_some()
+            || self.clip.is_some()
+            || self.flash_at.is_some()
+            || self.scene_at.is_some()
+            || self.fade.is_some()
+            || self.slideshow.as_ref().is_some_and(|show| !show.paused())
     }
 
-    /// The newest frame as pixels of `w` by `h`, with the effect applied.
+    /// The newest frame as pixels of `w` by `h`: the backdrop first (it compares against the camera's own picture),
+    /// then Auto Flip, then the effect.
     fn grab(&self, w: usize, h: usize) -> Option<Image> {
         let frame = self.last_frame.as_ref()?;
         let px = v4l2::to_pixels(frame, w, h)?;
-        let img = Image { w, h, px };
-        let img = if self.mirror { model::flip_horizontal(&img) } else { img };
-        Some(self.effect.apply(&img))
+        let mut img = Image { w, h, px };
+        if self.backdrop != Backdrop::None {
+            if let Some(reference) = self.reference.as_ref().filter(|r| r.fits(frame.width, frame.height)) {
+                img = backdrop::replace(&img, reference, self.backdrop);
+            }
+        }
+        if self.auto_flip {
+            img = warp::flip_horizontal(&img);
+        }
+        Some(self.effect.apply(img, self.distortion))
+    }
+
+    /// Picks a backdrop. A backdrop needs a picture of the empty scene, so the person gets a few seconds to step out.
+    fn set_backdrop(&mut self, backdrop: Backdrop) {
+        self.backdrop = backdrop;
+        self.reference = None;
+        self.scene_at = None;
+        self.view = None;
+        if backdrop != Backdrop::None {
+            self.schedule_scene();
+        }
+    }
+
+    fn schedule_scene(&mut self) {
+        self.scene_at = Some(self.now + backdrop::SETTLE_MS);
+        self.status = "Step out of the frame".to_string();
+    }
+
+    /// Takes the picture of the empty scene from the newest camera frame.
+    fn take_scene(&mut self) {
+        let Some(frame) = self.last_frame.as_ref() else {
+            self.status = "No camera picture yet".to_string();
+            return;
+        };
+        let Some(px) = v4l2::to_pixels(frame, frame.width, frame.height) else {
+            self.status = "No camera picture yet".to_string();
+            return;
+        };
+        self.reference = Some(Reference::from_picture(&Image { w: frame.width, h: frame.height, px }));
+        self.status = format!("Backdrop: {}", self.backdrop.title());
+    }
+
+    /// Starts the screen flash when it is switched on.
+    fn flash(&mut self, t: f64) {
+        if self.screen_flash {
+            self.flash_at = Some(t);
+        }
     }
 
     /// The newest frame at full size.
@@ -192,7 +331,7 @@ impl PhotoBooth {
         if vw == 0 || vh == 0 || frame.width == 0 || frame.height == 0 {
             return;
         }
-        let (w, h) = model::fit_size(frame.width, frame.height, vw.min(model::PREVIEW_MAX_W), vh);
+        let (w, h) = model::fit_size(frame.width, frame.height, vw.min(model::PREVIEW_PIXEL_LIMIT), vh);
         self.view = self.grab(w, h);
     }
 
@@ -202,7 +341,7 @@ impl PhotoBooth {
             clip.ends_at = t;
             return;
         }
-        if self.countdown.is_some() || self.burst.is_some() {
+        if self.countdown.is_some() || self.burst.is_some() || self.slideshow.is_some() {
             return;
         }
         self.selected = None;
@@ -228,63 +367,9 @@ impl PhotoBooth {
             self.status = "No camera picture yet".to_string();
             return;
         };
-        self.flash_now(t);
+        self.flash(t);
         if let Some(path) = self.write_still(&img, "") {
             self.add_capture(path, img);
-        }
-    }
-
-    fn flash_now(&mut self, t: f64) {
-        if self.flash {
-            self.flash_at = Some(t);
-        }
-    }
-
-    /// Deletes the selected capture's file and takes it off the strip. The file goes first: a failure keeps the strip.
-    fn delete_selected(&mut self) {
-        let Some(index) = self.selected else {
-            self.status = "Select a capture to delete".to_string();
-            return;
-        };
-        if let Err(e) = std::fs::remove_file(&self.captures[index].path) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                self.status = format!("Could not delete: {e}");
-                return;
-            }
-        }
-        let gone = self.captures.remove(index);
-        self.selected = model::selection_after_delete(index, self.captures.len());
-        self.slideshow = match self.slideshow {
-            Some(_) if self.captures.is_empty() => None,
-            Some((i, at)) => Some((i.min(self.captures.len() - 1), at)),
-            None => None,
-        };
-        self.status = format!("Deleted {}", gone.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
-    }
-
-    /// Switches to the camera listed at `index`; the current one is released first.
-    fn use_camera(&mut self, index: usize) {
-        let Some(info) = self.cameras.get(index) else { return };
-        if self.camera_path.as_deref() == Some(info.path.as_str()) && self.device.is_some() {
-            return;
-        }
-        self.camera_path = Some(info.path.clone());
-        self.stop();
-        self.start();
-    }
-
-    fn start_slideshow(&mut self, t: f64) {
-        if self.captures.is_empty() {
-            self.status = "Nothing to show yet".to_string();
-            return;
-        }
-        let first = self.selected.unwrap_or(self.captures.len() - 1);
-        self.slideshow = Some((first, t + SLIDE_MS));
-    }
-
-    fn slide(&mut self, forward: bool, t: f64) {
-        if let Some((i, _)) = self.slideshow {
-            self.slideshow = Some((model::slide_step(i, self.captures.len(), forward), t + SLIDE_MS));
         }
     }
 
@@ -293,8 +378,9 @@ impl PhotoBooth {
             self.status = "No camera picture yet".to_string();
             return;
         };
-        let w = frame.width.min(CLIP_MAX_W).max(2) & !1;
+        let w = frame.width.min(CLIP_FRAME_PIXEL_LIMIT).max(2) & !1;
         let h = (w * frame.height / frame.width.max(1)).max(2) & !1;
+        // compliance-allow: LAY-03 Converts the clip duration from seconds to the app clock's milliseconds.
         self.clip = Some(Clip { frames: Vec::new(), size: (w, h), first: None, next_at: t, ends_at: t + model::CLIP_SECS * 1000.0 });
     }
 
@@ -341,7 +427,7 @@ impl PhotoBooth {
         }
         match self.still() {
             Some(img) => {
-                self.flash_now(t);
+                self.flash(t);
                 let n = burst.shots.len() + 1;
                 let _ = self.write_still(&img, &format!(" Burst {n}"));
                 burst.shots.push(img);
@@ -389,7 +475,7 @@ impl PhotoBooth {
         let box_px = (model::THUMB_PT * self.scale).max(1.0) as usize;
         let (tw, th) = model::fit_size(img.w, img.h, box_px, box_px);
         let thumb = img.resized(tw, th);
-        let (sw, sh) = model::fit_size(img.w, img.h, model::PREVIEW_MAX_W, model::PREVIEW_MAX_W);
+        let (sw, sh) = model::fit_size(img.w, img.h, model::PREVIEW_PIXEL_LIMIT, model::PREVIEW_PIXEL_LIMIT);
         let shown = if (sw, sh) == (img.w, img.h) { img } else { img.resized(sw, sh) };
         self.status = format!("Saved {}", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
         self.captures.push(Capture { path, thumb, shown });
@@ -407,6 +493,120 @@ impl PhotoBooth {
         let ext = path.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
         let request = ctx.save_document(&name, &[ext.as_str()]);
         self.export = Some((request, path));
+    }
+
+    /// Moves the selected capture's file into the Trash and takes it out of the strip; the next capture is selected.
+    /// A file that is already gone leaves the strip too, with nothing to undo.
+    fn delete_selected(&mut self) {
+        let Some(index) = self.selected.filter(|i| *i < self.captures.len()) else {
+            self.status = "Select a capture to delete".to_string();
+            return;
+        };
+        let path = self.captures[index].path.clone();
+        let trashed = match trash::put(&self.trash, &path, &now_date()) {
+            Ok(trashed) => Some(trashed),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => {
+                self.status = format!("Could not delete: {e}");
+                return;
+            }
+        };
+        let gone = self.captures.remove(index);
+        self.slide = None;
+        self.selected = model::selection_after_delete(index, self.captures.len());
+        self.status = format!("Moved {} to the Trash", file_name_of(&path));
+        self.undo = trashed.map(|trashed| Removed { index, capture: gone, trashed });
+    }
+
+    /// Edit > Undo Delete: takes the last deleted capture back out of the Trash and returns it to its place in the strip.
+    fn undo_delete(&mut self) {
+        let Some(removed) = self.undo.take() else { return };
+        match trash::restore(&removed.trashed, &removed.capture.path) {
+            Ok(path) => {
+                let Removed { index, capture, .. } = removed;
+                let index = index.min(self.captures.len());
+                self.status = format!("Restored {}", file_name_of(&path));
+                self.captures.insert(index, Capture { path, thumb: capture.thumb, shown: capture.shown });
+                self.selected = Some(index);
+                self.slide = None;
+            }
+            Err(e) => {
+                self.status = format!("Could not restore: {e}");
+                self.undo = Some(removed);
+            }
+        }
+    }
+
+    /// View > Slideshow: all captures of the session, one after the other, over the whole window.
+    fn start_slideshow(&mut self) {
+        if self.captures.is_empty() {
+            self.status = "Nothing to show yet".to_string();
+            return;
+        }
+        let start = self.selected.unwrap_or(0).min(self.captures.len() - 1);
+        self.slideshow = Some(Slideshow::start(start, self.now));
+        self.slide = None;
+        self.fade = None;
+    }
+
+    /// Ends the slideshow and selects the capture it stopped on.
+    fn stop_slideshow(&mut self) {
+        if let Some(show) = self.slideshow.take() {
+            if show.index < self.captures.len() {
+                self.selected = Some(show.index);
+            }
+        }
+        self.slide = None;
+        self.fade = None;
+    }
+
+    fn set_full_screen(&mut self, on: bool) {
+        self.full_screen = on;
+        self.view = None;
+        self.status = if on { "Press Escape to show the controls again".to_string() } else { String::new() };
+    }
+
+    /// Runs a command from the menu bar; true when the window needs a new frame.
+    fn command(&mut self, ctx: &Ctx, command: Command) -> bool {
+        match command {
+            Command::TakePhoto => self.press_shutter(self.now),
+            Command::Export => self.export_selected(ctx),
+            Command::ShowLibrary => {
+                let _ = std::fs::create_dir_all(&self.library);
+                ctx.open_url(&format!("file://{}", self.library.display()));
+            }
+            Command::Delete => self.delete_selected(),
+            Command::UndoDelete => self.undo_delete(),
+            Command::Distortion(strength) => {
+                self.distortion = strength;
+                ctx.defaults_mut().set_string(PREF_DISTORTION, strength.key());
+                self.view = None;
+            }
+            Command::AutoFlip => {
+                self.auto_flip = !self.auto_flip;
+                ctx.defaults_mut().set_bool(PREF_AUTO_FLIP, self.auto_flip);
+                self.view = None;
+            }
+            Command::FullScreen => self.set_full_screen(!self.full_screen),
+            Command::Slideshow => {
+                if self.slideshow.is_some() {
+                    self.stop_slideshow();
+                } else {
+                    self.start_slideshow();
+                }
+            }
+            Command::ScreenFlash => {
+                self.screen_flash = !self.screen_flash;
+                ctx.defaults_mut().set_bool(PREF_SCREEN_FLASH, self.screen_flash);
+            }
+            Command::RetakeScene => {
+                self.reference = None;
+                self.schedule_scene();
+            }
+            Command::Backdrop(backdrop) => self.set_backdrop(backdrop),
+            Command::Camera(index) => return self.select_camera(ctx, index),
+        }
+        true
     }
 
     /// Which strip thumbnail sits at `(x, y)` points, as an index into `captures`.
@@ -432,6 +632,11 @@ fn strip_slot(strip: Rect, k: usize) -> Rect {
         w: model::THUMB_PT,
         h: model::THUMB_PT,
     }
+}
+
+/// The file name of `path` as text, empty when it has none.
+fn file_name_of(path: &std::path::Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
 fn now_date() -> Date {
@@ -474,39 +679,39 @@ impl App for PhotoBooth {
         "is.olibuijr.photobooth.desktop"
     }
 
-    fn configure(&mut self, _ctx: &Ctx) {
+    fn configure(&mut self, ctx: &Ctx) {
         let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
         self.library = model::library_dir(&home);
+        self.trash = trash::trash_dir(&home, std::env::var_os("XDG_DATA_HOME").map(PathBuf::from));
+        if !self.prefs_loaded {
+            self.prefs_loaded = true;
+            let mut defaults = ctx.defaults_mut();
+            defaults.register([(PREF_AUTO_FLIP, Value::Bool(true)), (PREF_SCREEN_FLASH, Value::Bool(true))]);
+            self.auto_flip = defaults.bool(PREF_AUTO_FLIP);
+            self.screen_flash = defaults.bool(PREF_SCREEN_FLASH);
+            self.camera_path = defaults.string(PREF_CAMERA);
+            self.distortion = defaults.string(PREF_DISTORTION).and_then(|key| Strength::from_key(&key)).unwrap_or(Strength::Normal);
+        }
+        self.active = true;
         self.start();
     }
 
     fn resume(&mut self, _ctx: &Ctx) {
+        self.active = true;
         self.start();
     }
 
     fn suspend(&mut self, _ctx: &Ctx) {
+        self.active = false;
         self.stop();
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         let scale = ctx.ui.s;
         if self.slideshow.is_some() {
-            match ev {
-                Input::Key(KeyInput::Code(1 | 27)) | Input::Touch { kind: TouchKind::Down, .. } => self.slideshow = None,
-                Input::Key(KeyInput::Code(37)) => self.slide(false, self.now),
-                Input::Key(KeyInput::Code(39)) => self.slide(true, self.now),
-                _ => return false,
-            }
-            return true;
+            return self.slideshow_event(ev);
         }
         match ev {
-            Input::Key(KeyInput::Code(8 | 46)) => {
-                if self.selected.is_none() {
-                    return false;
-                }
-                self.delete_selected();
-                true
-            }
             Input::Touch { kind: TouchKind::Down, x, y, .. } => {
                 let (x, y) = (x / scale, y / scale);
                 let Some(layout) = self.layout() else { return false };
@@ -550,81 +755,46 @@ impl App for PhotoBooth {
                 self.press_shutter(self.now);
                 true
             }
+            Input::Key(KeyInput::Code(KEY_DELETE | KEY_BACKSPACE)) if self.selected.is_some() => {
+                self.delete_selected();
+                true
+            }
+            Input::Key(KeyInput::Code(KEY_ESCAPE | KEY_ESCAPE_ASCII)) if self.full_screen => {
+                self.set_full_screen(false);
+                true
+            }
+            Input::Key(KeyInput::Code(KEY_ENTER)) if self.full_screen => {
+                self.press_shutter(self.now);
+                true
+            }
             _ => false,
         }
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        let busy = self.clip.is_some() || self.burst.is_some() || self.countdown.is_some();
-        let has_sel = self.selected.is_some();
-        let mode = |id: u32, title: &str, m: Mode| AppMenuItem::new(id, title).checked(self.mode == m).enabled(!busy);
-        let timer = |id: u32, title: &str, t: Timer| AppMenuItem::new(id, title).checked(self.timer == t);
-        let mut cameras: Vec<AppMenuItem> = self
-            .cameras
-            .iter()
-            .enumerate()
-            .map(|(i, c)| AppMenuItem::new(MENU_CAMERA_BASE + i as u32, &c.card).checked(self.camera_path.as_deref() == Some(c.path.as_str())))
-            .collect();
-        if cameras.is_empty() {
-            cameras.push(AppMenuItem::new(MENU_CAMERA_BASE, "No Camera").enabled(false));
-        }
-        vec![
-            AppMenu {
-                title: "File".into(),
-                items: vec![
-                    AppMenuItem::new(MENU_TAKE, if self.clip.is_some() { "Stop Recording" } else { "Take Photo" }).key("cmd+t"),
-                    AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_EXPORT, "Export...").key("cmd+shift+e").enabled(has_sel),
-                    AppMenuItem::new(MENU_DELETE, "Delete").enabled(has_sel),
-                ],
-            },
-            AppMenu {
-                title: "View".into(),
-                items: vec![
-                    mode(MENU_MODE_PHOTO, "Photo", Mode::Photo),
-                    mode(MENU_MODE_BURST, "Four-Up", Mode::Burst),
-                    mode(MENU_MODE_CLIP, "Video Clip", Mode::Clip),
-                    AppMenuItem::separator(),
-                    timer(MENU_TIMER_OFF, "Countdown Off", Timer::Off),
-                    timer(MENU_TIMER_3, "Countdown 3 Seconds", Timer::Three),
-                    timer(MENU_TIMER_10, "Countdown 10 Seconds", Timer::Ten),
-                    AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_FLIP, "Auto Flip").checked(self.mirror),
-                    AppMenuItem::new(MENU_FLASH, "Screen Flash").checked(self.flash),
-                    AppMenuItem::new(MENU_SLIDESHOW, "Play Slideshow").key("cmd+alt+s").enabled(!self.captures.is_empty()),
-                ],
-            },
-            AppMenu { title: "Camera".into(), items: cameras },
-        ]
+        let cameras: Vec<String> = self.cameras.iter().map(|c| c.card.clone()).collect();
+        let browsing = self.slideshow.is_none();
+        menu::menus(&MenuState {
+            live: self.device.is_some() && browsing,
+            selected: self.selected.is_some() && browsing,
+            has_captures: !self.captures.is_empty(),
+            auto_flip: self.auto_flip,
+            screen_flash: self.screen_flash,
+            full_screen: self.full_screen,
+            slideshow: !browsing,
+            backdrop: self.backdrop,
+            distortion: self.distortion,
+            can_undo: self.undo.is_some() && browsing,
+            cameras: &cameras,
+            current_camera: self.current_camera(),
+        })
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        match id {
-            MENU_TAKE => self.press_shutter(self.now),
-            MENU_EXPORT => self.export_selected(ctx),
-            MENU_DELETE => self.delete_selected(),
-            MENU_FLIP => {
-                self.mirror = !self.mirror;
-                self.view = None;
-            }
-            MENU_FLASH => self.flash = !self.flash,
-            MENU_SLIDESHOW => self.start_slideshow(self.now),
-            MENU_MODE_PHOTO | MENU_MODE_BURST | MENU_MODE_CLIP => {
-                if self.countdown.is_none() && self.burst.is_none() && self.clip.is_none() {
-                    self.mode = match id {
-                        MENU_MODE_PHOTO => Mode::Photo,
-                        MENU_MODE_BURST => Mode::Burst,
-                        _ => Mode::Clip,
-                    };
-                }
-            }
-            MENU_TIMER_OFF => self.timer = Timer::Off,
-            MENU_TIMER_3 => self.timer = Timer::Three,
-            MENU_TIMER_10 => self.timer = Timer::Ten,
-            n if n >= MENU_CAMERA_BASE => self.use_camera((n - MENU_CAMERA_BASE) as usize),
-            _ => return false,
+        match menu::decode(id) {
+            Some(command) => self.command(ctx, command),
+            None => false,
         }
-        true
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
@@ -668,11 +838,11 @@ impl App for PhotoBooth {
     fn tick(&mut self, _ctx: &Ctx, t: f64) -> bool {
         self.now = t;
         let mut dirty = false;
-        if let Some((i, at)) = self.slideshow {
+        if self.active && self.device.is_none() && model::camera_retry_due(self.probed_at, t) {
+            // no camera is open, so the list is read again: a camera plugged in since then appears in the Camera menu
+            self.probed_at = t;
+            self.start();
             dirty = true;
-            if t >= at {
-                self.slideshow = Some((model::slide_step(i, self.captures.len(), true), t + SLIDE_MS));
-            }
         }
         let polled = match self.device.as_mut() {
             Some(device) => device.latest(),
@@ -682,7 +852,10 @@ impl App for PhotoBooth {
             match polled {
                 Ok(Some(frame)) => {
                     self.last_frame = Some(frame);
-                    self.refresh_view();
+                    // the slideshow covers the viewfinder, so the live picture is not rebuilt behind it
+                    if self.slideshow.is_none() {
+                        self.refresh_view();
+                    }
                     dirty = true;
                 }
                 Ok(None) => {}
@@ -700,6 +873,25 @@ impl App for PhotoBooth {
                 self.fire(t);
             }
         }
+        if let Some(at) = self.scene_at {
+            dirty = true;
+            if t >= at {
+                self.scene_at = None;
+                self.take_scene();
+            }
+        }
+        let count = self.captures.len();
+        if let Some(show) = self.slideshow.as_mut() {
+            if show.tick(count, t) {
+                dirty = true;
+            }
+        }
+        if let Some(at) = self.fade.as_ref().map(|(_, at)| *at) {
+            dirty = true;
+            if t - at >= slideshow::FADE_MS {
+                self.fade = None;
+            }
+        }
         if self.burst.is_some() {
             dirty = true;
             self.burst_step(t);
@@ -708,7 +900,7 @@ impl App for PhotoBooth {
             dirty = true;
             self.clip_step(t);
         }
-        if self.flash_at.is_some_and(|f| t - f >= model::FLASH_MS) {
+        if self.flash_at.is_some_and(|f| model::flash_over(f, t)) {
             self.flash_at = None;
         }
         if self.flash_at.is_some() {
@@ -718,8 +910,10 @@ impl App for PhotoBooth {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        if self.device.is_some() || self.timed() || self.slideshow.is_some() {
+        if self.device.is_some() || self.timed() {
             Some(t + FRAME_MS)
+        } else if self.active {
+            Some(t + model::CAMERA_RETRY_MS)
         } else {
             None
         }
@@ -731,25 +925,19 @@ impl App for PhotoBooth {
         self.scale = scale;
         let (w, h) = (s.w, s.h);
         self.size_pt = (w as f32 / scale, h as f32 / scale);
-        let layout = model::layout(self.size_pt.0, self.size_pt.1);
-        if let Some((i, _)) = self.slideshow {
-            s.fill_rect(0, 0, w, h, BLACK);
-            if let Some(c) = self.captures.get(i) {
-                let img = &c.shown;
-                s.blit(img, (w as i32 - img.w as i32) / 2, (h as i32 - img.h as i32) / 2, 255, 255);
-            }
-            let note = format!("{} of {}   Esc to stop", i + 1, self.captures.len());
-            label_at(s, ui, &note, ui::MAC_FOOTNOTE_PT, WHITE, 14.0 * scale, 12.0 * scale, w as f32 - 28.0 * scale);
-            let mut d = Damage::new(w, h);
-            d.all();
-            return d;
-        }
+        let layout = self.window_layout(self.size_pt.0, self.size_pt.1);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
 
-        self.draw_viewfinder(s, ui, layout.viewfinder, scale);
-        self.draw_effects(s, ui, layout.effects, scale);
-        self.draw_strip(s, ui, layout.strip, scale);
-        self.draw_controls(s, ui, layout.controls, scale);
+        if self.slideshow.is_some() {
+            self.draw_slideshow(s, ui, scale);
+        } else {
+            self.draw_viewfinder(s, ui, layout.viewfinder, scale);
+            if !self.full_screen {
+                self.draw_effects(s, ui, layout.effects, scale);
+                self.draw_strip(s, ui, layout.strip, scale);
+                self.draw_controls(s, ui, layout.controls, scale);
+            }
+        }
 
         let mut d = Damage::new(w, h);
         d.all();
@@ -764,14 +952,85 @@ impl PhotoBooth {
         if w <= 0.0 || h <= 0.0 {
             return None;
         }
-        Some(model::layout(w, h))
+        Some(self.window_layout(w, h))
+    }
+
+    /// The window split into its parts, or the viewfinder alone while it fills the window.
+    fn window_layout(&self, w: f32, h: f32) -> Layout {
+        if self.full_screen {
+            model::layout_full_screen(w, h)
+        } else {
+            model::layout(w, h)
+        }
+    }
+
+    /// Keys and clicks while the slideshow is up: arrows step, space pauses, Escape or a click ends it.
+    fn slideshow_event(&mut self, ev: Input) -> bool {
+        let t = self.now;
+        match ev {
+            Input::Touch { kind: TouchKind::Down, .. } | Input::Key(KeyInput::Code(KEY_ESCAPE | KEY_ESCAPE_ASCII)) => {
+                self.stop_slideshow();
+                true
+            }
+            Input::Key(KeyInput::Code(KEY_RIGHT)) => self.step_slide(1),
+            Input::Key(KeyInput::Code(KEY_LEFT)) => self.step_slide(-1),
+            Input::Key(KeyInput::Text(text)) if text == " " => {
+                if let Some(show) = self.slideshow.as_mut() {
+                    show.toggle_pause(t);
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Moves the slideshow `delta` captures on or back.
+    fn step_slide(&mut self, delta: i32) -> bool {
+        let (count, t) = (self.captures.len(), self.now);
+        if let Some(show) = self.slideshow.as_mut() {
+            show.step(delta, count, t);
+        }
+        true
+    }
+
+    /// The slideshow: the capture on screen, as large as the window allows, with its name and position underneath.
+    fn draw_slideshow(&mut self, s: &mut Surface, ui: &Ui, scale: f32) {
+        s.fill_rect(0, 0, s.w, s.h, ui::DETAIL_BG.now());
+        let count = self.captures.len();
+        let Some(show) = self.slideshow.filter(|show| show.index < count) else { return };
+        let (cw, ch) = (self.captures[show.index].shown.w, self.captures[show.index].shown.h);
+        let (fw, fh) = model::fit_inside(cw, ch, s.w, s.h);
+        let key = (show.index, fw, fh);
+        if self.slide.as_ref().map(|slide| slide.0) != Some(key) {
+            // a new capture fades in over the one it replaces; a window resize alone does not fade
+            let turned = self.slide.as_ref().is_some_and(|((index, _, _), _)| *index != show.index);
+            let next = self.captures[show.index].shown.resized(fw, fh);
+            let leaving = self.slide.replace((key, next));
+            if let Some((_, old)) = leaving.filter(|_| turned) {
+                self.fade = Some((old, self.now));
+            }
+        }
+        if let Some((_, img)) = &self.slide {
+            s.blit(img, (s.w as i32 - img.w as i32) / 2, (s.h as i32 - img.h as i32) / 2, 255, 255);
+        }
+        if let Some((old, at)) = &self.fade {
+            let alpha = slideshow::fade_alpha(self.now - *at);
+            if alpha > 0 {
+                s.blit(old, (s.w as i32 - old.w as i32) / 2, (s.h as i32 - old.h as i32) / 2, 255, alpha);
+            }
+        }
+        let name = self.captures[show.index].path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let paused = if show.paused() { "  (paused)" } else { "" };
+        let caption = format!("{name}   {} of {count}{paused}", show.index + 1);
+        let y = s.h as f32 - ui::MAC_FOOTNOTE_PT * 2.4 * scale;
+        label_centred(s, ui, &caption, ui::MAC_FOOTNOTE_PT, WHITE, s.w as f32 / 2.0, y, s.w as f32 - 24.0 * scale);
     }
 
     fn draw_viewfinder(&mut self, s: &mut Surface, ui: &Ui, vf: Rect, scale: f32) {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
         let (x0, y0, vw, vh) = (p(vf.x), p(vf.y), p(vf.w), p(vf.h));
         self.view_px = (vw, vh);
-        s.fill_rect(x0, y0, vw, vh, BLACK);
+        s.fill_rect(x0, y0, vw, vh, ui::CARD_BG.now());
         let centre_x = vf.x * scale + vw as f32 / 2.0;
 
         let picture = match self.selected {
@@ -796,7 +1055,15 @@ impl PhotoBooth {
             let size = ui::MAC_LARGE_TITLE_PT * 3.0;
             label_centred(s, ui, &left.to_string(), size, WHITE, centre_x, y0 as f32 + vh as f32 / 2.0 - size * scale / 2.0, vw as f32);
         }
+        if let Some(at) = self.scene_at {
+            let left = ((at - self.now) / 1000.0).ceil().max(1.0) as u32;
+            let size = ui::MAC_LARGE_TITLE_PT * 3.0;
+            let top = y0 as f32 + vh as f32 / 2.0 - size * scale / 2.0;
+            label_centred(s, ui, "Step out of the frame", ui::MAC_BODY_PT, WHITE, centre_x, top - 28.0 * scale, vw as f32);
+            label_centred(s, ui, &left.to_string(), size, WHITE, centre_x, top, vw as f32);
+        }
         if self.flash_at.is_some() {
+            // compliance-allow: COL-03 camera flash is intentionally white, matching a physical shutter flash.
             s.fill_rect(x0, y0, vw, vh, WHITE);
         }
         if let Some(clip) = &self.clip {
@@ -815,10 +1082,10 @@ impl PhotoBooth {
 
     fn draw_effects(&self, s: &mut Surface, ui: &Ui, row: Rect, scale: f32) {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
-        s.fill_rect(p(row.x), p(row.y), p(row.w), p(row.h), ui::SIDEBAR_BG.now());
+        s.fill_rect(p(row.x), p(row.y), p(row.w), p(row.h), ui::CONTENT_BG.now());
         for (effect, cell) in model::effect_cells(row) {
             if effect == self.effect {
-                s.fill_rect(p(cell.x + 3.0), p(cell.y + 6.0), p(cell.w - 6.0), p(cell.h - 12.0), ui::SIDEBAR_SELECTED);
+                s.fill_rect(p(cell.x + 3.0), p(cell.y + 6.0), p(cell.w - 6.0), p(cell.h - 12.0), ui::SELECTION.now());
             }
             let colour = if effect == self.effect { ui::LABEL.now() } else { ui::LABEL_2.now() };
             label_centred(s, ui, effect.title(), ui::MAC_FOOTNOTE_PT, colour, (cell.x + cell.w / 2.0) * scale, cell.y * scale + 14.0 * scale, cell.w * scale - 6.0 * scale);
@@ -827,7 +1094,7 @@ impl PhotoBooth {
 
     fn draw_strip(&self, s: &mut Surface, ui: &Ui, strip: Rect, scale: f32) {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
-        s.fill_rect(p(strip.x), p(strip.y), p(strip.w), p(strip.h), ui::SIDEBAR_BG.now());
+        s.fill_rect(p(strip.x), p(strip.y), p(strip.w), p(strip.h), ui::CONTENT_BG.now());
         if self.captures.is_empty() {
             label_centred(s, ui, "Captures appear here", ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), (strip.x + strip.w / 2.0) * scale, strip.y * scale + strip.h * scale / 2.0 - 6.0 * scale, strip.w * scale);
             return;
@@ -848,7 +1115,7 @@ impl PhotoBooth {
 
     fn draw_controls(&self, s: &mut Surface, ui: &Ui, bar: Rect, scale: f32) {
         let p = |v: f32| (v * scale).round().max(0.0) as usize;
-        s.fill_rect(p(bar.x), p(bar.y), p(bar.w), p(bar.h), ui::SIDEBAR_BG.now());
+        s.fill_rect(p(bar.x), p(bar.y), p(bar.w), p(bar.h), ui::CONTENT_BG.now());
         let text_y = |r: Rect| (r.y + 6.0) * scale;
         let mode = model::button_rect(bar, Button::Mode);
         label_centred(s, ui, self.mode.title(), ui::MAC_BODY_PT, ui::LINK, (mode.x + mode.w / 2.0) * scale, text_y(mode), mode.w * scale);
@@ -862,10 +1129,74 @@ impl PhotoBooth {
         let (cx, cy) = ((shutter.x + shutter.w / 2.0) * scale, (shutter.y + shutter.h / 2.0) * scale);
         let r = shutter.w * scale / 2.0;
         fill_disc(s, cx, cy, r, ui::LABEL.now());
+        // compliance-allow: COL-03 the white center is the stock camera shutter face, not a scheme background.
         fill_disc(s, cx, cy, r - 3.0 * scale, if self.clip.is_some() { ui::DESTRUCTIVE } else { WHITE });
     }
 }
 
 fn main() {
     bifrost_app::run(PhotoBooth::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scratch::Scratch;
+
+    /// A booth whose strip holds one capture per path, and whose Trash is the `Trash` folder of `dir`.
+    fn booth_with(dir: &Scratch, paths: &[PathBuf]) -> PhotoBooth {
+        let mut booth = PhotoBooth::new();
+        booth.trash = dir.0.join("Trash");
+        booth.captures = paths
+            .iter()
+            .map(|path| {
+                let img = Image { w: 2, h: 2, px: vec![0; 4] };
+                Capture { path: path.clone(), thumb: img.clone(), shown: img }
+            })
+            .collect();
+        booth
+    }
+
+    #[test]
+    fn delete_moves_the_file_to_the_trash_and_undo_brings_it_back_in_its_place() {
+        let dir = Scratch::new("photobooth-undo");
+        let paths: Vec<PathBuf> = ["a.jpg", "b.jpg", "c.jpg"].iter().map(|n| dir.0.join(n)).collect();
+        for (i, path) in paths.iter().enumerate() {
+            std::fs::write(path, [i as u8; 3]).unwrap();
+        }
+        let mut booth = booth_with(&dir, &paths);
+        booth.selected = Some(1);
+        booth.delete_selected();
+        assert!(!paths[1].exists());
+        assert_eq!(std::fs::read(dir.0.join("Trash/files/b.jpg")).unwrap(), vec![1u8; 3]);
+        assert!(dir.0.join("Trash/info/b.jpg.trashinfo").exists());
+        assert_eq!(booth.captures.len(), 2);
+        assert_eq!(booth.selected, Some(1), "the capture that moved up is selected");
+        booth.undo_delete();
+        assert_eq!(std::fs::read(&paths[1]).unwrap(), vec![1u8; 3]);
+        assert!(!dir.0.join("Trash/files/b.jpg").exists());
+        assert!(!dir.0.join("Trash/info/b.jpg.trashinfo").exists());
+        assert_eq!(booth.captures.len(), 3);
+        assert_eq!(booth.captures[1].path, paths[1]);
+        assert_eq!(booth.selected, Some(1));
+        assert!(booth.undo.is_none());
+    }
+
+    #[test]
+    fn a_file_already_gone_leaves_the_strip_and_has_nothing_to_undo() {
+        let dir = Scratch::new("photobooth-gone");
+        let mut booth = booth_with(&dir, &[dir.0.join("gone.jpg")]);
+        booth.selected = Some(0);
+        booth.delete_selected();
+        assert!(booth.captures.is_empty());
+        assert!(booth.undo.is_none());
+    }
+
+    #[test]
+    fn undo_with_nothing_deleted_changes_nothing() {
+        let mut booth = PhotoBooth::new();
+        booth.undo_delete();
+        assert!(booth.captures.is_empty());
+        assert!(booth.undo.is_none());
+    }
 }

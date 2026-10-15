@@ -113,9 +113,32 @@ pub fn shown(name: &str, order: NameOrder) -> String {
     }
 }
 
+/// The title a card is shown under: the company when the card is marked as a company, the nickname when the person
+/// prefers nicknames and the card has one, and otherwise the name in the chosen order. `name` is the card's display name.
+pub fn title(name: &str, company: &str, nickname: &str, is_company: bool, prefer_nicknames: bool, order: NameOrder) -> String {
+    let (company, nickname) = (company.trim(), nickname.trim());
+    if is_company && !company.is_empty() {
+        company.to_string()
+    } else if prefer_nicknames && !nickname.is_empty() {
+        nickname.to_string()
+    } else {
+        shown(name, order)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_title_prefers_the_company_flag_then_the_nickname_then_the_name() {
+        let order = NameOrder::LastFirst;
+        assert_eq!(title("Ada Lovelace", "Analytical Ltd", "Countess", true, true, order), "Analytical Ltd");
+        assert_eq!(title("Ada Lovelace", "Analytical Ltd", "Countess", false, true, order), "Countess");
+        assert_eq!(title("Ada Lovelace", "Analytical Ltd", "Countess", false, false, order), "Lovelace, Ada");
+        assert_eq!(title("Ada Lovelace", "", "", true, true, order), "Lovelace, Ada", "a company flag without a company changes nothing");
+        assert_eq!(title("Ada Lovelace", "", "  ", false, true, NameOrder::FirstLast), "Ada Lovelace");
+    }
 
     fn sorted(names: &[&str]) -> Vec<String> {
         let mut v: Vec<String> = names.iter().map(|s| s.to_string()).collect();

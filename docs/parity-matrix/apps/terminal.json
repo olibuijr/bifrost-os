@@ -1,354 +1,354 @@
 {
-  "app": "Terminal",
-  "bifrost_app": "shell terminal (springboard/src/shell/terminal, app id is.olibuijr.term)",
-  "evidence": [
-    "ref27/System/Applications/Utilities/Terminal.app/Contents/Info.plist (document types session, settings, shell script, unix executable, folders; URL schemes telnet, ssh, x-man-page; Services New Terminal at Folder, Open man Page, Search man Page Index)",
-    "ref27/System/Applications/Utilities/Terminal.app/Contents/Resources/Base.lproj/MainMenu.nib (Bookmarks/Marks, Copy Special, Window 1-9, Terminal Help, Low Memory panel)",
-    "ref27/System/Applications/Utilities/Terminal.app/Contents/Resources/Base.lproj/TTWindow.nib, TTInspector.nib, TTAppPreferences.nib, TTFindPanel.nib, TTRunCommand.nib, ServiceBrowser.nib",
-    "ref27/System/Applications/Utilities/Terminal.app/Contents/Resources/en.lproj/ServicesMenu.strings",
-    "springboard/src/shell/terminal/ and the iosterm core (../iOSTerm/src: term.rs, parser.rs, mouse.rs, select.rs, search.rs, sshconfig.rs)"
-  ],
-  "summary": {
-    "features": 37,
-    "parity": 10,
-    "partial": 13,
-    "gap": 13,
-    "n/a": 1,
-    "coverage_pct": 45.8
+ "app": "Terminal",
+ "bifrost_app": "shell terminal (springboard/src/shell/terminal, app id is.olibuijr.term)",
+ "evidence": [
+  "ref27/System/Applications/Utilities/Terminal.app/Contents/Info.plist (document types session, settings, shell script, unix executable, folders; URL schemes telnet, ssh, x-man-page; Services New Terminal at Folder, Open man Page, Search man Page Index)",
+  "ref27/System/Applications/Utilities/Terminal.app/Contents/Resources/Base.lproj/MainMenu.nib (Bookmarks/Marks, Copy Special, Window 1-9, Terminal Help, Low Memory panel)",
+  "ref27/System/Applications/Utilities/Terminal.app/Contents/Resources/Base.lproj/TTWindow.nib, TTInspector.nib, TTAppPreferences.nib, TTFindPanel.nib, TTRunCommand.nib, ServiceBrowser.nib",
+  "ref27/System/Applications/Utilities/Terminal.app/Contents/Resources/en.lproj/ServicesMenu.strings",
+  "springboard/src/shell/terminal/ and the iosterm core (../iOSTerm/src: term.rs, parser.rs, mouse.rs, select.rs, search.rs, sshconfig.rs)"
+ ],
+ "summary": {
+  "features": 37,
+  "parity": 10,
+  "partial": 21,
+  "gap": 5,
+  "n/a": 1,
+  "coverage_pct": 56.9
+ },
+ "features": [
+  {
+   "feature": "New tab",
+   "area": "window",
+   "apple": "Shell > New Tab (cmd+T)",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/hwkeys.rs:82",
+   "note": "Cmd+T opens a tab in the home folder; More menu opens one in the current folder.",
+   "wire": ""
   },
-  "features": [
-    {
-      "feature": "New tab",
-      "area": "window",
-      "apple": "Shell > New Tab (cmd+T)",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/hwkeys.rs:82",
-      "note": "Cmd+T opens a tab in the home folder; More menu opens one in the current folder.",
-      "wire": ""
-    },
-    {
-      "feature": "New window",
-      "area": "window",
-      "apple": "Shell > New Window (cmd+N), New Window with profile",
-      "status": "gap",
-      "bifrost": "",
-      "note": "One terminal per desktop window; no new-window action inside the app.",
-      "wire": "Add TermKey::NewWindow to hwkeys.rs (cmd+N) that asks the shell to open a second Terminal window with its own tab set; terminal state (self.term) then needs a per-window TabSet instead of one on Shell."
-    },
-    {
-      "feature": "Tab strip with close buttons and Cmd+1..9",
-      "area": "window",
-      "apple": "tab bar, select tab, next/previous tab",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/layout.rs:46",
-      "note": "Compact tab strip, close box, Cmd+1 to 9, next and previous tab shortcuts.",
-      "wire": ""
-    },
-    {
-      "feature": "Reorder tabs and move a tab to a new window",
-      "area": "window",
-      "apple": "Window > Move Tab to New Window, Move Tab Left/Right, drag tabs",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Tabs keep creation order.",
-      "wire": "Drag-reorder in layout.rs hit testing plus tab move/detach once multiple windows exist (see New window)."
-    },
-    {
-      "feature": "Close tab, close other tabs, reopen closed",
-      "area": "window",
-      "apple": "Shell > Close Tab, Close Other Tabs",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/menus.rs:162",
-      "note": "Close Other Tabs added to the More menu (row 24). Needs a Midget check.",
-      "wire": "Add Close Other Tabs to the More menu list (view.rs MENU) and terminal_menu_action."
-    },
-    {
-      "feature": "Prompt before closing a running process",
-      "area": "window",
-      "apple": "Inspector Prompt before closing; close alert",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/input.rs:63",
-      "note": "Second Cmd+W confirms when the tab has a foreground job.",
-      "wire": ""
-    },
-    {
-      "feature": "New Command",
-      "area": "shell",
-      "apple": "Shell > New Command… (run a command in a new window)",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/command.rs:15",
-      "note": "Command panel runs the line through /bin/sh -c in a new tab that closes at exit.",
-      "wire": ""
-    },
-    {
-      "feature": "New Remote Connection (ssh/telnet browser)",
-      "area": "shell",
-      "apple": "Shell > New Remote Connection: service list, server list, user, Connect",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/ssh.rs:33",
-      "note": "Connections panel from the SSH config with add/edit form and import; no Bonjour server browser, no telnet or user-name toggle.",
-      "wire": "Add a discovered-servers list to the Connections panel from the dns_browse service browser (_ssh._tcp) and a telnet service row."
-    },
-    {
-      "feature": "ssh and telnet URL schemes",
-      "area": "shell",
-      "apple": "CFBundleURLTypes ssh://, telnet://",
-      "status": "gap",
-      "bifrost": "",
-      "note": "The Terminal is not registered for URL schemes.",
-      "wire": "Register ssh and telnet schemes with the shell URL router (app_links.rs) and open a tab running ssh with the parsed user, host and port."
-    },
-    {
-      "feature": "x-man-page URL and man page services",
-      "area": "shell",
-      "apple": "x-man-page scheme; Open man Page, Search man Page Index services",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No man page entry points.",
-      "wire": "Add Open man Page (selection) and the x-man-page scheme: spawn man in a new tab; wire to a selection context item."
-    },
-    {
-      "feature": "New Terminal at Folder service",
-      "area": "shell",
-      "apple": "Services: New Terminal / New Tab at Folder, Files Open in Terminal",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Files cannot open a folder in the Terminal.",
-      "wire": "Add a Files context item Open in Terminal that calls new_terminal_tab(Some(dir)) (terminal/tabs.rs) through the app link API."
-    },
-    {
-      "feature": "Open a .command or executable file in Terminal",
-      "area": "shell",
-      "apple": "document types: shell script, unix-executable",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No file association.",
-      "wire": "Register shell-script and executable types in the default-apps table (defaultapps.rs) and run them with spawn_terminal_tab."
-    },
-    {
-      "feature": "Window groups (save and open workspaces)",
-      "area": "shell",
-      "apple": "Shell > Save as Window Group, Open Window Group",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/groups.rs:10",
-      "note": "One group of tab folders saved in a pref; opens one tab per folder. No name, profile or command per tab, no several groups.",
-      "wire": "Store named groups (pref per name, JSON of folder, profile, command) and list them in a panel."
-    },
-    {
-      "feature": "Profiles: colour themes",
-      "area": "settings",
-      "apple": "Settings > Profiles: Basic, Pro, Homebrew, Ocean, Novel, Red Sands, Silver Aerogel, Clear Dark/Light",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/profile_table.rs:84",
-      "note": "The iosterm core has three themes cycled from the More menu; the nine-profile table is defined but not wired to the menu or sessions.",
-      "wire": "Wire PROFILES into profiles.rs (terminal_appearance) replacing palette::THEMES in the state and More menu, with a profile picker panel."
-    },
-    {
-      "feature": "Profile editor: ANSI colours, bold, blink, text",
-      "area": "settings",
-      "apple": "Profiles > Text: font, character and line spacing, ANSI colours, bright for bold, antialias, blinking text",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Colour, font and spacing are fixed per theme; only cursor style, blink and zoom change.",
-      "wire": "Add a settings panel (Panel::Profile) with font picker, character/line spacing steppers, ANSI palette wells and bold/bright/blink toggles stored per profile."
-    },
-    {
-      "feature": "Cursor style and blink",
-      "area": "settings",
-      "apple": "Cursor: Block, Underline, Vertical bar; Blink cursor",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/profiles.rs:36",
-      "note": "Style and blink stored in prefs and applied to every tab.",
-      "wire": ""
-    },
-    {
-      "feature": "Text size: bigger, smaller, actual size",
-      "area": "view",
-      "apple": "View > Bigger, Smaller (cmd + / -)",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/input.rs:48",
-      "note": "Cmd+plus, Cmd+minus and actual size; zoom steps saved.",
-      "wire": ""
-    },
-    {
-      "feature": "Window background image and translucency",
-      "area": "settings",
-      "apple": "Profiles > Window: background image, opacity, blur",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Clear profile alpha exists in the table but the view paints opaque.",
-      "wire": "Paint the profile alpha through the compositor in view.rs and add an image slot to the profile editor."
-    },
-    {
-      "feature": "Default login shell and startup",
-      "area": "settings",
-      "apple": "Settings > General: shell, new windows open with profile, startup window group",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Always spawns the account's login shell.",
-      "wire": "Add a General settings panel: shell path, default profile, open window group at launch."
-    },
-    {
-      "feature": "Find in scrollback",
-      "area": "edit",
-      "apple": "Edit > Find (panel with Ignore Case, Wrap Around, Not found), Find Next/Previous, Use Selection for Find",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/find.rs:5",
-      "note": "Find bar with match count, No matches, next and previous; no case toggle, no wrap toggle, no Use Selection for Find.",
-      "wire": "Add Ignore Case and Wrap Around toggles to the Find panel (search.rs find options) and cmd+E to use the selection."
-    },
-    {
-      "feature": "Copy, paste and select all",
-      "area": "edit",
-      "apple": "Edit > Copy, Paste, Select All; paste selection, paste escaped text",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/menus.rs:170",
-      "note": "Paste Escaped Text and Paste Selection added to the More menu (rows 25, 26); no key equivalents yet.",
-      "wire": "Add Paste Escaped Text and Paste Selection to the More menu and the edit shortcuts."
-    },
-    {
-      "feature": "Copy Special: plain text and without background colour",
-      "area": "edit",
-      "apple": "Edit > Copy Special",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Copy yields plain text only; no styled copy.",
-      "wire": "Add rich copy (colour runs) to Term::selected_text variants and a Copy Special submenu."
-    },
-    {
-      "feature": "Word and line selection",
-      "area": "edit",
-      "apple": "double click word, triple click line, option-drag rectangle",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/termtouch.rs:18",
-      "note": "Long press drag, double and triple tap select; no rectangular selection.",
-      "wire": "Add option+drag rectangular selection in termtouch.rs."
-    },
-    {
-      "feature": "Mouse reporting to applications",
-      "area": "edit",
-      "apple": "View > Allow Mouse Reporting",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/termtouch.rs",
-      "note": "The core encodes SGR and legacy mouse; the menu has no toggle to turn reporting off.",
-      "wire": "Add Allow Mouse Reporting to the More menu (state in TerminalUi) that disables mouse encoding when off."
-    },
-    {
-      "feature": "Secure Keyboard Entry",
-      "area": "shell",
-      "apple": "Terminal > Secure Keyboard Entry",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/profiles.rs:24",
-      "note": "Toggle keeps shell shortcuts out of the terminal, saved.",
-      "wire": ""
-    },
-    {
-      "feature": "Marks and bookmarks",
-      "area": "view",
-      "apple": "Edit > Mark as Bookmark, Insert Bookmark, Jump to Previous/Next Mark, Marks menu",
-      "status": "gap",
-      "bifrost": "",
-      "note": "The prompt marker parser (osc133_prompts) exists but no mark UI uses it.",
-      "wire": "Draw prompt marks from osc133_prompts in the gutter, add Jump to Previous/Next Mark (cmd+up/down) and a Mark as Bookmark action; list marks in the More menu."
-    },
-    {
-      "feature": "Scrollback buffer",
-      "area": "view",
-      "apple": "scrollback limit, Clear Scrollback (cmd+K), Clear to Start",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/menus.rs:197",
-      "note": "Clear Scrollback (cmd+K), Reset, Clear Screen (Ctrl+L), Save scrollback to Files.",
-      "wire": ""
-    },
-    {
-      "feature": "Export scrollback as text",
-      "area": "file",
-      "apple": "Shell > Export Text As…, Save Selected Text As…",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/menus.rs:186",
-      "note": "Writes the transcript to a fixed Files/terminal-scrollback.txt; no name or location panel and no selection export.",
-      "wire": "Use the SDK save panel for Export Text As and add Save Selected Text As."
-    },
-    {
-      "feature": "Split pane",
-      "area": "view",
-      "apple": "View > Split Pane",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/split.rs:9",
-      "note": "Two sessions side by side with a divider; close split.",
-      "wire": ""
-    },
-    {
-      "feature": "Show Inspector: title, process list, columns and rows",
-      "area": "window",
-      "apple": "Shell > Show Inspector (cmd+I): window title, running processes, size",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/mod.rs:61",
-      "note": "A Processes panel with a kill action; no title edit, no columns/rows entry.",
-      "wire": "Add a tab title editor and a Columns and Rows stepper to the Processes panel."
-    },
-    {
-      "feature": "Edit Title and tab title",
-      "area": "window",
-      "apple": "Shell > Edit Title",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Tab title follows the program title only.",
-      "wire": "Add Edit Title to the More menu that overrides the tab title (term.title in layout.rs)."
-    },
-    {
-      "feature": "Open URL / links",
-      "area": "view",
-      "apple": "Edit > Open URL, Look Up, Search the Web; command-click links",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/links.rs:5",
-      "note": "Opens the first link of the selection in the browser from the More menu; no command-click, no Look Up or Search the Web.",
-      "wire": "Add Cmd+click on detect_urls hits in termtouch.rs and Look Up / Search the Web items to the selection menu."
-    },
-    {
-      "feature": "Full screen and window chrome",
-      "area": "window",
-      "apple": "View > Enter Full Screen, Show Tab Bar, Show All Tabs",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/layout.rs:23",
-      "note": "The window frame and full-size mode come from the shell; no tab overview or hide tab bar.",
-      "wire": "Add Hide Tab Bar and Show All Tabs (grid of tab previews) to the View menu."
-    },
-    {
-      "feature": "Control socket and state",
-      "area": "automation",
-      "apple": "AppleScript dictionary",
-      "status": "parity",
-      "bifrost": "springboard/src/shell/terminal/control.rs:42",
-      "note": "state, read, resize and clear verbs over the control endpoint.",
-      "wire": ""
-    },
-    {
-      "feature": "Application menu bar",
-      "area": "menu",
-      "apple": "Shell, Edit, View, Window, Help menus",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/menus.rs:5",
-      "note": "One More menu list; the app publishes no menu bar of its own.",
-      "wire": "Publish the Shell, Edit, View and Window menus through the shell menu bar API and keep More as the touch fallback."
-    },
-    {
-      "feature": "Terminal help",
-      "area": "menu",
-      "apple": "Help > Terminal Help",
-      "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/extras.rs:21",
-      "note": "More menu row shows a one-line shortcut help; no help page.",
-      "wire": "Add a Help menu item that opens a short Terminal help page."
-    },
-    {
-      "feature": "Low memory notice",
-      "area": "view",
-      "apple": "Low Memory panel: older scrollback discarded",
-      "status": "n/a",
-      "bifrost": "",
-      "note": "Scrollback is capped by line count, not by memory pressure.",
-      "wire": ""
-    }
-  ]
+  {
+   "feature": "New window",
+   "area": "window",
+   "apple": "Shell > New Window (cmd+N), New Window with profile",
+   "status": "gap",
+   "bifrost": "",
+   "note": "One terminal per desktop window; no new-window action inside the app. Not started: Shell holds one tab set (Shell::term), so a second window needs that split first.",
+   "wire": "Add TermKey::NewWindow to hwkeys.rs (cmd+N) that asks the shell to open a second Terminal window with its own tab set; terminal state (self.term) then needs a per-window TabSet instead of one on Shell."
+  },
+  {
+   "feature": "Tab strip with close buttons and Cmd+1..9",
+   "area": "window",
+   "apple": "tab bar, select tab, next/previous tab",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/layout.rs:46",
+   "note": "Compact tab strip, close box, Cmd+1 to 9, next and previous tab shortcuts.",
+   "wire": ""
+  },
+  {
+   "feature": "Reorder tabs and move a tab to a new window",
+   "area": "window",
+   "apple": "Window > Move Tab to New Window, Move Tab Left/Right, drag tabs",
+   "status": "partial",
+   "bifrost": "springboard/src/term/tab_order.rs; springboard/src/term/sessions.rs (move_session); springboard/src/shell/terminal/tabs.rs (terminal_move_tab)",
+   "note": "More > Move tab left and Move tab right reorder the tab bar, and the active tab and a split pair follow their sessions. The order rule is tested headless in tests/parity_app-terminal.rs. Gap: dragging a tab name along the bar, and Move Tab to New Window, which needs several windows.",
+   "wire": "Move Tab to New Window once multiple windows exist (see New window)."
+  },
+  {
+   "feature": "Close tab, close other tabs, reopen closed",
+   "area": "window",
+   "apple": "Shell > Close Tab, Close Other Tabs",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/menus.rs (terminal_menu_action: rows 5 and 24); springboard/src/shell/terminal/input.rs (TermKey::CloseTab)",
+   "note": "Close Tab (Cmd+W, File menu), Close Other Tabs and Reopen Closed Tab (More) are in the code. The Midget check is pending.",
+   "wire": "Verify on Midget that Cmd+W, Close Other Tabs and Reopen Closed Tab act on the intended tabs, including a tab with a running process."
+  },
+  {
+   "feature": "Prompt before closing a running process",
+   "area": "window",
+   "apple": "Inspector Prompt before closing; close alert",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/input.rs:63",
+   "note": "Second Cmd+W confirms when the tab has a foreground job.",
+   "wire": ""
+  },
+  {
+   "feature": "New Command",
+   "area": "shell",
+   "apple": "Shell > New Command… (run a command in a new window)",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/command.rs:15",
+   "note": "Command panel runs the line through /bin/sh -c in a new tab that closes at exit.",
+   "wire": ""
+  },
+  {
+   "feature": "New Remote Connection (ssh/telnet browser)",
+   "area": "shell",
+   "apple": "Shell > New Remote Connection: service list, server list, user, Connect",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/ssh.rs:33",
+   "note": "Connections panel from the SSH config with add/edit form and import; no Bonjour server browser, no telnet or user-name toggle.",
+   "wire": "Add a discovered-servers list to the Connections panel from the dns_browse service browser (_ssh._tcp) and a telnet service row."
+  },
+  {
+   "feature": "ssh and telnet URL schemes",
+   "area": "shell",
+   "apple": "CFBundleURLTypes ssh://, telnet://",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/schemes.rs (link_argv, first_scheme_link); springboard/src/shell/terminal/menus.rs (terminal_open_selected_link)",
+   "note": "The Terminal declares ssh and telnet (shell/defaultapps.rs:39). Open link in selection runs an ssh or telnet link in a new tab as an argv of validated words, so no option reaches the command; the argv rules are tested headless in tests/parity_app-terminal.rs. Gap: a tap on a link in the output does not open it yet, and there is no server browser.",
+   "wire": "Offer the server browser (see New Remote Connection) from the links and the Connections panel."
+  },
+  {
+   "feature": "x-man-page URL and man page services",
+   "area": "shell",
+   "apple": "x-man-page scheme; Open man Page, Search man Page Index services",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/schemes.rs (link_argv, x-man-page links); springboard/src/shell/terminal/selection.rs (man_argv)",
+   "note": "Open man page for selection and Open link in selection run man in a new tab. An x-man-page link is read as an optional section and a page name with the same word checks, and the rule is tested headless. Gap: no Services entries for the man page index and no index search.",
+   "wire": "Add the Services entries for the man page index."
+  },
+  {
+   "feature": "New Terminal at Folder service",
+   "area": "shell",
+   "apple": "Services: New Terminal / New Tab at Folder, Files Open in Terminal",
+   "status": "partial",
+   "bifrost": "springboard/ui/src/services_menu.rs:101; springboard/src/shell/services_route.rs (Route::Terminal)",
+   "note": "Services > New Terminal at Folder opens a Terminal tab in the selected folder, or in the folder of a selected file (services_route.rs used the file's own path before this fix). Files Open in Terminal (files/menu.rs) was already built. Needs a check on Midget.",
+   "wire": "Check Open in Terminal from a file and a folder, and the Services entry, on Midget."
+  },
+  {
+   "feature": "Open a .command or executable file in Terminal",
+   "area": "shell",
+   "apple": "document types: shell script, unix-executable",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No file association. Terminal already receives shell scripts (defaultapps.rs:39) but does not run the file they open with; the document path into the Terminal is not built.",
+   "wire": "Run the opened file in a new tab through spawn_terminal_tab once the Terminal takes a document path."
+  },
+  {
+   "feature": "Window groups (save and open workspaces)",
+   "area": "shell",
+   "apple": "Shell > Save as Window Group, Open Window Group",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/groups.rs:32",
+   "note": "Save window group stores each tab's folder under a name, and Open window group reopens one from the list; the encoding is tested in groups.rs. Gap: the running command of a tab is not recorded, and no group opens at launch.",
+   "wire": "Record the running command of each tab when a group is saved."
+  },
+  {
+   "feature": "Profiles: colour themes",
+   "area": "settings",
+   "apple": "Settings > Profiles: Basic, Pro, Homebrew, Ocean, Novel, Red Sands, Silver Aerogel, Clear Dark/Light",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/profile_table.rs (PROFILES, profile_colors); springboard/src/shell/terminal/menus.rs (Color theme row)",
+   "note": "More > Color theme cycles the terminal core's colour themes, and profile_table.rs holds the nine profiles with their colours (Basic follows the scheme). Gap: there is no profile list or Use at Launch, and a profile's text size, caret and opacity are not applied.",
+   "wire": "Apply each profile text size and caret, and its opacity (see Window background image and translucency)."
+  },
+  {
+   "feature": "Profile editor: ANSI colours, bold, blink, text",
+   "area": "settings",
+   "apple": "Profiles > Text: font, character and line spacing, ANSI colours, bright for bold, antialias, blinking text",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No profile editor exists yet. The profiles are fixed in profile_table.rs (PROFILES), so the font, spacing, ANSI palette and bold, bright and blink options cannot be set.",
+   "wire": "Add a font picker, character and line spacing steppers, ANSI palette wells and bold, bright and blink toggles stored per profile."
+  },
+  {
+   "feature": "Cursor style and blink",
+   "area": "settings",
+   "apple": "Cursor: Block, Underline, Vertical bar; Blink cursor",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/profiles.rs:36",
+   "note": "Style and blink stored in prefs and applied to every tab.",
+   "wire": ""
+  },
+  {
+   "feature": "Text size: bigger, smaller, actual size",
+   "area": "view",
+   "apple": "View > Bigger, Smaller (cmd + / -)",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/input.rs:48",
+   "note": "Cmd+plus, Cmd+minus and actual size; zoom steps saved.",
+   "wire": ""
+  },
+  {
+   "feature": "Window background image and translucency",
+   "area": "settings",
+   "apple": "Profiles > Window: background image, opacity, blur",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Clear profile alpha exists in the table but the view paints opaque.",
+   "wire": "Paint the profile alpha through the compositor in view.rs and add an image slot to the profile editor."
+  },
+  {
+   "feature": "Default login shell and startup",
+   "area": "settings",
+   "apple": "Settings > General: shell, new windows open with profile, startup window group",
+   "status": "partial",
+   "bifrost": "springboard/src/term/mod.rs (SHELL: the login shell /bin/bash -l)",
+   "note": "The Terminal always starts the login shell /bin/bash -l (term/mod.rs SHELL). Gap: no shell choice, no startup command, no Use at Launch profile and no window group at launch; a per-window default profile waits on several windows.",
+   "wire": "Multiple windows: each new window opens with the default profile (see New window)."
+  },
+  {
+   "feature": "Find in scrollback",
+   "area": "edit",
+   "apple": "Edit > Find (panel with Ignore Case, Wrap Around, Not found), Find Next/Previous, Use Selection for Find",
+   "status": "partial",
+   "bifrost": "springboard/src/term/mod.rs (Terminal::find, Terminal::match_position); springboard/src/shell/terminal/find.rs",
+   "note": "Find, Find Next and Find Previous, and Use Selection for Find (Cmd+E) work. Matching always ignores case. Gap: the Find panel has no Ignore Case or Wrap Around switches, and wrapping needs options in the terminal core search.",
+   "wire": "Add Ignore Case and Wrap Around toggles to the Find panel."
+  },
+  {
+   "feature": "Copy, paste and select all",
+   "area": "edit",
+   "apple": "Edit > Copy, Paste, Select All; paste selection, paste escaped text",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/menus.rs (terminal_menu_action: Copy selection, Paste, Paste escaped text, Paste selection)",
+   "note": "Paste Escaped Text and Paste Selection added to the More menu (rows 25, 26); no key equivalents yet.",
+   "wire": "Give Paste Selection a key equivalent."
+  },
+  {
+   "feature": "Copy Special: plain text and without background colour",
+   "area": "edit",
+   "apple": "Edit > Copy Special",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Copy yields plain text only. The clipboard (render/src/clipboard.rs) holds text and images, no styled text, so Copy Special has nothing to carry colours with. Needs a rich pasteboard type first.",
+   "wire": "Add rich copy (colour runs) to Term::selected_text variants and a Copy Special submenu."
+  },
+  {
+   "feature": "Word and line selection",
+   "area": "edit",
+   "apple": "double click word, triple click line, option-drag rectangle",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/termtouch.rs:18",
+   "note": "Long press drag, double and triple tap select; no rectangular selection.",
+   "wire": "Add option+drag rectangular selection in termtouch.rs."
+  },
+  {
+   "feature": "Mouse reporting to applications",
+   "area": "edit",
+   "apple": "View > Allow Mouse Reporting",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/profiles.rs:36",
+   "note": "More menu row Allow mouse reporting turns mouse and wheel reports off for all tabs (saved). No option+drag rectangle yet.",
+   "wire": "Report pointer movement without a button (mode 1003) from pointer events."
+  },
+  {
+   "feature": "Secure Keyboard Entry",
+   "area": "shell",
+   "apple": "Terminal > Secure Keyboard Entry",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/profiles.rs:24",
+   "note": "Toggle keeps shell shortcuts out of the terminal, saved.",
+   "wire": ""
+  },
+  {
+   "feature": "Marks and bookmarks",
+   "area": "view",
+   "apple": "Edit > Mark as Bookmark, Insert Bookmark, Jump to Previous/Next Mark, Marks menu",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/profile_table.rs (osc133_prompts)",
+   "note": "The OSC 133 prompt parser (osc133_prompts) is tested in profile_table.rs, but nothing feeds its results into the scrollback yet, so no line is marked. Gap: Mark as Bookmark (Cmd+U), mark navigation with Cmd+Up and Cmd+Down, bookmarks and a Marks menu are not built.",
+   "wire": "Keep marks across a full scrollback (the iosterm core needs to report how many lines it dropped), name bookmarks and list them in a panel."
+  },
+  {
+   "feature": "Scrollback buffer",
+   "area": "view",
+   "apple": "scrollback limit, Clear Scrollback (cmd+K), Clear to Start",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/menus.rs:197",
+   "note": "Clear Scrollback (cmd+K), Reset, Clear Screen (Ctrl+L), Save scrollback to Files.",
+   "wire": ""
+  },
+  {
+   "feature": "Export scrollback as text",
+   "area": "file",
+   "apple": "Shell > Export Text As…, Save Selected Text As…",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/menus.rs:186",
+   "note": "Save scrollback to Files and Save selected text to Files write fixed file names in the Files folder. Gap: no save panel, so the folder and the name are not chosen by the user.",
+   "wire": "Verify on Midget that Save scrollback and Save selected text write the expected content to Files; then wire the SDK save panel so users choose the name and folder."
+  },
+  {
+   "feature": "Split pane",
+   "area": "view",
+   "apple": "View > Split Pane",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/split.rs:9",
+   "note": "Two sessions side by side with a divider; close split.",
+   "wire": ""
+  },
+  {
+   "feature": "Show Inspector: title, process list, columns and rows",
+   "area": "window",
+   "apple": "Shell > Show Inspector (cmd+I): window title, running processes, size",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/window.rs (Processes panel)",
+   "note": "The Processes panel lists the processes and offers Terminate and Force kill. Gap: columns and rows are neither shown nor editable there, and the tab title is set from More > Edit title.",
+   "wire": "Add a Columns and Rows stepper to the Processes panel."
+  },
+  {
+   "feature": "Edit Title and tab title",
+   "area": "window",
+   "apple": "Shell > Edit Title",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/command.rs (terminal_open_title_edit, terminal_run_command)",
+   "note": "More menu row Edit title sets a per-tab title (Terminal::set_custom_title); empty restores the automatic one. No Inspector field yet.",
+   "wire": "Verify on Midget that a custom title appears on its tab and an empty title restores the automatic title."
+  },
+  {
+   "feature": "Open URL / links",
+   "area": "view",
+   "apple": "Edit > Open URL, Look Up, Search the Web; command-click links",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/links.rs; springboard/src/shell/terminal/schemes.rs; springboard/src/shell/terminal/selection.rs (web_search_url)",
+   "note": "Open link in selection opens the first web link in the browser, or runs the first ssh, telnet or x-man-page link in a new tab. Search the web for selection is in the More menu. Gap: no command-click on a link and no Look Up.",
+   "wire": "Add Cmd+click on a link (pointer modifiers)."
+  },
+  {
+   "feature": "Full screen and window chrome",
+   "area": "window",
+   "apple": "View > Enter Full Screen, Show Tab Bar, Show All Tabs",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/desktop_bar.rs (File menu: Maximize / Restore Window)",
+   "note": "Full screen is the window's Maximize / Restore in the File menu. Gap: there is no View > Show All Tabs, no Hide Tab Bar and no tab overview with previews.",
+   "wire": "Add Hide Tab Bar and a tab overview with previews."
+  },
+  {
+   "feature": "Control socket and state",
+   "area": "automation",
+   "apple": "AppleScript dictionary",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/terminal/control.rs:42",
+   "note": "state, read, resize and clear verbs over the control endpoint.",
+   "wire": ""
+  },
+  {
+   "feature": "Application menu bar",
+   "area": "menu",
+   "apple": "Shell, Edit, View, Window, Help menus",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/desktop_bar.rs (Menu::File, Menu::Edit and Menu::View rows while the Terminal is in front)",
+   "note": "While the Terminal is in front, the desktop menu bar adds New Tab and Close Tab (File), Find, Find Next, Find Previous and Clear Scrollback (Edit), and Bigger, Smaller and Actual Size (View). Gap: Profiles, Startup Command and Login Shell are not published as a Shell menu, and More rows such as Close Other Tabs and Paste Selection are not in the bar.",
+   "wire": "Publish Profiles, Startup Command and Login Shell as a Shell menu through the menu bar API."
+  },
+  {
+   "feature": "Terminal help",
+   "area": "menu",
+   "apple": "Help > Terminal Help",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/extras.rs (SHORTCUTS, help_line)",
+   "note": "More menu row Terminal help shows every Terminal shortcut from one table, checked by unit tests in extras.rs (keys unique, line in table order). Shown as a one-line message; no help page yet.",
+   "wire": "Verify on Midget that Terminal help exposes the shortcut table and displayed shortcuts match the active key bindings."
+  },
+  {
+   "feature": "Low memory notice",
+   "area": "view",
+   "apple": "Low Memory panel: older scrollback discarded",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Scrollback is capped by line count, not by memory pressure.",
+   "wire": ""
+  }
+ ]
 }

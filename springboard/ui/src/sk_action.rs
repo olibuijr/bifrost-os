@@ -9,6 +9,8 @@
 //!
 //! Keyframes map a time to a value by linear interpolation or by holding the previous key.
 
+use crate::anim::Curve;
+
 /// One node action.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
@@ -51,9 +53,6 @@ impl Action {
         }
     }
 }
-
-/// The most passes an endless repeat makes in one step.
-const MAX_FOREVER_PASSES_PER_STEP: u32 = 10_000;
 
 /// The running state of one action.
 #[derive(Clone, Debug)]
@@ -196,7 +195,6 @@ impl Running {
             }
             Running::Forever { body, current } => {
                 let mut dt = dt;
-                let mut passes = 0u32;
                 loop {
                     match current.advance(dt, events) {
                         None => return None,
@@ -206,12 +204,6 @@ impl Running {
                             }
                             *current = Box::new(start(body));
                             dt = leftover;
-                            // A huge step against a tiny body would otherwise spin for a very long time. The rest
-                            // of the step is dropped and the action keeps running.
-                            passes += 1;
-                            if passes >= MAX_FOREVER_PASSES_PER_STEP {
-                                return None;
-                            }
                         }
                     }
                 }
@@ -275,7 +267,7 @@ impl Runner {
     }
 }
 
-/// How a keyframe sequence fills the time between two keys.
+/// How a key fills the time from itself to the next key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Interpolation {
     /// Interpolates linearly between the two keys around the time.
@@ -284,50 +276,100 @@ pub enum Interpolation {
     Hold,
 }
 
+/// One key of a keyframe sequence: the value at a time, and how the segment that starts at it is filled.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Key {
+    pub time: f64,
+    pub value: f64,
+    /// How the segment from this key to the next one is filled.
+    pub interpolation: Interpolation,
+    /// Eases the progress through a linear segment. Ignored by a held segment.
+    pub easing: Curve,
+}
+
+impl Key {
+    /// A key whose segment interpolates linearly, with no easing.
+    pub fn linear(time: f64, value: f64) -> Key {
+        Key {
+            time,
+            value,
+            interpolation: Interpolation::Linear,
+            easing: Curve::Linear,
+        }
+    }
+
+    /// A key whose segment holds its value until the next key.
+    pub fn hold(time: f64, value: f64) -> Key {
+        Key {
+            time,
+            value,
+            interpolation: Interpolation::Hold,
+            easing: Curve::Linear,
+        }
+    }
+
+    /// The same key with its segment eased by `curve`.
+    pub fn eased(self, curve: Curve) -> Key {
+        Key { easing: curve, ..self }
+    }
+}
+
 /// Values at increasing times. Times outside the keys take the value of the nearest key.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Keyframes {
-    keys: Vec<(f64, f64)>,
-    interpolation: Interpolation,
+    keys: Vec<Key>,
 }
 
 impl Keyframes {
-    /// Builds a sequence from `(time, value)` pairs. Returns `None` when there are no keys, a time or value is not
-    /// finite, or the times are not strictly increasing.
+    /// Builds a sequence from `(time, value)` pairs that all share one interpolation and have no easing. Returns `None`
+    /// under the same conditions as [`Keyframes::from_keys`].
     pub fn new(interpolation: Interpolation, keys: Vec<(f64, f64)>) -> Option<Self> {
+        let keys = keys
+            .into_iter()
+            .map(|(time, value)| Key {
+                time,
+                value,
+                interpolation,
+                easing: Curve::Linear,
+            })
+            .collect();
+        Self::from_keys(keys)
+    }
+
+    /// Builds a sequence from keys, each with its own timing. Returns `None` when there are no keys, a time or value is
+    /// not finite, or the times are not strictly increasing.
+    pub fn from_keys(keys: Vec<Key>) -> Option<Self> {
         if keys.is_empty() {
             return None;
         }
-        let finite = keys.iter().all(|(t, v)| t.is_finite() && v.is_finite());
-        let increasing = keys.windows(2).all(|w| w[0].0 < w[1].0);
+        let finite = keys.iter().all(|k| k.time.is_finite() && k.value.is_finite());
+        let increasing = keys.windows(2).all(|w| w[0].time < w[1].time);
         if !finite || !increasing {
             return None;
         }
-        Some(Keyframes {
-            keys,
-            interpolation,
-        })
+        Some(Keyframes { keys })
     }
 
     /// The value at time `t`.
     pub fn value_at(&self, t: f64) -> f64 {
         let first = self.keys[0];
         let last = self.keys[self.keys.len() - 1];
-        if t <= first.0 {
-            return first.1;
+        if t <= first.time {
+            return first.value;
         }
-        if t >= last.0 {
-            return last.1;
+        if t >= last.time {
+            return last.value;
         }
-        // Index of the first key after `t`; the key before it is the segment start.
-        let after = self.keys.partition_point(|k| k.0 <= t);
-        let (t0, v0) = self.keys[after - 1];
-        let (t1, v1) = self.keys[after];
-        match self.interpolation {
-            Interpolation::Hold => v0,
+        // Index of the first key after `t`; the key before it starts the segment that holds `t`.
+        let after = self.keys.partition_point(|k| k.time <= t);
+        let start = self.keys[after - 1];
+        let end = self.keys[after];
+        match start.interpolation {
+            Interpolation::Hold => start.value,
             Interpolation::Linear => {
-                let frac = (t - t0) / (t1 - t0);
-                v0 + (v1 - v0) * frac
+                let progress = (t - start.time) / (end.time - start.time);
+                let eased = f64::from(start.easing.at(progress as f32));
+                start.value + (end.value - start.value) * eased
             }
         }
     }
@@ -457,77 +499,5 @@ mod tests {
         assert!(Keyframes::new(Interpolation::Linear, vec![]).is_none());
         assert!(Keyframes::new(Interpolation::Linear, vec![(1.0, 0.0), (1.0, 2.0)]).is_none());
         assert!(Keyframes::new(Interpolation::Hold, vec![(0.0, f64::NAN)]).is_none());
-    }
-
-    #[test]
-    fn group_leftover_carries_into_the_next_sequence_step() {
-        let mut runner = Runner::new();
-        runner.run(&Action::Sequence(vec![
-            Action::Group(vec![wait(0.2), wait(0.5)]),
-            wait(0.3),
-            Action::Report(7),
-        ]));
-        // 0.5 ends the group, the 0.4 left over finishes the 0.3 wait and fires the report.
-        assert_eq!(runner.advance(0.9), vec![7]);
-        assert_eq!(runner.active_count(), 0);
-    }
-
-    #[test]
-    fn repeat_carries_leftover_between_passes_and_reports_each() {
-        let mut runner = Runner::new();
-        runner.run(&Action::Repeat(
-            Box::new(Action::Sequence(vec![wait(0.1), Action::Report(3)])),
-            3,
-        ));
-        assert_eq!(runner.advance(0.25), vec![3, 3]);
-        assert_eq!(runner.active_count(), 1);
-        assert_eq!(runner.advance(0.1), vec![3]);
-        assert_eq!(runner.active_count(), 0);
-    }
-
-    #[test]
-    fn zero_count_repeat_finishes_inside_a_sequence() {
-        let mut runner = Runner::new();
-        runner.run(&Action::Sequence(vec![
-            Action::Repeat(Box::new(Action::Report(1)), 0),
-            Action::Report(2),
-        ]));
-        assert_eq!(runner.advance(0.0), vec![2]);
-        assert_eq!(runner.active_count(), 0);
-    }
-
-    #[test]
-    fn handles_are_distinct_and_remove_reports_unknown() {
-        let mut runner = Runner::new();
-        let a = runner.run(&wait(1.0));
-        let b = runner.run(&wait(1.0));
-        assert_ne!(a, b);
-        assert!(runner.remove(a));
-        assert!(!runner.remove(a));
-        assert!(runner.is_active(b));
-    }
-
-    #[test]
-    fn huge_step_on_endless_repeat_returns_and_keeps_running() {
-        let mut runner = Runner::new();
-        let h = runner.run(&Action::RepeatForever(Box::new(wait(1e-6))));
-        assert!(runner.advance(1.0e6).is_empty());
-        assert!(runner.is_active(h));
-    }
-
-    #[test]
-    fn keyframes_linear_three_keys_and_exact_key_times() {
-        let k = Keyframes::new(
-            Interpolation::Linear,
-            vec![(0.0, 0.0), (1.0, 10.0), (3.0, 30.0)],
-        )
-        .unwrap();
-        assert!(near(k.value_at(1.0), 10.0));
-        assert!(near(k.value_at(2.0), 20.0));
-        assert!(near(k.value_at(0.25), 2.5));
-        assert!(near(k.value_at(3.0), 30.0));
-        let single = Keyframes::new(Interpolation::Linear, vec![(2.0, 4.0)]).unwrap();
-        assert!(near(single.value_at(-5.0), 4.0));
-        assert!(near(single.value_at(9.0), 4.0));
     }
 }

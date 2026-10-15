@@ -10,9 +10,9 @@
     {
       "feature": "Device and GPU enumeration",
       "apple": "MTLDevice, MTLCreateSystemDefaultDevice",
-      "bifrost": "springboard/src/gpu/desktop.rs (GBM device on a render node)",
-      "status": "os",
-      "note": "opened by the presenter only; no app-facing device object; one render node"
+      "bifrost": "springboard/sdk/src/gpu_device.rs (GpuInventory, RenderNode::from_entry_name); springboard/src/gpu/desktop.rs (GBM device on a render node)",
+      "status": "partial",
+      "note": "Render node names, the default device (the lowest node) and its device path are tested headless in tests/parity_sdk-os-02.rs. Gap: apps get no device object, and the shell still opens its own node without this model."
     },
     {
       "feature": "Command queue and work submission",
@@ -24,16 +24,16 @@
     {
       "feature": "Drawables and onscreen presentation",
       "apple": "CAMetalLayer, CAMetalDrawable, MTKView",
-      "bifrost": "springboard/src/gpu/wl.rs (create_surface, owe), springboard/src/gpu/desktop.rs (dma-buf buffers)",
-      "status": "os",
-      "note": "external Wayland apps use dma-buf buffers; built-in apps still submit SHM (docs/wayland-desktop.md)"
+      "bifrost": "springboard/sdk/src/drawable_pool.rs (DrawablePool); springboard/src/gpu/wl.rs (create_surface, owe), springboard/src/gpu/desktop.rs (dma-buf buffers)",
+      "status": "partial",
+      "note": "The drawable pool (two or three drawables, take, present, release, abandon, resize only while idle) is tested headless in tests/parity_sdk-os-02.rs. Gap: no application surface is connected to the pool, and built-in apps still submit SHM buffers (docs/wayland-desktop.md)."
     },
     {
       "feature": "Render passes and draw calls",
       "apple": "MTLRenderCommandEncoder, MTLRenderPipelineState",
-      "bifrost": "springboard/src/gpu/egl.rs, springboard/src/gpu/quad.rs, springboard/src/gpu/batch.rs",
-      "status": "os",
-      "note": "fixed compositor pipelines (quad, glass, shadow); no app pipeline state objects"
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (RenderPass, FixedPipeline); springboard/src/gpu/egl.rs, springboard/src/gpu/quad.rs, springboard/src/gpu/batch.rs",
+      "status": "partial",
+      "note": "Pass descriptions are checked headless in tests/parity_sdk-os-02.rs: one to eight colour attachments with load and store actions, one target size, and the three fixed pipelines chosen by name. Gap: apps cannot submit draw calls, and the presenter does not take its passes from this model yet."
     },
     {
       "feature": "Shader functions and libraries",
@@ -52,9 +52,9 @@
     {
       "feature": "Resource synchronization and buffer reuse",
       "apple": "MTLFence, MTLEvent, MTLHeap, resource barriers",
-      "bifrost": "springboard/src/gpu/wl.rs (BufferInfo, create_surface buffer count), springboard/src/gpu/damage.rs",
+      "bifrost": "springboard/src/gpu/wl.rs (BufferInfo, create_surface buffer count), springboard/src/gpu/damage.rs, springboard/src/gpu/buffer_pool.rs (BufferPool, Fence)",
       "status": "partial",
-      "note": "damage tracking and multi-buffer swap exist; no app-visible fences, events or heaps"
+      "note": "Damage tracking, multi-buffer swap and a reusable buffer pool with per-submission fences work and are tested headless in springboard/tests/parity_sdk-complete-32.rs. Gap: no events or heaps, and the compositor does not yet hand its surfaces to the pool, so the lab machine is needed to check the GPU waits on Midget."
     },
     {
       "feature": "Compute passes",
@@ -80,30 +80,30 @@
     {
       "feature": "Machine learning passes",
       "apple": "MTLTensor, MPSGraph inference in a command encoder",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no GPU inference path in the desktop"
+      "bifrost": "springboard/ui/src/ml_model.rs (Model::parse, Model::predict); springboard/ui/src/ml_tensor.rs (Tensor)",
+      "status": "partial",
+      "note": "A model of dense, relu and softmax layers runs as a prediction over tensor features, tested in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: the evaluator runs on the CPU and there is no GPU tensor or command encoder path."
     },
     {
       "feature": "Materials: blur and glass compositing",
       "apple": "MetalFX and Core Image style effects on the GPU",
-      "bifrost": "springboard/render/src/glass.rs (dual-Kawase blur), springboard/src/gpu/wl.rs (glass composite)",
-      "status": "os",
-      "note": "computed once per wallpaper and used by the shell only; not exposed to apps"
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (blur_divisor, blur_plan); springboard/render/src/glass.rs (dual-Kawase blur), springboard/src/gpu/wl.rs (glass composite)",
+      "status": "partial",
+      "note": "The blur divisor for each radius, the working size and the full-size fallback for small targets are tested headless in tests/parity_sdk-os-02.rs, with the shell's thresholds. Gap: apps cannot run the glass composite, and the shell does not read its divisor from this model."
     },
     {
       "feature": "Hardware video frames",
       "apple": "CVPixelBuffer and Metal texture interop",
-      "bifrost": "springboard/src/gpu/nv12.rs, springboard/src/media",
-      "status": "os",
-      "note": "NV12 import and hardware decode feed the media path; no app-facing texture API"
+      "bifrost": "springboard/sdk/src/pixel_buffer.rs (Layout, PixelFormat); springboard/src/gpu/nv12.rs, springboard/src/media",
+      "status": "partial",
+      "note": "BGRA and NV12 layouts (plane sizes, row padding, total size, byte addressing) are tested headless in tests/parity_sdk-os-02.rs. Gap: decoding stays in the media layer, and apps get no frame or texture handle."
     },
     {
       "feature": "HDR presentation",
       "apple": "Metal HDR content and extended dynamic range layers",
-      "bifrost": "springboard/render/src/hdr_transfer.rs",
+      "bifrost": "springboard/render/src/hdr_transfer.rs (pq_encode, hlg_encode, EdrHeadroom); springboard/render/src/hdr_frame.rs (FrameSession, frame_luminance)",
       "status": "partial",
-      "note": "Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. presenter is 8-bit SDR"
+      "note": "Pure model: the PQ and HLG curves, extended range headroom and per-frame metadata with MaxCLL and MaxFALL. Tests: the_perceptual_quantizer_maps_black_and_the_peak_to_the_ends_of_the_code_range, headroom_is_the_peak_over_the_reference_and_values_are_clamped_to_it, a_frame_reports_its_peak_and_mean_codes_and_the_running_light_levels (springboard/render/tests/parity_sdk-tests-10.rs). Not wired into apps or the presenter, which is 8-bit SDR; not yet tested on the VM or Midget"
     },
     {
       "feature": "GPU profiling, counters and frame capture",
@@ -115,9 +115,9 @@
     {
       "feature": "Simulator and alternative render paths",
       "apple": "Metal in Simulator, render path fallback",
-      "bifrost": "springboard/src/gpu/mod.rs (CPU and GPU render fallbacks, BIFROST_GPU=0)",
+      "bifrost": "springboard/src/gpu/mod.rs (CPU and GPU render fallbacks, BIFROST_GPU=0); springboard/src/gpu/render_path.rs (choose, Choice, Reason)",
       "status": "partial",
-      "note": "fallback to SHM exists for the compositor; no app-facing fallback"
+      "note": "The render path rule (GPU when present, CPU when BIFROST_GPU=0 or no GPU) is a pure function tested headless in springboard/tests/parity_sdk-complete-32.rs, and the compositor falls back to shared memory. Gap: apps do not yet query the path, and there is no simulator target, so the lab machine is needed for the fallback on Midget."
     }
   ],
   "gaps": [

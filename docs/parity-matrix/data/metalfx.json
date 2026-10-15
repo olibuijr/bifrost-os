@@ -10,30 +10,30 @@
     {
       "feature": "Temporal upscaling (MTLFXTemporalScaler)",
       "apple": "MTLFXTemporalScaler, MTLFXTemporalScalerDescriptor, encode(commandBuffer:)",
-      "bifrost": "springboard/render/src/temporal_upscale.rs",
+      "bifrost": "springboard/render/src/temporal_upscale.rs (TemporalScaler, resolve); tests: springboard/render/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Needs per-frame colour, depth and motion vectors. The presenter (springboard/src/gpu/wl.rs:147) receives CPU rasters uploaded on damage (docs/gpu-first.md, layer model) and no motion or depth buffers."
+      "note": "Jittered accumulation with depth rejection and neighbourhood clamping is a pure CPU model with host tests, and it is not wired into apps or the shell. Gap: the presenter (springboard/src/gpu/wl.rs:147) receives no motion or depth buffers and the scaler has no GPU pass, so it needs the lab machine to verify."
     },
     {
       "feature": "Temporal denoised upscaling (MTLFXTemporalDenoisedScaler)",
       "apple": "MTLFXTemporalDenoisedScaler, MTLFXTemporalDenoisedScalerDescriptor (macOS 26)",
-      "bifrost": "springboard/render/src/temporal_upscale.rs (Accumulation::Denoised)",
+      "bifrost": "springboard/render/src/temporal_upscale.rs (Accumulation::Denoised, box_denoise); tests: springboard/render/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-metalfx, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No denoiser and no temporal history buffer in the GPU path."
+      "note": "Denoised accumulation runs a 3x3 box filter on the input colour and keeps 95 percent history, all in the CPU model with host tests. Gap: the box filter is not a learned denoiser, and the GPU path has no temporal history buffer, so the lab machine must verify it."
     },
     {
       "feature": "Spatial upscaling (MTLFXSpatialScaler)",
       "apple": "MTLFXSpatialScaler, MTLFXSpatialScalerDescriptor, encode(commandBuffer:)",
       "bifrost": "springboard/render/src/upscale.rs",
       "status": "partial",
-      "note": "Wave 3 (metalfx, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only CPU bilinear resampling exists (asset density, box draws, control-centre preview). No edge-aware spatial scaler and no GPU path; these are resamplers, not upscalers."
+      "note": "A CPU Catmull-Rom bicubic upscaler with clamped edges is tested headless in springboard/render/tests/parity_sdk-complete-39.rs (flat rasters stay flat, bad sizes and sample counts are refused). Gap: there is no edge-aware scaler, no temporal input and no GPU path, so it is a resampler rather than a spatial upscaler, and it is not wired into apps or the shell."
     },
     {
       "feature": "Spatial colour processing modes",
       "apple": "MTLFXSpatialScalerColorProcessingMode (linear, perceptual, hdr)",
       "bifrost": "springboard/render/src/upscale.rs",
       "status": "partial",
-      "note": "Wave 3 (metalfx, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The bilinear helpers take no colour-space argument, so input and output space are implicit."
+      "note": "Linear, perceptual sRGB and HDR modes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs, including overshoot clamped in linear and kept in HDR. Gap: the mode is passed per call rather than read from a colour-space tag on the raster, and nothing is wired into apps or the shell."
     },
     {
       "feature": "Frame interpolation (MTLFXFrameInterpolator)",
@@ -45,16 +45,16 @@
     {
       "feature": "Metal command-buffer encoding of scaler passes",
       "apple": "encode(commandBuffer:) on each effect; MTL4FX* protocols",
-      "bifrost": "springboard/src/gpu/wl.rs:147 (Presenter), docs/gpu-first.md (one render pass per present, GLES)",
-      "status": "os",
-      "note": "The presenter runs GLES render passes, not Metal. Apps get no SDK API for GPU passes. Metal itself is Apple-only, so the API shape is n/a; the concept of GPU passes is os-level."
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (RenderPass, the checked pass model apps describe their passes with); springboard/src/gpu/wl.rs:147 (Presenter, GLES passes), docs/gpu-first.md",
+      "status": "n/a",
+      "note": "Metal command buffers and the MTL4FX encode protocols exist only on Apple's GPU drivers, so encoding a scaler into a Metal command buffer cannot exist on an Arch Linux system. The GPU passes that remain are the presenter's GLES render passes (one per present), which stay inside the shell, and apps describe their own passes with the checked RenderPass model."
     },
     {
       "feature": "Reduced-resolution GPU work with linear upscale",
       "apple": "Render at low resolution, upscale to output (MetalFX landing page)",
-      "bifrost": "springboard/src/gpu/wl.rs:724 (blur pyramid upscale, GL_LINEAR), docs/gpu-first.md:85 (quarter-size base), springboard/render/src/gfx.rs:423 (blur_material)",
-      "status": "os",
-      "note": "The only GPU upscale: the blur pyramid and material blur run at 1/2 or 1/4 size and scale back up with a linear filter. Internal to the shell; no app-facing scaler."
+      "bifrost": "springboard/sdk/src/gpu_pass.rs (blur_plan, BlurPlan); springboard/src/gpu/wl.rs:724 (blur pyramid upscale, GL_LINEAR), docs/gpu-first.md:85 (quarter-size base), springboard/render/src/gfx.rs:423 (blur_material)",
+      "status": "partial",
+      "note": "The divisor, working size and full-size fallback for a reduced copy are tested headless in tests/parity_sdk-os-02.rs. Gap: the linear upscale runs only inside the shell's presenter, and apps get no scaler."
     }
   ],
   "gaps": [

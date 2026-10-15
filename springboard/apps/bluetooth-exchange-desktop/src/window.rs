@@ -35,9 +35,9 @@ pub const FOOT_PT: f32 = 30.0;
 pub const SEND_ROWS: usize = 8;
 /// How many transfers are shown: the newest ones.
 pub const TRANSFER_ROWS: usize = 4;
-/// How often the folders and the radio are read again while the window is open (milliseconds).
+/// Fallback cadence for filesystem and radio changes while the app is open (milliseconds).
 pub const POLL_MS: f64 = 5000.0;
-/// How soon the loop comes back while a transfer is running (milliseconds).
+/// Fallback progress cadence used only if the reply wake socket could not be created.
 const BUSY_WAKE_MS: f64 = 250.0;
 
 pub const B_REFRESH: u32 = 1;
@@ -80,13 +80,18 @@ pub struct BluetoothExchange {
 }
 
 impl BluetoothExchange {
+    pub fn worker_wake_fd(&self) -> Option<i32> {
+        self.link.wake_fd()
+    }
+
     pub fn new() -> BluetoothExchange {
         let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
         BluetoothExchange {
             model: Model::default(),
             link: Link::start(),
             next_poll: 0.0,
-            size: (1000.0, 640.0),
+            // The app host configures the actual client size before the first frame.
+            size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
             home,
@@ -158,12 +163,12 @@ impl BluetoothExchange {
         changed
     }
 
-    /// When the loop should come back: soon while a transfer runs, else at the next reading.
+    /// Periodic folder/radio refresh remains necessary for external changes; transfer replies use wake_fd.
     pub fn wake_at(&self, t: f64) -> f64 {
-        if self.model.busy() {
+        if self.model.busy() && self.link.wake_fd().is_none() {
             t + BUSY_WAKE_MS
         } else {
-            self.next_poll.max(t + BUSY_WAKE_MS)
+            self.next_poll.max(t)
         }
     }
 

@@ -803,7 +803,7 @@ fn a_metadata_query_gathers_matches_and_then_reports_file_changes() {
     q.stop_query();
     assert!(q.is_stopped());
     assert!(q.fd().is_none());
-    assert_eq!(q.result_count(), 3, "stopping keeps the results");
+    assert_eq!(q.result_count(), 2, "stopping keeps the remaining results");
 }
 
 #[test]

@@ -27,7 +27,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/prefs.rs:45",
    "note": "Fields shown from View menu toggles; Bcc kept out of headers (message.rs Draft::render). The choice is saved in mail-prefs.json and comes back on the next run. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Check on Midget that the saved choice is applied at start"
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Send message",
@@ -52,18 +52,18 @@
    "area": "menu",
    "apple": "Message > Reply All",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:177",
-   "note": "Message > Reply All and a Reply All button on the toolbar while a message is open. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Hide the toolbar button when the message has no other recipients, and check it on Midget"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:318",
+   "note": "Message > Reply All and a Reply All button on the toolbar while a message is open. Both are offered only when the message has recipients besides the sender and the user (state.rs has_other_recipients, draw.rs open_has_others). Not yet verified on Midget.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Forward, Forward as Attachment, Redirect",
    "area": "menu",
    "apple": "Message > Forward, Forward as Attachment, Redirect",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:469",
-   "note": "Forward quotes the text under Fwd:. Forward as Attachment sends the original as a message/rfc822 file. Redirect sends the original unchanged with Resent headers (message.rs redirect_message). Plain Forward does not re-attach the original's own files. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Re-attach the files of the original on a plain Forward"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1769",
+   "note": "Forward quotes the text under Fwd: and carries the files of the original too, within the message limits (state.rs open_forward_with). Forward as Attachment sends the original as a message/rfc822 file. Redirect sends the original unchanged with Resent headers (message.rs redirect_message). Not yet verified on Midget.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Rich text formatting (bold/italic/underline, fonts, colours, alignment, lists, indentation)",
@@ -88,9 +88,9 @@
    "area": "menu",
    "apple": "File > Save Attachments",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1753",
-   "note": "Message > Save Attachments opens a save panel for each file in turn, and a tap on a file name in the reader saves that file alone. Without the panel the file goes into the app data directory. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Save every file into one folder chosen with a single panel"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1785",
+   "note": "Message > Save Attachments opens one folder panel and writes every file of the message into the folder under its name (save_folder, window.rs). Without the panel the files go into the app's data directory. A tap on one file name still saves that file alone. Not yet verified on Midget.",
+   "wire": "Check on Midget that the folder the panel returns is writable by the app"
   },
   {
    "feature": "Open or preview an attachment from the message",
@@ -115,9 +115,9 @@
    "area": "menu",
    "apple": "File > Export as PDF, Save As",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1466",
-   "note": "File > Save As writes the raw .eml where the save panel chooses. Export as PDF is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Render the message to PDF through the print path into a save panel"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1815",
+   "note": "File > Save As writes the raw .eml. File > Export as PDF writes the subject and the readable text of the message through the save panel (pdf.rs render, standard Helvetica). Pictures and the HTML layout are not in the PDF. Not yet verified on Midget.",
+   "wire": "Lay out the HTML part and the pictures of the message in the PDF"
   },
   {
    "feature": "Flag message (toggle)",
@@ -133,9 +133,9 @@
    "area": "menu",
    "apple": "Message > Flag > colours",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/flags.rs:FlagColor",
-   "note": "Message > Flag Color (seven colours, Clear Flag) stored as the $MailFlagBit0-2 keywords; the list row shows a colour dot. Not on the toolbar; no flag-colour smart filter yet.",
-   "wire": "Map the colours to the $MailFlagBit0-2 keywords in flags.rs, add a submenu in window.rs and a colour dot to the list row in draw.rs"
+   "bifrost": "springboard/apps/mail-desktop/src/flags.rs:FlagColor; springboard/apps/mail-desktop/src/window.rs:344 (colour submenu); springboard/apps/mail-desktop/src/draw.rs:727 (colour dot)",
+   "note": "Message > Flag Color (seven colours, Clear Flag) stored as the $MailFlagBit0-2 keywords; the list row draws the colour dot (draw.rs:727). Not on the toolbar; no flag-colour smart filter yet.",
+   "wire": "Built; a flag-colour smart filter and the toolbar button are the remaining items"
   },
   {
    "feature": "Mark as Read/Unread",
@@ -171,7 +171,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/window.rs:134",
    "note": "The Move menu holds Move To, Copy To (the first 22 mailboxes of the account) and Move Again. Dragging rows onto the sidebar is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Drag rows onto sidebar mailboxes, and a picker sheet for accounts with more than 22 mailboxes"
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Move to Junk and junk filtering",
@@ -180,41 +180,41 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/window.rs:1657",
    "note": "Move to Junk marks the message $Junk and moves it to the account Junk mailbox; moving a message out of Junk sets $NotJunk instead. Automatic junk filtering of new mail is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Filter new mail by the $Junk marks the user has set"
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Remind Me, follow-up, Send Later",
    "area": "menu",
    "apple": "Message > Remind Me; View > Sort by Send Later",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:2201",
-   "note": "Message > Remind Me asks when, and the message comes back unread with a notification. Message > Send Later adds a Send in field to the compose sheet. Both use the queue in mail-queue.json that tick() runs. Follow-up (a reminder when a sent message gets no reply) is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Remind when a sent message gets no reply"
+   "bifrost": "springboard/apps/mail-desktop/src/schedule.rs (parse_delay, Queue::take_due_reminders, Queue::drop_reminders); springboard/apps/mail-desktop/src/window.rs:351 (Remind Me), window.rs:352 (Ignore Follow-Up), window.rs:325 (Send Later); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "Remind Me takes a delay (30m, 2h, 1d), queues it in mail-queue.json and tick() brings the message back when it is due; Ignore Follow-Up drops the open message's reminders; Send Later uses the same queue. The queue is tested headless. The calendar-style times in organize.rs (remind_time: tonight, tomorrow) are not offered by any menu yet.",
+   "wire": "Built; decide whether the calendar-style Remind Me times are wanted (then wire organize::remind_time) and check the queue on Midget."
   },
   {
    "feature": "Mute conversation / Ignore follow-up",
    "area": "menu",
    "apple": "Message > Mute",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:667",
-   "note": "Message > Mute / Unmute keeps the conversation key in muted.txt, silences its new-mail notifications, and the list marks muted conversations with a Muted tag. Ignore follow-up is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Ignore follow-up: stop reminders for a conversation"
+   "bifrost": "springboard/apps/mail-desktop/src/mute.rs; springboard/apps/mail-desktop/src/window.rs:1065 (Mute); springboard/apps/mail-desktop/src/window.rs:1084 (Ignore Follow-Up); springboard/apps/mail-desktop/src/draw.rs:719 (Muted tag)",
+   "note": "Message > Mute / Unmute keeps the conversation key in muted.txt, silences its new-mail notifications, and the list marks muted conversations with a Muted tag. Ignore Follow-Up drops the reminders of the open message (window.rs ignore_follow_up); it does not yet cover a whole conversation, because reminders hold one message each.",
+   "wire": "Ignore follow-up for a whole conversation: store the conversation key with each reminder"
   },
   {
    "feature": "Set priority",
    "area": "menu",
    "apple": "Message > Set Priority",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:Priority",
-   "note": "Priority menu on the compose sheet sends X-Priority and Importance.",
-   "wire": "Mark High and Low priority messages in the list, and check the headers on Midget"
+   "bifrost": "springboard/apps/mail-desktop/src/message.rs:101",
+   "note": "Priority menu on the compose sheet sends X-Priority and Importance. The list marks received messages high or low from their headers (message.rs priority_of, draw.rs row_tag). Not yet verified on Midget.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Remove attachments",
    "area": "menu",
    "apple": "Message > Remove Attachments",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:1775",
+   "bifrost": "springboard/apps/mail-desktop/src/mime.rs (strip_attachments, removed_note); springboard/apps/mail-desktop/src/window.rs:1854 (remove_attachments)",
    "note": "Message > Remove Attachments cuts the file parts out (mime.rs strip_attachments), appends the result under the same flags and deletes the original over IMAP (session.rs append and remove). Built on parity/team-d-mail; not yet verified on Midget.",
    "wire": "Replace the file with a short note in the text, and check it against more servers"
   },
@@ -232,9 +232,9 @@
    "area": "settings",
    "apple": "RulesPreferences; Message > Apply Rules",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:2282",
-   "note": "Mailbox > Rules: New Rule (sender, recipient and subject contain; move to a mailbox, mark read, flag in a colour), Delete Rule and Apply Rules. Rules run on mail that arrives in an inbox and on request over the shown mailbox. They live in mail-prefs.json (rules.rs). A message a rule moves or reads raises no notification. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "A Rules settings pane that lists the rules for editing, more criteria (any or all, other headers, dates) and more actions (delete, forward, reply, sound)"
+   "bifrost": "springboard/apps/mail-desktop/src/rules.rs; springboard/apps/mail-desktop/src/window.rs (apply_rules_to_arrivals, apply_rules_to_shown); springboard/apps/mail-desktop/src/prefs.rs (rules)",
+   "note": "Rules are saved in mail-prefs.json, made from Mailbox > New Rule, and run on new mail and by Mailbox > Apply Rules over the shown mailbox. The rule actions run over IMAP. There is no Rules settings pane yet to edit a rule, and the rules are not tested on Midget.",
+   "wire": "Add a Rules settings pane that lists, edits and reorders rules; check the actions on Midget"
   },
   {
    "feature": "Conversations (organize by thread, expand/collapse)",
@@ -243,7 +243,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/draw.rs:355",
    "note": "View menu items and a disclosure triangle in the first row of a conversation fold and unfold it. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Check the triangle target on Midget"
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Sort messages by field and order",
@@ -252,16 +252,16 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/state.rs:70",
    "note": "View > Sort By: Date Received, From, To, Subject, Flag and Read Status, ascending or descending. Size is not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Read RFC822.SIZE in the listing and add Size and Attachments keys"
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Filter the message list (unread, flagged, attachments)",
    "area": "view",
    "apple": "View > Filter",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:109",
-   "note": "View > Filter: All, Unread, Flagged, Replied and With Attachments (judged by the message type until its text is loaded). No toolbar button yet. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "A filter button on the toolbar"
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:181",
+   "note": "View > Filter: All, Unread, Flagged, Replied and With Attachments. While a filter is applied a filter chip shows in the toolbar; a tap moves to the next filter and All takes the chip away (draw.rs toolbar_items). Not yet verified on Midget.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Mailbox search",
@@ -277,9 +277,9 @@
    "area": "menu",
    "apple": "Edit > Find > Find, Find Next/Previous",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:795",
-   "note": "Edit > Find in Message opens a find bar over the reader (draw.rs draw_find_bar): typed text is searched in the drawn lines, every match is highlighted, Return and Find Next / Find Previous step through them and scroll to the match. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Replace; match whole words; find in the raw source view"
+   "bifrost": "springboard/apps/mail-desktop/src/findbar.rs (find_all, FindBar); springboard/apps/mail-desktop/src/draw.rs:790 (matches drawn over the body); springboard/apps/mail-desktop/src/window.rs:834 (find_matches); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "Find in Message (cmd+alt+f) opens a find bar over the open message; the matches are drawn in the body and Find Next and Find Previous step through them. The case-insensitive matching is tested headless in tests/parity_app-mail.rs through organize::find_in_body, a parallel model the window does not call. Not yet verified on Midget.",
+   "wire": "Point the tests at findbar::find_all and delete organize::find_in_body"
   },
   {
    "feature": "Sidebar with accounts and mailboxes",
@@ -304,9 +304,9 @@
    "area": "view",
    "apple": "View > Show Favorites Bar; FavoritesBarViewController",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:563",
-   "note": "Mailbox > Add to Favorites Bar pins the shown mailbox; View > Show Favorites Bar shows a strip of chips under the toolbar. The pins are saved in mail-prefs.json. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Drag mailboxes onto the bar and reorder the chips; show an unread count on each"
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:127 (favorites_height), draw.rs:614 (draw_favorites); springboard/apps/mail-desktop/src/prefs.rs (favorites, toggle_favorite)",
+   "note": "View > Show Favorites Bar and Add to Favorites Bar pin mailboxes to a strip under the toolbar, saved in mail-prefs.json. Not yet verified on Midget.",
+   "wire": "Built; check the strip on Midget and the favourites of a second account"
   },
   {
    "feature": "New, rename and delete mailbox",
@@ -315,16 +315,16 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/sync.rs:Change",
    "note": "Mailbox menu items and a name sheet; IMAP CREATE, RENAME, DELETE.",
-   "wire": "Offer the existing mailboxes as parents when creating one, and check the server delimiter on Midget"
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Smart mailboxes",
    "area": "panel",
    "apple": "Mailbox > New Smart Mailbox; NewSmartMailbox",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:1096",
-   "note": "Mailbox > New Smart Mailbox saves a search under a name; it is listed in the sidebar and applies its search to the shown mailbox (Query::matches locally, UID SEARCH on the server). Mailbox > Delete Smart Mailbox removes the one on screen. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Search every mailbox of the account at once, and edit a smart mailbox"
+   "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (SmartMailbox); springboard/apps/mail-desktop/src/draw.rs:232 (sidebar section); springboard/apps/mail-desktop/src/state.rs (smart_active)",
+   "note": "Mailbox > New Smart Mailbox saves a named search; the sidebar lists the smart mailboxes and a click shows the messages the search matches. Delete Smart Mailbox removes the one shown. Not yet verified on Midget.",
+   "wire": "Built; check the sidebar section on Midget with two smart mailboxes"
   },
   {
    "feature": "Get new mail / synchronize",
@@ -342,16 +342,16 @@
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/session.rs:erase_all",
    "note": "Mailbox > Erase Deleted Items and Erase Junk Mail.",
-   "wire": "Erase for every account at once, and check on Midget"
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Import and export mailboxes (mbox)",
    "area": "menu",
    "apple": "File > Import Mailboxes; Mailbox > Export",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/mbox.rs:22",
-   "note": "Mailbox > Export Mailbox reads the newest 5000 messages of the shown mailbox and writes an mbox file (mboxrd) to the place the save panel chooses. Mailbox > Import Mailbox reads an mbox file and appends its messages to a mailbox named after the file, created when missing. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Import a whole folder of mbox files, keep the read state of imported messages, and export a selection"
+   "bifrost": "springboard/apps/mail-desktop/src/mbox.rs; springboard/apps/mail-desktop/src/window.rs:1285 (export); springboard/apps/mail-desktop/src/window.rs:1640 (import); springboard/apps/mail-desktop/tests/parity_app-mail.rs",
+   "note": "Export writes the selected mailbox with mbox::write (window.rs:1285) and import reads a file with mbox::read into a new mailbox (window.rs:1640). The mboxrd escaping, file names and round trips are tested headless in tests/parity_app-mail.rs. Not yet verified on Midget.",
+   "wire": "Check on Midget that an import of a large file appends every message over imap.rs and that the exported file opens in another client."
   },
   {
    "feature": "Add account",
@@ -376,36 +376,36 @@
    "area": "settings",
    "apple": "EditEmailAliases; Composing > Send new messages from",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:982",
-   "note": "Mail Settings keeps other addresses for each account; the compose sheet then has a From field that a click cycles through the account address and its aliases. The choice must be one of them. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Pick the alias a message was addressed to when replying"
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:962",
+   "note": "Mail Settings keeps other addresses for each account; the compose sheet has a From field that a click cycles. Replies and Reply All send from the alias the original was addressed to (state.rs sent_from). Not yet verified on Midget.",
+   "wire": "Check on Midget that the From field shows the alias"
   },
   {
    "feature": "Signatures",
    "area": "settings",
    "apple": "SignaturePreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:1451",
-   "note": "Mail Settings keeps a signature for each account; the compose sheet shows it under the text and adds it after a \"-- \" line when the message is sent (also in the HTML part). Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Several signatures for an account, with a choice in the compose sheet"
+   "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (signature, set_signature); springboard/apps/mail-desktop/src/state.rs:1546 (with_signature, used at send); springboard/apps/mail-desktop/src/state.rs (open_settings: Signature field); springboard/apps/mail-desktop/src/signature.rs",
+   "note": "Each account has a signature, set in Mail Settings and added after the -- delimiter when a message is sent (state.rs with_signature). The compose sheet shows it. signature.rs holds the delimiter helpers, tested headless in tests/parity_app-mail.rs. There is no separate Signatures pane, and replies keep the signature at the end rather than above the quote.",
+   "wire": "Add a Signatures pane with one signature per account and a choice of place for replies; move the send path onto signature::append once a message's own -- line no longer blocks the signature"
   },
   {
    "feature": "Viewing settings (headers shown, remote content, bold unread, dark backgrounds)",
    "area": "settings",
    "apple": "ViewerPreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/html.rs:37",
-   "note": "sanitize can block remote images, but there is no settings pane and messages are shown as text",
-   "wire": "Add a Viewing settings pane and wire html::sanitize and HTML rendering into the view"
+   "bifrost": "springboard/apps/mail-desktop/src/prefs.rs (bold_unread, all_headers); springboard/apps/mail-desktop/src/draw.rs:712 (bold unread senders); springboard/apps/mail-desktop/src/draw.rs:908 (all headers)",
+   "note": "View > All Headers (prefs.all_headers) shows every header above the text. Mail Settings has Bold unread messages (prefs.bold_unread, drawn at draw.rs:712). Remote content and dark backgrounds have no settings yet, and messages are shown as text (no HTML rendering).",
+   "wire": "Add a Viewing settings pane for remote content and dark backgrounds, and wire html::sanitize into the view"
   },
   {
    "feature": "Composing settings (format, quoting, undo send delay, spelling)",
    "area": "settings",
    "apple": "ComposingPreferences",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:2153",
-   "note": "Mail Settings sets an undo-send delay of 0 to 30 seconds: the message waits in the outbox and Message > Undo Send brings it back as it was written. Spelling is Edit > Check Spelling. Message format and quoting settings are not done. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Settings for quoting the original in replies, plain text only, and spelling as you type"
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:1349",
+   "note": "Mail Settings: Quote the original in replies (on by default; the reply starts with an 'On <date>, <name> wrote:' line and the quoted text), Plain text messages only (no HTML part) and the undo-send delay. Spelling is Edit > Check Spelling; checking as you type, text substitutions and speech are not done.",
+   "wire": "Add spelling as you type and text substitutions from Keyboard settings, and a message format choice in a Composing pane"
   },
   {
    "feature": "Fonts and colours settings",
@@ -430,8 +430,8 @@
    "area": "view",
    "apple": "View > Message > All Headers, Raw Source; RawSourceWindow",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:raw_text",
-   "note": "View > Raw Source (Opt+Cmd+U) shows the whole message text in the reader. A separate window and a headers-only mode (All Headers) are not done.",
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:208",
+   "note": "View > All Headers shows the header block above the text (draw.rs header_block). View > Raw Source shows the whole message as the server holds it. A separate raw source window is not done.",
    "wire": "Add a raw source window over the fetched raw text in the body cache"
   },
   {
@@ -457,9 +457,9 @@
    "area": "menu",
    "apple": "Edit > Paste as Quotation",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/message.rs:quote_text",
-   "note": "Edit > Paste as Quotation. A plain paste takes the style of the text typed so far, which is what Paste and Match Style does. Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Check on Midget; a Paste and Match Style command by name"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:480",
+   "note": "Edit > Paste as Quotation. Edit > Paste and Match Style pastes in the style of the text typed so far (a plain paste does the same); it is a menu command under its own name. Not yet verified on Midget.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Spelling and grammar, substitutions, speech",
@@ -475,9 +475,9 @@
    "area": "view",
    "apple": "View > Categories",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/category.rs:50",
-   "note": "View > Category shows Primary, Transactions, Updates or Promotions only. A message is classified from its headers (List-Unsubscribe, List-Id, Precedence, Auto-Submitted, the sender's address and the subject). Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Show the category of each message in the list and let the user move a message to another category"
+   "bifrost": "springboard/apps/mail-desktop/src/category.rs (classify, Category); springboard/apps/mail-desktop/src/state.rs:1160 (category filter); springboard/apps/mail-desktop/src/window.rs:439 (View > Categories)",
+   "note": "View > Categories filters the list to Primary, Transactions, Updates or Promotions, classified by category.rs from the message summary. The sidebar does not list the categories yet. A parallel header-block model, organize::categorize, is covered by the tests in tests/parity_app-mail.rs but the window does not call it.",
+   "wire": "Add the category list to the sidebar; then point the tests at category::classify and delete organize::categorize"
   },
   {
    "feature": "Out-of-office and server quota (Exchange)",
@@ -511,9 +511,9 @@
    "area": "panel",
    "apple": "OpenQuicklyWindowController",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/state.rs:quickly_matches",
-   "note": "Mailbox > Open Quickly (Shift+Cmd+O) sheet; Return opens the best matching mailbox. The match list is not shown under the field and it only covers the shown account.",
-   "wire": "Add a type-to-filter sheet over mail.mailboxes"
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:200",
+   "note": "Mailbox > Open Quickly (Shift+Cmd+O) sheet. The mailboxes its field matches are listed under it (up to 8, draw.rs choices_of); a click opens one, and Return opens the first. It only covers the shown account.",
+   "wire": "Include the mailboxes of the other accounts"
   },
   {
    "feature": "Smart replies and summaries",
@@ -533,5 +533,13 @@
    "note": "The SDK has no call for a second window yet (nothing like it in sdk/src), so a second MailWindow cannot be opened from the app.",
    "wire": "Open a second MailWindow through SDK multi-window support"
   }
- ]
+ ],
+ "summary": {
+  "features": 58,
+  "parity": 13,
+  "partial": 40,
+  "gap": 1,
+  "n/a": 4,
+  "coverage_pct": 61.1
+ }
 }

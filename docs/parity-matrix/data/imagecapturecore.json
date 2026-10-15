@@ -12,35 +12,35 @@
       "apple": "ICDeviceBrowser, ICDeviceBrowserDelegate, ICDevice",
       "bifrost": "springboard/ui/src/device_browser.rs; wired: springboard/src/shell/camera/mod.rs (check_devices, refresh_cameras, open_import); springboard/src/shell/camera/devices.rs; springboard/ui/src/device_browser.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to browse cameras or scanners and get add/remove callbacks. capture.rs only lists video nodes and opens nothing. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The browser turns each device snapshot into added and removed events in id order, filters by camera or scanner, and keeps a preferred device; tested headless in springboard/ui/tests/parity_sdk-complete-14.rs. Gap: nothing enumerates real cameras or scanners and no hotplug source feeds the snapshots, which needs hardware and a Midget check."
     },
     {
       "feature": "Camera device control (PTP tethering, capture, clock, battery)",
       "apple": "ICCameraDevice, ICCameraDeviceDelegate, requestTakePicture, requestEnableTethering, requestSendPTPCommand, requestSyncClock",
-      "bifrost": "springboard/ui/src/camera_device.rs",
+      "bifrost": "springboard/ui/src/camera_device.rs; tests: springboard/ui/tests/parity_sdk-complete-14.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No PTP or USB camera transport. Tethered capture and remote shutter are not implemented."
+      "note": "Tethering is gated on the take-picture capability, a capture needs tethering first, clock sync reports the offset before it and battery levels are clamped; all tested headless in springboard/ui/tests/parity_sdk-complete-14.rs. Gap: there is no PTP or USB camera transport, so tethered capture, the remote shutter and raw PTP commands need hardware."
     },
     {
       "feature": "Camera file browsing and download (contents, files, folders)",
       "apple": "ICCameraItem, ICCameraFile, ICCameraFolder, requestDownloadFile, requestReadData",
       "bifrost": "springboard/ui/src/camera_device.rs; wired: springboard/src/shell/camera/import.rs; springboard/src/shell/camera/devices.rs (contents_of, import_files); springboard/ui/src/camera_device.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to list or copy files from a camera's storage. Photos import from a device is not implemented. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The contents tree lists folders and files, builds paths, and filters files by media kind; tested headless in springboard/ui/tests/parity_sdk-complete-14.rs. Gap: no transport lists or copies files from a live camera's storage, and photos import from a device is not implemented; both need hardware."
     },
     {
       "feature": "File metadata and thumbnails (EXIF, GPS, burst, video)",
       "apple": "ICCameraFile metadata, requestMetadataDictionary, requestThumbnailData, ICEXIFOrientationType",
-      "bifrost": "springboard/src/shell/camera/mod.rs (writes EXIF orientation and date into saved JPEGs), springboard/src/shell/camera/jpeg.rs",
+      "bifrost": "springboard/src/shell/camera/mod.rs (writes EXIF orientation and date into saved JPEGs), springboard/src/shell/camera/jpeg.rs, springboard/render/src/cg/imageio/exif.rs (parse_block reads EXIF, GPS and orientation tags)",
       "status": "partial",
-      "note": "Only the write side exists for our own captures. No reader for device metadata, GPS, burst or thumbnails."
+      "note": "Our own captures get EXIF orientation and date on write, and the TIFF block reader in exif.rs parses EXIF, GPS and orientation tags from files on disk. Gap: no device metadata, burst grouping or device thumbnail reader is wired to the camera model, which needs hardware."
     },
     {
       "feature": "Camera deletion and locked-device state",
       "apple": "requestDeleteFiles, isLocked, ICDeleteResult, ICDeleteError",
       "bifrost": "springboard/ui/src/camera_device.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No delete path to a device."
+      "note": "A delete request returns one result per index, refuses every index while the camera is locked, and removes a deleted file from the listing without reusing its index; tested headless in springboard/ui/tests/parity_sdk-complete-14.rs. Gap: no delete command reaches a real camera, which needs hardware."
     },
     {
       "feature": "Scanner discovery and functional units",
@@ -96,7 +96,7 @@
       "apple": "ImageCaptureCore Constants, Data Types, Enumerations, Macros",
       "bifrost": "springboard/ui/src/device_browser.rs, springboard/ui/src/camera_device.rs, springboard/ui/src/scan_job.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Device types, transfer modes and functional-unit types need their own SDK types once device support exists."
+      "note": "The device kind, device mask, capability bits and media kinds are typed and tested headless in springboard/ui/tests/parity_sdk-complete-14.rs. Gap: the transfer modes and scanner functional-unit types still need hardware to verify their values."
     }
   ],
   "gaps": [

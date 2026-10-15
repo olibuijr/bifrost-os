@@ -45,9 +45,9 @@
     {
       "feature": "Shortcuts in Search (suggested actions)",
       "apple": "Offering Actions in the Shortcuts App, INShortcut, INVoiceShortcutCenter",
-      "bifrost": "springboard/src/shell/intents.rs (Search 'Shortcuts' section), manifest.toml [[intent]] with shortcut = true",
+      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line); springboard/src/shell/quicksearch.rs (shortcut_items, the Search 'Shortcuts' section); springboard/src/shell/apphost.rs (Manifest::parse reads [[intent]] with shortcut = true); springboard/tests/parity_sdk-tests-11.rs",
       "status": "partial",
-      "note": "Runnable parameterless intents appear in Search and run without a visible step. No user-added voice shortcuts and no suggestions from usage."
+      "note": "Manifest [[intent]] parsing, the runnable filter that Search applies and the request and reply lines are tested headless in parity_sdk-tests-11.rs. Gap: the Search list itself has no test, there are no user-added voice shortcuts and no suggestions from usage."
     },
     {
       "feature": "Donating interactions and shortcuts",
@@ -59,16 +59,16 @@
     {
       "feature": "Shortcuts app integration",
       "apple": "Adding User Interactivity with Siri Shortcuts and the Shortcuts App",
-      "bifrost": "springboard/apps/shortcuts-desktop (no intent listing found)",
-      "status": "gap",
-      "note": "Shortcuts does not list or run app intents. docs/bifrost-ui.md proposes reading intent.list and manifests."
+      "bifrost": "springboard/sdk/src/intents.rs (Intent, Param, Intent::manifest_toml, intent.list)",
+      "status": "partial",
+      "note": "Apps declare typed intents with a shortcut flag, serve them on the control socket as intent.list and intent.<id>, and write manifest text for a static listing. Gap: the Shortcuts app does not read those listings yet, so it cannot list or run another app's intents."
     },
     {
       "feature": "Siri voice input and spoken responses",
       "apple": "Requesting Authorization to Use Siri, SiriKit voice requests, Localizing Your Vocabulary",
-      "bifrost": "springboard/apps/assistant-desktop/src/model.rs (text chat over a model API)",
-      "status": "gap",
-      "note": "No speech recognition or synthesis in the desktop. The Assistant app sends typed text only."
+      "bifrost": "springboard/ui/src/speech.rs, springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/voice_commands.rs, springboard/ui/src/voice_reply.rs, springboard/ui/tests/parity_sdk-complete-28.rs",
+      "status": "partial",
+      "note": "Spoken replies are tested headless in voice_reply.rs: a confirmed click, an ambiguous name, an unknown name and an unknown phrase get a sentence queued on the speech synthesizer in the chosen language, and silent commands get none. Gap: nothing recognises speech and the shell does not call the reply model yet; the Assistant app sends typed text only, and the voice path needs Midget."
     },
     {
       "feature": "Custom vocabulary, synonyms and intent phrases",

@@ -3,12 +3,13 @@
 //! clipboard copy/paste and Icelandic decimal-comma formatting.
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
-use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_LARGE_TITLE_PT, MAC_TITLE3_PT};
+use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_LARGE_TITLE_PT};
 use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE1_PT};
-use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG, WHITE};
+use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, SEGMENT_ON, SEPARATOR_C, WHITE};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets;
 use bifrost_app::kit::canvas::{Canvas, RectF};
@@ -68,6 +69,25 @@ const ID_HISTORY: u32 = 1000;
 
 /// Height of the binary row above the Programmer keypad, in points.
 const PROG_STRIP_PT: f32 = 64.0;
+/// A wide keypad needs ten 40-point keys, their nine gaps and side insets.
+const WIDE_KEY_PT: f32 = 40.0;
+const WIDE_INSET_PT: f32 = 48.0;
+const WIDE_COLUMNS: f32 = 10.0;
+const WIDE_GAPS: f32 = 9.0;
+/// Vertical room reserved for the display and the keypad's controls before sizing the keys.
+const DISPLAY_AND_KEYS_RESERVE_PT: f32 = 230.0;
+/// Backspace is a compact trailing control sized to fit a wide keypad's final cell cluster.
+const BACKSPACE_CONTROL_WIDTH_PT: f32 = 105.0;
+/// The display's minimum breathing room above the keypad deck.
+const DISPLAY_DECK_INSET_PT: f32 = 145.0;
+/// Context menu geometry for the two display actions.
+const DISPLAY_MENU_TRAILING_INSET_PT: f32 = 236.0;
+const DISPLAY_MENU_WIDTH_PT: f32 = 224.0;
+const DISPLAY_MENU_HEIGHT_PT: f32 = 52.0;
+/// Maximum history row height and the room reserved for its heading and footer controls.
+const HISTORY_ROW_MAX_PT: f32 = 84.0;
+const HISTORY_CHROME_RESERVE_PT: f32 = 145.0;
+const HISTORY_VIEWPORT_RESERVE_PT: f32 = 136.0;
 
 /// The label of Clear History after one tap: a second tap clears.
 const CLEAR_CONFIRM_LABEL: &str = "Tap to Confirm";
@@ -372,13 +392,17 @@ impl Calculator {
         self.convert.is_none()
             && self.programmer.is_none()
             && !self.settings.rpn
-            && self.w as f32 >= ui.pt(520.0)
+            && self.w as f32 >= Self::wide_min_width(ui)
             && (self.settings.scientific || self.w > self.h)
     }
 
     /// Whether the Programmer keypad is showing (it needs the wide layout, like the scientific one).
     fn programmer_active(&self, ui: &Ui) -> bool {
-        self.convert.is_none() && self.programmer.is_some() && self.w as f32 >= ui.pt(520.0)
+        self.convert.is_none() && self.programmer.is_some() && self.w as f32 >= Self::wide_min_width(ui)
+    }
+
+    fn wide_min_width(ui: &Ui) -> f32 {
+        ui.pt(WIDE_INSET_PT + WIDE_KEY_PT * WIDE_COLUMNS + SPACE_S * WIDE_GAPS)
     }
 
     /// Whether the basic keypad drives the RPN stack.
@@ -410,7 +434,7 @@ impl Calculator {
     fn layout(&self, ui: &Ui) -> Layout {
         let bottom = self.h as f32 - home_zone(ui) - ui.pt(SPACE_XXL);
         let extra = self.strip_h(ui) + if self.convert.is_some() { ui.pt((category_rows() - 1) as f32 * CATEGORY_H_PT) } else { 0.0 };
-        let available = bottom - ui.pt(230.0) - extra;
+        let available = bottom - ui.pt(DISPLAY_AND_KEYS_RESERVE_PT) - extra;
         if self.wide(ui) {
             let gap = ui.pt(SPACE_S);
             let cw = ((self.w as f32 - ui.pt(48.0) - gap * 9.0) / 10.0).max(ui.pt(SPACE_XXL));
@@ -656,9 +680,9 @@ impl Calculator {
     fn backspace_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let l = self.layout(ui);
         (
-            l.x + l.width - ui.pt(105.0),
+            l.x + l.width - ui.pt(BACKSPACE_CONTROL_WIDTH_PT),
             self.deck_top(ui) - ui.pt(55.0),
-            ui.pt(105.0),
+            ui.pt(BACKSPACE_CONTROL_WIDTH_PT),
             ui.pt(44.0),
         )
     }
@@ -687,13 +711,13 @@ impl Calculator {
             l.x,
             ui.pt(90.0),
             l.width,
-            (self.deck_top(ui) - ui.pt(145.0)).max(ui.pt(SPACE_HUGE)),
+            (self.deck_top(ui) - ui.pt(DISPLAY_DECK_INSET_PT)).max(ui.pt(SPACE_HUGE)),
         )
     }
 
     fn menu_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let (x, y, w, _) = self.display_rect(ui);
-        (x + w - ui.pt(236.0), y + ui.pt(SPACE_S), ui.pt(224.0), ui.pt(52.0))
+        (x + w - ui.pt(DISPLAY_MENU_TRAILING_INSET_PT), y + ui.pt(SPACE_S), ui.pt(DISPLAY_MENU_WIDTH_PT), ui.pt(DISPLAY_MENU_HEIGHT_PT))
     }
 
     fn menu_item(&self, ui: &Ui, paste: bool) -> (f32, f32, f32, f32) {
@@ -703,18 +727,18 @@ impl Calculator {
 
     fn panel(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         // A full-height history sidebar under the traffic lights (Golden Gate Calculator's sidebar).
-        (0.0, 0.0, ui.pt(280.0).min(self.w as f32 * 0.85), self.h as f32 - home_zone(ui))
+        (0.0, 0.0, ui.pt(m::SIDEBAR_W).min(self.w as f32 * 0.85), self.h as f32 - home_zone(ui))
     }
 
     fn row_height(&self, ui: &Ui) -> f32 {
         let (_, _, _, h) = self.panel(ui);
-        ui.pt(84.0).min((h - ui.pt(145.0)) / 8.0).max(ui.pt(30.0))
+        ui.pt(HISTORY_ROW_MAX_PT).min((h - ui.pt(HISTORY_CHROME_RESERVE_PT)) / 8.0).max(ui.pt(30.0))
     }
 
     /// How many history rows fit between the title and Clear History.
     fn rows_visible(&self, ui: &Ui) -> usize {
         let (_, _, _, h) = self.panel(ui);
-        (((h - ui.pt(136.0)) / self.row_height(ui)).floor() as usize).max(1)
+        (((h - ui.pt(HISTORY_VIEWPORT_RESERVE_PT)) / self.row_height(ui)).floor() as usize).max(1)
     }
 
     /// The `visual`-th visible row (0 is the top one on screen).
@@ -1534,46 +1558,28 @@ impl Calculator {
         let locale = self.settings.locale;
         let thousands = self.settings.thousands;
         let now = history::now_secs();
-        s.fill_rect(chrome::whole(x, y, w, h), SIDEBAR_BG.now());
-        s.fill_rect(chrome::whole(x + w, y, 1.0, h), SEPARATOR_C.now());
+        let mut items = vec![SidebarItem::header("History")];
         if self.store.is_empty() {
-            self.label(
-                s,
-                ui,
-                "No Recent Calculations",
-                MAC_TITLE3_PT,
-                LABEL_2.now(),
-                (x, y + ui.pt(130.0), w, ui.pt(70.0)),
-            );
-        }
-        for visual in 0..self.rows_visible(ui) {
-            let index = self.hist_offset + visual;
-            let Some(entry) = self.store.get(index) else {
-                break;
-            };
-            let expression_text = localize_with(&pretty(&entry.expression), locale, thousands);
-            let result = localize_with(&entry.result, locale, thousands);
-            let (rx, ry, rw, rh) = self.result_rect(ui, visual);
-            if self.pressed == Some(Target::Result(index)) {
-                s.fill_rrect(RectF::new(rx, ry, rw, rh), ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
-            }
-            let expression = ui.fit(&expression_text, MAC_CALLOUT_PT, rw - ui.pt(SPACE_XXL));
-            let image = self
-                .cache
-                .get(ui, &expression, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
-            chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + ui.pt(SPACE_XS)) as i32);
-            let image = self.cache.get(ui, &result, MAC_LARGE_TITLE_PT, Weight::Regular, LABEL.now());
-            chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + rh - ui.pt(SPACE_XS) - image.h as f32) as i32);
-            // the first entry of each day carries the day's caption at the left of its row
-            if history::starts_day(|k| self.store.time(k), index) {
-                let caption = history::day_caption(self.store.time(index), now);
-                if !caption.is_empty() {
-                    let image = self.cache.get(ui, &caption, MAC_CALLOUT_PT, Weight::Regular, LABEL_3.now());
-                    chrome::blit(s, image, (rx + ui.pt(SPACE_M)) as i32, (ry + ui.pt(SPACE_XS)) as i32);
+            items.push(SidebarItem::row(u32::MAX, "No Recent Calculations").disabled());
+        } else {
+            for (index, entry) in self.store.entries().iter().enumerate() {
+                let expression = localize_with(&pretty(&entry.expression), locale, thousands);
+                let result = localize_with(&entry.result, locale, thousands);
+                let mut row = SidebarItem::row(ID_HISTORY + index as u32, &expression).with_subtitle(&result);
+                if history::starts_day(|k| self.store.time(k), index) {
+                    let caption = history::day_caption(self.store.time(index), now);
+                    if !caption.is_empty() { row = row.with_trailing(&caption); }
                 }
+                items.push(row);
             }
-            s.fill_rrect(RectF::new(rx, ry + rh - 1.0, rw, 1.0), 0.0, SEPARATOR_C.now());
         }
+        let scale = ui.pt(1.0).max(0.001);
+        let row_h = (self.row_height(ui) / scale - 16.0).max(8.0);
+        let list = SourceList::new(items, row_h, 72.0);
+        let scroll = self.hist_offset as f32 * (row_h + 16.0);
+        let bounds = bifrost_app::controls::Rect { x: x / scale, y: y / scale, w: w / scale, h: (h - ui.pt(64.0)) / scale };
+        let pressed = match self.pressed { Some(Target::Result(i)) => Some(ID_HISTORY + i as u32), _ => None };
+        widgets::source_list(s, ui, bounds, &list, scroll, pressed);
         // Copy Tape takes the left half of the bottom row, Clear History the right half.
         let (row_y, half) = (y + h - ui.pt(64.0), w / 2.0);
         let tape_color = if self.store.is_empty() { LABEL_3.now() } else { LINK };

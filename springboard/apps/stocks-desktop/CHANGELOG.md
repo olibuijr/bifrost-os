@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3 — 2026-10-14
+
+- Use the shared grouped-card radius and appearance-aware pressed-row color.
+
+## 0.1.2 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.1.1 — 2026-10-14
+
+- Use shared spacing tokens for the empty-watchlist message and chart date labels.
+
 ## 0.1.0 — 2026-10-13
 
 - First version: a Stocks watchlist in a full-size window. Each symbol shows its last close and its change since the

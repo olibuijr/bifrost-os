@@ -17,16 +17,16 @@
     {
       "feature": "Change notifications for network state",
       "apple": "SCDynamicStore, SCDynamicStoreSetNotificationKeys, SCDynamicStoreCreateRunLoopSource",
-      "bifrost": "springboard/netd/src/main.rs (Subscribe; Status event on every change), springboard/proto/src/svc.rs",
-      "status": "os",
-      "note": "netd polls every 250 ms and pushes a Status event on change. Only the shell subscribes; no SDK wrapper exists."
+      "bifrost": "springboard/sdk/src/network_path.rs (PathMonitor::update, PATH_EVENT, path_event); springboard/netd/src/main.rs (Status event on every change); springboard/proto/src/svc.rs",
+      "status": "partial",
+      "note": "Apps receive path changes from the shell's network service, and the monitor reports only real changes, with tests. netd polls every 250 ms and pushes a Status event on change; apps cannot subscribe to individual link or address keys."
     },
     {
       "feature": "Network interface enumeration",
       "apple": "SCNetworkInterfaceCopyAll, SCNetworkInterfaceGetBSDName, SCNetworkInterfaceGetInterfaceType, SCNetworkInterfaceGetLocalizedDisplayName",
-      "bifrost": "springboard/src/shell/desktop_network.rs (Interface, kind \"ethernet\"), springboard/src/net/netlink.rs",
-      "status": "os",
-      "note": "The shell lists interfaces and their kind and connection state. Apps get no list."
+      "bifrost": "springboard/sdk/src/network_path.rs (Interface, IfaceKind, Path::interfaces); springboard/src/shell/desktop_network.rs (Interface, kind \"ethernet\"), springboard/src/net/netlink.rs",
+      "status": "partial",
+      "note": "Apps get the interfaces in preference order with their kind (wired, Wi-Fi, cellular, loopback), and tests cover the ordering. Per-interface display name, hardware address and gateway lists are still shell-only."
     },
     {
       "feature": "Wi-Fi status, scan, join and saved networks",
@@ -38,9 +38,9 @@
     {
       "feature": "Wired link and address",
       "apple": "SCNetworkInterface, SCNetworkProtocol (IPv4, IPv6) configuration",
-      "bifrost": "springboard/src/net/dhcp.rs, springboard/src/net/netlink.rs (link_up, add_addr, default_route), springboard/src/net/wifi.rs (Status.ethernet)",
-      "status": "os",
-      "note": "The system sets the link up, assigns the address and runs DHCP when no host client does. No app can read or set IPv4 or IPv6 settings."
+      "bifrost": "springboard/sdk/src/system/ipv4_config.rs (Method, manual, mask, prefix_of_mask, network_of); springboard/src/net/dhcp.rs, springboard/src/net/netlink.rs (link_up, add_addr, default_route), springboard/src/net/wifi.rs (Status.ethernet)",
+      "status": "partial",
+      "note": "Manual IPv4 settings (address, prefix, router) are validated in the SDK with tests. The shell sets the link up, assigns the address and runs DHCP through netlink, but apps cannot send a configuration to the service yet, and IPv6 settings do not exist."
     },
     {
       "feature": "Network settings page",
@@ -87,9 +87,9 @@
     {
       "feature": "Ethernet bond and VLAN interfaces",
       "apple": "SCBondInterfaceCreate, SCVLANInterfaceCreate and related functions",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "Not part of the desktop network model. Would matter only for a server-class target."
+      "bifrost": "springboard/core/src/vlan_plan.rs (add_bond, add_vlan, remove_interface)",
+      "status": "partial",
+      "note": "Bond and VLAN command plans with checked names, ids, modes and members are tested headless in springboard/core/tests/parity_sdk-gaps-01.rs. Gap: the privileged network service does not run these plans yet, and no SDK call reaches them."
     },
     {
       "feature": "Console user and session information",

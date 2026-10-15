@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.10.0
+
+- Upstream effectcraft v0.10.0.
+  ## What's Changed
+  * Track matte on an adjustment layer limits where its effects show by @marcoarnulfo in https://github.com/storytold/effectcraft/pull/1204
+  * UI: Quick Apply keeps an IME composition while pinyin is typed by @cjcwwww in https://github.com/storytold/effectcraft/pull/1206
+  * fix(effects): CC Particle World / Systems II replace their layer; Time effects see earlier effects by @eliasx45 in https://github.com/storytold/effectcraft/pull/1111
+  * Tracker: a track point can be grabbed when zoomed out by @marcoarnulfo in https://github.com/storytold/effectcraft/pull/1112
+
+## 0.9.3
+
+- Upstream effectcraft v0.9.2.
+  ## What's Changed
+  * Share docking transactions and preserve viewer lifecycle by @skylartaylor in https://github.com/storytold/effectcraft/pull/689
+  * ci: refactor workflows to use storytold/craft-common-actions by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/801
+  * #678: dropped Photoshop files show the Import Photoshop File dialog by @vangel76 in https://github.com/storytold/effectcraft/pull/734
+  * #729: import STL 3D models (binary and ASCII) by @vangel76 in https://github.com/storytold/effectcraft/pull/735
+
 ## 0.9.2
 
 - Upstream effectcraft v0.9.2.

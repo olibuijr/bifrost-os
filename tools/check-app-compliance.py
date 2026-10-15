@@ -64,6 +64,7 @@ RULES = {
     'APP-07': ('error', 'APP-01', 'invalid kind or window', 'kind is app|system-app|system|service; window is "full-size" or "native" (or absent)'),
     'APP-08': ('warning', 'GG-01', 'full-size window with old min_shell', 'full-size windows need min_shell >= 0.4.84'),
     'APP-10': ('error', 'APP-01', 'icon is not a 180x180 PNG', 'export the manifest icon as a square 180x180 PNG (PNG signature and IHDR size are read; no re-encoding needed)'),
+    'APP-11': ('error', 'APP-01', 'manifest declares an app without an executable target', 'add a binary target before publishing this app'),
     'APP-09': ('error', 'APP-01', 'upstream package incomplete', 'upstream.toml needs repo, url, sha256, binary, licenses; manifest needs publisher and license'),
     'RES-01': ('warning', 'CTL-04', 'raw thread::spawn', 'use bifrost_app::dispatch (DispatchQueue::global(Qos).async_, serial queue, DispatchGroup); see docs/bifrost-ui.md "Migrating thread::spawn"'),
     'RES-02': ('warning', 'CTL-04', 'polling next_wake with a worker thread', 'finish work on the main queue (DispatchQueue::main().async_) or wake_fd; return None from next_wake when idle'),
@@ -81,12 +82,15 @@ FIXED = ['SECONDARY', 'FILL', 'FILL_PRESSED', 'FILL_GRAY', 'FILL_TERTIARY', 'SID
 SPACING = {'2': 'SPACE_XXS', '4': 'SPACE_XS', '8': 'SPACE_S', '12': 'SPACE_M', '16': 'SPACE_L',
            '20': 'SPACE_XL', '24': 'SPACE_XXL', '32': 'SPACE_XXXL', '40': 'SPACE_HUGE'}
 RESOLUTIONS = '480|600|640|720|768|800|900|960|1000|1024|1080|1200|1280|1366|1440|1600|1920|2560'
-KNOWN_PERMS = {'network', 'storage', 'audio', 'notifications', 'documents', 'keychain', 'remote-desktop'}
+KNOWN_PERMS = {'network', 'storage', 'audio', 'camera', 'screen', 'notifications', 'documents', 'keychain', 'remote-desktop'}
+PERM_APP = {'camera': 'photobooth-desktop', 'screen': 'colormeter-desktop'}
 # permission -> code that shows it is used
 PERM_USE = {
     'network': r'\b(http|https|TcpStream|TcpListener|UdpSocket|ureq|fetch|download|open_url|webview|WebProcessPool|net)\b',
     'documents': r'\b(open_document|save_document|commit_document|reopen_document|Document|DocumentEvent)\b',
     'audio': r'\b(audio|Audio|pcm|Pcm|play|sound|Sound|alsa|cpal|speaker|microphone|record)\b',
+    'camera': r'\b(v4l2::|Device::open|CameraInfo|camera_path|camera)\b',
+    'screen': r'\b(screen_sample|Media::Screen|require_screen_recording)\b',
     'notifications': r'\b(notify|usernotif|set_badge|notification|notification_schedule)\b',
     'keychain': r'\bkeychain\b',
     'storage': r'\b(data_dir|std::fs|fs::|File::|UserDefaults|defaults|store)\b',
@@ -117,7 +121,8 @@ EDIT_MENU_CALL = re.compile(r'\bedit_menu\s*\(\s*\)')
 STD_EDIT_ITEM = re.compile(r'(?:AppMenuItem|MenuEntry)::new\([^"]*"(Undo|Redo|Cut|Copy|Paste|Select All)"')
 KIT = {
     'sidebar': re.compile(r'\bsource_list\(|\bSourceList\b|\bSidebarItem\b|\bsidebar_list\b'),
-    'toolbar': re.compile(r'\btoolbar(?:_band)?\(|\bToolbar\b|\bToolbarItem\b'),
+    # Do not mistake an app model method such as Action::toolbar() for the shared kit widget.
+    'toolbar': re.compile(r'\b(?:widgets::|bifrost_app::widgets::)toolbar(?:_band)?\(|(?<!::)\btoolbar(?:_band)?\(|\bToolbar(?:Item|Layout)?\b'),
     'search': re.compile(r'\bsearch_field\(|\bSearchField\b'),
     'path': re.compile(r'\bpath_bar\(|\bPathBar\b|\bpathbar::'),
 }
@@ -150,6 +155,30 @@ def strip_tests(text):
             if (opened and depth <= 0) or (not opened and code.rstrip().endswith(';')):
                 break
     return out
+
+
+def rust_function_body(lines, start):
+    """Return the brace-delimited body beginning at a Rust function declaration line."""
+    body, depth, opened = [], 0, False
+    for line in lines[start:]:
+        code = line.split('//')[0]
+        if not opened:
+            if '{' not in code:
+                continue
+            opened = True
+        body.append(code)
+        depth += code.count('{') - code.count('}')
+        if opened and depth == 0:
+            break
+    return '\n'.join(body)
+
+
+def res02_required(next_wake_body, code_all, spawn_sites):
+    """Flag worker-fed polling only when next_wake itself schedules a timed wait on pending work."""
+    timed_deadline = re.search(r'\b(?:Some|then_some)\s*\(\s*t\s*\+\s*(?:\d+(?:\.\d*)?|\.\d+)', next_wake_body)
+    pending_worker = re.search(r'\b(?:self\.)?(?:job|work|search|task|worker|pending|in_flight)\b', next_wake_body)
+    worker_channel = bool(spawn_sites or re.search(r'\b(try_recv|mpsc::)', code_all))
+    return bool(timed_deadline and pending_worker and worker_channel)
 
 
 def rust_files(app):
@@ -299,11 +328,23 @@ def check_app(app):
     if DEPRECATED is None:
         DEPRECATED = load_deprecated()
     native = (app / 'Cargo.toml').exists()
+    cargo = tomllib.loads((app / 'Cargo.toml').read_text()) if native else {}
+    bins = cargo.get('bin', [])
+    executable = (app / 'src/main.rs').is_file()
+    if not executable and (app / 'src/bin').is_dir():
+        executable = any((app / 'src/bin').rglob('*.rs'))
+    if not executable:
+        executable = any((app / spec.get('path', f"src/bin/{spec.get('name', '')}.rs")).is_file() for spec in bins)
+    # Model-only crates live beside apps in the workspace but have no package manifest or lifecycle to audit.
+    if native and not executable and not (app / 'manifest.toml').exists():
+        return [], {'native': native, 'manifest': None, 'sidebar': False, 'toolbar': False, 'search': False}
     findings = []
     m = check_manifest(app, native, findings)
     info = {'native': native, 'manifest': m, 'sidebar': False, 'toolbar': False, 'search': False}
     if not native:
         return findings, info
+    if m is not None and not executable:
+        findings.append(('APP-11', f'{rel(app / "manifest.toml")}:1', 'manifest declares an app without a Cargo executable target'))
     files = {}
     for p in rust_files(app):
         raw = p.read_text(errors='replace').splitlines()
@@ -323,6 +364,8 @@ def check_app(app):
     for pm in sorted(perms):
         if pm not in KNOWN_PERMS:
             findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'unknown permission {pm!r}'))
+        elif pm in PERM_APP and app.name != PERM_APP[pm]:
+            findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'permission {pm!r} is restricted to {PERM_APP[pm]}'))
         elif pm in PERM_USE and not re.search(PERM_USE[pm], code_all):
             findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'permission {pm!r} requested but no code uses it'))
 
@@ -373,9 +416,8 @@ def check_app(app):
             if THREAD_SPAWN.search(code):
                 spawn_sites.append((p, i, raw))
             if re.search(r'\bfn\s+next_wake\b', code):
-                body = ' '.join(l.split('//')[0] for l in lines[i:i + 10])
-                if re.search(r'\bSome\(', body):
-                    next_wake_site = (p, i, raw)
+                body = rust_function_body(lines, i)
+                next_wake_site = (p, i, raw, body)
             if MENU_DECL.search(code) and MENU_DECL.search(code).group(1) == 'Edit' and re.search(r'AppMenu|MenuEntry|set_menus|main_menu', '\n'.join(lines[max(0, i - 3):i + 1]) + code):
                 add(p, i, 'CHR-01', f'menu "{MENU_DECL.search(code).group(1)}" duplicates the shell bar', raw)
             elif EDIT_MENU_CALL.search(code):
@@ -392,9 +434,9 @@ def check_app(app):
                     add(p, i, rule, f'{RULES[rule][2]} ({rx.search(code).group(0)})', raw)
     for p, i, raw in spawn_sites:
         add(p, i, 'RES-01', 'thread::spawn', raw)
-    if next_wake_site and (spawn_sites or re.search(r'\b(try_recv|mpsc::)', code_all)):
-        add(*next_wake_site[:2], 'RES-02', 'next_wake returns Some(..) while a worker thread feeds the app', next_wake_site[2])
-    if not re.search(r'enable_sudden_termination', code_all) and not UNSAVED.search(code_all) and 'documents' not in perms:
+    if next_wake_site and res02_required(next_wake_site[3], code_all, spawn_sites):
+        add(*next_wake_site[:2], 'RES-02', 'next_wake schedules a timed poll while worker work is pending', next_wake_site[2])
+    if executable and not re.search(r'enable_sudden_termination', code_all) and not UNSAVED.search(code_all) and 'documents' not in perms:
         findings.append(('RES-03', f'{rel(app / "src")}:1', 'no unsaved state found and enable_sudden_termination() is never called'))
 
     # tests
@@ -438,14 +480,18 @@ def generate_test(app, m, info, old=None):
         gaps = list(KNOWN.get(app.name, []))
     frac = VOLATILE.get(app.name, 0.02 if app.name in SOFT_VOLATILE else 0.002)
     keyboard = app.name == 'keyboard'
+    initial_chrome = INITIAL_CHROME.get(app.name, {})
+    expect_sidebar = initial_chrome.get('sidebar', info['sidebar'] and not keyboard)
+    expect_toolbar = initial_chrome.get('toolbar', info['toolbar'] and not keyboard)
+    expect_search = initial_chrome.get('search', info['search'] and not keyboard)
     head = [
         f'const BIN: &str = env!("CARGO_BIN_EXE_{bn}");',
         f'const BIN_NAME: &str = "{bn}";',
         f'const APP_ID: &str = "{app_id}";',
         f'const SNAP_NAME: &str = "{app.name}";',
-        f'const EXPECT_SIDEBAR: bool = {str(info["sidebar"] and not keyboard).lower()};  // source_list in the source',
-        f'const EXPECT_TOOLBAR: bool = {str(info["toolbar"] and not keyboard).lower()};  // widgets::toolbar in the source',
-        f'const EXPECT_SEARCH: bool = {str(info["search"] and not keyboard).lower()};  // search_field in the source',
+        f'const EXPECT_SIDEBAR: bool = {str(expect_sidebar).lower()};  // source_list in the source',
+        f'const EXPECT_TOOLBAR: bool = {str(expect_toolbar).lower()};  // widgets::toolbar in the source',
+        f'const EXPECT_SEARCH: bool = {str(expect_search).lower()};  // search_field in the source',
         f'/// {"TODO(lead): the system keyboard draws only after keyboard_config; it renders no frame when started alone." if keyboard else "An app must draw a frame on start."}',
         f'const FRAME_REQUIRED: bool = {str(not keyboard).lower()};',
         f'/// Fraction of 1/4-size pixels allowed to differ from the golden ({"clock face and time" if app.name in VOLATILE else "dates, feeds and live data" if app.name in SOFT_VOLATILE else "static UI"}).',
@@ -456,6 +502,16 @@ def generate_test(app, m, info, old=None):
     return TEMPLATE.read_text().replace('@HEADER@', '\n'.join(head))
 
 
+# The runtime harness starts apps with no open document or journal entries. Preview's sidebar appears after a file
+# opens; Journal's timeline is empty until the first entry is created. Neither launch frame can publish sidebar rows.
+INITIAL_CHROME = {
+    # The user must open these context views before their kit chrome becomes visible.
+    'calculator-desktop': {'sidebar': False},
+    'freeform-desktop': {'search': False},
+    'podcasts-desktop': {'search': False},
+    'preview-desktop': {'sidebar': False},
+    'journal-desktop': {'sidebar': False},
+}
 KNOWN = {}
 
 

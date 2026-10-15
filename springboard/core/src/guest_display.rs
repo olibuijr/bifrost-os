@@ -103,6 +103,60 @@ impl Capture {
     }
 }
 
+/// A guest picture shown in a view: its placement, the window-to-guest pointer map and keyboard capture, kept together.
+/// `resize` places the picture for the view's size; the other methods read that placement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GuestView {
+    frame_w: u32,
+    frame_h: u32,
+    integer: bool,
+    rect: Rect,
+    capture: Capture,
+}
+
+impl GuestView {
+    /// A view for a `frame_w` x `frame_h` guest picture. `integer` requests whole-number scaling (see [`fit`]).
+    /// Keyboard input is not captured until a click.
+    pub fn new(frame_w: u32, frame_h: u32, integer: bool, release_key: u32) -> Self {
+        GuestView { frame_w, frame_h, integer, rect: Rect::EMPTY, capture: Capture::new(release_key) }
+    }
+
+    /// Places the picture for a `view_w` x `view_h` view. Call again when the view is resized.
+    pub fn resize(&mut self, view_w: u32, view_h: u32) {
+        self.rect = fit(self.frame_w, self.frame_h, view_w, view_h, self.integer);
+    }
+
+    /// Where the picture sits in the view, as set by the last `resize`.
+    pub fn rect(&self) -> Rect {
+        self.rect
+    }
+
+    /// The guest pixel under a view point, or `None` outside the picture.
+    pub fn guest_point(&self, px: u32, py: u32) -> Option<(u32, u32)> {
+        to_guest(self.rect, self.frame_w, self.frame_h, px, py)
+    }
+
+    /// A click at a view point. A click on the picture captures the keyboard; the return value is true only when this
+    /// click captured it. A click outside the picture captures nothing.
+    pub fn click(&mut self, px: u32, py: u32) -> bool {
+        self.rect.contains(px, py) && self.capture.click()
+    }
+
+    /// Routes a key press or release.
+    pub fn key(&mut self, code: u32, pressed: bool) -> Route {
+        self.capture.key(code, pressed)
+    }
+
+    /// The view lost focus: the keyboard goes back to the host.
+    pub fn focus_lost(&mut self) {
+        self.capture.focus_lost();
+    }
+
+    pub fn is_captured(&self) -> bool {
+        self.capture.is_captured()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

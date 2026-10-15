@@ -160,7 +160,8 @@ impl DiskUtility {
             labels: TextCache::default(),
             show_all: true,
             erase_fs: Personality::Fat32,
-            size: (1200.0, 780.0),
+            // The app host configures the actual client size before the first frame.
+            size: (0.0, 0.0),
             last_refresh: f64::NEG_INFINITY,
             last_usage: f64::NEG_INFINITY,
             press: Target::Nothing,
@@ -403,17 +404,30 @@ impl DiskUtility {
         }
     }
 
+    /// Whether Mount can run on the selected row: an unmounted volume with a file system, and no running action. The
+    /// toolbar and the File menu both ask these three predicates, so they always agree.
+    pub fn can_mount(&self) -> bool {
+        !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_none() && n.fs_type.is_some())
+    }
+
+    /// Whether Unmount can run on the selected row: a mounted row, and no running action.
+    pub fn can_unmount(&self) -> bool {
+        !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_some())
+    }
+
+    /// Whether Eject can run on the selected row: a removable whole disk, and no running action.
+    pub fn can_eject(&self) -> bool {
+        !self.busy() && self.selected_node().is_some_and(|n| n.kind == Kind::Disk && n.removable)
+    }
+
     /// The toolbar for the current state. Actions need a selected row and no running action.
     pub fn toolbar(&self) -> Toolbar {
         let idle = !self.busy();
         let node = self.selected_node();
-        let mountable = node.is_some_and(|n| n.mount_point.is_none() && n.fs_type.is_some());
-        let mounted = node.is_some_and(|n| n.mount_point.is_some());
-        let ejectable = node.is_some_and(|n| n.kind == Kind::Disk && n.removable);
         Toolbar::new(vec![
-            ToolbarItem::button(B_MOUNT, "Mount").enabled(idle && mountable),
-            ToolbarItem::button(B_UNMOUNT, "Unmount").enabled(idle && mounted),
-            ToolbarItem::button(B_EJECT, "Eject").enabled(idle && ejectable),
+            ToolbarItem::button(B_MOUNT, "Mount").enabled(self.can_mount()),
+            ToolbarItem::button(B_UNMOUNT, "Unmount").enabled(self.can_unmount()),
+            ToolbarItem::button(B_EJECT, "Eject").enabled(self.can_eject()),
             ToolbarItem::button(B_DETACH, "Detach").enabled(idle && self.selected_image()),
             ToolbarItem::button(B_ERASE, "Erase").enabled(idle && node.is_some()),
             ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(idle && node.is_some()),
@@ -605,6 +619,25 @@ mod tests {
     }
 
     #[test]
+    fn the_mount_predicates_disable_every_mount_command_while_busy() {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "sdb".into(), removable: true, size: 8_000_000_000, ..Node::default() },
+            Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), ..Node::default() },
+        ];
+        w.selected = Some("sdb1".into());
+        assert!(w.can_mount() && !w.can_unmount() && !w.can_eject(), "an unmounted volume mounts, and a partition does not eject");
+        w.nodes[1].mount_point = Some("/mnt/a".into());
+        assert!(w.can_unmount() && !w.can_mount());
+        w.selected = Some("sdb".into());
+        assert!(w.can_eject() && !w.can_unmount() && !w.can_mount(), "a disk without a file system neither mounts nor unmounts");
+        w.job = Some(Job { verb: "Ejecting", name: "sdb".into(), rx: std::sync::mpsc::channel().1, commit: None });
+        assert!(!w.can_eject() && !w.can_unmount(), "a running action blocks the commands");
+        let bar = w.toolbar();
+        assert!(bar.items.iter().filter(|i| matches!(i.id, B_MOUNT | B_UNMOUNT | B_EJECT)).all(|i| !i.enabled));
+    }
+
+    #[test]
     fn detach_is_enabled_only_for_a_selected_disk_image() {
         let mut w = DiskUtility::new();
         w.nodes = vec![
@@ -644,6 +677,7 @@ mod tests {
 
     fn one_stick() -> DiskUtility {
         let mut w = DiskUtility::new();
+        w.size = (1200.0, 780.0);
         w.nodes = vec![
             Node { name: "sdb".into(), removable: true, size: 8_000_000_000, ..Node::default() },
             Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), ..Node::default() },

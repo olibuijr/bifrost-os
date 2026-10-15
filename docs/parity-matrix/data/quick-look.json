@@ -1,77 +1,77 @@
 {
-  "framework": "Quick Look",
-  "doc": "https://developer.apple.com/documentation/quicklook",
-  "macos_since": "10.5",
-  "status": "partial",
-  "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), springboard/proto/src/peek.rs, springboard/apps/files/src/peek.rs, springboard/src/files/preview.rs, springboard/sdk/src/peek_pdf.rs (PdfPreview, PdfStyle)",
-  "summary": "The SDK has a Quick Look panel model (items, clamped index, Space toggle, arrow stepping), a multi-page PDF layout with page thumbnails beside the content, and a thumbnail path and cache, but the shell does not draw the floating panel and no app uses the SDK panel yet. The Files app has its own in-app preview for images, text, PDFs, audio, video and file info. Preview and thumbnail extensions, which are how Apple lets third-party file types supply previews, have no counterpart.",
-  "rea_evidence": "ev_8f8e5e93fdbdd4c20445855d1b664ab16b942f834b9fc8f25ec0ddcada546ba3",
-  "features": [
-    {
-      "feature": "Preview panel (floating panel, items, index, Space toggle)",
-      "apple": "QLPreviewController, QLPreviewPanel-style data source (Quick Look UI, macOS 10.5+; https://developer.apple.com/documentation/quicklook/qlpreviewcontroller)",
-      "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, make_key_and_order_front, close); wired: springboard/src/shell/preview_panel.rs; springboard/apps/files/src/system.rs (Files Space)",
-      "status": "partial",
-      "note": "The model and tests exist. The shell decodes ToShell::Preview (springboard/proto/src/peek.rs, 0x1e0 and 0x1e1) but no handler was found under springboard/src, so nothing is drawn. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Preview items (URL and title)",
-      "apple": "QLPreviewItem protocol (https://developer.apple.com/documentation/quicklook/qlpreviewitem)",
-      "bifrost": "springboard/proto/src/peek.rs (PreviewItem, MAX_ITEMS), re-exported by springboard/sdk/src/peek.rs",
-      "status": "partial",
-      "note": "URL and title only. No previewItemDisplayState, transition source frames or full-screen mode."
-    },
-    {
-      "feature": "Thumbnail generation and cache",
-      "apple": "QLThumbnailGenerator, QLThumbnailImageCreate, QLThumbnailRequest* (https://developer.apple.com/documentation/quicklook/previews-or-thumbnail-images-for-macos-10-14-or-earlier)",
-      "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, ThumbnailCache::best_representation); springboard/sdk/src/thumbnails.rs (GeneratorRequest, RepresentationType, Representation, Generation)",
-      "status": "partial",
-      "note": "Names and caches a PNG path (under $XDG_CACHE_HOME/bifrost-peek). The SDK now has a generator request model (representation types icon, low quality, full; delivery plan and a never-regress update tracker) over the thumbnails service; host unit tests only, not yet checked on Midget. PDF page rasterising and per-type providers are still open."
-    },
-    {
-      "feature": "In-app preview of common file types",
-      "apple": "Quick Look previews for common file types (https://developer.apple.com/documentation/quicklook)",
-      "bifrost": "springboard/apps/files/src/peek.rs (Files::peek), springboard/src/files/preview.rs (preview_for, is_pdf, zoom and pan limits), springboard/src/files/mod.rs (spawn_preview; previous and next at :435); wired: springboard/src/shell/preview_panel.rs (kind_for via bifrost_ui preview Registry; PDF and audio bodies)",
-      "status": "partial",
-      "note": "Covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. It is inside Files, not an SDK API, and it does not use the SDK PreviewPanel. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Markup on picture previews",
-      "apple": "Quick Look simple edits, for example markup on images (iOS and iPadOS per the doc; https://developer.apple.com/documentation/quicklook)",
-      "bifrost": "springboard/src/shell/mod.rs (Quick Look's Markup button, around :3750; saves a PNG copy)",
-      "status": "partial",
-      "note": "Only the shell's Files preview has a Markup button. No SDK API for apps."
-    },
-    {
-      "feature": "Data-based and view-controller preview extensions",
-      "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply, QLPreviewReplyAttachment, QLPreviewingController (https://developer.apple.com/documentation/quicklook/data-based-preview-extensions)",
-      "bifrost": "springboard/sdk/src/peek.rs, springboard/ui/src/preview.rs; wired: springboard/apps/files/src/peek.rs (PictureFile, picture_registry, Files::peek)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets a third-party app register a file type and supply its own preview. Apps only get the panel model and thumbnail path. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
-    },
-    {
-      "feature": "PDF multi-page preview context",
-      "apple": "QLPreviewPDFStyle: standard, pages with thumbnails on the left, pages with thumbnails on the right (https://developer.apple.com/documentation/quicklook/qlpreviewpdfstyle); QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
-      "bifrost": "springboard/sdk/src/peek_pdf.rs (PdfPreview, PdfStyle, sidebar_frames, content_view); springboard/ui/src/pdfview.rs (page model); springboard/src/files/preview.rs (is_pdf) and springboard/src/files/mod.rs (PDF text through springboard/src/shell/books/engine)",
-      "status": "partial",
-      "note": "Model and host unit tests: the three styles, a thumbnail column that keeps each page's shape, and a content area beside it, over the Books page model. The Files preview still shows extracted PDF text and does not use this model, and the shell does not draw it. built on parity/team-j-quick-look; not yet verified on Midget."
-    },
-    {
-      "feature": "Preview of USDZ in augmented reality",
-      "apple": "Quick Look AR view for USDZ (iOS and iPadOS per the doc)",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "Apple AR hardware and the USDZ AR view are not a desktop feature here."
-    }
-  ],
-  "gaps": [
-    "The shell does not draw the floating preview panel: ToShell::Preview and ToShell::PreviewClose are decoded in springboard/proto/src/peek.rs and no handler was found under springboard/src.",
-    "No app uses the SDK PreviewPanel or ThumbnailCache. Files keeps its own preview (springboard/apps/files/src/peek.rs).",
-    "No third-party preview extension API (QLPreviewProvider, QLPreviewingController, QLFilePreviewRequest, QLPreviewReply).",
-    "No QLThumbnailGenerator equivalent: no generator for a file type, no icon-mode badge, no async update, and no drawing of the thumbnail in the panel.",
-    "No QLPreviewView, previewItemDisplayState, transition source frames or full-screen mode.",
-    "Doc error in docs/bifrost-ui.md:1420: names springboard/sdk/src/quicklook.rs and springboard/proto/src/quicklook.rs, which do not exist. The files are springboard/sdk/src/peek.rs and springboard/proto/src/peek.rs.",
-    "Doc error in docs/bifrost-ui.md:1423: says the cache is under $XDG_CACHE_HOME/bifrost-quicklook, but springboard/sdk/src/peek.rs uses bifrost-peek.",
-    "The PDF preview layout (springboard/sdk/src/peek_pdf.rs) is not used by the Files preview yet; Files still shows extracted PDF text."
-  ]
+ "framework": "Quick Look",
+ "doc": "https://developer.apple.com/documentation/quicklook",
+ "macos_since": "10.5",
+ "status": "partial",
+ "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), springboard/proto/src/peek.rs, springboard/apps/files/src/peek.rs, springboard/src/files/preview.rs, springboard/sdk/src/peek_pdf.rs (PdfPreview, PdfStyle)",
+ "summary": "The SDK has a Quick Look panel model (items, clamped index, Space toggle, arrow stepping), a multi-page PDF layout with page thumbnails beside the content, and a thumbnail path and cache, but the shell does not draw the floating panel and no app uses the SDK panel yet. The Files app has its own in-app preview for images, text, PDFs, audio, video and file info. Preview and thumbnail extensions, which are how Apple lets third-party file types supply previews, have no counterpart.",
+ "rea_evidence": "ev_8f8e5e93fdbdd4c20445855d1b664ab16b942f834b9fc8f25ec0ddcada546ba3",
+ "features": [
+  {
+   "feature": "Preview panel (floating panel, items, index, Space toggle)",
+   "apple": "QLPreviewController, QLPreviewPanel-style data source (Quick Look UI, macOS 10.5+; https://developer.apple.com/documentation/quicklook/qlpreviewcontroller)",
+   "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, make_key_and_order_front, close); wired: springboard/src/shell/preview_panel.rs; springboard/apps/files/src/system.rs (Files Space)",
+   "status": "partial",
+   "note": "The model and tests exist. The shell decodes ToShell::Preview (springboard/proto/src/peek.rs, 0x1e0 and 0x1e1) but no handler was found under springboard/src, so nothing is drawn. Model tests (springboard/sdk/tests/parity_sdk-tests-01c.rs): the_panel_steps_without_wrapping_and_the_index_stays_in_range, a_data_source_pull_keeps_its_order_and_is_capped_at_the_wire_limit, each_item_starts_ready_and_a_new_list_resets_the_states. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Preview items (URL and title)",
+   "apple": "QLPreviewItem protocol (https://developer.apple.com/documentation/quicklook/qlpreviewitem)",
+   "bifrost": "springboard/proto/src/peek.rs (PreviewItem, MAX_ITEMS), re-exported by springboard/sdk/src/peek.rs; springboard/ui/src/preview_transition.rs (PanelFrame, lerp_rect); springboard/ui/tests/parity_sdk-complete-28.rs",
+   "status": "partial",
+   "note": "URL and title on the wire, and the display state (ItemState) in the SDK. Transition geometry from the item's source frame and the full-screen frame are tested headless in preview_transition.rs. Gap: the wire message carries no display state or source frame, so the shell cannot draw either yet. Wire tests (springboard/proto/tests/parity_sdk-tests-01c.rs): a_preview_list_round_trips_with_its_index, the_list_is_capped_and_the_index_follows_the_cap, an_overlong_title_is_cut_on_a_character_boundary."
+  },
+  {
+   "feature": "Thumbnail generation and cache",
+   "apple": "QLThumbnailGenerator, QLThumbnailImageCreate, QLThumbnailRequest* (https://developer.apple.com/documentation/quicklook/previews-or-thumbnail-images-for-macos-10-14-or-earlier)",
+   "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, ThumbnailCache::best_representation); springboard/sdk/src/thumbnails.rs (GeneratorRequest, RepresentationType, Representation, Generation)",
+   "status": "partial",
+   "note": "Names and caches a PNG path (under $XDG_CACHE_HOME/bifrost-peek). The SDK now has a generator request model (representation types icon, low quality, full; delivery plan and a never-regress update tracker) over the thumbnails service; host unit tests only, not yet checked on Midget. PDF page rasterising and per-type providers are still open."
+  },
+  {
+   "feature": "In-app preview of common file types",
+   "apple": "Quick Look previews for common file types (https://developer.apple.com/documentation/quicklook)",
+   "bifrost": "springboard/src/files/preview.rs (preview_for, is_pdf, wrap_lines, Zoom, decode_allowed, image_size); springboard/src/files/mod.rs (spawn_preview at :411; step_preview, previous and next, at :449); springboard/apps/files/src/peek.rs (Files::peek); wired: springboard/src/shell/preview_panel.rs (kind_for via bifrost_ui preview Registry; PDF and audio bodies)",
+   "status": "partial",
+   "note": "The preview choice, text wrapping, zoom and pan limits, decode bounds and header sizes are tested headless in springboard/tests/parity_sdk-tests-16.rs. Covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. It is inside Files, not an SDK API, and it does not use the SDK PreviewPanel. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Markup on picture previews",
+   "apple": "Quick Look simple edits, for example markup on images (iOS and iPadOS per the doc; https://developer.apple.com/documentation/quicklook)",
+   "bifrost": "springboard/src/shell/mod.rs (Quick Look's Markup button, around :3750; saves a PNG copy)",
+   "status": "partial",
+   "note": "Only the shell's Files preview has a Markup button. No SDK API for apps."
+  },
+  {
+   "feature": "Data-based and view-controller preview extensions",
+   "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply, QLPreviewReplyAttachment, QLPreviewingController (https://developer.apple.com/documentation/quicklook/data-based-preview-extensions)",
+   "bifrost": "springboard/sdk/src/peek.rs, springboard/ui/src/preview.rs; wired: springboard/apps/files/src/peek.rs (PictureFile, picture_registry, Files::peek)",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets a third-party app register a file type and supply its own preview. Apps only get the panel model and thumbnail path. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+  },
+  {
+   "feature": "PDF multi-page preview context",
+   "apple": "QLPreviewPDFStyle: standard, pages with thumbnails on the left, pages with thumbnails on the right (https://developer.apple.com/documentation/quicklook/qlpreviewpdfstyle); QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
+   "bifrost": "springboard/ui/src/pdfview.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (pdfview.rs); not wired into the shell or apps, not tested on Midget. PDFs show extracted text, not a rendered page view with a PDF style option."
+  },
+  {
+   "feature": "Preview of USDZ in augmented reality",
+   "apple": "Quick Look AR view for USDZ (iOS and iPadOS per the doc)",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "Apple AR hardware and the USDZ AR view are not a desktop feature here."
+  }
+ ],
+ "gaps": [
+  "The shell does not draw the floating preview panel: ToShell::Preview and ToShell::PreviewClose are decoded in springboard/proto/src/peek.rs and no handler was found under springboard/src.",
+  "No app uses the SDK PreviewPanel or ThumbnailCache. Files keeps its own preview (springboard/apps/files/src/peek.rs).",
+  "No third-party preview extension API (QLPreviewProvider, QLPreviewingController, QLFilePreviewRequest, QLPreviewReply).",
+  "No QLThumbnailGenerator equivalent: no generator for a file type, no icon-mode badge, no async update, and no drawing of the thumbnail in the panel.",
+  "No QLPreviewView, previewItemDisplayState, transition source frames or full-screen mode.",
+  "Doc error in docs/bifrost-ui.md:1420: names springboard/sdk/src/quicklook.rs and springboard/proto/src/quicklook.rs, which do not exist. The files are springboard/sdk/src/peek.rs and springboard/proto/src/peek.rs.",
+  "Doc error in docs/bifrost-ui.md:1423: says the cache is under $XDG_CACHE_HOME/bifrost-quicklook, but springboard/sdk/src/peek.rs uses bifrost-peek.",
+  "The PDF preview layout (springboard/sdk/src/peek_pdf.rs) is not used by the Files preview yet; Files still shows extracted PDF text."
+ ]
 }

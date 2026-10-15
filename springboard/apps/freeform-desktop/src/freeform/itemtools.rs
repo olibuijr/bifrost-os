@@ -4,6 +4,7 @@
 //! open board, so it lives under `freeform.rs` and reaches its fields.
 use super::*;
 use crate::items::NOTE_COLORS;
+use bifrost_app::controls::prefs_layout::m;
 
 /// Two presses on one item closer together than this (milliseconds) are a double tap.
 const DOUBLE_TAP_MS: f64 = 450.0;
@@ -220,6 +221,7 @@ impl Freeform {
         self.selection = None;
         self.pick = Some(Pick::Item(id));
         self.edit = cell.map(|c| (id, c));
+        self.caret = usize::MAX;
         self.items_changed(ui);
         id
     }
@@ -329,16 +331,20 @@ impl Freeform {
             let side = ui.pt(NOTE_PT_SIDE);
             return Item { text, color: NOTE_COLORS[3], ..Item::new(ItemKind::Sticky, x, y, side, side) };
         }
-        Item { text, ..Item::new(ItemKind::Text, x, y, ui.pt(360.0), ui.pt(TEXT_BOX_PT.1)) }
+        Item { text, ..Item::new(ItemKind::Text, x, y, ui.pt(TEXT_BOX_PT.0), ui.pt(TEXT_BOX_PT.1)) }
     }
 
-    /// Edit > Paste with only text on the pasteboard: it lands on the board as an item (see `text_item`).
+    /// Edit > Paste with only text on the pasteboard: it lands on the board as an item centred at the pointer (see
+    /// `text_item`).
     pub fn paste_text_item(&mut self, ui: &Ui, text: String) {
         if text.trim().is_empty() {
             return;
         }
         let (w, h) = (ui.pt(NOTE_PT_SIDE), ui.pt(NOTE_PT_SIDE));
-        let (x, y) = self.spot(ui, w, h);
+        let (x, y) = match self.paste_anchor(ui) {
+            Some((cx, cy)) => (cx - w / 2.0, cy - h / 2.0),
+            None => self.spot(ui, w, h),
+        };
         let item = Self::text_item(ui, text, x, y);
         self.add_item(ui, item, None);
     }
@@ -441,6 +447,7 @@ impl Freeform {
             self.push_undo();
             self.edit = Some((id, cell));
         }
+        self.caret = usize::MAX;
         self.pick = Some(Pick::Item(id));
         self.repaint(ui, None);
     }
@@ -617,29 +624,37 @@ impl Freeform {
         let kind = self.items.get(id).map(|i| i.kind);
         match key {
             KeyInput::Text(text) => {
-                if self.items.insert_text(id, cell, text) {
+                self.type_at_caret(ui, id, cell, text);
+                true
+            }
+            KeyInput::Code(8) => {
+                if let Some(at) = self.items.backspace(id, cell, self.caret) {
+                    self.caret = at;
                     self.items_changed(ui);
                 }
                 true
             }
-            KeyInput::Code(8) => {
-                if self.items.backspace(id, cell) {
-                    self.items_changed(ui);
-                }
+            KeyInput::Code(code @ (35 | 36 | 37 | 39)) => {
+                let len = self.items.text_len(id, cell);
+                let at = self.caret.min(len);
+                self.caret = match *code {
+                    35 => len,
+                    36 => 0,
+                    37 => at.saturating_sub(1),
+                    _ => (at + 1).min(len),
+                };
+                self.repaint(ui, None);
                 true
             }
             KeyInput::Code(13) => {
                 match kind {
-                    Some(ItemKind::Text | ItemKind::Sticky) => {
-                        if self.items.insert_text(id, cell, "\n") {
-                            self.items_changed(ui);
-                        }
-                    }
+                    Some(ItemKind::Text | ItemKind::Sticky) => self.type_at_caret(ui, id, cell, "\n"),
                     Some(ItemKind::Table) => {
                         let cols = self.items.get(id).map_or(1, |i| i.cols.max(1));
                         let count = self.items.get(id).map_or(0, |i| i.cells.len());
                         if cell + cols < count {
                             self.edit = Some((id, cell + cols));
+                            self.caret = usize::MAX;
                             self.repaint(ui, None);
                         } else {
                             self.finish_edit(ui);
@@ -653,6 +668,7 @@ impl Freeform {
                 let count = self.items.get(id).map_or(0, |i| i.cells.len());
                 if kind == Some(ItemKind::Table) && count > 0 {
                     self.edit = Some((id, (cell + 1) % count));
+                    self.caret = usize::MAX;
                     self.repaint(ui, None);
                     return true;
                 }
@@ -663,6 +679,14 @@ impl Freeform {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Types `text` into the cell of the item being edited, at the caret, and moves the caret after it.
+    fn type_at_caret(&mut self, ui: &Ui, id: u32, cell: usize, text: &str) {
+        if let Some(at) = self.items.insert_text(id, cell, self.caret, text) {
+            self.caret = at;
+            self.items_changed(ui);
         }
     }
 
@@ -694,9 +718,7 @@ impl Freeform {
             return true;
         }
         let Some((id, cell)) = self.edit else { return false };
-        if self.items.insert_text(id, cell, text) {
-            self.items_changed(ui);
-        }
+        self.type_at_caret(ui, id, cell, text);
         true
     }
 
@@ -879,8 +901,17 @@ impl Freeform {
     /// A press while the search is open: a row opens that board, a press outside the panel closes the search.
     pub(super) fn search_press(&mut self, ui: &Ui, x: f32, y: f32) {
         let hits = self.search_hits();
-        let (panel, _, rows) = self.search_layout(ui);
+        let (panel, field, rows) = self.search_layout(ui);
         let inside = |r: &Rect| x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+        let scale = ui.pt(1.0);
+        let field_points = bifrost_app::controls::Rect {
+            x: field.x / scale, y: field.y / scale, w: field.w / scale, h: field.h / scale,
+        };
+        if bifrost_app::controls::search::hits_clear(field_points, self.search.as_ref().is_some_and(|s| !s.query.is_empty()), x / scale, y / scale) {
+            if let Some(search) = self.search.as_mut() { search.query.clear(); search.sel = 0; }
+            self.dirty = true;
+            return;
+        }
         if let Some(i) = rows.iter().position(|r| inside(r)) {
             if let Some(&id) = hits.get(i) {
                 self.open_search_hit(ui, id);
@@ -897,20 +928,33 @@ impl Freeform {
     pub(super) fn draw_search(&self, s: &mut Surface, ui: &Ui) {
         let Some(search) = &self.search else { return };
         let (panel, field, rows) = self.search_layout(ui);
-        s.fill_rrect(panel.x, panel.y, panel.w, panel.h, ui.pt(6.0), SIDEBAR_BG.now());
+        widgets::material(
+            s,
+            ui,
+            bifrost_app::controls::Rect { x: panel.x / ui.pt(1.0), y: panel.y / ui.pt(1.0), w: panel.w / ui.pt(1.0), h: panel.h / ui.pt(1.0) },
+            m::CARD_RADIUS,
+            widgets::Material::Popover,
+        );
         let line = ui.pt(1.0).max(1.0);
         s.fill_rect(panel.x as usize, (field.y + field.h) as usize, panel.w as usize, line as usize, SEPARATOR_C.now());
-        let pad = ui.pt(SPACE_M);
         let hint = if search.rename { "Board name" } else { "Search boards" };
-        let (text, color) = if search.query.is_empty() { (hint.to_string(), LABEL_2.now()) } else { (search.query.clone(), LABEL.now()) };
-        let shown = ui.fit(&text, MAC_CALLOUT_PT, panel.w - 2.0 * pad);
-        let img = ui.text(&shown, MAC_CALLOUT_PT, Weight::Regular, color);
-        s.blit(&img, (field.x + pad) as i32, (field.y + (field.h - img.h as f32) / 2.0) as i32, 255, 255);
+        let mut field_value = bifrost_app::controls::TextField::new();
+        field_value.push_str(&search.query);
+        let scale = ui.pt(1.0);
+        widgets::search_field(
+            s,
+            ui,
+            &field_value,
+            bifrost_app::controls::Rect { x: field.x / scale, y: field.y / scale, w: field.w / scale, h: field.h / scale },
+            hint,
+            true,
+        );
+        let pad = ui.pt(SPACE_M);
         let hits = self.search_hits();
         for (i, (row, id)) in rows.iter().zip(hits.iter()).enumerate() {
             let chosen = i == search.sel;
             if chosen {
-                s.fill_rrect(row.x + ui.pt(SPACE_XS), row.y, row.w - 2.0 * ui.pt(SPACE_XS), row.h, ui.pt(4.0), TINT);
+                s.fill_rrect(row.x + ui.pt(SPACE_XS), row.y, row.w - 2.0 * ui.pt(SPACE_XS), row.h, ui.pt(m::SELECTION_RADIUS), TINT);
             }
             let title = self.boards.entries().iter().find(|e| e.id == *id).map(|e| e.title.clone()).unwrap_or_default();
             let shown = ui.fit(&title, MAC_CALLOUT_PT, row.w - 2.0 * pad);
@@ -1070,6 +1114,43 @@ mod tests {
     }
 
     #[test]
+    fn left_and_right_move_the_caret_and_typing_goes_where_it_is() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.insert_text_box(&ui);
+        app.key(&ui, &KeyInput::Text("ac".into()));
+        app.key(&ui, &KeyInput::Code(37));
+        app.key(&ui, &KeyInput::Text("b".into()));
+        assert_eq!(text_of(&app, first(&app)), "abc", "the letter goes in before the caret");
+        app.key(&ui, &KeyInput::Code(36));
+        app.key(&ui, &KeyInput::Text(">".into()));
+        assert_eq!(text_of(&app, first(&app)), ">abc", "Home moves the caret to the start");
+        app.key(&ui, &KeyInput::Code(35));
+        app.key(&ui, &KeyInput::Code(8));
+        assert_eq!(text_of(&app, first(&app)), ">ab", "End moves the caret to the end, where Backspace takes the last letter");
+        app.key(&ui, &KeyInput::Code(39));
+        app.key(&ui, &KeyInput::Code(39));
+        assert_eq!(app.caret, 3, "Right stops at the end of the text");
+    }
+
+    #[test]
+    fn the_caret_stays_inside_the_table_cell_being_typed_into() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.insert_table(&ui);
+        let id = first(&app);
+        app.key(&ui, &KeyInput::Text("ab".into()));
+        for _ in 0..3 {
+            app.key(&ui, &KeyInput::Code(37));
+        }
+        app.key(&ui, &KeyInput::Text("x".into()));
+        assert_eq!(app.items.get(id).unwrap().cells[0], "xab", "Left stops at the start of the cell");
+        app.key(&ui, &KeyInput::Code(9));
+        app.key(&ui, &KeyInput::Text("c".into()));
+        assert_eq!(app.items.get(id).unwrap().cells[1], "c", "Tab starts the next cell with the caret at its end");
+    }
+
+    #[test]
     fn a_blank_table_stays_when_typing_ends() {
         let ui = test_ui();
         let mut app = board(&ui);
@@ -1101,6 +1182,7 @@ mod tests {
         let mut app = board(&ui);
         let id = app.items.add(Item::new(ItemKind::Sticky, 100.0, 100.0, 100.0, 100.0));
         app.snap = true;
+        app.tool = Tool::Lasso;
         let top = app.canvas_top(&ui) as f32;
         app.touch(&ui, Event::Down(110.0, top + 110.0), 0.0);
         app.touch(&ui, Event::Move(137.0, top + 128.0), 0.0);

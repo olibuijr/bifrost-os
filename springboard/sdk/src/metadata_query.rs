@@ -17,9 +17,12 @@
 //! The owner calls `poll(now)` from its tick and wakes on `fd()` and `next_deadline(now)`, exactly as for the
 //! watch stream.
 //!
-//! Gaps: no sort descriptors, grouping or value lists, no predicate text parser, no `Foundation`-style key paths,
+//! Results are ordered by the query's [`MetadataSortDescriptor`]s and then by path.
+//!
+//! Gaps: no grouping or value lists, no predicate text parser, no `Foundation`-style key paths,
 //! and no content attributes (the content index is not consulted).
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -109,7 +112,6 @@ impl MetadataPredicate {
 }
 
 fn compare(have: &MetadataValue, op: MetadataOp, want: &MetadataValue) -> bool {
-    use std::cmp::Ordering;
     match (have, want) {
         (MetadataValue::Str(a), MetadataValue::Str(b)) => match op {
             MetadataOp::Equal => a == b,
@@ -138,6 +140,54 @@ fn compare(have: &MetadataValue, op: MetadataOp, want: &MetadataValue) -> bool {
             _ => false,
         },
     }
+}
+
+/// One sort key of a query over a metadata attribute. Items are ordered by the first key, ties
+/// by the next key, and finally by path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MetadataSortDescriptor {
+    pub attribute: MetadataAttribute,
+    pub ascending: bool,
+}
+
+impl MetadataSortDescriptor {
+    pub fn ascending(attribute: MetadataAttribute) -> MetadataSortDescriptor {
+        MetadataSortDescriptor { attribute, ascending: true }
+    }
+
+    pub fn descending(attribute: MetadataAttribute) -> MetadataSortDescriptor {
+        MetadataSortDescriptor { attribute, ascending: false }
+    }
+}
+
+/// Orders two values of one attribute. Strings compare by code point, numbers and dates by value, booleans with
+/// false first. An item without the attribute sorts before one with it, and values of different kinds are equal.
+fn order_values(a: Option<&MetadataValue>, b: Option<&MetadataValue>) -> Ordering {
+    match (a, b) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Less,
+        (Some(_), None) => Ordering::Greater,
+        (Some(MetadataValue::Str(x)), Some(MetadataValue::Str(y))) => x.cmp(y),
+        (Some(MetadataValue::Bool(x)), Some(MetadataValue::Bool(y))) => x.cmp(y),
+        (Some(x), Some(y)) => match (x.number(), y.number()) {
+            (Some(p), Some(q)) => p.partial_cmp(&q).unwrap_or(Ordering::Equal),
+            _ => Ordering::Equal,
+        },
+    }
+}
+
+/// Sorts `items` by `descriptors`, then by path. The sort is stable.
+fn sort_items(descriptors: &[MetadataSortDescriptor], items: &mut [MetadataItem]) {
+    items.sort_by(|a, b| {
+        for d in descriptors {
+            let ord = order_values(a.value(d.attribute), b.value(d.attribute));
+            let ord = if d.ascending { ord } else { ord.reverse() };
+            if ord != Ordering::Equal {
+                return ord;
+            }
+        }
+        a.path.cmp(&b.path)
+    });
 }
 
 /// Wildcard match of `text` against `pattern` (`*` any run, `?` any one byte).
@@ -244,6 +294,7 @@ enum State {
 pub struct MetadataQuery {
     pub predicate: Option<MetadataPredicate>,
     pub search_scopes: Vec<PathBuf>,
+    sort_descriptors: Vec<MetadataSortDescriptor>,
     state: State,
     results: Vec<MetadataItem>,
     queued: Vec<MetadataNotification>,
@@ -263,6 +314,7 @@ impl MetadataQuery {
         MetadataQuery {
             predicate: None,
             search_scopes: Vec::new(),
+            sort_descriptors: Vec::new(),
             state: State::Stopped,
             results: Vec::new(),
             queued: Vec::new(),
@@ -327,9 +379,20 @@ impl MetadataQuery {
         self.results.get(index)
     }
 
-    /// `results`, sorted by path.
+    /// `results`, ordered by the sort descriptors and then by path.
     pub fn results(&self) -> &[MetadataItem] {
         &self.results
+    }
+
+    /// `sortDescriptors`: the keys that order `results`. Empty means path order.
+    pub fn sort_descriptors(&self) -> &[MetadataSortDescriptor] {
+        &self.sort_descriptors
+    }
+
+    /// Sets `sortDescriptors` and re-sorts the current results at once; later rescans keep the order.
+    pub fn set_sort_descriptors(&mut self, descriptors: Vec<MetadataSortDescriptor>) {
+        self.sort_descriptors = descriptors;
+        sort_items(&self.sort_descriptors, &mut self.results);
     }
 
     /// The descriptor for `App::wake_fd` (None without live updates).
@@ -364,7 +427,7 @@ impl MetadataQuery {
         out
     }
 
-    /// Every item below the scopes that matches the predicate, sorted by path.
+    /// Every item below the scopes that matches the predicate, ordered by the sort descriptors and then by path.
     fn gather(&self) -> Vec<MetadataItem> {
         let mut found = Vec::new();
         for scope in &self.search_scopes {
@@ -385,6 +448,7 @@ impl MetadataQuery {
         }
         found.sort_by(|a, b| a.path.cmp(&b.path));
         found.dedup_by(|a, b| a.path == b.path);
+        sort_items(&self.sort_descriptors, &mut found);
         found
     }
 }

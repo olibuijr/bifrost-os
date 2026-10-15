@@ -11,6 +11,7 @@ import json
 import mmap
 import os
 from pathlib import Path
+import re
 import socket
 import struct
 import subprocess
@@ -20,6 +21,14 @@ import tomllib
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
+SDK_VERSION_MATCH = re.search(
+    r"^pub const SDK_VERSION: u32 = (\d+);$",
+    (ROOT / 'springboard/proto/src/lib.rs').read_text(),
+    re.MULTILINE,
+)
+if SDK_VERSION_MATCH is None:
+    raise RuntimeError('could not read SDK_VERSION from springboard/proto/src/lib.rs')
+SDK_VERSION = int(SDK_VERSION_MATCH.group(1))
 
 
 SIZES = [(1000, 720), (900, 600)]
@@ -95,7 +104,7 @@ def smoke(app, output):
                             if tag == 0x101:
                                 version, length = struct.unpack_from('<II', packet, 4)
                                 identity = packet[12:12 + length].decode()
-                                assert version == 1 and identity == manifest['id'], (identity, manifest['id'])
+                                assert version == SDK_VERSION and identity == manifest['id'], (version, identity, manifest['id'])
                                 hello = True
                             elif tag == 0x102:
                                 actual = struct.unpack_from('<II', packet, 4)
@@ -152,7 +161,11 @@ def main():
     SIZES = [tuple(int(v) for v in s.split('x')) for s in args.sizes.split(',')]
     SCALE = args.scale
     args.out.mkdir(parents=True, exist_ok=True)
-    apps = args.apps or [p.name for p in sorted((ROOT / 'springboard/apps').glob('*-desktop')) if not (p / 'upstream.toml').exists()]  # prebuilt upstream apps have no SDK frame protocol
+    apps = args.apps or [
+        p.name for p in sorted((ROOT / 'springboard/apps').glob('*-desktop'))
+        if (p / 'manifest.toml').exists() and (p / 'src/main.rs').exists()
+        and not (p / 'upstream.toml').exists()
+    ]  # only manifest-backed SDK apps with a binary target use the frame protocol
     results = []
     for name in apps:
         assert Path(name).name == name

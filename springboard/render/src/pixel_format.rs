@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn argb_code_is_found_by_its_drm_name() {
+    fn argb_code_is_found_by_its_format_name() {
         let f = find(FourCc::parse("AR24").unwrap()).unwrap();
         assert_eq!(f.name, "ARGB8888");
         assert!(!f.is_planar());

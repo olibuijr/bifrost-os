@@ -1,132 +1,132 @@
 {
-  "framework": "User Notifications",
-  "doc": "https://developer.apple.com/documentation/usernotifications",
-  "macos_since": "10.14",
-  "status": "partial",
-  "bifrost": "bifrost_app::usernotif (springboard/sdk/src/usernotif.rs), shell registry springboard/src/shell/usernotif.rs, delivery UI springboard/src/shell/notify/",
-  "summary": "Local notifications are covered: categories with buttons, destructive and text-reply actions, requests with title, subtitle, body, thread, category, a time-interval delay and a Dock badge, removal and listing of delivered and pending requests, and the user's response (also queued for an app that is not running). Remote push (APNs, device tokens, background push, the notification service extension), calendar and location triggers, communication notifications, attachments, per-request sounds, notification settings queries and the foreground presentation delegate are not covered.",
-  "rea_evidence": "ev_153a89a120dc24e492871ed0c620f9e424d1d5c3b695af681112f5e45a5487f4",
-  "features": [
-    {
-      "feature": "Asking permission to use notifications",
-      "apple": "UNUserNotificationCenter requestAuthorization(options:) (asking-permission-to-use-notifications)",
-      "bifrost": "springboard/src/shell/usernotif.rs:225, springboard/src/bare/app_policy.rs:41; wired: springboard/src/shell/notify/permission.rs; springboard/src/shell/usernotif.rs (usernotif_hold, usernotif_ask_tick, usernotif_answer); springboard/sdk/src/usernotif_model.rs (AuthorizationStore, AuthorizationOptions, AuthorizationStatus, Settings)",
-      "status": "partial",
-      "note": "Permission is a static manifest entry (\"notifications\"); there is no runtime prompt, no authorization options (alert, sound, badge) and no authorization status query. Without the permission every add answers NotPermitted. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Added: the authorization state machine (notDetermined to authorized, denied or provisional; asked once, persisted as text) and the settings snapshot. Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending."
-    },
-    {
-      "feature": "UNUserNotificationCenter (add, remove, list)",
-      "apple": "UNUserNotificationCenter add, removeDeliveredNotifications, removePendingNotificationRequests, getDeliveredNotifications, getPendingNotificationRequests",
-      "bifrost": "springboard/sdk/src/usernotif.rs (add, remove_delivered, remove_pending, delivered, pending); springboard/src/shell/usernotif.rs (Registry); springboard/sdk/src/usernotif_model.rs (Sound, Attachment, CalendarTrigger, IntervalTrigger); springboard/src/shell/services/notification_schedule.rs; springboard/proto/src/rich.rs (NotifRequest)",
-      "status": "partial",
-      "note": "Covers add with identifier replacement, removal by identifier or all, and the delivered and pending lists. Pending is capped at 64 per app (MAX_PENDING); A request now carries a per-request sound (default, named, critical), a bounded userInfo map (16 entries, 512 characters per value), an interruption level and a relevance score over the wire and in the notification-schedule service (springboard/proto/src/rich.rs, springboard/sdk/src/usernotif.rs). Delivery does not yet play the sound or return userInfo in the response. Added: UNNotificationSound validation (named, defaultCritical, critical volume), attachment validation by type and size, DateComponents calendar matching with DST handling (nextTriggerDate), repeating interval minimum of 60 s (enforced in the notification-schedule service). Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending. Remote push and the service extension stay gaps."
-    },
-    {
-      "feature": "UNUserNotificationCenterDelegate (responses and foreground presentation)",
-      "apple": "userNotificationCenter(_:didReceive:withCompletionHandler:), userNotificationCenter(_:willPresent:withCompletionHandler:)",
-      "bifrost": "springboard/sdk/src/usernotif.rs (Event::Response, Response); springboard/sdk/src/usernotif_model.rs (PresentationOptions, foreground_presentation)",
-      "status": "partial",
-      "note": "Taps and action buttons arrive as Event::Response, including text-reply text, and are queued when the app is not running. No willPresent hook: the app cannot choose presentation options for a notification that arrives while it is in front. Added: the willPresent decision model (banner, list, sound, badge cut to the user's settings; no delegate shows nothing). Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending."
-    },
-    {
-      "feature": "Notification categories and actions",
-      "apple": "UNNotificationCategory, UNNotificationAction, UNTextInputNotificationAction",
-      "bifrost": "springboard/proto/src/rich.rs (NotifCategory, NotifAction, TextInput), springboard/sdk/src/usernotif.rs (set_categories), docs/bifrost-ui.md section 'User notifications'",
-      "status": "parity",
-      "note": "Buttons, destructive and foreground actions and text-input actions with a placeholder are covered (up to 16 categories of 10 actions). Action icons, category options (custom dismiss action, hidden preview) and the dismiss-action callback are not."
-    },
-    {
-      "feature": "UNNotificationRequest and UNMutableNotificationContent",
-      "apple": "UNNotificationRequest, UNMutableNotificationContent (title, subtitle, body, threadIdentifier, categoryIdentifier, badge, sound)",
-      "bifrost": "springboard/sdk/src/usernotif.rs (Request builder), springboard/proto/src/rich.rs:55 (NotifRequest)",
-      "status": "partial",
-      "note": "Title, subtitle, body, thread, category and badge are covered. No sound name, no launch image, no userInfo, no interruption or relevance level."
-    },
-    {
-      "feature": "Notification triggers",
-      "apple": "UNTimeIntervalNotificationTrigger, UNCalendarNotificationTrigger, UNLocationNotificationTrigger, UNPushNotificationTrigger",
-      "bifrost": "springboard/sdk/src/usernotif.rs (after_ms), springboard/src/shell/usernotif.rs (Pending.due, due()); springboard/sdk/src/notification_schedule.rs (Trigger::Interval and Trigger::Calendar, Trigger::next_trigger_date, Trigger::validate, Schedule::checked_interval, Schedule::checked_calendar); springboard/src/shell/services/notification_schedule.rs (calendar next time)",
-      "status": "partial",
-      "note": "Time-interval trigger: a delay (after_ms) and the scheduled interval with repeats (notification-schedule service); a repeating interval below 60 s is refused by checked_interval. Calendar trigger: local hour and minute on a weekday set, daily or weekly when repeating, with next_trigger_date(now, offset) answering when it fires next (today when still ahead, otherwise the next matching weekday; a non-repeating trigger has no fixed date, so it answers its next occurrence). Not covered: calendar components beyond hour, minute and weekday (no date, month, year or week of year), a next-trigger query for a request already pending in the shell (the app computes it with its own clock and zone offset), location and push triggers."
-    },
-    {
-      "feature": "Notification attachments and rich media",
-      "apple": "UNNotificationAttachment, UNNotificationAttachment options",
-      "bifrost": "springboard/ui/src/notifattach.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attachment API. Notification cards show text only. The shell has image drawing (springboard/render/src/imgdec, springboard/src/shell/notify/list.rs) that could carry an image thumbnail."
-    },
-    {
-      "feature": "Notification sounds",
-      "apple": "UNNotificationSound, UNNotificationSoundName",
-      "bifrost": "springboard/src/shell/notify_page.rs (AppNotif.sounds, per-app Sounds switch)",
-      "status": "partial",
-      "note": "Sounds can be turned off per app in Settings. An app cannot choose a sound per request, and there is no critical or default sound API."
-    },
-    {
-      "feature": "Notification display (banners, lock screen, Notification Center)",
-      "apple": "System presentation of local and remote notifications (Human Interface Guidelines > Notifications)",
-      "bifrost": "springboard/src/shell/notify/mod.rs (banner, lock screen stack, Notification Center), springboard/src/shell/notify/banner.rs, springboard/src/shell/notify/store.rs; wired: springboard/src/shell/notify/banner.rs (Banner::persistent); springboard/src/shell/notify/store.rs ([asked] section)",
-      "status": "parity",
-      "note": "The shell draws banners that slide down, stacks on the lock screen and in Notification Center, swipe to clear, and tap to open after unlock. Passcode hides the text on the lock screen. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Per-app notification settings and Focus",
-      "apple": "UNNotificationSettings, Focus status (INFocusStatusCenter)",
-      "bifrost": "springboard/sdk/src/usernotif.rs (settings), springboard/src/shell/usernotif.rs (settings_for), springboard/proto/src/rich.rs (NotifSettings); wired: springboard/src/shell/notify_page.rs (ALERT_STYLES, AppNotif::style, AppField::Style); springboard/src/shell/notify/mod.rs (notify_id, app_notif)",
-      "status": "partial",
-      "note": "Wave 4 (w4-user-notifications, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The user side is complete: per-app lock screen, Notification Center, banner, badges, previews and grouping, plus Do Not Disturb and per-app mute. Apps get no API to read their authorization settings or the Focus status (UNNotificationSettings is not exposed in the SDK). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Dock badge from a notification",
-      "apple": "UNMutableNotificationContent badge; NSDockTile badgeLabel",
-      "bifrost": "springboard/sdk/src/usernotif.rs (Request::badge), springboard/sdk/src/runtime.rs:313 (Ctx::set_badge)",
-      "status": "parity",
-      "note": "A badge number on a request and a short label on the dock icon are both available."
-    },
-    {
-      "feature": "Remote notifications and APNs registration",
-      "apple": "APS Environment entitlement, registerForRemoteNotifications, device token, Setting up a remote notification server",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No device token, no push registration and no remote delivery path. The desktop has a cloud backend (~/Projects/bifrost-cloud) but no push channel to apps. APNs itself is Apple's service and has no direct counterpart; a BifrOSt push service would be new work."
-    },
-    {
-      "feature": "Background push and notification service extension",
-      "apple": "UNNotificationServiceExtension, background push (content-available), Modifying content in newly delivered notifications",
-      "bifrost": "springboard/ui/src/notifservice.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-user-notifications, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on remote push, which is missing. No app extension point runs between delivery and display."
-    },
-    {
-      "feature": "Communication notifications",
-      "apple": "Implementing communication notifications, UNNotificationContentProviding, UNNotificationAttributedMessageContext",
-      "bifrost": "springboard/sdk/src/messaging.rs (Notice",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sender-based notification styling and no intent-backed message content. App Intents exist but are not wired into notification content."
-    },
-    {
-      "feature": "Web push notifications",
-      "apple": "Sending web push notifications in web apps and browsers",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No Push API or service worker push in the Browser app (the webview is Servo, see docs/bifrost-ui.md). Needs a push service and browser support."
-    },
-    {
-      "feature": "APS entitlements and push testing tools",
-      "apple": "APS Environment (macOS) entitlement, Sending push notifications using command-line tools, Push Notification Console",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "Entitlement and Apple-hosted testing tools belong to APNs. Nothing to match until remote push exists."
-    }
-  ],
-  "gaps": [
-    "Remote push: no device token, no push registration, no background push wake-up (APNs or a BifrOSt equivalent).",
-    "Notification service extension: no hook to modify a notification before it is shown.",
-    "Calendar and location triggers: only a time-interval delay exists; no repeating or region-based notifications.",
-    "Attachments and per-request sounds: notification cards are text only and the sound is a per-app switch.",
-    "Runtime permission flow and settings query: permission is a manifest flag; there is no authorization status, no request options and no UNNotificationSettings equivalent.",
-    "Foreground presentation delegate (willPresent): an app cannot choose how a notification shows while it is in front.",
-    "Communication notifications and web push: no sender-based message notification and no Push API for the browser."
-  ]
+ "framework": "User Notifications",
+ "doc": "https://developer.apple.com/documentation/usernotifications",
+ "macos_since": "10.14",
+ "status": "partial",
+ "bifrost": "bifrost_app::usernotif (springboard/sdk/src/usernotif.rs), shell registry springboard/src/shell/usernotif.rs, delivery UI springboard/src/shell/notify/",
+ "summary": "Local notifications are covered: categories with buttons, destructive and text-reply actions, requests with title, subtitle, body, thread, category, a time-interval delay and a Dock badge, removal and listing of delivered and pending requests, and the user's response (also queued for an app that is not running). Remote push (APNs, device tokens, background push, the notification service extension), calendar and location triggers, communication notifications, attachments, per-request sounds, notification settings queries and the foreground presentation delegate are not covered.",
+ "rea_evidence": "ev_153a89a120dc24e492871ed0c620f9e424d1d5c3b695af681112f5e45a5487f4",
+ "features": [
+  {
+   "feature": "Asking permission to use notifications",
+   "apple": "UNUserNotificationCenter requestAuthorization(options:) (asking-permission-to-use-notifications)",
+   "bifrost": "springboard/src/shell/usernotif.rs:225, springboard/src/bare/app_policy.rs:41; wired: springboard/src/shell/notify/permission.rs; springboard/src/shell/usernotif.rs (usernotif_hold, usernotif_ask_tick, usernotif_answer); springboard/sdk/src/usernotif_model.rs (AuthorizationStore, AuthorizationOptions, AuthorizationStatus, Settings)",
+   "status": "partial",
+   "note": "Permission is a static manifest entry (\"notifications\"); there is no runtime prompt, no authorization options (alert, sound, badge) and no authorization status query. Without the permission every add answers NotPermitted. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Added: the authorization state machine (notDetermined to authorized, denied or provisional; asked once, persisted as text) and the settings snapshot. Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending."
+  },
+  {
+   "feature": "UNUserNotificationCenter (add, remove, list)",
+   "apple": "UNUserNotificationCenter add, removeDeliveredNotifications, removePendingNotificationRequests, getDeliveredNotifications, getPendingNotificationRequests",
+   "bifrost": "springboard/sdk/src/usernotif.rs (add, remove_delivered, remove_pending, delivered, pending); springboard/src/shell/usernotif.rs (Registry); springboard/sdk/src/usernotif_model.rs (Sound, Attachment, CalendarTrigger, IntervalTrigger); springboard/src/shell/services/notification_schedule.rs; springboard/proto/src/rich.rs (NotifRequest); springboard/sdk/tests/parity_sdk-tests-04.rs (tests)",
+   "status": "partial",
+   "note": "Covers add with identifier replacement, removal by identifier or all, and the delivered and pending lists; the add, remove, query and trigger rules are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs.Pending is capped at 64 per app (MAX_PENDING); A request now carries a per-request sound (default, named, critical), a bounded userInfo map (16 entries, 512 characters per value), an interruption level and a relevance score over the wire and in the notification-schedule service (springboard/proto/src/rich.rs, springboard/sdk/src/usernotif.rs). Delivery does not yet play the sound or return userInfo in the response. Added: UNNotificationSound validation (named, defaultCritical, critical volume), attachment validation by type and size, DateComponents calendar matching with DST handling (nextTriggerDate), repeating interval minimum of 60 s (enforced in the notification-schedule service). Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending. Remote push and the service extension stay gaps."
+  },
+  {
+   "feature": "UNUserNotificationCenterDelegate (responses and foreground presentation)",
+   "apple": "userNotificationCenter(_:didReceive:withCompletionHandler:), userNotificationCenter(_:willPresent:withCompletionHandler:)",
+   "bifrost": "springboard/sdk/src/usernotif.rs (Event::Response, Response); springboard/sdk/src/usernotif_model.rs (PresentationOptions, foreground_presentation); springboard/sdk/tests/parity_sdk-tests-04.rs (tests)",
+   "status": "partial",
+   "note": "Taps and action buttons arrive as Event::Response, including text-reply text, and are queued when the app is not running. The Response fields, the default action and the foreground presentation rules are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs.No willPresent hook: the app cannot choose presentation options for a notification that arrives while it is in front. Added: the willPresent decision model (banner, list, sound, badge cut to the user's settings; no delegate shows nothing). Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending."
+  },
+  {
+   "feature": "Notification categories and actions",
+   "apple": "UNNotificationCategory, UNNotificationAction, UNTextInputNotificationAction",
+   "bifrost": "springboard/proto/src/rich.rs (NotifCategory, NotifAction, TextInput), springboard/sdk/src/usernotif.rs (set_categories), docs/bifrost-ui.md section 'User notifications'",
+   "status": "parity",
+   "note": "Buttons, destructive and foreground actions and text-input actions with a placeholder are covered (up to 16 categories of 10 actions). Action icons, category options (custom dismiss action, hidden preview) and the dismiss-action callback are not."
+  },
+  {
+   "feature": "UNNotificationRequest and UNMutableNotificationContent",
+   "apple": "UNNotificationRequest, UNMutableNotificationContent (title, subtitle, body, threadIdentifier, categoryIdentifier, badge, sound)",
+   "bifrost": "springboard/sdk/src/usernotif.rs (Request builder), springboard/proto/src/rich.rs:55 (NotifRequest); springboard/sdk/tests/parity_sdk-tests-04.rs (tests)",
+   "status": "partial",
+   "note": "Title, subtitle, body, thread, category, badge, sound, userInfo, interruption level and relevance score are built and tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs, which checks the request sent to the shell. No launch image. Delivery does not yet play the sound."
+  },
+  {
+   "feature": "Notification triggers",
+   "apple": "UNTimeIntervalNotificationTrigger, UNCalendarNotificationTrigger, UNLocationNotificationTrigger, UNPushNotificationTrigger",
+   "bifrost": "springboard/sdk/src/notification_schedule.rs (Trigger::Interval and Trigger::Calendar, Trigger::next_trigger_date, Trigger::validate, Schedule::checked_interval, Schedule::checked_calendar); springboard/sdk/src/usernotif_model.rs (CalendarTrigger, DateComponents, IntervalTrigger)",
+   "status": "partial",
+   "note": "Host tests a_repeating_interval_under_a_minute_is_refused, a_daily_calendar_trigger_is_the_next_local_time_after_now and a_weekday_calendar_trigger_skips_other_days (sdk/tests/parity_sdk-tests-01e.rs). usernotif_model::CalendarTrigger matches year, month, day, weekday, hour, minute and second, follows the zone's offset at the fire time, and is tested headless in sdk/tests/parity_sdk-complete-44.rs (leap days, a year-pinned date, a weekday, an impossible component, a zone offset). Gap: the notification-schedule service's wire form still carries only hour, minute and weekday, so month, day and year triggers are not sent to the shell; a next-trigger query for a request already pending in the shell is not offered; location and push triggers need hardware or a service that does not exist here."
+  },
+  {
+   "feature": "Notification attachments and rich media",
+   "apple": "UNNotificationAttachment, UNNotificationAttachment options",
+   "bifrost": "springboard/ui/src/notifattach.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attachment API. Notification cards show text only. The shell has image drawing (springboard/render/src/imgdec, springboard/src/shell/notify/list.rs) that could carry an image thumbnail."
+  },
+  {
+   "feature": "Notification sounds",
+   "apple": "UNNotificationSound, UNNotificationSoundName",
+   "bifrost": "springboard/sdk/src/usernotif_model.rs (Sound, Sound::named, Sound::critical_with_volume, Sound::allowed_by)",
+   "status": "partial",
+   "note": "The SDK model holds the default, critical, critical-with-volume and named sounds and checks each against the grant (a critical sound needs the critical-alert grant, others the sound setting). Host tests sound_names_are_capped_at_255_bytes, critical_sounds_need_the_critical_alert_grant and critical_volume_must_be_between_zero_and_one (sdk/tests/parity_sdk-tests-01e.rs). Delivery does not yet play a per-request sound and the sound is not in the shell wire protocol; the only sound control in the shell is the per-app Sounds switch in Settings (springboard/src/shell/notify_page.rs, not cited for this evidence)."
+  },
+  {
+   "feature": "Notification display (banners, lock screen, Notification Center)",
+   "apple": "System presentation of local and remote notifications (Human Interface Guidelines > Notifications)",
+   "bifrost": "springboard/src/shell/notify/mod.rs (banner, lock screen stack, Notification Center), springboard/src/shell/notify/banner.rs, springboard/src/shell/notify/store.rs; wired: springboard/src/shell/notify/banner.rs (Banner::persistent); springboard/src/shell/notify/store.rs ([asked] section)",
+   "status": "parity",
+   "note": "The shell draws banners that slide down, stacks on the lock screen and in Notification Center, swipe to clear, and tap to open after unlock. Passcode hides the text on the lock screen. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Per-app notification settings and Focus",
+   "apple": "UNNotificationSettings, Focus status (INFocusStatusCenter)",
+   "bifrost": "springboard/sdk/src/usernotif.rs (settings), springboard/src/shell/usernotif.rs (settings_for), springboard/proto/src/rich.rs (NotifSettings); springboard/sdk/tests/parity_sdk-tests-04.rs (tests); wired: springboard/src/shell/notify_page.rs (ALERT_STYLES, AppNotif::style, AppField::Style); springboard/src/shell/notify/mod.rs (notify_id, app_notif)",
+   "status": "partial",
+   "note": "Wave 4 (w4-user-notifications, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The user side is complete: per-app lock screen, Notification Center, banner, badges, previews and grouping, plus Do Not Disturb and per-app mute. The authorization store, the settings flags and the settings query are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs. Apps read their settings with usernotif::settings, which carries a Focus flag; the shell side of that flag is not verified on Midget. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Dock badge from a notification",
+   "apple": "UNMutableNotificationContent badge; NSDockTile badgeLabel",
+   "bifrost": "springboard/sdk/src/usernotif.rs (Request::badge), springboard/sdk/src/runtime.rs:313 (Ctx::set_badge)",
+   "status": "parity",
+   "note": "A badge number on a request and a short label on the dock icon are both available."
+  },
+  {
+   "feature": "Remote notifications and APNs registration",
+   "apple": "APS Environment entitlement, registerForRemoteNotifications, device token, Setting up a remote notification server",
+   "bifrost": "springboard/ui/src/push_registration.rs (Registry, valid_token)",
+   "status": "partial",
+   "note": "Device token checks, per-app registration with topic and expiry, and push routing with a payload limit are modelled and tested in push_registration and springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no push transport, no token issuance by a service and no delivery to apps."
+  },
+  {
+   "feature": "Background push and notification service extension",
+   "apple": "UNNotificationServiceExtension, background push (content-available), Modifying content in newly delivered notifications",
+   "bifrost": "springboard/ui/src/notifservice.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-user-notifications, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on remote push, which is missing. No app extension point runs between delivery and display."
+  },
+  {
+   "feature": "Communication notifications",
+   "apple": "Implementing communication notifications, UNNotificationContentProviding, UNNotificationAttributedMessageContext",
+   "bifrost": "springboard/sdk/src/messaging.rs (Notice",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sender-based notification styling and no intent-backed message content. App Intents exist but are not wired into notification content."
+  },
+  {
+   "feature": "Web push notifications",
+   "apple": "Sending web push notifications in web apps and browsers",
+   "bifrost": "springboard/ui/src/push_registration.rs (Subscription)",
+   "status": "partial",
+   "note": "A web push subscription (https origin and endpoint, both keys) is validated by push_registration::Subscription and tested in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no Push API or service worker in the Browser app (the webview is Servo, see docs/bifrost-ui.md) and no sender that encrypts payloads."
+  },
+  {
+   "feature": "APS entitlements and push testing tools",
+   "apple": "APS Environment (macOS) entitlement, Sending push notifications using command-line tools, Push Notification Console",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "Entitlement and Apple-hosted testing tools belong to APNs. Nothing to match until remote push exists."
+  }
+ ],
+ "gaps": [
+  "Remote push: no device token, no push registration, no background push wake-up (APNs or a BifrOSt equivalent).",
+  "Notification service extension: no hook to modify a notification before it is shown.",
+  "Calendar and location triggers: only a time-interval delay exists; no repeating or region-based notifications.",
+  "Attachments and per-request sounds: notification cards are text only and the sound is a per-app switch.",
+  "Runtime permission flow and settings query: permission is a manifest flag; there is no authorization status, no request options and no UNNotificationSettings equivalent.",
+  "Foreground presentation delegate (willPresent): an app cannot choose how a notification shows while it is in front.",
+  "Communication notifications and web push: no sender-based message notification and no Push API for the browser."
+ ]
 }

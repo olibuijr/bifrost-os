@@ -143,7 +143,8 @@ impl WebSession {
         if self.state != State::Running {
             return Err(SessionError::NotRunning);
         }
-        if scheme_of(redirect) != Some(self.callback_scheme.as_str()) {
+        // Schemes are case-insensitive (RFC 3986), so "MyApp://" completes a session that was given "myapp".
+        if !scheme_of(redirect).is_some_and(|scheme| scheme.eq_ignore_ascii_case(&self.callback_scheme)) {
             return Err(SessionError::CallbackMismatch);
         }
         self.state = State::Finished(redirect.to_string());

@@ -405,7 +405,7 @@ mod tests {
     fn a_whole_disk_request_on_a_partition_is_refused_and_the_reverse() {
         let erase_part = DiskRequest::EraseDisk { device: "sdb1".into(), fs: Personality::Ext4, label: String::new(), scheme: Scheme::Gpt };
         assert_eq!(plan(&erase_part, &snapshot(), ""), Err(Refusal::NotWhole("sdb1".into())));
-        let format_disk = DiskRequest::EraseVolume { device: "sdb".into(), fs: Personality::Ext4, label: String::new(), scheme: Scheme::Gpt };
+        let format_disk = DiskRequest::EraseVolume { device: "sdb".into(), fs: Personality::Ext4, label: String::new() };
         assert_eq!(plan(&format_disk, &snapshot(), ""), Err(Refusal::NotPartition("sdb".into())));
     }
 

@@ -10,9 +10,9 @@
     {
       "feature": "Browsing for nearby services (MCNearbyServiceBrowser)",
       "apple": "MCNearbyServiceBrowser, MCNearbyServiceBrowserDelegate",
-      "bifrost": "springboard/src/net/share.rs (Service::start, Peers::heard, Peers::live)",
-      "status": "os",
-      "note": "Discovery runs in the shell over a fixed beacon group. Apps cannot browse by their own service type; there is no delegate for found or lost peers."
+      "bifrost": "springboard/sdk/src/nearby_service.rs (ServiceType); springboard/sdk/src/nearby_browsing.rs (NearbyBrowser, Phase)",
+      "status": "partial",
+      "note": "The service type rules and the browse state are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: there is no found or lost peer delegate, and the shell's beacon does not yet browse an app's service type."
     },
     {
       "feature": "Advertising a service (MCNearbyServiceAdvertiser)",
@@ -66,16 +66,16 @@
     {
       "feature": "Background behaviour (stop and resume on background)",
       "apple": "framework stops advertising and browsing when the app is backgrounded",
-      "bifrost": "springboard/src/shell/share/glue.rs (poll_share)",
-      "status": "os",
-      "note": "The shell owns the beacon and it runs while the desktop is up. Apps have no lifecycle hook for it."
+      "bifrost": "springboard/sdk/src/nearby_browsing.rs (NearbyBrowser::did_enter_background, will_enter_foreground)",
+      "status": "partial",
+      "note": "The browse is suspended in the background and resumes in the foreground, tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: the shell's beacon does not take this state yet, so it keeps running while the desktop is up."
     },
     {
       "feature": "Error reporting (MCError, MCErrorDomain)",
       "apple": "MCError, MCErrorDomain, MCError.Code",
-      "bifrost": "springboard/src/net/share.rs (Event::Failed(String))",
+      "bifrost": "springboard/src/net/share.rs (ShareError, Event::Failed(ShareError)); springboard/tests/parity_sdk-complete-18.rs",
       "status": "partial",
-      "note": "Failures reach the shell as a text string. There is no typed error domain or code list."
+      "note": "Every share failure is a typed ShareError with a fixed domain (net.share), stable codes, an io kind and a display message, tested headless. Gap: apps do not receive these errors yet because the SDK has no share API, and the wire carries no code."
     },
     {
       "feature": "Session limits (kMCSessionMaximumNumberOfPeers)",

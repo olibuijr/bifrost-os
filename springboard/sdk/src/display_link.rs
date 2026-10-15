@@ -29,6 +29,55 @@ pub struct TimeStamp {
     pub video_refresh_period: i64,
 }
 
+impl TimeStamp {
+    /// The output time of the refresh as a [`Time`] (`CVTimeStamp.videoTime`).
+    pub fn time(&self) -> Time {
+        Time { value: self.video_time, time_scale: self.video_time_scale, flags: 0 }
+    }
+
+    /// The refresh period of the stamp as a [`Time`] (`CVTimeStamp.videoRefreshPeriod`).
+    pub fn refresh_time(&self) -> Time {
+        Time { value: self.video_refresh_period, time_scale: self.video_time_scale, flags: 0 }
+    }
+}
+
+/// Flag of a [`Time`] with no value (`kCVTimeIsIndefinite`).
+pub const TIME_IS_INDEFINITE: u32 = 1;
+
+/// A time as a count of units (`CVTime`): `value / time_scale` seconds, with flags. Times on the display link use
+/// [`VIDEO_TIME_SCALE`], so their values are nanoseconds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Time {
+    pub value: i64,
+    pub time_scale: i32,
+    pub flags: u32,
+}
+
+impl Time {
+    /// A time of `nanos` nanoseconds, in [`VIDEO_TIME_SCALE`] units. A value past `i64::MAX` is clamped.
+    pub fn from_nanos(nanos: u64) -> Time {
+        Time { value: i64::try_from(nanos).unwrap_or(i64::MAX), time_scale: VIDEO_TIME_SCALE, flags: 0 }
+    }
+
+    /// An indefinite time: no value, flagged so callers do not read it as zero seconds.
+    pub fn indefinite() -> Time {
+        Time { value: 0, time_scale: VIDEO_TIME_SCALE, flags: TIME_IS_INDEFINITE }
+    }
+
+    /// True when the time carries no value.
+    pub fn is_indefinite(&self) -> bool {
+        self.flags & TIME_IS_INDEFINITE != 0
+    }
+
+    /// The time in seconds, or None when the time is indefinite or its scale is not positive.
+    pub fn seconds(&self) -> Option<f64> {
+        if self.is_indefinite() || self.time_scale <= 0 {
+            return None;
+        }
+        Some(self.value as f64 / f64::from(self.time_scale))
+    }
+}
+
 /// A display link for one display at a fixed refresh rate (`CVDisplayLink`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DisplayLink {
@@ -57,6 +106,11 @@ impl DisplayLink {
     /// The refresh period in nanoseconds (`CVDisplayLinkGetActualOutputVideoRefreshPeriod`).
     pub fn refresh_period(&self) -> u64 {
         self.period_ns
+    }
+
+    /// The refresh period as a [`Time`] (`CVDisplayLinkGetActualOutputVideoRefreshPeriod` returns a `CVTime`).
+    pub fn refresh_time(&self) -> Time {
+        Time::from_nanos(self.period_ns)
     }
 
     /// True between `start` and `stop`.

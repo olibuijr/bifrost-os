@@ -240,40 +240,75 @@ pub const REACTIONS: [(&str, &str); 6] = [
     ("Question", "\u{2753}"),
 ];
 
-/// The emoji the picker offers with the words that find them, in rows of [`EMOJI_COLUMNS`].
-pub const EMOJI_CATALOG: [(&str, &str); 64] = [
-    ("\u{1F600}", "grinning smile happy"), ("\u{1F603}", "smile happy joy"),
-    ("\u{1F604}", "laugh happy"), ("\u{1F601}", "beam grin"),
-    ("\u{1F606}", "laugh squint"), ("\u{1F605}", "sweat relief"),
-    ("\u{1F602}", "joy laugh tears lol"), ("\u{1F642}", "slight smile"),
-    ("\u{1F609}", "wink"), ("\u{1F60A}", "blush smile"),
-    ("\u{1F60D}", "love heart eyes"), ("\u{1F618}", "kiss"),
-    ("\u{1F61C}", "tongue wink silly"), ("\u{1F914}", "think thinking hmm"),
-    ("\u{1F610}", "neutral meh"), ("\u{1F62E}", "surprised wow"),
-    ("\u{1F622}", "cry sad tear"), ("\u{1F62D}", "sob cry"),
-    ("\u{1F620}", "angry mad"), ("\u{1F631}", "scream shock fear"),
-    ("\u{1F634}", "sleep tired zzz"), ("\u{1F60E}", "cool sunglasses"),
-    ("\u{1F973}", "party celebrate"), ("\u{1F64F}", "pray thanks please"),
-    ("\u{1F44D}", "thumbs up like yes ok"), ("\u{1F44E}", "thumbs down dislike no"),
-    ("\u{1F44F}", "clap applause"), ("\u{1F64C}", "raised hands hooray"),
-    ("\u{1F44B}", "wave hello bye"), ("\u{1F4AA}", "strong muscle flex"),
-    ("\u{2764}\u{FE0F}", "heart love red"), ("\u{1F494}", "broken heart"),
-    ("\u{1F525}", "fire hot"), ("\u{2728}", "sparkles shine"),
-    ("\u{1F389}", "tada party celebrate"), ("\u{1F381}", "gift present"),
-    ("\u{2705}", "check done yes"), ("\u{274C}", "cross no wrong"),
-    ("\u{2753}", "question"), ("\u{203C}\u{FE0F}", "exclamation emphasis"),
-    ("\u{1F607}", "angel halo"), ("\u{1F923}", "rofl laugh floor"),
-    ("\u{1F60B}", "yum tasty"), ("\u{1F917}", "hug"),
-    ("\u{1F644}", "eye roll"), ("\u{1F62C}", "grimace awkward"),
-    ("\u{1F633}", "flushed embarrassed"), ("\u{1F97A}", "pleading puppy"),
-    ("\u{1F621}", "rage furious"), ("\u{1F92F}", "mind blown"),
-    ("\u{1F91D}", "handshake deal"), ("\u{1F440}", "eyes look"),
-    ("\u{1F648}", "see no evil monkey"), ("\u{1F4AF}", "hundred perfect"),
-    ("\u{2615}", "coffee tea"), ("\u{1F355}", "pizza food"),
-    ("\u{1F382}", "cake birthday"), ("\u{1F31E}", "sun sunny"),
-    ("\u{1F308}", "rainbow"), ("\u{2B50}", "star"),
-    ("\u{1F436}", "dog puppy"), ("\u{1F431}", "cat kitten"),
-    ("\u{1F680}", "rocket launch ship"), ("\u{1F4A1}", "idea light bulb"),
+/// The groups of the picker's strip, after All. Each catalogue emoji belongs to exactly one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EmojiGroup {
+    Faces,
+    Hands,
+    Nature,
+    Food,
+    Things,
+    Signs,
+}
+
+impl EmojiGroup {
+    /// The groups in the order of the strip.
+    pub const ALL: [EmojiGroup; 6] = [
+        EmojiGroup::Faces,
+        EmojiGroup::Hands,
+        EmojiGroup::Nature,
+        EmojiGroup::Food,
+        EmojiGroup::Things,
+        EmojiGroup::Signs,
+    ];
+
+    /// The label of the group's strip button.
+    pub fn label(self) -> &'static str {
+        match self {
+            EmojiGroup::Faces => "Faces",
+            EmojiGroup::Hands => "Hands",
+            EmojiGroup::Nature => "Nature",
+            EmojiGroup::Food => "Food",
+            EmojiGroup::Things => "Things",
+            EmojiGroup::Signs => "Signs",
+        }
+    }
+}
+
+/// The emoji the picker offers with its group and the words that find them, in rows of [`EMOJI_COLUMNS`].
+pub const EMOJI_CATALOG: [(EmojiGroup, &str, &str); 64] = [
+    (EmojiGroup::Faces, "\u{1F600}", "grinning smile happy"), (EmojiGroup::Faces, "\u{1F603}", "smile happy joy"),
+    (EmojiGroup::Faces, "\u{1F604}", "laugh happy"), (EmojiGroup::Faces, "\u{1F601}", "beam grin"),
+    (EmojiGroup::Faces, "\u{1F606}", "laugh squint"), (EmojiGroup::Faces, "\u{1F605}", "sweat relief"),
+    (EmojiGroup::Faces, "\u{1F602}", "joy laugh tears lol"), (EmojiGroup::Faces, "\u{1F642}", "slight smile"),
+    (EmojiGroup::Faces, "\u{1F609}", "wink"), (EmojiGroup::Faces, "\u{1F60A}", "blush smile"),
+    (EmojiGroup::Faces, "\u{1F60D}", "love heart eyes"), (EmojiGroup::Faces, "\u{1F618}", "kiss"),
+    (EmojiGroup::Faces, "\u{1F61C}", "tongue wink silly"), (EmojiGroup::Faces, "\u{1F914}", "think thinking hmm"),
+    (EmojiGroup::Faces, "\u{1F610}", "neutral meh"), (EmojiGroup::Faces, "\u{1F62E}", "surprised wow"),
+    (EmojiGroup::Faces, "\u{1F622}", "cry sad tear"), (EmojiGroup::Faces, "\u{1F62D}", "sob cry"),
+    (EmojiGroup::Faces, "\u{1F620}", "angry mad"), (EmojiGroup::Faces, "\u{1F631}", "scream shock fear"),
+    (EmojiGroup::Faces, "\u{1F634}", "sleep tired zzz"), (EmojiGroup::Faces, "\u{1F60E}", "cool sunglasses"),
+    (EmojiGroup::Faces, "\u{1F973}", "party celebrate"), (EmojiGroup::Hands, "\u{1F64F}", "pray thanks please"),
+    (EmojiGroup::Hands, "\u{1F44D}", "thumbs up like yes ok"), (EmojiGroup::Hands, "\u{1F44E}", "thumbs down dislike no"),
+    (EmojiGroup::Hands, "\u{1F44F}", "clap applause"), (EmojiGroup::Hands, "\u{1F64C}", "raised hands hooray"),
+    (EmojiGroup::Hands, "\u{1F44B}", "wave hello bye"), (EmojiGroup::Hands, "\u{1F4AA}", "strong muscle flex"),
+    (EmojiGroup::Signs, "\u{2764}\u{FE0F}", "heart love red"), (EmojiGroup::Signs, "\u{1F494}", "broken heart"),
+    (EmojiGroup::Nature, "\u{1F525}", "fire hot"), (EmojiGroup::Things, "\u{2728}", "sparkles shine"),
+    (EmojiGroup::Things, "\u{1F389}", "tada party celebrate"), (EmojiGroup::Things, "\u{1F381}", "gift present"),
+    (EmojiGroup::Signs, "\u{2705}", "check done yes"), (EmojiGroup::Signs, "\u{274C}", "cross no wrong"),
+    (EmojiGroup::Signs, "\u{2753}", "question"), (EmojiGroup::Signs, "\u{203C}\u{FE0F}", "exclamation emphasis"),
+    (EmojiGroup::Faces, "\u{1F607}", "angel halo"), (EmojiGroup::Faces, "\u{1F923}", "rofl laugh floor"),
+    (EmojiGroup::Faces, "\u{1F60B}", "yum tasty"), (EmojiGroup::Faces, "\u{1F917}", "hug"),
+    (EmojiGroup::Faces, "\u{1F644}", "eye roll"), (EmojiGroup::Faces, "\u{1F62C}", "grimace awkward"),
+    (EmojiGroup::Faces, "\u{1F633}", "flushed embarrassed"), (EmojiGroup::Faces, "\u{1F97A}", "pleading puppy"),
+    (EmojiGroup::Faces, "\u{1F621}", "rage furious"), (EmojiGroup::Faces, "\u{1F92F}", "mind blown"),
+    (EmojiGroup::Hands, "\u{1F91D}", "handshake deal"), (EmojiGroup::Things, "\u{1F440}", "eyes look"),
+    (EmojiGroup::Nature, "\u{1F648}", "see no evil monkey"), (EmojiGroup::Signs, "\u{1F4AF}", "hundred perfect"),
+    (EmojiGroup::Food, "\u{2615}", "coffee tea"), (EmojiGroup::Food, "\u{1F355}", "pizza food"),
+    (EmojiGroup::Food, "\u{1F382}", "cake birthday"), (EmojiGroup::Nature, "\u{1F31E}", "sun sunny"),
+    (EmojiGroup::Nature, "\u{1F308}", "rainbow"), (EmojiGroup::Nature, "\u{2B50}", "star"),
+    (EmojiGroup::Nature, "\u{1F436}", "dog puppy"), (EmojiGroup::Nature, "\u{1F431}", "cat kitten"),
+    (EmojiGroup::Things, "\u{1F680}", "rocket launch ship"), (EmojiGroup::Things, "\u{1F4A1}", "idea light bulb"),
 ];
 /// How many emoji a row of the picker holds.
 pub const EMOJI_COLUMNS: usize = 8;
@@ -287,9 +322,14 @@ pub fn emoji_matches(query: &str) -> Vec<&'static str> {
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     EMOJI_CATALOG
         .iter()
-        .filter(|(emoji, keywords)| words.iter().all(|w| keywords.contains(w.as_str()) || emoji.contains(w.as_str())))
-        .map(|(emoji, _)| *emoji)
+        .filter(|(_, emoji, keywords)| words.iter().all(|w| keywords.contains(w.as_str()) || emoji.contains(w.as_str())))
+        .map(|(_, emoji, _)| *emoji)
         .collect()
+}
+
+/// The catalogue emoji of `group` in catalogue order, or every catalogue emoji for `None` (All).
+pub fn emoji_in_group(group: Option<EmojiGroup>) -> Vec<&'static str> {
+    EMOJI_CATALOG.iter().filter(|(g, _, _)| group.map_or(true, |wanted| wanted == *g)).map(|(_, emoji, _)| *emoji).collect()
 }
 
 /// The per-conversation choices the user makes: pinned, alerts hidden, and marked as unread. Kept as room ids and saved
@@ -484,9 +524,37 @@ pub struct Messages {
     pub overlay: Overlay,
     /// What is typed in the emoji picker's search field.
     pub emoji_query: String,
+    /// The group the emoji picker shows; None is All.
+    pub emoji_group: Option<EmojiGroup>,
+    /// The message a jump to a quoted line has just brought on screen. Its bubble is outlined until the next press.
+    pub highlight: Option<String>,
 }
 
 impl Messages {
+    /// Outlines the message `id` of the room on screen, after a jump to it. False when the room has no such message.
+    pub fn highlight_message(&mut self, id: &str) -> bool {
+        if !self.selected_room().is_some_and(|r| r.timeline.iter().any(|m| m.id == id)) {
+            return false;
+        }
+        self.highlight = Some(id.to_string());
+        true
+    }
+
+    /// True while the message `id` is the outlined one.
+    pub fn is_highlighted(&self, id: &str) -> bool {
+        self.highlight.as_deref() == Some(id)
+    }
+
+    /// Takes the outline off, as the next press on the window does.
+    pub fn clear_highlight(&mut self) {
+        self.highlight = None;
+    }
+
+    /// True when a file dropped on the window goes to the conversation on screen: the account is signed in and a
+    /// conversation is open.
+    pub fn accepts_drop(&self) -> bool {
+        self.signed_in() && self.selected.is_some()
+    }
     pub fn signed_in(&self) -> bool {
         !self.user_id.is_empty()
     }
@@ -583,16 +651,16 @@ impl Messages {
         rooms
     }
 
-    /// The emoji the open picker shows: with no search, the recent ones first and then the rest of the catalogue; with
-    /// a search, the emoji it finds.
+    /// The emoji the open picker shows. With a search, the emoji it finds in any group. Without one, the emoji of the
+    /// chosen group (All when none is chosen), with the recent ones of that group first.
     pub fn emoji_choices(&self) -> Vec<String> {
-        let found = emoji_matches(&self.emoji_query);
         if !self.emoji_query.trim().is_empty() {
-            return found.into_iter().map(str::to_string).collect();
+            return emoji_matches(&self.emoji_query).into_iter().map(str::to_string).collect();
         }
+        let shown = emoji_in_group(self.emoji_group);
         let recent: Vec<&str> =
-            self.prefs.recent_emoji.iter().map(String::as_str).filter(|e| found.iter().any(|f| *f == *e)).collect();
-        recent.iter().copied().chain(found.iter().copied().filter(|e| !recent.iter().any(|r| r == e))).map(str::to_string).collect()
+            self.prefs.recent_emoji.iter().map(String::as_str).filter(|e| shown.iter().any(|s| *s == *e)).collect();
+        recent.iter().copied().chain(shown.iter().copied().filter(|e| !recent.iter().any(|r| r == e))).map(str::to_string).collect()
     }
 
     /// The lines of a message-info panel for the message `id` of the room on screen: its versions, oldest first (the
@@ -630,9 +698,10 @@ impl Messages {
         lines
     }
 
-    /// Opens the picker with an empty search, for a message (a reaction) or for the composer.
+    /// Opens the picker with an empty search and All selected, for a message (a reaction) or for the composer.
     pub fn open_emoji(&mut self, message: Option<String>) {
         self.emoji_query.clear();
+        self.emoji_group = None;
         self.overlay = Overlay::Emoji(message);
     }
 
@@ -758,6 +827,7 @@ impl Messages {
     pub fn select(&mut self, id: &str) -> Option<(String, String)> {
         if self.selected.as_deref() != Some(id) {
             self.compose = None;
+            self.highlight = None;
         }
         self.selected = Some(id.to_string());
         self.prefs.unread_marks.retain(|x| x != id);
@@ -1561,7 +1631,7 @@ mod tests {
     fn the_emoji_picker_fills_whole_rows() {
         assert_eq!(EMOJI_CATALOG.len() % EMOJI_COLUMNS, 0);
         assert_eq!(REACTIONS.len(), 6);
-        let mut seen: Vec<&str> = EMOJI_CATALOG.iter().map(|(e, _)| *e).collect();
+        let mut seen: Vec<&str> = EMOJI_CATALOG.iter().map(|(_, e, _)| *e).collect();
         seen.sort_unstable();
         seen.dedup();
         assert_eq!(seen.len(), EMOJI_CATALOG.len(), "no emoji twice");
@@ -1598,10 +1668,10 @@ mod tests {
     #[test]
     fn only_the_latest_emoji_are_remembered() {
         let mut m = signed_in();
-        for (emoji, _) in EMOJI_CATALOG.iter().take(RECENT_EMOJI_MAX + 3) {
+        for (_, emoji, _) in EMOJI_CATALOG.iter().take(RECENT_EMOJI_MAX + 3) {
             m.note_emoji_used(emoji);
         }
         assert_eq!(m.prefs.recent_emoji.len(), RECENT_EMOJI_MAX);
-        assert_eq!(m.prefs.recent_emoji[0], EMOJI_CATALOG[RECENT_EMOJI_MAX + 2].0);
+        assert_eq!(m.prefs.recent_emoji[0], EMOJI_CATALOG[RECENT_EMOJI_MAX + 2].1);
     }
 }

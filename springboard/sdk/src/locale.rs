@@ -7,10 +7,19 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 
+use crate::calendar_system::CalendarIdentifier;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lang {
     En,
     Is,
+}
+
+/// `Locale.MeasurementSystem`: metric everywhere except the US, which uses US customary units.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MeasurementSystem {
+    Metric,
+    UsCustomary,
 }
 
 /// `Locale`: a language plus an optional region (`en_US`, `is_IS`), and the Settings overrides for the
@@ -97,6 +106,28 @@ impl Locale {
     /// `usesMetricSystem`: false only for the US.
     pub fn uses_metric_system(&self) -> bool {
         self.region.as_deref() != Some("US")
+    }
+
+    /// `measurementSystem`, from the region.
+    pub fn measurement_system(&self) -> MeasurementSystem {
+        if self.uses_metric_system() { MeasurementSystem::Metric } else { MeasurementSystem::UsCustomary }
+    }
+
+    /// The region code (`US`, `IS`), or `None` when the locale has no region.
+    pub fn region_code(&self) -> Option<&str> {
+        self.region.as_deref()
+    }
+
+    /// `calendar`: the calendar the language expects. Thai uses the Buddhist era, Japanese the Japanese era, Arabic the
+    /// tabular Islamic calendar and Hebrew the Hebrew calendar; every other language uses the Gregorian calendar.
+    pub fn calendar_identifier(&self) -> CalendarIdentifier {
+        match self.language.as_str() {
+            "th" => CalendarIdentifier::Buddhist,
+            "ja" => CalendarIdentifier::Japanese,
+            "ar" => CalendarIdentifier::Islamic,
+            "he" => CalendarIdentifier::Hebrew,
+            _ => CalendarIdentifier::Gregorian,
+        }
     }
 
     /// The currency code: the Settings choice, else the region's default.
@@ -196,17 +227,27 @@ impl NumberFormatter {
             NumberStyle::Decimal => format!("{sign}{body}"),
             NumberStyle::Percent => if is { format!("{sign}{body}\u{a0}%") } else { format!("{sign}{body}%") },
             NumberStyle::Currency => {
-                let sym = match code.as_str() {
-                    "USD" => "$",
-                    "EUR" => "\u{20ac}",
-                    "GBP" => "\u{a3}",
-                    "ISK" => "kr.",
-                    "JPY" => "\u{a5}",
-                    other => other,
-                };
+                let sym = currency_symbol(&code);
                 if is { format!("{sign}{body}\u{a0}{sym}") } else { format!("{sign}{sym}{body}") }
             }
         }
+    }
+}
+
+/// The symbol a currency is written with. Codes without a symbol in this table are written as their code.
+pub fn currency_symbol(code: &str) -> &str {
+    match code {
+        "USD" => "$",
+        "EUR" => "\u{20ac}",
+        "GBP" => "\u{a3}",
+        "ISK" => "kr.",
+        "JPY" => "\u{a5}",
+        "CAD" => "CA$",
+        "AUD" => "A$",
+        "CNY" => "CN\u{a5}",
+        "INR" => "\u{20b9}",
+        "KRW" => "\u{20a9}",
+        other => other,
     }
 }
 

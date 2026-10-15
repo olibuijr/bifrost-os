@@ -45,9 +45,9 @@
     {
       "feature": "Shared file lists (recent items, favourites)",
       "apple": "LSSharedFileList, LSSharedFileListItem",
-      "bifrost": "springboard/ui/src/shared_list.rs; wired: springboard/src/shell/recent_items.rs; springboard/src/shell/desktop_bar.rs (Menu::System: Recent Items group, Clear Menu)",
+      "bifrost": "springboard/ui/src/shared_list.rs (SharedList, Item, in_recency_order, from_recency_order); springboard/ui/src/shared_list_store.rs (encode, decode: the text form for a preference file)",
       "status": "partial",
-      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Deprecated by Apple in favour of other APIs; no counterpart. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Recents and favourites keep their order and favourites are never trimmed, and the list round-trips through its text form, tested headless in ui/tests/parity_sdk-complete-33.rs. Host tests a_used_document_moves_to_the_front_with_its_new_title, favourites_are_kept_when_recents_are_trimmed_and_listed_first and clearing_recents_keeps_the_favourites (ui/tests/parity_sdk-tests-01e.rs). The recents menu (springboard/src/shell/recent_items.rs, springboard/src/shell/desktop_bar.rs) is shell wiring and not part of this evidence. Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Deprecated by Apple in favour of other APIs; no counterpart. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Quarantine properties",
@@ -73,9 +73,9 @@
     {
       "feature": "Apple Events (inter-process messages with replies)",
       "apple": "AESendMessage, AEInstallEventHandler, AECreateAppleEvent, AEProcessMessage",
-      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies)",
+      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies); springboard/sdk/src/app_events.rs; springboard/sdk/src/event_descriptor.rs (Descriptor::coerce, ObjectSpecifier::resolve)",
       "status": "partial",
-      "note": "springboard/sdk/src/app_events.rs: typed AppEvent (class, id, record) sent over the control socket with reply descriptor and timeout, plus AppleEventHandlers. No AEDesc coercion or object specifiers. Host unit tests only, not yet checked on Midget."
+      "note": "springboard/sdk/src/app_events.rs sends a typed AppEvent (class, id, record) over the control socket with reply descriptor and timeout, plus AppleEventHandlers. event_descriptor.rs adds typed descriptors with coercion (text, integer, real, boolean, list) and object specifiers (index, name, identifier, first, last, nested in a container), tested headless in springboard/sdk/tests/parity_sdk-complete-44.rs. Gap: no wire encoding of descriptors into the control socket and no Midget check."
     },
     {
       "feature": "Search index of documents (Search Kit)",
@@ -115,16 +115,16 @@
     {
       "feature": "Power and sleep",
       "apple": "IOPM and NSProcessInfo activity APIs; sleep and wake notifications through NSWorkspace",
-      "bifrost": "springboard/src/bare/sleep.rs (suspend after screen off, logind); springboard/sdk/src/process_info.rs (beginActivity, endActivity, thermal state, low power mode); springboard/sdk/src/workspace.rs (sleep and wake events)",
-      "status": "os",
-      "note": "Suspend is decided by the shell; apps get activities and sleep and wake events but cannot request a sleep block."
+      "bifrost": "springboard/src/bare/sleep.rs (note_app_activity, forget_app, app_sleep_blockers; suspend after screen off, logind); springboard/src/shell/apphost.rs (ToShell::Activity, Drop); springboard/sdk/src/process_info.rs (beginActivity, endActivity, thermal state, low power mode); springboard/sdk/src/workspace.rs (sleep and wake events)",
+      "status": "partial",
+      "note": "An app's beginActivity with idleSystemSleepDisabled blocks the shell's system sleep, and the activity union is tested headless in sdk/tests/parity_sdk-rest-11.rs and springboard/tests/parity_sdk-rest-11.rs. Gap: the block is a shell-side registry, not a logind inhibitor, so other programs do not see it, and a real refused suspend needs the lab machine."
     },
     {
       "feature": "Icons for files and content types",
       "apple": "NSWorkspace.icon(forFile:), Icon Storage article",
-      "bifrost": "springboard/sdk/src/workspace.rs (icon_for_content_type, icon_for_file); springboard/sdk/src/widgets.rs (folder_icon; docs/bifrost-ui.md line 69)",
+      "bifrost": "springboard/sdk/src/workspace.rs (icon_for_content_type, icon_for_file); springboard/sdk/src/widgets.rs (folder_icon)",
       "status": "partial",
-      "note": "Procedural icons only; no bitmap icon sets or custom folder icons."
+      "note": "Glyph names for content types and file names, and the procedural folder icon drawn offscreen and checked pixel by pixel, are tested in springboard/sdk/tests/parity_sdk-tests-16.rs. Gap: no bitmap icon sets or custom folder icons."
     },
     {
       "feature": "Carbon Core (legacy managers)",

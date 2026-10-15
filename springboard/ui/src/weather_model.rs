@@ -181,23 +181,45 @@ impl Wind {
 pub enum WeatherError {
     /// The user or the system refused access to weather data.
     PermissionDenied,
-    /// Anything else, such as a failed request or an unreadable answer.
+    /// The forecast service could not be reached: no connection, a refused connection, or a timeout.
+    Unreachable,
+    /// The service answered, but the answer could not be read as weather data.
+    BadAnswer,
+    /// Anything else.
     Unknown,
 }
 
 impl WeatherError {
-    /// The error for a failed read: a permission refusal stays `PermissionDenied`, every other kind is `Unknown`.
+    /// The error for a failed read. A refused permission stays `PermissionDenied`, a network failure is `Unreachable`,
+    /// an unreadable answer is `BadAnswer`, and every other kind is `Unknown`.
     pub fn from_io(err: &io::Error) -> WeatherError {
         match err.kind() {
             io::ErrorKind::PermissionDenied => WeatherError::PermissionDenied,
+            io::ErrorKind::NotConnected
+            | io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::TimedOut
+            | io::ErrorKind::HostUnreachable
+            | io::ErrorKind::NetworkUnreachable
+            | io::ErrorKind::NetworkDown
+            | io::ErrorKind::UnexpectedEof => WeatherError::Unreachable,
+            io::ErrorKind::InvalidData => WeatherError::BadAnswer,
             _ => WeatherError::Unknown,
         }
+    }
+
+    /// True when trying the same request again later may succeed. A refused permission never does by itself.
+    pub fn is_retryable(self) -> bool {
+        !matches!(self, WeatherError::PermissionDenied)
     }
 
     /// What went wrong, in one sentence.
     pub fn description(self) -> &'static str {
         match self {
             WeatherError::PermissionDenied => "Weather data is not allowed for this app.",
+            WeatherError::Unreachable => "The weather service could not be reached.",
+            WeatherError::BadAnswer => "The weather service sent an answer that could not be read.",
             WeatherError::Unknown => "The weather could not be loaded.",
         }
     }
@@ -206,6 +228,8 @@ impl WeatherError {
     pub fn recovery_suggestion(self) -> &'static str {
         match self {
             WeatherError::PermissionDenied => "Allow weather access in Privacy settings and try again.",
+            WeatherError::Unreachable => "Check the connection and try again.",
+            WeatherError::BadAnswer => "Try again later.",
             WeatherError::Unknown => "Check the connection and try again.",
         }
     }

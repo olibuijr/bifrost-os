@@ -1,6 +1,6 @@
 id = "is.olibuijr.console.desktop"
 name = "Console"
-version = "1.6.0"
+version = "1.7.1"
 exec = "bifrost-console"
 icon = "icon.png"
 min_shell = "0.5.4"
@@ -10,6 +10,7 @@ architecture = "x86_64-linux"
 kind = "system-app"
 entitlements = ["log-store"]
 permissions = ["documents"]
+handles = ["public.plain-text:alternate", "org.gnu.gnu-zip-archive:alternate"]
 window = "full-size"
 
 [[log.subsystem]]

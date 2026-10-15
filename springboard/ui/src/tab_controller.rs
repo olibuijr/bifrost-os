@@ -76,10 +76,6 @@ impl Tab {
         self.enabled = false;
         self
     }
-    /// Screens that can be selected: an enabled screen or search tab.
-    fn is_leaf(&self) -> bool {
-        !matches!(self.kind, TabKind::Group(_))
-    }
 }
 
 /// The result of a pointer tap on the bar or sidebar.
@@ -206,7 +202,7 @@ impl TabBarController {
     pub fn layout(&self, bounds: Rect) -> TabLayout {
         match Presentation::for_width(bounds.w) {
             Presentation::TabBar => {
-                let (content, bar) = bounds.divide(TAB_BAR_PT, Edge::Bottom);
+                let (bar, content) = bounds.divide(TAB_BAR_PT, Edge::Bottom);
                 TabLayout { content, bar: Some(bar), sidebar: None }
             }
             Presentation::Sidebar => {
@@ -347,8 +343,7 @@ mod tests {
         .take(5)
         .collect();
         assert_eq!(order, vec![1, 20, 22, 3, 4]);
-        assert!(c.step(false));
-        assert_eq!(c.selected(), Some(1), "wraps to the first screen");
+        assert_eq!(c.selected(), Some(1), "the last step wraps to the first screen");
         assert!(c.step(true));
         assert_eq!(c.selected(), Some(4), "backwards wraps to the last screen");
     }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.18.2 — 2026-10-14
+
+- Use named system black and white colors for sketch ink and paper pixels.
+
+## 1.18.1 — 2026-10-14
+
+- Send print jobs through the shared Utility dispatch queue so the app UI never creates a raw worker thread.
+
+## 1.18.0 — 2026-10-14
+
+- Note links open their note: the manifest registers the notes scheme, and an Open event with a notes://note/<id> link shows that note when it exists (src/main.rs, Input::Open). The lab machine has not yet verified the routing.
+
+## 1.17.0 — 2026-10-14
+
+- Attachment browser model (notes/attachments.rs): every attachment of every note, newest note first, with its folder and caption. The browser grid is not drawn yet.
+- Rename attachment: a caption saved per file in a sidecar file (notes/attachments.rs, set_caption), so file names on disk never change. The caption is not shown yet.
+- Settings model (notes/settings.rs): default text size, dark note background, new note start and attachment tile size, saved beside the notes. There is no Settings pane yet and the values do not change the editor.
+- Note links (notes/note_url.rs): notes://note/<id> links are built and read back with the id validated. The scheme is not registered and links do not open notes yet.
+- Not in this version: the attachment grid, caption display, Small and Large tiles, the Settings pane, the note-link handler, speech, gallery view, separate note windows and locked-note changes are still missing.
+
 ## 1.16.0 — 2026-10-13
 
 - Import to Notes also reads HTML and RTF files, converting headings, emphasis, lists and paragraphs to Markdown (notes/import.rs); a file with no text is skipped and logged.
@@ -7,6 +27,23 @@
 - Pipe tables get Add Row Above/Below, Add Column Left/Right, Delete Row/Column and Convert Table to Text (notes/table.rs), shown in the editor More menu while the caret is in a table.
 - The list menu can sort Newest First / Oldest First (A to Z / Z to A for titles); the choice is saved with the other list settings.
 - Note > Recent Notes lists the ten newest notes and opens the one chosen.
+
+## 1.16.0 — 2026-10-13
+
+- Format menu (the Format entry in the More menu of an open note, and a Format menu in the menu bar): paragraph styles Title, Heading, Subheading, Body, Monostyled (four leading spaces), Block Quote (`> `); lists Bulleted, Dashed (an en dash), Numbered and Checklist; character styles Bold, Italic, Underline (`++text++`), Strikethrough (`~~text~~`), Highlight (`==text==`) and Inline Code. The editor draws strike-through, underline, highlight and the quote bar. Cmd+U, Cmd+Shift+X and Cmd+Shift+H apply the new character styles.
+- Indentation: Tab and Shift+Tab (also Increase and Decrease Indent in the Format menu) move list lines one level in or out. Ctrl+Cmd+Up and Ctrl+Cmd+Down (or Move Item Up and Down) move a list item, with the items nested under it, past its neighbour.
+- Checklists: Mark All and Unmark All in the Format menu tick or untick every item in one undo step.
+- Tables: with the caret in a table, the Format menu adds a row above or below, a column left or right, deletes the row or column, or converts the table to text with tab-separated cells.
+- Tags: a `#word` that starts a word is a tag. The sidebar has a Tags section with a count per tag, the list menu lists them too, and choosing one shows the notes that carry it. Notes in Recently Deleted are not counted.
+- Group by Date (list menu): the list is cut into Today, Previous 7 Days, Previous 30 Days and month sections when sorted by a date. Pinned notes keep their own section above. Search and the title sort show the list without date sections.
+- Newest First and Oldest First (list menu) set the direction of the date sorts; the choice is remembered.
+- Math Results: turn it on in the Note menu or the Format menu, and typing `=` after a calculation (`12 * 3 =`) writes the answer. Calculate Math Results answers every such line in the note at once. It reads `+ - * / % ^` and brackets.
+- Add Link (Cmd+K, Format menu): asks for a web address and turns the selection into a `[text](address)` link.
+- Note menu: Copy as Markdown, Paste as Markdown, Paste and Match Style (removes the Markdown marks of the pasted text), Math Results and a Recent Notes submenu with the five newest notes.
+- Import to Notes accepts HTML and RTF files and converts them to Markdown: headings, bold, italic, links, lists, quotes and code stay; images, colours and fonts are dropped.
+- Menu bar extra: Resume Last Quick Note reopens the note New Quick Note made last. The list menu has a setting to make New Quick Note resume it too.
+- Shortcuts: new intents Open Note (by title or id) and Open Folder.
+- Not in this version: tags are not completed while typing and cannot be combined in a filter; tables are still not drawn as a grid; Tab and Shift+Tab, the new chords and the menu-bar entries have not been tried on Midget; locked notes, the attachment browser, the gallery view, collapsible sections, separate note windows, Speak, a settings window, user-made smart folders and note links by URL are still missing.
 
 ## 1.15.0 — 2026-10-13
 

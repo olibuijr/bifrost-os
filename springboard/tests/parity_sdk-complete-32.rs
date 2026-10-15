@@ -1,0 +1,288 @@
+//! Parity sdk-complete-32: headless tests for loudness normalization (`springboard::media::volume`). Pure arithmetic:
+//! no audio device, no clock and no file is read.
+
+use springboard::media::volume::{
+    normalization_gain_db, normalized_linear, Volume, NORMALIZATION_MAX_BOOST_DB, NORMALIZATION_TARGET_DB,
+};
+
+fn close(a: f32, b: f32) -> bool {
+    (a - b).abs() < 1e-4
+}
+
+#[test]
+fn a_track_at_the_target_needs_no_gain() {
+    assert!(close(normalization_gain_db(-16.0, -16.0, 6.0), 0.0));
+}
+
+#[test]
+fn a_loud_track_is_turned_down_by_the_full_difference() {
+    assert!(close(normalization_gain_db(-10.0, -16.0, 6.0), -6.0));
+    assert!(close(normalization_gain_db(-4.0, -16.0, 6.0), -12.0), "the cut is not limited");
+}
+
+#[test]
+fn a_quiet_track_is_raised_but_never_by_more_than_the_boost_limit() {
+    assert!(close(normalization_gain_db(-19.0, -16.0, 6.0), 3.0));
+    assert!(close(normalization_gain_db(-30.0, -16.0, 6.0), 6.0), "14 dB needed, 6 dB allowed");
+}
+
+#[test]
+fn a_silent_or_unmeasured_track_is_left_alone() {
+    assert!(close(normalization_gain_db(f32::NEG_INFINITY, -16.0, 6.0), 0.0));
+    assert!(close(normalization_gain_db(f32::NAN, -16.0, 6.0), 0.0));
+}
+
+#[test]
+fn a_negative_boost_limit_is_read_as_no_boost_and_still_allows_cuts() {
+    assert!(close(normalization_gain_db(-30.0, -16.0, -3.0), 0.0), "a quiet track gets no boost");
+    assert!(close(normalization_gain_db(-10.0, -16.0, -3.0), -6.0));
+}
+
+#[test]
+fn the_published_defaults_aim_at_minus_sixteen_with_six_db_of_boost() {
+    assert!(close(NORMALIZATION_TARGET_DB, -16.0));
+    assert!(close(NORMALIZATION_MAX_BOOST_DB, 6.0));
+}
+
+#[test]
+fn a_gain_of_minus_six_db_halves_the_full_volume_multiplier() {
+    let full = Volume::new(1.0);
+    assert!(close(normalized_linear(full, 0.0), 1.0));
+    assert!(close(normalized_linear(full, -6.0), 0.501_187), "about half amplitude");
+}
+
+#[test]
+fn muted_stays_silent_whatever_the_normalization_gain() {
+    assert_eq!(normalized_linear(Volume::new(0.0), 6.0), 0.0);
+}
+
+#[test]
+fn the_volume_and_the_normalization_multiply() {
+    let half = Volume::at_step(8);
+    let combined = normalized_linear(half, -6.0);
+    assert!(close(combined, half.linear() * 0.501_187));
+}
+
+mod loop_regions {
+    use springboard::media::loop_region::{Head, LoopMode, LoopRegion};
+
+    #[test]
+    fn a_loop_region_needs_at_least_one_frame() {
+        assert!(LoopRegion::new(10, 10, LoopMode::Forward).is_none());
+        assert_eq!(LoopRegion::new(4, 10, LoopMode::PingPong).map(|r| r.end()), Some(10));
+    }
+
+    #[test]
+    fn a_forward_loop_on_the_sdk_path_wraps_inside_the_region() {
+        let r = LoopRegion::new(2, 6, LoopMode::Forward).unwrap();
+        let head = Head::Playing { position: 4, backward: false };
+        assert_eq!(r.advance(head, 3, 100), Head::Playing { position: 3, backward: false });
+    }
+
+    #[test]
+    fn a_one_shot_stops_at_the_sample_end() {
+        let r = LoopRegion::new(2, 6, LoopMode::Off).unwrap();
+        let head = r.advance(r.head_at_start(), 9, 8);
+        assert_eq!(head, Head::Done);
+    }
+
+    #[test]
+    fn a_ping_pong_loop_reverses_at_the_region_end() {
+        let r = LoopRegion::new(0, 4, LoopMode::PingPong).unwrap();
+        let head = r.advance(Head::Playing { position: 3, backward: false }, 1, 100);
+        assert_eq!(head, Head::Playing { position: 3, backward: true });
+    }
+}
+
+mod engine_registry {
+    use springboard::media::engine::{AssetRegistry, Engine, EngineError, UpdateMode};
+    use springboard::media::loop_region::LoopMode;
+
+    #[test]
+    fn an_asset_is_registered_once_and_listed_in_name_order() {
+        let mut registry = AssetRegistry::new();
+        registry.register("snare", "drums/snare.wav", LoopMode::Off).unwrap();
+        registry.register("bass", "bass/loop.wav", LoopMode::Forward).unwrap();
+        assert_eq!(registry.names().collect::<Vec<_>>(), vec!["bass", "snare"]);
+        assert_eq!(registry.get("bass").map(|a| a.loop_mode), Some(LoopMode::Forward));
+        assert_eq!(
+            registry.register("snare", "other.wav", LoopMode::Off),
+            Err(EngineError::DuplicateAsset("snare".into()))
+        );
+        assert_eq!(registry.len(), 2);
+    }
+
+    #[test]
+    fn an_asset_needs_a_name_and_a_path() {
+        let mut registry = AssetRegistry::new();
+        assert_eq!(registry.register("  ", "a.wav", LoopMode::Off), Err(EngineError::EmptyName));
+        assert_eq!(registry.register("a", "", LoopMode::Off), Err(EngineError::EmptyPath));
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn unregistering_returns_the_asset_and_an_unknown_name_is_refused() {
+        let mut registry = AssetRegistry::new();
+        registry.register("click", "ui/click.wav", LoopMode::Off).unwrap();
+        let removed = registry.unregister("click").unwrap();
+        assert_eq!(removed.path, "ui/click.wav");
+        assert_eq!(registry.unregister("click"), Err(EngineError::UnknownAsset("click".into())));
+    }
+
+    #[test]
+    fn the_update_mode_is_automatic_until_an_app_changes_it() {
+        let mut engine = Engine::new();
+        assert_eq!(engine.update_mode(), UpdateMode::Automatic);
+        engine.set_update_mode(UpdateMode::Manual).unwrap();
+        assert_eq!(engine.update_mode(), UpdateMode::Manual);
+    }
+
+    #[test]
+    fn the_update_mode_is_locked_while_the_engine_runs() {
+        let mut engine = Engine::new();
+        engine.start().unwrap();
+        assert_eq!(engine.set_update_mode(UpdateMode::Manual), Err(EngineError::ModeLockedWhileRunning));
+        assert_eq!(engine.update_mode(), UpdateMode::Automatic);
+        engine.stop().unwrap();
+        assert!(engine.set_update_mode(UpdateMode::Manual).is_ok());
+    }
+
+    #[test]
+    fn start_and_stop_refuse_a_second_call_in_the_same_state() {
+        let mut engine = Engine::new();
+        assert_eq!(engine.stop(), Err(EngineError::NotRunning));
+        engine.start().unwrap();
+        assert_eq!(engine.start(), Err(EngineError::AlreadyRunning));
+        assert!(engine.is_running());
+    }
+
+    #[test]
+    fn playing_needs_a_running_engine_and_a_registered_name() {
+        let mut engine = Engine::new();
+        engine.assets_mut().register("hit", "fx/hit.wav", LoopMode::Off).unwrap();
+        assert_eq!(engine.play("hit").map(|_| ()), Err(EngineError::NotRunning));
+        engine.start().unwrap();
+        assert_eq!(engine.play("hit").map(|a| a.path.clone()), Ok("fx/hit.wav".to_string()));
+        assert_eq!(engine.play("miss").map(|_| ()), Err(EngineError::UnknownAsset("miss".into())));
+    }
+
+    #[test]
+    fn every_engine_error_has_a_readable_message() {
+        assert_eq!(EngineError::NotRunning.to_string(), "the engine is not running");
+        assert_eq!(
+            EngineError::DuplicateAsset("hit".into()).to_string(),
+            "an asset named hit is already registered"
+        );
+    }
+}
+
+mod gpu_contracts {
+    use springboard::gpu::buffer_pool::{BufferPool, Fence};
+    use springboard::gpu::render_path::{choose, Reason, RenderPath};
+
+    #[test]
+    fn a_pool_of_two_reuses_the_first_buffer_after_its_fence_completes() {
+        let mut pool = BufferPool::new(2).unwrap();
+        let first = pool.acquire().unwrap();
+        let first_index = first.index();
+        let fence: Fence = pool.submit(first);
+        assert!(!pool.is_done(fence));
+        assert!(pool.complete(fence));
+        assert_eq!(pool.acquire().map(|l| l.index()), Some(first_index));
+    }
+
+    #[test]
+    fn a_pool_of_one_has_no_buffer_while_its_frame_is_in_flight() {
+        let mut pool = BufferPool::new(1).unwrap();
+        let lease = pool.acquire().unwrap();
+        let _fence = pool.submit(lease);
+        assert!(pool.acquire().is_none());
+        assert_eq!(pool.capacity(), 1);
+    }
+
+    #[test]
+    fn the_render_path_follows_the_setting_and_the_hardware() {
+        assert_eq!(choose(None, true).path, RenderPath::Gpu);
+        assert_eq!(choose(Some("0"), true).reason, Reason::ForcedByUser);
+        assert_eq!(choose(None, false).path, RenderPath::Cpu);
+        assert_eq!(choose(None, false).reason, Reason::GpuMissing);
+    }
+}
+
+mod push_buffers {
+    use springboard::media::push_queue::{PushError, PushQueue, Priority, Pulled};
+
+    #[test]
+    fn a_pushed_block_plays_in_full_and_then_the_queue_is_empty() {
+        let mut q = PushQueue::new(8).unwrap();
+        q.push(Priority::Normal, &[5, 6, 7]).unwrap();
+        assert_eq!(q.pull(3), Pulled { samples: vec![5, 6, 7], underrun: 0 });
+        assert_eq!(q.free(), 8);
+    }
+
+    #[test]
+    fn a_full_queue_refuses_the_block_and_reports_the_room_left() {
+        let mut q = PushQueue::new(4).unwrap();
+        q.push(Priority::High, &[1, 2, 3]).unwrap();
+        assert_eq!(q.push(Priority::High, &[4, 5]), Err(PushError::Full { free: 1 }));
+    }
+
+    #[test]
+    fn a_high_priority_block_jumps_the_queue_of_normal_blocks() {
+        let mut q = PushQueue::new(16).unwrap();
+        q.push(Priority::Normal, &[1, 1]).unwrap();
+        q.push(Priority::High, &[9]).unwrap();
+        assert_eq!(q.pull(3).samples, vec![9, 1, 1]);
+    }
+
+    #[test]
+    fn an_empty_push_is_refused_and_a_zero_capacity_queue_is_not_built() {
+        assert!(PushQueue::new(0).is_none());
+        let mut q = PushQueue::new(2).unwrap();
+        assert_eq!(q.push(Priority::Low, &[]), Err(PushError::EmptyBlock));
+    }
+
+    #[test]
+    fn an_underrun_is_counted_per_missing_sample() {
+        let mut q = PushQueue::new(4).unwrap();
+        q.push(Priority::Normal, &[3]).unwrap();
+        assert_eq!(q.pull(3).underrun, 2);
+    }
+}
+
+mod layering {
+    use springboard::media::mixer::{db_to_linear, mix, Mixed, Strip};
+
+    #[test]
+    fn a_layer_at_minus_six_db_is_about_half_amplitude_in_the_sum() {
+        let out = mix(&[(&[1000], Strip::from_db(-6.0))]);
+        assert_eq!(out.samples, vec![501]);
+    }
+
+    #[test]
+    fn a_muted_layer_is_left_out_of_the_sum() {
+        let muted = Strip { gain: 1.0, muted: true };
+        let out = mix(&[(&[500, 500], muted), (&[1, 1], Strip::default())]);
+        assert_eq!(out, Mixed { samples: vec![1, 1], clipped: 0 });
+    }
+
+    #[test]
+    fn a_sum_that_is_too_loud_is_clipped_and_counted() {
+        let loud: [i16; 2] = [30_000, -30_000];
+        let out = mix(&[(&loud, Strip::default()), (&loud, Strip::default())]);
+        assert_eq!(out.samples, vec![i16::MAX, i16::MIN]);
+        assert_eq!(out.clipped, 2);
+    }
+
+    #[test]
+    fn a_shorter_layer_is_silent_past_its_end() {
+        let out = mix(&[(&[5, 5, 5], Strip::default()), (&[1], Strip::default())]);
+        assert_eq!(out.samples, vec![6, 5, 5]);
+    }
+
+    #[test]
+    fn negative_infinity_decibels_is_silence_and_zero_is_unity() {
+        assert_eq!(db_to_linear(f32::NEG_INFINITY), 0.0);
+        assert!((db_to_linear(0.0) - 1.0).abs() < 1e-6);
+    }
+}

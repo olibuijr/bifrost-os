@@ -45,6 +45,14 @@ pub struct Prefs {
     pub show_cc: bool,
     pub show_bcc: bool,
     pub show_reply_to: bool,
+    /// Replies start with the original quoted under an attribution line (Mailbox > Mail Settings).
+    pub quote_replies: bool,
+    /// New messages are sent as plain text only, without the HTML alternative.
+    pub plain_text: bool,
+    /// The reader shows every header of the open message (View > All Headers).
+    pub all_headers: bool,
+    /// Unread messages show their sender in bold, and read ones in regular type (Mail Settings).
+    pub bold_unread: bool,
 }
 
 impl Default for Prefs {
@@ -60,6 +68,10 @@ impl Default for Prefs {
             show_cc: true,
             show_bcc: false,
             show_reply_to: false,
+            quote_replies: true,
+            plain_text: false,
+            all_headers: false,
+            bold_unread: true,
         }
     }
 }
@@ -157,6 +169,10 @@ impl Prefs {
             ("show_cc".into(), Json::Bool(self.show_cc)),
             ("show_bcc".into(), Json::Bool(self.show_bcc)),
             ("show_reply_to".into(), Json::Bool(self.show_reply_to)),
+            ("quote_replies".into(), Json::Bool(self.quote_replies)),
+            ("plain_text".into(), Json::Bool(self.plain_text)),
+            ("all_headers".into(), Json::Bool(self.all_headers)),
+            ("bold_unread".into(), Json::Bool(self.bold_unread)),
         ])
     }
 
@@ -169,6 +185,10 @@ impl Prefs {
             show_cc: flag_of(json, "show_cc", defaults.show_cc),
             show_bcc: flag_of(json, "show_bcc", defaults.show_bcc),
             show_reply_to: flag_of(json, "show_reply_to", defaults.show_reply_to),
+            quote_replies: flag_of(json, "quote_replies", defaults.quote_replies),
+            plain_text: flag_of(json, "plain_text", defaults.plain_text),
+            all_headers: flag_of(json, "all_headers", defaults.all_headers),
+            bold_unread: flag_of(json, "bold_unread", defaults.bold_unread),
             ..defaults
         };
         if let Some(Json::Obj(fields)) = json.get("signatures") {
@@ -235,7 +255,16 @@ mod tests {
     use crate::rules::Action;
 
     fn sample() -> Prefs {
-        let mut prefs = Prefs { undo_delay: 10, show_favorites: true, show_cc: false, show_bcc: true, ..Prefs::default() };
+        let mut prefs = Prefs {
+            undo_delay: 10,
+            show_favorites: true,
+            show_cc: false,
+            show_bcc: true,
+            quote_replies: false,
+            plain_text: true,
+            all_headers: true,
+            ..Prefs::default()
+        };
         prefs.set_signature("work", "Ana\nOlafsson ehf.\n");
         prefs.set_aliases("work", vec!["info@example.com".into(), "ana@example.org".into()]);
         prefs.toggle_favorite("work", "INBOX");
@@ -276,6 +305,25 @@ mod tests {
             assert!(prefs.toggle_favorite("a", &format!("box{n}")));
         }
         assert!(!prefs.toggle_favorite("a", "one too many"));
+    }
+
+    #[test]
+    fn replies_quote_and_messages_keep_html_unless_asked_otherwise() {
+        let prefs = Prefs::default();
+        assert!(prefs.quote_replies && !prefs.plain_text && !prefs.all_headers);
+        let older = Prefs::from_json(&json::parse(r#"{"undo_delay":3}"#).unwrap());
+        assert!(older.quote_replies, "a file from before the setting keeps the default");
+        let off = Prefs::from_json(&json::parse(r#"{"quote_replies":false,"plain_text":true}"#).unwrap());
+        assert!(!off.quote_replies && off.plain_text);
+    }
+
+    #[test]
+    fn unread_senders_are_bold_unless_the_setting_is_off() {
+        assert!(Prefs::default().bold_unread);
+        assert!(Prefs::from_json(&json::parse("{}").unwrap()).bold_unread, "a file from before the setting keeps bold");
+        let off = Prefs::from_json(&json::parse(r#"{"bold_unread":false}"#).unwrap());
+        assert!(!off.bold_unread);
+        assert_eq!(Prefs::from_json(&off.to_json()), off);
     }
 
     #[test]

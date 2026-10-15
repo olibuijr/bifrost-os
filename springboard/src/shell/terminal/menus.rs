@@ -226,21 +226,7 @@ impl Shell {
             21 => self.terminal_close_split(t),
             22 => self.terminal_save_group(),
             23 => self.terminal_open_group(t),
-            // The first web link in the selection opens in the browser.
-            15 => {
-                let link = self
-                    .term
-                    .as_ref()
-                    .and_then(|term| term.selected_text())
-                    .and_then(|text| links::first_link(&text));
-                self.terminal_ui.message = match link {
-                    Some(url) => match self.desktop_open_url(&url, t) {
-                        Ok(()) => "Opened link".into(),
-                        Err(e) => format!("Could not open link: {e}"),
-                    },
-                    None => "No link in selection".into(),
-                };
-            }
+            15 => self.terminal_open_selected_link(t),
             24 => {
                 let keep = self.term.active_index();
                 self.term.close_others(keep);
@@ -254,9 +240,68 @@ impl Shell {
                 let text = self.term.as_ref().and_then(|term| term.selected_text());
                 self.terminal_paste_or_say(text, "Select terminal text first", t);
             }
-            27 => self.terminal_ui.message = extras::HELP.into(),
+            27 => self.terminal_ui.message = extras::help_line(),
+            28 => self.terminal_open_title_edit(t),
+            29 => self.terminal_toggle_mouse_reporting(),
+            30 => {
+                let url = self.term.as_ref().and_then(|term| term.selected_text()).and_then(|text| selection::web_search_url(&text));
+                self.terminal_ui.message = match url {
+                    Some(url) => match self.desktop_open_url(&url, t) {
+                        Ok(()) => "Opened web search".into(),
+                        Err(e) => format!("Could not search: {e}"),
+                    },
+                    None => "Select terminal text first".into(),
+                };
+            }
+            31 => {
+                let argv = self.term.as_ref().and_then(|term| term.selected_text()).and_then(|text| selection::man_argv(&text));
+                match argv {
+                    Some(argv) => {
+                        let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+                        if self.spawn_terminal_tab(&refs, None) {
+                            self.terminal_close_panel(t);
+                        }
+                    }
+                    None => self.terminal_ui.message = "Select a man page name such as ls or printf(3)".into(),
+                }
+            }
+            32 => {
+                let text = self.term.as_ref().and_then(|term| term.selected_text());
+                self.terminal_ui.message = match text {
+                    Some(text) => {
+                        let path = self.data_dir.join("Files/terminal-selection.txt");
+                        match fs::create_dir_all(path.parent().unwrap()).and_then(|_| fs::write(&path, text)) {
+                            Ok(()) => "Saved to Files/terminal-selection.txt".into(),
+                            Err(e) => format!("Could not save: {e}"),
+                        }
+                    }
+                    None => "Select terminal text first".into(),
+                };
+            }
+            33 => self.terminal_use_selection_for_find(t),
+            34 => self.terminal_move_tab(false, t),
+            35 => self.terminal_move_tab(true, t),
             _ => {}
         }
+    }
+    /// Open link in selection: an ssh, telnet or x-man-page link runs in a new tab; the first web link opens in the browser.
+    fn terminal_open_selected_link(&mut self, t: f64) {
+        let text = self.term.as_ref().and_then(|term| term.selected_text());
+        if let Some(argv) = text.as_deref().and_then(schemes::first_scheme_link).and_then(|url| schemes::link_argv(&url)) {
+            let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+            if self.spawn_terminal_tab(&refs, None) {
+                self.terminal_close_panel(t);
+            }
+            return;
+        }
+        let link = text.as_deref().and_then(links::first_link);
+        self.terminal_ui.message = match link {
+            Some(url) => match self.desktop_open_url(&url, t) {
+                Ok(()) => "Opened link".into(),
+                Err(e) => format!("Could not open link: {e}"),
+            },
+            None => "No link in selection".into(),
+        };
     }
     /// Types `text` into the shell as a paste and closes the menu, or shows `missing` when there is none.
     fn terminal_paste_or_say(&mut self, text: Option<String>, missing: &str, t: f64) {

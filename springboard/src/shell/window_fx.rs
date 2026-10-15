@@ -10,8 +10,8 @@ pub enum Effect {
     Open,
     Close,
     /// Minimize toward the dock icon centre (px, window-centre relative offset is derived by the caller).
-    Minimize { to_dx: f32, to_dy: f32 },
-    Restore { from_dx: f32, from_dy: f32 },
+    Minimize { to_dx: f32, to_dy: f32, how: MinimizeEffect },
+    Restore { from_dx: f32, from_dy: f32, how: MinimizeEffect },
     /// Zoom (maximize / restore size): a short settle pulse, the size itself comes from the compositor.
     Zoom,
 }
@@ -71,14 +71,30 @@ impl WindowFx {
         let mut f = match self.effect {
             Effect::Open => Fx { scale: lerp(POP_SCALE, 1.0), alpha: lerp(0.0, 1.0), dx: 0.0, dy: 0.0, shadow: lerp(0.0, 1.0) },
             Effect::Close => Fx { scale: lerp(1.0, POP_SCALE), alpha: lerp(1.0, 0.0), dx: 0.0, dy: 0.0, shadow: lerp(1.0, 0.0) },
-            Effect::Minimize { to_dx, to_dy } => {
+            Effect::Minimize { to_dx, to_dy, how } => {
                 // scale shrinks on the curve, the window slides along it; fades over the last third
                 let fade = ((t - 0.66) / 0.34).clamp(0.0, 1.0);
-                Fx { scale: lerp(1.0, MIN_SCALE), alpha: 1.0 - fade, dx: lerp(0.0, to_dx), dy: lerp(0.0, to_dy), shadow: lerp(1.0, 0.3) }
+                match how {
+                    MinimizeEffect::Scale => {
+                        Fx { scale: lerp(1.0, MIN_SCALE), alpha: 1.0 - fade, dx: lerp(0.0, to_dx), dy: lerp(0.0, to_dy), shadow: lerp(1.0, 0.3) }
+                    }
+                    MinimizeEffect::Funnel => {
+                        let t_pos = t * t;
+                        Fx { scale: lerp(1.0, MIN_SCALE * 0.8), alpha: 1.0 - fade, dx: lerp(0.0, to_dx * t_pos), dy: lerp(0.0, to_dy * t_pos), shadow: lerp(1.0, 0.2) }
+                    }
+                }
             }
-            Effect::Restore { from_dx, from_dy } => {
+            Effect::Restore { from_dx, from_dy, how } => {
                 let fade = (t / 0.34).clamp(0.0, 1.0);
-                Fx { scale: lerp(MIN_SCALE, 1.0), alpha: fade, dx: lerp(from_dx, 0.0), dy: lerp(from_dy, 0.0), shadow: lerp(0.3, 1.0) }
+                match how {
+                    MinimizeEffect::Scale => {
+                        Fx { scale: lerp(MIN_SCALE, 1.0), alpha: fade, dx: lerp(from_dx, 0.0), dy: lerp(from_dy, 0.0), shadow: lerp(0.3, 1.0) }
+                    }
+                    MinimizeEffect::Funnel => {
+                        let t_pos = (1.0 - t) * (1.0 - t);
+                        Fx { scale: lerp(MIN_SCALE * 0.8, 1.0), alpha: fade, dx: lerp(from_dx * t_pos, 0.0), dy: lerp(from_dy * t_pos, 0.0), shadow: lerp(0.2, 1.0) }
+                    }
+                }
             }
             // the window dips to 0.985 and returns, the spring gives the settle
             Effect::Zoom => Fx { scale: 1.0 - 0.015 * (std::f32::consts::PI * t).sin(), alpha: 1.0, dx: 0.0, dy: 0.0, shadow: 1.0 },
@@ -223,7 +239,7 @@ mod tests {
 
     #[test]
     fn minimize_moves_toward_the_dock_and_is_clamped() {
-        let m = WindowFx::new(Effect::Minimize { to_dx: 500.0, to_dy: 900.0 }, 0.0, false);
+        let m = WindowFx::new(Effect::Minimize { to_dx: 500.0, to_dy: 900.0, how: MinimizeEffect::Scale }, 0.0, false);
         let f = m.fx(100.0, 40.0);
         assert_eq!((f.dx, f.dy), (40.0, 40.0));
         assert!(f.scale < 0.2 && f.alpha < 0.01);
@@ -231,14 +247,14 @@ mod tests {
 
     #[test]
     fn restore_returns_to_identity() {
-        let r = WindowFx::new(Effect::Restore { from_dx: 10.0, from_dy: 20.0 }, 0.0, false);
+        let r = WindowFx::new(Effect::Restore { from_dx: 10.0, from_dy: 20.0, how: MinimizeEffect::Scale }, 0.0, false);
         let f = r.fx(100.0, 40.0);
         assert!((f.scale - 1.0).abs() < 1e-4 && (f.alpha - 1.0).abs() < 1e-4 && f.dx.abs() < 1e-4);
     }
 
     #[test]
     fn effects_are_running_just_after_the_start_and_done_after_their_duration() {
-        for e in [Effect::Open, Effect::Close, Effect::Minimize { to_dx: 5.0, to_dy: 5.0 }, Effect::Restore { from_dx: 5.0, from_dy: 5.0 }] {
+        for e in [Effect::Open, Effect::Close, Effect::Minimize { to_dx: 5.0, to_dy: 5.0, how: MinimizeEffect::Scale }, Effect::Restore { from_dx: 5.0, from_dy: 5.0, how: MinimizeEffect::Scale }] {
             let f = WindowFx::new(e, 10.0, false);
             assert!(!f.done(10.01), "{e:?} runs at first");
             assert!(f.done(11.0), "{e:?} ends within a second");
@@ -253,7 +269,7 @@ mod tests {
 
     #[test]
     fn reduce_motion_cross_fades_in_place() {
-        let m = WindowFx::new(Effect::Minimize { to_dx: 300.0, to_dy: 300.0 }, 0.0, true);
+        let m = WindowFx::new(Effect::Minimize { to_dx: 300.0, to_dy: 300.0, how: MinimizeEffect::Scale }, 0.0, true);
         assert_eq!(m.kind(), Kind::CrossFade);
         let mid = m.fx(0.06, 40.0);
         assert_eq!((mid.scale, mid.dx, mid.dy), (1.0, 0.0, 0.0));
@@ -267,11 +283,11 @@ mod tests {
     #[test]
     fn behavior_none_never_animates() {
         let mut t = FxTracker::default();
-        for e in [Effect::Open, Effect::Close, Effect::Zoom, Effect::Minimize { to_dx: 1.0, to_dy: 1.0 }] {
+        for e in [Effect::Open, Effect::Close, Effect::Zoom, Effect::Minimize { to_dx: 1.0, to_dy: 1.0, how: MinimizeEffect::Scale }] {
             assert!(!t.begin(1, e, AnimationBehavior::None, false, 0.0));
         }
         assert!(!t.active(0.0) && t.fx(1, 0.0, 40.0).is_identity());
-        assert!(!t.begin(2, Effect::Minimize { to_dx: 1.0, to_dy: 1.0 }, AnimationBehavior::Alert, false, 0.0));
+        assert!(!t.begin(2, Effect::Minimize { to_dx: 1.0, to_dy: 1.0, how: MinimizeEffect::Scale }, AnimationBehavior::Alert, false, 0.0));
         assert!(t.begin(2, Effect::Open, AnimationBehavior::Alert, false, 0.0));
     }
 
@@ -295,7 +311,7 @@ mod tests {
         assert!(!c.done(0.08) && c.done(0.5), "the close is kept only while it runs");
         let mut t = FxTracker::default();
         assert!(t.begin(3, Effect::Close, AnimationBehavior::Utility, false, 0.0), "utility windows close with an effect");
-        assert!(!t.begin(4, Effect::Minimize { to_dx: 1.0, to_dy: 1.0 }, AnimationBehavior::Utility, false, 0.0));
+        assert!(!t.begin(4, Effect::Minimize { to_dx: 1.0, to_dy: 1.0, how: MinimizeEffect::Scale }, AnimationBehavior::Utility, false, 0.0));
     }
 
     #[test]

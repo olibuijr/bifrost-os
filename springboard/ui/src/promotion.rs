@@ -79,6 +79,14 @@ pub fn in_display_order(list: &[Promotion]) -> Vec<&str> {
     seen
 }
 
+/// The promoted product ids in display order, leaving out the products the customer already owns: a promotion for an
+/// owned product is not shown, so the store never offers a second purchase of it.
+pub fn visible_in_display_order<'a>(list: &'a [Promotion], owned: &[&str]) -> Vec<&'a str> {
+    let mut visible = in_display_order(list);
+    visible.retain(|product| !owned.contains(product));
+    visible
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

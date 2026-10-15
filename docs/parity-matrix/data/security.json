@@ -12,21 +12,21 @@
       "apple": "SecItemAdd, SecItemCopyMatching, SecItemUpdate, SecItemDelete, kSecClassGenericPassword",
       "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete); springboard/sdk/src/keychain_query.rs (ItemClass, Attributes, Query, MatchLimit, Status, add_item, copy_matching, update_items, delete_items); springboard/src/keychain.rs; springboard/proto/src/lib.rs (KeychainOp, KeychainStatus); wired: springboard/src/keychain.rs (Store::list, per-item modified time); springboard/sdk/src/passwords.rs; Settings > Passwords in springboard/src/shell/passwords_page.rs",
       "status": "partial",
-      "note": "Generic and internet passwords with attributes (label, comment, dates, access group) via the SDK query API; the shell store still keys by (service, account) and holds attributes inside the value. kSecMatchLimitAll needs a shell list operation (SDK filters with select). Errors mirror OSStatus codes. No certificate, key or identity classes, no access groups, no iCloud sync. Calls are asynchronous, unlike Apple's synchronous calls (docs/bifrost-ui.md, Keychain section). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Generic and internet passwords with attributes (label, comment, dates, access group) via the SDK query API; the shell store still keys by (service, account) and holds attributes inside the value. kSecMatchLimitAll needs a shell list operation (SDK filters with select). Errors mirror OSStatus codes. No certificate, key or identity classes, no access groups, no iCloud sync. Calls are asynchronous, unlike Apple's synchronous calls (docs/bifrost-ui.md, Keychain section). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (generic_password_wire_key_is_service_and_account, internet_password_wire_key_carries_server_port_and_protocol, an_item_round_trips_through_its_stored_record, a_legacy_value_decodes_as_a_generic_password_with_only_its_secret, a_damaged_record_is_a_decode_status, decode_item_maps_a_failed_get_to_its_status, a_query_matches_only_the_attributes_it_sets_and_the_same_class, match_limit_one_takes_the_first_hit_and_all_takes_every_hit, select_drops_the_secret_and_the_attributes_the_query_did_not_ask_for)."
     },
     {
       "feature": "Keychain at-rest protection",
       "apple": "Keychain data protection classes and Secure Enclave-backed keys",
-      "bifrost": "springboard/src/keychain.rs (BKC1 file, ChaCha20 plus HMAC-SHA256, per-app subkeys)",
-      "status": "os",
-      "note": "Encrypted per app with a master key stored beside the items. No TPM or login-password key source yet, so it does not protect against root or a whole-disk attacker. Apps get no SDK option to choose a protection class."
+      "bifrost": "springboard/sdk/src/keychain_protection.rs (Protection, DeviceState, readable, code, from_code); springboard/src/keychain.rs (BKC1 file, ChaCha20 plus HMAC-SHA256, per-app subkeys)",
+      "status": "partial",
+      "note": "The six data protection classes, their wire codes and their readability rules are an SDK model with tests. The store still encrypts every item the same way, so the class is not enforced at rest, and there is no TPM or login-password key source."
     },
     {
       "feature": "App sandbox",
       "apple": "App Sandbox entitlements; Hardened Runtime",
-      "bifrost": "springboard/src/bare/app_policy.rs (Policy::from_permissions, with_entitlements, command)",
-      "status": "os",
-      "note": "Fail-closed bubblewrap sandbox driven by manifest permissions, with a separate app account and cgroups. Apps have no SDK API that reads or changes their sandbox state. Apple's entitlement model is not used."
+      "bifrost": "springboard/sdk/src/system/app_sandbox.rs (granted, permits, Capability); springboard/src/bare/app_policy.rs (Policy::from_permissions, with_entitlements, command)",
+      "status": "partial",
+      "note": "Apps can read which capabilities their manifest grants, in manifest order, with tests. The bubblewrap sandbox is still built by the shell, with a separate app account and cgroups, and apps cannot change it or inspect its mounts. Apple's entitlement model is not used."
     },
     {
       "feature": "Authorization Services and privileged operations",
@@ -38,9 +38,9 @@
     {
       "feature": "Login and session authentication",
       "apple": "Sessions (security sessions), local authentication prompts",
-      "bifrost": "springboard/src/privd/auth.rs; springboard/src/shell/passcode.rs (salted, stretched SHA-256 passcode with lockout)",
-      "status": "os",
-      "note": "Login is a PAM check with lockout backoff; the passcode is stored hashed with a lockout deadline. No app-facing LocalAuthentication-style prompt was found in the SDK."
+      "bifrost": "springboard/sdk/src/local_auth.rs (LAContext, LAPolicy, LAError, decode_reply); springboard/sdk/src/system/authorization_lock.rs (PasswordError); springboard/src/privd/auth.rs; springboard/src/shell/passcode.rs (salted, stretched SHA-256 passcode with lockout)",
+      "status": "partial",
+      "note": "The SDK models the authentication context, its policies and errors, and the reply of the account password check, with tests. The shell draws the prompt, the password check runs in the privileged daemon, and there is no biometry."
     },
     {
       "feature": "TLS client connections",
@@ -59,16 +59,16 @@
     {
       "feature": "App Transport Security (secure network links)",
       "apple": "NSAppTransportSecurity, Preventing Insecure Network Connections",
-      "bifrost": "springboard/sdk/src/url.rs; springboard/src/shell/update.rs (HTTPS only)",
+      "bifrost": "springboard/sdk/src/url.rs (parse_url, resolve); springboard/sdk/src/transport_policy.rs (TransportPolicy, check_request, check_redirect)",
       "status": "partial",
-      "note": "The shell's update client is HTTPS only. The SDK URL client uses rustls by default. No manifest-level ATS-style exception list or policy for apps."
+      "note": "Scheme and TLS choice, port defaults and redirect resolution are tested headless in url::transport_security_tests. The URL client refuses an https request redirected to plain http, and transport_policy decides plain-http exceptions per host and subdomain, tested headless in sdk/tests/parity_sdk-complete-35.rs. Gap: the URL client does not read an exception list from the app manifest yet, so exceptions apply only where an app calls TransportPolicy itself. The shell's update client (src/shell/update.rs) is HTTPS only."
     },
     {
       "feature": "Software update integrity",
       "apple": "Code signing checks during Mac software updates (Updating Mac Software)",
-      "bifrost": "springboard/src/shell/update.rs (manifest sha256, size check); springboard/src/shell/sha256.rs",
-      "status": "os",
-      "note": "Updates are checked by SHA-256 against the manifest, which is not signed. update.rs states that TLS authenticates the server and there is no client-side manifest signature, so an attacker who controls the manifest controls the hash."
+      "bifrost": "springboard/sdk/src/system/update_integrity.rs (verify, Expected, IntegrityError); springboard/src/shell/update.rs (manifest sha256, size check); springboard/src/shell/sha256.rs",
+      "status": "partial",
+      "note": "Apps can check a download against its announced size and SHA-256 digest with tests, as the shell does. The manifest is still not signed, so an attacker who controls the manifest controls the digest, and the check is only as trustworthy as the HTTPS source."
     },
     {
       "feature": "Code signing services",
@@ -115,9 +115,9 @@
     {
       "feature": "Security framework result codes",
       "apple": "OSStatus values such as errSecDuplicateItem and errSecItemNotFound",
-      "bifrost": "springboard/sdk/src/keychain.rs (Error); Error::code() in docs/bifrost-ui.md",
+      "bifrost": "springboard/sdk/src/security_status.rs (KNOWN_CODES, category, meaning); springboard/sdk/src/keychain.rs (Error); Error::code() in docs/bifrost-ui.md",
       "status": "partial",
-      "note": "Only the keychain errors are mirrored. Other Security OSStatus values have no counterpart."
+      "note": "A table of the result codes the keychain and trust services return, each with a meaning and a category, is tested headless in sdk/tests/parity_sdk-complete-35.rs, and the keychain error codes are checked against it. Gap: the table covers only the codes this platform reports, and certificate, key and trust evaluation services have no counterpart yet. Headless tests: sdk/tests/parity_sdk-tests-01a.rs (osstatus_codes_match_the_security_framework_values)."
     },
     {
       "feature": "Legacy Secure Transport, Secure Download, CSSM",

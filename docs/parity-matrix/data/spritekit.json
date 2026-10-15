@@ -1,135 +1,135 @@
 {
-  "framework": "SpriteKit",
-  "doc": "https://developer.apple.com/documentation/spritekit",
-  "macos_since": "10.9",
-  "status": "partial",
-  "bifrost": "springboard/sdk/src/view/ (retained views, animation), springboard/ui/src/anim.rs, springboard/ui/src/scroll.rs, springboard/apps/games-desktop/src/games.rs, springboard/render/src/gfx, springboard/render/src/imgdec.rs",
-  "summary": "SpriteKit is a 2D scene, node, action, physics, particle and tile-map framework for games. BifrOSt has no 2D scene graph, physics world, particle system, tile map or shader API for apps. Its retained view tree, property animation, timing curves and image decoding cover the general UI counterparts only; the Games app (2048, Minesweeper, Klondike) is hand-written and does not use an engine.",
-  "rea_evidence": "ev_9be83454be472ad9b63487454441d5b45d38296db93613aa7ecffa332b60902f",
-  "features": [
-    {
-      "feature": "Scene and scene lifecycle",
-      "apple": "SKScene, SKView, SKRenderer, SpriteView",
-      "bifrost": "springboard/ui/src/scene_loop.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scene object with an update loop, no game-scene presenter; apps get a retained UI view tree and a Surface"
-    },
-    {
-      "feature": "Node tree and camera",
-      "apple": "SKNode, SKCameraNode, SKReferenceNode",
-      "bifrost": "springboard/sdk/src/view/mod.rs",
-      "status": "partial",
-      "note": "views nest and lay out, but there is no camera node, no archived .sks scene files and no per-node z-order or transform API for 2D content"
-    },
-    {
-      "feature": "Drawing shapes, images and text",
-      "apple": "SKSpriteNode, SKShapeNode, SKLabelNode",
-      "bifrost": "springboard/render/src/gfx, springboard/sdk/src/glyphs.rs, springboard/apps/games-desktop/src/games.rs",
-      "status": "partial",
-      "note": "apps draw into a Surface with damage tracking (the Games app does); no node-based sprite, shape or label objects"
-    },
-    {
-      "feature": "Textures and texture atlases",
-      "apple": "SKTexture, SKTextureAtlas, SKMutableTexture",
-      "bifrost": "springboard/render/src/imgdec.rs (PNG and JPEG decode)",
-      "status": "partial",
-      "note": "images decode to pixels; there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps"
-    },
-    {
-      "feature": "Actions",
-      "apple": "SKAction, Getting Started with Actions",
-      "bifrost": "springboard/sdk/src/view/animation.rs; springboard/ui/src/sk_action.rs (node action tree and runner); wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
-      "status": "partial",
-      "note": "Window::animate interpolates frame, opacity and background when a closure changes them. sk_action.rs adds composable actions (wait, report, sequence, group, counted and endless repeat) run by a Runner that reports fired ids; no node, window or app holds a Runner yet, so apps cannot use it. The wired tile motion in games-desktop predates it and does not use it. Built on parity/team-a-07; host unit tests only, not yet verified on Midget"
-    },
-    {
-      "feature": "Timing curves and springs",
-      "apple": "SKActionTimingMode, SKActionTimingFunction, SKKeyframeSequence interpolation",
-      "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs, springboard/ui/src/sk_action.rs (Keyframes)",
-      "status": "partial",
-      "note": "curves and springs exist as pure functions. sk_action.rs adds keyframe sequences with linear or hold interpolation between keys; per-key timing modes and key-level easing are not modelled, and nothing outside the module's own tests calls Keyframes yet. Built on parity/team-a-07; host unit tests only, not yet verified on Midget"
-    },
-    {
-      "feature": "Node constraints",
-      "apple": "SKConstraint, SKReachConstraints",
-      "bifrost": "springboard/ui/src/node_constraint.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the solver constrains layout variables, not a node's position or rotation; no inverse kinematics"
-    },
-    {
-      "feature": "Physics simulation",
-      "apple": "SKPhysicsWorld, SKPhysicsBody, SKPhysicsContact, SKPhysicsContactDelegate, SKFieldNode",
-      "bifrost": "springboard/ui/src/physics.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 13 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the only physics is list fling deceleration and rubber-banding; no rigid bodies, gravity, collisions or contact callbacks"
-    },
-    {
-      "feature": "Physics joints",
-      "apple": "SKPhysicsJoint, SKPhysicsJointPin, SKPhysicsJointSpring, SKPhysicsJointSliding, SKPhysicsJointLimit, SKPhysicsJointFixed",
-      "bifrost": "springboard/ui/src/physics.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 13 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no joint solver"
-    },
-    {
-      "feature": "Particle emitters",
-      "apple": "SKEmitterNode, SKParticleRenderOrder",
-      "bifrost": "springboard/ui/src/emitter.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no particle system in the SDK or the renderer"
-    },
-    {
-      "feature": "Tile maps",
-      "apple": "SKTileMapNode, SKTileSet, SKTileGroup, SKTileDefinition, SKTileGroupRule",
-      "bifrost": "springboard/ui/src/tilemap.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no tile map or auto-tiling rules"
-    },
-    {
-      "feature": "Custom shaders and uniforms",
-      "apple": "SKShader, SKAttribute, SKAttributeValue, SKUniform",
-      "bifrost": "docs/gpu-first.md (system presenter); springboard/render/src/glass.rs (system blur)",
-      "status": "os",
-      "note": "the GPU presenter and glass pass run in the system layer; apps cannot supply a fragment shader or per-node attributes"
-    },
-    {
-      "feature": "Effect, crop and transform nodes",
-      "apple": "SKEffectNode, SKCropNode, SKTransformNode",
-      "bifrost": "springboard/src/shell/window_fx.rs (window effects), springboard/render/src/glass.rs",
-      "status": "os",
-      "note": "window transitions and blur run in the shell; no app-facing node that renders children into an offscreen buffer with a filter"
-    },
-    {
-      "feature": "Warp geometry",
-      "apple": "SKWarpGeometry, SKWarpGeometryGrid, SKWarpable",
-      "bifrost": "springboard/ui/src/warp.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mesh deformation API"
-    },
-    {
-      "feature": "Environmental nodes (audio, light)",
-      "apple": "SKAudioNode, SKLightNode",
-      "bifrost": "springboard/ui/src/scene2d.rs (positional_mix",
-      "status": "partial",
-      "note": "Wave 5 (w5-spritekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audio playback exists as a daemon (springboard/audiod) but has no scene-positioned node API; no 2D light nodes"
-    },
-    {
-      "feature": "Renderer hand-off and custom Metal pipeline",
-      "apple": "SKRenderer, SKView",
-      "bifrost": "docs/gpu-first.md (Metal-shaped presenter), springboard/sdk/src/lib.rs",
-      "status": "gap",
-      "note": "the presenter is internal; apps cannot render into their own pipeline or drive a scene update cycle"
-    }
-  ],
-  "gaps": [
-    "No node or scene runs actions: sk_action.rs is a pure model with no SDK binding, so apps cannot attach an action to a view or node yet",
-    "No 2D scene graph with a per-frame update cycle and a camera node for apps (SKScene, SKCameraNode).",
-    "No physics world (rigid bodies, gravity, contacts, joints, fields); only list scroll deceleration exists in springboard/ui/src/scroll.rs.",
-    "No particle emitter system (SKEmitterNode).",
-    "No tile map system (SKTileMapNode and its tile set and rules).",
-    "No app-facing custom shader API (SKShader, SKUniform); shaders exist only inside the system presenter.",
-    "No texture atlas or GPU texture object (SKTexture, SKTextureAtlas).",
-    "No warp geometry or inverse-kinematics constraints (SKWarpGeometry, SKReachConstraints).",
-    "The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer.",
-    "No per-key easing in keyframe sequences (SKKeyframeSequence timing modes); only linear and hold interpolation exist"
-  ]
+ "framework": "SpriteKit",
+ "doc": "https://developer.apple.com/documentation/spritekit",
+ "macos_since": "10.9",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/view/ (retained views, animation), springboard/ui/src/anim.rs, springboard/ui/src/scroll.rs, springboard/apps/games-desktop/src/games.rs, springboard/render/src/gfx, springboard/render/src/imgdec.rs",
+ "summary": "SpriteKit is a 2D scene, node, action, physics, particle and tile-map framework for games. BifrOSt has no 2D scene graph, physics world, particle system, tile map or shader API for apps. Its retained view tree, property animation, timing curves and image decoding cover the general UI counterparts only; the Games app (2048, Minesweeper, Klondike) is hand-written and does not use an engine.",
+ "rea_evidence": "ev_9be83454be472ad9b63487454441d5b45d38296db93613aa7ecffa332b60902f",
+ "features": [
+  {
+   "feature": "Scene and scene lifecycle",
+   "apple": "SKScene, SKView, SKRenderer, SpriteView",
+   "bifrost": "springboard/ui/src/scene_loop.rs (SceneLoop, Frame, Step); springboard/ui/tests/parity_sdk-tests-11.rs",
+   "status": "partial",
+   "note": "The present, dismiss, pause, resize and clamped frame clock with the ordered steps is tested headless in scene_loop::tests and parity_sdk-tests-11.rs. Gap: the model is not wired into apps or the shell, there is no scene object that runs the steps, and no game-scene presenter; apps get a retained UI view tree and a Surface."
+  },
+  {
+   "feature": "Node tree and camera",
+   "apple": "SKNode, SKCameraNode, SKReferenceNode",
+   "bifrost": "springboard/sdk/src/view/mod.rs; springboard/ui/src/sk_node.rs (NodeTree, set_camera, view_point, scene_point)",
+   "status": "partial",
+   "note": "Nodes with position, rotation, scale, alpha, z order, hidden subtrees and a camera node that maps views to scenes are tested headless in ui/tests/parity_sdk-complete-35.rs. Gap: no view or window draws a node tree yet, and archived .sks scene files are not supported."
+  },
+  {
+   "feature": "Drawing shapes, images and text",
+   "apple": "SKSpriteNode, SKShapeNode, SKLabelNode",
+   "bifrost": "springboard/render/src/gfx, springboard/sdk/src/glyphs.rs, springboard/apps/games-desktop/src/games.rs; springboard/ui/src/sk_node.rs (Content, draw_list)",
+   "status": "partial",
+   "note": "Apps draw into a Surface with damage tracking (the Games app does), and sk_node models rectangle, circle, label and image nodes whose paint-order draw list and view frames are tested headless. Gap: the draw list is not rasterised into a Surface yet, so text measurement and image decoding still belong to the renderer."
+  },
+  {
+   "feature": "Textures and texture atlases",
+   "apple": "SKTexture, SKTextureAtlas, SKMutableTexture",
+   "bifrost": "springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode); springboard/render/src/imgdec.rs (fit, cover, contain)",
+   "status": "partial",
+   "note": "Images decode to pixels, as tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps"
+  },
+  {
+   "feature": "Actions",
+   "apple": "SKAction, Getting Started with Actions",
+   "bifrost": "springboard/sdk/src/view/animation.rs; springboard/ui/src/sk_action.rs (node action tree and runner); springboard/ui/src/sk_node.rs (NodeTree::run_action, advance_actions); wired: springboard/apps/games-desktop/src/tile_motion.rs (Sequence and TileMotion over springboard/ui/src/anim.rs Animation/Curve; used by games.rs shift, draw_2048, tick, next_wake)",
+   "status": "partial",
+   "note": "Window::animate interpolates frame, opacity and background when a closure changes them. sk_action.rs adds composable actions (wait, report, sequence, group, counted and endless repeat) run by a Runner that reports fired ids, and sk_node.rs gives each scene node its own runner so reports carry the node that fired them. Gap: no window or view builds a node tree yet, so node actions run only in the headless tests in ui/tests/parity_sdk-complete-35.rs. built on parity/team-a-07; not yet verified on Midget"
+  },
+  {
+   "feature": "Timing curves and springs",
+   "apple": "SKActionTimingMode, SKActionTimingFunction, SKKeyframeSequence interpolation",
+   "bifrost": "springboard/ui/src/anim.rs, springboard/render/src/motion.rs, springboard/ui/src/sk_action.rs (Keyframes, Key)",
+   "status": "partial",
+   "note": "curves and springs exist as pure functions. Keyframes now give each key its own timing, hold or linear, and an easing curve for its segment, tested headless in ui/tests/parity_sdk-complete-35.rs. Gap: no node action uses Keyframes yet, so the timing modes apply only to the keyframe model. built on parity/team-a-07; not yet verified on Midget"
+  },
+  {
+   "feature": "Node constraints",
+   "apple": "SKConstraint, SKReachConstraints",
+   "bifrost": "springboard/ui/src/node_constraint.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the solver constrains layout variables, not a node's position or rotation; no inverse kinematics"
+  },
+  {
+   "feature": "Physics simulation",
+   "apple": "SKPhysicsWorld, SKPhysicsBody, SKPhysicsContact, SKPhysicsContactDelegate, SKFieldNode",
+   "bifrost": "springboard/ui/src/physics.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 13 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the only physics is list fling deceleration and rubber-banding; no rigid bodies, gravity, collisions or contact callbacks"
+  },
+  {
+   "feature": "Physics joints",
+   "apple": "SKPhysicsJoint, SKPhysicsJointPin, SKPhysicsJointSpring, SKPhysicsJointSliding, SKPhysicsJointLimit, SKPhysicsJointFixed",
+   "bifrost": "springboard/ui/src/physics.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 13 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no joint solver"
+  },
+  {
+   "feature": "Particle emitters",
+   "apple": "SKEmitterNode, SKParticleRenderOrder",
+   "bifrost": "springboard/ui/src/emitter.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no particle system in the SDK or the renderer"
+  },
+  {
+   "feature": "Tile maps",
+   "apple": "SKTileMapNode, SKTileSet, SKTileGroup, SKTileDefinition, SKTileGroupRule",
+   "bifrost": "springboard/ui/src/tilemap.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no tile map or auto-tiling rules"
+  },
+  {
+   "feature": "Custom shaders and uniforms",
+   "apple": "SKShader, SKAttribute, SKAttributeValue, SKUniform",
+   "bifrost": "springboard/sdk/src/system/sprite_shader.rs (Shader, Value, Uniform, validate)",
+   "status": "partial",
+   "note": "Shader sources, attributes and uniform values are validated with tests. The system presenter runs no application shader, so validated descriptions are not yet drawn by any presenter."
+  },
+  {
+   "feature": "Effect, crop and transform nodes",
+   "apple": "SKEffectNode, SKCropNode, SKTransformNode",
+   "bifrost": "springboard/sdk/src/system/effect_nodes.rs (CropNode, TransformNode, EffectNode, Affine, Rect)",
+   "status": "partial",
+   "note": "Crop visibility, affine composition and filter validation are tested. Window transitions and blur still run in the shell, and nodes do not yet render their children into an offscreen filtered buffer."
+  },
+  {
+   "feature": "Warp geometry",
+   "apple": "SKWarpGeometry, SKWarpGeometryGrid, SKWarpable",
+   "bifrost": "springboard/ui/src/warp.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mesh deformation API"
+  },
+  {
+   "feature": "Environmental nodes (audio, light)",
+   "apple": "SKAudioNode, SKLightNode",
+   "bifrost": "springboard/ui/src/scene2d.rs (positional_mix, Scene2d, FrameClock)",
+   "status": "partial",
+   "note": "The positional audio mix, the scene scale modes and anchors, the scene and view point mapping and the frame clock are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; there is no scene-positioned audio node API over the audio daemon (springboard/audiod) and no 2D light nodes."
+  },
+  {
+   "feature": "Renderer hand-off and custom Metal pipeline",
+   "apple": "SKRenderer, SKView",
+   "bifrost": "springboard/ui/src/scene_handoff.rs (SceneHandoff, RenderPass, Viewport); springboard/ui/src/scene_loop.rs (frame cycle)",
+   "status": "partial",
+   "note": "SceneHandoff advances a presented scene once per update and gives the app a render pass (viewport in device pixels and scene time), refused until an update has run; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: the GPU presenter does not consume the hand-off yet, apps cannot reach it through the SDK, and there is no second GPU pipeline for apps (the presenter is Linux GPU code, docs/gpu-first.md)."
+  }
+ ],
+ "gaps": [
+  "No node or scene runs actions: sk_action.rs is a pure model with no SDK binding, so apps cannot attach an action to a view or node yet",
+  "No 2D scene graph with a per-frame update cycle and a camera node for apps (SKScene, SKCameraNode).",
+  "No physics world (rigid bodies, gravity, contacts, joints, fields); only list scroll deceleration exists in springboard/ui/src/scroll.rs.",
+  "No particle emitter system (SKEmitterNode).",
+  "No tile map system (SKTileMapNode and its tile set and rules).",
+  "No app-facing custom shader API (SKShader, SKUniform); shaders exist only inside the system presenter.",
+  "No texture atlas or GPU texture object (SKTexture, SKTextureAtlas).",
+  "No warp geometry or inverse-kinematics constraints (SKWarpGeometry, SKReachConstraints).",
+  "The Games app (springboard/apps/games-desktop/src/games.rs) is hand-written with no engine; it is not evidence of a reusable SpriteKit-style layer.",
+  "No per-key easing in keyframe sequences (SKKeyframeSequence timing modes); only linear and hold interpolation exist"
+ ]
 }

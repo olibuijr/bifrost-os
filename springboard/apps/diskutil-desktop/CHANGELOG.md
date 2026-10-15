@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.5 — 2026-10-14
+
+- Derive the initial content geometry from the host-provided window size instead of assuming a default resolution.
+
+## 0.7.4 — 2026-10-14
+
+- Use the shared large-title widget on the empty root screen and an inline title for selected-disk details.
+
+## 0.7.3 — 2026-10-14
+
+- Add the generated app compliance harness.
+
+## 0.7.2 — 2026-10-14
+
+- Export the Disk Utility icon at the store's required 180 × 180 size.
+
+## 0.7.1 — 2026-10-14
+
+- Run disk operations through the shared utility queue and wake the app loop when each result is ready, without polling.
+
+## 0.7.0
+
+- File > Open Disk Image attaches the chosen image read-only, as its menu name says. File > Open Disk Image for Writing attaches it with read and write access.
+- Mount, Unmount and Eject in the File menu and the toolbar use the same rules, so a command is enabled in one exactly when it is enabled in the other.
+- Software RAID arrays (md devices) are listed in the sidebar, so an array the RAID Assistant made can be selected. The RAID Assistant never offers an array as a member.
+
 ## 0.6.0
 
 - Form sheets with text fields, choices and lists, in the sheet style of the other dialogs.

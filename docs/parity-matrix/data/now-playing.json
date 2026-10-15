@@ -10,51 +10,53 @@
     {
       "feature": "Local sessions: MediaSession and MediaSessionRepresentable",
       "apple": "MediaSession, MediaSessionRepresentable, MediaSessionError",
-      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; wired: springboard/src/shell/now_playing_menu.rs (panel_for), springboard/src/shell/services/now_playing.rs",
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; tests: springboard/sdk/tests/parity_sdk-complete-22.rs, springboard/ui/tests/parity_sdk-complete-22.rs; wired: springboard/src/shell/now_playing_menu.rs (panel_for), springboard/src/shell/services/now_playing.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only the shell reads playback; an app cannot register its own session. The audio client (springboard/sdk/src/lib.rs:87) drives playback but does not publish metadata to the system. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "An app's session (identifier, primary flags, content, playback, command table) and the body it publishes are tested headless. Gap: an app's primary request does not reach the shell, the shell's card is not verified on Midget, and the shell's playback is the only one it shows."
     },
     {
       "feature": "Publishing media sessions to Lock Screen and Control Center",
       "apple": "Publishing media sessions (article)",
-      "bifrost": "springboard/src/shell/music/system.rs (lock-screen card, Control Center controls); springboard/src/shell/notify/mod.rs (card placement above the notification list)",
-      "status": "os",
-      "note": "Works for whatever the audio service holds, not for an app's own session. The Music app is the only source; other apps reach the card only by playing through the service."
+      "bifrost": "springboard/ui/src/media_session.rs (MediaSession, RemoteCommand, dispatch); springboard/sdk/src/now_playing.rs (publish_body, publish, clear); springboard/src/shell/music/system.rs (lock-screen card, Control Center controls)",
+      "status": "partial",
+      "note": "An app's session, its content, its position capped at the duration and its command gating are tested headless in parity_sdk-os-01. Gap: the lock-screen card for an app's session is not verified on the lab machine, and the shell's Music card is not yet shared with other sessions."
     },
     {
       "feature": "Remote sessions: RemoteMediaSession, extension, attributes, MediaDevice",
       "apple": "RemoteMediaSessionRepresentable, RemoteMediaSession, RemoteMediaSessionExtension, RemoteMediaSessionExtensionConfiguration, RemoteMediaSessionAttributes, RemoteMediaSessionError, MediaDevice",
-      "bifrost": "springboard/src/bare/bluetooth.rs:250 and springboard/src/media/route.rs:34 (route name only, for the Now Playing route label)",
-      "status": "gap",
-      "note": "No remote playback across devices, no extension point, no device list. The Bluetooth route is displayed, not controlled as a remote session."
+      "bifrost": "springboard/ui/src/remote_session.rs (RemoteMediaSession, MediaDevice); springboard/src/media/route.rs:34 (route name only, for the Now Playing route label)",
+      "status": "partial",
+      "note": "A session's title, app, device list and connect, move and disconnect steps are modelled and tested in springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no transport moves the media, no extension point supplies the device list, and the Bluetooth route is still displayed rather than controlled."
     },
     {
       "feature": "Content types and metadata (MusicContent, PodcastContent, MovieContent, TVShowContent, BookContent, RadioContent, GenericContent, MediaType, MediaDuration)",
       "apple": "MediaContentRepresentable, MusicContent, PodcastContent, MovieContent, TVShowContent, BookContent, RadioContent, HomeMediaContent, GenericContent, MediaType, MediaDuration",
-      "bifrost": "springboard/ui/src/media_content.rs; wired: springboard/src/shell/now_playing_menu.rs",
+      "bifrost": "springboard/ui/src/media_content.rs (ContentKind); tests: springboard/ui/tests/parity_sdk-tests-01b.rs, springboard/ui/tests/parity_sdk-complete-22.rs; wired: springboard/src/shell/now_playing_menu.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The service track carries no title, artist, kind or artwork fields, so the card cannot receive typed metadata from an app. Duration is in the snapshot (duration_ms) and live streams have a Live marker. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Items carry a typed kind (music, podcast, movie, TV show, book, radio, generic), a title, artist, album, duration and the Live marker, and the publish body sends them. Gap: artwork does not reach the card, and the shell's card has not been verified on Midget for these fields."
     },
     {
       "feature": "Artwork (Artwork, ArtworkRepresentation, AnimatedArtwork)",
       "apple": "Artwork, ArtworkRepresentation, AnimatedArtwork",
       "bifrost": "springboard/ui/src/media_artwork.rs, springboard/sdk/src/now_playing.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
+      "note": "verified on Midget 0.7.25 by 8 tests. Headless tests (headless_now_playing_* in ui/tests) cover duration labels, text trimming, subtitles and progress. Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
     },
     {
       "feature": "Play, pause, stop and toggle commands",
       "apple": "play(_:), pause(_:), stop(_:), togglePlayPause(_:)",
       "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs (Menu::NowPlaying, Action::Media)",
       "status": "partial",
-      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Transport works from the lock card and Control Center. Apps have no command registration, so a remote command from the system cannot be routed to an app's own player. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; tests: springboard/sdk/tests/parity_sdk-complete-22.rs; wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs (Menu::NowPlaying, Action::Media)",
+      "status": "partial",
+      "note": "An app declares each command as unsupported, disabled or enabled, and now_playing::accept checks a shell command against that table before the app runs it. Gap: the shell does not yet deliver its play, pause and toggle events to an app's own player on the lab machine, and the lock card's transport is not verified on Midget."
     },
     {
       "feature": "Next and previous track commands",
       "apple": "next(_:), previous(_:)",
-      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; wired: springboard/src/shell/now_playing_menu.rs (Previous and Next rows)",
+      "bifrost": "springboard/ui/src/media_session.rs, springboard/sdk/src/now_playing.rs; tests: springboard/sdk/tests/parity_sdk-complete-22.rs; wired: springboard/src/shell/now_playing_menu.rs (Previous and Next rows)",
       "status": "partial",
-      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Works for the service queue. Enablement per command is not published, so the card cannot grey out an unavailable direction. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Next and previous are declared per session as unsupported, disabled or enabled, and the publish body sends each state, so a direction can be greyed out. Gap: the shell's card has not been verified on Midget to grey out a direction, and the service queue is the only source of these commands."
     },
     {
       "feature": "Skip forward and backward by interval",
@@ -66,9 +68,9 @@
     {
       "feature": "Seek to position and scrubbing",
       "apple": "seekToPosition(_:), seekForward(beginAction:endAction:), seekBackward(beginAction:endAction:)",
-      "bifrost": "springboard/proto/src/svc.rs (Cmd::SeekMs); springboard/src/shell/audiosvc.rs:168 (Target::Scrubber hit test); springboard/sdk/src/widgets.rs (PlayerLayout.progress seek); wired: springboard/src/shell/control_center.rs (Touch::Scrub, media_bar), springboard/src/shell/services/now_playing.rs (seek, seek_length_ms, scrub_target_ms)",
+      "bifrost": "springboard/proto/src/svc.rs (Cmd::SeekMs); springboard/src/shell/audiosvc.rs:168 (Target::Scrubber hit test); springboard/sdk/src/widgets.rs (PlayerLayout.progress seek); springboard/ui/src/media_session.rs (held_seek_position, seek_held); tests: springboard/ui/tests/parity_sdk-complete-22.rs; wired: springboard/src/shell/control_center.rs (Touch::Scrub, media_bar), springboard/src/shell/services/now_playing.rs (seek, seek_length_ms, scrub_target_ms)",
       "status": "partial",
-      "note": "Absolute seek works through the lock card scrubber and the floating player progress track. Press-and-hold fast forward and rewind (begin and end actions) is not implemented. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Absolute seek works through the lock card scrubber and the floating player progress track. Press-and-hold fast forward and rewind now has a headless model (held seeks move at four times the hold time and stop at the content ends). Gap: the shell does not yet send begin and end hold events to it, and that needs the lab machine to verify."
     },
     {
       "feature": "Playback rate",
@@ -94,9 +96,9 @@
     {
       "feature": "Playback state snapshot",
       "apple": "MediaPlaybackSnapshot",
-      "bifrost": "springboard/proto/src/svc.rs (Snapshot: playing, position_ms, duration_ms, shuffle, repeat, queue_len, volume, muted, error, live); springboard/sdk/src/lib.rs:87 (audio::Client subscription); wired: springboard/src/shell/services/now_playing.rs (extrapolate, Store::progress)",
+      "bifrost": "springboard/proto/src/svc.rs (Snapshot: playing, position_ms, duration_ms, shuffle, repeat, queue_len, volume, muted, error, live); tests: springboard/proto/tests/parity_sdk-tests-01b.rs; springboard/sdk/src/lib.rs:87 (audio::Client subscription); wired: springboard/src/shell/services/now_playing.rs (extrapolate, Store::progress)",
       "status": "partial",
-      "note": "Apps can subscribe to the service snapshot through the audio client. The snapshot is the service's own state, not a Now Playing snapshot an app publishes, and it has no rate field. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "The snapshot round-trips through the audio protocol, and position extrapolation, scrubbing and transport commands are tested headless (headless_playback_snapshot_* in proto/tests, headless_now_playing_* in springboard/tests). An app's own snapshot (state, position capped at the content end, and a rate of one only while playing) is tested headless in ui/tests/parity_sdk-complete-22.rs. Gap: the service snapshot itself still has no rate field, and the shell has not been verified on Midget."
     }
   ],
   "gaps": [

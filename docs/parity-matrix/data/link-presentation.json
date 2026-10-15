@@ -26,7 +26,7 @@
       "apple": "LPLinkMetadata.title, iconProvider, imageProvider",
       "bifrost": "springboard/apps/news-desktop/src/pictures.rs (og_image, load)",
       "status": "partial",
-      "note": "News scrapes the og:image meta tag for its own article pictures; the logic is app-local and not an SDK API, and there is no icon lookup"
+      "note": "News reads the og:image meta tag for its article pictures; og_image, the RUV recipe rewrite, base64 and the corner rounding are tested headless in pictures::tests. Gap: the logic is app-local, not an SDK API, and there is no title or icon lookup."
     },
     {
       "feature": "Video of a link",
@@ -47,7 +47,7 @@
       "apple": "share sheet and open-URL handoff (LPLinkMetadata for display)",
       "bifrost": "springboard/sdk/src/share.rs (receiving: Input::Open with https scheme)",
       "status": "partial",
-      "note": "a shared URL arrives as Input::Open(url); the app gets no metadata with it"
+      "note": "a shared URL arrives as Input::Open(url); the app gets no metadata with it. Tests (springboard/sdk/tests/parity_sdk-tests-01c.rs): a_shared_text_arrives_as_a_data_url_that_decodes_to_the_text, a_document_request_with_the_inbound_bit_is_one_someone_shared_with_the_app"
     },
     {
       "feature": "Recognising links in text",

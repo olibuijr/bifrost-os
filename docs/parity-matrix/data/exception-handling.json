@@ -10,9 +10,9 @@
     {
       "feature": "Uncaught exception capture and logging",
       "apple": "NSExceptionHandler (default(), setExceptionHandlingMask(_:))",
-      "bifrost": "springboard/src/bare/crashlog.rs (install, format_panic)",
-      "status": "os",
-      "note": "Panic hook appends a one-line record to DIR/crash.log before the release abort; no SDK call exposes it to apps"
+      "bifrost": "springboard/sdk/src/exception_handler.rs (ExceptionHandler::capture, FailureKind::name, Failure::log_line); springboard/src/bare/crashlog.rs (try_append, install, format_panic)",
+      "status": "partial",
+      "note": "ExceptionHandler::capture decides a monitored failure and appends its line to the app's crash.log in the shell's format; tested headless in sdk/tests/parity_sdk-rest-08.rs. Gap: the process panic hook stays with the shell, apps cannot install one, and the shell's diagnostics do not read an app's crash.log."
     },
     {
       "feature": "Exception handling mask (which exceptions are monitored)",
@@ -45,23 +45,23 @@
     {
       "feature": "Panic isolation for background work",
       "apple": "No direct equivalent in the framework; Objective-C exceptions unwind through the caller",
-      "bifrost": "springboard/sdk/src/dispatch.rs (run, sync), springboard/src/deildu/jobs.rs (spawn, spawn_or, spawn_front_or), springboard/render/src/gfx/pool.rs (drain)",
+      "bifrost": "springboard/sdk/src/dispatch.rs (run, sync), springboard/src/deildu/jobs.rs (spawn, spawn_or, spawn_front_or), springboard/render/src/gfx/pool.rs (drain); springboard/sdk/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "catch_unwind per job keeps a panicking closure from killing the worker; sync re-raises the panic on the caller"
+      "note": "Headless tests in parity_sdk-tests-18 show that a panicking job leaves the background and serial workers running, and that sync re-raises the panic on the caller. Gap: the deildu job queue and the render pool isolate panics in their own code, which is not covered by these tests."
     },
     {
       "feature": "Crash record surfaced to the user and developer",
       "apple": "Crash reports from the system (outside this framework)",
-      "bifrost": "springboard/sdk/src/exception_handler.rs",
+      "bifrost": "springboard/sdk/src/exception_handler.rs; tests: springboard/sdk/tests/parity_sdk-tests-06.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-exception-handling, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Diagnostics list crash.log entries and coredumpctl output; there is no in-app crash reporter API"
+      "note": "The failure monitor is tested headless in sdk/tests/parity_sdk-tests-06.rs: the bit layout, log and handle decisions per kind (a_monitored_kind_is_logged...), delegate refusals, the halt mask, and crash record reading with newest-first order and a sixty character signature (crash_records_list_the_newest_crash_first...). Gap: not wired into apps or the shell and not tested on the VM or Midget; diagnostics list crash.log entries and coredumpctl output, and there is no in-app crash reporter API."
     },
     {
       "feature": "Unclean-exit detection at next start",
       "apple": "Not part of this framework",
-      "bifrost": "springboard/src/bare/crashlog.rs (last_start, last_exit, previous_run_note)",
-      "status": "os",
-      "note": "A start with a last_start marker and no last_exit reports the previous run as unclean"
+      "bifrost": "springboard/src/bare/crashlog.rs (last_start, last_exit, previous_run_note); springboard/sdk/src/exception_handler.rs (start_session, end_session)",
+      "status": "partial",
+      "note": "start_session and end_session give an app's data directory the shell's start and exit marks; a start with a last_start marker and no last_exit reports the previous run as unclean. Tested headless in springboard/tests/parity_sdk-rest-08.rs and sdk/tests/parity_sdk-rest-08.rs. Gap: the marks are not yet written by an app's own launch path, and the note is not shown to the user."
     },
     {
       "feature": "Objective-C exception global string constants and error names",

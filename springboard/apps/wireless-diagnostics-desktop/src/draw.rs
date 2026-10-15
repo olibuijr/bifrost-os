@@ -175,7 +175,7 @@ fn paint_chart(labels: &mut TextCache, s: &mut Surface, ui: &Ui, v: &View, r: Re
         let Some(dbm) = value else { continue };
         let height = chart_fraction(*dbm) * plot.h;
         let x = plot.x + (offset + k) as f32 * col;
-        fill(s, ui, Rect { x, y: bottom - height, w: (col - 1.0).max(1.0), h: height }, 0.0, TINT.now());
+        fill(s, ui, Rect { x, y: bottom - height, w: (col - 1.0).max(1.0), h: height }, 0.0, TINT);
     }
     text(
         labels,

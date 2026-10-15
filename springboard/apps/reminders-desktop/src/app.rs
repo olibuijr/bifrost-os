@@ -435,6 +435,13 @@ impl Reminders {
         let settings_path = path.with_file_name("settings.tsv");
         let attach_dir = path.with_file_name("attachments");
         let settings = settings::load(&settings_path);
+        let opts = Options {
+            default_list: settings.default_list,
+            sort: settings.sort,
+            hidden_smart: settings.hidden_smart,
+            ..Options::default()
+        };
+        let collapsed: HashSet<u64> = settings.collapsed.iter().copied().collect();
         let mut app = Self {
             w,
             x0: 0.0,
@@ -452,7 +459,7 @@ impl Reminders {
             wall,
             screen: Screen::Items,
             view: View::Smart(Smart::All),
-            opts: Options { default_list: settings.default_list, ..Options::default() },
+            opts,
             options_open: false,
             file_export: false,
             notice: None,
@@ -461,7 +468,7 @@ impl Reminders {
             rows: vec![],
             row_y: vec![],
             items_h: 0.0,
-            collapsed: HashSet::new(),
+            collapsed,
             collapsed_groups: HashSet::new(),
             today: local_day(wall.unix, wall.offset),
             editor: None,
@@ -631,7 +638,14 @@ impl Reminders {
         } else {
             self.collapsed.extend(organize::parent_ids(&self.data.items));
         }
+        self.save_collapsed();
         self.rebuild(ui);
+    }
+
+    /// Keeps the folded subtasks in the settings file, so they are still folded after a restart.
+    fn save_collapsed(&mut self) {
+        self.settings.collapsed = self.collapsed.iter().copied().collect();
+        self.save_settings();
     }
 
     /// Reminders > Mark Due Date As: the selected open reminder gets the day, keeping its time.
@@ -722,6 +736,8 @@ impl Reminders {
 
     pub fn set_sort(&mut self, ui: &Ui, sort: Sort) {
         self.opts.sort = sort;
+        self.settings.sort = sort;
+        self.save_settings();
         self.rebuild(ui);
     }
 
@@ -732,7 +748,8 @@ impl Reminders {
 
     pub fn toggle_smart(&mut self, smart: Smart) {
         self.opts.toggle_smart(smart);
-        self.dirty = true;
+        self.settings.hidden_smart = self.opts.hidden_smart;
+        self.save_settings();
     }
 
     /// Lists > Pin List / Unpin List: a pinned list has a tile beside the smart lists.
@@ -904,11 +921,36 @@ impl Reminders {
         saved
     }
 
-    /// File > Print List: the list's name and its Markdown checklist, when a list is on screen.
+    /// Whether a list, or a smart list on screen (not a search), has something for File > Print List.
+    pub fn can_print(&self) -> bool {
+        self.open_list().is_some() || (self.screen == Screen::Items && !self.searching && matches!(self.view, View::Smart(_) | View::Custom(_)))
+    }
+
+    /// File > Print List: the list's name and its Markdown checklist, when a list or a smart list is on screen.
+    /// A smart list prints its rows as one flat checklist under its own name.
     pub fn printable_list(&self) -> Option<(String, String)> {
-        let list = self.open_list()?;
-        let name = self.data.lists.iter().find(|l| l.id == list)?.name.clone();
-        Some((name, model::export_markdown(&self.data, list)))
+        if let Some(list) = self.open_list() {
+            let name = self.data.lists.iter().find(|l| l.id == list)?.name.clone();
+            return Some((name, model::export_markdown(&self.data, list)));
+        }
+        if !self.can_print() {
+            return None;
+        }
+        let name = match self.view {
+            View::Smart(s) => s.label().to_string(),
+            View::Custom(id) => self.data.smarts.iter().find(|s| s.id == id)?.name.clone(),
+            _ => return None,
+        };
+        let items: Vec<&model::Reminder> = self
+            .rows
+            .iter()
+            .filter_map(|row| match row {
+                Row::Item { idx, .. } => self.data.items.get(*idx),
+                _ => None,
+            })
+            .collect();
+        let text = model::flat_markdown(&name, &items);
+        Some((name, text))
     }
 
     // ---- intents ---------------------------------------------------------
@@ -2025,10 +2067,15 @@ impl Reminders {
     }
 
     /// Writes the open list as `<name>.md` under ~/Documents/Reminders Export.
-    fn export_list(&mut self) {
-        let View::List(list) = self.view else { return };
+    /// The name and Markdown checklist of the list on screen, as Export List and Save List As write them.
+    pub fn list_export(&self) -> Option<(String, String)> {
+        let View::List(list) = self.view else { return None };
         let name = self.data.lists.iter().find(|l| l.id == list).map_or("Reminders".to_string(), |l| l.name.clone());
-        let text = model::export_markdown(&self.data, list);
+        Some((name, model::export_markdown(&self.data, list)))
+    }
+
+    fn export_list(&mut self) {
+        let Some((name, text)) = self.list_export() else { return };
         let dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Documents").join("Reminders Export");
         let written = std::fs::create_dir_all(&dir).and_then(|_| springboard::shell::fsutil::write_atomic(&dir.join(format!("{name}.md")), &text));
         self.notice = Some(match written {
@@ -2120,10 +2167,7 @@ impl Reminders {
             }
             Target::Options => self.options_open = !self.options_open,
             Target::OptClose => self.options_open = false,
-            Target::OptSort(s) => {
-                self.opts.sort = s;
-                self.rebuild(ui);
-            }
+            Target::OptSort(s) => self.set_sort(ui, s),
             Target::OptGroup(g) => {
                 self.opts.group = g;
                 self.rebuild(ui);
@@ -2148,6 +2192,7 @@ impl Reminders {
                     if !self.collapsed.remove(&id) {
                         self.collapsed.insert(id);
                     }
+                    self.save_collapsed();
                     self.rebuild(ui);
                 }
             }

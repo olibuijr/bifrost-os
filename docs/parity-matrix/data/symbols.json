@@ -10,16 +10,16 @@
     {
       "feature": "Symbol-based images (SF Symbols catalogue)",
       "apple": "Symbols collection; NSImage(systemSymbolName:) is the entry point in the official overview",
-      "bifrost": "springboard/sdk/src/glyphs.rs (glyph, NAMES: 59 names); springboard/render/src/symbols.rs (Symbol enum, font lookup by glyph name then Unicode)",
+      "bifrost": "springboard/sdk/src/glyphs.rs (glyph, NAMES: 60 names); springboard/render/src/symbols.rs (Symbol enum, font lookup by glyph name then Unicode)",
       "status": "partial",
-      "note": "59 named line drawings; unknown names draw nothing. Not the SF Symbols catalogue. The renderer's symbol font path finds no real symbol font on the device, so the drawings are what ships"
+      "note": "60 named line drawings, tested headless in springboard/sdk/tests/parity_sdk-tests-10-w7.rs; unknown names draw nothing. Not the SF Symbols catalogue. The 22-symbol set maps names and code points (springboard/render/tests/parity_sdk-tests-10-w7.rs). The renderer's symbol font path finds no real symbol font on the device, so the drawings are what ships"
     },
     {
       "feature": "Symbol drawing: shape painters and named icons",
       "apple": "No direct counterpart; the fill behind a symbol image (CGContext fill of a path into a rect)",
-      "bifrost": "springboard/sdk/src/glyph_draw.rs (paint, disc, ring, segment, arc, ellipse, either, globe, mic, dismiss_keyboard, alarm_clock, stopwatch, timer re-exported from springboard/render/src/sdf_glyphs.rs; springboard/src/shell/glyphs.rs re-exports the same)",
+      "bifrost": "springboard/sdk/src/glyph_draw.rs (paint, disc, ring, segment, arc, ellipse, either, globe, mic, dismiss_keyboard, alarm_clock, stopwatch, timer re-exported from springboard/render/src/sdf_glyphs.rs; springboard/src/shell/glyphs.rs re-exports the same); springboard/sdk/src/symbol_draw.rs (SymbolStyle, paint_layer)",
       "status": "partial",
-      "note": "The shell's painters are now the SDK's: apps can draw through bifrost_app::glyph_draw, and shell and SDK draw identical pixels (tests in sdk glyph_draw and render sdf_glyphs). Still one colour per call, no rendering modes (monochrome, hierarchical, palette) and no symbol weights or scales; apps still import springboard::shell::glyphs until they move (no app changes this sprint). Parity needs a Midget check"
+      "note": "The shell's painters are the SDK's, and bifrost_app::symbol_draw applies a symbol's weight stroke factor, scale, rendering mode (hierarchical opacity by layer, palette slots, monochrome) and palette to each layer (headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the named icons (globe, mic and the others) still take one colour per call with no layered form, and a Midget check is still needed for parity."
     },
     {
       "feature": "Appear, disappear and scale effects",
@@ -31,16 +31,16 @@
     {
       "feature": "Bounce and pulse effects",
       "apple": "bounce, pulse (BounceSymbolEffect, PulseSymbolEffect)",
-      "bifrost": "springboard/ui/src/symbol_effect.rs; wired: springboard/src/shell/control_center.rs (start_toggle_bounce, glyph_scale; desktop panel Wi-Fi, Bluetooth, Focus)",
+      "bifrost": "springboard/ui/src/symbol_effect.rs (SymbolEffect, Effect::Bounce, Effect::Pulse, replace_poses); wired: springboard/src/shell/control_center.rs (start_toggle_bounce, glyph_scale; desktop panel Wi-Fi, Bluetooth, Focus)",
       "status": "partial",
-      "note": "Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the bounce spring and dock bounce are fixed motions for scrolling and the dock, not symbol effects an app can request Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The bounce and pulse poses, the repeat and speed options and the replace hand-over are tested headless in springboard/ui/tests/parity_sdk-tests-12.rs; the control centre bounces its toggles, pulse is drawn nowhere yet, and the dock bounce and scroll spring are fixed motions that apps cannot request."
     },
     {
       "feature": "Variable color effect",
       "apple": "variableColor (VariableColorSymbolEffect)",
-      "bifrost": "springboard/ui/src/symbol_layers.rs",
+      "bifrost": "springboard/ui/src/symbol_layers.rs (layer_opacity, cycle_progress)",
       "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no variable layers in glyphs.rs; each glyph is one colour"
+      "note": "Cumulative and iterative fills, dimmed or hidden inactive layers and reversing cycles are a pure model, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on Midget. No variable layers in glyphs.rs; each glyph is one colour"
     },
     {
       "feature": "Content transitions (replace, automatic)",
@@ -66,16 +66,16 @@
     {
       "feature": "Symbol weights, scales and rendering modes",
       "apple": "Symbol images with weight, scale and rendering modes (per the Symbols doc overview, the effects target symbol layers)",
-      "bifrost": "springboard/ui/src/symbol_layers.rs",
+      "bifrost": "springboard/ui/src/symbol_layers.rs (Weight, Scale, RenderingMode, rendering_opacity, palette_slot)",
       "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. one weight and no hierarchical or palette rendering, as docs/bifrost-ui.md records under Symbols"
+      "note": "Nine weight steps, three scale steps and the hierarchical and palette rules are a pure model, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs. Not wired into apps or the shell, not yet tested on Midget. The glyph renderer still draws one weight and no hierarchical or palette rendering, as docs/bifrost-ui.md records under Symbols"
     },
     {
       "feature": "Generic implicit animation of views",
       "apple": "Not part of the Symbols framework; the effects are the symbol-specific layer",
       "bifrost": "springboard/sdk/src/view/animation.rs (Window::animate interpolates frame, opacity, background); springboard/ui/src/anim.rs (Animation, Curve)",
       "status": "partial",
-      "note": "the animation system exists and retargets mid-flight, but it animates whole views and cannot reach individual symbol layers, so it is a base for symbol effects rather than one"
+      "note": "the animation system exists and retargets mid-flight (a_retargeted_spring_keeps_its_speed, headless_swatch_settles_on_the_new_frame_when_the_animation_ends in springboard/sdk/src/view/animation.rs), but it animates whole views and cannot reach individual symbol layers, so it is a base for symbol effects rather than one"
     }
   ],
   "gaps": [

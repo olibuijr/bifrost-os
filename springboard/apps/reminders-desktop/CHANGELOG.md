@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.16.0 — 2026-10-14
+
+- Settings: the all-day alert time offers every half hour from 6:00 to 20:00 (it offered ten fixed times).
+- File > Print List prints a smart list (Today, Scheduled, Flagged, All, Completed, or a custom smart list) as a flat Markdown checklist under its name. Search results are not printed yet.
+- File > Save List As... writes the list's Markdown checklist to a file chosen in the save panel, beside Export List.
+
+## 1.15.0 — 2026-10-14
+
+- View > Sort By, View > Show Smart List and Hide All Subtasks are saved in `settings.tsv`: the sort order, the hidden smart list tiles and the folded subtasks are the same after a restart.
+- A Markdown checklist (`.md`) opened or shared from Files is imported as a new list, the same as File > Import List. Reminders is an Open With choice for Markdown files.
+- Removed two unused copies of the mark-due, template, grocery and time zone rules; the list uses the ones in `organize.rs` and `zones.rs`.
+
 ## 1.14.0 — 2026-10-13
 
 - Mark Due Date As (Reminder menu): Today, Tomorrow, This Weekend and Next Week set the selected reminder's due day and keep its time. Mark All Overdue as Today moves every open overdue reminder in one undo step.

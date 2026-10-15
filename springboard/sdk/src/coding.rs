@@ -15,6 +15,8 @@ pub enum Value {
     Str(String),
     /// Seconds since 1970 (`Date.timeIntervalSince1970`); written per the encoder's date strategy.
     Date(f64),
+    /// Raw bytes (`Data`): base64 text in JSON, a `<data>` element in XML, a data object in binary.
+    Data(Vec<u8>),
     Arr(Vec<Value>),
     Dict(Vec<(String, Value)>),
 }
@@ -49,6 +51,26 @@ pub trait Decodable: Sized {
 /// A point in time, encoded per the coder's date strategy.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Date(pub f64);
+
+/// Raw bytes (`Data`). JSON and XML carry them as base64; a binary property list keeps them as data objects.
+/// A JSON string is accepted too, so base64 text decodes into `Data` wherever the document holds it.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Data(pub Vec<u8>);
+
+impl Encodable for Data {
+    fn encode(&self) -> Value {
+        Value::Data(self.0.clone())
+    }
+}
+impl Decodable for Data {
+    fn decode(v: &Value) -> Result<Self, CodingError> {
+        match v {
+            Value::Data(d) => Ok(Data(d.clone())),
+            Value::Str(s) => bifrost_core::plist::base64_decode(s).map(Data).ok_or_else(|| CodingError("bad base64 data".into())),
+            _ => err("expected data"),
+        }
+    }
+}
 
 macro_rules! int_codable { ($($t:ty),*) => {$(
     impl Encodable for $t { fn encode(&self) -> Value { Value::Int(*self as i64) } }
@@ -305,6 +327,7 @@ impl JSONEncoder {
                 DateEncodingStrategy::SecondsSince1970 => o.push_str(&d.to_string()),
                 DateEncodingStrategy::Iso8601 => o.push_str(&bifrost_core::json::quote(&format_iso8601(*d))),
             },
+            Value::Data(d) => o.push_str(&bifrost_core::json::quote(&bifrost_core::plist::base64_encode(d))),
             Value::Arr(a) if a.is_empty() => o.push_str("[]"),
             Value::Arr(a) => {
                 o.push('[');
@@ -403,6 +426,7 @@ impl PropertyListEncoder {
             Value::Num(n) => o.push_str(&format!("{pad}<real>{n}</real>\n")),
             Value::Str(s) => o.push_str(&format!("{pad}<string>{}</string>\n", xml_esc(s))),
             Value::Date(d) => o.push_str(&format!("{pad}<date>{}</date>\n", format_iso8601(*d))),
+            Value::Data(d) => o.push_str(&format!("{pad}<data>{}</data>\n", bifrost_core::plist::base64_encode(d))),
             Value::Arr(a) => {
                 o.push_str(&format!("{pad}<array>\n"));
                 a.iter().for_each(|x| Self::write(x, depth + 1, o));
@@ -439,8 +463,8 @@ impl PropertyListDecoder {
         T::decode(&crate::binary_plist::to_value(&parsed).map_err(|e| CodingError(e.0))?)
     }
 
-    /// Decodes binary (`bplist00`) or text (XML or ASCII) property-list bytes. Binary dates decode like XML dates;
-    /// data values have no [`Value`] form yet, so a binary file holding one is refused.
+    /// Decodes binary (`bplist00`) or text (XML or ASCII) property-list bytes. Binary dates decode like XML dates,
+    /// and data values decode into [`Data`] fields.
     pub fn decode_bytes<T: Decodable>(&self, bytes: &[u8]) -> Result<T, CodingError> {
         if bytes.starts_with(b"bplist") {
             let p = bifrost_core::plist::parse_bytes(bytes).map_err(CodingError)?;
@@ -460,7 +484,7 @@ fn plist_value(p: bifrost_core::plist::Plist) -> Result<Value, CodingError> {
         P::Real(r) => Value::Num(r),
         P::Str(s) => Value::Str(s),
         P::Date(text) => Value::Date(parse_iso8601(&text).ok_or_else(|| CodingError("bad date".into()))?),
-        P::Data(_) => return err("data values are not decoded through Codable yet"),
+        P::Data(d) => Value::Data(d),
         P::Array(a) => Value::Arr(a.into_iter().map(plist_value).collect::<Result<Vec<_>, _>>()?),
         P::Dict(d) => Value::Dict(
             d.into_iter().map(|(k, v)| plist_value(v).map(|v| (k, v))).collect::<Result<Vec<_>, _>>()?,
@@ -510,6 +534,11 @@ impl Plist<'_> {
             ("integer", _) => Value::Int(self.text("integer")?.trim().parse().map_err(|_| CodingError("bad integer".into()))?),
             ("real", _) => Value::Num(self.text("real")?.trim().parse().map_err(|_| CodingError("bad real".into()))?),
             ("date", _) => Value::Date(parse_iso8601(self.text("date")?.trim()).ok_or_else(|| CodingError("bad date".into()))?),
+            ("data", true) => Value::Data(Vec::new()),
+            ("data", _) => {
+                let text = self.text("data")?;
+                Value::Data(bifrost_core::plist::base64_decode(&text).ok_or_else(|| CodingError("bad base64 in <data>".into()))?)
+            }
             ("array", true) => Value::Arr(Vec::new()),
             ("array", _) => {
                 let mut a = Vec::new();

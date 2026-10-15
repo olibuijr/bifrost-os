@@ -7,8 +7,8 @@
 //! wires them to the SDK: the document controller, menus, keys, touches and the canvas.
 
 mod docx;
-mod document;
 mod encoding;
+mod document;
 mod html;
 mod layout;
 mod links;
@@ -16,16 +16,20 @@ mod odt;
 mod prefs;
 mod print;
 mod properties;
+mod replace;
 mod rtf;
 mod spell;
 mod text;
 mod view;
+mod webarchive;
 mod xml;
 mod zipdoc;
 
 use bifrost_app::controls::undo::ChangeCount;
+use bifrost_app::controls::{Node, Role};
 use bifrost_app::document::{is_menu_id, item, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::Canvas;
+use bifrost_app::pasteboard::NativePasteboard;
 use bifrost_app::kit::ui::Ui;
 use bifrost_app::kit::{clipboard, Damage, Surface};
 use bifrost_app::print::{Orientation, PrintError, PrintInfo, PrintOperation};
@@ -86,6 +90,20 @@ struct TextEditApp {
     props: Option<(DocId, properties::Panel)>,
     /// Edit > Add Link: the address being typed for a range of text, while the panel is open
     link: Option<LinkSheet>,
+    /// Edit > Find > Select Line: the line number or range being typed, while the panel is open
+    line: Option<String>,
+    /// Edit > Spelling and Grammar > Show Spelling and Grammar: the panel is open over the page
+    spelling_panel: bool,
+    /// Preferences: the settings panel is open over the page, and the encodings list panel
+    settings: bool,
+    encodings_panel: bool,
+    /// Format > Text > Spacing: the panel's fields, while it is open
+    spacing_sheet: Option<SpacingSheet>,
+    /// Cut and Copy keep the copied cells with their formatting, for a paste of the same text. The text is the clipboard
+    /// text they were copied with.
+    rich_clip: Option<(String, Vec<Cell>)>,
+    /// Format > Text > Copy Ruler: the tab stop distance copied, for Paste Ruler
+    ruler: Option<f32>,
 }
 
 /// The link panel: which text it links, the address typed so far, and whether that text already links somewhere (the
@@ -95,6 +113,17 @@ struct LinkSheet {
     range: Range<usize>,
     url: String,
     had_link: bool,
+}
+
+/// The Spacing panel: the line spacing, the space before and the space after as typed, and the field with the keyboard.
+struct SpacingSheet {
+    fields: [String; 3],
+    focus: usize,
+}
+
+impl SpacingSheet {
+    /// The fields' labels, in order.
+    const LABELS: [&'static str; 3] = ["Line", "Before", "After"];
 }
 
 /// A completion in progress: the typed prefix, the cells of the word as completed, and which candidate it shows.
@@ -154,6 +183,8 @@ fn edits_text(action: Action) -> bool {
                 | Action::Transform(_)
                 | Action::MakePlain
                 | Action::MakeRich
+                | Action::PasteRuler
+                | Action::Direction(_)
         )
 }
 
@@ -202,14 +233,30 @@ impl TextEditApp {
             export_request: None,
             props: None,
             link: None,
+            line: None,
+            spelling_panel: false,
+            settings: false,
+            encodings_panel: false,
+            spacing_sheet: None,
+            rich_clip: None,
+            ruler: None,
         }
     }
 
     /// Writes the settings to the preferences.
     fn save_options(&self, ctx: &Ctx) {
         for (key, value) in self.opts.entries() {
-            DocumentHost::set_pref(ctx, key, value);
+            DocumentHost::set_pref(ctx, key, &value);
         }
+    }
+
+    /// A setting changed in the Preferences panel: it is saved, and the parts that read it directly take it now (the
+    /// reader's markup choice, the spelling checker, and the page, which is laid out again).
+    fn apply_options(&mut self, ctx: &Ctx) {
+        document::set_markup_as_code(self.opts.markup_as_code);
+        self.spelling.enabled = self.opts.spell_enabled;
+        self.revision += 1;
+        self.save_options(ctx);
     }
 
     /// Whether the active document is read-only; says so in the status row when it is.
@@ -304,7 +351,8 @@ impl TextEditApp {
     /// Runs a text command on the active document. Returns whether the window needs a frame.
     fn perform(&mut self, ctx: &Ctx, action: Action) -> bool {
         // a panel takes a paste as typing (the first line of the clipboard)
-        if matches!(action, Action::Paste | Action::PasteMatch) && (self.link.is_some() || self.props.is_some()) {
+        let panel_open = self.link.is_some() || self.props.is_some() || self.line.is_some() || self.spacing_sheet.is_some();
+        if matches!(action, Action::Paste | Action::PasteMatch) && panel_open {
             let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
             return self.type_into(&line);
         }
@@ -374,6 +422,8 @@ impl TextEditApp {
                 if picked.is_empty() || picked.contains('\n') {
                     return false;
                 }
+                // the selection goes on the find pasteboard, which other apps' find bars read too
+                NativePasteboard::find().set_string(ctx, &picked);
                 self.note = Some(format!("Finding \"{picked}\""));
                 self.find = picked;
                 return true;
@@ -382,7 +432,9 @@ impl TextEditApp {
                 self.follow = true;
                 return true;
             }
-            Action::SelectLine => return self.select_line(),
+            Action::SelectLine => return self.open_line_sheet(),
+            Action::LineDone => return self.finish_line(),
+            Action::LineCancel => return self.line.take().is_some(),
             Action::CopyStyle => {
                 let Some(doc) = active_doc(&self.docs) else { return false };
                 self.copied_style = Some(doc.text.char_style());
@@ -413,6 +465,29 @@ impl TextEditApp {
                 };
                 self.revision += 1;
                 self.follow = true;
+                return true;
+            }
+            Action::Rewrap => {
+                self.opts.rewrap = !self.opts.rewrap;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::DarkBackground => {
+                self.opts.dark_background = !self.opts.dark_background;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::TextReplacement => {
+                self.opts.text_replacement = !self.opts.text_replacement;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::DefaultFont(index) => {
+                if (index as usize) >= text::FAMILIES.len() {
+                    return false;
+                }
+                self.opts.default_font = index;
+                self.save_options(ctx);
                 return true;
             }
             Action::SmartQuotes => {
@@ -446,6 +521,10 @@ impl TextEditApp {
                 return true;
             }
             Action::Find => {
+                // the find field starts with the find pasteboard's text, as the shared find field does
+                if let Some(shared) = NativePasteboard::find().string().filter(|s| !s.is_empty() && !s.contains('\n')) {
+                    self.find = shared;
+                }
                 self.find_open = true;
                 self.focus = Focus::Find;
                 return true;
@@ -508,8 +587,82 @@ impl TextEditApp {
             }
             Action::SpellNext => return self.spell_next(),
             Action::SpellCorrect => return self.spell_correct(),
-            Action::SpellLearn => return self.spell_learn(ctx),
+            Action::SpellLearn => {
+                let learned = self.spell_learn(ctx);
+                // the panel moves on from a word it has learned
+                if self.spelling_panel {
+                    self.spell_next();
+                }
+                return learned;
+            }
             Action::SpellIgnore => return self.spell_ignore(),
+            Action::ShowSpelling => {
+                if active_doc(&self.docs).is_none() {
+                    return false;
+                }
+                self.props = None;
+                self.link = None;
+                self.line = None;
+                self.spelling_panel = true;
+                // the panel opens on the next misspelled word, selected
+                self.spell_next();
+                return true;
+            }
+            Action::SpellingIgnore => {
+                if self.spell_ignore() {
+                    self.spell_next();
+                }
+                return true;
+            }
+            Action::SpellingChange => {
+                if self.spell_correct() {
+                    self.spell_next();
+                }
+                return true;
+            }
+            Action::SpellingDone => {
+                self.spelling_panel = false;
+                return true;
+            }
+            Action::ShowSettings => {
+                self.settings = true;
+                self.props = None;
+                self.link = None;
+                self.line = None;
+                self.spelling_panel = false;
+                return true;
+            }
+            Action::SettingsDone => {
+                self.settings = false;
+                return true;
+            }
+            Action::ShowEncodings => {
+                self.encodings_panel = true;
+                self.settings = false;
+                return true;
+            }
+            Action::EncodingsDone => {
+                self.encodings_panel = false;
+                return true;
+            }
+            Action::EncodingToggle(index) => {
+                let index = index as usize;
+                if index >= encoding::ALL.len() {
+                    return false;
+                }
+                self.opts.encodings = self.opts.with_encoding(index, !self.opts.lists_encoding(index));
+                self.save_options(ctx);
+                return true;
+            }
+            Action::ShowSpacing => return self.open_spacing_sheet(),
+            Action::SpacingDone => return self.finish_spacing(),
+            Action::SpacingCancel => return self.spacing_sheet.take().is_some(),
+            Action::Setting(index) => {
+                let Some(setting) = prefs::Setting::ALL.get(index as usize).copied() else { return false };
+                setting.change(&mut self.opts);
+                self.apply_options(ctx);
+                return true;
+            }
             _ => {}
         }
         if edits_text(action) && self.refuse_edit() {
@@ -525,29 +678,59 @@ impl TextEditApp {
             Action::Undo => doc.text.undo(),
             Action::Redo => doc.text.redo(),
             Action::Cut => {
+                let picked = doc.text.cells()[doc.text.selection()].to_vec();
                 let cut = doc.text.cut();
                 if cut.is_empty() {
                     false
                 } else {
                     clipboard::set_text(&cut);
+                    self.rich_clip = Some((cut, picked));
                     true
                 }
             }
             Action::Copy => {
-                let sel = doc.text.selection();
-                let copied: String = doc.text.cells()[sel].iter().map(|c| c.ch).collect();
+                let picked = doc.text.cells()[doc.text.selection()].to_vec();
+                let copied: String = picked.iter().map(|c| c.ch).collect();
                 if !copied.is_empty() {
                     clipboard::set_text(&copied);
+                    self.rich_clip = Some((copied, picked));
                 }
                 return false;
             }
-            // the clipboard carries plain text, so a paste already takes the style at the caret
-            Action::Paste | Action::PasteMatch => match clipboard::text() {
+            // a paste of this application's own copy keeps the formatting it was copied with; any other text is
+            // pasted as plain text in the style at the caret. Paste and Match Style always takes the caret's style.
+            Action::Paste => match clipboard::text() {
+                Some(s) if !s.is_empty() => {
+                    match self.rich_clip.as_ref().filter(|(text, _)| *text == s) {
+                        Some((_, cells)) => doc.text.insert_cells(cells, Kind::Pasting),
+                        None => doc.text.insert(&normalize_breaks(&s), Kind::Pasting),
+                    }
+                    true
+                }
+                _ => false,
+            },
+            Action::PasteMatch => match clipboard::text() {
                 Some(s) if !s.is_empty() => {
                     doc.text.insert(&normalize_breaks(&s), Kind::Pasting);
                     true
                 }
                 _ => false,
+            },
+            Action::CopyRuler => {
+                self.ruler = Some(doc.text.tab_width());
+                self.note = Some("Ruler copied".into());
+                return true;
+            }
+            Action::PasteRuler => match self.ruler {
+                Some(width) => {
+                    doc.text.set_tab_width(width);
+                    if let Some(id) = self.docs.active() {
+                        self.docs.mark_edited(id);
+                    }
+                    self.revision += 1;
+                    true
+                }
+                None => false,
             },
             Action::SelectAll => {
                 doc.text.select_all();
@@ -562,6 +745,10 @@ impl TextEditApp {
                 }
             }
             Action::Transform(how) => doc.text.transform(how),
+            Action::Direction(rtl) => {
+                doc.text.set_writing_direction(rtl);
+                true
+            }
             Action::Strike => {
                 doc.text.toggle_strike();
                 true
@@ -578,9 +765,10 @@ impl TextEditApp {
                 doc.text.set_highlight(index);
                 true
             }
+            // Paste Style gives the character formatting and the paragraph's alignment, spacing and list
             Action::PasteStyle => match self.copied_style {
                 Some(style) => {
-                    doc.text.apply_char_style(&style);
+                    doc.text.apply_style(&style);
                     true
                 }
                 None => false,
@@ -645,12 +833,13 @@ impl TextEditApp {
 
     /// A new document takes the format and the plain text encoding chosen in the Preferences.
     fn apply_new_defaults(&mut self, id: DocId) {
-        let (plain, encoding) = (self.opts.new_plain, self.opts.default_encoding);
+        let (plain, encoding, font) = (self.opts.new_plain, self.opts.default_encoding, self.opts.default_font);
         if let Some(d) = self.docs.get_mut(id) {
             if plain {
                 d.rich = false;
             }
             d.encoding = encoding;
+            d.text.set_default_font(font);
         }
     }
 
@@ -802,6 +991,69 @@ impl TextEditApp {
         true
     }
 
+    /// A press while the Preferences panel is open: Done, a row (which changes that setting), or nothing.
+    fn touch_settings(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::list_layout(geom.width, geom.body_top, prefs::Setting::ALL.len());
+        let buttons = view::list_buttons(&ctx.ui, &layout, Action::SettingsDone);
+        if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            return self.perform(ctx, action);
+        }
+        match layout.rows.iter().position(|r| r.contains(px, py)) {
+            Some(index) => self.perform(ctx, Action::Setting(index as u8)),
+            None => true,
+        }
+    }
+
+    /// A press while the Customize Encodings List panel is open: Done, a row (which lists or unlists that encoding), or
+    /// nothing.
+    fn touch_encodings(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::list_layout(geom.width, geom.body_top, encoding::ALL.len());
+        let buttons = view::list_buttons(&ctx.ui, &layout, Action::EncodingsDone);
+        if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            return self.perform(ctx, action);
+        }
+        match layout.rows.iter().position(|r| r.contains(px, py)) {
+            Some(index) => self.perform(ctx, Action::EncodingToggle(index as u8)),
+            None => true,
+        }
+    }
+
+    /// A press while the Show Spelling and Grammar panel is open: a button, or nothing (the page is not reachable).
+    fn touch_spelling(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::layout_rows(geom.width, geom.body_top, 2);
+        let buttons = view::spelling_buttons(&ctx.ui, &layout);
+        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            Some(action) => self.perform(ctx, action),
+            None => true,
+        }
+    }
+
+    /// The word the Spelling panel shows (the word at the caret or the selection) and its best correction.
+    fn spelling_fields(&self) -> (String, String) {
+        let Some(doc) = active_doc(&self.docs) else { return (String::new(), String::new()) };
+        match word_here(doc) {
+            Some((range, word)) => {
+                let guess = self.spelling.correction(doc.text.cells(), range).unwrap_or_default();
+                (word, guess)
+            }
+            None => (String::new(), String::new()),
+        }
+    }
+
+    /// A press while the Select Line panel is open: a button, or nothing (the page behind it is not reachable).
+    fn touch_line(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+        let buttons = view::line_buttons(&ctx.ui, &layout);
+        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            Some(action) => self.perform(ctx, action),
+            None => true,
+        }
+    }
+
     /// Closes the properties panel; Done (`apply`) stores the draft on the document and marks it edited when it changed.
     fn close_properties(&mut self, apply: bool) -> bool {
         let Some((id, panel)) = self.props.take() else { return false };
@@ -910,22 +1162,88 @@ impl TextEditApp {
         true
     }
 
-    /// Select Line: with a line number or range ("12", "12-20") in the find field, selects those lines; otherwise opens the
-    /// find bar to take one.
-    fn select_line(&mut self) -> bool {
-        if self.find_open {
-            if let Some((first, last)) = text::parse_line_spec(&self.find) {
-                let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
-                let found = doc.text.select_lines(first, last);
-                let count = doc.text.line_count();
-                self.note = Some(if found { format!("Selected line {first}") } else { format!("There is no line {first}; the document has {count}") });
-                self.follow = true;
-                return true;
-            }
+    /// Edit > Find > Select Line: opens the panel that takes a line number or a range ("12", "12-20").
+    fn open_line_sheet(&mut self) -> bool {
+        if active_doc(&self.docs).is_none() {
+            return false;
         }
-        self.find_open = true;
-        self.focus = Focus::Find;
-        self.note = Some("Type a line number or a range such as 12-20 in the find field, then choose Select Line again".into());
+        self.line = Some(String::new());
+        self.props = None;
+        self.link = None;
+        true
+    }
+
+    /// Format > Text > Spacing: opens the panel on the paragraph at the caret (or the first one the selection touches).
+    fn open_spacing_sheet(&mut self) -> bool {
+        let Some(doc) = active_doc(&self.docs) else { return false };
+        if !doc.rich {
+            self.note = Some("Spacing needs rich text. Choose Format > Make Rich Text first.".into());
+            return true;
+        }
+        let style = doc.text.paragraph_style_at(doc.text.selection().start);
+        let (before, after) = doc.text.paragraph_space_at(doc.text.selection().start);
+        let line = view::spacing_label(style.spacing);
+        self.spacing_sheet = Some(SpacingSheet { fields: [line, before.to_string(), after.to_string()], focus: 0 });
+        self.props = None;
+        self.link = None;
+        self.line = None;
+        true
+    }
+
+    /// Done in the Spacing panel: the line spacing is the preset nearest the number typed (1.0 to 3.0), and the spaces
+    /// are whole points. A value that is not a number keeps the panel open with a note.
+    fn finish_spacing(&mut self) -> bool {
+        let Some(sheet) = self.spacing_sheet.as_ref() else { return false };
+        let line: Option<f32> = sheet.fields[0].trim().parse::<f32>().ok().filter(|m| (1.0..=3.0).contains(m));
+        let before: Option<u8> = sheet.fields[1].trim().parse::<u8>().ok().filter(|&p| p <= text::MAX_PARAGRAPH_SPACE);
+        let after: Option<u8> = sheet.fields[2].trim().parse::<u8>().ok().filter(|&p| p <= text::MAX_PARAGRAPH_SPACE);
+        let (Some(line), Some(before), Some(after)) = (line, before, after) else {
+            self.note = Some(format!("Line spacing is 1 to 3, and the spaces are 0 to {} points", text::MAX_PARAGRAPH_SPACE));
+            return true;
+        };
+        if self.refuse_edit() {
+            return true;
+        }
+        let spacing = rtf::nearest_spacing(line);
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        doc.text.set_paragraph_format(spacing, before, after);
+        self.spacing_sheet = None;
+        self.edited();
+        true
+    }
+
+    /// A press while the Spacing panel is open: a button or a field, or nothing (the page is not reachable).
+    fn touch_spacing(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::layout_rows(geom.width, geom.body_top, 3);
+        let buttons = view::spacing_buttons(&ctx.ui, &layout);
+        if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            return self.perform(ctx, action);
+        }
+        if let (Some(field), Some(sheet)) = (properties::field_at(&layout, px, py), self.spacing_sheet.as_mut()) {
+            sheet.focus = field;
+        }
+        true
+    }
+
+    /// Done in the Select Line panel: selects the lines it names and closes the panel. A line that is not in the document
+    /// keeps the panel open with a note, so the number can be corrected.
+    fn finish_line(&mut self) -> bool {
+        let Some(typed) = self.line.clone() else { return false };
+        let Some((first, last)) = text::parse_line_spec(&typed) else {
+            self.note = Some("Type a line number or a range such as 12-20".into());
+            return true;
+        };
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        let found = doc.text.select_lines(first, last);
+        let count = doc.text.line_count();
+        if !found {
+            self.note = Some(format!("There is no line {first}; the document has {count}"));
+            return true;
+        }
+        self.line = None;
+        self.note = Some(format!("Selected line {first}"));
+        self.follow = true;
         true
     }
 
@@ -971,11 +1289,23 @@ impl TextEditApp {
         let doc = active_doc(&self.docs)?;
         let (_, _, width, _) = info.imageable();
         let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
-        let cells = doc.text.cells();
-        let layout = layout::layout_tabs(cells, width, &measure, doc.text.tab_width());
+        let (cells, layout) = if self.opts.rewrap {
+            // wrapped to the page: the lines break at the printable width
+            let cells = doc.text.cells().to_vec();
+            let layout = layout::layout_tabs(&cells, width, &measure, doc.text.tab_width());
+            (cells, layout)
+        } else {
+            // kept as on screen: the lines break where the window breaks them, and the whole column is scaled down to
+            // the printable width (never up)
+            let window = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+            let scale = if window > 0.0 { (width / window).min(1.0) } else { 1.0 };
+            let cells = zoomed(doc.text.cells(), scale);
+            let layout = layout::layout_tabs(&cells, window * scale, &measure, doc.text.tab_width() * scale);
+            (cells, layout)
+        };
         let title = self.docs.active().and_then(|id| self.docs.display_name(id)).unwrap_or_else(|| "Untitled".into());
         let header = self.opts.header_footer.then_some(title.as_str());
-        let pages = print::document_with(cells, &layout, &info, &measure, header);
+        let pages = print::document_with(&cells, &layout, &info, &measure, header);
         Some(PrintOperation::pages(title.clone(), pages, print::FACES.to_vec()).with_info(info))
     }
 
@@ -1049,6 +1379,25 @@ impl TextEditApp {
             panel.type_text(&printable);
             return true;
         }
+        if let Some(sheet) = self.spacing_sheet.as_mut() {
+            // a number: digits and the point, up to a few characters
+            for ch in printable.chars().filter(|c| c.is_ascii_digit() || *c == '.') {
+                let field = &mut sheet.fields[sheet.focus];
+                if field.len() < 6 {
+                    field.push(ch);
+                }
+            }
+            return true;
+        }
+        if let Some(typed) = self.line.as_mut() {
+            // a line number or a range: digits and the dash between the two numbers
+            for ch in printable.chars().filter(|c| c.is_ascii_digit() || *c == '-') {
+                if typed.len() < 12 {
+                    typed.push(ch);
+                }
+            }
+            return true;
+        }
         if let Some(sheet) = self.link.as_mut() {
             for ch in printable.chars().filter(|c| !c.is_whitespace()) {
                 if sheet.url.chars().count() < links::MAX_LEN {
@@ -1080,15 +1429,45 @@ impl TextEditApp {
             doc.text.type_text(s);
         }
         self.edited();
-        // a blank ends a word, which Smart Links turns into a link when it is an address
-        if self.opts.smart_links && s.chars().last().is_some_and(char::is_whitespace) {
-            self.autolink();
+        // a blank ends a word: a shortcut becomes its symbol, and Smart Links turns an address into a link
+        if s.chars().last().is_some_and(char::is_whitespace) {
+            if self.opts.text_replacement {
+                self.replace_shortcut();
+            }
+            if self.opts.smart_links {
+                self.autolink();
+            }
         }
         // a space or punctuation ends a word, which Correct Spelling Automatically then checks
         if self.opts.spell_auto && s.chars().last().is_some_and(|c| !c.is_alphanumeric() && c != '\'') {
             self.autocorrect();
         }
         true
+    }
+
+    /// Text Replacement: the word before the blank just typed becomes its symbol when it is a shortcut. The symbol must
+    /// be one the document's encoding can save, so a plain text document in ASCII keeps the shortcut as typed. The caret
+    /// stays after the blank.
+    fn replace_shortcut(&mut self) {
+        let Some(doc) = active_doc(&self.docs) else { return };
+        let head = doc.text.head();
+        let Some(boundary) = head.checked_sub(1) else { return };
+        let cells = doc.text.cells();
+        if !cells[boundary].ch.is_whitespace() {
+            return;
+        }
+        let start = cells[..boundary].iter().rposition(|c| c.ch.is_whitespace()).map_or(0, |i| i + 1);
+        let word: String = cells[start..boundary].iter().map(|c| c.ch).collect();
+        let Some(symbol) = replace::for_shortcut(&word) else { return };
+        if !doc.rich && encoding::encode(symbol, doc.encoding).is_err() {
+            return;
+        }
+        let shift = symbol.chars().count() as isize - word.chars().count() as isize;
+        let caret = (head as isize + shift).max(0) as usize;
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return };
+        doc.text.replace_range(start..boundary, symbol);
+        doc.text.select(caret, caret);
+        self.edited();
     }
 
     /// Smart Links: the word before the blank just typed becomes a link when it is a web or mail address (and is not
@@ -1137,6 +1516,14 @@ impl TextEditApp {
     fn backspace(&mut self) -> bool {
         if let Some((_, panel)) = self.props.as_mut() {
             panel.backspace();
+            return true;
+        }
+        if let Some(sheet) = self.spacing_sheet.as_mut() {
+            sheet.fields[sheet.focus].pop();
+            return true;
+        }
+        if let Some(typed) = self.line.as_mut() {
+            typed.pop();
             return true;
         }
         if let Some(sheet) = self.link.as_mut() {
@@ -1189,6 +1576,21 @@ impl TextEditApp {
             TouchKind::Down => {
                 if self.props.is_some() {
                     return self.touch_properties(ctx, px, py);
+                }
+                if self.spacing_sheet.is_some() {
+                    return self.touch_spacing(ctx, px, py);
+                }
+                if self.encodings_panel {
+                    return self.touch_encodings(ctx, px, py);
+                }
+                if self.settings {
+                    return self.touch_settings(ctx, px, py);
+                }
+                if self.spelling_panel {
+                    return self.touch_spelling(ctx, px, py);
+                }
+                if self.line.is_some() {
+                    return self.touch_line(ctx, px, py);
                 }
                 if self.link.is_some() {
                     return self.touch_link(ctx, px, py);
@@ -1265,32 +1667,15 @@ impl TextEditApp {
         }
     }
 
-    fn edit_menu(&self) -> AppMenu {
+    fn text_menu(&self) -> AppMenu {
         let doc = active_doc(&self.docs);
-        let (can_undo, can_redo, has_sel, undo, redo) = match doc {
-            Some(d) => (
-                d.text.can_undo(),
-                d.text.can_redo(),
-                d.text.has_selection(),
-                d.text.undo_name().map_or("Undo".to_string(), |n| format!("Undo {n}")),
-                d.text.redo_name().map_or("Redo".to_string(), |n| format!("Redo {n}")),
-            ),
-            None => (false, false, false, "Undo".into(), "Redo".into()),
-        };
+        let (has_sel, enabled) = doc.map_or((false, false), |d| (d.text.has_selection(), true));
         let has_find = !self.find.is_empty();
-        let enabled = doc.is_some();
         let rich = doc.is_some_and(|d| d.rich);
         let linked = doc.is_some_and(|d| d.text.link_near(if d.text.has_selection() { d.text.selection().start } else { d.text.head() }) != 0);
         let items = vec![
-            menu_item(Action::Undo, &undo, "cmd+z", can_undo),
-            menu_item(Action::Redo, &redo, "cmd+shift+z", can_redo),
-            AppMenuItem::separator(),
-            menu_item(Action::Cut, "Cut", "cmd+x", has_sel),
-            menu_item(Action::Copy, "Copy", "cmd+c", has_sel),
-            menu_item(Action::Paste, "Paste", "cmd+v", clipboard::text().is_some()),
             menu_item(Action::PasteMatch, "Paste and Match Style", "cmd+alt+shift+v", clipboard::text().is_some()),
             menu_item(Action::Delete, "Delete", "", has_sel),
-            menu_item(Action::SelectAll, "Select All", "cmd+a", enabled),
             AppMenuItem::separator(),
             menu_item(Action::Find, "Find\u{2026}", "cmd+f", true),
             menu_item(Action::FindNext, "Find Next", "cmd+g", has_find),
@@ -1313,10 +1698,13 @@ impl TextEditApp {
             menu_item(Action::SpellCorrect, "Correct Spelling", "", enabled).depth(1),
             menu_item(Action::SpellLearn, "Learn Spelling", "", enabled).depth(1),
             menu_item(Action::SpellIgnore, "Ignore Spelling", "", enabled).depth(1),
+            AppMenuItem::separator().depth(1),
+            menu_item(Action::ShowSpelling, "Show Spelling and Grammar", "", enabled).depth(1),
             AppMenuItem::submenu("Substitutions"),
             menu_item(Action::SmartQuotes, "Smart Quotes", "", true).checked(self.opts.smart_quotes).depth(1),
             menu_item(Action::SmartDashes, "Smart Dashes", "", true).checked(self.opts.smart_dashes).depth(1),
             menu_item(Action::SmartLinks, "Smart Links", "", true).checked(self.opts.smart_links).depth(1),
+            menu_item(Action::TextReplacement, "Text Replacement", "", true).checked(self.opts.text_replacement).depth(1),
             AppMenuItem::submenu("Transformations"),
             menu_item(Action::Transform(Transform::Upper), "Make Upper Case", "", has_sel).depth(1),
             menu_item(Action::Transform(Transform::Lower), "Make Lower Case", "", has_sel).depth(1),
@@ -1328,7 +1716,7 @@ impl TextEditApp {
             AppMenuItem::separator(),
             menu_item(Action::Complete, "Complete", "alt+escape", enabled),
         ];
-        AppMenu { title: "Edit".into(), items }
+        AppMenu { title: "Text".into(), items }
     }
 
     fn format_menu(&self) -> AppMenu {
@@ -1362,11 +1750,17 @@ impl TextEditApp {
             items.push(menu_item(Action::Align(a), title, "", rich).checked(align == a).depth(1));
         }
         items.push(AppMenuItem::separator().depth(1));
+        items.push(menu_item(Action::Direction(false), "Left to Right", "", rich).checked(!style.rtl).depth(1));
+        items.push(menu_item(Action::Direction(true), "Right to Left", "", rich).checked(style.rtl).depth(1));
+        items.push(AppMenuItem::separator().depth(1));
         for index in 0..text::SPACINGS.len() as u8 {
             let title = format!("Spacing {}", view::spacing_label(index));
             items.push(menu_item(Action::Spacing(index), &title, "", rich).checked(style.spacing == index).depth(1));
         }
+        items.push(menu_item(Action::ShowSpacing, "Spacing\u{2026}", "", rich).depth(1));
         items.push(AppMenuItem::separator().depth(1));
+        items.push(menu_item(Action::CopyRuler, "Copy Ruler", "", enabled && rich).depth(1));
+        items.push(menu_item(Action::PasteRuler, "Paste Ruler", "", rich && self.ruler.is_some()).depth(1));
         items.push(menu_item(Action::List(text::ListKind::Bullet), "Bullets", "", rich).checked(style.list == text::ListKind::Bullet).depth(1));
         items.push(menu_item(Action::List(text::ListKind::Numbered), "Numbers", "", rich).checked(style.list == text::ListKind::Numbered).depth(1));
         items.push(AppMenuItem::submenu("Color"));
@@ -1385,11 +1779,14 @@ impl TextEditApp {
         }
         let read_only = active_doc(&self.docs).is_some_and(|d| d.read_only);
         items.push(menu_item(Action::PreventEditing, if read_only { "Allow Editing" } else { "Prevent Editing" }, "", enabled));
+        // the text column is the page's width unless Wrap to Window is on (View has the same item)
+        items.push(menu_item(Action::WrapToWindow, "Wrap to Page", "", enabled).checked(!self.opts.wrap_window));
         // the encoding is a plain text setting: it is saved with the file, and Reinterpret As repairs a wrong guess
         let current = active_doc(&self.docs).map(|d| d.encoding);
         items.push(AppMenuItem::separator());
         items.push(AppMenuItem::submenu("Text Encoding"));
-        for (index, e) in encoding::ALL.iter().enumerate() {
+        // the encodings listed in Preferences, and the document's own encoding whether it is listed or not
+        for (index, e) in encoding::ALL.iter().enumerate().filter(|(i, e)| self.opts.lists_encoding(*i) || current == Some(**e)) {
             items.push(menu_item(Action::Encoding(index as u8), e.name(), "", enabled && !rich).checked(current == Some(*e)).depth(1));
         }
         items.push(AppMenuItem::submenu("Reinterpret As"));
@@ -1413,6 +1810,8 @@ impl TextEditApp {
             menu_item(Action::ZoomIn, "Zoom In", "cmd+alt+=", enabled && self.zoom < prefs::ZOOMS[prefs::ZOOMS.len() - 1]),
             menu_item(Action::ZoomOut, "Zoom Out", "cmd+alt+-", enabled && self.zoom > prefs::ZOOMS[0]),
             menu_item(Action::ActualSize, "Actual Size", "cmd+0", enabled && self.zoom != 1.0),
+            AppMenuItem::separator(),
+            menu_item(Action::DarkBackground, "Use Dark Background for Windows", "", true).checked(self.opts.dark_background),
         ];
         AppMenu { title: "View".into(), items }
     }
@@ -1422,6 +1821,7 @@ impl TextEditApp {
     /// preferences too.
     fn preferences_menu(&self) -> AppMenu {
         let mut items = vec![
+            menu_item(Action::ShowSettings, "Preferences\u{2026}", "cmd+,", true),
             AppMenuItem::submenu("New Documents"),
             menu_item(Action::NewPlain(false), "Rich Text", "", true).checked(!self.opts.new_plain).depth(1),
             menu_item(Action::NewPlain(true), "Plain Text", "", true).checked(self.opts.new_plain).depth(1),
@@ -1429,6 +1829,11 @@ impl TextEditApp {
         ];
         for (index, e) in encoding::ALL.iter().enumerate() {
             items.push(menu_item(Action::DefaultEncoding(index as u8), e.name(), "", true).checked(self.opts.default_encoding == *e).depth(1));
+        }
+        items.push(menu_item(Action::ShowEncodings, "Customize Encodings List\u{2026}", "", true));
+        items.push(AppMenuItem::submenu("Default Font"));
+        for index in 0..text::FAMILIES.len() as u8 {
+            items.push(menu_item(Action::DefaultFont(index), view::family_name(index), "", true).checked(self.opts.default_font == index).depth(1));
         }
         items.push(menu_item(Action::MarkupAsCode, "Show RTF and HTML Files as Code", "", true).checked(self.opts.markup_as_code));
         AppMenu { title: "Preferences".into(), items }
@@ -1446,6 +1851,7 @@ impl TextEditApp {
         menu.items.push(AppMenuItem::separator());
         menu.items.push(menu_item(Action::Print, "Print\u{2026}", "cmd+p", enabled));
         menu.items.push(menu_item(Action::HeaderFooter, "Print Header and Footer", "", enabled).checked(self.opts.header_footer));
+        menu.items.push(menu_item(Action::Rewrap, "Rewrap to Fit Page", "", enabled).checked(self.opts.rewrap));
         menu.items.push(AppMenuItem::submenu("Paper Size"));
         for (index, paper) in print::PAPERS.iter().enumerate() {
             let checked = self.print_info.paper == *paper;
@@ -1487,6 +1893,21 @@ impl App for TextEditApp {
         }
     }
 
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        view::toolbar(&ctx.ui, &self.status())
+            .into_iter()
+            .enumerate()
+            .map(|(index, button)| Node {
+                id: 0x5445_0000 + index as u64,
+                role: Role::Button,
+                label: button.label,
+                value: if button.active { "selected".into() } else { String::new() },
+                bounds: button.rect,
+                enabled: button.enabled,
+            })
+            .collect()
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
             Input::Command(command) => match command {
@@ -1515,6 +1936,37 @@ impl App for TextEditApp {
                             }
                             true
                         }
+                        _ => false,
+                    };
+                }
+                if self.spacing_sheet.is_some() {
+                    return match code {
+                        8 => self.backspace(),
+                        9 => {
+                            if let Some(sheet) = self.spacing_sheet.as_mut() {
+                                sheet.focus = (sheet.focus + 1) % SpacingSheet::LABELS.len();
+                            }
+                            true
+                        }
+                        13 => self.perform(ctx, Action::SpacingDone),
+                        27 => self.perform(ctx, Action::SpacingCancel),
+                        _ => false,
+                    };
+                }
+                if self.settings && code == 27 {
+                    return self.perform(ctx, Action::SettingsDone);
+                }
+                if self.encodings_panel && code == 27 {
+                    return self.perform(ctx, Action::EncodingsDone);
+                }
+                if self.spelling_panel && code == 27 {
+                    return self.perform(ctx, Action::SpellingDone);
+                }
+                if self.line.is_some() {
+                    return match code {
+                        8 => self.backspace(),
+                        13 => self.perform(ctx, Action::LineDone),
+                        27 => self.perform(ctx, Action::LineCancel),
                         _ => false,
                     };
                 }
@@ -1601,7 +2053,7 @@ impl App for TextEditApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        vec![self.file_menu(), self.edit_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
+        vec![self.file_menu(), self.text_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -1661,7 +2113,7 @@ impl App for TextEditApp {
             view::draw_find(canvas, ui, &geom, &find, &self.find, &self.replace, self.focus);
         }
         self.ensure_layout(ui, geom.text_w);
-        view::page_clip(canvas, ui, &geom);
+        view::page_clip(canvas, ui, &geom, self.opts.dark_background);
         let view_h = geom.body_bottom - geom.body_top;
         if let (Some(doc), Some(cache)) = (active_doc(&self.docs), self.cache.as_ref()) {
             let sel = doc.text.selection();
@@ -1688,6 +2140,7 @@ impl App for TextEditApp {
                 self.scroll,
                 self.focus == Focus::Body,
                 &cache.misspelled,
+                self.opts.dark_background,
             );
         }
         canvas.pop_clip();
@@ -1701,6 +2154,44 @@ impl App for TextEditApp {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
             let buttons = view::link_buttons(ui, &layout, sheet.had_link);
             view::draw_sheet(canvas, ui, &layout, "Link", &[("Address", sheet.url.as_str())], 0, &buttons);
+        }
+        if let Some(typed) = &self.line {
+            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+            let buttons = view::line_buttons(ui, &layout);
+            view::draw_sheet(canvas, ui, &layout, "Select Line", &[("Line", typed.as_str())], 0, &buttons);
+        }
+        if self.spelling_panel {
+            let layout = properties::layout_rows(geom.width, geom.body_top, 2);
+            let buttons = view::spelling_buttons(ui, &layout);
+            let (word, guess) = self.spelling_fields();
+            let rows = [("Misspelled", word.as_str()), ("Change to", guess.as_str())];
+            view::draw_sheet(canvas, ui, &layout, "Spelling and Grammar", &rows, usize::MAX, &buttons);
+        }
+        if let Some(sheet) = &self.spacing_sheet {
+            let layout = properties::layout_rows(geom.width, geom.body_top, 3);
+            let buttons = view::spacing_buttons(ui, &layout);
+            let rows = [
+                (SpacingSheet::LABELS[0], sheet.fields[0].as_str()),
+                (SpacingSheet::LABELS[1], sheet.fields[1].as_str()),
+                (SpacingSheet::LABELS[2], sheet.fields[2].as_str()),
+            ];
+            view::draw_sheet(canvas, ui, &layout, "Spacing", &rows, sheet.focus, &buttons);
+        }
+        if self.settings {
+            let layout = properties::list_layout(geom.width, geom.body_top, prefs::Setting::ALL.len());
+            let buttons = view::list_buttons(ui, &layout, Action::SettingsDone);
+            let rows: Vec<(&str, String)> = prefs::Setting::ALL.iter().map(|s| (s.label(), s.value(&self.opts))).collect();
+            view::draw_list(canvas, ui, &layout, "Preferences", &rows, &buttons);
+        }
+        if self.encodings_panel {
+            let layout = properties::list_layout(geom.width, geom.body_top, encoding::ALL.len());
+            let buttons = view::list_buttons(ui, &layout, Action::EncodingsDone);
+            let rows: Vec<(&str, String)> = encoding::ALL
+                .iter()
+                .enumerate()
+                .map(|(i, e)| (e.name(), (if self.opts.lists_encoding(i) { "Listed" } else { "Not listed" }).to_string()))
+                .collect();
+            view::draw_list(canvas, ui, &layout, "Customize Encodings List", &rows, &buttons);
         }
         let (words, chars) = active_doc(&self.docs).map_or((0, 0), |d| (d.text.word_count(), d.text.char_count()));
         view::draw_status(canvas, ui, &geom, words, chars, self.note.as_deref());

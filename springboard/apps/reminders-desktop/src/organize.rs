@@ -749,7 +749,7 @@ mod tests {
         assert_eq!(save_template(&mut d, 9, "x"), None);
 
         let list = list_from_template(&mut d, t, Some(1234)).unwrap();
-        assert_eq!(d.lists.last().unwrap().name, "Trip");
+        assert_eq!(d.lists.last().unwrap().name, "trip", "the replacement template's casing is preserved");
         assert_eq!(d.lists.last().unwrap().color, 3);
         let made: Vec<&Reminder> = d.items.iter().filter(|r| r.list == list).collect();
         assert_eq!(made.len(), 3);

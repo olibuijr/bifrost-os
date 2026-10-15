@@ -2,12 +2,16 @@
 //! hosted through the SDK. The shell draws the keyboard; the app
 //! asks for it with `wants_keyboard` and receives typed keys as `Input::Key`.
 
-mod details;
+mod control;
 mod insights;
+mod notify;
 mod services;
 mod weather;
 
+use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS};
+use bifrost_app::intents::{self, Intent, IntentResult};
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::share::{self, Payload};
 use bifrost_app::{network_path, widgets_timeline, App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
@@ -39,6 +43,20 @@ impl WeatherApp {
         self.sync_keyboard(ctx);
         if self.w.as_mut().is_some_and(|w| w.take_summary_changed()) {
             self.push_timeline(ctx);
+        }
+        self.post_outgoing(ctx);
+    }
+
+    /// Sends what the window queued: rain notifications to the shell, and the Share button's text to the share menu.
+    fn post_outgoing(&mut self, ctx: &Ctx) {
+        let Some(w) = &mut self.w else { return };
+        for notice in w.take_notices() {
+            ctx.notify(&notice.title, &notice.body);
+        }
+        if w.take_share() {
+            if let Some(text) = w.share_text() {
+                let _ = share::show_picker(ctx, &[Payload::Text(text)], w.share_anchor(&ctx.ui));
+            }
         }
     }
 
@@ -115,7 +133,20 @@ impl App for WeatherApp {
             Input::Activate(id) => {
                 c.activate_control(&ctx.ui, id, bifrost_app::proto::sys::now_ms());
             }
-            Input::Open(_) => return false,
+            Input::Open(url) => {
+                if !c.open_link(&ctx.ui, &url, bifrost_app::proto::sys::now_ms()) {
+                    return false;
+                }
+            }
+            Input::Context { x, y } => {
+                let items = c.context_items(&ctx.ui, x, y);
+                if !items.is_empty() {
+                    ctx.context_menu(x, y, items);
+                }
+            }
+            Input::ContextAction(id) => {
+                c.context_action(&ctx.ui, id, bifrost_app::proto::sys::now_ms());
+            }
             _ => return false,
         }
         self.sync(ctx);
@@ -159,6 +190,31 @@ impl App for WeatherApp {
             }
             _ => false,
         }
+    }
+
+    /// `weather.places`, `weather.current` and `weather.forecast` (see `control`): what the window shows, as JSON.
+    fn rpc_methods(&self) -> Vec<&'static str> {
+        control::METHODS.to_vec()
+    }
+
+    fn rpc(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        match &self.w {
+            Some(w) => w.rpc(method, params),
+            None => Err(RpcError::new(INTERNAL_ERROR, "Weather has not started yet")),
+        }
+    }
+
+    /// `current`: the conditions at the selected place, for Search and the assistant.
+    fn intents(&self) -> Vec<Intent> {
+        vec![Intent::new("current", "Current Weather", "Says the current conditions at the selected place.").shortcut()]
+    }
+
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &std::path::Path, id: &str, _params: &Json) -> Result<IntentResult, RpcError> {
+        if id != "current" {
+            return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}")));
+        }
+        let dialog = self.w.as_ref().and_then(|w| w.intent_dialog()).ok_or_else(|| intents::failed("the forecast for the selected place has not loaded yet"))?;
+        Ok(IntentResult::dialog(&dialog))
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {

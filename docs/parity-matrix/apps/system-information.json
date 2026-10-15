@@ -20,9 +20,9 @@
    "area": "view",
    "apple": "sidebar group of every hardware class (ATA, Audio, Bluetooth, Camera, Card Reader, Controller, Diagnostics, Disc Burning, Ethernet, Fibre Channel, Graphics/Displays, Memory, NVMe, PCI, Power, Printers, SAS, SATA, Storage, Thunderbolt, USB)",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:76",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "Add the remaining hardware classes the reference lists (Card Reader, Controller, Diagnostics, Disc Burning, Fibre Channel, SAS), each with a sysfs reader in probe.rs and a Category variant in model.rs. Then check the new Audio, Bluetooth, Camera, Printers, Thunderbolt, NVMe and SATA pages on a machine that has the device."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:45, springboard/apps/sysinfo-desktop/src/probe.rs:1052, springboard/apps/sysinfo-desktop/src/probe.rs:1201",
+   "note": "Every class but ATA has a page: Card Reader, Controller, SAS, Fibre Channel, Disc Burning and Diagnostics (0.6.0) with a reader in probe.rs. ATA is missing: Linux lists parallel and serial ATA ports in the same ata_port class with no field that tells them apart. Check the new pages on a machine that has the device.",
+   "wire": "Add ATA once a sysfs field separates parallel ATA ports from SATA ones (or a host driver name rule is agreed), with a reader in probe.rs and a Category variant in model.rs. Then check the Audio, Bluetooth, Camera, Printers, Thunderbolt, NVMe and SATA pages on a machine that has the device."
   },
   {
    "feature": "Network section in the sidebar",
@@ -30,7 +30,7 @@
    "apple": "Network group: Firewall, Locations, Volumes, WWAN, Wi-Fi",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:21",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "note": "Locations and the firewall's rule state are not built: the OS keeps no network locations an app can read, and the rules need administrator rights. Check Wi-Fi, Ethernet, WWAN and Volumes on Midget.",
    "wire": "Add Locations (network profiles) once the OS keeps them, and rule state on the Firewall page once a firewall service exists (the page shows the loaded packet filter only). Check Wi-Fi, Ethernet, WWAN and Volumes on Midget."
   },
   {
@@ -38,8 +38,8 @@
    "area": "view",
    "apple": "Software group: Accessibility, Applications, Developer, Extensions, Fonts, Frameworks, Installations, Language & Region, Logs, Preference Panes, Printer Software, Profiles, Startup Items, Sync Services",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:76",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/probe.rs:1254, springboard/apps/sysinfo-desktop/src/probe.rs:1289",
+   "note": "Installations (the pacman log) and Printer Software (installed PPD drivers) added in 0.6.0. Preference Panes, Accessibility, Developer, Frameworks, Profiles and Sync Services are not built: the shell keeps no pane list and the system has no profile or sync service to read. Check Fonts and Logs on Midget.",
    "wire": "Add Preference Panes (the pane list lives in the shell), Accessibility, Developer, Frameworks, Installations, Profiles, Printer Software and Sync Services. Check Fonts and Logs on Midget."
   },
   {
@@ -56,8 +56,8 @@
    "area": "view",
    "apple": "split view: Contents list on top, details pane below",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:657",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:419, springboard/apps/sysinfo-desktop/src/draw.rs:87",
+   "note": "Name and Details headers sort the list (a second click reverses it), and the picked item stays picked through a sort and a refresh. The USB tree keeps bus order. Check the split on Midget.",
    "wire": "Add column headers and sorting to the item list, and keep the picked item across a refresh. Check the split on Midget."
   },
   {
@@ -83,9 +83,9 @@
    "area": "view",
    "apple": "Hardware > Processor / chip: cores, cache, speed",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:467",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "Show the clock of each core (cpufreq) and the performance and efficiency core split. Physical cores, cache sizes and the clock range are in place; check on Midget."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/probe.rs:193, springboard/apps/sysinfo-desktop/src/probe.rs:216, springboard/apps/sysinfo-desktop/src/model.rs:517",
+   "note": "Each processor's clock (cpufreq) and the performance and efficiency core counts (hybrid and capacity-based) are in place (0.6.0). Check on Midget.",
+   "wire": "The clock of each processor (cpufreq) and the performance and efficiency core split are in place (model.rs processor_rows). Physical cores, cache sizes and the clock range are in place; check on Midget."
   },
   {
    "feature": "Memory details",
@@ -93,16 +93,16 @@
    "apple": "Hardware > Memory: type, speed, slots, manufacturer",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:491",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "The firmware table (/sys/firmware/dmi/tables/DMI) is readable by root only: read it through the privileged helper so the slots show for a normal user. Available memory and swap are in place; check on Midget."
+   "note": "Available memory, swap and the slot list are in place. The slots come from the firmware table, which only root can read; a normal user sees the slots as not reported. Check on Midget.",
+   "wire": "The firmware table (/sys/firmware/dmi/tables/DMI) is readable by root only. The privileged helper runs only the disk requests in springboard/core/src/disk_request.rs, so a read-only DMI request has to be added to that contract and the helper first. Available memory and swap are in place; check on Midget."
   },
   {
    "feature": "Graphics and displays",
    "area": "view",
    "apple": "Graphics/Displays: chipset, VRAM, resolution",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:581",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:677, springboard/apps/sysinfo-desktop/src/main.rs:155",
+   "note": "Each display's refresh rate and scale come from the display service (0.6.0). Video memory is in place; check it on a machine with a discrete GPU.",
    "wire": "Add the refresh rate and scale of each display (needs the shell display service, not sysfs). Video memory is in place; check it on a machine with a discrete GPU."
   },
   {
@@ -138,8 +138,8 @@
    "apple": "Hardware > Storage / Volumes: capacity, free space, file system, SMART",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:691",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "Add SMART health (a smartctl summary needs root: read it through the privileged helper). File system, mount point and free space per partition are in place."
+   "note": "SMART health is still missing: no SMART reader exists in the shell, the disk helper or this app. File system, mount point and free space per partition are in place. Check on Midget.",
+   "wire": "Add SMART health. A smartctl summary needs root, and the privileged helper runs only the disk requests in springboard/core/src/disk_request.rs, so a read-only SMART request has to be added there first (Disk Utility already runs smartctl -H itself, springboard/apps/diskutil-desktop/src/probe.rs:1). File system, mount point and free space per partition are in place."
   },
   {
    "feature": "Network interfaces",
@@ -147,8 +147,8 @@
    "apple": "Network > Wi-Fi / Ethernet: addresses, MAC, state",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:781",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "Add the Wi-Fi SSID and channel (they come from the network service status, not /proc). IPv4 addresses, gateway, DNS, link speed and signal are in place."
+   "note": "Wi-Fi SSID and channel are still missing. The network service (netd) publishes the SSID in its Status event, but no app-facing SDK network module exists, and the Status carries no channel. IPv4 addresses, gateway, DNS, link speed and signal are in place.",
+   "wire": "Add a network module to the SDK that reads netd's Status event (springboard/docs/services.md:49) and show the SSID. The channel is not in the event; it needs a netd field first. IPv4 addresses, gateway, DNS, link speed and signal are in place."
   },
   {
    "feature": "Operating system details",
@@ -165,7 +165,7 @@
    "apple": "Software > Applications: name, version, source, 64-bit, last modified",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:746",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "note": "Signature state is still missing: installs verify a SHA-256 only, so there is no signature to show. Name, kind and install date are in place.",
    "wire": "Show the signature state once packages carry signatures (installs verify a SHA-256 only). Name, kind and install date are in place."
   },
   {
@@ -182,9 +182,9 @@
    "area": "menu",
    "apple": "File/View > Refresh Information (cmd+R)",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:89",
-   "note": "View > Refresh Information (Cmd+R) routes to SysInfo::reload; the toolbar button stays.",
-   "wire": "Declare a View menu (Refresh Information cmd+R) in main.rs via the app menu API used by activity-desktop (main.rs main_menu) and route cmd+R to SysInfo::reload (window.rs:74)."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:94, springboard/apps/sysinfo-desktop/src/window.rs:373",
+   "note": "View > Refresh Information (Cmd+R) is declared in the View menu and calls SysInfo::refresh, which reads the machine again; the toolbar button stays. Check on Midget.",
+   "wire": "Check on Midget that Cmd+R reads the machine again while a sheet is not open, and that the toolbar button does the same."
   },
   {
    "feature": "Preparing system profile progress",
@@ -200,9 +200,9 @@
    "area": "menu",
    "apple": "View > Show Less Information (hides item detail or developer rows)",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:349",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:95, springboard/apps/sysinfo-desktop/src/window.rs:452",
    "note": "View > Show Less Information toggles a mini mode: sidebar and report keep only the Overview.",
-   "wire": "Add a mini/full flag to SysInfo and a View menu toggle; the concise mode shows only the Overview rows."
+   "wire": "Check on Midget that View > Show Less Information (a check mark while on) leaves only the Overview in the sidebar and the report, and that toggling it back restores every category. The flag is SysInfo::mini (springboard/apps/sysinfo-desktop/src/window.rs:223)."
   },
   {
    "feature": "Save System Report as .spx / text / rich text",
@@ -210,7 +210,7 @@
    "apple": "File > Save; document types spx, txt, rtf",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:317",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "note": "Text, rich text and JSON reports are written. A .spx report is not: the reference format has no writer here. Check the three files on Midget.",
    "wire": "The reference .spx type has no equivalent here: text, rich text and JSON reports are written. Check the three files on Midget."
   },
   {
@@ -218,17 +218,17 @@
    "area": "menu",
    "apple": "File > Open, Open Recent; spreporter and spx types",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:325",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "Register the report file type with the shell once manifests can declare document types, so Files opens a report in this app. File > Open Report and Open Recent are in place."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:325, springboard/apps/sysinfo-desktop/manifest.toml:11",
+   "note": "File > Open Report and Open Recent are in place. The manifest declares public.json at rank none (0.7.0), so Open With lists System Information for a JSON report; Files never picks it by itself, and the report's own type is not registered. Check on Midget.",
+   "wire": "Check on Midget that Files' Open With lists System Information for a saved report and that the report opens. A dedicated report type would need a UTI in springboard/ui/src/uttype.rs."
   },
   {
    "feature": "Find in the report",
    "area": "menu",
    "apple": "Edit > Find: Find Next/Previous, Use Selection for Find, Jump to Selection",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:608",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:85, springboard/apps/sysinfo-desktop/src/window.rs:540, springboard/apps/sysinfo-desktop/src/window.rs:551",
+   "note": "Use Selection for Find (Cmd+E) and Jump to Selection (Cmd+J) are in the Edit menu (0.6.0). Typing into the toolbar field is checked on Midget.",
    "wire": "Check typing into the toolbar field on Midget; add Use Selection for Find and Jump to Selection."
   },
   {
@@ -237,8 +237,8 @@
    "apple": "Edit > Select All, Copy",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:437",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "Add range selection (Shift-click and Shift with the arrow keys) once the touch event carries modifiers. Copy of a picked row or the picked list item is in place."
+   "note": "Copy of a picked row or the picked list item is in place. Range selection needs modifier state, and the SDK's Input::Touch and KeyInput carry none yet (springboard/sdk/src/runtime.rs:20).",
+   "wire": "Add the modifier state to Input::Touch and to the key input in the SDK, then range selection (Shift-click and Shift with the arrow keys) here. Copy of a picked row or the picked list item is in place."
   },
   {
    "feature": "Send to Apple",
@@ -254,9 +254,9 @@
    "area": "menu",
    "apple": "Window/Hardware > Speak Serial Number",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:300",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
-   "wire": "The announcement is spoken only while the screen reader is on (the shell speaks announcements through its speech engine and shows the text as a banner otherwise). Add a speak call that works without the screen reader once the shell offers one."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/speech.rs:1, springboard/apps/sysinfo-desktop/src/main.rs:346",
+   "note": "Speak Serial Number reads the serial digit by digit through espeak-ng or espeak, with the screen reader on or off (0.7.0). With no engine installed the text shows as the banner. Check the voice on Midget.",
+   "wire": "Check on Midget that the serial is spoken with the screen reader off, and that the banner shows when no engine is installed."
   },
   {
    "feature": "Develop menu: fill startup disk and memory thresholds",
@@ -290,8 +290,8 @@
    "area": "menu",
    "apple": "About, Hide, Hide Others, Show All, Services, Quit, Minimize, Bring All to Front",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:94",
-   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:99",
+   "note": "The Window menu has Show Overview, Previous Category and Next Category. The application menu is built by the shell, so an app cannot add to it. Check on Midget.",
    "wire": "The application menu (About, Hide, Quit) is built by the shell and an app cannot add to it; the Window menu has Show Overview, Previous Category and Next Category. Check on Midget."
   },
   {
@@ -299,9 +299,9 @@
    "area": "menu",
    "apple": "System Information Help",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:102",
-   "note": "Help > System Information Help opens the help page URL; no in-shell help viewer.",
-   "wire": "Add a Help menu entry that opens a short Help page in the shell help viewer."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/help.rs (rows, toggle_help); springboard/apps/sysinfo-desktop/src/main.rs (MENU_HELP, MENU_ONLINE_HELP)",
+   "note": "Help > System Information Help shows a short help card in the window, tested in help.rs; Help > System Information Online Help opens the web page. There is no shell help viewer, so the help is a card, not a separate page; check it on Midget.",
+   "wire": "Verify the in-window help card and online help action on Midget, including that the card closes and returns to the selected view."
   }
  ]
 }

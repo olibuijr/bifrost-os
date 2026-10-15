@@ -12,7 +12,7 @@
       "apple": "UnaryFileSystemExtension, FSUnaryFileSystem, FSFileSystemBase",
       "bifrost": "none; no SDK or shell API for an app to register a mount type",
       "status": "gap",
-      "note": "Apple's module runs as an app extension and is driven by FSKit. Linux has FUSE in the kernel, but BifrOSt exposes no SDK wrapper for it."
+      "note": "Blocked: a mount type needs a FUSE binding (the kernel interface exists, no Rust wrapper is built) plus a shell mount service that runs an app's module and checks its grants. Neither exists, and no C dependency is allowed to fill the gap."
     },
     {
       "feature": "Volumes and items",
@@ -24,9 +24,9 @@
     {
       "feature": "Resources (block device, path URL, generic URL)",
       "apple": "FSResource, FSBlockDeviceResource, FSPathURLResource, FSGenericURLResource",
-      "bifrost": "springboard/src/bare/docbroker.rs (grants resolve a path beneath the account home and return a descriptor)",
+      "bifrost": "springboard/src/bare/docbroker.rs (grants resolve a path beneath the account home and return a descriptor); springboard/ui/src/fs_resource.rs (Resource: block device, path URL, generic URL)",
       "status": "partial",
-      "note": "The grant model covers one path per app and per file. There is no block device resource and no generic URL resource."
+      "note": "The resource kinds and their checks are tested headless in tests/parity_sdk-complete-23.rs, and the grant model still covers one path per app and per file. Gap: no resource is opened or mounted from a block device node or a generic URL yet."
     },
     {
       "feature": "Containers and probing",
@@ -38,9 +38,9 @@
     {
       "feature": "Extents and blockmaps",
       "apple": "FSExtentPacker, FSExtentType, FSBlockmapFlags, FSMetadataRange, FSCompleteIOFlags",
-      "bifrost": "Linux kernel file systems (no BifrOSt SDK surface)",
-      "status": "os",
-      "note": "Extent mapping happens in the Linux kernel file systems. No app-facing API exists."
+      "bifrost": "springboard/sdk/src/extent_map.rs (ExtentMap::new, ExtentMap::locate); the Linux kernel file systems allocate the extents",
+      "status": "partial",
+      "note": "Extent packing, overlap refusal and the file-offset to disk-offset lookup are tested headless in tests/parity_sdk-os-02.rs. Gap: the kernel file systems do the allocation, and no call yet reads a real file's extents from the kernel."
     },
     {
       "feature": "Errors and logging",
@@ -52,9 +52,9 @@
     {
       "feature": "Tasks and operation identifiers",
       "apple": "FSTask, FSTaskOptions, FSOperationID",
-      "bifrost": "springboard/src/bare/docbroker.rs (per-request grant ids and cancellation)",
+      "bifrost": "springboard/src/bare/docbroker.rs (per-request grant ids and cancellation); springboard/ui/src/fs_maintenance.rs (operation ids, task log, completion)",
       "status": "partial",
-      "note": "Grant requests have ids and can be cancelled. There is no FSTask log or completion channel for file system modules."
+      "note": "Operation ids, the per-task message log, finish-once completion with a failure reason and cancellation are tested headless in tests/parity_sdk-complete-23.rs. Gap: there are no FSTaskOptions and no completion channel into a file system module, which needs a running module to exist."
     },
     {
       "feature": "File change notification",

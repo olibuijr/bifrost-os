@@ -115,7 +115,7 @@ mod tests {
     fn manifest_lists_one_shortcut_table_per_intent() {
         let lines = manifest_lines();
         assert_eq!(lines.len(), CATALOGUE.len());
-        assert!(lines[0].starts_with("[[intent]]\nid = \"open-date-time\""));
+        assert!(lines[0].starts_with("[[intent]]\nid = \"open-sound\""));
         assert!(lines.iter().all(|t| t.contains("shortcut = true")));
     }
 }

@@ -10,23 +10,23 @@
     {
       "feature": "View management (MTKView, MTKViewDelegate)",
       "apple": "MTKView, MTKViewDelegate",
-      "bifrost": "springboard/ui/src/render_loop.rs",
+      "bifrost": "springboard/ui/src/render_loop.rs; springboard/ui/src/render_view.rs (RenderView: drawable size from bounds and content scale, automatic resizing, the loop and draw requests)",
       "status": "partial",
-      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Presenter is internal to the shell. SDK views are retained CPU views; no app-facing GPU render view or per-frame draw delegate"
+      "note": "The render view model is tested headless in ui/tests/parity_sdk-complete-33.rs: drawable size from bounds and scale, automatic and manual resizing with change reports, and the paused, timed and on-demand loop, alongside the loop tests in render_loop.rs and parity_sdk-tests-05.rs. Gap: no app-facing GPU view or per-frame draw delegate is attached, and the presenter stays internal to the shell, which needs a GPU device and the lab machine."
     },
     {
       "feature": "Device and drawable setup",
       "apple": "MTKView.device, preferredDevice, colorPixelFormat",
-      "bifrost": "springboard/src/gpu/wl.rs (Presenter::create_surface, line 380); springboard/src/gpu/egl.rs",
-      "status": "os",
-      "note": "GBM and EGL drawables exist in the system layer; apps get no device or drawable API"
+      "bifrost": "springboard/ui/src/drawable_setup.rs (DrawableSetup::validate, FORMAT_OPAQUE, FORMAT_ALPHA); springboard/src/gpu/wl.rs (Presenter::create_surface, line 380); springboard/src/gpu/egl.rs",
+      "status": "partial",
+      "note": "A drawable request is validated headless in ui/tests/parity_sdk-rest-12.rs: zero sides, the device side limit, render node paths, the presenter format codes and buffer sizes. Gap: the shell's GBM and EGL presenter does not take these requests yet, and no app receives a device or drawable handle; checking the real device limit needs the lab machine."
     },
     {
       "feature": "Texture loading from image files",
       "apple": "MTKTextureLoader (newTexture URL, asset catalog)",
-      "bifrost": "springboard/render/src/imgdec.rs (decode, PNG and JPEG); springboard/src/gpu/mod.rs (upload, line 352)",
+      "bifrost": "springboard/render/src/imgdec.rs (decode, PNG and JPEG); springboard/src/gpu/mod.rs (upload, line 352); springboard/ui/src/texture_catalog.rs (named images with scale variants); springboard/ui/src/texture_loader.rs (background load requests)",
       "status": "partial",
-      "note": "Images decode to RGBA on the CPU and upload to GLES. No app-facing GPU texture object, no asynchronous load, no asset catalog lookup, no texture options"
+      "note": "Images decode to RGBA on the CPU and upload to GLES. A named lookup that picks the scale variant for the screen is tested headless in ui/tests/parity_sdk-complete-33.rs. Gap: no app-facing GPU texture object and no asynchronous upload to GLES, and the upload path needs a GPU and the lab machine."
     },
     {
       "feature": "Model I/O mesh handling (MTKMesh, MTKSubmesh, MTKMeshBuffer, allocator)",
@@ -38,9 +38,9 @@
     {
       "feature": "Vertex batching for 2D draws",
       "apple": "(no direct MetalKit class; Metal draw calls)",
-      "bifrost": "springboard/src/gpu/batch.rs (Vertex, ATTRIBS)",
-      "status": "os",
-      "note": "Internal batching of shell primitives into one vertex list per frame. Not exposed to apps"
+      "bifrost": "springboard/ui/src/sprite_batch.rs (SpriteBatch::push_quad, Run); springboard/src/gpu/batch.rs (Vertex, ATTRIBS)",
+      "status": "partial",
+      "note": "The app-facing sprite batch joins quads into texture runs and refuses a full or empty quad; tested headless in ui/tests/parity_sdk-rest-12.rs. Gap: the shell's frame batch in gpu/batch.rs is still its own copy, and no app submits sprites to the GPU."
     },
     {
       "feature": "Conversion functions and model errors",

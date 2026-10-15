@@ -4,6 +4,24 @@
 
 # Changelog
 
+## 0.7.0
+
+- Upstream soundcraft v0.7.0.
+  ## What's Changed
+  * fix(dsp): a huge finite sample rate is no pitch, not an overflow (#241) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/269
+  * fix(track): vca: null clears a VCA assignment, as documented (#237) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/270
+  * fix(control): apply the engine.commands filter to UI commands (#255) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/271
+  * fix(window): keep the MIDI Editor open on Bring to Front (#254) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/272
+
+## 0.6.2
+
+- Upstream soundcraft v0.6.1.
+  ## What's Changed
+  * Add shared docking with SoundCraft theme and MIDI sizing by @skylartaylor in https://github.com/storytold/soundcraft/pull/167
+  * ci: refactor workflows to use storytold/craft-common-actions by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/184
+  * Keep each consolidation in its own audio file. by @vbasky in https://github.com/storytold/soundcraft/pull/123
+  * Save a session copy without retargeting the open document. by @vbasky in https://github.com/storytold/soundcraft/pull/124
+
 ## 0.6.1
 
 - Upstream soundcraft v0.6.1.

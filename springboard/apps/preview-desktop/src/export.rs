@@ -4,7 +4,7 @@
 
 use crate::document::adjusted;
 use crate::model::{self, Adjust, Mark};
-use crate::pdfjob::{self, Job, Pdf, Reply, PAGE_BOX};
+use crate::pdfjob::{self, Job, Pdf, Reply, DOCUMENT_RENDER_BOUNDS};
 use crate::pixels;
 use bifrost_app::kit::Image;
 use springboard::cg::imageio::encode::{encode_png, PngOptions};
@@ -53,12 +53,17 @@ pub fn finish(img: &Image, marks: &[Mark], src: usize, turns: u8, adjust: &Adjus
     out
 }
 
+/// The picture as PNG bytes, transparency kept. None when it cannot be encoded.
+pub fn png_bytes(img: &Image) -> Option<Vec<u8>> {
+    encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default())
+}
+
 /// Encodes `img` and writes it to `target`. A PNG keeps transparency; a JPEG has none, so a transparent picture is laid
 /// over white first.
 pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), String> {
     let unencoded = || "The picture could not be encoded.".to_string();
     let bytes = match raster {
-        Raster::Png => encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default()).ok_or_else(unencoded)?,
+        Raster::Png => png_bytes(img).ok_or_else(unencoded)?,
         Raster::Jpeg(quality) => {
             let flat;
             let opaque = if pixels::has_alpha(img) {
@@ -81,8 +86,8 @@ pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), Str
 pub fn pdf_page_job(src: usize, turns: u8, marks: Vec<Mark>, adjust: Adjust, scale: f32, raster: Raster, target: PathBuf) -> Job {
     pdfjob::run(move |pdf: &Pdf| {
         let result = (|| -> Result<PathBuf, String> {
-            let bw = ((PAGE_BOX.0 as f32 * scale).round() as usize).max(1);
-            let bh = ((PAGE_BOX.1 as f32 * scale).round() as usize).max(1);
+            let bw = ((DOCUMENT_RENDER_BOUNDS.0 as f32 * scale).round() as usize).max(1);
+            let bh = ((DOCUMENT_RENDER_BOUNDS.1 as f32 * scale).round() as usize).max(1);
             let page = pdf.pages.get(src).ok_or("This page is missing.")?;
             let img = draw::render_page_fit(&pdf.doc, page, bw, bh).ok_or("The page could not be drawn.")?;
             let out = finish(&img, &marks, src, turns, &adjust, 1.0);

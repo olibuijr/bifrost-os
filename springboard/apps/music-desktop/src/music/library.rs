@@ -201,6 +201,49 @@ fn added_of(path: &Path) -> u64 {
     std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs())
 }
 
+/// The folder inside a music root that File > Import copies songs into.
+pub const IMPORT_DIR: &str = "Imported";
+
+/// Whether the library lists a file of this name: a format the audio service plays, or a MIDI file.
+pub fn is_library_file(name: &str) -> bool {
+    let path = Path::new(name);
+    audiofile::format_of(path).is_some() || is_midi(path)
+}
+
+/// The path in `dir` for a file called `name` that does not exist yet: `name` itself, else "stem 2.ext", "stem 3.ext", ...
+pub fn free_name(dir: &Path, name: &str) -> PathBuf {
+    let first = dir.join(name);
+    if !first.exists() {
+        return first;
+    }
+    let path = Path::new(name);
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    (2..).map(|n| dir.join(format!("{stem} {n}{ext}"))).find(|p| !p.exists()).unwrap_or(first)
+}
+
+/// Copies one song into the library: reads `source` into `<root>/Imported/<name>`, under a free name. Returns the new
+/// path, or None when `name` is not a file the library lists (nothing is written then). The file is written under a
+/// temporary name and moved into place, so a scan never sees half of it.
+pub fn import_into(root: &Path, name: &str, source: &mut impl std::io::Read) -> std::io::Result<Option<PathBuf>> {
+    // only the last component counts: a name never reaches outside the import folder
+    let Some(name) = Path::new(name).file_name().map(|n| n.to_string_lossy().into_owned()) else { return Ok(None) };
+    if name.starts_with('.') || !is_library_file(&name) {
+        return Ok(None);
+    }
+    let dir = root.join(IMPORT_DIR);
+    std::fs::create_dir_all(&dir)?;
+    let dest = free_name(&dir, &name);
+    let tmp = dir.join(format!(".{name}.part"));
+    let copied = std::fs::File::create(&tmp).and_then(|mut out| std::io::copy(source, &mut out));
+    if let Err(e) = copied {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    std::fs::rename(&tmp, &dest)?;
+    Ok(Some(dest))
+}
+
 /// A MIDI file: its length is the sequence's length from the Standard MIDI File reader. It has no tags and no
 /// cover. A file that is too big or does not parse is skipped.
 fn scan_midi(path: &Path) -> Option<Scanned> {
@@ -224,6 +267,22 @@ pub fn scan_file(path: &Path) -> Option<Scanned> {
     let duration_ms = audiofile::open(path).ok().and_then(|d| d.duration_ms());
     let has_cover = tags.cover.is_some();
     Some(Scanned { path: path.to_path_buf(), tags, duration_ms, has_cover, added: added_of(path) })
+}
+
+/// The encoded picture embedded in one file's tags, when it has one within the size cap. A file that does not read has none.
+pub fn artwork_of(path: &Path) -> Option<Vec<u8>> {
+    audiofile::read_tags(path).ok()?.cover.filter(|c| c.len() <= MAX_COVER)
+}
+
+/// The MIME type of an encoded picture, named by its signature: PNG or JPEG. Other formats give None.
+pub fn artwork_format(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else {
+        None
+    }
 }
 
 /// Scans every file, keeping one cover per album: later songs of an album
@@ -330,6 +389,11 @@ impl Library {
     /// The album a song belongs to.
     pub fn album_of(&self, song: usize) -> Option<usize> {
         self.albums.iter().position(|a| a.songs.contains(&song))
+    }
+
+    /// The encoded cover picture of album `album` (an index into `albums`), when one was read.
+    pub fn cover_of(&self, album: usize) -> Option<&[u8]> {
+        self.covers.get(album)?.as_deref()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -441,6 +505,33 @@ mod tests {
         b.extend([0, 0, 0, 13]);
         b.extend([0x00, 0x90, 0x3C, 0x40, 0x87, 0x40, 0x80, 0x3C, 0x00, 0x00, 0xFF, 0x2F, 0x00]);
         b
+    }
+
+    #[test]
+    fn importing_copies_a_song_into_the_import_folder_under_a_free_name() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-music-import");
+        let _ = std::fs::remove_dir_all(&root);
+        let bytes = midi_bytes();
+        let first = import_into(&root, "riff.mid", &mut bytes.as_slice()).unwrap().unwrap();
+        assert_eq!(first, root.join("Imported/riff.mid"));
+        assert_eq!(std::fs::read(&first).unwrap(), bytes);
+        let second = import_into(&root, "riff.mid", &mut bytes.as_slice()).unwrap().unwrap();
+        assert_eq!(second, root.join("Imported/riff 2.mid"), "a taken name gets a number");
+        let third = import_into(&root, "riff.mid", &mut bytes.as_slice()).unwrap().unwrap();
+        assert_eq!(third, root.join("Imported/riff 3.mid"));
+        assert_eq!(import_into(&root, "notes.txt", &mut bytes.as_slice()).unwrap(), None, "not a song");
+        assert_eq!(import_into(&root, ".hidden.mid", &mut bytes.as_slice()).unwrap(), None);
+        assert_eq!(import_into(&root, "", &mut bytes.as_slice()).unwrap(), None);
+        let escaped = import_into(&root, "../../out.mid", &mut bytes.as_slice()).unwrap().unwrap();
+        assert_eq!(escaped, root.join("Imported/out.mid"), "only the file name is used");
+        assert!(!root.join("Imported").read_dir().unwrap().flatten().any(|e| e.file_name().to_string_lossy().ends_with(".part")), "no temporary file is left");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_library_lists_the_formats_the_audio_service_plays() {
+        assert!(is_library_file("a.mp3") && is_library_file("B.M4A") && is_library_file("c.mid"));
+        assert!(!is_library_file("d.txt") && !is_library_file("e") && !is_library_file("f.jpg"));
     }
 
     #[test]

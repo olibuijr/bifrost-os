@@ -1,6 +1,6 @@
 //! Wireless Diagnostics as an installed BifrOSt system app: the Wi-Fi link (network, channel, band, signal, noise, rate
 //! and a quality rating), a live signal chart, a scan of nearby networks and a plain-text diagnostics report.
-//! `source.rs` reads the kernel and `iw` on background threads, `model.rs` parses and rates what they return,
+//! `source.rs` reads the kernel and `iw` on dispatch queues, `model.rs` parses and rates what they return,
 //! `state.rs` holds the window's state and layout, and `draw.rs` paints it.
 
 mod draw;
@@ -10,39 +10,25 @@ mod state;
 
 use bifrost_app::kit::{clipboard, Damage, Surface};
 use bifrost_app::{App, Ctx, Input, TouchKind};
-use source::Reading;
 use state::{to_points, Diagnostics, B_COPY, B_REPORT, B_SCAN};
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// How often the radio is read, in seconds.
 const POLL: Duration = Duration::from_secs(1);
-/// How often the window asks to be woken to take readings that arrived, in milliseconds.
-const WAKE_MS: f64 = 500.0;
-
 struct WirelessDiagnostics {
     state: Diagnostics,
-    poll: Receiver<Reading>,
 }
 
 impl WirelessDiagnostics {
     fn new() -> WirelessDiagnostics {
-        WirelessDiagnostics { state: Diagnostics::new(), poll: source::spawn_poller(POLL) }
+        let state = Diagnostics::new();
+        source::spawn_poller(POLL, &state.readings);
+        WirelessDiagnostics { state }
     }
 
     /// Takes every reading the poller sent since the last frame, and the scan's answer if it has come back.
     fn drain(&mut self) -> bool {
-        let mut changed = false;
-        loop {
-            match self.poll.try_recv() {
-                Ok(reading) => {
-                    self.state.apply_reading(reading);
-                    changed = true;
-                }
-                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
-            }
-        }
-        self.state.poll_scan() || changed
+        self.state.poll_scan() | self.state.drain_readings()
     }
 
     /// Runs the toolbar action `id`. True when the window needs a new frame.
@@ -102,8 +88,8 @@ impl App for WirelessDiagnostics {
         self.drain()
     }
 
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        Some(t + WAKE_MS)
+    fn next_wake(&self, _t: f64) -> Option<f64> {
+        None
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {

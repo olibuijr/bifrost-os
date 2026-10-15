@@ -24,6 +24,9 @@ const AXIS_PX: usize = 2;
 const CURVE_PT: f32 = 2.0;
 /// Pixel coordinates are clamped to this, so a point far off the plot cannot overflow the rasteriser.
 const PIXEL_LIMIT: f64 = 1.0e6;
+/// Keep each stroked path's bounds local. The software stroke rasterizer tests every segment against every sample
+/// in the path bounds, so one path spanning a whole plot makes a long curve quadratic in its length.
+const SEGMENTS_PER_STROKE: usize = 32;
 /// The gap between a tick label and its axis, in device pixels.
 const LABEL_GAP_PX: f64 = 4.0;
 
@@ -113,14 +116,18 @@ pub fn draw(s: &mut Surface, ui: &Ui, labels: &mut TextCache, area: Area, model:
             if line.len() < 2 {
                 continue;
             }
-            let mut verbs = Vec::with_capacity(line.len());
-            for (i, &(x, y)) in line.iter().enumerate() {
-                let (px, py) = view.to_px(x, y, w, h);
-                let px = area.x as f32 + px.clamp(-PIXEL_LIMIT, PIXEL_LIMIT) as f32;
-                let py = area.y as f32 + py.clamp(-PIXEL_LIMIT, PIXEL_LIMIT) as f32;
-                verbs.push(if i == 0 { PathVerb::Move(px, py) } else { PathVerb::Line(px, py) });
+            for start in (0..line.len() - 1).step_by(SEGMENTS_PER_STROKE) {
+                let end = (start + SEGMENTS_PER_STROKE + 1).min(line.len());
+                let points = &line[start..end];
+                let mut verbs = Vec::with_capacity(points.len());
+                for (i, &(x, y)) in points.iter().enumerate() {
+                    let (px, py) = view.to_px(x, y, w, h);
+                    let px = area.x as f32 + px.clamp(-PIXEL_LIMIT, PIXEL_LIMIT) as f32;
+                    let py = area.y as f32 + py.clamp(-PIXEL_LIMIT, PIXEL_LIMIT) as f32;
+                    verbs.push(if i == 0 { PathVerb::Move(px, py) } else { PathVerb::Line(px, py) });
+                }
+                Canvas::path(s, &PathData { verbs }, PathPaint::Stroke(width), colour);
             }
-            Canvas::path(s, &PathData { verbs }, PathPaint::Stroke(width), colour);
         }
     }
     Canvas::pop_clip(s);

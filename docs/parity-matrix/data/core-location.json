@@ -12,28 +12,28 @@
       "apple": "CLLocationManager, CLLocationUpdate, CLBackgroundActivitySession, CLServiceSession (Getting the current location of a device; Handling location updates in the background)",
       "bifrost": "springboard/sdk/src/core_location.rs (LocationManager, Delegate, Location, accuracy levels, distance filter); springboard/src/shell/services/location.rs (shell location service: manual location from Settings prefs, IP lookup off by default)",
       "status": "partial",
-      "note": "Host-tested only; not yet checked on Midget. Authorization state machine runs through the privacy grants (notDetermined to authorizedWhenInUse or denied); requestLocation, start/stopUpdatingLocation, didUpdateLocations and didFailWithError are delivered to a delegate. No GPS hardware and no Wi-Fi positioning: a fix is a manual location (100 m) or an opt-in IP lookup (about 25 km, city level). No altitude, no background updates, no CLLocationUpdate/CLServiceSession."
+      "note": "Tested headless in springboard/sdk/tests/parity_sdk-tests-16.rs (authorization replies, update and failure delivery, distance filter, decoding, error codes, usage texts); not yet checked on Midget. Authorization state machine runs through the privacy grants (notDetermined to authorizedWhenInUse or denied); requestLocation, start/stopUpdatingLocation, didUpdateLocations and didFailWithError are delivered to a delegate. No GPS hardware and no Wi-Fi positioning: a fix is a manual location (100 m) or an opt-in IP lookup (about 25 km, city level). No altitude, no background updates, no CLLocationUpdate/CLServiceSession."
     },
     {
       "feature": "Authorization and usage descriptions",
       "apple": "CLAuthorizationStatus, CLAccuracyAuthorization, NSLocation*UsageDescription keys, Requesting authorization, Suspending authorization requests",
       "bifrost": "springboard/ui/src/location_auth.rs; wired: springboard/ui/src/location_auth.rs (shell privacy service: location_status, location_request; Settings > Privacy > App Permissions > LOCATION switch; SDK privacy_permissions::location_status/location_request/decode_location/decode_location_outcome); wired: springboard/apps/weather-desktop/src/insights.rs (location_note) and weather.rs LOCATION, place_rows footer; wired: springboard/src/shell/services/privacy_permissions.rs (location_request queues the sheet)",
       "status": "partial",
-      "note": "Wave 6 (b04, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The manifest permission list accepts only network, storage, audio, notifications, documents, keychain and remote-desktop. There is no location permission and no prompt. springboard/CHANGELOG.md:543 says the Location Services row was removed as dead. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Authorization status, accuracy, usage texts and error codes are tested headless in springboard/ui/tests/parity_sdk-tests-17.rs. The shell privacy service, the SDK privacy client and the weather app use this model for the Settings switch and the request sheet; not yet verified on Midget. Gap: the manifest permission list (springboard/src/bare/app_policy.rs) has no location entry, so apps cannot declare a location use."
     },
     {
       "feature": "Coordinates and location values",
       "apple": "CLLocation, CLLocationCoordinate2D, CLLocationSourceInformation, CLFloor, CLVisit",
-      "bifrost": "springboard/src/shell/weather/data.rs:116 (Location struct)",
+      "bifrost": "springboard/src/shell/weather/data.rs (Location)",
       "status": "partial",
-      "note": "Weather keeps lat and lon for a saved place (typed by name). It is a private struct of the Weather app with no accuracy, timestamp, altitude, course or speed, and no floor or visit data."
+      "note": "A saved place is a public struct in the shell's Weather data module with a name, region, latitude and longitude, and a two-decimal cache key; the values, the saved list and the key are tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: no accuracy, timestamp, altitude, course, speed, floor or visit data, and no SDK type."
     },
     {
       "feature": "Forward geocoding (place name to coordinates)",
       "apple": "CLGeocoder (geocodeAddressString), CLPlacemark, Converting between coordinates and user-friendly place names",
-      "bifrost": "springboard/src/shell/weather/data.rs:25 (GEOCODE_API), springboard/src/shell/weather/data.rs:253 (parse_places)",
+      "bifrost": "springboard/src/shell/weather/data.rs (GEOCODE_API, geocode_url, parse_places)",
       "status": "partial",
-      "note": "Open-Meteo place search returns name, admin1, country and coordinates. It is used only by the Weather app, not exposed through springboard/sdk/src, and it does not return a placemark with address parts."
+      "note": "The place-name request is trimmed, percent-encoded and asks for six English matches, and each answer becomes a name, region and coordinates; tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: only the Weather app's data module uses it, not springboard/sdk/src, and no placemark carries address parts."
     },
     {
       "feature": "Reverse geocoding (coordinates to placemark)",
@@ -73,9 +73,9 @@
     {
       "feature": "Location metadata in photos (not Core Location)",
       "apple": "No direct equivalent in Core Location; photo GPS is read through ImageIO",
-      "bifrost": "springboard/src/shell/photos/exif.rs:110 (format_gps), springboard/src/shell/photos/exif.rs:324 (read_gps)",
+      "bifrost": "springboard/src/shell/photos/exif.rs:115 (format_gps), springboard/src/shell/photos/exif.rs:330 (read_gps)",
       "status": "partial",
-      "note": "Photos reads GPS tags from JPEG EXIF and formats them as coordinates. It is read-only, has no SDK API and does not write GPS tags."
+      "note": "Photos reads GPS tags from JPEG EXIF and formats them as coordinates. It is read-only, has no SDK API and does not write GPS tags. Headless tests in springboard/tests/parity_sdk-tests-07.rs: headless_gps_is_formatted_as_unsigned_degrees_with_hemisphere_letters, headless_gps_tags_are_read_from_the_jpeg_and_signed_by_their_references, headless_out_of_range_gps_is_dropped, headless_reader_rejects_non_jpeg_bytes_and_keeps_the_file_size_fallback, headless_capture_date_and_exposure_are_formatted_for_the_info_sheet."
     },
     {
       "feature": "Errors and diagnostics",

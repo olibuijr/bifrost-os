@@ -12,7 +12,7 @@
       "apple": "ExtensionKit: Including extension-based UI in your interface (article)",
       "bifrost": "springboard/ui/src/remote_view.rs",
       "status": "partial",
-      "note": "Wave 4 (theme-01, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No out-of-process view hosting between apps. Views are built and drawn inside the app that owns them."
+      "note": "Pure host-side state for a remote view: connect, connected, loss with a retry limit, stop, and the size fitted and reported within bounds. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (remote_view_*) and the remote_view unit tests. Not wired into apps or the shell and not verified on Midget. No out-of-process view hosting between apps; views are built and drawn inside the app that owns them."
     },
     {
       "feature": "Extension scenes (AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder)",
@@ -45,9 +45,9 @@
     {
       "feature": "Share targets provided by other apps",
       "apple": "Share extensions (ExtensionKit host of ExtensionFoundation share UI)",
-      "bifrost": "springboard/sdk/src/share.rs (show_picker); springboard/src/shell/sharing.rs (targets from manifest handles and schemes)",
+      "bifrost": "springboard/sdk/src/share.rs (SharingService::sharing_services_for_items, can_perform, perform); springboard/src/shell/sharing.rs (targets from manifest handles and schemes); springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "Other apps can receive shared items when they declare handles or schemes in their manifest. Apps cannot ship their own share UI or a share view that the picker hosts. docs/bifrost-ui.md 'Share sheet' lists share-sheet extensions as a gap."
+      "note": "Installed apps that declare handles or schemes take shared items (the_share_menu_lists_apps_that_take_the_items_then_compose_and_copy, a_service_performs_only_when_it_takes_every_item, copy_puts_the_items_on_the_clipboard_one_per_line). Apps cannot ship their own share UI that the picker hosts. docs/bifrost-ui.md 'Share sheet' lists share-sheet extensions as a gap."
     },
     {
       "feature": "Actions declared by apps for other surfaces",
@@ -59,9 +59,9 @@
     {
       "feature": "Process isolation for third-party app code",
       "apple": "Extension processes launched and sandboxed by the system (ExtensionFoundation runtime)",
-      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox); springboard/src/bare/app_manager.rs (cgroups)",
+      "bifrost": "springboard/src/bare/app_policy.rs (bubblewrap sandbox); springboard/src/bare/app_manager.rs (cgroups); springboard/sdk/src/system/app_sandbox.rs (read-only grant query)",
       "status": "os",
-      "note": "The OS sandboxes apps, but no SDK API lets an app load another app's extension process."
+      "note": "The shell builds the bubblewrap sandbox and the cgroup limits at launch, and an app can read its granted capabilities through system::app_sandbox. Blocker for an SDK surface: starting third-party code in its own sandboxed process needs an out-of-process extension host protocol in the shell (privileged launch, identity drop), which is not built."
     }
   ],
   "gaps": [

@@ -17,9 +17,9 @@
   {
    "feature": "Element role mapping",
    "apple": "AccessibilityTechnology, NSAccessibility roles",
-   "bifrost": "springboard/src/shell/atspi/model.rs:37 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
+   "bifrost": "springboard/src/shell/atspi/model.rs:38 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, speech, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
    "status": "partial",
-   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window are mapped; no table, selection, or rotor roles. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window and ProgressIndicator map to AT-SPI roles, and the spoken words and rotor roles are tested headless in springboard/tests/parity_sdk-tests-03.rs (each_element_role_maps_to_its_own_atspi_role_number, the rotor and speech tests). The Settings and menu role mapping in axmap.rs is crate-private and not covered by those tests. No table, selection, or rotor roles. Earlier checks: springboard/tests/parity_sdk-tests-01c.rs. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Element hierarchy (parent, focus, checked state)",
@@ -33,28 +33,28 @@
    "apple": "accessibilityLabel, accessibilityTitle, accessibilityHelp",
    "bifrost": "springboard/ui/src/ax.rs (AxMeta), springboard/src/shell/atspi/bridge.rs; wired: springboard/src/shell/accessibility/walk.rs (speech); springboard/src/shell/accessibility/reader.rs",
    "status": "partial",
-   "note": "Name falls back from label to title, Description from help to role name; SDK hooks App::ax_meta and View::ax_meta exist. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Name falls back from label to title, Description from help to role name (tests: the_name_falls_back_to_the_title_and_help_is_kept_apart in springboard/tests/parity_sdk-tests-01c.rs); SDK hooks App::ax_meta and View::ax_meta exist. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
   },
   {
    "feature": "Text attributes and text events",
    "apple": "AXSelectedText, AXSelectedTextRange, AXVisibleCharacterRange, text change notifications",
    "bifrost": "springboard/ui/src/ax.rs (AxText), springboard/src/shell/atspi/bridge.rs",
    "status": "partial",
-   "note": "Caret, selection and visible range are exported as char offsets; TextChanged, TextCaretMoved and TextSelectionChanged are diffed on publish. Implemented for the shell TextField only, plus the sign-in sheet's fields."
+   "note": "Caret, selection and visible range are exported as char offsets; TextChanged, TextCaretMoved and TextSelectionChanged are diffed on publish. Implemented for the shell TextField only, plus the sign-in sheet's fields. Tests: text_attributes_are_char_offsets_of_the_selection_and_the_caret, offsets_count_characters_and_round_a_byte_inside_one_down (springboard/ui/tests/parity_sdk-tests-01c.rs); text_edits_report_an_insert_a_delete_and_a_replace (springboard/tests/parity_sdk-tests-01c.rs)."
   },
   {
    "feature": "Secure text fields",
    "apple": "isSecureTextEntry fields",
    "bifrost": "springboard/ui/src/ax.rs (secure flag), springboard/src/shell/atspi/model.rs (build_ax)",
    "status": "partial",
-   "note": "Value is masked and selected text is always empty; only the length crosses the wire."
+   "note": "Value is masked and selected text is always empty; only the length crosses the wire. Tests: a_secure_field_exposes_only_its_length (springboard/ui/tests/parity_sdk-tests-01c.rs); a_secure_field_reads_as_password_and_its_value_is_only_bullets (springboard/tests/parity_sdk-tests-01c.rs)."
   },
   {
    "feature": "Accessibility announcements",
    "apple": "AccessibilityNotification, announcement requested (low, medium, high priority)",
    "bifrost": "springboard/ui/src/ax.rs:52 (announce priority), Ctx::announce in the SDK; wired: springboard/src/shell/accessibility/banner.rs; springboard/src/shell/apphost.rs (announce_banner); springboard/src/shell/mod.rs (tick, draw); wired: springboard/src/shell/accessibility/reader.rs (speech queued on each move via Banner::post); springboard/src/shell/accessibility/banner.rs",
    "status": "partial",
-   "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Live on a screen reader not verified. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Maps to AT-SPI Object:Announcement with politeness; at most 8 pending per app. Tests (springboard/ui/tests/parity_sdk-tests-01c.rs): an_assertive_announcement_is_spoken_first_and_a_full_queue_drops_a_polite_one, announcement_priority_maps_to_politeness. Live on a screen reader not verified. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
   },
   {
    "feature": "Custom actions and value setting",

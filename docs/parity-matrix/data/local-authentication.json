@@ -1,89 +1,89 @@
 {
-  "framework": "Local Authentication",
-  "doc": "https://developer.apple.com/documentation/localauthentication",
-  "macos_since": "10.10",
-  "status": "partial",
-  "bifrost": "springboard/src/shell/login.rs, springboard/src/privd/pam.rs, springboard/src/shell/passcode.rs, springboard/src/keychain.rs, springboard/sdk/src/keychain.rs",
-  "summary": "BifrOSt checks a device-owner password at login and unlock (PAM through the root helper) and a lock-screen passcode, but apps get no API for either and there is no biometric support. The app keychain is the only app-facing secret store, and it has no user-presence or biometric access control. The authentication prompt state machine is a pure model in springboard/ui/src/auth_prompt.rs; the shell does not draw a reusable sheet yet.",
-  "rea_evidence": "ev_970ec89cf86817a12826f704b629abf4861aad230b10053a9350fe42ebe2caea",
-  "features": [
-    {
-      "feature": "Biometric policy evaluation (LAContext, evaluatePolicy)",
-      "apple": "LAContext, kLAPolicyDeviceOwnerAuthenticationWithBiometrics",
-      "bifrost": "springboard/core/src/biometry.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Touch ID, Face ID or fingerprint support in the shell or SDK. Grep for fprint, fprintd, howdy and biometric returns nothing except the keychain doc's gap note (docs/bifrost-ui.md around line 410). LAPolicy.deviceOwnerAuthenticationWithBiometrics returns biometryNotAvailable from LAContext; biometry stays a gap."
-    },
-    {
-      "feature": "Device-owner password or passcode authentication for apps",
-      "apple": "LAContext, kLAPolicyDeviceOwnerAuthentication",
-      "bifrost": "springboard/sdk/src/local_auth.rs, springboard/src/shell/services/local_auth.rs",
-      "status": "partial",
-      "note": "LAContext canEvaluatePolicy/evaluatePolicy with LAPolicy.deviceOwnerAuthentication: the local_auth shell service verifies the account password through the login backend (read-only), rate-limits failures per app. The password sheet is not drawn yet; callers pass the password. Host unit tests only, not checked on Midget."
-    },
-    {
-      "feature": "Authentication prompt UI (LocalAuthenticationView)",
-      "apple": "LocalAuthenticationView (SwiftUI)",
-      "bifrost": "springboard/ui/src/auth_prompt.rs; springboard/src/shell/login.rs (login field), springboard/src/shell/passcode.rs (passcode prompt)",
-      "status": "partial",
-      "note": "Pure state model of a password sheet: attempts left, lockout after the limit (default 5, the same as the local_auth service, which stays the authority), cancel and fallback choice (fallback only when offered). It has no caller yet and is not LocalAuthenticationView itself; that view's biometric icon model is springboard/ui/src/auth_view.rs. Host unit tests (9). Built on parity/team-a-03; not yet verified on Midget. The shell does not draw a reusable sheet yet."
-    },
-    {
-      "feature": "Keychain items protected by user presence or biometrics",
-      "apple": "SecAccessControl, kSecAttrAccessControl (Accessing Keychain Items with Face ID or Touch ID)",
-      "bifrost": "springboard/ui/src/access_control.rs (Constraint",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 24 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Items are readable whenever the shell runs. There is no access control class and no prompt before reading a secret (docs/bifrost-ui.md, Keychain section, parity gaps)."
-    },
-    {
-      "feature": "Persisted rights and secrets (LARight, LAPersistedRight, LASecret, LARightStore)",
-      "apple": "LARight, LARightStore, LAPersistedRight, LASecret",
-      "bifrost": "springboard/ui/src/access_control.rs (RightStore",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 24 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No right or requirement model exists. The keychain stores only generic passwords keyed by (service, account)."
-    },
-    {
-      "feature": "Authentication requirements and biometry fallback (LAAuthenticationRequirement, LABiometryFallbackRequirement)",
-      "apple": "LAAuthenticationRequirement, LABiometryFallbackRequirement",
-      "bifrost": "springboard/core/src/biometry.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No requirement objects or fallback chain. The only fallback is the password path at login."
-    },
-    {
-      "feature": "Key pairs gated by authentication (LAPublicKey, LAPrivateKey)",
-      "apple": "LAPublicKey, LAPrivateKey",
-      "bifrost": "springboard/ui/src/access_control.rs (KeyPairPolicy)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 24 tests. Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The keychain has no keys or certificates (only kSecClassGenericPassword). No Secure Enclave equivalent is present; the master key is a file on disk (springboard/src/keychain.rs, module comment)."
-    },
-    {
-      "feature": "Authentication errors (LAError, LAErrorDomain)",
-      "apple": "LAError, LAError.Code, LAErrorDomain",
-      "bifrost": "springboard/sdk/src/keychain.rs (Error, Reply), springboard/sdk/src/local_auth.rs",
-      "status": "partial",
-      "note": "The keychain error type mirrors the SecItem OSStatus codes (DuplicateItem, ItemNotFound, Param, NotPermitted, Io). No LAError codes exist, since there is no LAContext. LAError codes (userCancel, authenticationFailed, biometryNotAvailable, passcodeNotSet, appCancel, invalidContext, ...) exist in bifrost_app::local_auth; not checked on Midget."
-    },
-    {
-      "feature": "Biometry type and device state (LADomainState, LAEnvironment, kLABiometryType*)",
-      "apple": "LADomainState, LADomainStateBiometry, LAEnvironment, kLABiometryTypeNone/TouchID/FaceID/OpticID",
-      "bifrost": "springboard/core/src/biometry.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API reports whether biometrics or a passcode are enrolled, or which biometry type exists. Apps cannot choose a policy from device capability."
-    },
-    {
-      "feature": "Companion device authentication (Apple Watch, Vision Pro)",
-      "apple": "LACompanionType, kLACompanionTypeWatch, kLACompanionTypeVision, kLAPolicyDeviceOwnerAuthenticationWithCompanion",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "Tied to Apple-only companion hardware with no BifrOSt counterpart."
-    }
-  ],
-  "gaps": [
-    "No biometric authentication (Touch ID, Face ID, fingerprint). Nothing in the shell or SDK; fprint, fprintd and howdy are absent.",
-    "No app-facing authentication API: an app cannot ask the user for the account password or passcode before a sensitive action (the LAContext evaluatePolicy equivalent).",
-    "Keychain items have no access control. Any item an app can read is readable without user presence (docs/bifrost-ui.md, Keychain, parity gaps).",
-    "No authentication-gated rights, persisted secrets or key pairs (LARight, LAPersistedRight, LASecret, LAPrivateKey).",
-    "No device capability query for enrolled biometry or passcode (LADomainState and kLABiometryType constants).",
-    "Reusable authentication sheet drawn by the shell (state model in springboard/ui/src/auth_prompt.rs)"
-  ]
+ "framework": "Local Authentication",
+ "doc": "https://developer.apple.com/documentation/localauthentication",
+ "macos_since": "10.10",
+ "status": "partial",
+ "bifrost": "springboard/src/shell/login.rs, springboard/src/privd/pam.rs, springboard/src/shell/passcode.rs, springboard/src/keychain.rs, springboard/sdk/src/keychain.rs",
+ "summary": "BifrOSt checks a device-owner password at login and unlock (PAM through the root helper) and a lock-screen passcode, but apps get no API for either and there is no biometric support. The app keychain is the only app-facing secret store, and it has no user-presence or biometric access control. The authentication prompt state machine is a pure model in springboard/ui/src/auth_prompt.rs; the shell does not draw a reusable sheet yet.",
+ "rea_evidence": "ev_970ec89cf86817a12826f704b629abf4861aad230b10053a9350fe42ebe2caea",
+ "features": [
+  {
+   "feature": "Biometric policy evaluation (LAContext, evaluatePolicy)",
+   "apple": "LAContext, kLAPolicyDeviceOwnerAuthenticationWithBiometrics",
+   "bifrost": "springboard/core/src/biometry.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Touch ID, Face ID or fingerprint support in the shell or SDK. Grep for fprint, fprintd, howdy and biometric returns nothing except the keychain doc's gap note (docs/bifrost-ui.md around line 410). LAPolicy.deviceOwnerAuthenticationWithBiometrics returns biometryNotAvailable from LAContext; biometry stays a gap."
+  },
+  {
+   "feature": "Device-owner password or passcode authentication for apps",
+   "apple": "LAContext, kLAPolicyDeviceOwnerAuthentication",
+   "bifrost": "springboard/sdk/src/local_auth.rs (LAContext, LAPolicy, decode_reply); springboard/src/shell/services/local_auth.rs; springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-24.rs",
+   "status": "partial",
+   "note": "LAContext canEvaluatePolicy and evaluatePolicy for LAPolicy.deviceOwnerAuthentication: the local_auth shell service verifies the account password through the login backend (read-only) and rate-limits failures per app. The caller's ask callback supplies the shell's reply, and the reply decodes to success or a mapped error. Headless tests: the_device_owner_policy_needs_a_password_and_biometry_is_never_available, an_invalidated_context_fails_with_invalid_context, a_success_inside_the_reuse_window_does_not_prompt_again, a_refused_prompt_reports_the_shell_error_and_unknown_errors_fall_back_to_authentication_failed. Gap: the password sheet is not drawn yet, so the prompt needs a check on the lab machine. Not checked on Midget."
+  },
+  {
+   "feature": "Authentication prompt UI (LocalAuthenticationView)",
+   "apple": "LocalAuthenticationView (SwiftUI)",
+   "bifrost": "springboard/ui/src/auth_view.rs (Prompt, PromptError)",
+   "status": "partial",
+   "note": "Prompt holds the reason and the fallback and cancel titles with the system's rules: an empty fallback title hides the button, and a blank reason or cancel title is refused. Headless tests: ui/tests/parity_sdk-complete-11.rs (a_prompt_needs_a_reason_and_a_cancel_title, an_empty_fallback_title_hides_the_fallback_button). Gap: no sheet is drawn and an app cannot show one yet, because the Rust shell has no sheet for this and only the system login and lock prompts exist; a check on Midget is still needed."
+  },
+  {
+   "feature": "Keychain items protected by user presence or biometrics",
+   "apple": "SecAccessControl, kSecAttrAccessControl (Accessing Keychain Items with Face ID or Touch ID)",
+   "bifrost": "springboard/ui/src/access_control.rs (Constraint",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 24 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Items are readable whenever the shell runs. There is no access control class and no prompt before reading a secret (docs/bifrost-ui.md, Keychain section, parity gaps)."
+  },
+  {
+   "feature": "Persisted rights and secrets (LARight, LAPersistedRight, LASecret, LARightStore)",
+   "apple": "LARight, LARightStore, LAPersistedRight, LASecret",
+   "bifrost": "springboard/ui/src/access_control.rs (RightStore",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 24 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No right or requirement model exists. The keychain stores only generic passwords keyed by (service, account)."
+  },
+  {
+   "feature": "Authentication requirements and biometry fallback (LAAuthenticationRequirement, LABiometryFallbackRequirement)",
+   "apple": "LAAuthenticationRequirement, LABiometryFallbackRequirement",
+   "bifrost": "springboard/core/src/biometry.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No requirement objects or fallback chain. The only fallback is the password path at login."
+  },
+  {
+   "feature": "Key pairs gated by authentication (LAPublicKey, LAPrivateKey)",
+   "apple": "LAPublicKey, LAPrivateKey",
+   "bifrost": "springboard/ui/src/access_control.rs (KeyPairPolicy)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 24 tests. Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The keychain has no keys or certificates (only kSecClassGenericPassword). No Secure Enclave equivalent is present; the master key is a file on disk (springboard/src/keychain.rs, module comment)."
+  },
+  {
+   "feature": "Authentication errors (LAError, LAErrorDomain)",
+   "apple": "LAError, LAError.Code, LAErrorDomain",
+   "bifrost": "springboard/sdk/src/local_auth.rs (LAError wire names, from_wire, code, from_code, ERROR_DOMAIN); springboard/sdk/src/keychain.rs (Error, Reply); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-24.rs",
+   "status": "partial",
+   "note": "LAError codes map to and from their wire names and their numeric codes (-1 to -1004), and an unknown name falls back to authenticationFailed (every_error_wire_name_round_trips_and_policies_have_their_names, a_refused_prompt_reports_the_shell_error_and_unknown_errors_fall_back_to_authentication_failed, every_authentication_error_has_a_numeric_code_that_maps_back). The keychain error type mirrors the SecItem OSStatus codes in both directions (DuplicateItem, ItemNotFound, Param, NotPermitted, Io). Gap: the error domain is a BifrOSt name, not the reference domain string, since the reference name cannot be used here. Not checked on Midget."
+  },
+  {
+   "feature": "Biometry type and device state (LADomainState, LAEnvironment, kLABiometryType*)",
+   "apple": "LADomainState, LADomainStateBiometry, LAEnvironment, kLABiometryTypeNone/TouchID/FaceID/OpticID",
+   "bifrost": "springboard/core/src/biometry.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API reports whether biometrics or a passcode are enrolled, or which biometry type exists. Apps cannot choose a policy from device capability."
+  },
+  {
+   "feature": "Companion device authentication (Apple Watch, Vision Pro)",
+   "apple": "LACompanionType, kLACompanionTypeWatch, kLACompanionTypeVision, kLAPolicyDeviceOwnerAuthenticationWithCompanion",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "Tied to Apple-only companion hardware with no BifrOSt counterpart."
+  }
+ ],
+ "gaps": [
+  "No biometric authentication (Touch ID, Face ID, fingerprint). Nothing in the shell or SDK; fprint, fprintd and howdy are absent.",
+  "No app-facing authentication API: an app cannot ask the user for the account password or passcode before a sensitive action (the LAContext evaluatePolicy equivalent).",
+  "Keychain items have no access control. Any item an app can read is readable without user presence (docs/bifrost-ui.md, Keychain, parity gaps).",
+  "No authentication-gated rights, persisted secrets or key pairs (LARight, LAPersistedRight, LASecret, LAPrivateKey).",
+  "No device capability query for enrolled biometry or passcode (LADomainState and kLABiometryType constants).",
+  "Reusable authentication sheet drawn by the shell (state model in springboard/ui/src/auth_prompt.rs)"
+ ]
 }

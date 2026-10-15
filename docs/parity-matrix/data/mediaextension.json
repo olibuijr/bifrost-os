@@ -38,16 +38,16 @@
     {
       "feature": "RAW processors (MERAWProcessor, MERAWProcessorExtension, MERAWProcessingParameter)",
       "apple": "MERAWProcessor, MERAWProcessorExtension, MERAWProcessorPixelBufferManager, MERAWProcessingParameter, MERAWProcessorNotification",
-      "bifrost": "springboard/render/src/raw_params.rs",
+      "bifrost": "springboard/render/src/raw_params.rs (RawParameter, RawProcessingParameters)",
       "status": "partial",
-      "note": "Wave 3 (w3-mediaextension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No RAW camera format decoding, no processing parameters, no RAW processor extension point."
+      "note": "Parameter ranges, clamping, reset, enable flags and key checks are tested in render/tests/parity_sdk-tests-19.rs. Gap: no RAW decoding and no processor extension point, so the parameters are not yet passed to a processor."
     },
     {
       "feature": "Out-of-process extension hosting and entitlements (format reader and video decoder entitlements)",
       "apple": "Format reader entitlement, Video decoder entitlement, RAW processor entitlement",
-      "bifrost": "springboard/src/media/dl.rs (dlopen of system libraries only)",
-      "status": "os",
-      "note": "The OS can dlopen system libraries, and apps are sandboxed (bubblewrap, see springboard/src/bare/app_policy.rs in the index), but there is no extension host that loads third-party format or decoder plug-ins with a declared entitlement."
+      "bifrost": "springboard/src/media/dl.rs (dlopen of system libraries only); springboard/sdk/src/media_extension.rs (Entitlement, Declaration, register_reader); springboard/ui/src/format_readers.rs (reader registry)",
+      "status": "partial",
+      "note": "The entitlement check before a format reader is registered, and the professional-reader gating, are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: extensions run in-process with no extension host, and the video decoder and RAW processor entitlements are not enforced."
     },
     {
       "feature": "Errors (MEError, MediaExtensionErrorDomain)",

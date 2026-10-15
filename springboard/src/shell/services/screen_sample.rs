@@ -10,11 +10,10 @@
 //!
 //! The pointer is recorded by the pointer code in `bare/wayland.rs` (see [`pointer_moved`] and [`pointer_left`]).
 
-use super::privacy_permissions::access;
+use super::display_services::require_screen_recording;
 use super::{Shell, SystemService};
 use crate::gfx::{Image, Surface};
 use bifrost_core::json::Json;
-use bifrost_ui::capture_access::Media;
 use std::sync::Mutex;
 
 /// Largest side of a sampled rectangle, in display pixels. Keeps one reply small.
@@ -53,9 +52,7 @@ impl SystemService for ScreenSample {
         if !matches!(method, "sample" | "display" | "pointer") {
             return Err(format!("screen has no method {method}"));
         }
-        if !access(app_id).can_capture(Media::Screen) {
-            return Err("the Screen permission is not granted".into());
-        }
+        require_screen_recording(app_id)?;
         match method {
             "display" => return Ok(size_reply(shell.w, shell.h)),
             "pointer" => {

@@ -38,16 +38,16 @@
     {
       "feature": "Subject lifting and background removal",
       "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No subject segmentation found in the repo, including PhotoCraft and the render crate."
+      "bifrost": "springboard/ui/src/subject_lift.rs (segment_background, Interaction::lift); tests: springboard/ui/tests/parity_sdk-complete-13.rs",
+      "status": "partial",
+      "note": "Subject lists, hit testing, highlights and cutouts are tested headless, and a colour-key segmenter lifts a subject off a plain backdrop (background_removal_* in ui/tests/parity_sdk-complete-13.rs). Gap: there is no learned segmentation model for busy scenes, and the module is not wired into the shell or apps, so it is not yet checked on Midget."
     },
     {
       "feature": "Visual Look Up",
       "apple": "ImageAnalysisInteraction (visual Look Up button)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The only Look Up reference in springboard/src/shell/pages.rs:868 is the dictionary list used by the keyboard. It is not an image lookup."
+      "bifrost": "springboard/ui/src/visual_lookup.rs, springboard/ui/src/look_up.rs, springboard/ui/src/visual_search.rs",
+      "status": "partial",
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (visual_lookup.rs, look_up.rs, visual_search.rs); not wired into the shell or apps, not tested on Midget. The only Look Up reference in springboard/src/shell/pages.rs:868 is the dictionary list used by the keyboard. It is not an image lookup."
     },
     {
       "feature": "Document scanning through the camera",
@@ -59,9 +59,9 @@
     {
       "feature": "Stabilised camera region of interest",
       "apple": "CameraRegionView",
-      "bifrost": "springboard/ui/src/camera_region.rs (Stabilizer)",
+      "bifrost": "springboard/ui/src/camera_region.rs (Stabilizer); springboard/sdk/tests/parity_sdk-complete-29.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-visionkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No view that shows a stabilised region of the camera feed to apps."
+      "note": "The stabilizer keeps the region inside the frame, ignores moves inside its dead band, closes half the distance per frame, and clamps when the frame size changes; all of it is tested headless. Gap: no view draws the stabilised region of the camera feed and no app or shell feeds it frames, so the live behaviour needs the camera on the lab machine."
     },
     {
       "feature": "Image analysis overlay and delegate callbacks",

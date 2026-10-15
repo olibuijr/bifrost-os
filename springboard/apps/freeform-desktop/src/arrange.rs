@@ -28,6 +28,11 @@ pub fn union_of(boxes: &[Rect]) -> Option<Rect> {
     Some(Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
 }
 
+/// The move (dx, dy) that puts the centre of `b` on the point `at`.
+pub fn centre_on(b: Rect, at: (f32, f32)) -> (f32, f32) {
+    (at.0 - (b.x + b.w / 2.0), at.1 - (b.y + b.h / 2.0))
+}
+
 /// The move (dx, dy) that takes each box to the chosen edge or centre line of the whole selection.
 pub fn align_offsets(boxes: &[Rect], how: Align) -> Vec<(f32, f32)> {
     let Some(all) = union_of(boxes) else { return Vec::new() };
@@ -172,6 +177,12 @@ mod tests {
 
     fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
         Rect { x, y, w, h }
+    }
+
+    #[test]
+    fn centre_on_moves_the_centre_of_a_box_onto_the_point() {
+        assert_eq!(centre_on(r(10.0, 20.0, 40.0, 10.0), (100.0, 50.0)), (100.0 - 30.0, 50.0 - 25.0));
+        assert_eq!(centre_on(r(0.0, 0.0, 4.0, 4.0), (2.0, 2.0)), (0.0, 0.0));
     }
 
     #[test]

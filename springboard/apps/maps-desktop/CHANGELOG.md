@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.5.1 — 2026-10-14
+
+- Clamp the location accuracy ring to the current map viewport instead of a fixed 2000 pt size.
+
+## 0.5.0 - 2026-10-14
+
+- Transit requests take a departure time: the planner model has leave-at and arrive-by times, checked as a date
+  and a clock time before they reach the URL. The directions card has no time picker yet.
+- Each transit leg names the stops in between when the planner lists them ("3 stops in between").
+- Print draws the followed route line and the pins over the map picture, as the map shows them.
+- The matrix rows for Current Location, the map data credit and the route alternatives cite the code that does it.
+
+## 0.4.0 - 2026-10-14
+
+- Hybrid map type (View > Hybrid, Cmd+3): the imagery with the place names drawn over it from a labels layer in its own
+  cache folder. The map credit names the labels.
+- Pinch to zoom: two fingers on the map zoom it, anchored at their midpoint. The mouse wheel is not wired yet (the
+  shell does not send scroll events to apps).
+- Share is a submenu of File: Copy Link, Copy Coordinates and the share sheet.
+- Go > Add Place to Collection: one slot per collection (up to eight), so a place can be added from the keyboard
+  without dragging it from the card.
+- Print sends the map as it is on screen (the loaded tiles, without the route and pin overlays) as the first page,
+  with the place or the directions text on the pages after it.
+- The `map:` link scheme opens the app like `maps:` and `geo:`.
+
 ## 0.3.0 - 2026-10-13
 
 - Current Location: a toolbar button and Go > Current Location (Cmd+L) ask the shell's location service for a position
@@ -15,6 +40,8 @@
   planner set the card says so; there is no straight-line stand-in for a timetable.
 - Show Traffic (View menu, Cmd+T): an optional traffic layer from the tile URL `traffic_url` in settings.json, drawn
   over the map and fetched again after five minutes. Without the setting the menu item says how to turn it on.
+- Download Map keeps a list of saved offline areas in the same card; Delete removes an area and the tiles no other
+  saved area needs.
 - Still not done: 3D and street-level views, Dock New Window and Handoff.
 
 ## 0.2.0 - 2026-10-13

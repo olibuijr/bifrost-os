@@ -8,7 +8,7 @@
 use super::edit::{self, Action, EditTarget};
 use super::editmenu::EditMenu;
 use super::keyboard::Out;
-use super::ui::{Ui, Weight, SECONDARY, WHITE};
+use super::ui::{Ui, Weight, WHITE};
 use super::wifi_page::BLUE;
 use super::Event;
 use crate::gfx::{pack, rgba, Image, Surface};
@@ -97,7 +97,7 @@ impl TextField {
             secure,
             focused: true,
             size_pt,
-            placeholder: ui.text(placeholder, size_pt, Weight::Regular, SECONDARY),
+            placeholder: ui.text(placeholder, size_pt, Weight::Regular, WHITE),
             rendered: None,
             caret_px: 0.0,
             marked: None,
@@ -536,7 +536,7 @@ impl TextField {
                 s.blit_colored(&visible, x as i32, (mid - img.h as f32 / 2.0) as i32, super::ui::LABEL.now(), 255);
             }
             None => {
-                s.blit(&self.placeholder, x as i32, (mid - self.placeholder.h as f32 / 2.0) as i32, 255, 255);
+                s.blit_colored(&self.placeholder, x as i32, (mid - self.placeholder.h as f32 / 2.0) as i32, super::ui::LABEL_2.now(), 255);
                 caret_x = x;
             }
         }
@@ -879,7 +879,7 @@ mod tests {
         let mut buf = vec![0u32; 300 * 60];
         let mut s = Surface { w: 300, h: 60, stride: 300, px: &mut buf, y0: 0 };
         f.draw(&mut s, &ui, (10.0, 0.0, 280.0, 60.0), 0.0);
-        assert!(buf.contains(&SECONDARY));
+        assert!(buf.contains(&crate::shell::ui::LABEL_2.now()));
     }
 
     const FRAME: Frame = (100.0, 500.0, 600.0, 70.0);

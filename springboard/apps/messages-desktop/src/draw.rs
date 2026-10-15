@@ -2,11 +2,15 @@
 //! sidebar; the timeline and the composer are the main pane; the sign-in form is a sheet over both. [`Layout`] holds the
 //! geometry for the painter and the hit test alike, so a tap lands on what is drawn.
 
-use crate::model::{day_label, day_of, preview, starts_day, typing_text, Overlay, EMOJI_CATALOG, INFO_ROWS_MAX, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
+use crate::model::{day_label, day_of, preview, starts_day, typing_text, EmojiGroup, Overlay, EMOJI_CATALOG, INFO_ROWS_MAX, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
 use crate::protocol::Body;
 use crate::window::MessagesWindow;
+use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::{Node, Rect as KRect, Role};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
 use bifrost_app::kit::{colors, Surface, TextCache, Ui, Weight};
+use bifrost_app::widgets;
 
 pub const HEADER_PT: f32 = 52.0;
 const SIDE_MIN_PT: f32 = 220.0;
@@ -20,7 +24,7 @@ const EMOJI_W_PT: f32 = 44.0;
 const INFO_W_PT: f32 = 76.0;
 const BANNER_PT: f32 = 36.0;
 /// Corner radius of the newer controls (flat corners, at most 6 points).
-const CORNER_PT: f32 = 6.0;
+const CORNER_PT: f32 = m::ICON_RADIUS;
 const CELL_PT: f32 = 40.0;
 const MEMBER_ROWS: usize = 8;
 /// How many shared picture names the details panel lists.
@@ -32,7 +36,9 @@ const BUBBLE_GAP_PT: f32 = 8.0;
 const FOOT_LINE_PT: f32 = 15.0;
 /// Widest a bubble gets, as a share of the main pane.
 const BUBBLE_SHARE: f32 = 0.62;
-const RADIUS_PT: f32 = 12.0;
+/// Width of the outline around the message a quoted line jumped to.
+const HIGHLIGHT_PT: f32 = 2.0;
+const RADIUS_PT: f32 = m::CARD_RADIUS;
 const BADGE_PT: f32 = 16.0;
 const SHEET_W_PT: f32 = 420.0;
 const SHEET_HEAD_PT: f32 = 44.0;
@@ -41,7 +47,7 @@ const SHEET_LABEL_PT: f32 = 16.0;
 const SHEET_BOX_PT: f32 = 30.0;
 const SHEET_FOOT_PT: f32 = 68.0;
 const SHEET_BUTTON_W_PT: f32 = 120.0;
-const PANEL_RADIUS_PT: f32 = 12.0;
+const PANEL_RADIUS_PT: f32 = m::CARD_RADIUS;
 
 /// A rectangle in pixels: x, y, width, height.
 pub type Rect = [f32; 4];
@@ -92,6 +98,8 @@ pub enum OverlayAction {
     Delete,
     /// The emoji at this index of the picker's choices (`Messages::emoji_choices`).
     Pick(usize),
+    /// A button of the picker's group strip: a group, or None for All.
+    EmojiGroup(Option<EmojiGroup>),
 }
 
 /// A button on a sheet or panel.
@@ -277,6 +285,60 @@ impl Layout {
 }
 
 impl MessagesWindow {
+    /// The visible room list and search field, in window points, for accessibility and window dragging.
+    pub fn controls(&self, ui: &Ui) -> Vec<Node> {
+        let layout = self.layout(ui);
+        let scale = ui.pt(1.0);
+        let points = |r: Rect| KRect { x: r[0] / scale, y: r[1] / scale, w: r[2] / scale, h: r[3] / scale };
+        let side = layout.sidebar();
+        let search = layout.search_field();
+        vec![
+            Node {
+                id: 0x4d53_4701,
+                role: Role::List,
+                label: "Conversations".into(),
+                value: String::new(),
+                bounds: points(side),
+                enabled: true,
+            },
+            Node {
+                id: 0x4d53_4702,
+                role: Role::TextField,
+                label: "Search conversations".into(),
+                value: self.model.search.clone(),
+                bounds: points(search),
+                enabled: true,
+            },
+        ]
+    }
+
+    fn room_source_list(&self, lay: &Layout) -> SourceList {
+        let rooms = self.model.visible_rooms();
+        let items = rooms.iter().enumerate().map(|(i, room)| {
+            let tags = room_tags(self.model.is_pinned(&room.id), self.model.is_muted(&room.id));
+            let marked = room.unread == 0 && self.model.is_marked_unread(&room.id) && !self.model.is_muted(&room.id);
+            let trailing = match (tags.is_empty(), marked) {
+                (true, true) => Some("•".to_string()),
+                (false, true) => Some(format!("{tags} •")),
+                (false, false) => Some(tags),
+                (true, false) => None,
+            };
+            let mut item = SidebarItem::row(i as u32, &room.title(&self.model.user_id))
+                .with_symbol("person.crop.circle")
+                .with_subtitle(&room.preview());
+            if room.unread > 0 {
+                item = item.with_count(room.unread.min(u32::MAX as u64) as u32);
+            }
+            if let Some(trailing) = trailing {
+                item = item.with_trailing(&trailing);
+            }
+            item
+        }).collect();
+        let mut list = SourceList::new(items, ROW_PT - 16.0, 0.0);
+        list.set_selected(rooms.iter().position(|r| self.model.selected.as_deref() == Some(r.id.as_str())).map(|i| i as u32));
+        list
+    }
+
     /// The geometry for the window as it is now: the banner strip exists while the composer holds a reply or an edit.
     pub fn layout(&self, ui: &Ui) -> Layout {
         let mut lay = Layout::new(ui, self.w as f32, self.h as f32);
@@ -333,8 +395,9 @@ impl MessagesWindow {
             return Hit::Quote(target.clone());
         }
         if inside(lay.sidebar(), x, y) {
-            let index = ((y - lay.header + self.room_scroll.offset()) / lay.row).floor();
-            if index >= 0.0 {
+            let scale = ui.pt(1.0);
+            let list = self.room_source_list(&lay);
+            if let Some(index) = list.hit(KRect { x: 0.0, y: HEADER_PT, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale) {
                 if let Some(room) = self.model.visible_rooms().get(index as usize) {
                     return Hit::Room(room.id.clone());
                 }
@@ -349,10 +412,9 @@ impl MessagesWindow {
         if !inside(lay.sidebar(), x, y) {
             return None;
         }
-        let index = ((y - lay.header + self.room_scroll.offset()) / lay.row).floor();
-        if index < 0.0 {
-            return None;
-        }
+        let scale = ui.pt(1.0);
+        let list = self.room_source_list(&lay);
+        let index = list.hit(KRect { x: 0.0, y: HEADER_PT, w: lay.side / scale, h: lay.sidebar()[3] / scale }, self.room_scroll.offset() / scale, x / scale, y / scale)?;
         self.model.visible_rooms().get(index as usize).map(|r| r.id.clone())
     }
 
@@ -479,20 +541,25 @@ impl MessagesWindow {
                 let rows = EMOJI_CATALOG.len().div_ceil(EMOJI_COLUMNS);
                 let width = (EMOJI_COLUMNS as f32 * cell + 2.0 * lay.pad).min(lay.w);
                 let search_h = ui.pt(SHEET_BOX_PT) + lay.pad;
-                let ph = head + search_h + rows as f32 * cell + lay.pad;
+                let strip_h = ui.pt(SHEET_BOX_PT) + lay.pad;
+                let ph = head + search_h + strip_h + rows as f32 * cell + lay.pad;
                 let r = place(ph, width);
                 let field = [r[0] + lay.pad, r[1] + head, (width - 2.0 * lay.pad).max(0.0), ui.pt(SHEET_BOX_PT)];
-                let content_y = r[1] + head + search_h;
-                let buttons = self
-                    .model
-                    .emoji_choices()
-                    .iter()
+                let strip_y = r[1] + head + search_h;
+                let content_y = strip_y + strip_h;
+                let strip_w = (width - 2.0 * lay.pad).max(0.0) / (EmojiGroup::ALL.len() + 1) as f32;
+                let groups = std::iter::once((None, "All")).chain(EmojiGroup::ALL.iter().map(|g| (Some(*g), g.label())));
+                let mut buttons: Vec<OverlayButton> = groups
                     .enumerate()
-                    .map(|(i, emoji)| {
-                        let rect = [r[0] + lay.pad + (i % EMOJI_COLUMNS) as f32 * cell, content_y + (i / EMOJI_COLUMNS) as f32 * cell, cell, cell];
-                        button(rect, emoji.as_str(), OverlayAction::Pick(i), false, false)
+                    .map(|(i, (group, label))| {
+                        let rect = [r[0] + lay.pad + i as f32 * strip_w, strip_y, strip_w, ui.pt(SHEET_BOX_PT)];
+                        button(rect, label, OverlayAction::EmojiGroup(group), self.model.emoji_group == group, false)
                     })
                     .collect();
+                buttons.extend(self.model.emoji_choices().iter().enumerate().map(|(i, emoji)| {
+                    let rect = [r[0] + lay.pad + (i % EMOJI_COLUMNS) as f32 * cell, content_y + (i / EMOJI_COLUMNS) as f32 * cell, cell, cell];
+                    button(rect, emoji.as_str(), OverlayAction::Pick(i), false, false)
+                }));
                 Some(Panel { panel: r, field: Some(field), content_y, buttons })
             }
         }
@@ -518,16 +585,16 @@ impl MessagesWindow {
 
     fn draw_sidebar(&mut self, s: &mut Surface, ui: &Ui, lay: &Layout) {
         let side = lay.sidebar();
-        s.fill_rect(px(side[0]), px(side[1]), px(side[2]), px(side[3]), CARD_BG.now());
+        let list = self.room_source_list(lay);
+        let scale = ui.pt(1.0);
+        self.room_scroll.set_max((list.content_height() * scale - side[3]).max(0.0));
+        widgets::source_list(s, ui, KRect { x: side[0] / scale, y: side[1] / scale, w: side[2] / scale, h: side[3] / scale }, &list, self.room_scroll.offset() / scale, None);
         s.fill_rect(px(lay.side), 0, px(lay.rule), px(lay.h), SEPARATOR_C.now());
         let focus = self.model.search_focus;
         let search = lay.search_field();
         let add = lay.new_button();
         let enabled = self.model.signed_in();
         let rooms = self.model.visible_rooms();
-        let rows = rooms.len() as f32 * lay.row;
-        self.room_scroll.set_max((rows - side[3]).max(0.0));
-        let scroll = self.room_scroll.offset();
         if rooms.is_empty() {
             let hint = if !self.model.signed_in() {
                 "Sign in to see your conversations"
@@ -537,51 +604,6 @@ impl MessagesWindow {
                 "No conversation matches"
             };
             put(s, &mut self.labels, ui, hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), lay.pad, lay.header + lay.pad);
-        }
-        let inset = lay.gap;
-        let text_w = (lay.side - 2.0 * lay.pad).max(0.0);
-        for (i, room) in rooms.iter().enumerate() {
-            let r = lay.room_row(i, scroll);
-            if r[1] + r[3] < lay.header || r[1] > lay.h {
-                continue;
-            }
-            let selected = self.model.selected.as_deref() == Some(room.id.as_str());
-            if selected {
-                s.fill_rrect(r[0] + inset, r[1] + inset / 2.0, r[2] - 2.0 * inset, r[3] - inset, lay.corner, colors::SYSTEM_BLUE.now());
-            }
-            let (c_name, c_sub) = if selected { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
-            let marked = room.unread == 0 && self.model.is_marked_unread(&room.id) && !self.model.is_muted(&room.id);
-            let badge = if room.unread > 0 {
-                Some(badge_text(room.unread))
-            } else if marked {
-                Some("\u{2022}".to_string())
-            } else {
-                None
-            };
-            let badge_w = badge.as_ref().map_or(0.0, |b| ui.measure(b, MAC_FOOTNOTE_PT, Weight::Semibold) + lay.pad);
-            let tags = room_tags(self.model.is_pinned(&room.id), self.model.is_muted(&room.id));
-            let tags_w = if tags.is_empty() { 0.0 } else { ui.measure(&tags, MAC_FOOTNOTE_PT, Weight::Regular) + lay.gap };
-            let name_w = (text_w - badge_w - tags_w).max(0.0);
-            let title = room.title(&self.model.user_id);
-            let name = fit(ui, &title, MAC_BODY_PT, Weight::Semibold, name_w);
-            put(s, &mut self.labels, ui, &name, MAC_BODY_PT, Weight::Semibold, c_name, r[0] + lay.pad, r[1] + lay.row * 0.16);
-            if !tags.is_empty() {
-                let tx = r[0] + r[2] - lay.pad - badge_w - tags_w + lay.gap;
-                put(s, &mut self.labels, ui, &tags, MAC_FOOTNOTE_PT, Weight::Regular, c_sub, tx, r[1] + lay.row * 0.18);
-            }
-            let sub = fit(ui, &room.preview(), MAC_FOOTNOTE_PT, Weight::Regular, text_w);
-            put(s, &mut self.labels, ui, &sub, MAC_FOOTNOTE_PT, Weight::Regular, c_sub, r[0] + lay.pad, r[1] + lay.row * 0.56);
-            if let Some(b) = badge {
-                let bw = ui.measure(&b, MAC_FOOTNOTE_PT, Weight::Semibold) + lay.pad;
-                let bx = r[0] + r[2] - lay.pad - bw;
-                let by = r[1] + (lay.row - ui.pt(BADGE_PT)) / 2.0;
-                let (fill, text) = if selected { (WHITE, colors::SYSTEM_BLUE.now()) } else { (colors::SYSTEM_BLUE.now(), WHITE) };
-                s.fill_rrect(bx, by, bw, ui.pt(BADGE_PT), ui.pt(BADGE_PT) / 2.0, fill);
-                put_centred(s, &mut self.labels, ui, &b, MAC_FOOTNOTE_PT, Weight::Semibold, text, bx + bw / 2.0, by + ui.pt(BADGE_PT) / 2.0);
-            }
-            if !selected {
-                s.fill_rect(px(r[0] + lay.pad), px(r[1] + r[3] - lay.rule), px((r[2] - lay.pad).max(0.0)), px(lay.rule), SEPARATOR_C.now());
-            }
         }
         // The header strip is drawn last so a scrolled row never shows through it.
         s.fill_rect(px(side[0]), 0, px(side[2]), px(lay.header), CARD_BG.now());
@@ -671,6 +693,9 @@ impl MessagesWindow {
             let (fill, ink) = if row.own { (colors::SYSTEM_BLUE.now(), WHITE) } else { (FIELD_BG.now(), LABEL.now()) };
             let faint = if row.own { WHITE } else { LABEL_2.now() };
             s.fill_rrect(x, by, bw, row.bubble_h, lay.radius, fill);
+            if self.model.is_highlighted(&row.id) {
+                s.stroke_rrect(x, by, bw, row.bubble_h, lay.radius, ui.pt(HIGHLIGHT_PT), colors::SYSTEM_YELLOW.now());
+            }
             self.bubbles.push(([x, by, bw, row.bubble_h], row.id.clone()));
             let mut ly = by + lay.bubble_pad;
             if let Some(quote) = &row.quote {
@@ -883,7 +908,7 @@ impl MessagesWindow {
                 if let Some(f) = panel.field {
                     draw_field_tail(s, &mut self.labels, ui, lay, f, &self.model.emoji_query, "Search emoji", true);
                 }
-                if panel.buttons.is_empty() {
+                if !panel.buttons.iter().any(|b| matches!(b.action, OverlayAction::Pick(_))) {
                     put_centred(s, &mut self.labels, ui, "No emoji match", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), px_ + pw / 2.0, panel.content_y + lay.pad);
                 }
             }

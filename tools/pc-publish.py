@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Publish a BifrOSt PC system update: build the shell, package `springboard-shell`, add it to the lab pacman repo, serve the repo.
+"""Build and publish a BifrOSt PC system update.
 
-usage: tools/pc-publish.py [--release] [--skip-build] [--no-serve]      (also: bifrost pc publish)
-The repo lives in out/pc-repo/bifrost/x86_64 and is served at http://192.168.1.12:8079/bifrost/$arch (titan's home-LAN address; Midget on VLAN 20 reaches it by routing; override with BIFROST_REPO_BIND=host:port.
-Installed systems have it in /etc/pacman.conf). Machines then update with Settings > Software Update or `bifrost pc midget update` - Btrfs system generations reboot for probation; choose Install Now in Settings, or pass `--restart` to the CLI. Version = Cargo version + epoch seconds, so every publish is newer than the last.
+usage: tools/pc-publish.py [--release] [--skip-build] [--no-serve] (also: bifrost pc publish)
+
+The lab repo is served from out/pc-repo/bifrost/x86_64 at
+http://192.168.1.12:8079/bifrost/$arch (override with BIFROST_REPO_BIND=host:port).
+Packages and the pacman database are also exported to ~/Projects/bifrost-site/site/arch/x86_64,
+served at https://bifrost.olibuijr.com/arch/$arch (override the site root with BIFROST_PUBLIC_SITE).
+Installed systems use that repository from /etc/pacman.conf. Version = Cargo version + epoch seconds,
+so every publish is newer than the last.
 """
-import argparse, glob, os, re, shutil, subprocess, sys, time
+import argparse, glob, hashlib, os, re, shutil, subprocess, sys, tempfile, time
 
 import pc_mirror
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POOL = os.path.join(REPO, "out/pc-repo/bifrost/x86_64")
 PIDF = os.path.join(REPO, "out/pc-repo/server.pid")
+PUBLIC_SITE = os.path.abspath(os.path.expanduser(os.environ.get(
+    "BIFROST_PUBLIC_SITE", "~/Projects/bifrost-site/site")))
 _h, _, _p = os.environ.get("BIFROST_REPO_BIND", "192.168.1.12:8079").partition(":")
 BIND = (_h, int(_p or 8079))
 
@@ -41,6 +48,91 @@ def run(cmd, **kw):
     if r.returncode:
         sys.exit(f"failed: {' '.join(map(str, cmd))}")
     return r
+
+
+def _contained_path(root, path):
+    """Resolve a path and refuse symlinks or traversal that escape its configured root."""
+    root = os.path.realpath(root)
+    path = os.path.realpath(path)
+    if os.path.commonpath((root, path)) != root:
+        raise ValueError(f"path escapes its root: {path}")
+    return path
+
+
+def _file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.digest()
+
+
+def _atomic_repo_copy(src, dst, immutable=False):
+    """Publish one file by atomic rename; immutable package names may only be reused byte-for-byte."""
+    if os.path.lexists(dst) and immutable:
+        if not os.path.isfile(dst) or os.path.islink(dst) or _file_sha256(src) != _file_sha256(dst):
+            raise FileExistsError(f"immutable public package already differs: {dst}")
+        return False
+    fd, tmp = tempfile.mkstemp(prefix=f".{os.path.basename(dst)}.", suffix=".tmp", dir=os.path.dirname(dst))
+    try:
+        with os.fdopen(fd, "wb") as out, open(src, "rb") as inp:
+            shutil.copyfileobj(inp, out)
+            out.flush()
+            os.fsync(out.fileno())
+        os.chmod(tmp, 0o644)
+        if immutable:
+            # A hard link is an atomic create-if-absent on this same-directory temporary file.
+            try:
+                os.link(tmp, dst)
+            except FileExistsError:
+                if not os.path.isfile(dst) or os.path.islink(dst) or _file_sha256(src) != _file_sha256(dst):
+                    raise FileExistsError(f"immutable public package already differs: {dst}")
+                return False
+            return True
+        os.replace(tmp, dst)
+        dirfd = os.open(os.path.dirname(dst), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dirfd)
+        finally:
+            os.close(dirfd)
+        return True
+    finally:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+
+
+def publish_public_repo(source_dir, site_dir=PUBLIC_SITE):
+    """Export the system repo under the live site's /arch/x86_64 path, publishing the database last."""
+    source_root = os.path.realpath(source_dir)
+    if not os.path.isdir(source_root):
+        raise FileNotFoundError(f"package repository not found: {source_dir}")
+    site_root = os.path.realpath(site_dir)
+    repo_dir = _contained_path(site_root, os.path.join(site_root, "arch", "x86_64"))
+    packages = sorted(glob.glob(os.path.join(source_root, "springboard-shell-*-1-x86_64.pkg.tar.zst")))
+    packages = [_contained_path(source_root, p) for p in packages]
+    packages = [p for p in packages if os.path.isfile(p)]
+    if not packages:
+        raise FileNotFoundError(f"no springboard-shell packages in {source_root}")
+    db_tar = _contained_path(source_root, os.path.join(source_root, "bifrost.db.tar.zst"))
+    db = _contained_path(source_root, os.path.join(source_root, "bifrost.db"))
+    if not os.path.isfile(db_tar) or not os.path.isfile(db):
+        raise FileNotFoundError(f"pacman database files missing from {source_root}")
+
+    os.makedirs(repo_dir, exist_ok=True)
+    repo_dir = _contained_path(site_root, repo_dir)
+    published = []
+    for package in packages:
+        name = os.path.basename(package)
+        _atomic_repo_copy(package, os.path.join(repo_dir, name), immutable=True)
+        published.append(name)
+    # Keep the compressed target available before replacing pacman's ordinary database URL.
+    for name, source in (("bifrost.db.tar.zst", db_tar), ("bifrost.db", db)):
+        source = _contained_path(source_root, source)
+        _atomic_repo_copy(source, os.path.join(repo_dir, name))
+        published.append(name)
+    return repo_dir, published
 
 
 def serve():
@@ -115,10 +207,12 @@ def main():
     for o in olds:
         os.unlink(o)
     run(["repo-add", "-q", "-R", os.path.join(POOL, "bifrost.db.tar.zst"), pkg], stdout=subprocess.DEVNULL)
+    public_dir, public_files = publish_public_repo(POOL)
     pid = None if a.no_serve else serve()
     print(f"build {built_at - t0:.1f}s; package/publish {time.time() - built_at:.1f}s")
     print(f"published springboard-shell {ver} ({os.path.getsize(pkg) // 1024} KiB, {prof}) in {time.time() - t0:.0f}s"
-          + (f"; repo served at http://{BIND[0]}:{BIND[1]}/bifrost/x86_64 (pid {pid})" if pid else ""))
+          + (f"; repo served at http://{BIND[0]}:{BIND[1]}/bifrost/x86_64 (pid {pid})" if pid else "")
+          + f"; public repo exported to {public_dir} ({len(public_files)} files)")
 
 
 if __name__ == "__main__":

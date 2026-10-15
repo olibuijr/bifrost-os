@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs",
-  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. Apple's execution model (foreground/background modes, authentication policy, snippets, enum and common data types, donations, Focus filters, widgets and controls, schema domains) is not covered, and Siri and Apple Intelligence have no counterpart.",
+  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. Apple's execution model (foreground/background modes, authentication policy, snippets, enum and common data types, donations, Focus filters, widgets and controls) is not covered; schema domains and presentations are modelled in springboard/sdk/src/intent_presentation.rs, and Siri and Apple Intelligence have no counterpart.",
   "rea_evidence": "ev_d0e83cf707606d76adf0707300c745b42e7847dacf037c0925b97338090514ee",
   "features": [
     {
@@ -66,23 +66,23 @@
     {
       "feature": "App Shortcuts (AppShortcutsProvider)",
       "apple": "AppShortcutsProvider, AppShortcutsBuilder, shortcutTileColor, phrases",
-      "bifrost": "springboard/sdk/src/intents.rs:127 (shortcut flag), manifest [[intent]] tables read by springboard/src/shell/intents.rs",
+      "bifrost": "springboard/sdk/src/intents.rs (Intent::shortcut, Intent::phrase, Intent::manifest_toml, Intent::to_json); tests: springboard/sdk/tests/parity_sdk-complete-38.rs, springboard/sdk/tests/parity_sdk-tests-01e.rs",
       "status": "partial",
-      "note": "shortcut = true marks an intent as a Spotlight shortcut; no phrase list, tile colour or parameter-bearing shortcuts"
+      "note": "shortcut = true marks an intent as a Spotlight shortcut, and phrases are trimmed, de-duplicated and written to the manifest and the intent JSON, all tested headless. Gap: tile colour and parameter-bearing shortcuts are not modelled, and the shell does not yet read the phrases from the [[intent]] tables in springboard/src/shell/intents.rs."
     },
     {
       "feature": "Spotlight shortcut search and launch",
       "apple": "Spotlight integration, App Shortcuts in Spotlight and Shortcuts app",
-      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, Spotlight Shortcuts section)",
+      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line_with, parse_reply)",
       "status": "partial",
-      "note": "lists parameterless shortcuts without launching the app; choosing one launches the app and calls intent.<id> with up to 8 s retry; no parameter prompts or disambiguation"
+      "note": "Parameterless shortcuts are listed, and their request lines and replies are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the 8 s launch retry, parameter prompts and disambiguation have no tests."
     },
     {
       "feature": "Indexing entities for Spotlight",
       "apple": "IndexedEntity, attributeSet, hideInSpotlight, CSSearchableIndex",
-      "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem)",
+      "bifrost": "springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem), springboard/sdk/src/searchable_entity.rs (SearchableEntity, searchable_items); tests: springboard/sdk/tests/parity_sdk-complete-38.rs",
       "status": "partial",
-      "note": "a Core Search indexing API exists, but it is not tied to App Intents entities; no IndexedEntity protocol"
+      "note": "An app value can implement SearchableEntity to build the searchable item the index stores, with its identifiers, attributes, expiry and validation tested headless. Gap: the entity protocol is not tied to App Intents entity queries, a hide-from-search flag is not modelled, and the shell does not index entities yet."
     },
     {
       "feature": "Intent errors",
@@ -110,21 +110,21 @@
       "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)",
       "bifrost": "springboard/ui/src/focus_filter.rs; wired: springboard/ui/src/focus_filter.rs, springboard/src/shell/services/focus_filter.rs, springboard/sdk/src/focus_filter.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model of per-Focus app contexts, the active context and change generations, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Widgets, controls and Live Activities",
       "apple": "Widgets, Live Activities, and Controls (intent-driven)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "springboard/sdk/src/widgets.rs is a drawing adapter for controls, not a widget extension point"
+      "bifrost": "springboard/ui/src/live_activity.rs, springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/widgets.rs",
+      "status": "partial",
+      "note": "The live activity life cycle (scheduled start, stale content, end and dismissal times) is tested headless in springboard/ui/tests/parity_sdk-tests-01.rs. Gap: the timeline and control adapters have no tests yet, nothing is wired into the shell or apps, and nothing is run on Midget."
     },
     {
       "feature": "Schema domains and visual presentation",
       "apple": "App schema domains, visual intelligence, Action button, side button",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no system schema adoption; hardware-button and visual-search entry points are Apple-only"
+      "bifrost": "springboard/sdk/src/intent_presentation.rs (SchemaDomain, Presentation)",
+      "status": "partial",
+      "note": "Schema domains (a closed set of thirteen categories, read back by name) and presentations (a checked title, subtitle, symbol and domain) are tested headless in springboard/sdk/tests/parity_sdk-rest-16.rs. Gap: no schema registry reads the domains yet, no picker shows the presentation, and the side button and visual search entry points are not built."
     },
     {
       "feature": "Siri and Apple Intelligence",

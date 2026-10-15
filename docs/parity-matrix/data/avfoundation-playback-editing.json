@@ -45,44 +45,44 @@
   {
    "feature": "Audio settings",
    "apple": "AVAudioSettings keys and constants",
-   "bifrost": "springboard/src/media/convert.rs",
+   "bifrost": "springboard/ui/src/audio_settings.rs (Settings, Format, Quality; to_map and from_map); tests ui/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "Sample format conversion exists internally; no settings dictionary"
+   "note": "The settings dictionary, the format rules and the nearest supported configuration are tested headless in ui/tests/parity_sdk-tests-09.rs. Gap: nothing calls the model yet, and the recorder still picks its own PCM format."
   },
   {
    "feature": "Media playback (AVPlayer, AVPlayerItem, AVQueuePlayer)",
    "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, interstitials",
-   "bifrost": "springboard/src/media/player.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs",
-   "status": "os",
-   "note": "Play, pause, seek, buffering and A/V sync work, but only through the shell (Deildu, Files video); apps get no SDK player. No looper, interstitials or rate control"
+   "bifrost": "springboard/src/media/player.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs; springboard/ui/src/av_player.rs (Player, PlayerItem); springboard/ui/src/av_queue_player.rs (QueuePlayer, looper)",
+   "status": "partial",
+   "note": "The player model (items, rate, time control status, seeking, clock, queue and looper) is tested headless in springboard/ui/tests/parity_sdk-os-10.rs. Gap: the shell's players do not use this model yet, apps get no player object, and there are no interstitials."
   },
   {
    "feature": "Video decoding",
    "apple": "AVPlayerItemVideoOutput, VideoToolbox-backed decode",
-   "bifrost": "springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs",
-   "status": "os",
-   "note": "VA-API hardware decode with libavcodec fallback; no frame-output API for apps"
+   "bifrost": "springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs; springboard/sdk/src/video_decode.rs (choose, Preference)",
+   "status": "partial",
+   "note": "The decoder choice (hardware when the probe decodes the codec, software otherwise, or hardware required) is tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: the shell does not feed its probe into this choice yet, and there is no frame-output API for apps."
   },
   {
    "feature": "Audio output and routing",
    "apple": "AVPlayer audio, AVAudioSession-style routing",
-   "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/audio/alsa/src/ctl.rs",
-   "status": "os",
-   "note": "audiod and mixer own output and routing; no app-facing session API"
+   "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/audio/alsa/src/ctl.rs; springboard/sdk/src/audio_session.rs (SessionHub, route changes)",
+   "status": "partial",
+   "note": "Route state and route-change events for apps are the session model in springboard/sdk/src/audio_session.rs, tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: audiod and the mixer do not post to this model yet, so apps get no route changes from the headphone jack."
   },
   {
    "feature": "Now Playing and remote commands",
    "apple": "Playback integration (MPNowPlayingInfoCenter)",
-   "bifrost": "springboard/src/shell/music/system.rs, springboard/sdk/src/widgets.rs",
+   "bifrost": "springboard/src/shell/services/now_playing.rs (transport_for, extrapolate, scrub_target_ms); tests: springboard/tests/parity_sdk-tests-01b.rs; springboard/src/shell/music/system.rs, springboard/sdk/src/widgets.rs",
    "status": "partial",
-   "note": "Music integrates with the shell; widgets::player draws the mini player (docs/bifrost-ui.md)"
+   "note": "Play, pause, skip and scrub mapping is tested headless (headless_now_playing_* in springboard/tests). Music integrates with the shell; widgets::player draws the mini player (docs/bifrost-ui.md)"
   },
   {
    "feature": "Offline playback and storage",
    "apple": "AVAssetDownloadTask, AVAssetDownloadStorageManager",
-   "bifrost": "springboard/src/media/stream.rs",
+   "bifrost": "springboard/src/media/offline.rs (OfflineStore); springboard/src/media/stream.rs",
    "status": "partial",
-   "note": "Progressive streaming to a growing file for playback; no HLS download tasks or storage policy"
+   "note": "Download tasks (queued, downloading, paused, finished, failed, resume from stored bytes) and a storage budget that evicts the least recently played finished items are tested headless in springboard/tests/parity_sdk-complete-37.rs. Gap: there is no HLS download transport and the player does not yet play offline items, and storage is not measured on Midget."
   },
   {
    "feature": "Streaming and AirPlay",
@@ -96,7 +96,7 @@
    "apple": "AVSampleBufferDisplayLayer, AVSampleBufferAudioRenderer, AVSampleBufferRenderSynchronizer",
    "bifrost": "springboard/ui/src/render_synchronizer.rs",
    "status": "partial",
-   "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an internal MSE feed for the browser; no app renderer or synchronizer"
+   "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure timeline model with host unit tests: rate and anchor, re-anchoring, renderers by id and boundary crossings, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs. Not wired into apps or the shell, not yet tested on the VM or Midget. Only an internal MSE feed for the browser; no app renderer or synchronizer"
   },
   {
    "feature": "Composite assets",
@@ -129,9 +129,9 @@
   {
    "feature": "Playback (player, player item, queue player, looper, time observers)",
    "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, addPeriodicTimeObserver, addBoundaryTimeObserver, AVPlayerItemMetadataOutput",
-   "bifrost": "springboard/ui/src/av_player.rs, springboard/ui/src/av_queue_player.rs, springboard/ui/tests/av_playback.rs",
+   "bifrost": "springboard/ui/src/av_player.rs, springboard/ui/src/av_queue_player.rs, springboard/ui/tests/av_playback.rs, springboard/ui/tests/parity_sdk-tests-14.rs",
    "status": "partial",
-   "note": "Sprint10/6: host-tested model on a caller clock (status, rate, time control status, seek with tolerance, observers, did-play-to-end, action at item end, queue, looper, timed metadata, audio mix ramps). Not wired to the audio engine or apps; parity needs a Midget check."
+   "note": "Status, rate, time control status, seek with tolerance, boundary observers, did-play-to-end, queue order, insertion, removal and looping are tested headless on a caller clock in springboard/ui/tests/parity_sdk-tests-14.rs. Not wired to the audio engine or apps; parity needs a Midget check."
   }
  ],
  "gaps": [

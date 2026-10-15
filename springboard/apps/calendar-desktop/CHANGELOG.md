@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.16.1 — 2026-10-14
+
+- Remove the unused keychain permission; Calendar accesses accounts through the shell's account service.
+
+## 1.16.0 — 2026-10-14
+
+- Day and Week: grab the top or bottom edge of a timed event and drag it to resize the event. The start or the end snaps to
+  quarter hours, the block keeps at least 15 minutes, and it never ends after midnight. The event is saved when the pointer
+  is released.
+
+## 1.15.0 — 2026-10-14
+
+- Event > Quick Event: a note after "note:" or "notes:" in the sentence becomes the event's notes, and the preview has a
+  Notes row.
+- Day and Week: an event with a travel time is drawn from its travel time before the start, so the time to get there
+  shows in the grid. The block never starts before midnight.
+- Go > Search Events...: from:YYYY-MM-DD and to:YYYY-MM-DD words limit the results to a date range, inclusive. A date
+  range alone lists the events in it.
+- Edit > Copy, Cut and Paste keep a custom repeat rule and custom alarms with the event, not only the presets.
+
+## 1.14.0 — 2026-10-13
+
+- File > Settings... (Command-comma): week start, day start hour, default event length and default alerts for timed and
+  all-day events. The settings are kept beside the events; the month grid, the week view, the scroll position of Day and
+  Week and new events follow them. The Day and Week zoom level is saved too.
+- Go > Search Events... (Command-F) and a toolbar button: a search screen with a query field and a scrolling result
+  list. Return or a click opens the event.
+- Day and Week: dragging empty hour-grid space sizes a new event and opens its editor; dragging a timed event moves it
+  to another time or day.
+- Edit > Cut, Copy and Paste work on events (Event > Cut Event, Shift-Command-X, deletes after copying; Undo restores it).
+- File > Export Calendar Archive and Import Calendar Archive...: the events and their rich data in one backup file; a
+  restore keeps the previous events as events.tsv.bak.
+- Calendar files (.ics) opened from Files are imported.
+- Intents create-event and show-date, and the control methods calendar.state, calendar.show_date and calendar.create_event.
+
 ## 1.13.0 — 2026-10-13
 
 - Go > Go to Date... (Shift-Command-T): a sheet with year, month and day steppers; Return shows the date, Escape cancels.
@@ -7,6 +42,34 @@
 - Event > Copy Event / Paste Event (Shift-Command-C / V): the saved event being edited goes to the pasteboard as a calendar
   file with its location and notes; Paste adds the pasteboard's event to the selected day.
 - File > Import...: reads a calendar file (.ics, .vcs) chosen in the open panel and says how many events were added.
+
+## 1.14.0 — 2026-10-14
+
+- Repeat: the Repeat row opens its picker under the row: Frequency (Never, Daily, Weekly, Monthly, Yearly), Every N, the weekdays for a weekly rule, and Ends (Never, After N times, Until a date). The presets still save as before; any other rule is saved beside the events and repeats in the calendar.
+- Alerts: the Alert row opens a picker that lists the seven presets as a checklist (several can be on), a custom alarm from 0 minutes to a week in 5-minute steps, and a row to remove each custom alarm. The alarms are scheduled one by one.
+- Calendars: File > New Calendar... makes a calendar from a line sheet; File > Rename Calendar and File > Delete Calendar work on the calendars made. Each calendar has its own colour and a row in the calendar list that shows or hides it. A calendar that still holds events is not deleted; the message says to delete them first. Up to ten calendars, the built-in one included.
+- Editor: a Calendar row picks the calendar of the event, a Time Zone row sets the zone of its times (the device's, UTC, or Iceland, which has no daylight saving), and a Travel Time row records the minutes to leave before the event. The zone is written to the .ics export and used for the alarms.
+- Settings > Default Calendar: the calendar new events go to.
+- File > New Calendar Subscription... opens a sheet with an address field, filled from the pasteboard. Return subscribes; an address that is refused keeps the sheet open with the reason.
+- Search matches the location and the notes of saved events as well as their titles.
+- View > Refresh Calendars (Cmd+R) reads the CalDAV calendars now instead of at the next 15-minute interval.
+- The event form scrolls when its pickers make it taller than the window.
+
+## 1.13.0 — 2026-10-13
+
+- Search: Cmd+F or a click puts the cursor in the search field at the right of the toolbar. The events whose titles match replace the grid in a list (title, then day, time and place); a result opens its event on its day. Escape or the clear button ends the search; choosing a view or Today does too. The field is left out when the toolbar is narrower than 560 pt. Event > Search Events does the same.
+- Hold and drag in Day and Week: hold a press for a quarter of a second, then drag. On empty space it draws out a new event (the editor opens when you let go); on an event it moves the event to the time and day under the pointer, in quarter hours, and saves it. A press that moves at once still scrolls the grid.
+- Quick Event: Event > Quick Event... (Cmd+Shift+N) opens a sheet with one line. Type "Lunch with Ana tomorrow at 12:30"; the sheet shows the title, day, time and place it read, and Add (or Return) saves the event at once. File > New Event from Text still opens the editor on the pasteboard's sentence.
+- Go to Date: Go > Go to Date... (Cmd+Shift+T) opens a sheet with day, month and year steppers, a Today shortcut and Go and Cancel. Return accepts and the arrow keys step the day and week.
+- View > Zoom In and Zoom Out (Cmd+= and Cmd+-) change the hour height of the Day and Week grids from 24 to 144 pt, keeping the same hour at the top; the size is kept.
+- Settings menu: start the week on Monday (Month, Week and Year follow, and the week numbers), the length of a new event, the hour the Day and Week views open at, and the default alert of a new timed and a new all-day event. A new event that is switched to all-day takes the all-day alert unless you picked one.
+- Edit > Cut, Copy and Paste work on events: the event open in the editor, else the one last opened or saved, else the first of the shown day. An event is copied as .ics text, so it pastes into other calendars or a text file; Paste puts the events on the shown day with their times, place, notes, alert and repeat. Inside the editor the commands go to the text field that has the cursor.
+- File > Import... reads an .ics or .vcs file or a calendar archive, and an .ics opened from Files imports the same way. File > Export Archive... saves the whole calendar (events and the repeat rules, alerts and invitees) as one .calarchive file; File > Import Archive... merges one back. An import adds what is missing and never removes anything.
+- File > Print... sends the shown day, week, month or year to the printing service as a plain-text agenda.
+- Calendar list: it now lists the saved events, Holidays and each subscribed calendar with a colour dot; a click shows or hides the calendar. Holidays are Iceland's public holidays and observances, worked out from the year (Easter, the first Thursday after 18 April, the first Monday of August and the fixed dates). They are read-only: a tap says what the day is.
+- File > Subscribe to Calendar from Clipboard adds the webcal:// or https:// address on the pasteboard as a subscribed calendar, and a webcal link opened from another app does the same. Each subscription is read every hour in the background, keeps its last answer for the next start and shows in its own colour; File > Unsubscribe from removes one.
+- Intents: show-date, show-event and create-event on the control socket (`intent.<id>`) and in the manifest, with Event entities for pickers.
+- Still open, listed in `docs/parity-matrix/apps/calendar.json`: the Birthdays calendar (needs the Contacts service), several local calendars, custom repeats and several alerts per event, inviting people and answering invitations, a time zone choice, travel time, dated reminders, and a window per event.
 
 ## 1.12.0 — 2026-10-13
 

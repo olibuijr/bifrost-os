@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "security improvements, no counterpart yet",
+   "bifrost": "springboard/src/shell/pacman_update.rs",
+   "status": "partial",
+   "note": "Security fixes reach the machine through the pacman check and the user-confirmed install in pacman_update.rs, which are tested headless in its unit tests. Gap: there is no separate background security channel and no automatic security-only install.",
    "rea": []
   },
   {
@@ -219,8 +219,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Siri invocation settings, no Siri settings page",
+   "status": "n/a",
+   "note": "Voice invocation and attention settings of the reference voice assistant; BifrOSt ships no system voice assistant to invoke.",
    "rea": []
   },
   {
@@ -279,8 +279,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of the reference voice assistant for crisis help; BifrOSt has no voice assistant that would call them.",
    "rea": []
   },
   {
@@ -299,8 +299,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of the reference voice assistant for location requests; BifrOSt has no voice assistant that would call them.",
    "rea": []
   },
   {
@@ -339,8 +339,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of the reference voice assistant for messages; BifrOSt has no voice assistant that would call them.",
    "rea": []
   },
   {
@@ -379,8 +379,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of the reference voice assistant for notifications; BifrOSt has no voice assistant that would call them.",
    "rea": []
   },
   {
@@ -399,8 +399,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of the reference voice assistant for calls; BifrOSt has no voice assistant that would call them.",
    "rea": []
   },
   {
@@ -419,8 +419,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of the reference voice assistant for photos; BifrOSt has no voice assistant that would call them.",
    "rea": []
   },
   {
@@ -439,8 +439,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "App Intents of the reference voice assistant for playback control; BifrOSt has no voice assistant that would call them.",
    "rea": []
   },
   {
@@ -459,8 +459,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "assistant app exists, no Siri settings page",
+   "status": "n/a",
+   "note": "Voice assistant preference pane of the reference OS; BifrOSt has no system voice assistant to configure. The assistant-desktop app is a chat client with no voice settings.",
    "rea": []
   },
   {
@@ -479,8 +479,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "status": "n/a",
+   "note": "Setup intents of the reference voice assistant; BifrOSt has no system voice assistant to set up.",
    "rea": []
   },
   {
@@ -519,8 +519,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Siri settings, no Siri settings page",
+   "status": "n/a",
+   "note": "Turn restatement settings of the reference voice assistant; BifrOSt has no system voice assistant, so no spoken turns are restated.",
    "rea": []
   },
   {
@@ -698,9 +698,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "status": "partial",
+   "note": "The catalogue of pane-opening settings intents is tested in settings_intents::tests (ids valid and unique, pages resolve, manifest listing). Gap: Search does not read the catalogue yet; it matches quicksearch_math::settings_aliases instead.",
    "rea": []
   },
   {

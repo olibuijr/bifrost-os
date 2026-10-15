@@ -1,5 +1,7 @@
 //! Stream formats (the reference platform's stream basic description). Owner: task 01.
 
+use crate::error::AudioError;
+
 /// The sample encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FormatId {
@@ -82,6 +84,22 @@ impl StreamFormat {
             bytes_per_frame: frame,
             channels,
             bits_per_channel: bits,
+        }
+    }
+
+    /// Checks that the description is self-consistent: a finite positive rate, at least one channel, packet and frame
+    /// sizes that agree, a sample width that fits its container, float formats of 32 or 64 bits, and no format that is
+    /// both float and signed integer. Returns `AudioError::BadValue` for any of these failures.
+    pub fn validate(&self) -> Result<(), AudioError> {
+        let rate_ok = self.sample_rate.is_finite() && self.sample_rate > 0.0;
+        let sample_bytes = if self.is_interleaved() { self.bytes_per_frame.checked_div(self.channels) } else { Some(self.bytes_per_frame) };
+        let width_ok = sample_bytes.is_some_and(|bytes| bytes > 0 && self.bits_per_channel >= 1 && self.bits_per_channel <= bytes.saturating_mul(8));
+        let float_ok = !self.is_float() || (matches!(self.bits_per_channel, 32 | 64) && !self.flags.contains(FormatFlags::SIGNED_INTEGER));
+        let packet_ok = self.frames_per_packet >= 1 && self.bytes_per_packet == self.bytes_per_frame.saturating_mul(self.frames_per_packet);
+        if rate_ok && self.channels >= 1 && width_ok && float_ok && packet_ok {
+            Ok(())
+        } else {
+            Err(AudioError::BadValue)
         }
     }
 

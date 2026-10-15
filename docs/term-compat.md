@@ -12,12 +12,13 @@ Not compatibility items, but they exist and are easy to miss: tabs and split pan
 |---|---|---|---|
 | Alternate screen 47/1047/1049 | OK | `Term::set_alt` | 1049 saves the cursor and clears; scrollback off on alt. Midget: vim/less exit restores the screen. |
 | Bracketed paste 2004 | OK | `paste_bytes`, test in `term/mod.rs` | ESC stripped so the paste cannot end early. |
-| Mouse 1000/1002/1003, SGR 1006 | Wheel wired | `Terminal::scroll`, `Terminal::report_mouse` | Emulator tracks modes. Wheel now goes to the program as reports (was arrow keys). Click, drag and release from the desktop pointer path do not call `report_mouse` yet: follow-up. Midget: htop, vim `mouse=a`, tmux `mouse on`. |
+| Mouse 1000/1002/1003, SGR 1006 | Wheel and taps wired | `Terminal::scroll`, `Terminal::report_mouse`, `TermTouch::tap` | Emulator tracks modes. Wheel goes to the program as reports (was arrow keys), and a tap is a press and release at its cell. More > Allow mouse reporting turns both off for every tab. Drags from touch and the desktop pointer path do not call `report_mouse` yet: follow-up. Midget: htop, vim `mouse=a`, tmux `mouse on`. |
 | OSC 0/1/2 title | OK | `Term::osc`, `Terminal::title` | Capped; tab caption falls back to the job name. |
 | OSC 7 cwd | Not parsed, not needed locally | `pty.cwd()` reads `/proc/PID/cwd` | New tab in the same dir works for local shells; ssh sessions would need OSC 7 (gap). |
 | OSC 8 hyperlinks | Ignored | `Term::osc` drops unknown codes | Text shows, link not clickable. Needs a cell link table in iosterm: gap. |
 | OSC 52 clipboard | Write only, no ask | `take_clipboard`, `Shell::pump` | Reads (`?`) are ignored, good. Writes go straight to the system clipboard with no prompt: gap, needs a consent sheet like Terminal.app. |
 | OSC 10/11 colour query | OK | `Term::osc` | |
+| OSC 133 prompt marks | `A` only | `term/marks.rs`, `Terminal::advance_marked` | The core ignores OSC 133; the Terminal scans the output for `ESC ] 133 ; A` (also across two reads) and marks the caret line. Cmd+Up and Cmd+Down jump between marks, Cmd+U marks a line. Marks are kept until the scrollback is full, because the core does not say how many lines it dropped. `B`, `C` and `D` are not used. |
 | 256 colour, truecolor | OK | `Term::sgr`, tests near term.rs line 1300 | Malformed params ignored. |
 | Wide and combining | Partial | `iosterm::width::char_width` | CJK and emoji blocks 1F300-1F64F, 1F900-1F9FF are 2; ZWJ is 0. Gaps: 1F680-1F6FF, 2600-27BF emoji presentation, regional indicators, VS16 widening. Wide pairs stay consistent on edit and resize (tested). |
 
@@ -33,9 +34,9 @@ Not compatibility items, but they exist and are easy to miss: tabs and split pan
 
 | Program | Status | Basis |
 |---|---|---|
-| vim | Expected OK; Midget | alt screen, app cursor, bracketed paste, colours; mouse clicks pending |
-| htop | Expected OK; Midget | alt screen, 256/truecolor; wheel ok; clicks pending |
-| tmux | Expected OK; Midget | alt screen, wheel ok, clicks pending, title via OSC 2 |
+| vim | Expected OK; Midget | alt screen, app cursor, bracketed paste, colours; taps are clicks, drags pending |
+| htop | Expected OK; Midget | alt screen, 256/truecolor; wheel ok; taps are clicks |
+| tmux | Expected OK; Midget | alt screen, wheel ok, taps are clicks, title via OSC 2 |
 | less | OK | alt screen; wheel becomes arrows unless less enabled mouse |
 | git log | OK | runs in less |
 | ls --color | OK | SGR 16/256 |

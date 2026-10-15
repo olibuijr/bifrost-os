@@ -171,6 +171,99 @@ pub(crate) fn event_incoming(kind: WorkspaceEventKind, app_id: String, name: Str
     heard
 }
 
+/// What an app publishes about what the user is doing, so that another window or device can carry it on: an activity
+/// type the app declares (a dotted name such as `org.example.notes.editing`), a title, the state needed to resume, and
+/// whether the activity may be offered for continuation or as a search result. The shell carries the activity to the
+/// other surface; this type holds the facts and the current or resigned state only.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Activity {
+    activity_type: String,
+    title: String,
+    user_info: HashMap<String, String>,
+    eligible_for_continuation: bool,
+    eligible_for_search: bool,
+    current: bool,
+}
+
+impl Activity {
+    /// An activity of the given type, or None when the type is not a dotted name of at least two non-empty segments made
+    /// of letters, digits and dashes.
+    pub fn new(activity_type: &str, title: &str) -> Option<Self> {
+        let segments: Vec<&str> = activity_type.split('.').collect();
+        let valid_segment = |s: &&str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        if segments.len() < 2 || !segments.iter().all(valid_segment) {
+            return None;
+        }
+        Some(Activity {
+            activity_type: activity_type.to_string(),
+            title: title.to_string(),
+            user_info: HashMap::new(),
+            eligible_for_continuation: false,
+            eligible_for_search: false,
+            current: false,
+        })
+    }
+
+    /// Adds one piece of state the continuation needs, such as the open document's identifier.
+    pub fn with_info(mut self, key: &str, value: &str) -> Self {
+        self.user_info.insert(key.to_string(), value.to_string());
+        self
+    }
+
+    /// Allows another surface to offer this activity to the user while it is current.
+    pub fn eligible_for_continuation(mut self) -> Self {
+        self.eligible_for_continuation = true;
+        self
+    }
+
+    /// Allows the activity to be offered as a search result.
+    pub fn eligible_for_search(mut self) -> Self {
+        self.eligible_for_search = true;
+        self
+    }
+
+    pub fn activity_type(&self) -> &str {
+        &self.activity_type
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn user_info(&self) -> &HashMap<String, String> {
+        &self.user_info
+    }
+
+    pub fn is_current(&self) -> bool {
+        self.current
+    }
+
+    /// Makes the activity the current one (the user is in the state it describes). False when it already is.
+    pub fn become_current(&mut self) -> bool {
+        !std::mem::replace(&mut self.current, true)
+    }
+
+    /// Ends the activity (the user left the state it describes). False when it was not current.
+    pub fn resign(&mut self) -> bool {
+        std::mem::replace(&mut self.current, false)
+    }
+
+    /// Whether another surface may offer this activity now: it is current and eligible for continuation.
+    pub fn offers_continuation(&self) -> bool {
+        self.current && self.eligible_for_continuation
+    }
+
+    /// Whether the activity may be indexed as a search result.
+    pub fn offers_search(&self) -> bool {
+        self.eligible_for_search
+    }
+
+    /// Whether an incoming activity of this type resumes this one.
+    pub fn resumes(&self, incoming_type: &str) -> bool {
+        self.activity_type == incoming_type
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

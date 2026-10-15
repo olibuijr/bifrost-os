@@ -39,21 +39,32 @@ impl Prop {
 pub struct Timing {
     pub duration: f32,
     pub curve: Curve,
+    /// Springs only: the speed the spring starts at, as a fraction of the distance per second, positive towards the
+    /// target. Zero starts from rest, as `CASpringAnimation.initialVelocity` does by default.
+    pub initial_velocity: f32,
 }
 
 impl Timing {
     /// 0.25 s ease-in-out, like an implicit `CATransaction`.
-    pub const DEFAULT: Timing = Timing { duration: DEFAULT_DURATION, curve: Curve::EaseInOut };
+    pub const DEFAULT: Timing = Timing { duration: DEFAULT_DURATION, curve: Curve::EaseInOut, initial_velocity: 0.0 };
     pub fn new(duration: f32, curve: Curve) -> Timing {
-        Timing { duration, curve }
+        Timing { duration, curve, initial_velocity: 0.0 }
     }
-    /// `CASpringAnimation`: lasts as long as the spring takes to settle.
+    /// `CASpringAnimation`: lasts as long as the spring takes to settle, and starts from rest.
     pub fn spring(damping_ratio: f32, response: f32) -> Timing {
-        Timing { duration: -1.0, curve: Curve::Spring { damping_ratio, response } }
+        Timing::spring_with_velocity(damping_ratio, response, 0.0)
+    }
+    /// `CASpringAnimation` with an `initialVelocity`: the spring starts already moving, as a fling or a drag leaves it.
+    pub fn spring_with_velocity(damping_ratio: f32, response: f32, initial_velocity: f32) -> Timing {
+        Timing { duration: -1.0, curve: Curve::Spring { damping_ratio, response }, initial_velocity }
     }
     fn animation(self, from: f32, to: f32) -> Animation {
         match self.curve {
-            Curve::Spring { damping_ratio, response } if self.duration < 0.0 => Animation::spring(from, to, 0.0, damping_ratio, response),
+            Curve::Spring { damping_ratio, response } if self.duration < 0.0 => {
+                let mut anim = Animation::spring(from, to, 0.0, damping_ratio, response);
+                anim.velocity = self.initial_velocity;
+                anim
+            }
             c => Animation::new(from, to, 0.0, self.duration, c),
         }
     }
@@ -322,7 +333,7 @@ impl<S: Responder> Window<S> {
                 let mut anim = t.animation(b.get(p), a.get(p));
                 // a retargeted spring keeps the speed of the one it replaces
                 let distance = a.get(p) - b.get(p);
-                if matches!(anim.curve, Curve::Spring { .. }) && distance.abs() > 1e-6 {
+                if matches!(anim.curve, Curve::Spring { .. }) && distance.abs() > 1e-6 && t.initial_velocity == 0.0 {
                     anim.velocity = carried / distance;
                 }
                 Track { id, prop: p, anim, started: false, shown: b.get(p), colors: None, shown_color: None, group }
@@ -671,6 +682,22 @@ mod tests {
     }
 
     #[test]
+    fn a_spring_with_initial_velocity_moves_ahead_of_one_from_rest() {
+        let (mut rest, rest_id) = win();
+        rest.animate(Timing::spring(0.6, 0.5), |w| w.view_mut::<Container>(rest_id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        let (mut fling, fling_id) = win();
+        let pushed = Timing::spring_with_velocity(0.6, 0.5, 4.0);
+        assert_eq!(pushed.initial_velocity, 4.0);
+        assert_eq!(Timing::spring(0.6, 0.5).initial_velocity, 0.0);
+        fling.animate(pushed, |w| w.view_mut::<Container>(fling_id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        rest.tick(0.0);
+        fling.tick(0.0);
+        rest.tick(0.05);
+        fling.tick(0.05);
+        assert!(frame(&fling, fling_id).x > frame(&rest, rest_id).x, "a fling of four distances a second starts ahead");
+    }
+
+    #[test]
     fn idle_window_has_no_wake() {
         let (mut w, id) = win();
         assert_eq!(w.next_wake(1.0), None);
@@ -741,5 +768,107 @@ mod tests {
         w.tick(0.12);
         let v2 = (frame(&w, id).x - x2) / 0.01;
         assert!((v2 - v).abs() / v < 0.3, "{v} vs {v2}");
+    }
+
+    // Headless: the tests below read model values or draw into an in-memory Surface. No display, device or clock is used.
+    fn test_ui() -> crate::kit::Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).expect("SFUI.ttf").into_boxed_slice());
+        crate::kit::Ui::new(crate::kit::Font::parse(data).expect("font"), 1.0)
+    }
+
+    /// A 4 x 4 window whose only child is a green 2 x 4 swatch at the origin.
+    fn swatch() -> (Window, u64) {
+        let mut w: Window = Window::new(Container::new(vec![Box::new(Container::default())]), 10);
+        let id = w.root().children()[0].id();
+        w.root_mut().set_frame(rect(0.0, 0.0, 4.0, 4.0));
+        let child = &mut w.root_mut().children_mut()[0];
+        child.set_frame(rect(0.0, 0.0, 2.0, 4.0));
+        child.base_mut().background = Some(0xff00_ff00);
+        w.set_reduce_motion(Some(false));
+        (w, id)
+    }
+
+    #[test]
+    fn headless_swatch_is_drawn_where_the_animation_has_moved_it() {
+        let ui = test_ui();
+        let (mut w, id) = swatch();
+        w.animate(lin(1.0), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(2.0, 0.0, 2.0, 4.0)));
+        w.tick(0.0);
+        w.tick(0.5);
+        let mut px = vec![0xff00_0000u32; 16];
+        let mut s = Surface { w: 4, h: 4, stride: 4, px: &mut px, y0: 0 };
+        w.draw(&mut s, &ui);
+        assert_eq!(s.px[1], 0xff00_ff00, "the swatch covers columns 1 and 2 at the midpoint");
+        assert_eq!(s.px[2], 0xff00_ff00);
+        assert_ne!(s.px[0], 0xff00_ff00);
+        assert_ne!(s.px[3], 0xff00_ff00);
+    }
+
+    #[test]
+    fn headless_swatch_settles_on_the_new_frame_when_the_animation_ends() {
+        let ui = test_ui();
+        let (mut w, id) = swatch();
+        w.animate(lin(1.0), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(2.0, 0.0, 2.0, 4.0)));
+        w.tick(0.0);
+        w.tick(1.0);
+        let mut px = vec![0xff00_0000u32; 16];
+        let mut s = Surface { w: 4, h: 4, stride: 4, px: &mut px, y0: 0 };
+        w.draw(&mut s, &ui);
+        assert_eq!(s.px[2], 0xff00_ff00);
+        assert_eq!(s.px[3], 0xff00_ff00);
+        assert_ne!(s.px[1], 0xff00_ff00, "the old column is no longer covered");
+    }
+
+    #[test]
+    fn headless_frame_opacity_and_size_interpolate_together() {
+        let (mut w, id) = win();
+        w.animate(lin(1.0), |w| {
+            let v = w.view_mut::<Container>(id).unwrap();
+            v.set_frame(rect(100.0, 40.0, 200.0, 90.0));
+            v.base_mut().opacity = 0.0;
+        });
+        w.tick(0.0);
+        w.tick(0.5);
+        let b = w.view::<Container>(id).unwrap().base();
+        assert_eq!(b.frame, rect(50.0, 20.0, 150.0, 70.0));
+        assert!((b.opacity - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn headless_underdamped_spring_passes_its_target_then_rests_on_it() {
+        let (mut w, id) = win();
+        w.animate(Timing::spring(0.3, 0.4), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        let mut peak = f32::MIN;
+        for i in 0..=400 {
+            w.tick(i as f64 * 0.01);
+            peak = peak.max(frame(&w, id).x);
+        }
+        assert!(peak > 110.0, "an underdamped spring passes its target: {peak}");
+        assert_eq!(frame(&w, id).x, 100.0);
+        assert!(!w.is_animating(None));
+    }
+
+    #[test]
+    fn headless_group_completes_once_after_all_of_its_tracks() {
+        use std::{cell::Cell, rc::Rc};
+        let (mut w, id) = win();
+        let n = Rc::new(Cell::new(0));
+        let c = n.clone();
+        let tx = Transaction::new(lin(1.0)).completion(move |ok| {
+            assert!(ok);
+            c.set(c.get() + 1);
+        });
+        w.transaction(tx, |w| {
+            let v = w.view_mut::<Container>(id).unwrap();
+            v.set_frame(rect(100.0, 0.0, 100.0, 50.0));
+            v.base_mut().opacity = 0.0;
+        });
+        w.tick(0.0);
+        w.tick(0.5);
+        assert_eq!(n.get(), 0, "still running at the midpoint");
+        w.tick(1.0);
+        assert_eq!(n.get(), 1);
+        w.tick(2.0);
+        assert_eq!(n.get(), 1, "the completion runs once");
     }
 }

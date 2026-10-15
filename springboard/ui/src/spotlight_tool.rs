@@ -1,4 +1,4 @@
-//! The Core Spotlight search tool for the on-device assistant (`SpotlightSearchTool`): a model [`Tool`] that searches
+//! The local search tool for the on-device assistant: a model [`Tool`] that searches
 //! the items apps have indexed and returns the best matches as text the model can read.
 //!
 //! The caller decides which items the assistant may see and passes them in as [`IndexedItem`]s; this module only

@@ -35,9 +35,19 @@ confirmation first. The installer copies the files it needs from the live medium
 disk, creates a locked-root system with one wheel user (password via `chpasswd` on stdin), writes locale,
 console keymap and X11 keyboard from the chosen layout, enables SpringBoard, NetworkManager and sshd.
 
-Network is required (pacstrap pulls the bundle from the mirrors). A lab install with the `mirror` config field set makes pacstrap use only
-the lab's offline mirror (`offline_pacman_conf`, `http://10.99.0.1:8078/mirror/`, built by `tools/lab-mirror.sh`). The
-installed system keeps the stock configuration plus the `[bifrost]` update repo.
+Release ISOs install without network access. When `/usr/share/bifrost/offline/manifest.json` is present, the installer
+verifies the bundle before partitioning, uses only its file-backed pacman repository for pacstrap, then installs the
+bundled `springboard-shell` and the Browser and Files app packages. An advertised but incomplete or corrupt bundle is a
+hard error; it never falls back to the network. The manifest uses schema version 1: `repo` identifies `repo/offline.db`
+and its SHA-256, `packages` lists repository archive basenames and SHA-256 checksums, `shell` identifies the bundled
+shell archive and checksum, and `apps` identifies the two app package paths (`apps/<id>-<version>.aap`) and checksums.
+Pacman's temporary file-repository configuration is not copied into the installation; the installed system keeps the
+normal Arch sources plus the `[bifrost]` update repo. The ISO bundle also includes dependency archives, which the
+installer checks against pacman's resolved package plan, using an empty temporary package database, before any disk changes.
+
+A lab install with the `mirror` config field set retains its existing route: pacstrap uses only the lab mirror
+(`offline_pacman_conf`, `http://10.99.0.1:8078/mirror/`, built by `tools/lab-mirror.sh`), and the installed system
+keeps the stock configuration plus the `[bifrost]` update repo.
 
 The installed kernel is `linux-rt` (stock `linux` for NVIDIA or when the package source lacks `linux-rt`). After mkinitcpio the
 installer runs `bifrost-update-guard uki` to build the unified kernel image `EFI/BIFROST/bifrost.efi`; a failure keeps the
@@ -48,6 +58,12 @@ caches for the panel.
 
 - Logic is unit-tested: `cd springboard && cargo test --lib installer`.
 - On a dev VM: `BIFROST_NO_VIDEO=1 BIFROST_DISK_FIXTURE=file SPRINGBOARD_MODE=1920x1080@60 bifrost-installer`
+
+Before building an ISO, prepare the generated `springboard/assets` directory (including its required fonts, default icons,
+wallpaper, and wallpaper index); `tools/build-iso.sh` copies it into the live image and fails closed if those files are
+missing. The ISO builder does not fetch or generate these assets. Installer footage is staged from
+`packaging/archiso/airootfs/usr/share/bifrost/video`; lab builds may explicitly select a prepared directory with
+`BIFROST_ISO_VIDEO_DIR`.
   (`BIFROST_DISK_FIXTURE` holds `parted -sm` outputs separated by `---`; `BIFROST_LAYOUT=is` picks a layout).
 - Lab hooks (only when `/run/bifrost-shot-on` exists): the installer writes `/run/bifrost-screen.png` and reads input lines
   (`down|move|up X Y`, `key CODE 1|0`) from `/run/bifrost-input`.
@@ -75,6 +91,12 @@ on Midget never meets a 404. It is incremental: only missing files are fetched, 
 file it lists is present. `pc_mirror.py --sync|--check` run it by hand; `--skip-mirror-sync` on publish only checks.
 The upstream is `BIFROST_UPSTREAM_MIRROR` (default `https://geo.mirror.pkgbuild.com`).
 
+The publisher also exports the retained shell packages and pacman database to
+`~/Projects/bifrost-site/site/arch/x86_64`, which the live site serves at
+`https://bifrost.olibuijr.com/arch/$arch` for installed-system updates and new non-lab installs. Set
+`BIFROST_PUBLIC_SITE` to the static site root on another publishing host. Package files are immutable by version; both
+database filenames are replaced atomically after the package files, with `bifrost.db` last.
+
 ## Faster iteration
 
 - **Installer changes without an ISO rebuild (lab/debug images):** `tools/lab-push.sh` builds the installer and publishes it,
@@ -90,7 +112,8 @@ The upstream is `BIFROST_UPSTREAM_MIRROR` (default `https://geo.mirror.pkgbuild.
 
 `BIFROST_AUTO=user:password:/dev/vda bifrost-installer` runs the whole install without a display and exits 0 on success,
 1 with the failure message otherwise (Erase mode, first keyboard layout, en_US.UTF-8). `tools/vm-install.sh install` wraps it
-for the QEMU VM. Package set: `PACKAGES` in `installer/plan.rs` (minimal base; apps come from the App Store).
+for the QEMU VM. Package set: `packages()` in `installer/plan.rs`; release ISOs carry this set, GPU driver alternatives,
+kernel alternatives, package dependency closure, the shell archive and the two default app packages.
 See `docs/bifrost-pc-workflow.md`.
 
 Fresh Btrfs setup loads the kernel module before partitioning, mounts the six

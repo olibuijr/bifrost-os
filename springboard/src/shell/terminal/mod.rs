@@ -34,10 +34,12 @@ mod find;
 mod groups;
 mod input;
 mod links;
+pub mod schemes;
 mod menus;
 #[allow(dead_code)]
 pub mod profile_table;
 mod profiles;
+mod selection;
 mod session;
 mod ssh;
 mod tabs;
@@ -54,7 +56,7 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-const MENU: [&str; 28] = [
+const MENU: [&str; 36] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -83,6 +85,14 @@ const MENU: [&str; 28] = [
     "Paste escaped text",
     "Paste selection",
     "Terminal help",
+    "Edit title",
+    "Allow mouse reporting",
+    "Search the web for selection",
+    "Open man page for selection",
+    "Save selected text to Files",
+    "Use selection for find",
+    "Move tab left",
+    "Move tab right",
 ];
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
@@ -96,6 +106,7 @@ fn menu_key(i: usize) -> Option<&'static str> {
         2 => "\u{2318}+",
         7 => "\u{2318}A",
         8 => "\u{2318}C",
+        33 => "\u{2318}E",
         11 => "\u{2318}K",
         _ => return None,
     })
@@ -146,6 +157,10 @@ pub struct TerminalUi {
     pub secure: bool,
     /// the command line of the New command panel
     command: Option<TextField>,
+    /// the command panel is editing the tab title instead of running a line
+    title_edit: bool,
+    /// View > Allow Mouse Reporting (saved in prefs)
+    pub mouse_reporting: bool,
 }
 impl Default for TerminalUi {
     fn default() -> Self {
@@ -179,6 +194,8 @@ impl Default for TerminalUi {
             blink: false,
             secure: false,
             command: None,
+            title_edit: false,
+            mouse_reporting: true,
         }
     }
 }
@@ -199,6 +216,7 @@ impl TerminalUi {
         self.cursor = profile_table::CursorStyle::from_key(prefs.get("terminal.cursor"));
         self.blink = prefs.get("terminal.blink") == Some("1");
         self.secure = prefs.get("terminal.secure_input") == Some("1");
+        self.mouse_reporting = prefs.get("terminal.mouse_reporting") != Some("0");
     }
     pub fn next_wake(&self) -> Option<f64> {
         Some(if self.panel == Panel::Processes {

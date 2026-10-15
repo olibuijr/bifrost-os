@@ -10,23 +10,23 @@
     {
       "feature": "Decompression session (VTDecompressionSession)",
       "apple": "VTDecompressionSessionCreate, VTDecompressionSessionDecodeFrame, output handler",
-      "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (Decoder, impl VideoDecoder), springboard/src/media/mod.rs (VideoDecoder trait, line 226)",
-      "status": "os",
-      "note": "H.264 and HEVC only, behind the VideoDecoder trait; no SDK type is exposed to apps"
+      "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (Decoder, impl VideoDecoder), springboard/src/media/mod.rs (VideoDecoder trait, line 226); springboard/sdk/src/video_decompression.rs (DecompressionSession, FormatDescription)",
+      "status": "partial",
+      "note": "The app-facing session, format check and output handler are tested headless: parameter sets go in front of the first sample and after a flush, and pictures arrive in order. Gap: H.264 and HEVC only, and the libavcodec decoder itself has not run on the lab machine."
     },
     {
       "feature": "Hardware decode capability query",
       "apple": "VTIsHardwareDecodeSupported, VTDecompressionSessionCanAcceptFormatDescription",
-      "bifrost": "springboard/src/media/hwdec/vaapi.rs (libva probe on the DRM render node)",
-      "status": "os",
-      "note": "probe decides VA-API use; falls back to software; no per-codec query for apps"
+      "bifrost": "springboard/src/media/hwdec/vaapi.rs (libva probe on the DRM render node); springboard/sdk/src/video_decompression.rs (hardware_decode_supported, support_from_probe, can_accept)",
+      "status": "partial",
+      "note": "The per-codec answer of the probe is exposed to apps and checked by can_accept, tested headless with probe data. Gap: the probe itself has not been read on the lab machine, and the query covers the codec set only, not profiles or levels."
     },
     {
       "feature": "Zero-copy decoded frames",
       "apple": "CVPixelBuffer output with IOSurface backing",
-      "bifrost": "springboard/src/media/mod.rs (Pixels::Dma, DmaPicture), springboard/src/gpu/nv12.rs (EGL dma-buf import)",
-      "status": "os",
-      "note": "Linux dma-buf instead of IOSurface; the shell GPU path imports NV12 directly"
+      "bifrost": "springboard/src/media/mod.rs (Pixels::Dma, DmaPicture), springboard/src/gpu/nv12.rs (EGL dma-buf import); springboard/sdk/src/video_decompression.rs (DecodedPixels::Buffer, set_zero_copy)",
+      "status": "partial",
+      "note": "With zero-copy requested, a decoded picture reaches an app as its dma-buf handle (DecodedPixels::Buffer), tested headless. Gap: the handle is a Linux dma-buf, the GPU import is not exposed to apps, and the path has not run on the lab machine."
     },
     {
       "feature": "Compression session (encoding)",
@@ -59,30 +59,30 @@
     {
       "feature": "Pixel transfer (format conversion and scaling)",
       "apple": "VTPixelTransferSessionCreate, VTPixelTransferSessionTransferImage",
-      "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12",
+      "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12, transfer_i420, transfer_rgba); springboard/render/tests/parity_sdk-complete-09.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-video-toolbox, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. conversion exists for the shell's own video path only; no app-facing pixel transfer session"
+      "note": "Pure model with headless tests: NV12 and I420 pictures convert to RGBA and scale by nearest neighbour, and RGBA scales too. Gap: not wired into apps or the shell, no app-facing pixel transfer session, and no test on the VM or Midget."
     },
     {
       "feature": "Pixel rotation (VTPixelRotationSession)",
       "apple": "VTPixelRotationSessionCreate, VTPixelRotationSessionRotateImage",
-      "bifrost": "springboard/render/src/video_transfer.rs (rotate_picture",
+      "bifrost": "springboard/render/src/video_transfer.rs (rotate_picture, turn_for_degrees, transfer_rgba); springboard/render/tests/parity_sdk-complete-09.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-video-toolbox, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. display rotation only; not exposed as a video-buffer rotation API"
+      "note": "Quarter turns with mirrors, and clockwise angles that map to a turn (turn_for_degrees), are tested headless. Gap: not wired into apps or the shell, and the rotation is not exposed as a video-buffer rotation session, nor tested on the VM or Midget."
     },
     {
       "feature": "RAW processing",
       "apple": "VTRAWProcessingSession",
-      "bifrost": "springboard/render/src/bayer.rs",
+      "bifrost": "springboard/render/src/bayer.rs (demosaic, CfaPattern)",
       "status": "partial",
-      "note": "Wave 5 (w5-video-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no camera-native or Bayer path in springboard/src/media; v4l2.rs converts only YUV formats it lists"
+      "note": "The Bayer tiles, the demosaic at frame edges, white balance and refusal of bad frames are tested headless in springboard/render/tests/parity_sdk-tests-01.rs. Gap: no camera-native or RAW container path in springboard/src/media, and v4l2.rs converts only the YUV formats it lists."
     },
     {
       "feature": "HDR per-frame metadata",
       "apple": "VTHDRPerFrameMetadataGenerationSession, VTCompressionPropertyKey_LogTransferFunction",
-      "bifrost": "springboard/render/src/hdr_metadata.rs",
+      "bifrost": "springboard/render/src/hdr_metadata.rs (FrameLightSession, code_to_nits; PQ and HLG transfers)",
       "status": "partial",
-      "note": "Wave 5 (w5-video-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. decoder path is 8-bit NV12 only; no 10-bit or HDR transfer handling found"
+      "note": "The PQ and HLG light model, the per-frame peak and mean and the scene peak over 10-bit codes are tested headless in render/tests/parity_sdk-tests-02.rs. Gaps: the model is not attached to decoded frames, the decoder path is 8-bit NV12 only, and nothing is run on the VM or Midget."
     },
     {
       "feature": "Frame processing (super resolution, frame interpolation, optical flow, noise filter, motion blur)",
@@ -96,21 +96,21 @@
       "apple": "VTMotionEstimationSession",
       "bifrost": "springboard/render/src/block_motion.rs (MotionEstimation::estimate)",
       "status": "partial",
-      "note": "Wave 4 (w4-video-toolbox, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no motion estimation code found"
+      "note": "Full-search block motion between 8-bit planes (SAD per block, clipped edge blocks, zero offset first on ties) is tested headless in render/tests/parity_sdk-complete-30.rs. Gap: not wired into a decoder, the shell or apps, and there is no sub-pixel or hierarchical search; not yet verified on the VM or Midget."
     },
     {
       "feature": "CGImage from pixel buffer",
       "apple": "VTCreateCGImageFromCVPixelBuffer",
-      "bifrost": "springboard/src/media/convert.rs (nv12_to_rgba to gfx::Image)",
+      "bifrost": "springboard/src/media/convert.rs (nv12_to_rgba to gfx::Image); tests springboard/tests/parity_sdk-tests-09.rs",
       "status": "partial",
-      "note": "same conversion to the shell's own image type, not to CGImage"
+      "note": "NV12 pictures convert and scale to the shell's own gfx::Image pixels, tested headless in springboard/tests/parity_sdk-tests-09.rs. Gap: the output is not a CGImage."
     },
     {
       "feature": "Media extensions and codec registration",
       "apple": "VTRegisterSupplementalVideoDecoderIfAvailable, VTRegisterProfessionalVideoWorkflowVideoDecoders, VTExtensionPropertiesKey",
-      "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (libavcodec dlopen, codec set fixed to H.264 and HEVC)",
-      "status": "os",
-      "note": "codec set is fixed in the Codec enum (springboard/src/media/mod.rs line 101); no plug-in registration"
+      "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (libavcodec dlopen, codec set fixed to H.264 and HEVC); springboard/sdk/src/video_decompression.rs (codec_for_sample_entry, is_decodable)",
+      "status": "partial",
+      "note": "Sample-entry codes map to the fixed codec set, and VP9 and AV1 are refused, tested headless. Gap: the codec set is compiled into the media stack (springboard/src/media/mod.rs line 101), so no extension can register a decoder."
     },
     {
       "feature": "Error codes",

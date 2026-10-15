@@ -167,6 +167,53 @@ pub fn parse(bytes: &[u8]) -> Option<Exif> {
     Some(out)
 }
 
+/// The eight bytes that open every PNG file.
+const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+/// Reads the EXIF data of a PNG from its `eXIf` chunk, which holds the TIFF data without the JPEG `Exif` header.
+/// The size comes from the `IHDR` chunk when the EXIF data has no dimensions. A chunk cut short by the end of the
+/// bytes ends the walk and keeps what was read before it.
+pub fn parse_png(bytes: &[u8]) -> Option<Exif> {
+    if bytes.get(..8)? != PNG_SIGNATURE {
+        return None;
+    }
+    let mut out = Exif::default();
+    let mut size = None;
+    let mut pos = 8;
+    while let Some(head) = bytes.get(pos..pos + 8) {
+        let len = u32::from_be_bytes([head[0], head[1], head[2], head[3]]) as usize;
+        let Some(data) = bytes.get(pos + 8..pos + 8 + len) else { break };
+        match &head[4..8] {
+            b"IHDR" => size = png_size(data),
+            b"eXIf" => read_tiff(data, &mut out),
+            b"IEND" => break,
+            _ => {}
+        }
+        pos += 12 + len;
+    }
+    if let Some((w, h)) = size {
+        out.width = out.width.or(Some(w));
+        out.height = out.height.or(Some(h));
+    }
+    Some(out)
+}
+
+/// The width and height held in the first eight bytes of an `IHDR` chunk, both big-endian.
+fn png_size(data: &[u8]) -> Option<(u32, u32)> {
+    let w = u32::from_be_bytes(data.get(0..4)?.try_into().ok()?);
+    let h = u32::from_be_bytes(data.get(4..8)?.try_into().ok()?);
+    Some((w, h))
+}
+
+/// Reads the EXIF data of a JPEG or a PNG, chosen by the file signature. Other bytes give `None`.
+pub fn parse_image(bytes: &[u8]) -> Option<Exif> {
+    if bytes.starts_with(&PNG_SIGNATURE) {
+        parse_png(bytes)
+    } else {
+        parse(bytes)
+    }
+}
+
 /// The capture time ("2026:10:04 12:30:00", the camera's local wall clock) as
 /// Unix seconds in a zone `offset` seconds east of UTC.
 pub fn taken_unix(taken: &str, offset: i32) -> Option<i64> {
@@ -183,7 +230,7 @@ pub fn taken_unix(taken: &str, offset: i32) -> Option<i64> {
 
 /// The EXIF orientation of a JPEG (1 when absent or not a JPEG).
 pub fn orientation(bytes: &[u8]) -> u16 {
-    parse(bytes).and_then(|e| e.orientation).unwrap_or(1)
+    parse_image(bytes).and_then(|e| e.orientation).unwrap_or(1)
 }
 
 /// The info sheet's rows for a file: its name, the EXIF details found in
@@ -191,7 +238,7 @@ pub fn orientation(bytes: &[u8]) -> u16 {
 /// EXIF date, and the file size.
 pub fn describe(name: &str, size: u64, mtime: i64, offset: i32, head: &[u8]) -> Vec<(String, String)> {
     let mut rows = vec![("Name".to_string(), name.to_string())];
-    let details = parse(head).unwrap_or_default().rows();
+    let details = parse_image(head).unwrap_or_default().rows();
     if details.iter().all(|(l, _)| *l != "Date") {
         let d = super::library::civil(mtime, offset);
         rows.push(("Date".to_string(), format!("{}, {}", super::library::day_title(&d), super::library::time_title(&d))));

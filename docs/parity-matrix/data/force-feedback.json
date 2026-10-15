@@ -4,7 +4,7 @@
   "macos_since": "10.2",
   "status": "partial",
   "bifrost": "springboard/core/src/gamepad.rs, ff_effect.rs, ff_device.rs, force_effect.rs, rumble.rs, ff_escape.rs, haptic_request.rs (pure models; no evdev or shell wiring)",
-  "summary": "Apple's Force Feedback framework is a legacy C API (FFCreateDevice, FFEffectDownload, FFEffectStart) for HID force-feedback devices such as wheels and joysticks. BifrOSt has pure models for the device capability bits, effects, device properties, haptic pulses and escape frames in springboard/core, but none is wired to an evdev node or the shell: the evdev reader does not upload effects, and the SDK's haptic() call is still dropped by the shell. Cooperative level has no counterpart, and the driver plug-in interface is not exposed.",
+  "summary": "Apple's Force Feedback framework is a legacy C API (FFCreateDevice, FFEffectDownload, FFEffectStart) for HID force-feedback devices such as wheels and joysticks. BifrOSt has pure models for the device capability bits, effects, device properties, haptic pulses and escape frames in springboard/core, but none is wired to an evdev node or the shell: the evdev reader does not upload effects, and the SDK's haptic() call is still dropped by the shell. Cooperative levels and polar or Cartesian directions are modelled in springboard/core/src/ff_cooperation.rs, but no input node uses them yet, and the driver plug-in interface is not exposed.",
   "rea_evidence": "ev_cfcdde9a3970a00d568422cade4aaff07d84740a3b46f512a0a2d9db35042d16",
   "features": [
     {
@@ -33,14 +33,14 @@
       "apple": "FFDeviceEscape, FFEffectEscape, FFEFFESCAPE, FFCommandFlag",
       "bifrost": "springboard/core/src/ff_escape.rs (Escape, EscapeError, encode, decode)",
       "status": "partial",
-      "note": "built on parity/team-k-force-feedback; not yet verified on Midget. Frame model only: a BifrOSt framing of the command code and payload, with a 4096-byte payload limit. No driver accepts the frame yet, so no escape reaches a device"
+      "note": "Frame model: a BifrOSt framing of the command code and payload with a 4096-byte payload limit, which encodes, decodes and splits several frames from one reply buffer (headless tests in springboard/core/tests/parity_sdk-complete-36.rs). Gap: no driver accepts the frame yet, so no escape reaches a device, and it is not verified on Midget."
     },
     {
       "feature": "Cooperative level and coordinate system",
       "apple": "FFDeviceSetCooperativeLevel, FFCooperativeLevelFlag, FFCoordinateSystemFlag",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Apple's own reference marks FFDeviceSetCooperativeLevel as unimplemented in version 1.0, so there is nothing to match; left as a gap on purpose"
+      "bifrost": "springboard/core/src/ff_cooperation.rs (CooperativeLevel, Arbiter, Direction)",
+      "status": "partial",
+      "note": "Cooperative levels (shared or exclusive, foreground or background), one exclusive holder per device, and polar and Cartesian directions are tested headless in springboard/core/tests/parity_sdk-rest-16.rs. Gap: no input grab or effect upload uses the arbiter yet, and three-axis (spherical) directions are not modelled."
     },
     {
       "feature": "Plug-in interface for drivers",

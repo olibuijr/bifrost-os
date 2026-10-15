@@ -1,307 +1,307 @@
 {
-  "app": "Weather",
-  "bifrost_app": "weather-desktop",
-  "evidence": [
-    "ref27/System/Applications/Weather.app/Contents/Info.plist via bifrost pc ref extract (URL scheme weather, user activities WeatherIntent; NSLocationUsageDescription for local weather and notifications near you)",
-    "ref27/System/Applications/Weather.app/Contents/Resources: weather-material.materialrecipe, weather-material-alternate.materialrecipe (window material only; the app binary is in the shared cache and its UI resources ship in private frameworks, so the feature list also follows the shipped app's documented behaviour)",
-    "springboard/apps/weather-desktop/src/ and springboard/src/shell/weather/ (data.rs forecast query, glyph.rs)"
-  ],
-  "summary": {
-    "features": 32,
-    "parity": 11,
-    "partial": 11,
-    "gap": 9,
-    "n/a": 1,
-    "coverage_pct": 46.8
+ "app": "Weather",
+ "bifrost_app": "weather-desktop",
+ "evidence": [
+  "ref27/System/Applications/Weather.app/Contents/Info.plist via bifrost pc ref extract (URL scheme weather, user activities WeatherIntent; NSLocationUsageDescription for local weather and notifications near you)",
+  "ref27/System/Applications/Weather.app/Contents/Resources: weather-material.materialrecipe, weather-material-alternate.materialrecipe (window material only; the app binary is in the shared cache and its UI resources ship in private frameworks, so the feature list also follows the shipped app's documented behaviour)",
+  "springboard/apps/weather-desktop/src/ and springboard/src/shell/weather/ (data.rs forecast query, glyph.rs)"
+ ],
+ "summary": {
+  "features": 32,
+  "parity": 11,
+  "partial": 19,
+  "gap": 1,
+  "n/a": 1,
+  "coverage_pct": 66.1
+ },
+ "features": [
+  {
+   "feature": "Locations sidebar",
+   "area": "view",
+   "apple": "Source list of saved places, each with a live temperature and condition",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:377 (sidebar, the sky glyph drawn over the row)",
+   "note": "Each sidebar row shows the place's sky glyph, its sky in words and its last known temperature. Not yet verified on Midget.",
+   "wire": "Verify the two-line rows, temperature and sky glyph on Midget."
   },
-  "features": [
-    {
-      "feature": "Locations sidebar",
-      "area": "view",
-      "apple": "Source list of saved places, each with a live temperature and condition",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:313",
-      "note": "Each sidebar row shows the place's last known temperature on the right; no condition glyph in the row yet (SidebarItem has no icon slot for a drawn glyph).",
-      "wire": "Store each place's last Summary (data.rs:271) and draw its temperature and condition glyph on the right of the row in weather.rs side_rows (weather.rs:391), using shell::weather::glyph."
-    },
-    {
-      "feature": "Search and add a location",
-      "area": "view",
-      "apple": "Search field finds a city and adds it to the list",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:504",
-      "note": "Sidebar search opens the Locations page with a focused field; results add a place.",
-      "wire": ""
-    },
-    {
-      "feature": "Remove a location",
-      "area": "view",
-      "apple": "Delete from the list (Edit > Delete, swipe, context menu)",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:952",
-      "note": "Delete or Backspace removes the selected place from the main page (code 46 mapped in main.rs). The sidebar secondary-click menu is still missing.",
-      "wire": "Handle the Delete key in weather.rs key() (weather.rs:933) for the selected sidebar row and add a secondary-click menu with Remove."
-    },
-    {
-      "feature": "Reorder locations",
-      "area": "view",
-      "apple": "Drag rows to reorder the list",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Places keep the order they were added.",
-      "wire": "Add drag handling to the sidebar source_list rows in weather.rs touch() (weather.rs:973) and persist the order in data::Store (data.rs:358)."
-    },
-    {
-      "feature": "My Location",
-      "area": "location",
-      "apple": "First entry follows the device location and asks for permission (NSLocationUsageDescription)",
-      "status": "gap",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:108",
-      "note": "The shell gives apps no location service yet; the authorization is fixed at NotDetermined and the Locations note says so.",
-      "wire": "When the shell exposes a location service, replace the LOCATION constant (weather.rs:108) by a request through bifrost_app::controls::location, insert a My Location place first and refresh it on movement; insights::location_note (insights.rs:163) already words the states."
-    },
-    {
-      "feature": "Current conditions",
-      "area": "forecast",
-      "apple": "Large temperature, condition, high and low for the place",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1112",
-      "note": "Big temperature, condition glyph and name, high and low.",
-      "wire": ""
-    },
-    {
-      "feature": "Hourly forecast",
-      "area": "forecast",
-      "apple": "Scrolling strip of hours with temperature, condition and precipitation chance",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Precipitation chance under each hour's glyph (rounded to 5, hidden below 10). Sunrise and sunset markers between the hours are still missing.",
-      "wire": "Add precipitation_probability and the day's sunrise and sunset to the hourly query (data.rs:243) and draw the percentage under the glyph and sun markers between the hours in weather.rs:1154."
-    },
-    {
-      "feature": "10-day forecast",
-      "area": "forecast",
-      "apple": "Ten days with condition, range bar against the period's range, precipitation chance",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Range bar already scaled to the ten-day extremes; the daily precipitation chance is now under each day's glyph.",
-      "wire": "Draw a min-max range bar per day scaled to the ten-day extremes in weather.rs:1173 and add precipitation_probability_max to the daily query (data.rs:243)."
-    },
-    {
-      "feature": "Minute-by-minute next-hour precipitation",
-      "area": "forecast",
-      "apple": "Next-hour precipitation chart with a summary sentence",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Next Hour card above the hourly strip: summary sentence and four quarter-hour bars from minutely_15 precipitation (details.rs next_hour_summary, next_hour_bars). Quarter-hour resolution, not per minute.",
-      "wire": "Request minutely_15 precipitation in forecast_url (data.rs:243), add Forecast.minutes in data.rs:169 and draw a Next Hour card above the hourly strip."
-    },
-    {
-      "feature": "Condition-driven backdrop",
-      "area": "view",
-      "apple": "Window background and materials follow sky and time of day",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:166",
-      "note": "Gradient backdrop by sky and day or night.",
-      "wire": ""
-    },
-    {
-      "feature": "UV index tile",
-      "area": "detail",
-      "apple": "UV Index with level word and advice",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1213",
-      "note": "Value and level note.",
-      "wire": ""
-    },
-    {
-      "feature": "Sunrise and sunset tile",
-      "area": "detail",
-      "apple": "Sunrise with sunset in the footer, path of the sun",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Sun path arc with the sun at its position between sunrise and sunset.",
-      "wire": "Draw the day arc with the sun position from the two times in weather.rs:1214."
-    },
-    {
-      "feature": "Wind tile",
-      "area": "detail",
-      "apple": "Wind speed, gusts and direction compass",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Note gives the compass point and gusts; a dotted compass dial marks the direction the wind comes from. No arrow needle or tick labels besides N.",
-      "wire": "Add wind_direction_10m and wind_gusts_10m to the current query (data.rs:243), extend data::Current (data.rs:136) and draw a compass dial in the tile."
-    },
-    {
-      "feature": "Humidity tile",
-      "area": "detail",
-      "apple": "Humidity with dew point",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Note shows the dew point in the temperature unit.",
-      "wire": "Add dew_point_2m to the current query (data.rs:243) and show it as the tile note."
-    },
-    {
-      "feature": "Feels like tile",
-      "area": "detail",
-      "apple": "Apparent temperature with a note why",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1217",
-      "note": "Value with a note comparing it to the real temperature.",
-      "wire": ""
-    },
-    {
-      "feature": "Moon tile",
-      "area": "detail",
-      "apple": "Moon phase and illumination",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1456",
-      "note": "Illumination share and phase name computed locally.",
-      "wire": ""
-    },
-    {
-      "feature": "Precipitation tile",
-      "area": "detail",
-      "apple": "Rain or snow amount for 24 hours and the next days",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Next 24 hours total with tomorrow's amount as the note, mm or in following the unit setting. Snow is not separated from rain.",
-      "wire": "Add precipitation_sum to the daily and precipitation to the hourly query (data.rs:243), a Precipitation tile in weather.rs:1212 and mm or in following the unit setting."
-    },
-    {
-      "feature": "Visibility tile",
-      "area": "detail",
-      "apple": "Visibility distance with a note",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "Visibility in km or mi from the hourly series with a descriptive note.",
-      "wire": "Add visibility to the hourly query (data.rs:243) and a Visibility tile in weather.rs:1212 with km or mi."
-    },
-    {
-      "feature": "Pressure tile",
-      "area": "detail",
-      "apple": "Barometric pressure with a trend dial",
-      "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
-      "note": "hPa or inHg with a Rising, Falling or Steady note from the three-hour change. No trend dial.",
-      "wire": "Add pressure_msl to the current query (data.rs:243) and a Pressure tile in weather.rs:1212 with hPa or inHg and a rising or falling note."
-    },
-    {
-      "feature": "Air quality",
-      "area": "detail",
-      "apple": "Air Quality index card with level and main pollutant",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No air quality source.",
-      "wire": "Query the air-quality endpoint of the forecast service (european_aqi, pm2_5) in data.rs, add Forecast.air and an Air Quality card after the tiles in weather.rs:1212."
-    },
-    {
-      "feature": "Averages",
-      "area": "detail",
-      "apple": "Today's high against the average high for the date",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No climate data.",
-      "wire": "Fetch the archive daily maximum for the same date over the last ten years (data.rs) and add an Averages tile that states the difference."
-    },
-    {
-      "feature": "Temperature chart",
-      "area": "detail",
-      "apple": "Interactive temperature line over the day",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:55",
-      "note": "Line with area fill, labelled axis and times.",
-      "wire": ""
-    },
-    {
-      "feature": "Weather maps",
-      "area": "maps",
-      "apple": "Precipitation, Temperature and Air Quality map overlays with a Map button in the toolbar",
-      "status": "gap",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1275",
-      "note": "The Map card is a latitude and longitude grid with a scale bar and says no tiles are loaded.",
-      "wire": "Use bifrost-maps (springboard/apps/maps-desktop tiles, cache, source) to draw base tiles under the card and add radar overlay tiles from a configurable raster layer URL with a layer switch (Precipitation, Temperature, Air Quality) in the toolbar."
-    },
-    {
-      "feature": "Severe weather alerts",
-      "area": "alerts",
-      "apple": "Alert banner with region and threat level, full alert text",
-      "status": "gap",
-      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:18",
-      "note": "DATA_HAS_ALERTS is false; the footer says alerts are not available.",
-      "wire": "Choose an alert feed (national warning service CAP feed for the place) in data.rs, add Forecast.alerts and restore the banner (removed in 1.5.2) drawn from the shared weather_alert control."
-    },
-    {
-      "feature": "Notifications",
-      "area": "alerts",
-      "apple": "Notifications for severe weather, precipitation starting, rain tomorrow (per-location setting)",
-      "status": "gap",
-      "bifrost": "",
-      "note": "The app posts nothing.",
-      "wire": "Post shell notifications from the 15-minute refresh (weather.rs:112) when an alert or next-hour rain appears and add a per-place Notifications switch in the Locations page."
-    },
-    {
-      "feature": "Units setting",
-      "area": "settings",
-      "apple": "Weather > Settings: Temperature Units Celsius or Fahrenheit, with wind and distance following",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:51",
-      "note": "C and F switch; wind and map scale follow it.",
-      "wire": ""
-    },
-    {
-      "feature": "Refresh and offline cache",
-      "area": "data",
-      "apple": "Updates in the background and keeps the last forecast offline",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:112",
-      "note": "15-minute refresh, disk cache, offline state and retry when the network path returns (services.rs:51).",
-      "wire": ""
-    },
-    {
-      "feature": "Widget timeline",
-      "area": "shell",
-      "apple": "Weather widgets for desktop and Notification Centre",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/services.rs:26",
-      "note": "Current-conditions timeline entries pushed to the shell.",
-      "wire": ""
-    },
-    {
-      "feature": "Data attribution",
-      "area": "legal",
-      "apple": "Weather data attribution link",
-      "status": "parity",
-      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:187",
-      "note": "Footer credits the data service with its terms link.",
-      "wire": ""
-    },
-    {
-      "feature": "URL scheme and user activity",
-      "area": "system",
-      "apple": "weather: URL scheme, user activities WeatherIntent and handoff",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No URL handler or activity registered.",
-      "wire": "Declare a weather:// scheme in manifest.toml and handle open requests in main.rs (main.rs:180) selecting or adding the place named in the URL."
-    },
-    {
-      "feature": "Share and assistant intents",
-      "area": "system",
-      "apple": "Share forecast, Weather intent for assistants and shortcuts",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No sharing and no control methods.",
-      "wire": "Expose current(place) and forecast(place) as app control methods (bifrost-app-control) so Shortcuts and the assistant read them, and add a Share button to the toolbar."
-    },
-    {
-      "feature": "Stocks watchlist",
-      "area": "extra",
-      "apple": "Not part of the reference Weather app",
-      "status": "n/a",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:352",
-      "note": "BifrOSt extra kept beside the forecast; not scored.",
-      "wire": ""
-    }
-  ]
+  {
+   "feature": "Search and add a location",
+   "area": "view",
+   "apple": "Search field finds a city and adds it to the list",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:504",
+   "note": "Sidebar search opens the Locations page with a focused field; results add a place.",
+   "wire": ""
+  },
+  {
+   "feature": "Remove a location",
+   "area": "view",
+   "apple": "Delete from the list (Edit > Delete, swipe, context menu)",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1149 (context_items, the sidebar secondary-click menu with Remove); springboard/apps/weather-desktop/src/weather.rs:1235 (the Delete key)",
+   "note": "Delete or Backspace removes the selected place from the main page, and the sidebar secondary-click menu offers Remove. Not yet verified on Midget.",
+   "wire": "Verify the Delete key and the sidebar context menu on Midget."
+  },
+  {
+   "feature": "Reorder locations",
+   "area": "view",
+   "apple": "Drag rows to reorder the list",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1119 (reorder_places, a drag test at weather.rs:2131); springboard/apps/weather-desktop/src/insights.rs (move_item, follow_selection, drop_index)",
+   "note": "Dragging a sidebar row moves the place, keeps the same place selected and saves the order; the moves are tested headless in insights::tests. Not yet verified on Midget.",
+   "wire": "Verify the sidebar drag on Midget; there is no keyboard reordering and no drag on the Locations page."
+  },
+  {
+   "feature": "My Location",
+   "area": "location",
+   "apple": "First entry follows the device location and asks for permission (NSLocationUsageDescription)",
+   "status": "gap",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:142",
+   "note": "The shell gives apps no location service yet; the authorization is fixed at NotDetermined and the Locations note says so.",
+   "wire": "When the shell exposes a location service, replace the LOCATION constant (weather.rs:142) by a request through bifrost_app::controls::location, insert a My Location place first and refresh it on movement; insights::location_note (insights.rs:167) already words the states."
+  },
+  {
+   "feature": "Current conditions",
+   "area": "forecast",
+   "apple": "Large temperature, condition, high and low for the place",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1112",
+   "note": "Big temperature, condition glyph and name, high and low.",
+   "wire": ""
+  },
+  {
+   "feature": "Hourly forecast",
+   "area": "forecast",
+   "apple": "Scrolling strip of hours with temperature, condition and precipitation chance",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Precipitation chance under each hour's glyph (rounded to 5, hidden below 10). Sunrise and sunset markers between the hours are still missing.",
+   "wire": "Verify on Midget; the strip shows no chance below 10%."
+  },
+  {
+   "feature": "10-day forecast",
+   "area": "forecast",
+   "apple": "Ten days with condition, range bar against the period's range, precipitation chance",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Range bar already scaled to the ten-day extremes; the daily precipitation chance is now under each day's glyph.",
+   "wire": "Verify on Midget; the range bar was already drawn, the chance of precipitation under each glyph is new."
+  },
+  {
+   "feature": "Minute-by-minute next-hour precipitation",
+   "area": "forecast",
+   "apple": "Next-hour precipitation chart with a summary sentence",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Next Hour card above the hourly strip: summary sentence and four quarter-hour bars from minutely_15 precipitation (details.rs next_hour_summary, next_hour_bars). Quarter-hour resolution, not per minute.",
+   "wire": "Verify on Midget; the service gives 15-minute steps, so the card has four bars and a summary sentence, not a per-minute chart."
+  },
+  {
+   "feature": "Condition-driven backdrop",
+   "area": "view",
+   "apple": "Window background and materials follow sky and time of day",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:166",
+   "note": "Gradient backdrop by sky and day or night.",
+   "wire": ""
+  },
+  {
+   "feature": "UV index tile",
+   "area": "detail",
+   "apple": "UV Index with level word and advice",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1213",
+   "note": "Value and level note.",
+   "wire": ""
+  },
+  {
+   "feature": "Sunrise and sunset tile",
+   "area": "detail",
+   "apple": "Sunrise with sunset in the footer, path of the sun",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Sun path arc with the sun at its position between sunrise and sunset.",
+   "wire": "Verify the day arc on Midget."
+  },
+  {
+   "feature": "Wind tile",
+   "area": "detail",
+   "apple": "Wind speed, gusts and direction compass",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Note gives the compass point and gusts; a dotted compass dial marks the direction the wind comes from. No arrow needle or tick labels besides N.",
+   "wire": "Verify the compass dial on Midget; the dial draws a pointer toward the bearing the wind comes from."
+  },
+  {
+   "feature": "Humidity tile",
+   "area": "detail",
+   "apple": "Humidity with dew point",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Note shows the dew point in the temperature unit.",
+   "wire": "Verify the dew point note on Midget."
+  },
+  {
+   "feature": "Feels like tile",
+   "area": "detail",
+   "apple": "Apparent temperature with a note why",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1217",
+   "note": "Value with a note comparing it to the real temperature.",
+   "wire": ""
+  },
+  {
+   "feature": "Moon tile",
+   "area": "detail",
+   "apple": "Moon phase and illumination",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1456",
+   "note": "Illumination share and phase name computed locally.",
+   "wire": ""
+  },
+  {
+   "feature": "Precipitation tile",
+   "area": "detail",
+   "apple": "Rain or snow amount for 24 hours and the next days",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Today's total as the value; the note gives the next 24 hours, or how much of today's total is snow when there is snow. The coming days are not listed. Not yet verified on Midget.",
+   "wire": "The tile lists today's total and the next 24 hours, with snow named when the day has it; it does not list the coming days."
+  },
+  {
+   "feature": "Visibility tile",
+   "area": "detail",
+   "apple": "Visibility distance with a note",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "Visibility in km or mi from the hourly series with a descriptive note.",
+   "wire": "Verify on Midget against the reference tile."
+  },
+  {
+   "feature": "Pressure tile",
+   "area": "detail",
+   "apple": "Barometric pressure with a trend dial",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
+   "note": "hPa or inHg with a Rising, Falling or Steady note from the three-hour change, and a trend dial whose needle follows that change (insights::pressure_dial_angle, weather.rs draw_pressure_dial). Not yet verified on Midget.",
+   "wire": "Verify the trend dial on Midget against the reference tile."
+  },
+  {
+   "feature": "Air quality",
+   "area": "detail",
+   "apple": "Air Quality index card with level and main pollutant",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/weather/data.rs (Air::main_pollutant, Air::advice); springboard/apps/weather-desktop/src/weather.rs (the air quality card)",
+   "note": "The card names the main pollutant, the one furthest over its European Good limit, with its concentration, the index band and the advice for the band. The model is tested headless in springboard/tests/parity_app-weather.rs. Not yet verified on Midget.",
+   "wire": "Verify the taller card on Midget against the reference card."
+  },
+  {
+   "feature": "Averages",
+   "area": "detail",
+   "apple": "Today's high against the average high for the date",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/insights.rs (average_text); springboard/src/shell/weather/data.rs (average_window, parse_average_high)",
+   "note": "The Averages tile shows the difference between today's high and the ten-year mean high of this date from the archive, with a word for it. The kit statistics model (springboard/ui/src/weather_stats.rs) is not used by the app. Not yet verified on Midget.",
+   "wire": "Verify the tile on Midget; move the mean onto weather_stats only if the app needs its percentiles."
+  },
+  {
+   "feature": "Temperature chart",
+   "area": "detail",
+   "apple": "Interactive temperature line over the day",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/insights.rs:55",
+   "note": "Line with area fill, labelled axis and times.",
+   "wire": ""
+  },
+  {
+   "feature": "Weather maps",
+   "area": "maps",
+   "apple": "Precipitation, Temperature and Air Quality map overlays with a Map button in the toolbar",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/insights.rs (map_view, grid, coordinate_label, scale_text); springboard/apps/weather-desktop/src/weather.rs:1707 (the Map card)",
+   "note": "The Map card draws a latitude and longitude grid around the place with a centre mark and a scale bar; the grid is tested headless in insights::tests. Gap: no base map tiles, no Precipitation, Temperature or Air Quality overlays and no layer switch.",
+   "wire": "Use bifrost-maps (springboard/apps/maps-desktop tiles, cache, source) to draw base tiles under the card and add radar overlay tiles from a configurable raster layer URL with a layer switch (Precipitation, Temperature, Air Quality) in the toolbar."
+  },
+  {
+   "feature": "Severe weather alerts",
+   "area": "alerts",
+   "apple": "Alert banner with region and threat level, full alert text",
+   "status": "partial",
+   "bifrost": "springboard/ui/src/weather_alert.rs",
+   "note": "Audit 2026-10-13: kit model ui/src/weather_alert.rs (host tests) already provides this; the app does not use it yet.",
+   "wire": "Choose an alert feed in data.rs, fill bifrost_ui::weather_alert::WeatherAlert, restore the banner."
+  },
+  {
+   "feature": "Notifications",
+   "area": "alerts",
+   "apple": "Notifications for severe weather, precipitation starting, rain tomorrow (per-location setting)",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/notify.rs (RainWatch::check, RainWatch::check_tomorrow)",
+   "note": "Per place, behind the Notify switch: rain starting within the hour, and rain tomorrow at 60 percent or more, once a day. Severe weather alerts are not posted because there is no alert feed. Not yet verified on Midget.",
+   "wire": "Alert notifications need an alert feed (see Severe weather alerts). Verify both notice kinds on Midget."
+  },
+  {
+   "feature": "Units setting",
+   "area": "settings",
+   "apple": "Weather > Settings: Temperature Units Celsius or Fahrenheit, with wind and distance following",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:51",
+   "note": "C and F switch; wind and map scale follow it.",
+   "wire": ""
+  },
+  {
+   "feature": "Refresh and offline cache",
+   "area": "data",
+   "apple": "Updates in the background and keeps the last forecast offline",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:112",
+   "note": "15-minute refresh, disk cache, offline state and retry when the network path returns (services.rs:51).",
+   "wire": ""
+  },
+  {
+   "feature": "Widget timeline",
+   "area": "shell",
+   "apple": "Weather widgets for desktop and Notification Centre",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/services.rs:26",
+   "note": "Current-conditions timeline entries pushed to the shell.",
+   "wire": ""
+  },
+  {
+   "feature": "Data attribution",
+   "area": "legal",
+   "apple": "Weather data attribution link",
+   "status": "parity",
+   "bifrost": "springboard/apps/weather-desktop/src/insights.rs:187",
+   "note": "Footer credits the data service with its terms link.",
+   "wire": ""
+  },
+  {
+   "feature": "URL scheme and user activity",
+   "area": "system",
+   "apple": "weather: URL scheme, user activities WeatherIntent and handoff",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs (Done::Linked, the weather:// link handling)",
+   "note": "weather:// links select a saved place or look a name up and add it, and the lat and lon form adds a position. The SDK has no user activity or handoff service, so the WeatherIntent activity is not registered. Not yet verified on Midget.",
+   "wire": "Register the user activity and handoff when the SDK has a user-activity service."
+  },
+  {
+   "feature": "Share and assistant intents",
+   "area": "system",
+   "apple": "Share forecast, Weather intent for assistants and shortcuts",
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/main.rs (WeatherApp::intents, WeatherApp::perform_intent); springboard/apps/weather-desktop/src/weather.rs (share_text, intent_dialog)",
+   "note": "The Share button sends the selected place's summary to the share menu. A Current Weather intent, a shortcut with no parameters, answers with that summary. Not yet verified on Midget.",
+   "wire": "Verify the intent in Search and Shortcuts on Midget; the weather.* control methods already exist."
+  },
+  {
+   "feature": "Stocks watchlist",
+   "area": "extra",
+   "apple": "Not part of the reference Weather app",
+   "status": "n/a",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:352",
+   "note": "BifrOSt extra kept beside the forecast; not scored.",
+   "wire": ""
+  }
+ ]
 }

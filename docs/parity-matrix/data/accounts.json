@@ -24,9 +24,9 @@
     {
       "feature": "Credentials (ACAccountCredential, OAuth tokens)",
       "apple": "ACAccountCredential: init(oAuthToken:tokenSecret:), init(oAuth2Token:refreshToken:expiryDate:), oauthToken",
-      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete of opaque bytes by service and account)",
+      "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete of opaque bytes by service and account); springboard/sdk/tests/parity_sdk-tests-01d.rs",
       "status": "partial",
-      "note": "An app can store a token itself as an opaque secret. The typed credential (Credential::encode and decode) is kept in memory by the account store and never written to accounts.ini; after a reopen the app sets it again from its keychain item. There is no refresh-token flow beyond renewCredentials, and no shared store between apps for secrets."
+      "note": "An app stores a token itself as an opaque keychain secret, and a_keychain_add_is_sent_with_its_service_account_and_secret checks the add message headless. The typed credential is kept in memory by the account store and not written to accounts.ini; after a reopen the app sets it again from its keychain item. There is no refresh-token flow beyond renewCredentials, and no shared store between apps for secrets."
     },
     {
       "feature": "Account types and access grants (ACAccountType)",
@@ -45,9 +45,9 @@
     {
       "feature": "Sign-in and account creation prompts",
       "apple": "Account sign-in sheets and the 'create account in app' flow of requestAccessToAccounts",
-      "bifrost": "springboard/src/shell/login.rs (desktop sign-in: password field, authentication through privd, lockout)",
-      "status": "os",
-      "note": "Desktop login only. There is no sheet an app can present to add a third-party account."
+      "bifrost": "springboard/src/shell/login.rs (desktop sign-in: password field, authentication through privd, lockout); springboard/sdk/src/sign_in.rs (callback scheme, one-time code lookup)",
+      "status": "partial",
+      "note": "The app-facing sign-in helpers (callback scheme and one-time code lookup) are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: no sheet lets an app create an account or add a third-party one."
     },
     {
       "feature": "Secure secret storage used for credentials",
@@ -59,9 +59,9 @@
     {
       "feature": "BifrOSt account sign-in (cloud)",
       "apple": "Not part of Accounts; Apple's equivalent is Apple Account sign-in",
-      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (BifrOSt Cloud API, separate repo)",
-      "status": "gap",
-      "note": "The cloud account lives on the server and is not exposed to apps through an SDK API in bifrost-os."
+      "bifrost": "springboard/sdk/src/cloud_account.rs (normalize_email, SignIn::request, sign_in, parse_sign_in, sign_out_request); springboard/sdk/tests/parity_sdk-rest-15.rs",
+      "status": "partial",
+      "note": "The sign-in and sign-out requests, the answer reader and the error mapping of the cloud HTTP API are tested headless with canned answers. Gap: the transport runs only on the URL session, which needs the lab machine and a live cloud server; signup, profile, devices and the session store are not exposed."
     },
     {
       "feature": "Errors (ACErrorCode, ACErrorDomain)",

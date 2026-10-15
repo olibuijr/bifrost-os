@@ -454,6 +454,17 @@ impl WmState {
 
     /// A press or touch at `pos` raises and focuses the window there; on the desktop it clears focus.
     pub fn focus_at(&mut self, pos: Point<f64, Logical>, serial: Serial) {
+        if let Some(output) = self.output() {
+            let map = smithay::desktop::layer_map_for_output(&output);
+            let has_exclusive = map.layers().any(|l| {
+                smithay::wayland::compositor::with_states(l.wl_surface(), |states| {
+                    states.cached_state.get::<smithay::wayland::shell::wlr_layer::LayerSurfaceCachedState>().current().keyboard_interactivity == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::Exclusive
+                })
+            });
+            if has_exclusive {
+                return;
+            }
+        }
         let hit = self.wm.at(pos.x as i32, pos.y as i32);
         if hit.is_some() || self.surface_under(pos).is_none() {
             self.focus(hit, serial);

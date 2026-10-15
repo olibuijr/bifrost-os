@@ -12,14 +12,14 @@
       "apple": "EKEventStore, access requests",
       "bifrost": "springboard/ui/src/calendar_access.rs; springboard/src/shell/services/calendar.rs; springboard/sdk/src/calendar.rs",
       "status": "partial",
-      "note": "Read side: the calendar service answers access (authorized when the manifest declares calendars, else denied) and events in a [start, end) range, from the shared store (springboard/src/shell/calendar/store.rs, appdata/is.olibuijr.calendar.desktop/events.tsv); SDK calendar::access / events / decode_events. Not yet: EKEventStore writes, a permission prompt (the manifest is the grant), recurrence expansion in the service, and Midget testing (host unit tests only)"
+      "note": "Read side: the calendar service answers access (authorized when the manifest declares calendars, else denied) and events in a [start, end) range, with each repeating event expanded to its occurrences in the range, from the shared store (springboard/src/shell/calendar/store.rs, appdata/is.olibuijr.calendar.desktop/events.tsv); SDK calendar::access / events / decode_events. Not yet: EKEventStore writes, a permission prompt (the manifest is the grant), and Midget testing (host unit tests only)"
     },
     {
       "feature": "Events",
       "apple": "EKEvent",
-      "bifrost": "springboard/src/shell/calendar/store.rs (CalendarEvent), springboard/ui/src/calendar_store.rs (Event, Span)",
+      "bifrost": "springboard/ui/src/calendar_store.rs (Event, Availability, Span, EventStore::save_event, EventStore::remove_event, EventStore::events_between); springboard/src/shell/calendar/store.rs (CalendarEvent); springboard/ui/tests/parity_sdk-complete-43.rs",
       "status": "partial",
-      "note": "title, location, notes, date, duration, all-day; titles capped at 160 chars; no URL, availability or structured attendees. Sprint 4: calendarItemIdentifier, isAllDay, save/remove with .thisEvent/.futureEvents on repeat-every-N-days events (model only)."
+      "note": "The event model has title, dates, the all-day flag, an identifier, a repeat interval in days, a URL and an availability; saving, removing with the ThisEvent and FutureEvents spans, the access gate, and the URL and availability round trip are verified headless in springboard/ui/tests/parity_sdk-tests-02.rs and parity_sdk-complete-43.rs. Gap: the shell store (location, notes, titles capped at 160 chars) is not wired to this model, and there are no structured attendees."
     },
     {
       "feature": "Reminders",
@@ -52,16 +52,16 @@
     {
       "feature": "Alarms",
       "apple": "EKAlarm",
-      "bifrost": "springboard/apps/calendar-desktop/src/calendar/alerts.rs",
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/alerts.rs (due, step, ALERT_MINUTES)",
       "status": "partial",
-      "note": "relative-offset alerts posted as notifications; no absolute or proximity alarms"
+      "note": "Relative-offset alarms, their alert text, time zones, recurrence with exceptions and the rebuild rule are tested headless in springboard/apps/calendar-desktop/tests/parity_sdk-tests-07-w7.rs. Gap: no absolute or proximity alarms."
     },
     {
       "feature": "Alarm scheduling service",
       "apple": "alarm delivery",
-      "bifrost": "docs/alarm-service-design.md",
-      "status": "os",
-      "note": "design for a scheduler service used by Reminders and Calendar"
+      "bifrost": "springboard/ui/src/os_services/alarm.rs (Alarm::occurs_in, Alarm::next_occurrence, weekday masks); docs/alarm-service-design.md",
+      "status": "partial",
+      "note": "Weekday masks, the grace window and the next-occurrence rule are tested headless. Gap: no scheduler service or RTC wake exists yet, and Reminders and Calendar alerts have no schedule source."
     },
     {
       "feature": "Location-based reminders",

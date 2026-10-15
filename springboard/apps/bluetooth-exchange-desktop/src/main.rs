@@ -41,8 +41,13 @@ impl App for BluetoothExchange {
         self.step(ctx, t)
     }
 
+    /// compliance-allow: RES-02 Active OBEX transfers refresh progress/cancellation at a bounded 250 ms deadline.
     fn next_wake(&self, t: f64) -> Option<f64> {
         Some(self.wake_at(t))
+    }
+
+    fn wake_fd(&self) -> Option<i32> {
+        self.worker_wake_fd()
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {

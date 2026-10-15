@@ -17,9 +17,9 @@
     {
       "feature": "Intent catalog (IntentDefinitions)",
       "apple": "IntentDefinitions, AppIntentDefinition, intents",
-      "bifrost": "springboard/sdk/src/intents.rs (App::intents(), methods(), Intent::to_json at line 145); wired: springboard/apps/shortcuts-desktop/src/widget.rs picker Intents section (title and description of each declared intent)",
+      "bifrost": "springboard/sdk/src/intents.rs (App::intents(), methods(), Intent::to_json); springboard/sdk/src/intent_catalog.rs (Catalog::new, get, shortcuts); springboard/apps/shortcuts-desktop/src/widget.rs (picker Intents section); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/sdk/tests/parity_sdk-complete-45.rs",
       "status": "partial",
-      "note": "The catalog is served as intent.list JSON; there is no typed definition collection for tests Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Catalog::new checks a declared intent list as one set (method-token identifiers, no duplicates, titles, shortcuts with no required parameter) and serves get, ids and shortcuts, tested headless in parity_sdk-complete-45.rs. Gap: dispatch still reads the raw App::intents() list, so the checks run only when an app builds a Catalog; verify the picker on Midget for parity."
     },
     {
       "feature": "Entity queries (suggested, by id, by string)",
@@ -45,7 +45,7 @@
     {
       "feature": "Entity annotation and onscreen context",
       "apple": "ViewAnnotation (entity, isSelected)",
-      "bifrost": "springboard/ui/src/onscreen_entity.rs; wired: springboard/ui/src/onscreen_entity.rs (used by springboard/apps/shortcuts-desktop/src/automation.rs onscreen_context, frontmost; src/widget.rs on_screen; src/main.rs frontmost)",
+      "bifrost": "springboard/ui/src/onscreen_entity.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs; wired: springboard/ui/src/onscreen_entity.rs (used by springboard/apps/shortcuts-desktop/src/automation.rs onscreen_context, frontmost; src/widget.rs on_screen; src/main.rs frontmost)",
       "status": "partial",
       "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No API to annotate a view with an entity; the accessibility tree (bifrost_ui::ax, springboard/ui/src/ax.rs) carries labels but no entity link Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },

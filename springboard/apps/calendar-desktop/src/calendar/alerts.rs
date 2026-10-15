@@ -1,6 +1,7 @@
 //! Event alerts: pure computation of which alarms fall in a time window, and
 //! the `AlertState` the app polls to post due ones as notifications.
 use super::exchange;
+use super::extras::{self, Extras};
 use super::ics::{IcsCalendar, IcsEvent};
 use super::store::CalendarEvent;
 use super::{recur, Calendar, Date};
@@ -8,19 +9,42 @@ use springboard::shell::clock::Wall;
 
 /// How far ahead one scan looks; the state rescans when it runs out.
 const SCAN_SECS: i64 = 3 * 86_400;
-const REPEAT_RULES: [&str; 6] = ["", "FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2", "FREQ=MONTHLY", "FREQ=YEARLY"];
+pub const REPEAT_RULES: [&str; 6] = ["", "FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2", "FREQ=MONTHLY", "FREQ=YEARLY"];
 /// Minutes before the start for each `CalendarEvent::alert` choice.
-const ALERT_MINUTES: [Option<u32>; 7] = [None, Some(0), Some(5), Some(15), Some(30), Some(60), Some(1440)];
+pub const ALERT_MINUTES: [Option<u32>; 7] = [None, Some(0), Some(5), Some(15), Some(30), Some(60), Some(1440)];
 
 /// Store events plus rich events as one calendar whose store events carry
 /// their alert and repeat choices, which the .ics conversion leaves out.
 pub fn alert_calendar(store: &[CalendarEvent], rich: &IcsCalendar) -> IcsCalendar {
+    alert_calendar_with(store, rich, &Extras::default())
+}
+
+/// `alert_calendar` with the extras (`extras.rs`): an event's own alarms, its custom repeat rule and its zone replace
+/// the presets the store keeps.
+pub fn alert_calendar_with(store: &[CalendarEvent], rich: &IcsCalendar, extras: &Extras) -> IcsCalendar {
     let mut cal = exchange::build_export("", store, rich);
     for e in &mut cal.events {
         let id = e.uid.strip_suffix("@springboard.tab").and_then(|i| i.parse::<u64>().ok());
         let Some(s) = id.and_then(|id| store.iter().find(|s| s.id == id)) else { continue };
-        e.alarms = ALERT_MINUTES.get(s.alert as usize).copied().flatten().into_iter().collect();
-        e.rule = REPEAT_RULES.get(s.repeat as usize).and_then(|r| recur::parse_rrule(r));
+        let own = extras.events.get(&s.id);
+        e.alarms = match own.and_then(|x| x.alarms.clone()) {
+            Some(list) => list,
+            None => ALERT_MINUTES.get(s.alert as usize).copied().flatten().into_iter().collect(),
+        };
+        e.rule = match own.and_then(|x| x.rrule.as_deref()) {
+            Some(text) => recur::parse_rrule(text),
+            None => REPEAT_RULES.get(s.repeat as usize).and_then(|r| recur::parse_rrule(r)),
+        };
+        if let Some(zone) = own.and_then(|x| x.tzid.as_deref()).filter(|_| !e.all_day) {
+            e.tzid = Some(zone.to_string());
+        }
+    }
+    // a zone an event names must be known to the calendar, or its alarms would fall back to the device's zone
+    let zones: Vec<String> = cal.events.iter().filter_map(|e| e.tzid.clone()).collect();
+    for zone in zones {
+        if let (false, Some(minutes)) = (cal.timezones.iter().any(|(n, _)| *n == zone), extras::zone_minutes(&zone)) {
+            cal.timezones.push((zone, minutes));
+        }
     }
     cal
 }
@@ -73,8 +97,8 @@ impl AlertState {
 impl Calendar {
     /// Alerts that came due since the last call; the app posts each as a notification.
     pub fn take_alerts(&mut self, t: f64) -> Vec<Alert> {
-        let (events, path) = (&self.events, &self.path);
-        let load = || alert_calendar(events, &exchange::load_rich(&exchange::rich_path(path)));
+        let (events, path, extras) = (&self.events, &self.path, &self.extras);
+        let load = || alert_calendar_with(events, &exchange::load_rich(&exchange::rich_path(path)), extras);
         step(&mut self.alerts, self.wall.now(t), self.changes.generation(), self.wall.offset, load)
     }
 

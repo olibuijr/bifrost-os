@@ -10,9 +10,9 @@
     {
       "feature": "HTTP and URL-based loading",
       "apple": "URLSession (the framework page says to use URLSession for HTTP and URL loading)",
-      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); wired: springboard/apps/news-desktop/src/feed_cache.rs (Conditional::get over bifrost_app::url::URLSession::shared().bytes)",
+      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/src/url_configuration.rs (URLSessionConfiguration, CachePolicy); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); wired: springboard/apps/news-desktop/src/feed_cache.rs (Conditional::get over bifrost_app::url::URLSession::shared().bytes)",
       "status": "partial",
-      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache. No URLSessionConfiguration, delegates, background sessions, upload tasks or HTTP/2 Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache, and a URLSessionConfiguration model (request timeout cap, session headers, cache policy actions, resource expiry, connections per host; headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the transport does not read the configuration yet, and HTTP/2 is missing; the row needs a Midget check."
     },
     {
       "feature": "Connections (NWConnection) to a remote endpoint",
@@ -31,16 +31,16 @@
     {
       "feature": "Service discovery on the local network",
       "apple": "NWBrowser, Bonjour (struct Bonjour, Bonjour Listener Provider)",
-      "bifrost": "springboard/core/src/dns_browse.rs, springboard/sdk/src/network_browser.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs and springboard/sdk/src/network_path.rs (partial: browse lifecycle only, no daemon)",
+      "bifrost": "springboard/core/src/dns_browse.rs, springboard/sdk/src/network_browser.rs; springboard/core/tests/parity_sdk-tests-05.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs and springboard/sdk/src/network_path.rs (partial: browse lifecycle only, no daemon)",
       "status": "partial",
-      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon is a private protocol for nearby sharing. No mDNS or DNS-SD, and no browse or advertise API for apps Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Service type rules, browse and resolve replies, and name building are tested headless in core/tests/parity_sdk-tests-05.rs, and the SDK exposes the browser under its own names in sdk/src/network_browser.rs. The shell's network service runs browse references over this model. Gaps: replies are fed in, with no socket or daemon query; there is no advertise or registration API; and the nearby-sharing beacon is a private protocol, not DNS-SD. Verify on Midget for parity."
     },
     {
       "feature": "Multicast groups",
       "apple": "NWConnectionGroup",
-      "bifrost": "springboard/src/net/share.rs (join_multicast_v4)",
-      "status": "os",
-      "note": "Multicast is used inside the shell only. No app API"
+      "bifrost": "springboard/ui/src/multicast.rs (MulticastMembership); springboard/src/net/share.rs (join_multicast_v4)",
+      "status": "partial",
+      "note": "Group membership rules, the 224.0.0.0/4 range and send options are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the model opens no socket, so the shell's join is not driven by it, and apps still cannot join a group."
     },
     {
       "feature": "Custom Ethernet frames",
@@ -59,9 +59,9 @@
     {
       "feature": "TLS and security options",
       "apple": "NWProtocolTLS, sec_protocol_options_t, sec_protocol_metadata_t, sec_identity_t",
-      "bifrost": "springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots); springboard/sdk/src/keychain.rs (keychain items)",
-      "status": "os",
-      "note": "TLS is fixed in the shell (rustls). No handshake options, verify blocks, client identities, or TLS metadata for apps"
+      "bifrost": "springboard/ui/src/tls_options.rs (TlsOptions, Trust); springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots)",
+      "status": "partial",
+      "note": "Version range, protocol names, server name and pinned trust are validated headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: no handshake uses these options yet, the shell's client is still fixed, and client identities and TLS metadata are missing."
     },
     {
       "feature": "QUIC, WebSocket and custom framers",
@@ -87,16 +87,16 @@
     {
       "feature": "Network debugging and diagnostics",
       "apple": "CFNetwork diagnostic logging, packet trace, Debugging HTTP Server-Side Errors",
-      "bifrost": "springboard/core/src/log.rs (Logger, bifrost-log); springboard/sdk/src/log.rs; wired: springboard/src/shell/pages.rs (WifiDetail DIAGNOSTICS group shows a saved network's failure note; DETAILS group shows interface, IPv4 method and DNS)",
+      "bifrost": "springboard/core/src/log.rs (Level, redact, encode_datagram, Logger); springboard/core/tests/parity_sdk-tests-01d.rs; springboard/sdk/src/log.rs; springboard/sdk/src/http_log.rs (Exchange, redact_url); wired: springboard/src/shell/pages.rs (WifiDetail DIAGNOSTICS group shows a saved network's failure note; DETAILS group shows interface, IPv4 method and DNS)",
       "status": "partial",
-      "note": "Apps can log through os.Logger. No packet traces, no CFNetwork-style HTTP logging, and no network inspector Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Apps log through os.Logger with levels, privacy redaction and journal encoding (log_levels_map_to_syslog_priorities_and_back, private_values_are_redacted_unless_the_subsystem_shows_them, a_multi_line_journal_value_is_length_prefixed). HTTP exchanges have a one-line summary with a redacted URL (credential query values and passwords removed), status, body size, duration and an outcome-based level (headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the transport does not write these summaries yet, and there are no packet traces or network inspector."
     },
     {
       "feature": "Privacy attribution and local network identity",
       "apple": "nw_parameters_set_attribution, App Privacy Report, Creating an Identity for Local Network TLS",
-      "bifrost": "springboard/src/bare/app_policy.rs (native-app sandbox)",
-      "status": "gap",
-      "note": "The sandbox limits app access, but there is no per-connection attribution and no local-network permission prompt"
+      "bifrost": "springboard/ui/src/network_attribution.rs (is_local_destination, LocalNetwork, Attribution); springboard/src/bare/app_policy.rs (native-app sandbox)",
+      "status": "partial",
+      "note": "Local destination detection, the per-app local-network answer and the per-app connection record are tested headless in springboard/ui/tests/parity_sdk-gaps-01.rs. Gap: the network service does not call these models yet, so no permission prompt appears and connections are not attributed to apps."
     },
     {
       "feature": "Web content loading in a view",

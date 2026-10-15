@@ -20,9 +20,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.apache.httpd.plist",
@@ -41,9 +41,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cups-lpd.plist",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
+   "status": "partial",
+   "note": "rule: CUPS client and IPP models; Print Center app",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cupsd.plist",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
+   "status": "partial",
+   "note": "rule: CUPS client and IPP models; Print Center app",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.net-snmp.snmpd.plist",
@@ -104,9 +104,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.openldap.slapd.plist",
@@ -125,9 +125,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
    "rea": [],
-   "method": "heuristic"
+   "method": "rule"
   }
  ]
 }

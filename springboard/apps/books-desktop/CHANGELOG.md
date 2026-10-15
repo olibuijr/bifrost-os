@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.9.0
+
+- The rule that opens a book after an import now lives in `books::share`: a lone PDF shared to Books opens at once,
+  and a batch or a book chosen in File > Add to Library only joins the shelf. Headless tests cover the rule in
+  `books::share_tests`.
+- Parity: the Save PDF to Books share target is recorded against that rule and its tests. Font family choice,
+  audiobooks and the Settings window are not built yet.
+
+## 1.8.0 — 2026-10-14
+
+- View > Sort By gains Progress: the books furthest along the reader come first, and books with the same progress are
+  ordered by title. The choice is kept like the other sort orders.
+- The unused shelf model that duplicated the library's collections, marks, goal and display settings is removed; the
+  library's own code is the one that runs.
+- Parity: the Library, View and Find menus, the reading settings and the reading goal are recorded against the code
+  that runs them, with the headless tests that cover them. Font family choice and the Settings window are not built yet.
+
 ## 1.7.0 — 2026-10-13
 
 - Library: Want to Read and Finished are collections in the sidebar, and a book carries the label under its cover. The

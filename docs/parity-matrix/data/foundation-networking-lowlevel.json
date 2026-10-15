@@ -24,9 +24,9 @@
     {
       "feature": "URL Loading: cookies, credentials, authentication challenges",
       "apple": "HTTPCookieStorage, URLCredentialStorage, URLAuthenticationChallenge",
-"bifrost": "springboard/sdk/src/http_auth.rs; springboard/sdk/src/http_cookies.rs; springboard/sdk/src/url_background.rs (ConfiguredSession wires jar, credential storage and delegate)",
+"bifrost": "springboard/sdk/src/http_auth.rs; springboard/sdk/src/http_digest.rs (parse_digest_challenge, authorization); springboard/sdk/src/http_cookies.rs; springboard/sdk/src/url_background.rs (ConfiguredSession wires jar, credential storage and delegate)",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Added later, host tests only: cookie jar (accept policy Always/Never) and credential storage are used by ConfiguredSession; a 401 Basic challenge goes to the delegate and is retried once. Digest, client-certificate and server-trust challenges, and AcceptPolicy.onlyFromMainDocumentDomain are not done. Host tests only; verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Host tests only: cookie jar (accept policy Always/Never) and credential storage are used by ConfiguredSession; a 401 Basic challenge goes to the delegate and is retried once. The Digest (MD5, qop auth) challenge is parsed and answered headless in springboard/sdk/tests/parity_sdk-complete-41.rs, including the RFC 2617 worked example, but ConfiguredSession does not send it yet. Gap: client-certificate and server-trust challenges and AcceptPolicy.onlyFromMainDocumentDomain are not done; verify on Midget for parity."
     },
     {
       "feature": "URL Loading: WebSocket and streaming tasks",
@@ -80,9 +80,9 @@
     {
       "feature": "Processes and Threads: launching child processes",
       "apple": "Process, Pipe",
-      "bifrost": "springboard/src/bare/app_policy.rs; springboard/src/bare/app_manager.rs",
-      "status": "os",
-      "note": "shell launches sandboxed apps under bubblewrap and cgroups; apps get no Process/Pipe wrapper (Rust std::process is available)"
+      "bifrost": "springboard/sdk/src/child_process.rs (ProcessSpec, Termination, Finished); springboard/src/bare/app_policy.rs; springboard/src/bare/app_manager.rs",
+      "status": "partial",
+      "note": "Apps build a checked launch (absolute program, no NUL bytes, valid environment names), run it, and read the exit code or signal and both outputs (tested headless in springboard/sdk/tests/parity_sdk-rest-02.rs). Gap: the child is not confined by the shell's bubblewrap or cgroup policy, and pipes between processes are not exposed; the launch needs the lab machine to verify."
     },
     {
       "feature": "Streams, Sockets, Ports",

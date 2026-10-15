@@ -166,8 +166,8 @@
    "role": "no optical media player. Build: ISO/UDF playback, menus, chapters, audio and subtitle tracks, reusing videoplayer-desktop decoding",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no optical media player. Build: ISO/UDF playback, menus, chapters, audio and subtitle tracks, reusing videoplayer-desktop decoding",
+   "status": "n/a",
+   "note": "No optical drive target: BifrOSt runs on PCs and tablets without an optical reader, so disc menus and ISO or UDF playback are not built. Local video files play in the video player app.",
    "rea": [],
    "method": "assessed"
   },
@@ -270,9 +270,9 @@
    "description": "",
    "role": "no folder action hooks. Build: attach a script or shortcut to a folder, fired when items are added; needs a folder watcher in the shell",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no folder action hooks. Build: attach a script or shortcut to a folder, fired when items are added; needs a folder watcher in the shell",
+   "bifrost": "springboard/sdk/src/fswatch.rs (WatchStream)",
+   "status": "partial",
+   "note": "The folder watcher exists: recursive inotify with coalesced events in fswatch.rs. Gap: nothing attaches a script or shortcut to a folder, and the shell does not run one when items arrive.",
    "rea": [],
    "method": "assessed"
   }

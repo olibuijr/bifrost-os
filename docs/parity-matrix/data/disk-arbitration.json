@@ -19,7 +19,7 @@
       "apple": "DASessionCreate, DASessionScheduleWithRunLoop, DASessionSetDispatchQueue",
       "bifrost": "springboard/sdk/src/disk_arbitration.rs (DiskSession), springboard/src/shell/services/disks.rs",
       "status": "partial",
-      "note": "Sprint 3: DiskSession::create, set_dispatch_queue and schedule_with_run_loop (main queue); callbacks run on that queue. Host unit tests only; needs a Midget check with a real USB disk. No run loop object, no peek callback."
+      "note": "DiskSession creation, the main-queue scheduling, the list reply, the appear, leave and description-change callbacks, duplicate suppression and the plan replies are tested headless in sdk/tests/parity_sdk-tests-02.rs (disks module). Gaps: no run loop object, no peek callback, and no run on a real USB disk on Midget."
     },
     {
       "feature": "Mount, unmount, eject and rename commands (DADiskMount, DADiskUnmount, DADiskEject, DADiskRename)",
@@ -52,16 +52,16 @@
     {
       "feature": "Volumes in the Files sidebar",
       "apple": "Finder volume list (Disk Arbitration supplies the data; the UI is not in this framework)",
-      "bifrost": "springboard/src/shell/services/disks.rs (data and events); Files app UI not done (apps owned elsewhere)",
+      "bifrost": "springboard/src/shell/services/disks.rs (data and events; rescan and handle tested headless in springboard/tests/parity_sdk-tests-02.rs); Files app UI not done (apps owned elsewhere)",
       "status": "partial",
-      "note": "Sprint 3: the data feed for a Volumes section exists (list, describe, appear and disappear events). The Files sidebar does not use it yet, and document grants still cannot reach a mounted volume."
+      "note": "The Volumes data feed (list, describe, appear, leave and mount events, validated plans and claims) is tested headless through the public service API. Gap: the Files sidebar does not use it yet, and document grants still cannot reach a mounted volume."
     },
     {
       "feature": "Sandbox access to udev data for apps",
       "apple": "Not part of the framework (system-level device data)",
-      "bifrost": "springboard/src/bare/app_policy.rs:245 (bubblewrap binds /sys and /run/udev read-only, try-bind)",
-      "status": "os",
-      "note": "The sandbox exposes device data to apps read-only, but no SDK API wraps it."
+      "bifrost": "springboard/sdk/src/udev.rs (read, read_in, DbId, Record); springboard/core/src/udev_db.rs (parse_record); springboard/src/bare/app_policy.rs:367 (bubblewrap binds /sys and /run/udev read-only, try-bind)",
+      "status": "partial",
+      "note": "The udev database record of a device (properties, symlinks, tags, malformed lines, missing records) is read and checked headless in sdk/tests/parity_sdk-rest-13.rs. Gap: the sandbox mounts /run/udev only for native apps, no record has been read on Midget, and apps must poll because there is no change feed."
     }
   ],
   "gaps": [

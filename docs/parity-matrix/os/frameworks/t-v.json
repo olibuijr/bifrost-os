@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/ui/src/scanner.rs (parse_list, parse_help)",
+   "status": "partial",
+   "note": "Scanners are listed from scanimage -L and their options parsed from its help text in ui::scanner, and the Print & Scan page shows them. Gap: no app-facing scan session API.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/TabularData.framework",
@@ -60,9 +60,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "packaging/arch/runtime-packages.txt (tk)",
+   "status": "os",
+   "note": "Tcl comes in as a dependency of the tk runtime package. Apps get no SDK API for Tcl scripts.",
    "rea": [],
    "method": "heuristic"
   },
@@ -82,10 +82,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "status": "n/a",
+   "note": "Carrier telephony messaging has no BifrOSt transport or counterpart.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ThreadNetwork.framework",
@@ -144,9 +144,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "packaging/arch/runtime-packages.txt (tk)",
+   "status": "os",
+   "note": "The Tk toolkit ships as an Arch runtime package. Apps get no SDK API for Tk widgets.",
    "rea": [],
    "method": "heuristic"
   },
@@ -270,11 +270,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "springboard/src/media/hwdec/mod.rs; springboard/src/media/hwdec/vaapi.rs; springboard/src/media/hwdec/ffmpeg.rs",
+   "status": "partial",
+   "note": "VA-API decode runs through a dlopened libavcodec with a software fallback; NAL splitting and NV12 conversion are tested headless. Gap: hardware decode is unverified on the lab machine and no app-facing decode API exists.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/VideoSubscriberAccount.framework",
@@ -354,11 +354,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/sdk/src/image_analysis.rs, springboard/ui/src/subject_lift.rs, springboard/ui/src/scan.rs",
+   "status": "partial",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/Frameworks/VisionKit.framework",

@@ -9,7 +9,9 @@
 //! uploads unchanged; the XBGR target has the byte order of `gfx` frames.
 
 pub mod batch;
+pub mod buffer_pool;
 pub mod damage;
+pub mod render_path;
 pub mod error;
 pub mod filter_kernels;
 pub mod health;

@@ -31,9 +31,9 @@
     {
       "feature": "Fetch requests and predicates",
       "apple": "NSFetchRequest, NSPredicate, NSSortDescriptor (https://developer.apple.com/documentation/coredata/nsfetchrequest)",
-      "bifrost": "springboard/core/src/migrate.rs, springboard/ui/src/fetch.rs, springboard/ui/src/history.rs; wired: springboard/apps/reminders-desktop/src/model.rs (impl Record for Reminder, Smart::predicate, Smart::count via fetch_indices); wired: springboard/apps/notes-desktop/src/notes/smart.rs (Smart::predicate, Smart::matches, Fields record); springboard/apps/notes-desktop/src/notes/mod.rs (visible, smart_cutoff); springboard/apps/notes-desktop/src/notes/chrome.rs (Smart Folders sidebar rows, count_in)",
+      "bifrost": "springboard/ui/src/fetch.rs (Field, Predicate, Op, SortDescriptor, FetchRequest, fetch, fetch_indices); tests: springboard/ui/tests/parity_sdk-complete-38.rs; wired: Smart Folders in springboard/apps/reminders-desktop/src/model.rs and springboard/apps/notes-desktop/src/notes/smart.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Queries are ordinary Rust iterator code over in-memory vectors. No fetch request object, no predicate language, no batch or offset fetching. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "FetchRequest carries a predicate (comparisons, set membership, inclusive ranges, case-insensitive containment and prefix match, and, or, not), sort keys with direction, an offset and a limit over in-memory records, verified headless by springboard/ui/tests/parity_sdk-tests-02.rs and parity_sdk-complete-38.rs. Gap: there is no predicate language or string parser, no batched or persistent fetching, and it is not yet tested on Midget."
     },
     {
       "feature": "Asynchronous fetch results",
@@ -82,7 +82,7 @@
       "apple": "Lightweight, staged and manual migrations, NSMigrationManager (https://developer.apple.com/documentation/coredata/migrating-your-data-model-automatically)",
       "bifrost": "springboard/src/shell/contactstore.rs (HEADER springboard-contacts-v1), springboard/src/shell/calendar/store.rs (HEADER springboard-calendar-v1), springboard/sdk/src/restoration.rs (foreign or corrupt state ignored)",
       "status": "partial",
-      "note": "Stores carry a version header and reject foreign files, but there is no migration path between versions and no mapping model."
+      "note": "Stores carry a version header and reject foreign files: the contacts and calendar files are tested headless in springboard/tests/parity_sdk-tests-03.rs, and restorable state ignores and removes a foreign or corrupt file in springboard/sdk/tests/parity_sdk-tests-03b.rs. There is no migration path between versions and no mapping model."
     },
     {
       "feature": "Preference storage",

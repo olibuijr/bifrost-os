@@ -4,8 +4,9 @@
 
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON};
+use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SPACE_XS};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
@@ -14,8 +15,7 @@ use bifrost_ui::stardict::{load_library, Hit, Library};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-mod model;
-use model::{History, Prefs};
+use bifrost_dictionary::model::{self, History, Prefs};
 
 const MENU_LOOK_UP_CLIPBOARD: u32 = 1;
 const MENU_COPY_DEFINITION: u32 = 2;
@@ -370,8 +370,7 @@ impl DictionaryApp {
         if self.shown.is_none() {
             return;
         }
-        let text = self.visible_hits().iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n");
-        ctx.set_pasteboard_string(&text);
+        ctx.set_pasteboard_string(&model::definition_text(&self.visible_hits()));
     }
 
     /// Sends the definitions on screen to the default printer on its own thread, so the window keeps drawing.
@@ -381,9 +380,9 @@ impl DictionaryApp {
         if hits.is_empty() {
             return false;
         }
-        let body = hits.iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n");
+        let body = model::definition_text(&hits);
         let job = bifrost_app::print::PrintOperation::text(shown.word.clone(), format!("{}\n\n{body}", shown.word));
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             if let Err(e) = job.run() {
                 eprintln!("Dictionary print: {e:?}");
             }
@@ -649,7 +648,7 @@ fn button(canvas: &mut dyn Canvas, ui: &Ui, hot: &mut Vec<Hot>, x: f32, y: f32, 
     let r = RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h));
     canvas.fill_rrect(r, ui.pt(6.0), if strong { SEGMENT_ON.now() } else { FIELD_BG.now() });
     let colour = if act.is_some() { LABEL.now() } else { LABEL_3.now() };
-    let img = ui.text(&ui.fit(label, MAC_SUBHEAD_PT, r.w - ui.pt(4.0)), MAC_SUBHEAD_PT, Weight::Regular, colour);
+    let img = ui.text(&ui.fit(label, MAC_SUBHEAD_PT, r.w - ui.pt(SPACE_XS)), MAC_SUBHEAD_PT, Weight::Regular, colour);
     widgets::blit(canvas, &img, (r.x + (r.w - img.w as f32) / 2.0) as i32, (r.y + (r.h - img.h as f32) / 2.0) as i32);
     if let Some(act) = act {
         hot.push(Hot { x, y, w, h, act });
@@ -734,6 +733,7 @@ impl App for DictionaryApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination();
         if self.library.is_none() {
             self.folder = ctx.data_dir.join("dictionaries").display().to_string();
             let library = load_library(&ctx.data_dir);
@@ -786,7 +786,7 @@ impl App for DictionaryApp {
             MENU_PRINT => self.print_definition(),
             MENU_OPEN_FOLDER => {
                 let _ = std::fs::create_dir_all(&self.folder);
-                ctx.open_url(&format!("file://{}", self.folder));
+                ctx.open_url(&model::folder_url(&self.folder));
                 false
             }
             MENU_CLEAR => {

@@ -460,7 +460,7 @@ impl VoiceMemos {
         }
         self.input_id = id;
         self.input_name = name;
-        self.inputs = listing.devices.iter().filter(|d| d.input).map(|d| (d.id.clone(), d.name.clone())).collect();
+        self.inputs = listing.devices.iter().filter(|d| d.can_input).map(|d| (d.id.clone(), d.name.clone())).collect();
     }
 
     /// Chooses the input device for recording (the Recording menu's Input submenu). The shell reports the change and
@@ -2113,7 +2113,7 @@ impl VoiceMemos {
                 s.fill_rrect(mx, my, fill.max(h), h, h / 2.0, BLUE);
             }
             let readout = meter_title(self.input_level);
-            self.centred(s, ui, &readout, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, my + h + ui.pt(SPACE_XS), pw, ui.pt(20.0)));
+            self.centred(s, ui, &readout, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, my + h + ui.pt(SPACE_XS), pw, ui.pt(SPACE_XL)));
         } else if let Some(memo) = memo {
             if self.peaks_for.as_deref() != Some(memo.path.as_path()) {
                 self.peaks = store::peaks(&memo.path, 256);

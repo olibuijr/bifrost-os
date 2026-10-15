@@ -21,6 +21,35 @@ pub enum MediaDuration {
     Live,
 }
 
+/// The typed content classes an item can be described as: `MusicContent`, `PodcastContent`, `MovieContent`,
+/// `TVShowContent`, `BookContent`, `RadioContent` and `GenericContent`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ContentKind {
+    #[default]
+    Generic,
+    Music,
+    Podcast,
+    Movie,
+    TvShow,
+    Book,
+    Radio,
+}
+
+impl ContentKind {
+    /// The name the shell's now playing service reads for this kind.
+    pub fn name(self) -> &'static str {
+        match self {
+            ContentKind::Generic => "generic",
+            ContentKind::Music => "music",
+            ContentKind::Podcast => "podcast",
+            ContentKind::Movie => "movie",
+            ContentKind::TvShow => "tv_show",
+            ContentKind::Book => "book",
+            ContentKind::Radio => "radio",
+        }
+    }
+}
+
 /// The cases `MediaContent::new` and `MediaDuration::finite_seconds` reject.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ContentError {
@@ -75,6 +104,7 @@ pub struct MediaContent {
     pub media_type: MediaType,
     pub duration: MediaDuration,
     pub is_explicit: bool,
+    pub kind: ContentKind,
 }
 
 impl MediaContent {
@@ -96,7 +126,14 @@ impl MediaContent {
             media_type,
             duration,
             is_explicit: false,
+            kind: ContentKind::Generic,
         })
+    }
+
+    /// Describes the item as one of the typed content classes. Items start as `Generic`.
+    pub fn with_kind(mut self, kind: ContentKind) -> Self {
+        self.kind = kind;
+        self
     }
 
     /// The artist and album joined for a card line, `Artist - Album`, skipping whatever is missing.

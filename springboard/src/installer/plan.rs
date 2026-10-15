@@ -5,7 +5,8 @@
 use super::disks::{partition_commands, Disk, Mode};
 use super::keymaps::Layout;
 use std::fmt::Write as _;
-use std::io::Write;
+use std::io::{Read, Write};
+use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -88,6 +89,290 @@ pub fn offline_pacman_conf(mirror: &str) -> String {
         "[options]\nHoldPkg = pacman glibc\nArchitecture = auto\nParallelDownloads = 4\nSigLevel = Required DatabaseOptional\n\
          LocalFileSigLevel = Optional\n\n[offline]\nSigLevel = Never\nServer = {mirror}\n"
     )
+}
+
+pub const OFFLINE_BUNDLE_ROOT: &str = "/usr/share/bifrost/offline";
+const OFFLINE_BUNDLE_SCHEMA: u64 = 1;
+
+#[derive(Clone, Debug)]
+pub struct OfflineApp {
+    pub id: String,
+    pub version: String,
+    pub file: PathBuf,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct OfflineBundle {
+    pub root: PathBuf,
+    pub repo: PathBuf,
+    pub database: PathBuf,
+    pub shell: PathBuf,
+    pub shell_sha256: String,
+    pub apps: Vec<OfflineApp>,
+    pub packages: Vec<String>,
+}
+
+fn json_string(v: &bifrost_core::json::Json, key: &str) -> Result<String, String> {
+    v.get(key).and_then(bifrost_core::json::Json::as_str).map(str::to_string)
+        .ok_or_else(|| format!("offline bundle manifest: {key} must be a string"))
+}
+
+fn safe_relative(value: &str) -> bool {
+    let path = Path::new(value);
+    !value.is_empty() && !path.is_absolute() && path.components().all(|c| matches!(c, Component::Normal(_)))
+}
+
+fn bundle_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    if !safe_relative(relative) {
+        return Err(format!("offline bundle has unsafe path: {relative}"));
+    }
+    let root = root.canonicalize().map_err(|e| format!("offline bundle root: {e}"))?;
+    let path = root.join(relative);
+    let meta = std::fs::symlink_metadata(&path).map_err(|e| format!("offline bundle missing {relative}: {e}"))?;
+    if !meta.file_type().is_file() {
+        return Err(format!("offline bundle entry is not a regular file: {relative}"));
+    }
+    let canonical = path.canonicalize().map_err(|e| format!("offline bundle {relative}: {e}"))?;
+    if !canonical.starts_with(&root) {
+        return Err(format!("offline bundle path escapes bundle root: {relative}"));
+    }
+    Ok(canonical)
+}
+
+fn bundle_database(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    if !safe_relative(relative) { return Err(format!("offline bundle has unsafe database path: {relative}")); }
+    let root = root.canonicalize().map_err(|e| format!("offline bundle root: {e}"))?;
+    let path = root.join(relative);
+    if !path.is_file() { return Err(format!("offline bundle database is missing: {relative}")); }
+    let canonical = path.canonicalize().map_err(|e| format!("offline bundle database {relative}: {e}"))?;
+    if !canonical.starts_with(&root) { return Err("offline bundle database escapes bundle root".into()); }
+    Ok(canonical)
+}
+
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let mut file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut hash = bifrost_core::sha256::Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| format!("{}: {e}", path.display()))?;
+        if n == 0 { break; }
+        hash.update(&buf[..n]);
+    }
+    Ok(bifrost_core::sha256::hex(&hash.finish()))
+}
+
+fn checked_entry(root: &Path, relative: &str, expected: &str) -> Result<PathBuf, String> {
+    if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!("offline bundle has invalid SHA-256 for {relative}"));
+    }
+    let path = bundle_path(root, relative)?;
+    if sha256_file(&path)? != expected.to_ascii_lowercase() {
+        return Err(format!("offline bundle checksum mismatch: {relative}"));
+    }
+    Ok(path)
+}
+
+/// Finds and verifies the ISO bundle. A missing root means this is not a bundled ISO; an existing but incomplete root
+/// fails closed. Every listed package is hashed, while pacman preflight below verifies the database and dependency closure.
+pub fn discover_offline_bundle(root: &Path) -> Result<Option<OfflineBundle>, String> {
+    if !root.exists() { return Ok(None); }
+    let manifest_path = root.join("manifest.json");
+    if !manifest_path.is_file() {
+        return Err(format!("offline bundle is incomplete: missing {}", manifest_path.display()));
+    }
+    let text = std::fs::read_to_string(&manifest_path).map_err(|e| format!("offline bundle manifest: {e}"))?;
+    let manifest = bifrost_core::json::parse(&text).map_err(|e| format!("offline bundle manifest: {e}"))?;
+    if manifest.get("schema_version").and_then(bifrost_core::json::Json::as_u64) != Some(OFFLINE_BUNDLE_SCHEMA) {
+        return Err("offline bundle manifest has an unsupported schema_version".into());
+    }
+    let repo_info = manifest.get("repo").ok_or("offline bundle manifest has no repo object")?;
+    let repo_rel = json_string(repo_info, "path")?;
+    let db_rel = json_string(repo_info, "database")?;
+    if !safe_relative(&repo_rel) || !safe_relative(&db_rel) || Path::new(&db_rel).components().count() != 1 {
+        return Err("offline bundle repo paths are invalid".into());
+    }
+    let canonical_root = root.canonicalize().map_err(|e| format!("offline bundle root: {e}"))?;
+    let repo = canonical_root.join(&repo_rel).canonicalize().map_err(|e| format!("offline bundle repository: {e}"))?;
+    if !repo.starts_with(&canonical_root) || !repo.is_dir() { return Err(format!("offline bundle repository is missing or unsafe: {}", repo.display())); }
+    let database = bundle_database(root, &format!("{repo_rel}/{db_rel}"))?;
+    let database_sha256 = json_string(repo_info, "sha256")?;
+    if sha256_file(&database)? != database_sha256.to_ascii_lowercase() {
+        return Err("offline bundle repository database checksum mismatch".into());
+    }
+    if std::fs::metadata(&database).map(|m| m.len() == 0).unwrap_or(true) {
+        return Err("offline bundle repository database is empty".into());
+    }
+
+    let mut packages = Vec::new();
+    let mut package_names = std::collections::HashSet::new();
+    let package_rows = manifest.get("packages").and_then(bifrost_core::json::Json::as_array)
+        .ok_or("offline bundle manifest has no packages array")?;
+    if package_rows.is_empty() { return Err("offline bundle package list is empty".into()); }
+    for row in package_rows {
+        let file = json_string(row, "file")?;
+        if Path::new(&file).components().count() != 1 { return Err(format!("package filename must be a basename: {file}")); }
+        let checksum = json_string(row, "sha256")?;
+        checked_entry(root, &format!("{repo_rel}/{file}"), &checksum)?;
+        if !package_names.insert(file.clone()) { return Err(format!("duplicate package in offline manifest: {file}")); }
+        packages.push(file);
+    }
+
+    let shell_info = manifest.get("shell").ok_or("offline bundle manifest has no shell object")?;
+    let shell_rel = json_string(shell_info, "file")?;
+    let shell_sha256 = json_string(shell_info, "sha256")?.to_ascii_lowercase();
+    let shell = checked_entry(root, &shell_rel, &shell_sha256)?;
+
+    let app_rows = manifest.get("apps").and_then(bifrost_core::json::Json::as_array)
+        .ok_or("offline bundle manifest has no apps array")?;
+    let mut apps = Vec::new();
+    for id in DEFAULT_APPS {
+        let row = app_rows.iter().find(|r| r.get("id").and_then(bifrost_core::json::Json::as_str) == Some(id))
+            .ok_or_else(|| format!("offline bundle is missing app {id}"))?;
+        let version = json_string(row, "version")?;
+        if version.is_empty() || !version.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+')) {
+            return Err(format!("offline bundle has invalid version for {id}"));
+        }
+        let file = json_string(row, "file")?;
+        let expected_file = format!("apps/{id}-{version}.aap");
+        if file != expected_file { return Err(format!("offline bundle app path for {id} must be {expected_file}")); }
+        let sha256 = json_string(row, "sha256")?.to_ascii_lowercase();
+        let file = checked_entry(root, &file, &sha256)?;
+        apps.push(OfflineApp { id: id.into(), version, file, sha256 });
+    }
+    if app_rows.len() != DEFAULT_APPS.len() { return Err("offline bundle must contain exactly the default apps".into()); }
+
+    Ok(Some(OfflineBundle { root: root.canonicalize().map_err(|e| e.to_string())?, repo, database, shell, shell_sha256, apps, packages }))
+}
+
+fn offline_required_packages(gpu: &[&'static str]) -> Vec<&'static str> {
+    let mut out = packages();
+    for name in [KERNEL_FALLBACK, "vulkan-intel", "intel-media-driver", "vulkan-radeon", "nvidia-open", "nvidia-utils", "libva-nvidia-driver"] {
+        if !out.contains(&name) { out.push(name); }
+    }
+    for name in gpu { if !out.contains(name) { out.push(*name); } }
+    out
+}
+
+pub fn offline_pacman_config(repo: &Path) -> String {
+    format!("[options]\nArchitecture = auto\nSigLevel = Never\nLocalFileSigLevel = Never\n\n[offline]\nSigLevel = Never\nServer = file://{}/\n", repo.display())
+}
+
+fn offline_source(mirror: &str, root: &Path) -> Result<Option<OfflineBundle>, String> {
+    if !mirror.is_empty() { return Ok(None); }
+    discover_offline_bundle(root)
+}
+
+pub fn pacstrap_args(packages: &[&str], offline_config: Option<&str>) -> Vec<String> {
+    let mut args = vec!["pacstrap".to_string(), "-K".to_string()];
+    if let Some(config) = offline_config { args.extend(["-C".to_string(), config.to_string()]); }
+    args.push("/mnt".to_string());
+    args.extend(packages.iter().map(|p| (*p).to_string()));
+    args
+}
+
+fn strip_repo_section(conf: &str, name: &str) -> String {
+    let mut out = String::new();
+    let mut skip = false;
+    for line in conf.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            skip = &trimmed[1..trimmed.len() - 1] == name;
+        }
+        if !skip { out.push_str(line); out.push('\n'); }
+    }
+    out
+}
+
+fn offline_sync_args(config: &str, dbpath: &str) -> Vec<String> {
+    vec!["pacman".into(), "-Sy".into(), "--noconfirm".into(), "--config".into(), config.into(), "--dbpath".into(), dbpath.into()]
+}
+
+fn offline_resolve_args(config: &str, dbpath: &str, packages: &[&str]) -> Vec<String> {
+    let mut args = vec!["pacman".into(), "-Sp".into(), "--print-format".into(), "%l".into(), "--config".into(), config.into(), "--dbpath".into(), dbpath.into()];
+    args.extend(packages.iter().map(|p| (*p).to_string()));
+    args
+}
+
+fn offline_resolve(r: &Run, bundle: &OfflineBundle, gpu: &[&'static str]) -> Result<(), String> {
+    let required = offline_required_packages(gpu);
+    let config = "/run/bifrost-offline-pacman.conf";
+    // Never let the live ISO's installed-package database make a missing dependency look satisfied. This DB is
+    // deliberately empty and separate from the config used later by pacstrap.
+    let dbpath = format!("/run/bifrost-offline-preflight-{}", std::process::id());
+    use std::os::unix::fs::PermissionsExt;
+    let result = (|| {
+        std::fs::create_dir(&dbpath).map_err(|e| format!("{dbpath}: {e}"))?;
+        std::fs::set_permissions(&dbpath, std::fs::Permissions::from_mode(0o700)).map_err(|e| format!("{dbpath}: {e}"))?;
+        std::fs::create_dir(Path::new(&dbpath).join("local")).map_err(|e| format!("{dbpath}/local: {e}"))?;
+        std::fs::create_dir(Path::new(&dbpath).join("sync")).map_err(|e| format!("{dbpath}/sync: {e}"))?;
+        std::fs::write(config, offline_pacman_config(&bundle.repo)).map_err(|e| format!("{config}: {e}"))?;
+        let sync = offline_sync_args(config, &dbpath);
+        r.cmd(&sync.iter().map(String::as_str).collect::<Vec<_>>())?;
+        let resolve = offline_resolve_args(config, &dbpath, &required);
+        let locations = r.cmd(&resolve.iter().map(String::as_str).collect::<Vec<_>>())?;
+        let mut resolved = 0usize;
+        for location in locations.lines().map(str::trim).filter(|line| !line.is_empty()) {
+            let Some(path) = location.strip_prefix("file://") else {
+                return Err(format!("offline resolver returned a non-local package source: {location}"));
+            };
+            let path = Path::new(path).canonicalize().map_err(|e| format!("offline package path {path}: {e}"))?;
+            if !path.starts_with(&bundle.repo) {
+                return Err(format!("offline repository references a package outside the bundle: {}", path.display()));
+            }
+            let file = path.file_name().and_then(|f| f.to_str())
+                .ok_or_else(|| format!("pacman returned an invalid offline package path: {}", path.display()))?;
+            if !bundle.packages.iter().any(|listed| listed == file) {
+                return Err(format!("offline repository references unverified package {file}"));
+            }
+            resolved += 1;
+        }
+        if resolved < required.len() {
+            return Err(format!("offline resolver returned only {resolved} package sources for {} requested packages", required.len()));
+        }
+        Ok(())
+    })();
+    let cleanup = std::fs::remove_dir_all(&dbpath).map_err(|e| format!("remove offline preflight database {dbpath}: {e}"));
+    match (result, cleanup) {
+        (Err(e), _) => Err(e),
+        (Ok(()), Err(e)) => Err(e),
+        (Ok(()), Ok(())) => Ok(()),
+    }
+}
+
+fn install_offline_desktop(r: &Run, bundle: &OfflineBundle) -> Result<(), String> {
+    // Keep this outside /run: arch-chroot mounts the live system's /run over the target's /run.
+    let mount = "/mnt/var/cache/bifrost-offline";
+    let config_rel = "/etc/pacman-bifrost-offline.conf";
+    let config_host = format!("/mnt{config_rel}");
+    std::fs::create_dir_all(mount).map_err(|e| e.to_string())?;
+    let bind = r.cmd(&["mount", "--bind", bundle.root.to_str().ok_or("offline bundle path is not UTF-8")?, mount]);
+    if let Err(e) = bind { return Err(format!("mount offline bundle into target: {e}")); }
+    let result = (|| {
+        let repo_in_target = Path::new("/var/cache/bifrost-offline").join(bundle.repo.strip_prefix(&bundle.root).map_err(|e| e.to_string())?);
+        r.write(&config_host, &offline_pacman_config(&repo_in_target))?;
+        r.chroot(&["pacman", "-Sy", "--noconfirm", "--config", config_rel])?;
+        if sha256_file(&bundle.shell)? != bundle.shell_sha256 {
+            return Err("offline shell package checksum mismatch".into());
+        }
+        let shell_rel = bundle.shell.strip_prefix(&bundle.root).map_err(|e| e.to_string())?.to_str().ok_or("offline shell path is not UTF-8")?;
+        let shell_target = format!("/var/cache/bifrost-offline/{shell_rel}");
+        r.chroot(&["pacman", "-U", "--noconfirm", "--overwrite", "*", "--config", config_rel, &shell_target])?;
+        for app in &bundle.apps {
+            if sha256_file(&app.file)? != app.sha256 { return Err(format!("offline app checksum mismatch: {}", app.id)); }
+            let app_rel = app.file.strip_prefix(&bundle.root).map_err(|e| e.to_string())?.to_str().ok_or("offline app path is not UTF-8")?;
+            let app_target = format!("/var/cache/bifrost-offline/{app_rel}");
+            r.chroot(&["/usr/bin/springboard", "--install-package", &app_target])?;
+        }
+        Ok(())
+    })();
+    let _ = std::fs::remove_file(&config_host);
+    let unmount = r.cmd(&["umount", mount]);
+    match (result, unmount) {
+        (Err(e), _) => Err(e),
+        (Ok(()), Err(e)) => Err(format!("unmount offline bundle: {e}")),
+        (Ok(()), Ok(_)) => Ok(()),
+    }
 }
 
 pub const STAGES: [&str; 4] = ["Preparing the disk", "Installing the system", "Setting up your account and apps", "Finishing"];
@@ -381,7 +666,7 @@ impl Run<'_> {
 /// The shell, its units and session come from the package, which is installed last so it wins any overlap.
 /// They are copied into RAM first: if the medium is a network CD that drops out half way, the install can still finish.
 const LIVE_FILES: &[&str] = &["/usr/share/bifrost/bootweave.efi"];
-const LIVE_DIRS: &[&str] = &["/usr/share/springboard/assets", "/usr/share/bifrost"];
+const LIVE_DIRS: &[&str] = &["/usr/share/springboard/assets", "/usr/share/bifrost/installer", "/usr/share/bifrost/video"];
 const STAGE: &str = "/run/bifrost-stage";
 
 /// Waits (at most 2 min) while the lab sync is still writing the newest installer files and assets into the medium:
@@ -423,6 +708,17 @@ pub fn install(cfg: &Config, progress: &Shared) {
     let res = (|| -> Result<(), String> {
         r.set(0, 0, "Reading the installer files");
         stage_live_files()?;
+        // Discover and preflight the ISO bundle before the first disk command. An incomplete advertised bundle is a
+        // hard failure; only an ISO with no bundle directory uses the online installer path.
+        let offline = offline_source(&cfg.mirror, Path::new(OFFLINE_BUNDLE_ROOT))?;
+        let lspci = r.cmd(&["lspci", "-nn"]).unwrap_or_default();
+        let gpu = gpu_packages(&lspci);
+        let mut kernel = kernel_for(&gpu);
+        if let Some(bundle) = offline.as_ref() {
+            r.set(0, 1, "Verifying the offline installer bundle");
+            offline_resolve(&r, bundle, &gpu)?;
+            r.log(format!("verified offline package source {}", bundle.repo.display()));
+        }
         r.cmd(&["btrfs","--version"])?;
         r.cmd(&["modprobe", "btrfs"])?;
         r.set(0, 1, "Partitioning the disk");
@@ -463,8 +759,6 @@ pub fn install(cfg: &Config, progress: &Shared) {
         r.cmd(&["mount", &efi, "/mnt/boot"])?;
 
         r.set(1, 4, "Installing the system and apps");
-        let lspci = r.cmd(&["lspci", "-nn"]).unwrap_or_default();
-        let gpu = gpu_packages(&lspci);
         r.log(format!("graphics stack: {}", gpu.join(" ")));
         if !cfg.mirror.is_empty() {
             // every package from the lab's offline mirror (the live system's own configuration is kept aside)
@@ -477,18 +771,18 @@ pub fn install(cfg: &Config, progress: &Shared) {
             // more parallel downloads than the stock 5 (the link, not the CPU, is the limit)
             let _ = std::fs::write("/etc/pacman.conf", conf.replace("ParallelDownloads = 5", "ParallelDownloads = 12"));
         }
-        let mut args = vec!["pacstrap", "-K", "/mnt"];
-        let mut kernel = kernel_for(&gpu);
         // -y: the live system's own databases are not synced yet (pacstrap syncs its own), so refresh them first
-        if kernel == KERNEL_RT && r.cmd(&["pacman", "-Syp", KERNEL_RT]).is_err() {
+        if offline.is_none() && kernel == KERNEL_RT && r.cmd(&["pacman", "-Syp", KERNEL_RT]).is_err() {
             r.log(format!("{KERNEL_RT} is not in the package source; installing the stock {KERNEL_FALLBACK} kernel"));
             kernel = KERNEL_FALLBACK;
         } else if kernel != KERNEL_RT {
             r.log(format!("NVIDIA GPU: installing the stock {KERNEL_FALLBACK} kernel (nvidia-open modules match it only)"));
         }
         let pkgs: Vec<&str> = packages().into_iter().map(|p| if p == KERNEL_RT { kernel } else { p }).collect();
-        args.extend(pkgs.iter().copied());
-        args.extend(gpu.iter().copied());
+        let mut requested = pkgs;
+        requested.extend(gpu.iter().copied());
+        let args = pacstrap_args(&requested, offline.as_ref().map(|_| "/run/bifrost-offline-pacman.conf"));
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let watcher = {
             let p = progress.clone();
             std::thread::spawn(move || {
@@ -552,14 +846,22 @@ pub fn install(cfg: &Config, progress: &Shared) {
             }
         }
 
-        // the update channel: System Update installs `springboard-shell` from this repo (a lab ISO points at titan's lab repo)
+        // Keep the installed configuration on Arch and the update channel. Pacstrap's `-C` config is ISO-only and must
+        // never leave a file:// repo in the installed system.
         {
             let lab = std::path::Path::new("/etc/bifrost/lab.token").exists();
             let server = if lab { "http://192.168.1.12:8079/bifrost/$arch" } else { "https://bifrost.olibuijr.com/arch/$arch" };
-            let conf = std::fs::read_to_string(sys("/etc/pacman.conf")).unwrap_or_default();
-            if !conf.contains("[bifrost]") {
-                r.write(&sys("/etc/pacman.conf"), &format!("{conf}\n[bifrost]\nSigLevel = Optional TrustAll\nServer = {server}\n"))?;
+            let source = if cfg.mirror.is_empty() { "/etc/pacman.conf" } else { "/etc/pacman.conf.online" };
+            let base = std::fs::read_to_string(source).or_else(|_| std::fs::read_to_string("/etc/pacman.conf")).unwrap_or_default();
+            let conf = strip_repo_section(&strip_repo_section(&base, "offline"), "bifrost");
+            let has_active_file_repo = conf.lines().any(|l| {
+                let trimmed = l.trim_start();
+                !trimmed.starts_with('#') && trimmed.contains("file://")
+            });
+            if has_active_file_repo {
+                return Err("refusing to write ISO-only file repositories into the installed pacman.conf".into());
             }
+            r.write(&sys("/etc/pacman.conf"), &format!("{conf}\n[bifrost]\nSigLevel = Optional TrustAll\nServer = {server}\n"))?;
         }
 
         r.set(2, 86, "Installing the desktop");
@@ -572,10 +874,14 @@ pub fn install(cfg: &Config, progress: &Shared) {
         prune_assets(std::path::Path::new(&sys("/usr/share/springboard/assets"))).map_err(|e| format!("assets: {e}"))?;
         // The package owns the shell, units, session and apps. Installing it here, from the same
         // repo System Update uses, keeps one source of truth and no fake pacman registration.
-        r.chroot(&["pacman", "-Sy", "--noconfirm", "springboard-shell"])?;
+        if let Some(bundle) = offline.as_ref() {
+            install_offline_desktop(&r, bundle)?;
+        } else {
+            r.chroot(&["pacman", "-Sy", "--noconfirm", "--overwrite", "*", "springboard-shell"])?;
+        }
 
-        r.set(2, 89, "Installing default apps from App Store");
-        install_default_apps(&r, &cfg.mirror)?;
+        r.set(2, 89, if offline.is_some() { "Installing bundled desktop apps" } else { "Installing default apps from App Store" });
+        if offline.is_none() { install_default_apps(&r, &cfg.mirror)?; }
         r.set(2, 90, "Creating your account");
         let name = if cfg.full_name.is_empty() { &cfg.username } else { &cfg.full_name };
         r.chroot(&["useradd", "-m", "-G", "wheel,audio,video,input,storage", "-s", "/bin/bash", "-c", name, &cfg.username])?;
@@ -793,6 +1099,69 @@ mod tests {
 
     use super::*;
     use crate::installer::keymaps::{layout_index, layouts};
+
+    fn test_bundle(root: &Path) -> String {
+        std::fs::create_dir_all(root.join("repo")).unwrap();
+        std::fs::create_dir_all(root.join("apps")).unwrap();
+        let entries = [
+            ("repo/offline.db", b"test database".as_slice()),
+            ("repo/base-1-1-x86_64.pkg.tar.zst", b"test package".as_slice()),
+            ("springboard-shell.pkg.tar.zst", b"test shell".as_slice()),
+            ("apps/is.olibuijr.browser.desktop-1.0.aap", b"browser".as_slice()),
+            ("apps/is.olibuijr.files.desktop-1.0.aap", b"files".as_slice()),
+        ];
+        for (path, bytes) in entries { std::fs::write(root.join(path), bytes).unwrap(); }
+        let sum = |bytes: &[u8]| bifrost_core::sha256::hex(&bifrost_core::sha256::digest(bytes));
+        format!(
+            "{{\"schema_version\":1,\"repo\":{{\"path\":\"repo\",\"database\":\"offline.db\",\"sha256\":\"{}\"}},\
+             \"packages\":[{{\"file\":\"base-1-1-x86_64.pkg.tar.zst\",\"sha256\":\"{}\"}}],\
+             \"shell\":{{\"file\":\"springboard-shell.pkg.tar.zst\",\"sha256\":\"{}\"}},\
+             \"apps\":[{{\"id\":\"{}\",\"version\":\"1.0\",\"file\":\"apps/{}-1.0.aap\",\"sha256\":\"{}\"}},\
+             {{\"id\":\"{}\",\"version\":\"1.0\",\"file\":\"apps/{}-1.0.aap\",\"sha256\":\"{}\"}}]}}",
+            sum(b"test database"), sum(b"test package"), sum(b"test shell"), DEFAULT_APPS[0], DEFAULT_APPS[0], sum(b"browser"),
+            DEFAULT_APPS[1], DEFAULT_APPS[1], sum(b"files"),
+        )
+    }
+
+    #[test]
+    fn offline_source_is_optional_but_existing_bundle_fails_closed() {
+        let dir = std::env::temp_dir().join(format!("offline-source-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(offline_source("", &dir).unwrap().is_none());
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(offline_source("", &dir).unwrap_err().contains("missing"));
+        assert!(offline_source("http://lab/mirror/", &dir).unwrap().is_none(), "the lab mirror keeps its existing route");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn offline_bundle_checks_every_manifest_checksum_and_required_entry() {
+        let dir = std::env::temp_dir().join(format!("offline-bundle-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let manifest = test_bundle(&dir);
+        std::fs::write(dir.join("manifest.json"), &manifest).unwrap();
+        let bundle = discover_offline_bundle(&dir).unwrap().unwrap();
+        assert_eq!(bundle.apps.len(), 2);
+        assert!(bundle.database.is_file() && bundle.shell.is_file());
+        std::fs::write(bundle.apps[0].file.clone(), b"corrupt").unwrap();
+        assert!(discover_offline_bundle(&dir).unwrap_err().contains("checksum mismatch"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn offline_command_plans_have_only_the_file_repository() {
+        let conf = offline_pacman_config(Path::new("/usr/share/bifrost/offline/repo"));
+        assert!(conf.contains("Server = file:///usr/share/bifrost/offline/repo/"));
+        assert!(!conf.contains("https://") && !conf.contains("[core]") && !conf.contains("[extra]"));
+        let args = pacstrap_args(&["base", "linux-rt"], Some("/run/bifrost-offline-pacman.conf"));
+        assert_eq!(args, ["pacstrap", "-K", "-C", "/run/bifrost-offline-pacman.conf", "/mnt", "base", "linux-rt"]);
+        assert_eq!(offline_sync_args("offline.conf", "/run/preflight"), ["pacman", "-Sy", "--noconfirm", "--config", "offline.conf", "--dbpath", "/run/preflight"]);
+        assert_eq!(offline_resolve_args("offline.conf", "/run/preflight", &["base", "linux-rt"]), ["pacman", "-Sp", "--print-format", "%l", "--config", "offline.conf", "--dbpath", "/run/preflight", "base", "linux-rt"]);
+        let conf = strip_repo_section("[core]\nServer = https://mirror/\n\n[offline]\nServer = file:///iso/repo\n[bifrost]\nServer = https://updates/\n", "offline");
+        assert!(!conf.contains("[offline]") && !conf.contains("file:///iso"));
+        assert!(conf.contains("[core]") && conf.contains("[bifrost]"));
+    }
 
     #[test]
     fn lab_profile_pins_the_address_on_the_lab_nic() {

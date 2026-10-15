@@ -5,7 +5,7 @@
 //! `*` wildcard inside text, modifiers after the closing quote (`c` ignore case, `d` ignore diacritics, `w` match any
 //! whole word of the value), `&&` binds tighter than `||`, parentheses group, and `$time.now` or `$time.now(-3600)`
 //! (seconds from now) as a time value. Pure model, std only; callers pass the clock.
-//! Gaps: `CSSearchQueryContext.sourceOptions` is recorded but has no effect, no SpotlightSearchTool, no disk store.
+//! Gaps: source options are recorded but have no effect, no assistant search tool, and no disk store.
 
 use std::cell::Cell;
 use std::collections::BTreeMap;

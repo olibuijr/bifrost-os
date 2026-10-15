@@ -1,11 +1,12 @@
 id = "is.olibuijr.books.desktop"
 name = "Books"
-version = "1.7.0"
+version = "1.9.0"
 exec = "bifrost-books"
 icon = "icon.png"
 min_shell = "0.4.84"
 summary = "PDF and EPUB reader with library, bookmarks and search."
 category = "Books"
+kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 handles = ["com.adobe.pdf"]

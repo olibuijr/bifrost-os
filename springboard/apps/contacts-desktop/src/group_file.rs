@@ -10,6 +10,8 @@
 //! files (`group<TAB>Name`, numbered from 1 in order) still load. Writes go to a temporary file and then replace the
 //! old one.
 
+use crate::extras::{escape, unescape};
+use crate::smart::{Condition, Rule, RuleField, UserList, MAX_LISTS, MAX_RULES};
 use bifrost_app::controls::contact_groups::Groups;
 use std::collections::BTreeMap;
 use std::io;
@@ -94,6 +96,77 @@ fn bad(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
 }
 
+const LISTS_HEADER: &str = "contact-smart-lists 1";
+const LISTS_MAX_BYTES: u64 = 1024 * 1024;
+
+/// The file text of the smart lists, as `smartlists.txt` holds them:
+///
+/// ```text
+/// contact-smart-lists 1
+/// list<TAB>name<TAB>all|any
+/// rule<TAB>field<TAB>condition<TAB>value
+/// ```
+///
+/// A `rule` line belongs to the `list` line before it. Names and values are escaped like the other contact files.
+pub fn lists_text(lists: &[UserList]) -> String {
+    let mut out = format!("{LISTS_HEADER}\n");
+    for list in lists {
+        out.push_str(&format!("list\t{}\t{}\n", escape(list.name.trim()), if list.any { "any" } else { "all" }));
+        for rule in &list.rules {
+            out.push_str(&format!("rule\t{}\t{}\t{}\n", rule.field.code(), rule.condition.code(), escape(rule.value.trim())));
+        }
+    }
+    out
+}
+
+/// Reads the smart lists from their file text. `None` when the header is not this format's. Lines that do not read are
+/// skipped, a list that is not valid is dropped, and at most `MAX_LISTS` lists of `MAX_RULES` rules are kept.
+pub fn parse_lists(text: &str) -> Option<Vec<UserList>> {
+    let mut lines = text.lines();
+    if lines.next() != Some(LISTS_HEADER) {
+        return None;
+    }
+    let mut lists: Vec<UserList> = Vec::new();
+    for line in lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        match fields.as_slice() {
+            ["list", name, mode] => lists.push(UserList { name: unescape(name), any: *mode == "any", rules: Vec::new() }),
+            ["rule", field, condition, value] => {
+                let (Some(field), Some(condition), Some(list)) = (RuleField::from_code(field), Condition::from_code(condition), lists.last_mut()) else {
+                    continue;
+                };
+                if list.rules.len() < MAX_RULES {
+                    list.rules.push(Rule { field, condition, value: unescape(value) });
+                }
+            }
+            _ => {}
+        }
+    }
+    lists.retain(UserList::valid);
+    lists.truncate(MAX_LISTS);
+    Some(lists)
+}
+
+/// Reads the smart lists file. A missing file is no lists. A file that is too large, cannot be read or has another header
+/// is an error, so the app does not overwrite it.
+pub fn load_lists(path: &Path) -> io::Result<Vec<UserList>> {
+    match std::fs::metadata(path) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+        Ok(meta) if meta.len() > LISTS_MAX_BYTES => return Err(bad("The smart lists file is too large")),
+        Ok(_) => {}
+    }
+    let text = std::fs::read_to_string(path)?;
+    parse_lists(&text).ok_or_else(|| bad("Unknown smart lists format"))
+}
+
+/// Writes the smart lists file atomically.
+pub fn save_lists(path: &Path, lists: &[UserList]) -> io::Result<()> {
+    let temp = path.with_extension("txt.tmp");
+    std::fs::write(&temp, lists_text(lists))?;
+    std::fs::rename(&temp, path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,6 +226,73 @@ mod tests {
         assert_eq!(groups.get(ids[0]).unwrap().name, "First");
         assert_eq!(groups.members(ids[1], false).unwrap(), vec![9]);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    fn sample_lists() -> Vec<UserList> {
+        vec![
+            UserList {
+                name: "Acme, people".into(),
+                any: false,
+                rules: vec![
+                    Rule { field: RuleField::Company, condition: Condition::Contains, value: "acme\\ltd".into() },
+                    Rule { field: RuleField::Email, condition: Condition::IsSet, value: String::new() },
+                ],
+            },
+            UserList { name: "Friends".into(), any: true, rules: vec![Rule { field: RuleField::Name, condition: Condition::BeginsWith, value: "Ó".into() }] },
+        ]
+    }
+
+    #[test]
+    fn smart_lists_round_trip_through_their_file_text_and_file() {
+        let lists = sample_lists();
+        let text = lists_text(&lists);
+        assert!(text.starts_with("contact-smart-lists 1\nlist\t"), "{text}");
+        assert!(text.contains("rule\tcompany\tcontains\tacme\\\\ltd\n"), "a backslash is escaped: {text}");
+        let back = parse_lists(&text).unwrap();
+        assert_eq!(back[0].name, "Acme, people");
+        assert_eq!(back, lists);
+        let path = dir("lists").join("smartlists.txt");
+        assert_eq!(load_lists(&path).unwrap(), Vec::<UserList>::new(), "a missing file is no lists");
+        save_lists(&path, &lists).unwrap();
+        assert_eq!(load_lists(&path).unwrap(), lists);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_foreign_lists_file_is_refused_and_bad_lines_and_lists_are_dropped() {
+        assert_eq!(parse_lists("contact-groups 2\n"), None);
+        let path = dir("lists-bad").join("smartlists.txt");
+        std::fs::write(&path, "something else\n").unwrap();
+        assert!(load_lists(&path).is_err());
+        let text = "contact-smart-lists 1\n\
+rule\tname\tcontains\torphan\n\
+list\tOk\tall\n\
+rule\tshoe\tcontains\tx\n\
+rule\tname\tcontains\tan\n\
+list\tNo rules\tall\n\
+list\t\tall\n\
+rule\tname\tcontains\tx\n\
+list\tEmpty value\tall\n\
+rule\tname\tis\t\n\
+junk\n";
+        let lists = parse_lists(text).unwrap();
+        assert_eq!(lists.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), ["Ok"], "only the valid list is kept");
+        assert_eq!(lists[0].rules.len(), 1, "the rule with an unknown field is skipped");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn at_most_thirty_lists_and_six_rules_are_kept() {
+        let mut text = String::from("contact-smart-lists 1\n");
+        for n in 0..MAX_LISTS + 5 {
+            text.push_str(&format!("list\tList {n}\tall\n"));
+            for r in 0..MAX_RULES + 3 {
+                text.push_str(&format!("rule\tname\tcontains\tvalue {r}\n"));
+            }
+        }
+        let lists = parse_lists(&text).unwrap();
+        assert_eq!(lists.len(), MAX_LISTS);
+        assert!(lists.iter().all(|l| l.rules.len() == MAX_RULES));
     }
 
     #[test]

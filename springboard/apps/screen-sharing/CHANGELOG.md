@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3 — 2026-10-14
+
+- Remove the unused connection polling hook; dispatch completions and the shell service pipe wake the viewer when its state changes.
+- Add the store icon asset.
+
+## 0.1.2
+
+- Move the RFB reader and writer onto utility dispatch tasks; connection events wake the app through the main dispatch queue instead of a frame polling timer.
+
+## 0.1.1 — 2026-10-14
+
+- Empty areas around the remote display follow the active appearance; the app enables sudden termination because it has no unsaved document state.
 ## 0.1.0
 
 - New Screen Sharing app: type the address of a computer that serves VNC (RFB 3.3, 3.7 or 3.8) and Connect. The remote desktop shows scaled to fit or at actual size.

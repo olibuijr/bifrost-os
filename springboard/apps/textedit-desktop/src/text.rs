@@ -110,7 +110,17 @@ pub struct Style {
     pub highlight: u8,
     /// The link the character belongs to: a number from `links::intern`, 0 for none.
     pub link: u16,
+    /// Paragraph spacing in points, before and after the paragraph (Format > Text > Spacing). Paragraph properties, stored
+    /// on every cell of the paragraph like `align`.
+    pub space_before: u8,
+    pub space_after: u8,
+    /// Writing direction of the paragraph (Format > Text > Writing Direction): right to left when true. A paragraph
+    /// property, stored on every cell of the paragraph like `align`.
+    pub rtl: bool,
 }
+
+/// The largest space a paragraph takes before or after, in points.
+pub const MAX_PARAGRAPH_SPACE: u8 = 200;
 
 impl Default for Style {
     fn default() -> Self {
@@ -128,6 +138,9 @@ impl Default for Style {
             script: 0,
             highlight: 0,
             link: 0,
+            space_before: 0,
+            space_after: 0,
+            rtl: false,
         }
     }
 }
@@ -212,6 +225,9 @@ pub struct Text {
     epoch: u32,
     /// The distance between tab stops, in points. A document property, kept in the file.
     tab: f32,
+    /// The family typing takes when the caret is where no character gives one (an empty document): the preference
+    /// for new documents. Not part of the text.
+    default_font: u8,
 }
 
 impl Default for Text {
@@ -222,7 +238,16 @@ impl Default for Text {
 
 impl Text {
     pub fn new() -> Self {
-        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::default(), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0, tab: DEFAULT_TAB }
+        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::default(), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0, tab: DEFAULT_TAB, default_font: 0 }
+    }
+
+    /// The family new text takes where no character sets one (the Preferences' default font). Setting it changes no
+    /// text and makes no undo entry.
+    pub fn set_default_font(&mut self, font: u8) {
+        self.default_font = (font as usize).min(FAMILIES.len() - 1) as u8;
+        if self.cells.is_empty() {
+            self.typing.font = self.default_font;
+        }
     }
 
     /// Replaces the content (a file was read). Undo, redo and the selection start over.
@@ -324,7 +349,7 @@ impl Text {
         } else {
             self.cells.first().map(|c| c.style)
         };
-        self.typing = style.unwrap_or_default();
+        self.typing = style.unwrap_or(Style { font: self.default_font, ..Style::default() });
         // typing continues a link only from inside it, not from its end
         let before = if at > 0 { self.cells[at - 1].style.link } else { 0 };
         let after = self.cells.get(at).map_or(0, |c| c.style.link);
@@ -335,6 +360,8 @@ impl Text {
         self.typing.align = para.align;
         self.typing.spacing = para.spacing;
         self.typing.list = para.list;
+        self.typing.space_before = para.space_before;
+        self.typing.space_after = para.space_after;
     }
 
     /// The paragraph properties (alignment, spacing, list) of the paragraph that holds `pos`, in a style.
@@ -387,6 +414,21 @@ impl Text {
     /// Typed text or a paste. Typing is one undo entry however many characters it adds.
     pub fn type_text(&mut self, s: &str) {
         self.insert(s, Kind::Typing);
+    }
+
+    /// Pastes cells that keep their own styles (a paste from this document's own copy). The selection is replaced, the
+    /// pasted cells keep their formatting, and the text after them takes the style of the caret again.
+    pub fn insert_cells(&mut self, cells: &[Cell], kind: Kind) {
+        if cells.is_empty() {
+            return;
+        }
+        self.record(kind);
+        let range = self.selection();
+        let at = range.start;
+        self.cells.splice(range, cells.iter().copied());
+        self.anchor = at + cells.len();
+        self.head = self.anchor;
+        self.sync_typing();
     }
 
     /// Deletes the selection, or the character before the caret.
@@ -510,6 +552,30 @@ impl Text {
         self.restyle_paragraphs(|s| s.spacing = spacing);
     }
 
+    /// Spacing panel: the line spacing (an index into `SPACINGS`) and the space before and after, on every paragraph the
+    /// selection touches, as one undo entry.
+    pub fn set_paragraph_format(&mut self, spacing: u8, before: u8, after: u8) {
+        let spacing = spacing.min(SPACINGS.len() as u8 - 1);
+        let before = before.min(MAX_PARAGRAPH_SPACE);
+        let after = after.min(MAX_PARAGRAPH_SPACE);
+        self.restyle_paragraphs(move |s| {
+            s.spacing = spacing;
+            s.space_before = before;
+            s.space_after = after;
+        });
+    }
+
+    /// Format > Text > Writing Direction: right to left or left to right, on every paragraph the selection touches.
+    pub fn set_writing_direction(&mut self, rtl: bool) {
+        self.restyle_paragraphs(move |s| s.rtl = rtl);
+    }
+
+    /// The paragraph spacing (before, after) of the paragraph that holds the selection start.
+    pub fn paragraph_space_at(&self, pos: usize) -> (u8, u8) {
+        let para = self.paragraph_style_at(pos);
+        (para.space_before, para.space_after)
+    }
+
     /// Sets the list of every paragraph the selection touches; the same list again takes it off.
     pub fn toggle_list(&mut self, list: ListKind) {
         let now = self.paragraph_style_at(self.selection().start).list;
@@ -606,19 +672,29 @@ impl Text {
 
     /// Paste Style: gives the selection (or the typing style) the character formatting of `from`. Paragraph
     /// properties are left alone.
+    #[cfg_attr(not(test), allow(dead_code))] // Paste Style applies `apply_style`, which takes the paragraph too
     pub fn apply_char_style(&mut self, from: &Style) {
         let f = *from;
-        self.restyle(move |s| {
-            s.bold = f.bold;
-            s.italic = f.italic;
-            s.underline = f.underline;
-            s.size = f.size;
-            s.font = f.font;
-            s.color = f.color;
-            s.strike = f.strike;
-            s.script = f.script;
-            s.highlight = f.highlight;
-        });
+        self.restyle(move |s| copy_char(s, &f));
+    }
+
+    /// Paste Style as one undo entry: the character formatting on the selected characters (or the typing style) and
+    /// the paragraph properties on the paragraphs the selection touches.
+    pub fn apply_style(&mut self, from: &Style) {
+        self.record(Kind::Formatting);
+        if self.has_selection() {
+            let range = self.selection();
+            for c in &mut self.cells[range] {
+                copy_char(&mut c.style, from);
+            }
+        } else {
+            copy_char(&mut self.typing, from);
+        }
+        let paragraphs = self.paragraphs_of_selection();
+        for c in &mut self.cells[paragraphs] {
+            copy_para(&mut c.style, from);
+        }
+        copy_para(&mut self.typing, from);
     }
 
     /// Edit > Transformations: the selected text in upper case, lower case or capitalised words, in one undo entry.
@@ -845,6 +921,28 @@ impl Text {
         words
     }
 
+}
+
+/// Copies the character formatting of `from` (what Copy Style keeps) onto `to`.
+fn copy_char(to: &mut Style, from: &Style) {
+    to.bold = from.bold;
+    to.italic = from.italic;
+    to.underline = from.underline;
+    to.size = from.size;
+    to.font = from.font;
+    to.color = from.color;
+    to.strike = from.strike;
+    to.script = from.script;
+    to.highlight = from.highlight;
+}
+
+/// Copies the paragraph properties of `from` (alignment, line spacing and list) onto `to`.
+fn copy_para(to: &mut Style, from: &Style) {
+    to.align = from.align;
+    to.spacing = from.spacing;
+    to.list = from.list;
+    to.space_before = from.space_before;
+    to.space_after = from.space_after;
 }
 
 /// The one character a case mapping gives, or `ch` when it maps to several (a German sharp s becomes two letters).
@@ -1105,6 +1203,22 @@ mod tests {
     }
 
     #[test]
+    fn writing_direction_applies_to_every_paragraph_the_selection_touches() {
+        let mut t = plain("one\ntwo\nthree");
+        t.select(0, 7);
+        t.set_writing_direction(true);
+        assert!(t.cells()[0].style.rtl && t.cells()[4].style.rtl, "both selected paragraphs turn right to left");
+        assert!(!t.cells()[9].style.rtl, "the third paragraph is outside the selection");
+        assert_eq!(t.undo_name(), Some("Formatting"));
+        t.select(9, 9);
+        t.set_writing_direction(true);
+        t.select(0, 0);
+        t.set_writing_direction(false);
+        assert!(!t.cells()[0].style.rtl, "a caret in the first paragraph clears that paragraph");
+        assert!(t.cells()[4].style.rtl && t.cells()[9].style.rtl, "the other paragraphs keep their direction");
+    }
+
+    #[test]
     fn transformations_change_case_in_one_undo() {
         let mut t = plain("hello wORLD it's");
         t.select_all();
@@ -1267,6 +1381,47 @@ mod tests {
         t.toggle_bold();
         assert!(t.cells().iter().all(|c| c.style.bold && c.style.link == 2));
         assert!(!Style { link: 1, ..Style::default() }.same_run(&Style::default()), "a link breaks a run");
+    }
+
+    #[test]
+    fn pasted_cells_keep_their_formatting_and_are_one_undo() {
+        let mut t = plain("ab");
+        let bold = Style { bold: true, ..Style::default() };
+        t.insert_cells(&[Cell { ch: 'x', style: bold }, Cell { ch: 'y', style: Style::default() }], Kind::Pasting);
+        assert_eq!(t.text(), "abxy");
+        assert!(t.cells()[2].style.bold && !t.cells()[3].style.bold);
+        assert_eq!(t.selection(), 4..4);
+        assert_eq!(t.undo_name(), Some("Pasting"));
+        t.select(0, 0);
+        t.insert_cells(&[], Kind::Pasting);
+        assert_eq!(t.text(), "abxy", "nothing to paste changes nothing");
+    }
+
+    #[test]
+    fn the_spacing_panel_sets_line_and_paragraph_space_in_one_undo() {
+        let mut t = plain("one\ntwo");
+        t.select(1, 1);
+        t.set_paragraph_format(2, 12, 6);
+        assert_eq!(t.paragraph_style_at(0).spacing, 2);
+        assert_eq!(t.paragraph_space_at(0), (12, 6));
+        assert_eq!(t.paragraph_space_at(5), (0, 0), "the other paragraph is not touched");
+        assert!(t.undo());
+        assert_eq!(t.paragraph_space_at(0), (0, 0), "one undo takes back the spacing");
+        assert_eq!(t.paragraph_style_at(0).spacing, 0);
+        t.set_paragraph_format(200, 250, 250);
+        assert_eq!(t.paragraph_space_at(0), (MAX_PARAGRAPH_SPACE, MAX_PARAGRAPH_SPACE), "clamped");
+    }
+
+    #[test]
+    fn paste_style_is_one_undo_entry_for_characters_and_paragraphs() {
+        let mut t = plain("one\ntwo");
+        let from = Style { italic: true, align: Align::Center, ..Style::default() };
+        t.select(0, 3);
+        t.apply_style(&from);
+        assert!(t.cells()[0].style.italic && t.cells()[0].style.align == Align::Center);
+        assert!(t.cells()[5].style.align == Align::Left, "the next paragraph keeps its alignment");
+        assert!(t.undo());
+        assert!(!t.cells()[0].style.italic && t.cells()[0].style.align == Align::Left, "one undo takes back both");
     }
 
     #[test]

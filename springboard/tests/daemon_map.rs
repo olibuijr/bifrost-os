@@ -61,9 +61,11 @@ fn claimed_rows_point_at_existing_paths_with_a_note() {
             claimed += 1;
             let name = field(&row, "name");
             let bifrost = field(&row, "bifrost");
-            let file = bifrost.split(':').next().unwrap_or("");
             assert!(!bifrost.is_empty(), "{name} in {path:?} is {status} without a bifrost path");
-            assert!(root.join(file).exists(), "{name}: cited path {file} does not exist");
+            for file in bifrost.split(',').map(str::trim) {
+                let file = file.split(':').next().unwrap_or("");
+                assert!(root.join(file).exists(), "{name}: cited path {file} does not exist");
+            }
             assert!(!field(&row, "note").trim().is_empty(), "{name}: {status} row has an empty note");
         }
     }
@@ -71,7 +73,7 @@ fn claimed_rows_point_at_existing_paths_with_a_note() {
 }
 
 #[test]
-fn shell_roles_are_mapped_and_unrelated_services_stay_gaps() {
+fn shell_roles_are_mapped_and_platform_services_are_classified() {
     let all: Vec<_> = shards().into_iter().flat_map(|(_, t)| rows(&t)).collect();
     let status_of = |n: &str| {
         all.iter().find(|r| field(r, "name") == n).map(|r| field(r, "status").to_string()).unwrap_or_default()
@@ -99,8 +101,12 @@ fn shell_roles_are_mapped_and_unrelated_services_stay_gaps() {
     ] {
         assert_eq!(status_of(n), "partial", "{n} should be mapped to the shell service that fills its role");
     }
-    for n in ["com.apple.Siri.agent", "com.apple.FamilyControlsAgent", "com.apple.iCloudNotificationAgent", "com.apple.icloud.searchpartyd", "com.apple.ScreenTimeAgent"] {
+    for n in ["com.apple.Siri.agent", "com.apple.FamilyControlsAgent"] {
         assert_eq!(status_of(n), "gap", "{n} has no real counterpart and must stay a gap");
     }
-    assert_eq!(status_of("com.apple.MemorySlotNotification"), "n/a", "Apple-only memory slot hardware");
+    for n in ["com.apple.iCloudNotificationAgent", "com.apple.icloud.searchpartyd"] {
+        assert_eq!(status_of(n), "n/a", "{n} is a vendor cloud service with no BifrOSt counterpart");
+    }
+    assert_eq!(status_of("com.apple.ScreenTimeAgent"), "partial", "Screen Time usage and limits are mapped in the shell");
+    assert_eq!(status_of("com.apple.MemorySlotNotification"), "n/a", "platform-specific memory slot hardware");
 }
