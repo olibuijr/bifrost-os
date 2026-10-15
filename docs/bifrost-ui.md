@@ -876,6 +876,11 @@ Model (`springboard/ui/src/text.rs`, `bifrost_ui::text`, no dependencies):
   `perform(EditCommand, extend)` and `handle_key(KeyCombo)` use `text::binding`: the emacs set every Cocoa field has
   (ctrl-A / E line start / end, F / B / N / P, D, H, K, Y, T, O), option-arrows by word, cmd-arrows by line / document,
   option-backspace, cmd-backspace, cmd-A / Z / shift-Z.
+- Terminals send keys, they do not edit: `terminal_keys` (`springboard/ui/src/terminal_keys.rs`, `bifrost_ui::terminal_keys`,
+  no dependencies) maps chords to the bytes the pty expects, so the hardware keyboard, the on-screen Ctrl key and
+  `term send_keys` agree. `control_byte` (Ctrl+A 1 through Ctrl+Z 26, Space/@ NUL, brackets, `^`, `_`), `alt_bytes`
+  (ESC plus the key), `alt_word_bytes` (Alt+Left/Right word jumps), `ctrl_bytes` / `alt_combo_bytes` / `alt_arrows`
+  (the same over `KeyCombo`, leaving shell shortcuts out), and `CONTROL_BINDINGS` (every byte with its readline action).
 - A view feeds the shell: after each change `ctx.text_state(...)` from `TextBuffer::surrounding(4000)`, and
   `ctx.caret_rect(...)` from its own layout (the model has no geometry).
 

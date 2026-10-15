@@ -6,6 +6,10 @@ Status by reading code paths (emulator: the `iosterm` crate, imported as `termco
 
 Not compatibility items, but they exist and are easy to miss: tabs and split panes (`split.rs`), saved window groups (`groups.rs`), colour profiles (`profiles.rs`, `profile_table.rs`), the Find bar (`find.rs`), SSH connections from a config file with import (`ssh.rs`), prompt marks (OSC 133 `A`, used by Cmd+Up and Cmd+Down to jump between prompts), opening the first web link in a selection from the More menu (`links.rs`; this is not OSC 8), and the `term` tool in the MCP server that reads and drives tabs ([bifrost-mcp.md](bifrost-mcp.md), "Term tool").
 
+## Control keys
+
+Every Ctrl chord (hardware keyboard, the on-screen Ctrl key, `term send_keys`) sends its control byte to the pty, and Alt sends ESC plus the key, so readline editing and job control all work: Ctrl+A/E line start/end, Ctrl+B/F/N/P move and history, Ctrl+D/H delete, Ctrl+K/U/W kill, Ctrl+Y yank, Ctrl+L clear, Ctrl+R/S search, Ctrl+T transpose, Ctrl+C/Z interrupt/suspend, Alt+B/F/D and Alt+Backspace word edits, Alt+Left/Right word jumps, and Home/End/Delete/PageUp/PageDown. One mapping serves all three: the `terminal_keys` SDK kit (`bifrost_ui::terminal_keys`, `CONTROL_BINDINGS` documents every byte). Kept for the shell: Ctrl+Space (input source), any Tab chord (app switcher), Ctrl+Alt chords (screen reader), and Cmd chords (copy/paste, tabs, find); an open panel keeps pty input out. Midget: confirm Ctrl+C interrupts and Ctrl+R searches in a shell.
+
 ## Escape sequences
 
 | Feature | Status | Where | Notes |

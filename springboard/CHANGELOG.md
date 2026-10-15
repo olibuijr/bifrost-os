@@ -1,6 +1,9 @@
 # BifrOSt changelog
 
-## 0.8.0 — 2026-10-14
+## 0.8.1 — 2026-10-15
+
+- Terminal: common control keys reach the shell. Plain Ctrl chords send their control bytes to the pty (Ctrl+A/E line start/end, Ctrl+B/F/N/P move and history, Ctrl+D/H delete, Ctrl+K/U/W kill, Ctrl+Y yank, Ctrl+L clear, Ctrl+R/S search, Ctrl+T transpose, Ctrl+C/Z interrupt/suspend), Alt sends ESC plus the key (Alt+B/F/D word edits, Alt+Backspace kill word, Alt+Left/Right word jumps), and Home/End/Delete/PageUp/PageDown work with a hardware keyboard. One new SDK kit maps them all (`bifrost_ui::terminal_keys`, shared by the hardware path, the on-screen Ctrl key and `term send_keys`); Ctrl+Space (input source), Tab chords (app switcher), Ctrl+Alt chords (screen reader) and Cmd chords (copy/paste, tabs, find) are untouched, and an open panel keeps pty input out.
+- Keyboard: the on-screen Ctrl key uses the same terminal-keys kit (Ctrl+Space is NUL, keys Ctrl does not combine with are dropped instead of sending a bogus code).
 
 - Installer: release ISOs carry a checksum-verified offline package repository, shell and default apps; dependency resolution is preflighted from an empty package database before disk changes.
 - App isolation: camera permission is limited to Photo Booth and supported capture devices; screen sampling is limited to Color Meter and requires the existing privacy consent. Undeclared or unauthorized capabilities remain denied.

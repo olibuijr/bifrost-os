@@ -23,10 +23,17 @@ const KEY_EQUAL: u16 = 13;
 const KEY_D: u16 = 32;
 const KEY_GRAVE: u16 = 41;
 const KEY_5: u16 = 6;
+const KEY_BACKSPACE: u16 = 14;
+const KEY_ENTER: u16 = 28;
 const KEY_UP: u16 = 103;
 const KEY_LEFT: u16 = 105;
 const KEY_RIGHT: u16 = 106;
 const KEY_DOWN: u16 = 108;
+const KEY_HOME: u16 = 102;
+const KEY_PAGEUP: u16 = 104;
+const KEY_PAGEDOWN: u16 = 109;
+const KEY_END: u16 = 107;
+const KEY_DELETE: u16 = 111;
 const KEY_Y: u16 = 21;
 const KEY_LEFTCTRL: u16 = 29;
 const KEY_A: u16 = 30;
@@ -46,7 +53,11 @@ const KEY_RIGHTALT: u16 = 100;
 const KEY_LEFTMETA: u16 = 125;
 const KEY_RIGHTMETA: u16 = 126;
 
-/// Term key equivalents, taken only while Term is in front and only with Cmd held (Ctrl chords stay control characters).
+/// Term key equivalents, taken only while Term is in front. Cmd chords (Meta)
+/// drive the chrome (tabs, find, zoom); plain Ctrl and Alt chords become the
+/// control bytes and ESC-prefixed bytes the pty expects
+/// (`bifrost_ui::terminal_keys`), so readline and job control all work:
+/// Ctrl+A/E line start/end, Ctrl+C/Z interrupt/suspend, Alt+F/B word jumps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TermKey {
     Copy,
@@ -66,6 +77,14 @@ pub enum TermKey {
     Tab(u8),
     /// Cmd+E: Use Selection for Find
     UseSelectionForFind,
+    /// A Ctrl chord's byte for the pty (Ctrl+A is 1, Ctrl+E is 5, ...).
+    Ctrl(u8),
+    /// An Alt chord's byte after ESC (Alt+F is `ESC f`).
+    Alt(u8),
+    /// Alt+Left (false) / Alt+Right (true): word backward / forward (`ESC b` / `ESC f`).
+    AltWord(bool),
+    /// A navigation key for the pty: "Home", "End", "Delete", "PageUp" or "PageDown".
+    Named(&'static str),
 }
 
 impl TermKey {
@@ -93,6 +112,48 @@ impl TermKey {
     }
 }
 
+/// The TermKey a plain Ctrl chord sends to the pty while Term is in front:
+/// the control byte of the physical key's US legend (Shift lets shifted
+/// symbols through, so Ctrl+Shift+2 is Ctrl+@). Ctrl+Backspace deletes a
+/// word (`0x17`, as in other terminals) and Ctrl+Enter is CR. None for keys
+/// Ctrl does not combine with (digits, Tab, function keys).
+fn term_ctrl_key(code: u16, shift: bool) -> Option<TermKey> {
+    if code == KEY_BACKSPACE {
+        return Some(TermKey::Ctrl(0x17));
+    }
+    if code == KEY_ENTER {
+        return Some(TermKey::Ctrl(b'\r'));
+    }
+    let (_, lower, upper) = TEXT_KEYS.iter().find(|k| k.0 == code)?;
+    bifrost_ui::terminal_keys::control_byte(*lower)
+        .or_else(|| shift.then(|| bifrost_ui::terminal_keys::control_byte(*upper)).flatten())
+        .map(TermKey::Ctrl)
+}
+
+/// The TermKey a plain Alt (Left Alt, not AltGr) chord sends to the pty while
+/// Term is in front: ESC plus the key, with Shift kept (Alt+Shift+F is
+/// `ESC F`). Alt+Backspace is `ESC DEL` (kill word backward) and Alt+Left /
+/// Alt+Right jump a word (`ESC b` / `ESC f`). None for keys Alt does not
+/// combine with (digits stay digits: they fall through as before).
+fn term_alt_key(code: u16, shift: bool) -> Option<TermKey> {
+    if code == KEY_BACKSPACE {
+        return Some(TermKey::Alt(bifrost_ui::terminal_keys::ALT_BACKSPACE));
+    }
+    if code == KEY_LEFT {
+        return Some(TermKey::AltWord(false));
+    }
+    if code == KEY_RIGHT {
+        return Some(TermKey::AltWord(true));
+    }
+    let (_, lower, upper) = TEXT_KEYS.iter().find(|k| k.0 == code)?;
+    let c = if shift { *upper } else { *lower };
+    // Letters, Space and the brackety symbols Alt combines with as Meta;
+    // digits and most punctuation fall through untouched.
+    if c.is_ascii_alphabetic() || c == ' ' || matches!(c, '[' | ']' | '\\') {
+        return bifrost_ui::terminal_keys::alt_bytes(c).map(|b| TermKey::Alt(b[1]));
+    }
+    None
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shortcut {
     Term(TermKey),
@@ -241,6 +302,36 @@ impl HwKeys {
         if term && meta && !ctrl && !alt {
             if let Some(k) = TermKey::from_chord(code, self.shift > 0) {
                 return Some(Shortcut::Term(k));
+            }
+        }
+        // While Term is in front, plain Ctrl and Alt chords go to the pty as
+        // control bytes (`bifrost_ui::terminal_keys`), not to editing
+        // shortcuts: Ctrl+A/E move, Ctrl+C/Z signal, Alt+F/B jump words.
+        // Kept for the shell: Ctrl+Space (input source), any Tab chord (the
+        // app switcher) and any Ctrl+Alt chord (the screen reader).
+        if term && ctrl && !meta && !alt && code != KEY_SPACE && code != KEY_TAB {
+            if let Some(k) = term_ctrl_key(code, self.shift > 0) {
+                return Some(Shortcut::Term(k));
+            }
+        }
+        if term && alt && self.alt > self.altgr && !ctrl && !meta && code != KEY_TAB {
+            if let Some(k) = term_alt_key(code, self.shift > 0) {
+                return Some(Shortcut::Term(k));
+            }
+        }
+        // Navigation keys with no modifiers reach the pty while Term is in
+        // front (Home/End line start/end, Delete, PageUp/PageDown).
+        if term && !ctrl && !alt && !meta {
+            let name = match code {
+                KEY_HOME => Some("Home"),
+                KEY_END => Some("End"),
+                KEY_DELETE => Some("Delete"),
+                KEY_PAGEUP => Some("PageUp"),
+                KEY_PAGEDOWN => Some("PageDown"),
+                _ => None,
+            };
+            if let Some(name) = name {
+                return Some(Shortcut::Term(TermKey::Named(name)));
             }
         }
         if photos && meta && !ctrl {
@@ -738,7 +829,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn term_takes_cmd_chords_only_while_in_front_and_leaves_ctrl_alone() {
+    fn term_takes_cmd_chords_only_while_in_front_and_ctrl_reaches_the_pty() {
         let mut k = HwKeys::default();
         let in_term = |k: &mut HwKeys, mods: &[u16], key: u16| {
             for m in mods {
@@ -767,14 +858,48 @@ mod tests {
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 10), Some(Shortcut::Term(TermKey::Tab(8))));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_C), Some(Shortcut::Term(TermKey::Copy)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], KEY_A), Some(Shortcut::Term(TermKey::SelectAll)));
-        // Ctrl chords are never Term's: Ctrl+F, Ctrl+K and Ctrl+T stay control characters for the pty
-        for key in [33, 37, 20, 34] {
-            assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], key), None);
-        }
-        // outside Term the same Cmd chords fall through to the app
+        // Plain Ctrl chords are Term's too now: they carry the control byte
+        // for the pty (readline, job control), never an editing shortcut.
+        // A=1 (line start), E=5 (line end), C=3 (interrupt), Z=26 (suspend).
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], 30), Some(Shortcut::Term(TermKey::Ctrl(1))), "Ctrl+A");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], 18), Some(Shortcut::Term(TermKey::Ctrl(5))), "Ctrl+E");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_C), Some(Shortcut::Term(TermKey::Ctrl(3))), "Ctrl+C interrupts");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_A), Some(Shortcut::Term(TermKey::Ctrl(1))), "Ctrl+A, not SelectAll");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_X), Some(Shortcut::Term(TermKey::Ctrl(24))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_V), Some(Shortcut::Term(TermKey::Ctrl(22))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_Z), Some(Shortcut::Term(TermKey::Ctrl(26))), "Ctrl+Z suspends, not Undo");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_Z), Some(Shortcut::Term(TermKey::Ctrl(26))), "Ctrl+Shift+Z is the same byte");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_LEFTSHIFT), None, "bare Shift is not a chord");
+        // The shell keeps its own Ctrl chords: input source, the app switcher.
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::InputSource));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], KEY_TAB), Some(Shortcut::AppSwitch));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTCTRL], 2), None, "Ctrl+1 is not a control byte");
+        // Plain Alt chords send ESC plus the key (word jumps); AltGr still types.
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], 33), Some(Shortcut::Term(TermKey::Alt(b'f'))), "Alt+F forward word");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], 30), Some(Shortcut::Term(TermKey::Alt(b'a'))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT, KEY_LEFTSHIFT], 33), Some(Shortcut::Term(TermKey::Alt(b'F'))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], KEY_LEFT), Some(Shortcut::Term(TermKey::AltWord(false))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], KEY_RIGHT), Some(Shortcut::Term(TermKey::AltWord(true))));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], 2), None, "Alt+1 falls through");
+        assert_eq!(in_term(&mut k, &[KEY_LEFTALT], KEY_TAB), Some(Shortcut::AppSwitch));
+        // Navigation keys with no modifiers reach the pty.
+        assert_eq!(in_term(&mut k, &[], KEY_HOME), Some(Shortcut::Term(TermKey::Named("Home"))));
+        assert_eq!(in_term(&mut k, &[], KEY_END), Some(Shortcut::Term(TermKey::Named("End"))));
+        assert_eq!(in_term(&mut k, &[], KEY_DELETE), Some(Shortcut::Term(TermKey::Named("Delete"))));
+        // outside Term the same chords are the app's shortcuts again
         k.key(KEY_LEFTMETA, true);
         assert_eq!(k.key_in(33, true, false), None);
         assert_eq!(k.key_in(KEY_C, true, false), Some(Shortcut::Copy));
+        k.key(KEY_C, false);
+        k.key(KEY_LEFTMETA, false);
+        k.key(KEY_LEFTCTRL, true);
+        assert_eq!(k.key_in(KEY_C, true, false), Some(Shortcut::Copy), "Ctrl+C outside Term is Copy");
+        k.key(KEY_C, false);
+        k.key(KEY_LEFTCTRL, false);
+        k.key(KEY_LEFTALT, true);
+        assert_eq!(k.key_in(33, true, false), None, "Alt+F outside Term is not the terminal's");
+        k.key(33, false);
+        k.key(KEY_LEFTALT, false);
     }
 
     #[test]

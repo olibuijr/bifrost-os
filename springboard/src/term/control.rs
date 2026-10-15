@@ -5,15 +5,16 @@ use super::*;
 pub fn spec_bytes(spec: &str, app_cursor: bool) -> Option<Vec<u8>> {
     let lower = spec.to_ascii_lowercase();
     if let Some(c) = lower.strip_prefix("ctrl+") {
-        let b = match c.as_bytes() {
-            [b @ b'a'..=b'z'] => *b - b'a' + 1,
-            b"[" => 27,
-            b"\\" => 28,
-            b"]" => 29,
-            b"space" | b"@" => 0,
+        // Ctrl bytes come from the terminal-keys SDK kit, shared with the
+        // hardware and on-screen keyboards, so every client sends the same.
+        if c == "space" {
+            return Some(vec![0]);
+        }
+        let mut chars = c.chars();
+        match (chars.next(), chars.next()) {
+            (Some(b), None) => return bifrost_ui::terminal_keys::control_byte(b).map(|byte| vec![byte]),
             _ => return None,
-        };
-        return Some(vec![b]);
+        }
     }
     if lower.starts_with("alt+") {
         let mut v = vec![0x1b];

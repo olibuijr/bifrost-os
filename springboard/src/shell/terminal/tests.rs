@@ -482,6 +482,40 @@ fn mouse_reporting_toggle_applies_to_new_tabs() {
 }
 
 #[test]
+fn ctrl_and_alt_keys_reach_the_shell_as_control_bytes() {
+    let mut sh = terminal(&["/bin/sh", "-c", "/bin/stty raw -echo; echo ready; /bin/head -c 5 | /bin/od -An -t x1; read x"]);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("ready"));
+    sh.terminal_hw_key(TermKey::Ctrl(1), 2000.0);
+    sh.terminal_hw_key(TermKey::Ctrl(5), 2100.0);
+    sh.terminal_hw_key(TermKey::Alt(b'f'), 2200.0);
+    sh.terminal_hw_key(TermKey::Ctrl(3), 2300.0);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("01 05 1b 66 03"));
+}
+
+#[test]
+fn control_keys_do_not_type_into_open_panels() {
+    let mut sh = terminal(&["/bin/sh", "-c", "/bin/stty raw -echo; echo ready; /bin/head -c 1 | /bin/od -An -t x1; read x"]);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("ready"));
+    sh.terminal_action(6, 2000.0);
+    assert!(matches!(sh.terminal_ui.panel, Panel::More));
+    sh.terminal_hw_key(TermKey::Ctrl(1), 2100.0);
+    sh.terminal_hw_key(TermKey::Alt(b'f'), 2150.0);
+    sh.terminal_hw_key(TermKey::AltWord(true), 2200.0);
+    sh.terminal_hw_key(TermKey::Named("Home"), 2250.0);
+    let start = std::time::Instant::now();
+    while start.elapsed().as_millis() < 500 {
+        let fds = sh.poll_fds();
+        if crate::bare::sys::wait(&fds, 50).contains(&true) {
+            sh.pump();
+        }
+    }
+    assert!(!sh.term.as_ref().unwrap().viewport_text().contains("01"), "a panel keeps pty input out");
+    sh.terminal_close_panel(3000.0);
+    sh.terminal_hw_key(TermKey::Ctrl(1), 3100.0);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("01"));
+}
+
+#[test]
 fn selection_rows_ask_for_a_selection_first() {
     let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
     for (i, label) in [(30, "Search the web for selection"), (31, "Open man page for selection"), (32, "Save selected text to Files"), (33, "Use selection for find")] {

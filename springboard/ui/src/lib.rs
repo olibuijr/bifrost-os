@@ -573,6 +573,7 @@ pub mod responder;
 pub mod undo;
 pub mod text;
 pub mod keys;
+pub mod terminal_keys;
 pub mod anim;
 pub mod angle;
 pub mod anim_value;
