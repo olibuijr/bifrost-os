@@ -28,6 +28,8 @@ pub struct Session {
     last_zoom: HashMap<String, f32>,
     changed_at: Option<f64>,
     saved_once: bool,
+    /// True when tabs, URLs, titles or selection changed since the last session snapshot.
+    pub dirty: bool,
 }
 
 fn path() -> PathBuf {
@@ -181,11 +183,15 @@ impl Browser {
         if self.pool.is_none() || self.private {
             return;
         }
+        if !self.session.dirty && self.session.changed_at.is_none() && self.session.saved_once && self.current == self.session.last_sel {
+            return;
+        }
         let snap = self.snapshot();
         let (sel, nz) = (self.current, self.session.zoom.clone());
         let s = &mut self.session;
         if snap == s.last && sel == s.last_sel && s.last_zoom == nz && s.saved_once {
             s.changed_at = None;
+            s.dirty = false;
             return;
         }
         let since = *s.changed_at.get_or_insert(t);
@@ -200,6 +206,7 @@ impl Browser {
         s.last_zoom = nz;
         s.saved_once = true;
         s.changed_at = None;
+        s.dirty = false;
     }
 
     /// Pushes tab `i` on the closed stack (call before it is removed).
@@ -249,6 +256,7 @@ impl Browser {
             } else {
                 self.session.zoom.insert(o, f);
             }
+            self.session.dirty = true;
         }
     }
 }

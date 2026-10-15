@@ -2,7 +2,7 @@
 //! written atomically via a temp file and rename).
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use std::{collections::HashMap, fs, io};
+use std::{collections::{HashMap, HashSet}, fs, io};
 
 /// History is written at most this often (and on exit via `Drop`).
 pub const SAVE_INTERVAL: Duration = Duration::from_secs(5);
@@ -42,6 +42,8 @@ pub struct Store {
     pub private: bool,
     /// url -> position in `history` (O(1) visit lookup); rebuilt whenever the order changes.
     index: HashMap<String, usize>,
+    /// url -> bookmarked membership (O(1) bookmark lookup); synchronized on bookmark mutations.
+    bookmark_set: HashSet<String>,
     dirty: bool,
     last_save: Option<Instant>,
 }
@@ -118,6 +120,7 @@ impl Store {
 
     fn reindex(&mut self) {
         self.index = self.history.iter().enumerate().map(|(i, e)| (e.url.clone(), i)).collect();
+        self.bookmark_set = self.bookmarks.iter().map(|e| e.url.clone()).collect();
     }
 
     /// Writes pending changes now (atomic). Called on exit and by `tick`.
@@ -181,7 +184,7 @@ impl Store {
     }
 
     pub fn is_bookmarked(&self, url: &str) -> bool {
-        self.bookmarks.iter().any(|b| b.url == url)
+        self.bookmark_set.contains(url) || (!self.bookmarks.is_empty() && self.bookmark_set.is_empty() && self.bookmarks.iter().any(|b| b.url == url))
     }
 
     /// Add or remove the bookmark; returns whether it is bookmarked afterwards.
@@ -191,9 +194,12 @@ impl Store {
         }
         let on = if let Some(i) = self.bookmarks.iter().position(|b| b.url == url) {
             self.bookmarks.remove(i);
+            self.bookmark_set.remove(url);
             false
         } else {
-            self.bookmarks.push(Entry { url: url.into(), title: title.into(), visits: 0, last: at });
+            let u = url.to_string();
+            self.bookmark_set.insert(u.clone());
+            self.bookmarks.push(Entry { url: u, title: title.into(), visits: 0, last: at });
             true
         };
         self.save();
@@ -211,7 +217,9 @@ impl Store {
             return false;
         }
         if !self.is_bookmarked(url) {
-            self.bookmarks.push(Entry { url: clip(url), title: clip(title), visits: 0, last: at });
+            let u = clip(url);
+            self.bookmark_set.insert(u.clone());
+            self.bookmarks.push(Entry { url: u, title: clip(title), visits: 0, last: at });
             self.save();
         }
         true
@@ -229,6 +237,7 @@ impl Store {
     pub fn remove_bookmark(&mut self, url: &str) -> bool {
         let Some(i) = self.bookmarks.iter().position(|b| b.url == url) else { return false };
         self.bookmarks.remove(i);
+        self.bookmark_set.remove(url);
         self.save();
         true
     }
@@ -250,7 +259,9 @@ impl Store {
             if url.is_empty() || url == "about:blank" || self.is_bookmarked(url) {
                 continue;
             }
-            self.bookmarks.push(Entry { url: clip(url), title: clip(title), visits: 0, last: at });
+            let u = clip(url);
+            self.bookmark_set.insert(u.clone());
+            self.bookmarks.push(Entry { url: u, title: clip(title), visits: 0, last: at });
             added += 1;
         }
         if added > 0 {
