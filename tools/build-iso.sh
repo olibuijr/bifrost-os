@@ -86,6 +86,7 @@ rsync -a --delete "$ASSET_SRC/" "$ASSET_DEST/"
 # Installer footage is a required live-media input. The canonical source is the archiso overlay; lab builds can point
 # at the already-published payload explicitly without depending on an old AIROOT tree.
 VIDEO_SRC=${BIFROST_ISO_VIDEO_DIR:-packaging/archiso/airootfs/usr/share/bifrost/video}
+[ -d "$VIDEO_SRC" ] || [ ! -d out/video-new ] || VIDEO_SRC=out/video-new
 for file in Godafoss_1080.mp4 Svartifoss_1080.mp4; do
   [ -s "$VIDEO_SRC/$file" ] || { echo "required installer video missing: $VIDEO_SRC/$file (set BIFROST_ISO_VIDEO_DIR to a prepared source directory)" >&2; exit 1; }
 done

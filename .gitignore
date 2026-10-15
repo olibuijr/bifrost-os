@@ -19,6 +19,8 @@ packaging/archiso/airootfs/usr/share/bifrost/opencore/
 /out
 *.core
 packaging/archiso/airootfs/usr/bin/bifrost-installer
+packaging/archiso/airootfs/usr/share/bifrost/video/
+*.mp4
 springboard/apps/*/assets/licenses/
 
 # SDK snapshot goldens are committed
