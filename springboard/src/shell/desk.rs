@@ -1019,12 +1019,11 @@ impl Shell {
         let m = self.desk_metrics();
         let win = self.desk.as_ref().unwrap().wins[i].r;
         let (dx, dy) = window_fx::minimize_target((win.x, win.y, win.w, win.h), self.fx_dock_target(&m, app));
-        // Funnel needs a mesh warp the presenter cannot draw in the window's own drawable: both effects scale and slide
-        let _effect = window_fx::MinimizeEffect::from_index(super::pages::DeskPrefs::load(&self.prefs).minimize_effect);
+        let minimize_effect = window_fx::MinimizeEffect::from_index(super::pages::DeskPrefs::load(&self.prefs).minimize_effect);
         let effect = match call {
             FxCall::Open => window_fx::Effect::Open,
-            FxCall::Minimize => window_fx::Effect::Minimize { to_dx: dx, to_dy: dy },
-            FxCall::Restore => window_fx::Effect::Restore { from_dx: dx, from_dy: dy },
+            FxCall::Minimize => window_fx::Effect::Minimize { to_dx: dx, to_dy: dy, how: minimize_effect },
+            FxCall::Restore => window_fx::Effect::Restore { from_dx: dx, from_dy: dy, how: minimize_effect },
             FxCall::Zoom => window_fx::Effect::Zoom,
             FxCall::Close => window_fx::Effect::Close,
         };

@@ -170,7 +170,8 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             }
             continue;
         }
-        if k == "sdk_protocol" || v.parse::<u64>().is_ok() || v == "true" || v == "false" {
+        if (k == "sdk_protocol" || v.parse::<u64>().is_ok() || v == "true" || v == "false")
+            && !matches!(k, "id" | "name" | "version" | "exec" | "icon" | "min_shell" | "summary" | "category" | "kind" | "window") {
             continue;
         }
         let Some(s) = toml_string(v) else {

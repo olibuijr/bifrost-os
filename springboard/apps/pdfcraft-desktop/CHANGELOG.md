@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.0
+
+- Upstream pdfcraft v0.8.0.
+  ## What's Changed
+  * Add a PR template, and record the review practice and external-PR bar by @tanish2k09 in https://github.com/storytold/pdfcraft/pull/223
+  * F1 + F2: exact standard-14 metrics, and code-to-Unicode completeness by @tanish2k09 in https://github.com/storytold/pdfcraft/pull/357
+  * Retire inherited resources by @not-a-feature in https://github.com/storytold/pdfcraft/pull/1348
+  * Fix Lab Bradford adaptation to use LMS white-point ratios by @FredApps in https://github.com/storytold/pdfcraft/pull/1417
+
 ## 0.7.2
 
 - Upstream pdfcraft v0.7.1.

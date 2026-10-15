@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.7.0
+
+- Upstream gridcraft v0.7.0.
+  ## What's Changed
+  * fix(calc): recalculate dependents of a cleared spill past 65536 cells (#558) by @MarekSpodBiedry in https://github.com/storytold/gridcraft/pull/605
+  * Return #VALUE! when a LAMBDA call has too few argument positions (#557) by @MarekSpodBiedry in https://github.com/storytold/gridcraft/pull/606
+  * SUBTOTAL 109-111 leave out nested subtotals like 1-11 (#556) by @MarekSpodBiedry in https://github.com/storytold/gridcraft/pull/607
+  * fix(xlsx): keep leading and trailing whitespace in document properties on reopen (#554) by @MarekSpodBiedry in https://github.com/storytold/gridcraft/pull/608
+
 ## 0.6.2
 
 - Upstream gridcraft v0.6.1.

@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.7.0
+
+- Upstream deckcraft v0.7.0.
+  ## What's Changed
+  * Text: superscript and subscript letters no longer spread apart by @echelon in https://github.com/storytold/deckcraft/pull/264
+  * Themes: background pictures are recoloured, and dark layouts stay dark by @echelon in https://github.com/storytold/deckcraft/pull/269
+  * Render: two-colour gradients ramp like PowerPoint's by @echelon in https://github.com/storytold/deckcraft/pull/273
+  * PPTX: a picture fill with no stretch or tile is tiled, as in PowerPoint by @echelon in https://github.com/storytold/deckcraft/pull/290
+
 ## 0.6.2
 
 - Upstream deckcraft v0.6.1.

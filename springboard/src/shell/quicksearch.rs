@@ -1291,22 +1291,22 @@ impl QuickSearch {
             }
             if !self.recents.is_empty() {
             let hd = &self.suggestions;
-            s.blit(hd, header_x, (y + ui.pt(m.header_mid) - hd.h as f32 / 2.0) as i32, 255, alpha);
+            s.blit_colored(hd, header_x, (y + ui.pt(m.header_mid) - hd.h as f32 / 2.0) as i32, LABEL_2.now(), alpha);
             let ch = &self.chevron;
-            s.blit(ch, (cx + cw - ui.pt(m.inset + 4.0) - ch.w as f32) as i32, (y + ui.pt(m.header_mid) - ch.h as f32 / 2.0) as i32, 255, alpha);
+            s.blit_colored(ch, (cx + cw - ui.pt(m.inset + 4.0) - ch.w as f32) as i32, (y + ui.pt(m.header_mid) - ch.h as f32 / 2.0) as i32, LABEL_2.now(), alpha);
             for (i, app) in self.recents.iter().enumerate() {
                 let Some((_, big, _, label)) = self.icons.iter().find(|(a, ..)| a == app) else { continue };
                 let (ix, iy, iw, _) = self.suggestion_rect(ui, w, i);
                 let iy = iy + slide;
                 let tint = if pressed == Some(Target::Suggestion(i)) { 150 } else { 255 };
                 s.blit(big, ix as i32, iy as i32, tint, alpha);
-                s.blit(label, (ix + (iw - label.w as f32) / 2.0) as i32, (iy + iw + ui.pt(SUGGEST_LABEL_GAP_PT)) as i32, 255, alpha);
+                s.blit_colored(label, (ix + (iw - label.w as f32) / 2.0) as i32, (iy + iw + ui.pt(SUGGEST_LABEL_GAP_PT)) as i32, LABEL.now(), alpha);
             }
             y += ui.pt(m.header + SUGGEST_PT);
             }
             if !self.searches.is_empty() {
                 let hd = &self.searches_header;
-                s.blit(hd, header_x, (y + ui.pt(m.header_mid) - hd.h as f32 / 2.0) as i32, 255, alpha);
+                s.blit_colored(hd, header_x, (y + ui.pt(m.header_mid) - hd.h as f32 / 2.0) as i32, LABEL_2.now(), alpha);
                 y += ui.pt(m.header);
                 for (i, label) in self.search_imgs.iter().enumerate() {
                     let rh = ui.pt(m.row);
@@ -1316,8 +1316,8 @@ impl QuickSearch {
                     let (gx, gr) = (cx + ui.pt(m.row_icon_x + m.row_icon / 2.0 - 3.0), ui.pt(5.5));
                     let stroke = ui.pt(1.6);
                     let glass = glyphs::either(glyphs::ring((gx, y + rh / 2.0 - ui.pt(1.0)), gr, stroke), glyphs::segment((gx + gr * 0.72, y + rh / 2.0 - ui.pt(1.0) + gr * 0.72), (gx + gr * 1.5, y + rh / 2.0 - ui.pt(1.0) + gr * 1.5), stroke * 1.2));
-                    glyphs::paint(s, (gx - gr - stroke, y + rh / 2.0 - gr - stroke - ui.pt(2.0), gr * 2.6 + stroke, gr * 2.6 + stroke), a(SECONDARY), glass);
-                    s.blit(label, (cx + ui.pt(m.row_text_x)) as i32, (y + rh / 2.0 - label.h as f32 / 2.0) as i32, 255, alpha);
+                    glyphs::paint(s, (gx - gr - stroke, y + rh / 2.0 - gr - stroke - ui.pt(2.0), gr * 2.6 + stroke, gr * 2.6 + stroke), a(LABEL_2.now()), glass);
+                    s.blit_colored(label, (cx + ui.pt(m.row_text_x)) as i32, (y + rh / 2.0 - label.h as f32 / 2.0) as i32, LABEL.now(), alpha);
                     y += rh;
                 }
             }
@@ -1325,7 +1325,7 @@ impl QuickSearch {
             for (si, sec) in self.sections.iter().enumerate() {
                 let hd = &sec.header;
                 let hy = (y + ui.pt(m.header_mid) - hd.h as f32 / 2.0) as i32;
-                if self.mac { s.blit_colored(hd, header_x, hy, LABEL_2.now(), alpha) } else { s.blit(hd, header_x, hy, 255, alpha) }
+                s.blit_colored(hd, header_x, hy, LABEL_2.now(), alpha);
                 y += ui.pt(m.header);
                 for (ri, (hit, label)) in sec.rows.iter().enumerate() {
                     let rh = ui.pt(m.row);
@@ -1373,7 +1373,7 @@ impl QuickSearch {
                         _ => {}
                     }
                     let (lx, ly) = ((cx + ui.pt(m.row_text_x)) as i32, (y + rh / 2.0 - label.h as f32 / 2.0) as i32);
-                    if self.mac { s.blit_colored(label, lx, ly, LABEL.now(), alpha) } else { s.blit(label, lx, ly, 255, alpha) }
+                    s.blit_colored(label, lx, ly, LABEL.now(), alpha);
                     y += rh;
                 }
             }

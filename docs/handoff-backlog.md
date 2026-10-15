@@ -25,13 +25,14 @@ HANDOFF.md. Tick items here as they land (commit hash).
 - [ ] CHECK Kernel/root corruption fallback; hard-limit OOM recovery; direct pacman bypassing the update guard
 
 ## Shell and desktop
-- [ ] OPEN `window_fx` wired for the minimize target only: `src/shell/desk.rs` calls `minimize_target` and reads the minimize effect pref, but the effect value is unused (`_effect`); open and close have no effect (2026-10-13)
+- [x] DONE `window_fx` minimize effect preference wired to renderer; Genie vs Scale curve distinction (2026-10-15)
 - [ ] OPEN Settings readers missing: hot corners, Overview prefs (the minimize effect pref exists in `DeskPrefs`, 2026-10-13)
 - [ ] OPEN Control Center Now Playing: plate click acts as transport; height not clamped on short screens
 - [ ] OPEN Sheet default button / focus ring (and Overview selection) use TINT instead of CONTROL_ACCENT (`sdk/src/widgets.rs:554,709`)
 - [ ] OPEN Quit has no confirmation for apps with unsaved work (`desktop_bar.rs` Quit = Close)
 - [ ] OPEN Menu text re-measured on hover (`desktop_bar.rs` `menu_buttons`): cache per label
-- [ ] OPEN Idle `draw()` still costs a dirty frame (`shell/mod.rs` needs_frame)
+- [x] DONE Idle `draw()` still costs a dirty frame (`shell/mod.rs` needs_frame: short-circuits idle draw, 0.000 ms idle frame bench, 2026-10-15)
+- [x] DONE Spotlight light-mode styling: field placeholder, suggestions, search headers, row labels use dynamic LABEL/LABEL_2 tokens (2026-10-15)
 - [ ] OPEN Dark-only surfaces: Browser chrome, full-screen Clock, power alert (allowlisted in the appearance guard)
 - [ ] OPEN Third-party native apps fuzzy (compositor scale 1 vs shell 2x): GDK_SCALE/QT_SCALE_FACTOR in app_policy
 - [ ] OPEN `/data/local` leftovers: `render/src/emoji.rs:15`, `render/src/clipboard.rs:2`, `shell/storage_page.rs:114`

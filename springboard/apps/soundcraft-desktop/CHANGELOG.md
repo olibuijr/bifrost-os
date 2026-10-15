@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.7.0
+
+- Upstream soundcraft v0.7.0.
+  ## What's Changed
+  * fix(dsp): a huge finite sample rate is no pitch, not an overflow (#241) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/269
+  * fix(track): vca: null clears a VCA assignment, as documented (#237) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/270
+  * fix(control): apply the engine.commands filter to UI commands (#255) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/271
+  * fix(window): keep the MIDI Editor open on Bring to Front (#254) by @marcoarnulfo in https://github.com/storytold/soundcraft/pull/272
+
 ## 0.6.2
 
 - Upstream soundcraft v0.6.1.

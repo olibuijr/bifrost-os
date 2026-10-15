@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.0
+
+- Upstream designcraft v0.8.0.
+  ## What's Changed
+  * Files: saves and exports replace the file atomically by @aiongg in https://github.com/storytold/designcraft/pull/485
+  * Recovery: each running app keeps its own recovery data by @noah1400 in https://github.com/storytold/designcraft/pull/506
+  * UI: quitting asks to save documents with unsaved changes by @aiongg in https://github.com/storytold/designcraft/pull/545
+  * fix(save): preserve live state when persistence fails by @skylartaylor in https://github.com/storytold/designcraft/pull/613
+
 ## 0.7.2
 
 - Upstream designcraft v0.7.1.

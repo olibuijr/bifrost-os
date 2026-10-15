@@ -49,6 +49,7 @@ fn strings(list: &str) -> Vec<String> {
 
 impl Shell {
     /// The quick actions of the installed app in `slot`: its dynamic items first, then the manifest's static ones.
+    #[allow(dead_code)]
     pub(super) fn quick_actions_for(&self, slot: usize) -> Vec<ShortcutItem> {
         let dynamic = self.ext.get(slot).and_then(Option::as_ref).map(|host| host.quick_actions.clone()).unwrap_or_default();
         let fixed = installed().get(slot).map(|app| app.manifest.quick_actions.clone()).unwrap_or_default();
