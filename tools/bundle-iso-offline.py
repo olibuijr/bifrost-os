@@ -132,6 +132,14 @@ def build(dest, sync=False):
     if sync:
         pc_mirror.sync()
     selected = package_closure()
+    t2 = os.environ.get("BIFROST_ISO_T2") == "1"
+    if t2:
+        filename = "linux-lts-t2-6.18.56-2-x86_64.pkg.tar.zst"
+        source = os.path.join(ROOT, "out/t2-package", filename)
+        expected = "8a28a43d483d65eea0bb9ad5600df1cbcbd35eedee0be0817de92e1e084f3e33"
+        if not os.path.isfile(source) or sha256(source) != expected:
+            raise RuntimeError("the pinned linux-lts-t2 package is missing or has the wrong SHA-256")
+        selected.append(("linux-lts-t2", filename, source))
     shell = shell_package()
     apps = [app_package("is.olibuijr.browser.desktop"), app_package("is.olibuijr.files.desktop")]
     parent = os.path.dirname(dest)
@@ -175,7 +183,7 @@ def build(dest, sync=False):
     finally:
         if stage and os.path.isdir(stage):
             shutil.rmtree(stage)
-    print(f"offline ISO bundle: {len(selected)} Arch packages, shell, and {len(apps)} default apps -> {dest}")
+    print(f"offline ISO bundle: {len(selected)} packages, shell, and {len(apps)} default apps -> {dest}")
 
 
 def main():

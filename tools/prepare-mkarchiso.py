@@ -26,8 +26,9 @@ _make_bootmode_uefi.bifrost() {
     local extra="quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 threadirqs"
     # debug builds put their own command line (journal diagnostics with graphical splash) in <profile>/bifrost-cmdline
     [[ -s "${profile}/bifrost-cmdline" ]] && extra="$(cat "${profile}/bifrost-cmdline")"
-    # the live ISO keeps the stock linux kernel; only installed systems use linux-rt (plan.rs BASE_PACKAGES)
-    local line="initrd=\\${install_dir}\\boot\\${arch}\\initramfs-linux.img archisobasedir=${install_dir} archisosearchuuid=${iso_uuid} ${extra}"
+    local kernel="linux"; [[ -f "${profile}/bifrost-t2" ]] && kernel="linux-lts-t2"
+    [[ "${kernel}" != "linux-lts-t2" ]] || extra="${extra} efi=noruntime intel_iommu=on iommu=pt pm_async=off"
+    local line="initrd=\\${install_dir}\\boot\\${arch}\\initramfs-${kernel}.img archisobasedir=${install_dir} archisosearchuuid=${iso_uuid} ${extra}"
     rm -rf -- "${isofs_dir}/EFI" "${isofs_dir}/loader" "${isofs_dir}/shell"*.efi
     install -d -m 0755 -- "${isofs_dir}/EFI/BOOT" "${isofs_dir}/EFI/BIFROST" "${isofs_dir}/loader/entries"
     install -m 0644 -- "${splash}" "${isofs_dir}/EFI/BOOT/BOOTx64.efi"
@@ -35,8 +36,8 @@ _make_bootmode_uefi.bifrost() {
     printf '%s\n' "${line}" > "${isofs_dir}/EFI/BOOT/cmdline.txt"
     printf '%s\n' "${line}" > "${isofs_dir}/EFI/BIFROST/boot.cfg"
     local opts="archisobasedir=${install_dir} archisosearchuuid=${iso_uuid} ${extra}"
-    printf 'title   Install BifrOSt\nsort-key 01\nlinux   /%s/boot/%s/vmlinuz-linux\ninitrd  /%s/boot/%s/initramfs-linux.img\noptions %s\n' "${install_dir}" "${arch}" "${install_dir}" "${arch}" "${opts}" > "${isofs_dir}/loader/entries/01-bifrost.conf"
-    printf 'title   Try BifrOSt\nsort-key 02\nlinux   /%s/boot/%s/vmlinuz-linux\ninitrd  /%s/boot/%s/initramfs-linux.img\noptions %s bifrost.live=1\n' "${install_dir}" "${arch}" "${install_dir}" "${arch}" "${opts}" > "${isofs_dir}/loader/entries/02-bifrost-live.conf"
+    printf 'title   Install BifrOSt\nsort-key 01\nlinux   /%s/boot/%s/vmlinuz-%s\ninitrd  /%s/boot/%s/initramfs-%s.img\noptions %s\n' "${install_dir}" "${arch}" "${kernel}" "${install_dir}" "${arch}" "${kernel}" "${opts}" > "${isofs_dir}/loader/entries/01-bifrost.conf"
+    printf 'title   Try BifrOSt\nsort-key 02\nlinux   /%s/boot/%s/vmlinuz-%s\ninitrd  /%s/boot/%s/initramfs-%s.img\noptions %s bifrost.live=1\n' "${install_dir}" "${arch}" "${kernel}" "${install_dir}" "${arch}" "${kernel}" "${opts}" > "${isofs_dir}/loader/entries/02-bifrost-live.conf"
     efiboot_files=("${isofs_dir}/EFI/" "${isofs_dir}/loader/" "${boot_dir}/vmlinuz-"* "${boot_dir}/initramfs-"*".img")
     _make_efibootimg
     mcopy -s -i "${efibootimg}" "${isofs_dir}/EFI" "${isofs_dir}/loader" '::/'

@@ -1,5 +1,10 @@
 # BifrOSt changelog
 
+## 0.8.2 — 2026-10-16
+
+- Installer: explicitly install `mkinitcpio` on the target system so offline installs can generate the initial initramfs and finish boot setup.
+- T2 MacBook Pro installer media: opt-in ISO builds use the pinned `linux-lts-t2` kernel, include T2BCE and built-in keyboard/trackpad modules in the live initramfs, and set the T2 EFI kernel parameters. The installer selects the T2 kernel and carries it in its offline package bundle.
+
 ## 0.8.1 — 2026-10-15
 
 - Terminal: common control keys reach the shell. Plain Ctrl chords send their control bytes to the pty (Ctrl+A/E line start/end, Ctrl+B/F/N/P move and history, Ctrl+D/H delete, Ctrl+K/U/W kill, Ctrl+Y yank, Ctrl+L clear, Ctrl+R/S search, Ctrl+T transpose, Ctrl+C/Z interrupt/suspend), Alt sends ESC plus the key (Alt+B/F/D word edits, Alt+Backspace kill word, Alt+Left/Right word jumps), and Home/End/Delete/PageUp/PageDown work with a hardware keyboard. One new SDK kit maps them all (`bifrost_ui::terminal_keys`, shared by the hardware path, the on-screen Ctrl key and `term send_keys`); Ctrl+Space (input source), Tab chords (app switcher), Ctrl+Alt chords (screen reader) and Cmd chords (copy/paste, tabs, find) are untouched, and an open panel keeps pty input out.

@@ -245,9 +245,14 @@ pub fn discover_offline_bundle(root: &Path) -> Result<Option<OfflineBundle>, Str
     Ok(Some(OfflineBundle { root: root.canonicalize().map_err(|e| e.to_string())?, repo, database, shell, shell_sha256, apps, packages }))
 }
 
-fn offline_required_packages(gpu: &[&'static str]) -> Vec<&'static str> {
+pub const KERNEL_T2: &str = "linux-lts-t2";
+
+fn offline_required_packages(gpu: &[&'static str], kernel: &'static str) -> Vec<&'static str> {
     let mut out = packages();
-    for name in [KERNEL_FALLBACK, "vulkan-intel", "intel-media-driver", "vulkan-radeon", "nvidia-open", "nvidia-utils", "libva-nvidia-driver"] {
+    out.retain(|name| *name != KERNEL_RT && *name != KERNEL_FALLBACK);
+    out.push(kernel);
+    if kernel != KERNEL_T2 { out.push(KERNEL_FALLBACK); }
+    for name in ["vulkan-intel", "intel-media-driver", "vulkan-radeon", "nvidia-open", "nvidia-utils", "libva-nvidia-driver"] {
         if !out.contains(&name) { out.push(name); }
     }
     for name in gpu { if !out.contains(name) { out.push(*name); } }
@@ -294,8 +299,8 @@ fn offline_resolve_args(config: &str, dbpath: &str, packages: &[&str]) -> Vec<St
     args
 }
 
-fn offline_resolve(r: &Run, bundle: &OfflineBundle, gpu: &[&'static str]) -> Result<(), String> {
-    let required = offline_required_packages(gpu);
+fn offline_resolve(r: &Run, bundle: &OfflineBundle, gpu: &[&'static str], kernel: &'static str) -> Result<(), String> {
+    let required = offline_required_packages(gpu, kernel);
     let config = "/run/bifrost-offline-pacman.conf";
     // Never let the live ISO's installed-package database make a missing dependency look satisfied. This DB is
     // deliberately empty and separate from the config used later by pacstrap.
@@ -464,13 +469,23 @@ pub fn initramfs_hooks(encrypted: bool) -> String {
 /// An empty systemd.tty.rows.console= makes PID 1 skip its ANSI size query on /dev/console. Nothing answers
 /// that query behind the boot frame, so PID 1 otherwise waits out its 333 ms reply timeout every boot.
 pub fn cmdline_txt(root_uuid: &str, kernel: &str) -> String {
-    cmdline_with(root_uuid, kernel, AUDIO_CORE)
+    let mut line = cmdline_with(root_uuid, kernel, AUDIO_CORE);
+    if t2_hardware() {
+        line = line.replace("threadirqs", "threadirqs efi=noruntime intel_iommu=on iommu=pt pm_async=off");
+    }
+    line
 }
 
 /// The installed kernel package: `linux-rt` (PREEMPT_RT, the default since 2026-10-12, docs/audio-latency.md
 /// "Kernel"), or the stock `linux` when the package source had no linux-rt (see `KERNEL_FALLBACK`).
 pub const KERNEL_RT: &str = "linux-rt";
 pub const KERNEL_FALLBACK: &str = "linux";
+
+fn t2_hardware() -> bool {
+    let vendor = std::fs::read_to_string("/sys/class/dmi/id/sys_vendor").unwrap_or_default();
+    let product = std::fs::read_to_string("/sys/class/dmi/id/product_name").unwrap_or_default();
+    vendor.trim() == "Apple Inc." && product.trim().starts_with("MacBookPro1")
+}
 
 /// The kernel for a machine with these GPU packages. `nvidia-open` ships prebuilt modules that match only the stock
 /// `linux` kernel, and NVIDIA's modules refuse to build on PREEMPT_RT by default, so an NVIDIA machine gets `linux`.
@@ -547,6 +562,8 @@ pub const RUNTIME_PACKAGES: &str = include_str!("../../../packaging/arch/runtime
 pub const BASE_PACKAGES: &[&str] = &[
     "btrfs-progs",
     "base",
+    // The installer writes the system's mkinitcpio preset and generates the first boot image below.
+    "mkinitcpio",
     // linux-rt is the default kernel; the installer retries with `linux` when the source lacks it. No headers
     // package: nothing on the installed system builds DKMS modules.
     "linux-rt",
@@ -713,10 +730,11 @@ pub fn install(cfg: &Config, progress: &Shared) {
         let offline = offline_source(&cfg.mirror, Path::new(OFFLINE_BUNDLE_ROOT))?;
         let lspci = r.cmd(&["lspci", "-nn"]).unwrap_or_default();
         let gpu = gpu_packages(&lspci);
-        let mut kernel = kernel_for(&gpu);
+        let is_t2 = t2_hardware();
+        let mut kernel = if is_t2 { KERNEL_T2 } else { kernel_for(&gpu) };
         if let Some(bundle) = offline.as_ref() {
             r.set(0, 1, "Verifying the offline installer bundle");
-            offline_resolve(&r, bundle, &gpu)?;
+            offline_resolve(&r, bundle, &gpu, kernel)?;
             r.log(format!("verified offline package source {}", bundle.repo.display()));
         }
         r.cmd(&["btrfs","--version"])?;
@@ -931,6 +949,9 @@ pub fn install(cfg: &Config, progress: &Shared) {
             if l.starts_with("HOOKS=") { initramfs_hooks(false) } else if l.starts_with("MODULES=(") { let mut line=l.to_string(); for module in ["virtio_gpu", "btrfs"] { if !line.contains(module) { line=line.replacen("MODULES=(", &format!("MODULES=({module} "), 1); } } line } else { l.to_string() }
         }).collect::<Vec<_>>().join("\n");
         r.write(&sys("/etc/mkinitcpio.conf"), &(mc + "\n"))?;
+        if is_t2 {
+            r.cmd(&["sh", "-c", "set -- /mnt/usr/lib/modules/*/vmlinuz; test -f \"$1\" && install -m0644 \"$1\" /mnt/boot/vmlinuz-linux-lts-t2"])?;
+        }
         // the package ships the hook; an older package from the update repo may not, so keep a local copy then
         if !std::path::Path::new(&sys("/usr/lib/initcpio/install/bifrost-mounts")).exists() {
             r.write(&sys("/etc/initcpio/install/bifrost-mounts"), include_str!("../../../packaging/arch/initcpio/install/bifrost-mounts"))?;
@@ -1247,6 +1268,7 @@ mod tests {
         assert!(cmdline_txt("abcd", KERNEL_FALLBACK).starts_with("initrd=\\initramfs-linux.img "));
         assert!(mkinitcpio_preset(KERNEL_RT).contains("/boot/vmlinuz-linux-rt") && mkinitcpio_preset(KERNEL_RT).contains("initramfs-linux-rt.img"));
         assert!(BASE_PACKAGES.contains(&"linux-rt") && !BASE_PACKAGES.contains(&"linux") && BASE_PACKAGES.contains(&"linux-firmware"));
+        assert!(BASE_PACKAGES.contains(&"mkinitcpio"), "the installer generates the installed system's initramfs");
         let iso = cmdline_with("abcd", KERNEL_FALLBACK, Some("7"));
         assert!(iso.contains(" threadirqs isolcpus=7 nohz_full=7 rcu_nocbs=7\n"));
         assert_eq!(audio_modprobe(), "options snd_hda_intel power_save=0\n");
