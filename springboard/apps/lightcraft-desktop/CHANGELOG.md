@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.1
+
+- Upstream lightcraft v0.8.0.
+  ## What's Changed
+  * Integration batch 32a: 8 reviewed contributor PRs by @echelon in https://github.com/storytold/lightcraft/pull/1426
+  * Issue #989: clippy 1.99, fill_box reads its buffer with as_chunks::<3>() (item 4) by @snofla in https://github.com/storytold/lightcraft/pull/997
+  * LR-LIB-ALBUM: "Include selected photos" option in New Album by @MarkusFriedel in https://github.com/storytold/lightcraft/pull/1250
+  * Scroll the filmstrip when the same photo is opened in another source. by @vbasky in https://github.com/storytold/lightcraft/pull/1253
+
 ## 0.8.0
 
 - Upstream lightcraft v0.8.0.
