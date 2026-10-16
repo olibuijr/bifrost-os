@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.1
+
+- Upstream filmcraft v0.8.0.
+  ## What's Changed
+  * Captions: preserve fractional TTML tick offsets by @webdevtodayjason in https://github.com/storytold/filmcraft/pull/1223
+  * Export: 32-bit integer and 32-bit float audio by @JordyUSA in https://github.com/storytold/filmcraft/pull/1245
+  * fix(apv): skip oracle tests when ffmpeg predates APV support by @AkashBhat14 in https://github.com/storytold/filmcraft/pull/1257
+  * test(i18n): skip the Japanese language step when no Japanese font is available (#1251) by @MarekSpodBiedry in https://github.com/storytold/filmcraft/pull/1259
+
 ## 0.8.0
 
 - Upstream filmcraft v0.8.0.
