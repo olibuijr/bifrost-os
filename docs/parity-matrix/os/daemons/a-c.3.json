@@ -5020,10 +5020,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/bifrostd/src/purge.rs",
+   "bifrost": "springboard/bifrostd/src/purge.rs, springboard/src/privd/methods.rs",
    "status": "partial",
    "note": "bifrostd purges app caches, the thumbnail cache, expired Recently Deleted items (when the Storage policy allows) and old pacman packages (beyond the newest two) when / or /home is low, and on a Free Up Space request; reclaimed bytes and the Purgeable figure are published under /run/bifrost. The Storage policy file (/etc/bifrost/storage.conf) is now written by the privd method storage.policy_set (built 2026-10-17, tests privd::methods::tests). Gaps: apps do not declare cache directories (no manifest key), and the Settings > General > Storage Purgeable line and Free Up Space button are not wired to those files yet.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrostd",
+     "filter": "purge::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "bifrostd purge removes expired Recently Deleted items, app and thumbnail caches and old packages when space is low or on a Free Up Space request; the Storage policy file is written by privd storage.policy_set. Covered by purge::tests and privd::methods::tests.",
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.deviceconfigurationd.plist",
@@ -5144,11 +5159,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
+   "bifrost": "springboard/core/src/dhcp6_server.rs, springboard/src/privd/methods.rs, packaging/arch/bifrost-dhcp6@.service, packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "rule: network path and VPN models; the DHCPv6 client itself is systemd-networkd, a Linux unit, and BifrOSt ships no DHCPv6 code of its own. Open: no check that proves the lease path is configured on the installed system.",
+   "note": "Built: DHCPv6 server for a shared segment (core dhcp6_server, privd dhcp6.serve, bifrost-dhcp6@.service running dnsmasq). The client side stays systemd-networkd.",
    "rea": [],
-   "method": "rule"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dhcp6_server::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/bifrost-dhcp6@.service"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/dnsmasq"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the DHCPv6 server for a shared segment. bifrost_core::dhcp6_server validates the interface, the /64 prefix, the lease range and the name servers and writes a dnsmasq config (leases, router advertisement, DNS off); privd dhcp6.serve stores it under /run/bifrost/dhcp6 and starts bifrost-dhcp6@<interface>.service; dnsmasq is in runtime-packages.txt. This is the address-assignment half only: routing/NAT between interfaces is not part of this row."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diagnosticd.plist",
@@ -5566,9 +5603,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried reading the launchd plist (control and host special-port Mach services, filesystem label); the binary is not extracted, so the purpose is unconfirmed.",
-   "rea": []
+   "status": "n/a",
+   "note": "n/a: private DoubleAgent.framework daemon whose launchd plist declares only a control Mach service, a host special-port service and a filesystem label hook (with its own sandbox profile com.apple.doubleagentd.sb in the reference index). Those are XNU Mach port interfaces with no user-visible or app-visible function and no Linux analogue. The binary is not extracted, so the exact purpose is unconfirmed.",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.dprivacyd.plist",
@@ -5666,10 +5704,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/bifrostd/src/pager.rs",
+   "bifrost": "springboard/bifrostd/src/pager.rs, packaging/arch/bifrost-zram.service",
    "status": "partial",
    "note": "bifrostd sets up a zram swap of half the RAM (at most 8 GiB) at boot (bifrost-zram.service), adds 1 GiB swap files in /var/lib/bifrost/swap under PSI pressure when swap is under 25 % free, removes unused ones after 10 min of calm, and publishes normal/warn/critical to /run/bifrost/memory-pressure (bifrost_app::memory_pressure). Gaps: the pager runs inside bifrostd, which starts after the first desktop frame, so disk swap files are not added before the desktop; not verified on a device.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrostd",
+     "filter": "pager::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/bifrost-zram.service"
+    },
+    {
+     "kind": "unit",
+     "name": "bifrostd.service",
+     "state": "enabled"
+    }
+   ],
+   "ready_note": "bifrostd's pager adds and removes swap files under memory pressure on top of the boot-time zram swap (bifrost-zram.service) and publishes the pressure level; covered by pager::tests.",
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.eapolcfg_auth.plist",
@@ -5805,11 +5862,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "bifrost": "springboard/core/src/endpoint_security.rs, springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs",
    "status": "partial",
-   "note": "Open: the Endpoint Security event feed (file, process and exec events for security apps) has no BifrOSt service. The keychain and trust models do not cover it. Needs a fanotify-based monitor that a security app can subscribe to; not started.",
+   "note": "Built 2026-10-17: bifrost_core::endpoint_security reads fanotify records, matches them to subscriptions with path muting, collects authorization answers (one deny denies, a missing answer allows at the deadline) and builds the kernel reply, with tests (endpoint_security::tests). Still missing, so the row stays partial: the root service that owns the fanotify descriptor, marks the mounts, resolves paths from /proc/self/fd, and relays events to subscribed apps over a socket with an entitlement check. That service and its app-facing SDK client need a design decision on who may subscribe.",
    "rea": [],
-   "method": "rule"
+   "method": "built"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.eoshostd.plist",
