@@ -799,7 +799,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system-configuration.json",
    "status": "partial",
-   "note": "from SDK matrix system-configuration.json Built 2026-10-17: route reachability flags for a named host or address (sdk reachability_flags, tests reachability_flags::tests). Still open: IPv4 and IPv6 configuration from apps, network sets, and name-based reachability callbacks.",
+   "note": "from SDK matrix system-configuration.json Built 2026-10-17: route reachability flags for a named host or address (sdk reachability_flags, tests reachability_flags::tests). Still open: IPv4 and IPv6 configuration from apps, network sets, and name-based reachability callbacks. Built 2026-10-17: reachability callbacks for a host or address (sdk reachability_watch, tests reachability_watch::tests): a watch reports its flags only when a path change alters them. Still open: IPv4 and IPv6 configuration from apps, network sets.",
    "rea": [],
    "method": "assessed"
   },

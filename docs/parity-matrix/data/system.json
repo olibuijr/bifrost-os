@@ -61,7 +61,7 @@
       "apple": "No direct System type; used with NSFileCoordinator (Foundation)",
       "bifrost": "springboard/sdk/src/file_coordination.rs:1-20 (flock on the parent directory, shared for reads, exclusive for writes, bounded wait) and springboard/sdk/src/file_coordination.rs:105, :112 (coordinate_reading, coordinate_writing); wired: springboard/apps/files/src/coordinate.rs (writing_in) used by springboard/apps/files/src/ops.rs (transfer_now)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 3 tests. Advisory only. A process that does not coordinate is not blocked. Presenters and relinquish negotiation are not modelled. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 3 tests. Advisory only. A process that does not coordinate is not blocked. Presenters and relinquish negotiation are not modelled. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Built 2026-10-17: savePresentedItemChanges negotiation before coordinated writes (sdk file_coordination save_presented_item_changes; tests file_coordination::tests) and pump of a watch stream into presenters (file_coordination::pump). Still open: relinquish."
     },
     {
       "feature": "File system change events",
