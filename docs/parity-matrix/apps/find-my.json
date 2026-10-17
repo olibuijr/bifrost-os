@@ -5,7 +5,8 @@
     "ref27/System/Applications/FindMy.app/Contents/Info.plist via bifrost pc ref extract (URL schemes grenada, findmyfriends, fmf1, findmy, fmip1; user activities LocateDeviceIntent, LocateIntent, PlaySoundIntent, ToggleLocationSharingIntent; contacts and location usage strings; regulatory privacy disclosure keys for camera, contacts, location; extension FindMyNotificationsService.appex)",
     "ref27/System/Applications/FindMy.app/Contents/PlugIns/FindMyNotificationsService.appex (the only other file in the bundle; the UI is in private frameworks, so the feature list also follows the shipped app's documented behaviour)",
     "No BifrOSt source: grep of springboard for the feature finds only springboard/docs/parity/windows-spaces.md (unrelated)",
-    "Locate app (round 2): springboard/apps/locate-desktop/src/window.rs, panel.rs, control.rs, main.rs; SDK springboard/sdk/src/cloud_findmy.rs (cloud device list, command and report requests); cloud routes are specified for bifrost-cloud, not yet built"
+    "Locate app (round 2): springboard/apps/locate-desktop/src/window.rs, panel.rs, control.rs, main.rs; SDK springboard/sdk/src/cloud_findmy.rs (cloud device list, command and report requests); cloud routes are specified for bifrost-cloud, not yet built",
+    "Locate 0.3.0: springboard/apps/locate-desktop/src/sealing.rs (HPKE report and account-key seal), pairing.rs (enrollment and approval list), reporting.rs (throttle, clear, live share copies); SDK springboard/sdk/src/cloud_findmy.rs (key, pending, sealed-location and share routes with tests). Headless only: nothing is wired to a window, keychain or poll thread, so no row moved."
   ],
   "summary": {
     "features": 18,
@@ -85,7 +86,7 @@
       "apple": "Share location with contacts for an hour, a day or indefinitely (ToggleLocationSharingIntent)",
       "status": "partial",
       "bifrost": "springboard/apps/locate-desktop/src/panel.rs:92 (Panel::set_sharing); springboard/apps/locate-desktop/src/window.rs:73 (rpc locate.share)",
-      "note": "The Share My Location switch is a state with a control method. It does not grant sharing to any contact yet, and the switch on the Me page cannot be clicked.",
+      "note": "The Share My Location switch is a state with a control method. It does not grant sharing to any contact yet, and the switch on the Me page cannot be clicked. Round 3: the sealed copy model (reporting.rs copy_targets, sealing.rs) and the share route exist and are tested headless; the copies are not sent yet.",
       "wire": "Share grants are built in bifrost-cloud: POST {base}/findmy/shares (contact's email, until or null) and DELETE /findmy/shares/{id}. Sealed copies: while a grant is active the owner's device also seals each report to the contact's account public key; revoking stops new copies and deletes stored ones (not built). Still to do: a Share My Location sheet that picks contacts, and the clickable switch."
     },
     {

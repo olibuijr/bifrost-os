@@ -155,7 +155,7 @@ mod tests {
     use bifrost_app::cloud_findmy::CloudDevice;
 
     fn cloud(id: &str, name: &str, battery: Option<u8>, fix: Option<CloudFix>) -> CloudDevice {
-        CloudDevice { id: id.into(), name: name.into(), model: String::new(), last_seen: 0, battery_percent: battery, is_charging: None, fix }
+        CloudDevice { id: id.into(), name: name.into(), model: String::new(), last_seen: 0, battery_percent: battery, is_charging: None, fix, sealed_location: None }
     }
 
     fn fix(at: i64) -> CloudFix {

@@ -15,5 +15,8 @@ pub mod control;
 pub mod devices;
 pub mod friends;
 pub mod links;
+pub mod pairing;
 pub mod panel;
+pub mod reporting;
+pub mod sealing;
 pub mod share;

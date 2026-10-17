@@ -4240,11 +4240,31 @@ control methods `locate.locate`, `locate.play_sound`, `locate.share`; the SDK cl
 list, device report, command request, device poll with ack, share-free event feed); the cloud routes for devices, battery,
 commands, acks, shares and the event feed (branch `feat/findmy-devices`, see the report for its sha).
 
-**Not built:** the background poll thread, device self-registration at start, play sound on the device (no app-to-shell
-sound path exists: `system_sound::SystemSounds` is drained only by the audio service), notifications from events, a
-clickable Me switch, and every item in the location design below.
+**Round 3 (models and routes, not wired):** the SDK client has the key, pending-device, sealed-location and share routes
+(`bifrost_app::cloud_findmy`: `put_account_key_request`, `get_account_key_request`, `create_pending_request`,
+`pending_list_request`, `approve_pending_request`, `sealed_key_request`, `delete_pending_request`,
+`put_self_location_request`, `delete_self_location_request`, `put_share_location_request`, `shared_with_me_request`, each
+with its parser; `CloudDevice::sealed_location` reads `location_sealed`, `location_enc`, `location_updated`). The locate
+app has three pure models, each tested headless:
 
-### Location design (decided by the owner, not yet implemented)
+- `sealing` (`springboard/apps/locate-desktop/src/sealing.rs`): HPKE seal and open of a report to the account key (info =
+  device id), of a share copy (info = share id), and of the account private key to an enrolling device (info = pending
+  id). The payload is JSON `lat`, `lon`, `timestamp`, `accuracy`, `battery`. Coordinates are range-checked on read.
+- `pairing` (`pairing.rs`): `Enrollment` (Idle, Waiting, Enrolled, Denied) for a device that asks to join, and
+  `Approvals`, the owner's pending list behind the confirmation sheet. Syncing the list approves nothing; only
+  `confirm` returns a request for sealing and `deny` removes one.
+- `reporting` (`reporting.rs`): `Reporter::step` gives Report (at most every 15 minutes, and at once on a locate while
+  sharing is on), Clear (once, on the first step with sharing off, which also clears a previous run's data) or Nothing;
+  `copy_targets` gives the share ids of live grants only, so a revoked or expired share gets no copy.
+
+**Not built:** the background poll thread and device self-registration at start, the keychain calls for the account key
+(the `bifrost_app::keychain` API is asynchronous and needs the app's `App::keychain` reply), the approval sheet and the
+enrollment button in the window, the Me switch hit test, the location service (`bifrost_app::core_location` exists but
+is not called, so the report carries battery only), play sound on the device (the SDK has `system_sound::SystemSounds`
+with `play` and `take_request`, but no app-to-shell message reaches the audio service: adding one is a proto change),
+notifications from events, and the shared-with-me list in the People tab.
+
+### Location design (owner decision; models and routes built in round 3, wiring not built)
 
 Location is end to end encrypted. The cloud never sees plaintext coordinates, and the columns it keeps are opaque blobs.
 
@@ -4269,4 +4289,7 @@ Location is end to end encrypted. The cloud never sees plaintext coordinates, an
 - **Tests required before this ships:** seal and open round trip; the approval state machine; a revoked share stops
   sealing; the cloud handlers store and return opaque blobs only.
 
-Until this design is built, the cloud accepts no location at all, and the SDK report sends no position.
+Until the wiring is built, the cloud accepts no location from this app, and the SDK report sends no position.
+Routes assumed where the contract left the answer shape open: `GET findmy/devices/pending` answers
+`{"pending": [{id, name, device_public_key}]}`; `GET findmy/devices/pending/{id}/key` answers `200` with the sealed key,
+`202` while waiting, and `404` once the request is denied or deleted; `GET findmy/shared-with-me` answers a bare array.

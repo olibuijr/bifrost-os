@@ -49,6 +49,8 @@ pub struct CloudDevice {
     pub battery_percent: Option<u8>,
     pub is_charging: Option<bool>,
     pub fix: Option<CloudFix>,
+    /// The sealed position the cloud holds for this device, when it has one. The cloud cannot open it.
+    pub sealed_location: Option<SealedBlob>,
 }
 
 /// The answer to a device list: every device of the account, and the id of the device that asked when it is one.
@@ -119,6 +121,7 @@ fn read_device(j: &Json) -> Result<CloudDevice, CloudError> {
         battery_percent,
         is_charging,
         fix,
+        sealed_location: sealed_blob(j, "location_sealed", "location_enc", "location_updated"),
     })
 }
 
@@ -270,6 +273,309 @@ pub fn parse_events(status: u16, body: &str) -> Result<FeedPage, CloudError> {
         .collect::<Result<Vec<_>, CloudError>>()?;
     let next = whole(&parsed, "next").unwrap_or(0);
     Ok(FeedPage { events, next })
+}
+
+/// A sealed position the cloud holds: `sealed` and `enc` are base64 HPKE blobs the cloud cannot open, and `updated` is
+/// when the device sent it (Unix seconds).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SealedBlob {
+    pub sealed: String,
+    pub enc: String,
+    pub updated: i64,
+}
+
+/// A position shared with this account by another person, under the share `share_id`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SharedLocation {
+    pub share_id: String,
+    pub owner_name: String,
+    pub blob: SealedBlob,
+}
+
+/// A device waiting for approval on the account: its own public key, sent so an approving device can seal the
+/// account key to it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingDevice {
+    pub id: String,
+    pub name: String,
+    pub device_public_key: String,
+}
+
+/// A JSON request with the session bearer token. `body` is sent as `application/json` when given.
+fn json_request(method: &str, url: &str, session_token: &str, body: Option<Json>) -> Result<URLRequest, CloudError> {
+    let mut req = URLRequest::new(url);
+    req.method = method.into();
+    if let Some(b) = body {
+        req.body = Some(b.encode().into_bytes());
+        req.set_header("Content-Type", "application/json");
+    }
+    with_session(req, session_token)
+}
+
+/// Reads an answer that must have one of the `ok` statuses and carries a non-empty string under `key`.
+fn answer_str(status: u16, body: &str, ok: &[u16], key: &str) -> Result<String, CloudError> {
+    ok_status(status, body, ok)?;
+    let parsed = json::parse(body).map_err(CloudError::MalformedAnswer)?;
+    parsed.str_field(key).filter(|s| !s.is_empty()).ok_or_else(|| malformed(&format!("no {key}")))
+}
+
+/// Refuses an answer whose status is not one of `ok`, and an answer too large to read.
+fn ok_status(status: u16, body: &str, ok: &[u16]) -> Result<(), CloudError> {
+    if body.len() > MAX_ANSWER_BYTES {
+        return Err(malformed("the answer is too large"));
+    }
+    if ok.contains(&status) { Ok(()) } else { Err(failure(status, body)) }
+}
+
+fn sealed_blob(j: &Json, sealed_key: &str, enc_key: &str, updated_key: &str) -> Option<SealedBlob> {
+    let sealed = j.str_field(sealed_key).filter(|s| !s.is_empty())?;
+    let enc = j.str_field(enc_key).filter(|s| !s.is_empty())?;
+    Some(SealedBlob { sealed, enc, updated: whole(j, updated_key).unwrap_or(0) })
+}
+
+/// `PUT {base}/findmy/keys`: publishes the account's public key (base64 of its 32 raw bytes). Only the public key
+/// goes to the cloud; the private key stays in the keychain of the devices that hold it.
+pub fn put_account_key_request(base_url: &str, session_token: &str, public_key: &str) -> Result<URLRequest, CloudError> {
+    let body = Json::Obj(vec![("public_key".into(), Json::Str(public_key.into()))]);
+    json_request("PUT", &endpoint(base_url, "findmy/keys")?, session_token, Some(body))
+}
+
+/// `GET {base}/findmy/keys/{account}`: an account's public key, which a contact seals a share to.
+pub fn get_account_key_request(base_url: &str, session_token: &str, account: &str) -> Result<URLRequest, CloudError> {
+    let id = checked_id(account)?;
+    json_request("GET", &endpoint(base_url, &format!("findmy/keys/{id}"))?, session_token, None)
+}
+
+/// Reads an account key answer: `200` with `{"public_key": ...}`.
+pub fn parse_account_key(status: u16, body: &str) -> Result<String, CloudError> {
+    answer_str(status, body, &[200], "public_key")
+}
+
+/// `POST {base}/findmy/devices/pending`: asks to join the account with this device's public key. Nothing is approved
+/// by the service; an approving device has to seal the account key to it.
+pub fn create_pending_request(base_url: &str, session_token: &str, device_public_key: &str, name: &str) -> Result<URLRequest, CloudError> {
+    let body = Json::Obj(vec![
+        ("device_public_key".into(), Json::Str(device_public_key.into())),
+        ("name".into(), Json::Str(name.into())),
+    ]);
+    json_request("POST", &endpoint(base_url, "findmy/devices/pending")?, session_token, Some(body))
+}
+
+/// Reads the id of a new pending device: `200` or `201` with `{"id": ...}`.
+pub fn parse_pending_id(status: u16, body: &str) -> Result<String, CloudError> {
+    answer_str(status, body, &[200, 201], "id")
+}
+
+/// `GET {base}/findmy/devices/pending`: the devices waiting for approval on this account.
+pub fn pending_list_request(base_url: &str, session_token: &str) -> Result<URLRequest, CloudError> {
+    json_request("GET", &endpoint(base_url, "findmy/devices/pending")?, session_token, None)
+}
+
+/// Reads the pending list: `200` with `{"pending": [{"id", "name", "device_public_key"}]}`.
+pub fn parse_pending_list(status: u16, body: &str) -> Result<Vec<PendingDevice>, CloudError> {
+    ok_status(status, body, &[200])?;
+    let parsed = json::parse(body).map_err(CloudError::MalformedAnswer)?;
+    let items = parsed.get("pending").and_then(Json::as_array).ok_or_else(|| malformed("no pending list"))?;
+    items
+        .iter()
+        .map(|p| -> Result<PendingDevice, CloudError> {
+            let id = p.str_field("id").filter(|s| !s.is_empty()).ok_or_else(|| malformed("pending device has no id"))?;
+            let device_public_key = p.str_field("device_public_key").filter(|s| !s.is_empty()).ok_or_else(|| malformed("pending device has no key"))?;
+            Ok(PendingDevice { id, name: p.str_field("name").unwrap_or_default(), device_public_key })
+        })
+        .collect()
+}
+
+/// `POST {base}/findmy/devices/pending/{id}/key`: stores the account key sealed to the pending device.
+pub fn approve_pending_request(base_url: &str, session_token: &str, pending_id: &str, sealed_key: &str) -> Result<URLRequest, CloudError> {
+    let id = checked_id(pending_id)?;
+    let body = Json::Obj(vec![("sealed_key".into(), Json::Str(sealed_key.into()))]);
+    json_request("POST", &endpoint(base_url, &format!("findmy/devices/pending/{id}/key"))?, session_token, Some(body))
+}
+
+/// Reads an approve answer: `200`, `201` or `204`.
+pub fn parse_approve_pending(status: u16, body: &str) -> Result<(), CloudError> {
+    ok_status(status, body, &[200, 201, 204])
+}
+
+/// `GET {base}/findmy/devices/pending/{id}/key`: the sealed account key, handed over once. The pending device polls
+/// this route until it has an answer.
+pub fn sealed_key_request(base_url: &str, session_token: &str, pending_id: &str) -> Result<URLRequest, CloudError> {
+    let id = checked_id(pending_id)?;
+    json_request("GET", &endpoint(base_url, &format!("findmy/devices/pending/{id}/key"))?, session_token, None)
+}
+
+/// Reads the sealed-key poll: `200` with `{"sealed_key": ...}` once approved, `202` while the approval is still
+/// waiting (`None`). Any other status, including `404` for a request that was denied or deleted, is an error.
+pub fn parse_sealed_key(status: u16, body: &str) -> Result<Option<String>, CloudError> {
+    if status == 202 {
+        return Ok(None);
+    }
+    answer_str(status, body, &[200], "sealed_key").map(Some)
+}
+
+/// `DELETE {base}/findmy/devices/pending/{id}`: denies a pending device, or clears it after its key was taken.
+pub fn delete_pending_request(base_url: &str, session_token: &str, pending_id: &str) -> Result<URLRequest, CloudError> {
+    let id = checked_id(pending_id)?;
+    json_request("DELETE", &endpoint(base_url, &format!("findmy/devices/pending/{id}"))?, session_token, None)
+}
+
+/// Reads a delete answer: `200` or `204`.
+pub fn parse_delete(status: u16, body: &str) -> Result<(), CloudError> {
+    ok_status(status, body, &[200, 204])
+}
+
+/// `PUT {base}/findmy/devices/self/location`: stores this device's sealed position, with its `enc` header.
+pub fn put_self_location_request(base_url: &str, session_token: &str, sealed: &str, enc: &str) -> Result<URLRequest, CloudError> {
+    let body = Json::Obj(vec![("sealed".into(), Json::Str(sealed.into())), ("enc".into(), Json::Str(enc.into()))]);
+    json_request("PUT", &endpoint(base_url, "findmy/devices/self/location")?, session_token, Some(body))
+}
+
+/// `DELETE {base}/findmy/devices/self/location`: turning Share My Location off removes the stored position.
+pub fn delete_self_location_request(base_url: &str, session_token: &str) -> Result<URLRequest, CloudError> {
+    json_request("DELETE", &endpoint(base_url, "findmy/devices/self/location")?, session_token, None)
+}
+
+/// `PUT {base}/findmy/shares/{id}/location`: stores the report sealed to one contact, for the share `share_id`.
+pub fn put_share_location_request(base_url: &str, session_token: &str, share_id: &str, sealed: &str, enc: &str) -> Result<URLRequest, CloudError> {
+    let id = checked_id(share_id)?;
+    let body = Json::Obj(vec![("sealed".into(), Json::Str(sealed.into())), ("enc".into(), Json::Str(enc.into()))]);
+    json_request("PUT", &endpoint(base_url, &format!("findmy/shares/{id}/location"))?, session_token, Some(body))
+}
+
+/// `GET {base}/findmy/shared-with-me`: the positions other people share with this account.
+pub fn shared_with_me_request(base_url: &str, session_token: &str) -> Result<URLRequest, CloudError> {
+    json_request("GET", &endpoint(base_url, "findmy/shared-with-me")?, session_token, None)
+}
+
+/// Reads the shared list: `200` with a JSON array of `{"share_id", "owner_name", "sealed", "enc", "updated"}`. An entry
+/// without its share id or its blob is malformed.
+pub fn parse_shared_with_me(status: u16, body: &str) -> Result<Vec<SharedLocation>, CloudError> {
+    ok_status(status, body, &[200])?;
+    let parsed = json::parse(body).map_err(CloudError::MalformedAnswer)?;
+    let items = parsed.as_array().ok_or_else(|| malformed("the shared list is not an array"))?;
+    items
+        .iter()
+        .map(|s| -> Result<SharedLocation, CloudError> {
+            let share_id = s.str_field("share_id").filter(|v| !v.is_empty()).ok_or_else(|| malformed("shared entry has no share_id"))?;
+            let blob = sealed_blob(s, "sealed", "enc", "updated").ok_or_else(|| malformed("shared entry has no sealed location"))?;
+            Ok(SharedLocation { share_id, owner_name: s.str_field("owner_name").unwrap_or_default(), blob })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod keys_tests {
+    use super::*;
+
+    const BASE: &str = "https://bifrost.olibuijr.com/api/cloud/v1";
+    const TOKEN: &str = "tok42";
+
+    fn body_of(req: &URLRequest) -> String {
+        String::from_utf8(req.body.clone().unwrap_or_default()).unwrap()
+    }
+
+    #[test]
+    fn the_account_key_is_put_as_a_public_key_only() {
+        let req = put_account_key_request(BASE, TOKEN, "cHVi").unwrap();
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.url, format!("{BASE}/findmy/keys"));
+        assert_eq!(body_of(&req), r#"{"public_key":"cHVi"}"#);
+        assert_eq!(get_account_key_request(BASE, TOKEN, "a1").unwrap().url, format!("{BASE}/findmy/keys/a1"));
+        assert!(get_account_key_request(BASE, TOKEN, "../x").is_err());
+        assert_eq!(parse_account_key(200, r#"{"public_key":"cHVi"}"#).unwrap(), "cHVi");
+        assert!(parse_account_key(404, r#"{"error":"no_account"}"#).is_err());
+    }
+
+    #[test]
+    fn a_pending_device_posts_its_key_and_name_and_reads_back_an_id() {
+        let req = create_pending_request(BASE, TOKEN, "a2V5", "Midget").unwrap();
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.url, format!("{BASE}/findmy/devices/pending"));
+        assert_eq!(body_of(&req), r#"{"device_public_key":"a2V5","name":"Midget"}"#);
+        assert_eq!(parse_pending_id(201, r#"{"id":"p7"}"#).unwrap(), "p7");
+        assert!(parse_pending_id(201, r#"{}"#).is_err());
+    }
+
+    #[test]
+    fn the_pending_list_reads_each_device_with_its_key() {
+        let req = pending_list_request(BASE, TOKEN).unwrap();
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.url, format!("{BASE}/findmy/devices/pending"));
+        let list = parse_pending_list(200, r#"{"pending":[{"id":"p1","name":"Tab","device_public_key":"a2V5"}]}"#).unwrap();
+        assert_eq!(list, vec![PendingDevice { id: "p1".into(), name: "Tab".into(), device_public_key: "a2V5".into() }]);
+        assert!(parse_pending_list(200, r#"{"pending":[{"id":"p1"}]}"#).is_err(), "a pending device needs its key");
+    }
+
+    #[test]
+    fn approval_posts_the_sealed_key_and_the_poll_reads_it_or_waits() {
+        let req = approve_pending_request(BASE, TOKEN, "p1", "c2VhbGVk").unwrap();
+        assert_eq!(req.url, format!("{BASE}/findmy/devices/pending/p1/key"));
+        assert_eq!(body_of(&req), r#"{"sealed_key":"c2VhbGVk"}"#);
+        assert!(parse_approve_pending(200, "{}").is_ok());
+        let poll = sealed_key_request(BASE, TOKEN, "p1").unwrap();
+        assert_eq!(poll.method, "GET");
+        assert_eq!(parse_sealed_key(200, r#"{"sealed_key":"c2VhbGVk"}"#).unwrap(), Some("c2VhbGVk".into()));
+        assert_eq!(parse_sealed_key(202, "{}").unwrap(), None, "still waiting");
+        assert!(parse_sealed_key(404, r#"{"error":"gone"}"#).is_err(), "a denied request is an error to the poll");
+    }
+
+    #[test]
+    fn denying_a_pending_device_deletes_it() {
+        let req = delete_pending_request(BASE, TOKEN, "p1").unwrap();
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(req.url, format!("{BASE}/findmy/devices/pending/p1"));
+        assert!(parse_delete(204, "").is_ok());
+        assert!(parse_delete(404, r#"{"error":"gone"}"#).is_err());
+    }
+
+    #[test]
+    fn the_self_location_is_put_sealed_and_deleted_when_sharing_stops() {
+        let req = put_self_location_request(BASE, TOKEN, "s1", "e1").unwrap();
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.url, format!("{BASE}/findmy/devices/self/location"));
+        assert_eq!(body_of(&req), r#"{"sealed":"s1","enc":"e1"}"#);
+        let del = delete_self_location_request(BASE, TOKEN).unwrap();
+        assert_eq!(del.method, "DELETE");
+        assert_eq!(del.url, format!("{BASE}/findmy/devices/self/location"));
+        assert_eq!(del.headers.iter().find(|(k, _)| k.as_str() == "Authorization").map(|(_, v)| v.as_str()), Some("Bearer tok42"));
+    }
+
+    #[test]
+    fn a_contact_copy_goes_to_the_share_route() {
+        let req = put_share_location_request(BASE, TOKEN, "sh9", "s2", "e2").unwrap();
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.url, format!("{BASE}/findmy/shares/sh9/location"));
+        assert_eq!(body_of(&req), r#"{"sealed":"s2","enc":"e2"}"#);
+        assert!(put_share_location_request(BASE, TOKEN, "../sh", "s", "e").is_err());
+    }
+
+    #[test]
+    fn shared_with_me_reads_an_array_of_sealed_positions() {
+        let req = shared_with_me_request(BASE, TOKEN).unwrap();
+        assert_eq!(req.url, format!("{BASE}/findmy/shared-with-me"));
+        let body = r#"[{"share_id":"sh9","owner_name":"Anna","sealed":"s2","enc":"e2","updated":1700000000}]"#;
+        let list = parse_shared_with_me(200, body).unwrap();
+        assert_eq!(
+            list,
+            vec![SharedLocation {
+                share_id: "sh9".into(),
+                owner_name: "Anna".into(),
+                blob: SealedBlob { sealed: "s2".into(), enc: "e2".into(), updated: 1_700_000_000 },
+            }]
+        );
+        assert!(parse_shared_with_me(200, r#"[{"share_id":"sh9","owner_name":"Anna"}]"#).is_err(), "no blob is malformed");
+        assert!(parse_shared_with_me(200, r#"{"shared":[]}"#).is_err(), "the answer is an array");
+    }
+
+    #[test]
+    fn the_device_list_carries_the_sealed_location_when_present() {
+        let body = r#"{"devices":[{"id":"d1","location_sealed":"s1","location_enc":"e1","location_updated":1700000500},
+            {"id":"d2","location_sealed":null,"location_enc":null}]}"#;
+        let list = parse_devices(200, body).unwrap();
+        assert_eq!(list.devices[0].sealed_location, Some(SealedBlob { sealed: "s1".into(), enc: "e1".into(), updated: 1_700_000_500 }));
+        assert_eq!(list.devices[1].sealed_location, None);
+    }
 }
 
 #[cfg(test)]
