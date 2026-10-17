@@ -1191,6 +1191,7 @@ pub mod rules;
 pub mod decision;
 pub mod capture_access;
 pub mod echo_cancel;
+pub mod voice_processing;
 pub mod pcm_convert;
 pub mod capture_content;
 pub mod capture_filter;
