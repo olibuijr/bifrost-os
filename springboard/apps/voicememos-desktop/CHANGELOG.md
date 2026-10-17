@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0 — 2026-10-17
+
+- Playback speed: a Slower and Faster stepper under the volume slider moves through 0.5x, 1x, 1.5x and 2x. The audio
+  service time-stretches (WSOLA), so the pitch stays the same; the speed is saved per recording (a hidden sidecar) and
+  is kept when the memo is opened again. The protocol gained `SetRate` and the State event a trailing rate.
+- Transcription is still not in this version: no local speech-to-text engine is shipped or referenced yet.
+
 ## 1.9.1 — 2026-10-14
 
 - Use the shared spacing token for the level readout's vertical padding.

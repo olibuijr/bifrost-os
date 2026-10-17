@@ -221,6 +221,8 @@ pub mod audio {
         pub muted: bool,
         pub error: Option<String>,
         pub live: Option<Live>,
+        /// the playback rate (0.5 to 2.0), applied as a time-stretch: the pitch does not change
+        pub rate: f32,
     }
 
     /// Client -> audiod.
@@ -240,6 +242,8 @@ pub mod audio {
         SetShuffle { on: bool, seed: u64 },
         SetRepeat(Repeat),
         SetVolume(f32),
+        /// playback speed, 0.5 to 2.0; audiod time-stretches so the pitch stays put
+        SetRate(f32),
         SetMuted(bool),
         Stop,
         /// records the microphone into `path` (WAV); one recording at a time, explicit user action only
@@ -274,6 +278,7 @@ pub mod audio {
         pub const STOP: u32 = 15;
         pub const RECORD_START: u32 = 16;
         pub const RECORD_STOP: u32 = 17;
+        pub const SET_RATE: u32 = 18;
         pub const STATE: u32 = 0x102;
         pub const RECORD: u32 = 0x103;
         pub const RECORD_DONE: u32 = 0x104;
@@ -318,6 +323,7 @@ pub mod audio {
                 Cmd::SetShuffle { on, seed } => Enc::tag(t::SET_SHUFFLE).bool(*on).u64(*seed),
                 Cmd::SetRepeat(r) => Enc::tag(t::SET_REPEAT).u8(*r as u8),
                 Cmd::SetVolume(v) => Enc::tag(t::SET_VOLUME).f32(*v),
+                Cmd::SetRate(r) => Enc::tag(t::SET_RATE).f32(*r),
                 Cmd::SetMuted(m) => Enc::tag(t::SET_MUTED).bool(*m),
                 Cmd::Stop => Enc::tag(t::STOP),
                 Cmd::RecordStart { path } => Enc::tag(t::RECORD_START).str(path),
@@ -349,6 +355,7 @@ pub mod audio {
                 t::SET_SHUFFLE => Cmd::SetShuffle { on: d.bool()?, seed: d.u64()? },
                 t::SET_REPEAT => Cmd::SetRepeat(repeat(d.u8()?)?),
                 t::SET_VOLUME => Cmd::SetVolume(d.f32()?),
+                t::SET_RATE => Cmd::SetRate(d.f32()?),
                 t::SET_MUTED => Cmd::SetMuted(d.bool()?),
                 t::STOP => Cmd::Stop,
                 t::RECORD_START => Cmd::RecordStart { path: d.str()? },
@@ -374,10 +381,11 @@ pub mod audio {
                     };
                     e = e.bool(s.playing).f64(s.position_ms).opt_f64(s.duration_ms).bool(s.shuffle).u8(s.repeat as u8);
                     e = e.u32(s.queue_len).f32(s.volume).bool(s.muted).opt_str(&s.error);
-                    match &s.live {
+                    e = match &s.live {
                         Some(l) => e.bool(true).u32(l.phase).opt_str(&l.title).opt_str(&l.error),
                         None => e.bool(false),
-                    }
+                    };
+                    e.f32(s.rate)
                 }
                 Evt::Record { active, elapsed_ms, level, error } => Enc::tag(t::RECORD).bool(*active).u64(*elapsed_ms).f32(*level).opt_str(error),
                 Evt::RecordDone { path, duration_ms } => Enc::tag(t::RECORD_DONE).str(path).u64(*duration_ms),
@@ -396,7 +404,8 @@ pub mod audio {
                     let rep = repeat(d.u8()?)?;
                     let (queue_len, volume, muted, error) = (d.u32()?, d.f32()?, d.bool()?, d.opt_str()?);
                     let live = if d.bool()? { Some(Live { phase: d.u32()?, title: d.opt_str()?, error: d.opt_str()? }) } else { None };
-                    Evt::State(Snapshot { track, index, playing, position_ms, duration_ms, shuffle, repeat: rep, queue_len, volume, muted, error, live })
+                    let rate = d.f32()?;
+                    Evt::State(Snapshot { track, index, playing, position_ms, duration_ms, shuffle, repeat: rep, queue_len, volume, muted, error, live, rate })
                 }
                 t::RECORD => Evt::Record { active: d.bool()?, elapsed_ms: d.u64()?, level: d.f32()?, error: d.opt_str()? },
                 t::RECORD_DONE => Evt::RecordDone { path: d.str()?, duration_ms: d.u64()? },
@@ -419,6 +428,7 @@ pub mod audio {
                 Cmd::SeekMs(1234.5),
                 Cmd::SetRepeat(Repeat::One),
                 Cmd::SetVolume(0.5),
+                Cmd::SetRate(1.5),
                 Cmd::RecordStart { path: "/m.wav".into() },
             ];
             for c in cmds {
@@ -441,11 +451,25 @@ pub mod audio {
                 muted: false,
                 error: None,
                 live: Some(Live { phase: 1, title: Some("t".into()), error: None }),
+                rate: 1.5,
             };
             let e = Evt::State(s);
             assert_eq!(Evt::decode(&e.encode()), Ok(e));
             assert_eq!(Cmd::decode(&Enc::tag(0x7fff).done()), Err(DecodeError::UnknownTag(0x7fff)));
             assert_eq!(Cmd::decode(&[1]), Err(DecodeError::Truncated));
+        }
+
+        #[test]
+        fn set_rate_round_trips_with_its_value_and_its_own_tag() {
+            for rate in [0.5f32, 0.75, 1.0, 2.0] {
+                let bytes = Cmd::SetRate(rate).encode();
+                assert_eq!(Cmd::decode(&bytes), Ok(Cmd::SetRate(rate)));
+            }
+            // the tag is 18 (after RECORD_STOP's 17), and the value follows it as a little-endian f32
+            let bytes = Cmd::SetRate(1.5).encode();
+            assert_eq!(&bytes[bytes.len() - 4..], &1.5f32.to_le_bytes());
+            assert_ne!(Cmd::SetRate(1.0).encode(), Cmd::SetVolume(1.0).encode());
+            assert_eq!(Cmd::decode(&Enc::tag(t::SET_RATE).done()), Err(DecodeError::Truncated));
         }
 
         #[test]

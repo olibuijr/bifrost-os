@@ -34,7 +34,7 @@ pub mod audio {
 
     /// A snapshot of nothing playing, what `Client::snapshot` reports while disconnected.
     pub fn idle() -> Snapshot {
-        Snapshot { track: None, index: None, playing: false, position_ms: 0.0, duration_ms: None, shuffle: false, repeat: Repeat::Off, queue_len: 0, volume: 1.0, muted: false, error: None, live: None }
+        Snapshot { track: None, index: None, playing: false, position_ms: 0.0, duration_ms: None, shuffle: false, repeat: Repeat::Off, queue_len: 0, volume: 1.0, muted: false, error: None, live: None, rate: 1.0 }
     }
 
     pub struct Client {
@@ -271,6 +271,10 @@ pub mod audio {
         }
         pub fn set_volume(&mut self, v: f32) -> bool {
             self.send(Cmd::SetVolume(v.clamp(0.0, 1.0)))
+        }
+        /// Sets the playback rate (clamped to 0.5 to 2.0); audiod time-stretches, so the pitch does not change.
+        pub fn set_rate(&mut self, rate: f32) -> bool {
+            self.send(Cmd::SetRate(crate::media::timestretch::clamp_rate(rate)))
         }
         pub fn set_muted(&mut self, m: bool) -> bool {
             self.send(Cmd::SetMuted(m))
