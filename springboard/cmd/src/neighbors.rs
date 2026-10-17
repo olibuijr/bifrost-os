@@ -77,7 +77,7 @@ fn parse_line(line: &str) -> Option<Neighbor> {
     let address = (*tokens.first()?).to_string();
     let iface = value_after(&tokens, "dev")?.to_string();
     let mac = value_after(&tokens, "lladdr").map(str::to_string);
-    let state = tokens.last().filter(|t| STATES.contains(t)).map(|t| t.to_string()).unwrap_or_default();
+    let state = tokens.last().filter(|t| STATES.contains(*t)).map(|t| t.to_string()).unwrap_or_default();
     Some(Neighbor { address, mac, iface, state })
 }
 
