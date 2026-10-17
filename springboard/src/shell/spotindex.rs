@@ -782,7 +782,7 @@ pub fn load_thumbnail(app_id: &str, thumb: &str, size: usize) -> Option<Image> {
     decode_thumbnail(&std::fs::read(&path).ok()?, size)
 }
 
-fn decode_thumbnail(bytes: &[u8], size: usize) -> Option<Image> {
+pub(super) fn decode_thumbnail(bytes: &[u8], size: usize) -> Option<Image> {
     use png::{BitDepth, ColorType, Transformations};
     let mut d = png::Decoder::new(std::io::Cursor::new(bytes));
     d.set_transformations(Transformations::EXPAND | Transformations::STRIP_16);

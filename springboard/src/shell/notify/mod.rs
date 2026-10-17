@@ -517,6 +517,12 @@ impl Shell {
 
     /// Clears one stack of an app: the notifications of `app` in `thread` (the Clear button of a group).
     pub(super) fn clear_group(&mut self, app: AppId, thread: &str) {
+        self.usernotif_prune();
+        self.clear_group_entries(app, thread);
+        self.usernotif_dismiss_gone();
+    }
+
+    fn clear_group_entries(&mut self, app: AppId, thread: &str) {
         if self.notify.store.clear_thread(app, thread) {
             self.store_changed();
         }
@@ -529,6 +535,12 @@ impl Shell {
 
     /// Drops one notification (a swipe on a card of an expanded stack).
     fn clear_notification(&mut self, id: u64) {
+        self.usernotif_prune();
+        self.clear_notification_entry(id);
+        self.usernotif_dismiss_gone();
+    }
+
+    fn clear_notification_entry(&mut self, id: u64) {
         let banner = self.notify.banner.as_ref().is_some_and(|b| b.id == id);
         if self.notify.store.remove(id) {
             self.store_changed();
@@ -542,6 +554,12 @@ impl Shell {
 
     /// Drops every notification (Clear All).
     pub(super) fn clear_all_notifications(&mut self) {
+        self.usernotif_prune();
+        self.clear_all_entries();
+        self.usernotif_dismiss_gone();
+    }
+
+    fn clear_all_entries(&mut self) {
         self.notify.store.clear();
         self.store_changed();
         if let Some(b) = &mut self.notify.banner {
@@ -1654,7 +1672,7 @@ mod tests {
         let mut sh = shell();
         unlock(&mut sh);
         sh.tick(1000.0);
-        let threaded = |thread: &str, title: &str| Notification { thread: thread.into(), ..note(AppId::Files, title) };
+        let threaded = |thread: &str, title: &str| Notification { image: None, thread: thread.into(), ..note(AppId::Files, title) };
         sh.notify(threaded("chat:1", "hi"));
         sh.notify(threaded("chat:2", "yo"));
         sh.notify(threaded("chat:1", "again"));

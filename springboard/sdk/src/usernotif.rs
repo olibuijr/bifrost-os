@@ -6,7 +6,7 @@
 //! app was not running (the shell starts it and delivers the response once it is up). Needs the `notifications`
 //! permission in the manifest; without it every `add` answers `NotifStatus::NotPermitted`.
 
-pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_MASK, NotifTrigger};
+pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_MASK, NotifTrigger, MAX_NOTIF_ATTACHMENTS, MAX_NOTIF_ATTACHMENT_PATH, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, NOTIF_CATEGORY_HIDDEN_SHOW_TITLE};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -129,6 +129,22 @@ impl Request {
         self
     }
     /// `content.relevanceScore`, clamped to 0...1.
+    /// `UNNotificationAttachment`: a PNG at an absolute `path` inside the app's data directory. The first attachment
+    /// shows on the card as a thumbnail. Up to `MAX_NOTIF_ATTACHMENTS` paths; anything else is refused here.
+    pub fn attachment(mut self, path: &str) -> Result<Self, String> {
+        if self.0.attachments.len() >= MAX_NOTIF_ATTACHMENTS {
+            return Err(format!("at most {MAX_NOTIF_ATTACHMENTS} attachments"));
+        }
+        if !path.starts_with('/') || path.len() > MAX_NOTIF_ATTACHMENT_PATH {
+            return Err("an attachment needs an absolute path".into());
+        }
+        if !path.to_ascii_lowercase().ends_with(".png") {
+            return Err("only PNG attachments are shown".into());
+        }
+        self.0.attachments.push(path.to_string());
+        Ok(self)
+    }
+
     pub fn relevance_score(mut self, score: f32) -> Self {
         self.0.relevance_milli = (score.clamp(0.0, 1.0) * 1000.0).round() as u16;
         self
@@ -259,6 +275,19 @@ mod tests {
         assert_eq!(Request::new("a", "T").relevance_score(2.0).0.relevance_milli, 1000);
         assert_eq!(Request::new("a", "T").relevance_score(-1.0).0.relevance_milli, 0);
         assert_eq!(Request::new("a", "T").relevance_score(0.25).0.relevance_milli, 250);
+    }
+
+    #[test]
+    fn attachments_are_absolute_png_paths_and_bounded() {
+        let r = Request::new("a", "T").attachment("/data/pic.PNG").unwrap();
+        assert_eq!(r.0.attachments, vec!["/data/pic.PNG".to_string()]);
+        assert!(Request::new("a", "T").attachment("pic.png").is_err(), "relative");
+        assert!(Request::new("a", "T").attachment("/data/pic.jpg").is_err(), "not PNG");
+        let mut many = Request::new("a", "T");
+        for _ in 0..MAX_NOTIF_ATTACHMENTS {
+            many = many.attachment("/p.png").unwrap();
+        }
+        assert!(many.attachment("/p.png").is_err(), "too many");
     }
 
     #[test]

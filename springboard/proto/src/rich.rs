@@ -19,6 +19,9 @@ pub const MAX_NOTIF_IDS: usize = 64;
 /// `userInfo` entries of one request, and the longest value.
 pub const MAX_NOTIF_USER_INFO: usize = 16;
 pub const MAX_NOTIF_USER_INFO_VALUE: usize = 512;
+/// Attachments of one request, and the longest path.
+pub const MAX_NOTIF_ATTACHMENTS: usize = 10;
+pub const MAX_NOTIF_ATTACHMENT_PATH: usize = 1024;
 
 /// A text-reply action (`UNTextInputNotificationAction`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,11 +41,19 @@ pub struct NotifAction {
     pub foreground: bool,
     /// set for `UNTextInputNotificationAction`
     pub text_input: Option<TextInput>,
+    /// the name of an icon from the shell's icon set, drawn with the action; empty for none (`UNNotificationActionIcon`)
+    pub icon: String,
 }
 
 impl NotifAction {
     pub fn button(id: &str, title: &str) -> Self {
-        NotifAction { id: id.into(), title: title.into(), destructive: false, foreground: false, text_input: None }
+        NotifAction { id: id.into(), title: title.into(), destructive: false, foreground: false, text_input: None, icon: String::new() }
+    }
+
+    /// The same action with an icon (`UNNotificationActionIcon`).
+    pub fn with_icon(mut self, name: &str) -> Self {
+        self.icon = name.into();
+        self
     }
 }
 
@@ -51,6 +62,8 @@ impl NotifAction {
 pub struct NotifCategory {
     pub id: String,
     pub actions: Vec<NotifAction>,
+    /// `UNNotificationCategoryOptions` bits: `NOTIF_CATEGORY_CUSTOM_DISMISS` and the hidden-preview bits
+    pub options: u8,
 }
 
 /// `UNNotificationRequest` with its content (`UNMutableNotificationContent`) and a time-interval trigger.
@@ -83,6 +96,9 @@ pub struct NotifRequest {
     pub interruption_level: u8,
     /// `content.relevanceScore` in thousandths, 0 to 1000
     pub relevance_milli: u16,
+    /// `UNNotificationAttachment` images: absolute paths of PNG files in the app's data directory. The first one shows
+    /// on the card as a thumbnail.
+    pub attachments: Vec<String>,
 }
 
 /// `UNNotificationTrigger` of a scheduled request, sent with `ToShell::NotifySchedule`.
@@ -149,6 +165,16 @@ pub const NOTIF_PRESENT_SOUND: u8 = 2;
 pub const NOTIF_PRESENT_LIST: u8 = 8;
 /// `UNNotificationPresentationOptions.banner`
 pub const NOTIF_PRESENT_BANNER: u8 = 16;
+
+/// `UNNotificationCategoryOptions.customDismissAction`: the app hears `NOTIF_DISMISS_ACTION` when the user clears one of
+/// its notifications of this category without opening it.
+pub const NOTIF_CATEGORY_CUSTOM_DISMISS: u8 = 1;
+/// `UNNotificationCategoryOptions.hiddenPreviewsShowTitle`: the title still shows when previews are hidden.
+pub const NOTIF_CATEGORY_HIDDEN_SHOW_TITLE: u8 = 4;
+/// `UNNotificationCategoryOptions.hiddenPreviewsShowSubtitle`: the subtitle still shows when previews are hidden.
+pub const NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE: u8 = 8;
+/// Every category option bit the wire accepts.
+pub const NOTIF_CATEGORY_MASK: u8 = NOTIF_CATEGORY_CUSTOM_DISMISS | NOTIF_CATEGORY_HIDDEN_SHOW_TITLE | NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE;
 
 /// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -374,11 +400,13 @@ fn put_categories(b: &mut Vec<u8>, list: &[NotifCategory]) {
     u32_(b, n as u32);
     for c in &list[..n] {
         put(b, &c.id, MAX_NOTIF_ID);
+        b.push(c.options);
         let m = c.actions.len().min(MAX_NOTIF_ACTIONS);
         u32_(b, m as u32);
         for a in &c.actions[..m] {
             put(b, &a.id, MAX_NOTIF_ID);
             put(b, &a.title, MAX_NOTIF_TEXT);
+            put(b, &a.icon, MAX_NOTIF_ID);
             b.push(a.destructive as u8 | (a.foreground as u8) << 1 | (a.text_input.is_some() as u8) << 2);
             if let Some(t) = &a.text_input {
                 put(b, &t.button_title, MAX_NOTIF_TEXT);
@@ -393,19 +421,24 @@ fn get_categories(r: &mut Reader) -> Result<Vec<NotifCategory>, DecodeError> {
     let mut out = Vec::with_capacity(n);
     for _ in 0..n {
         let id = get(r, MAX_NOTIF_ID)?;
+        let options = r.u8()?;
+        if options & !NOTIF_CATEGORY_MASK != 0 {
+            return Err(DecodeError::BadValue);
+        }
         let m = count(r, MAX_NOTIF_ACTIONS)?;
         let mut actions = Vec::with_capacity(m);
         for _ in 0..m {
             let aid = get(r, MAX_NOTIF_ID)?;
             let title = get(r, MAX_NOTIF_TEXT)?;
+            let icon = get(r, MAX_NOTIF_ID)?;
             let f = r.u8()?;
             if f > 7 {
                 return Err(DecodeError::BadValue);
             }
             let text_input = if f & 4 != 0 { Some(TextInput { button_title: get(r, MAX_NOTIF_TEXT)?, placeholder: get(r, MAX_NOTIF_TEXT)? }) } else { None };
-            actions.push(NotifAction { id: aid, title, destructive: f & 1 != 0, foreground: f & 2 != 0, text_input });
+            actions.push(NotifAction { id: aid, title, destructive: f & 1 != 0, foreground: f & 2 != 0, text_input, icon });
         }
-        out.push(NotifCategory { id, actions });
+        out.push(NotifCategory { id, actions, options });
     }
     Ok(out)
 }
@@ -437,6 +470,11 @@ fn put_request(b: &mut Vec<u8>, q: &NotifRequest) {
     }
     b.push(q.interruption_level);
     b.extend_from_slice(&q.relevance_milli.to_le_bytes());
+    let n = q.attachments.len().min(MAX_NOTIF_ATTACHMENTS);
+    u32_(b, n as u32);
+    for path in &q.attachments[..n] {
+        put(b, path, MAX_NOTIF_ATTACHMENT_PATH);
+    }
 }
 
 fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
@@ -462,10 +500,15 @@ fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
     }
     let interruption_level = r.u8()?;
     let relevance_milli = u16::from_le_bytes([r.u8()?, r.u8()?]);
+    let n = count(r, MAX_NOTIF_ATTACHMENTS)?;
+    let mut attachments = Vec::with_capacity(n);
+    for _ in 0..n {
+        attachments.push(get(r, MAX_NOTIF_ATTACHMENT_PATH)?);
+    }
     if interruption_level > 3 || relevance_milli > 1000 {
         return Err(DecodeError::BadValue);
     }
-    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats, sound_kind, sound_name, sound_volume, user_info, interruption_level, relevance_milli })
+    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats, sound_kind, sound_name, sound_volume, user_info, interruption_level, relevance_milli, attachments })
 }
 
 /// A trigger: kind 0 is an interval (seconds u32, repeats), kind 1 a calendar (hour, minute, weekdays, repeats).
@@ -949,21 +992,22 @@ mod tests {
 
     fn category() -> NotifCategory {
         NotifCategory {
+            options: 0,
             id: "MESSAGE".into(),
             actions: vec![
                 NotifAction::button("open", "Open"),
                 NotifAction { destructive: true, ..NotifAction::button("delete", "Delete") },
-                NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: true, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "Message".into() }) },
+                NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: true, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "Message".into() }), icon: "reply".into() },
             ],
         }
     }
 
     #[test]
     fn notification_messages_round_trip() {
-        shell_rt(ToShell::NotifyCategories(vec![category(), NotifCategory { id: "EMPTY".into(), actions: vec![] }]));
+        shell_rt(ToShell::NotifyCategories(vec![category(), NotifCategory { options: 0, id: "EMPTY".into(), actions: vec![] }]));
         shell_rt(ToShell::NotifyRequest {
             request: 4,
-            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true, sound_kind: 4, sound_name: String::new(), sound_volume: 60, user_info: vec![("room".into(), "ü 7".into())], interruption_level: 2, relevance_milli: 750 },
+            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true, sound_kind: 4, sound_name: String::new(), sound_volume: 60, user_info: vec![("room".into(), "ü 7".into())], interruption_level: 2, relevance_milli: 750, attachments: vec!["/home/app/a.png".into()] },
         });
         shell_rt(ToShell::NotifyRequest { request: 6, req: NotifRequest { id: "n3".into(), sound_kind: 2, sound_name: "chime.wav".into(), ..Default::default() } });
         shell_rt(ToShell::NotifyRequest { request: 5, req: NotifRequest { id: "n2".into(), ..Default::default() } });
@@ -1014,6 +1058,39 @@ mod tests {
         for options in [0u8, 1, 2, 8, 16, NOTIF_PRESENT_MASK] {
             shell_rt(ToShell::NotifyPresentReply { token: 9, options });
         }
+    }
+
+    #[test]
+    fn notification_category_options_round_trip_and_reject_unknown_bits() {
+        let custom = NotifCategory { options: NOTIF_CATEGORY_CUSTOM_DISMISS, ..category() };
+        shell_rt(ToShell::NotifyCategories(vec![custom]));
+        let hidden = NotifCategory { options: NOTIF_CATEGORY_HIDDEN_SHOW_TITLE | NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, ..category() };
+        shell_rt(ToShell::NotifyCategories(vec![hidden]));
+        assert_eq!(NOTIF_CATEGORY_MASK, 13);
+        // tag 4, count 4, id length 4 and "c" 1 bytes come first, so the options byte is at index 13
+        let mut bytes = ToShell::NotifyCategories(vec![NotifCategory { id: "c".into(), actions: vec![], options: 0 }]).encode();
+        assert_eq!(bytes[13], 0);
+        bytes[13] = 0x80;
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn notification_action_icons_round_trip() {
+        let icons = NotifCategory { id: "i".into(), actions: vec![NotifAction::button("a", "A").with_icon("trash"), NotifAction::button("b", "B")], options: 0 };
+        shell_rt(ToShell::NotifyCategories(vec![icons.clone()]));
+        assert_eq!(icons.actions[0].icon, "trash");
+        assert!(icons.actions[1].icon.is_empty());
+    }
+
+    #[test]
+    fn notification_attachments_are_bounded() {
+        let mut bytes = ToShell::NotifyRequest { request: 1, req: NotifRequest { id: "a".into(), ..Default::default() } }.encode();
+        // the attachment count is the last u32 of an empty request
+        let at = bytes.len() - 4;
+        bytes[at..].copy_from_slice(&(MAX_NOTIF_ATTACHMENTS as u32 + 1).to_le_bytes());
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+        let many = NotifRequest { attachments: vec!["/a.png".into(); 3], ..Default::default() };
+        shell_rt(ToShell::NotifyRequest { request: 2, req: many });
     }
 
     #[test]
@@ -1092,7 +1169,7 @@ mod tests {
         u32_(&mut p, 17);
         assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
         // unknown flag bits on an action
-        let mut ok = ToShell::NotifyCategories(vec![NotifCategory { id: "c".into(), actions: vec![NotifAction::button("a", "A")] }]).encode();
+        let mut ok = ToShell::NotifyCategories(vec![NotifCategory { options: 0, id: "c".into(), actions: vec![NotifAction::button("a", "A")] }]).encode();
         *ok.last_mut().unwrap() = 8;
         assert!(ToShell::decode(&ok).is_err());
         assert_eq!(ToApp::decode(&[51, 0, 0, 0, 1, 0, 0, 0, 9]), Err(DecodeError::BadValue));

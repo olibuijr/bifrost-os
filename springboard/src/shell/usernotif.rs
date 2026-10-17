@@ -5,9 +5,9 @@
 //!
 //! Identity is always the app id of the connection, never anything in the message.
 
-use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
-use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, NotifTrigger, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND, NotifTrigger, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, NOTIF_CATEGORY_HIDDEN_SHOW_TITLE};
 use crate::shell::clock::alarm::Alarm;
+use crate::gfx::Image;
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 
@@ -15,6 +15,9 @@ use std::collections::{HashMap, HashSet};
 pub const MAX_PENDING: usize = 64;
 /// Answers kept for an app that is not running.
 const MAX_QUEUED: usize = 32;
+/// The largest attachment file the shell reads (bytes), and the side of its thumbnail (pixels).
+const MAX_ATTACHMENT_BYTES: u64 = 4 * 1024 * 1024;
+const ATTACHMENT_PX: usize = 96;
 /// How long a frontmost app has to answer `willPresent` (shell clock, ms). No answer hides the notification, which is
 /// what an app without the delegate gets.
 pub const PRESENT_TIMEOUT_MS: f64 = 1000.0;
@@ -229,8 +232,11 @@ impl Registry {
     }
 
     /// Forgets delivered requests whose store entry is gone (the user cleared it, or the store evicted it).
-    pub fn prune(&mut self, exists: impl Fn(u64) -> bool) {
-        self.delivered.retain(|d| exists(d.store_id));
+    /// Forgets the delivered requests whose store entry is gone, and returns them (oldest first).
+    pub fn prune(&mut self, exists: impl Fn(u64) -> bool) -> Vec<Delivered> {
+        let (gone, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut self.delivered).into_iter().partition(|d| !exists(d.store_id));
+        self.delivered = keep;
+        gone
     }
 
     pub fn store_ids(&self) -> Vec<u64> {
@@ -412,6 +418,15 @@ pub fn settings_for(permitted: bool, muted: bool, focus: bool) -> NotifSettings 
 pub fn display(req: &NotifRequest) -> (String, String) {
     let body = if req.subtitle.is_empty() { req.body.clone() } else if req.body.is_empty() { req.subtitle.clone() } else { format!("{}\n{}", req.subtitle, req.body) };
     (req.title.clone(), body)
+}
+
+/// The text shown while previews are hidden (the app's Show Previews setting, or the lock screen): the body never shows,
+/// and the title and subtitle show only when the category's hidden-preview options ask for them. The subtitle then shows
+/// alone in the body.
+pub fn hidden_text(options: u8, req: &NotifRequest) -> (String, String) {
+    let title = if options & NOTIF_CATEGORY_HIDDEN_SHOW_TITLE != 0 { req.title.clone() } else { String::new() };
+    let body = if options & NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE != 0 { req.subtitle.clone() } else { String::new() };
+    (title, body)
 }
 
 /// What a delivery shows for a grant (None when the app was never decided): (banner, sound). The banner needs the alert
@@ -681,15 +696,41 @@ impl super::Shell {
         }
     }
 
+    /// What a delivery of `req` shows for the app's Show Previews setting: hidden when set to Never, or when set to When
+    /// Unlocked and the device is locked. The shell decides at delivery, so the stored text stays hidden after unlocking.
+    fn usernotif_text(&self, slot: u8, app: &str, req: &NotifRequest) -> (String, String) {
+        let previews = self.app_notif(super::AppId::External(slot)).previews;
+        let hidden = previews == 2 || (previews == 1 && self.is_locked());
+        if !hidden {
+            return display(req);
+        }
+        let options = self.usernotif.category(app, &req.category).map_or(0, |c| c.options);
+        hidden_text(options, req)
+    }
+
+    /// The thumbnail of the request's first attachment. Only a PNG inside the app's own data directory is read (a link or a
+    /// path elsewhere is refused), and a file over 4 MiB is not read at all.
+    fn usernotif_thumbnail(&self, app: &str, req: &NotifRequest) -> Option<Image> {
+        let path = std::path::Path::new(req.attachments.first()?);
+        let base = std::fs::canonicalize(super::apphost::root().join("appdata").join(app)).ok()?;
+        let file = std::fs::canonicalize(path).ok()?;
+        let png = file.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"));
+        if !png || !file.starts_with(&base) || std::fs::metadata(&file).ok()?.len() > MAX_ATTACHMENT_BYTES {
+            return None;
+        }
+        super::spotindex::decode_thumbnail(&std::fs::read(&file).ok()?, ATTACHMENT_PX)
+    }
+
     /// Shows a delivered request. `presented` is the `willPresent` plan of a request that arrived in front; None applies
     /// the grant and mute state alone.
     fn usernotif_show(&mut self, slot: u8, app: &str, req: NotifRequest, replaced: Vec<u64>, t: f64, presented: Option<u8>) {
         for id in replaced {
             self.notify_remove(id);
         }
-        let (title, body) = display(&req);
+        let (title, body) = self.usernotif_text(slot, app, &req);
         let mut n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
         n.thread = req.thread.clone();
+        n.image = self.usernotif_thumbnail(app, &req);
         let (banner, sound, badge_allowed) = match presented {
             None => {
                 let (banner, sound) = delivery_plan(self.usernotif.granted(app), self.notify.store().is_muted(super::AppId::External(slot)), req.sound_kind);
@@ -731,10 +772,41 @@ impl super::Shell {
     }
 
     /// Forgets delivered requests the user cleared from the notification UI.
-    fn usernotif_prune(&mut self) {
+    pub(super) fn usernotif_prune(&mut self) {
         let gone: Vec<u64> = self.usernotif.store_ids().into_iter().filter(|&id| !self.notify_exists(id)).collect();
         if !gone.is_empty() {
             self.usernotif.prune(|id| !gone.contains(&id));
+        }
+    }
+
+    /// The user cleared notifications from the notification UI (swipe, group or Clear All). Call `usernotif_prune` before
+    /// the change, so only entries this change removed are found here. An app whose category asked for a custom dismissal
+    /// hears `NOTIF_DISMISS_ACTION` for each of them, once it is running or when it next starts.
+    pub(super) fn usernotif_dismiss_gone(&mut self) {
+        let gone: Vec<u64> = self.usernotif.store_ids().into_iter().filter(|&id| !self.notify_exists(id)).collect();
+        if gone.is_empty() {
+            return;
+        }
+        for d in self.usernotif.prune(|id| !gone.contains(&id)) {
+            let asks = self.usernotif.category(&d.app, &d.req.category).is_some_and(|c| c.options & NOTIF_CATEGORY_CUSTOM_DISMISS != 0);
+            if !asks {
+                continue;
+            }
+            let msg = ToApp::NotificationAction {
+                id: d.req.id.clone(),
+                action: NOTIF_DISMISS_ACTION.to_string(),
+                text: String::new(),
+                thread: d.req.thread.clone(),
+                category: d.req.category.clone(),
+                user_info: d.req.user_info.clone(),
+            };
+            let Some(slot) = super::apphost::slot_of(&d.app) else { continue };
+            let running = self.ext.get(slot).and_then(Option::as_ref).is_some_and(|h| h.running());
+            if running {
+                self.ext_send(slot, &msg);
+            } else {
+                self.usernotif.queue(&d.app, msg);
+            }
         }
     }
 
@@ -874,10 +946,11 @@ mod tests {
         r.set_categories(
             APP,
             vec![NotifCategory {
+                options: 0,
                 id: "MSG".into(),
                 actions: vec![
                     NotifAction::button("archive", "Archive"),
-                    NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: false, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "".into() }) },
+                    NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: false, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "".into() }), icon: String::new() },
                     NotifAction { destructive: true, ..NotifAction::button("delete", "Delete") },
                 ],
             }],
@@ -973,6 +1046,16 @@ mod tests {
     }
 
     #[test]
+    fn prune_returns_what_it_forgot_with_its_request() {
+        let mut r = Registry::default();
+        r.record_delivery(APP, req("a"), 1);
+        r.record_delivery(APP, req("b"), 2);
+        let gone = r.prune(|id| id == 2);
+        assert_eq!(gone.iter().map(|d| (d.req.id.as_str(), d.store_id)).collect::<Vec<_>>(), [("a", 1)]);
+        assert_eq!(r.list(APP, true), ["b"]);
+    }
+
+    #[test]
     fn prune_forgets_cleared_entries() {
         let mut r = Registry::default();
         r.record_delivery(APP, req("a"), 1);
@@ -1044,6 +1127,16 @@ mod tests {
         r.hold(APP, 2, 1, req("gone"));
         r.forget_app(APP);
         assert!(r.take_held(APP).is_empty());
+    }
+
+    #[test]
+    fn hidden_previews_keep_only_what_the_category_asks_for() {
+        let r = NotifRequest { title: "T".into(), subtitle: "S".into(), body: "B".into(), ..Default::default() };
+        assert_eq!(hidden_text(0, &r), (String::new(), String::new()), "no option: nothing of the content shows");
+        assert_eq!(hidden_text(NOTIF_CATEGORY_HIDDEN_SHOW_TITLE, &r), ("T".to_string(), String::new()));
+        assert_eq!(hidden_text(NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, &r), (String::new(), "S".to_string()));
+        assert_eq!(hidden_text(NOTIF_CATEGORY_HIDDEN_SHOW_TITLE | NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, &r), ("T".to_string(), "S".to_string()));
+        assert_eq!(hidden_text(NOTIF_CATEGORY_CUSTOM_DISMISS, &r), (String::new(), String::new()), "the dismiss option does not show text");
     }
 
     #[test]
