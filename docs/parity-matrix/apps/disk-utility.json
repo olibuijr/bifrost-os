@@ -29,7 +29,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:set_show_all",
    "note": "View menu radio items (cmd+1, cmd+2) in main.rs; volume_indices() drives the volumes-only sidebar. Needs a check on the lab machine.",
-   "wire": "Add View radio items in main.rs and a flag in window.rs sidebar() that hides Kind::Disk rows when volumes-only."
+   "wire": "Check on the lab machine that the sidebar refreshes when the View radio items change (cmd+1, cmd+2 in main.rs; window.rs set_show_all hides disk rows)."
   },
   {
    "feature": "Volume info: capacity, used, free, fs, mount point, SMART",
@@ -119,7 +119,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/flow.rs:97 (open_image, open_image_for_writing); springboard/apps/diskutil-desktop/src/images.rs (attach_plan)",
    "note": "File > Open Disk Image (cmd+O) attaches the chosen image read-only (hdiutil attach -readonly); File > Open Disk Image for Writing attaches it with -readwrite. Both paths are tested in flow.rs and images.rs. Detach Disk Image already existed. Not yet verified on Midget.",
-   "wire": "Verify on the lab machine that the panel's file resolves to a path the attach tool accepts; offer read-write attach."
+   "wire": "Check on the lab machine that the chosen file reaches hdiutil attach unchanged, read-only and for writing (MENU_OPEN_IMAGE and MENU_OPEN_IMAGE_RW in main.rs)."
   },
   {
    "feature": "Convert / Resize image, Change Password",
@@ -164,7 +164,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:MENU_SHOW_IN_FILES",
    "note": "File > Show in Files (cmd+shift+R) opens the mount point as a file:// URL via ctx.open_url (actions::mount_url, tested). Needs a check on the lab machine.",
-   "wire": "Add a menu item opening the selected mount point in the Files app via shell open."
+   "wire": "Check on the lab machine that File > Show in Files opens the selected mount point in the Files app (main.rs MENU_SHOW_IN_FILES, actions::mount_url)."
   },
   {
    "feature": "Usage bar and capacity",
