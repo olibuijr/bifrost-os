@@ -8,8 +8,12 @@
 //!   operation. `headers` is a list of `{id, kind, value}`: `kind` is `text`, `bytes`, `byte` or `dword`, and `value`
 //!   is the text, the hex bytes, or the number.
 //! - `connect {max_len}` answers `{hex}`: a CONNECT request for version 1.0 with that largest packet length.
+//! - `exchange {addr, channel, hex}` opens an RFCOMM channel to the device `addr` (`channel` 1 to 30), sends the
+//!   request packet `hex` and answers `{hex}` with the one packet that comes back (`bare::rfcomm::request`). It blocks
+//!   for at most the connect timeout and is open to first-party apps only.
 //!
 //! A packet the model cannot read (a short or inconsistent length, a value of the wrong type) is a service error.
+use super::keychain_groups::first_party;
 use super::{Shell, SystemService};
 use crate::keychain::{hex, unhex};
 use bifrost_core::json::Json;
@@ -26,9 +30,36 @@ impl SystemService for ObexCodec {
         SERVICE
     }
 
-    fn call(&mut self, _shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        if method == "exchange" {
+            return exchange(app_id, params);
+        }
         answer(method, params)
     }
+}
+
+/// Sends one request over an RFCOMM channel and returns the answer. A link is opened only for a first-party app.
+fn exchange(app_id: &str, params: &Json) -> Result<Json, String> {
+    let installed = crate::shell::apphost::installed();
+    let first = installed.iter().find(|a| a.manifest.id == app_id).is_some_and(|a| first_party(&a.manifest));
+    if !first {
+        return Err("OBEX links are open to first-party apps only".into());
+    }
+    let addr = text(params, "addr")?;
+    let channel = params.get("channel").and_then(Json::as_u64).and_then(|c| u8::try_from(c).ok()).ok_or("channel must be 1 to 30")?;
+    let packet = unhex(&text(params, "hex")?).ok_or("hex must be an even run of hex digits")?;
+    link(&addr, channel, &packet)
+}
+
+#[cfg(target_os = "linux")]
+fn link(addr: &str, channel: u8, packet: &[u8]) -> Result<Json, String> {
+    let reply = crate::bare::rfcomm::request(addr, channel, packet).map_err(|e| format!("obex link: {e}"))?;
+    Ok(Json::Obj(vec![("hex".into(), Json::Str(hex(&reply)))]))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn link(_addr: &str, _channel: u8, _packet: &[u8]) -> Result<Json, String> {
+    Err("RFCOMM links need Linux".into())
 }
 
 /// Runs one method. Pure: it reads only the parameters.
@@ -84,6 +115,12 @@ mod tests {
 
     fn obj(pairs: Vec<(&str, Json)>) -> Json {
         Json::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+    }
+
+    #[test]
+    fn an_app_that_is_not_installed_gets_no_link() {
+        let req = obj(vec![("addr", Json::Str("AA:BB:CC:DD:EE:FF".into())), ("channel", Json::Num(3.0)), ("hex", Json::Str("8000".into()))]);
+        assert!(exchange("app.nobody", &req).unwrap_err().contains("first-party"));
     }
 
     #[test]

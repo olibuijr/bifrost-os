@@ -4,12 +4,15 @@
 //! by the caller and is open to first-party apps only, so a third-party app cannot read a suite another app uses.
 //!
 //! Values are text, flags (JSON booleans) and numbers (JSON numbers; a whole number is stored as an integer, any
-//! other as a double). Data is not served yet: a read of stored data answers an error rather than a wrong value.
+//! other as a double). Data is hex text: `data` on a set, and `value` as hex with `kind` "data" on a get. A property list value is
+//! not served: a read of one answers an error rather than a wrong value.
 //!
 //! Methods (JSON parameters, `key` required):
-//! - `get {key, suite?}` answers `{value}`: the text, flag or number, or `null` when unset. An app's own domain falls
-//!   back to the global domain, as `CFPreferencesCopyAppValue` does.
-//! - `set {key, value, suite?}` writes the text, flag or number and synchronises at once, answering `{saved}`.
+//! - `get {key, suite?}` answers `{value, kind}`: the text, flag, number or hex data, or `null` when unset, and `kind`
+//!   (`text`, `flag`, `number`, `data`). An app's own domain falls back to the global domain, as
+//!   `CFPreferencesCopyAppValue` does.
+//! - `set {key, value, suite?}` or `set {key, data, suite?}` (`data` is hex) writes the value and synchronises at
+//!   once, answering `{saved}`.
 //! - `remove {key, suite?}` deletes the key and synchronises, answering `{saved}`.
 //!
 //! The folder is `<apphost root>/domains`.
@@ -18,6 +21,7 @@ use super::{Shell, SystemService};
 use crate::shell::apphost;
 use bifrost_core::defaults_file::Value;
 use bifrost_core::json::Json;
+use bifrost_core::plist::{hex_decode, hex_encode};
 use bifrost_core::pref_domains::{PrefStore, ANY_HOST, CURRENT_USER};
 use std::path::Path;
 
@@ -65,18 +69,23 @@ pub fn answer(root: &Path, app_id: &str, suite: Option<&str>, method: &str, para
                 Some(name) => store.copy_value(&key, name, CURRENT_USER, ANY_HOST),
                 None => store.copy_app_value(&key, app_id),
             };
-            let value = match found {
-                None => Json::Null,
-                Some(Value::Str(s)) => Json::Str(s),
-                Some(Value::Bool(b)) => Json::Bool(b),
-                Some(Value::Int(i)) => Json::Num(i as f64),
-                Some(Value::Double(d)) => Json::Num(d),
-                Some(_) => return Err(format!("{key} holds data; this service reads text, flags and numbers only")),
+            let (value, kind) = match found {
+                None => (Json::Null, Json::Null),
+                Some(Value::Str(s)) => (Json::Str(s), Json::Str("text".into())),
+                Some(Value::Bool(b)) => (Json::Bool(b), Json::Str("flag".into())),
+                Some(Value::Int(i)) => (Json::Num(i as f64), Json::Str("number".into())),
+                Some(Value::Double(d)) => (Json::Num(d), Json::Str("number".into())),
+                Some(Value::Data(bytes)) => (Json::Str(hex_encode(&bytes)), Json::Str("data".into())),
+                Some(_) => return Err(format!("{key} holds a property list; this service reads text, flags, numbers and data only")),
             };
-            Ok(Json::Obj(vec![("value".into(), value)]))
+            Ok(Json::Obj(vec![("value".into(), value), ("kind".into(), kind)]))
         }
         "set" => {
             let stored = match params.get("value") {
+                _ if params.get("data").is_some() => match params.str_field("data").and_then(|h| hex_decode(&h)) {
+                    Some(bytes) => Value::Data(bytes),
+                    None => return Err("data must be hex text".into()),
+                },
                 Some(Json::Str(s)) => Value::Str(s.clone()),
                 Some(Json::Bool(b)) => Value::Bool(*b),
                 Some(Json::Num(n)) if !n.is_finite() => return Err("value must be a finite number".into()),
@@ -146,6 +155,18 @@ mod tests {
         assert_eq!(get(&root, "app.one", None, "count"), Json::Num(7.0));
         assert_eq!(get(&root, "app.one", None, "ratio"), Json::Num(0.25));
         assert!(answer(&root, "app.one", None, "set", &obj(vec![("key", Json::Str("n".into())), ("value", Json::Null)])).is_err());
+    }
+
+    #[test]
+    fn data_values_round_trip_as_hex() {
+        let root = scratch("data");
+        let key = || obj(vec![("key", Json::Str("blob".into()))]);
+        let with_data = |hex: &str| obj(vec![("key", Json::Str("blob".into())), ("data", Json::Str(hex.into()))]);
+        assert_eq!(answer(&root, "app.one", None, "set", &with_data("00ff10")).unwrap().get("saved"), Some(&Json::Bool(true)));
+        let got = answer(&root, "app.one", None, "get", &key()).unwrap();
+        assert_eq!(got.get("value"), Some(&Json::Str("00ff10".into())));
+        assert_eq!(got.get("kind"), Some(&Json::Str("data".into())));
+        assert!(answer(&root, "app.one", None, "set", &with_data("zz")).is_err());
     }
 
     #[test]
