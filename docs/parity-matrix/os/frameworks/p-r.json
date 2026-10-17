@@ -164,9 +164,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/sdk/src/permission_kit.rs",
+   "bifrost": "springboard/ui/src/permission_question.rs; springboard/sdk/src/permission_kit.rs; springboard/src/shell/services/permission_kit.rs",
    "status": "partial",
-   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet.",
+   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Not built: the guardian sheet that shows a question and calls respond, and a timer that calls expire.",
    "rea": [],
    "method": "assessed"
   },
@@ -770,9 +770,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/pip.rs",
+   "bifrost": "springboard/src/media/pip.rs; springboard/src/shell/pip.rs",
    "status": "partial",
-   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine.",
+   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Not built: nothing calls it from Shell::draw yet, since no shell state holds an active window, and frames are not scaled.",
    "rea": [],
    "method": "assessed"
   },
@@ -847,9 +847,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/pacman_progress.rs",
    "status": "gap",
-   "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first.",
+   "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first. Built 2026-10-17: pacman_progress reads the steps of the latest transaction from the pacman log and gives a fraction for a progress bar (tests pacman_progress::tests). Not built: the install sheet, the confirmation before scripts run, and the shell wiring.",
    "rea": [],
    "method": "assessed"
   },
@@ -1852,11 +1852,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/detect.rs",
+   "bifrost": "springboard/ui/src/phone_number.rs, springboard/ui/src/detect.rs",
    "status": "partial",
-   "note": "The detector in detect.rs (Kind::Phone) finds phone numbers in plain text and ranks them below links and dates. It does not parse, normalise or format numbers for a region.",
+   "note": "The detector in detect.rs (Kind::Phone) finds phone numbers in plain text and ranks them below links and dates. It does not parse, normalise or format numbers for a region. Built 2026-10-17: phone_number parses, validates and formats numbers for the twelve regions in its table (E.164, national and international forms); tests phone_number::tests. Not built: full numbering plans for other regions.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "phone_number::tests"
+    }
+   ],
+   "ready_note": "phone_number::tests cover parsing, E.164, national and international formats and the refusals, for the regions in the table."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhoneSnippetUI.framework",
@@ -5588,9 +5597,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/net/regdomain.rs",
    "status": "gap",
-   "note": "Set the wireless regulatory domain from the region setting (for example iw reg set with the country code) and show it in Wi-Fi settings; nothing in springboard/netd sets a country code.",
+   "note": "Set the wireless regulatory domain from the region setting (for example iw reg set with the country code) and show it in Wi-Fi settings; nothing in springboard/netd sets a country code. Built 2026-10-17: regdomain parses iw reg get and sets the domain with iw reg set, refusing anything but a two-letter country code. Not built: netd does not call it at start or when the region changes, and Wi-Fi settings do not show the domain.",
    "rea": [],
    "method": "assessed"
   },
@@ -6409,9 +6418,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/occlusion.rs",
+   "bifrost": "springboard/core/src/occlusion.rs; springboard/core/src/memory_pressure.rs",
    "status": "partial",
-   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions.",
+   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions. Built 2026-10-17: memory pressure is parsed from /proc/pressure/memory and reported once per level change (core memory_pressure); suspend and resume map to SIGSTOP and SIGCONT (occlusion::signal_for). Not built: the shell does not feed occlusion events or send the signals, the Settings toggle is missing, and apps are not told about pressure.",
    "rea": [],
    "method": "assessed"
   },
