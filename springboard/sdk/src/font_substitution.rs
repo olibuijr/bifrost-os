@@ -158,9 +158,40 @@ pub fn class_of_family(family: &str) -> Option<FamilyClass> {
     TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
 }
 
+/// Reference family name (lowercase) to the open face that stands in for it, tried before the class list. Each face
+/// is packaged on Arch (`packaging/arch/runtime-packages.txt`) and is the family name fontconfig reports for it.
+const FACES: &[(&str, &str)] = &[
+    ("avenir", "Lato"), ("avenir next", "Lato"), ("avenir next condensed", "Lato"),
+    ("arial black", "Noto Sans"), ("arial unicode ms", "Noto Sans"),
+    ("andale mono", "DejaVu Sans Mono"),
+    ("athelas", "Liberation Serif"),
+    ("baskerville", "Libertinus Serif"), ("big caslon", "Libertinus Serif"), ("cochin", "Libertinus Serif"),
+    ("charter", "Charis SIL"),
+    ("american typewriter", "IBM Plex Serif"),
+];
+
+/// The open face mapped to `family` in `FACES`, if any.
+pub fn face_of_family(family: &str) -> Option<&'static str> {
+    let key = family.trim().to_lowercase();
+    FACES.iter().find(|(n, _)| *n == key).map(|(_, f)| *f)
+}
+
+/// The open families for `family`: its own face first, then the equivalents of its class. Empty when neither is known.
+fn equivalents_of(family: &str) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = face_of_family(family).into_iter().collect();
+    if let Some(c) = class_of_family(family) {
+        for f in c.equivalents() {
+            if !out.contains(f) {
+                out.push(f);
+            }
+        }
+    }
+    out
+}
+
 /// The open families that stand in for `family`, preferred first. Empty when the name is unknown.
 pub fn substitute(family: &str) -> Vec<&'static str> {
-    class_of_family(family).map(|c| c.equivalents().to_vec()).unwrap_or_default()
+    equivalents_of(family)
 }
 
 /// The generic class for a descriptor whose family is unknown: fixed pitch is monospaced, everything else is the
@@ -177,14 +208,15 @@ pub fn class_for_spec(spec: &FontSpec) -> FamilyClass {
 /// class (or of the generic class for an unknown name), in preference order. Empty when `spec` names no family.
 pub fn candidates(spec: &FontSpec) -> Vec<FontSpec> {
     let Some(name) = spec.family.as_deref() else { return Vec::new() };
-    let class = class_of_family(name).unwrap_or_else(|| class_for_spec(spec));
-    class
-        .equivalents()
-        .iter()
+    let list = match equivalents_of(name) {
+        v if !v.is_empty() => v,
+        _ => class_for_spec(spec).equivalents().to_vec(),
+    };
+    list.into_iter()
         .filter(|f| !f.eq_ignore_ascii_case(name))
         .map(|f| {
             let mut s = spec.clone();
-            s.family = Some((*f).to_string());
+            s.family = Some(f.to_string());
             s
         })
         .collect()
@@ -276,6 +308,27 @@ mod tests {
             assert_eq!(*n, n.to_lowercase(), "key {n} must be lowercase");
             assert!(seen.insert(*n), "duplicate key {n}");
         }
+        let mut faces = std::collections::HashSet::new();
+        for (n, f) in FACES {
+            assert_eq!(*n, n.to_lowercase(), "face key {n} must be lowercase");
+            assert!(!f.is_empty() && faces.insert(*n), "face {n} needs one open family, once");
+        }
+    }
+
+    #[test]
+    fn open_faces_stand_in_for_licensed_families_first() {
+        assert_eq!(substitute("Avenir Next")[0], "Lato");
+        assert_eq!(substitute("  AVENIR NEXT CONDENSED ")[0], "Lato");
+        assert_eq!(substitute("Charter")[0], "Charis SIL");
+        assert_eq!(substitute("Andale Mono")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("Arial Black")[0], "Noto Sans");
+        assert_eq!(substitute("Arial Unicode MS"), vec!["Noto Sans"]);
+        assert_eq!(substitute("Baskerville")[0], "Libertinus Serif");
+        assert_eq!(substitute("American Typewriter")[0], "IBM Plex Serif");
+        assert_eq!(substitute("Futura")[0], "Outfit");
+        let avenir = candidates(&FontSpec::new().family("Avenir"));
+        assert_eq!(avenir[0].family.as_deref(), Some("Lato"));
+        assert!(avenir.iter().all(|s| s.family.as_deref() != Some("Avenir")));
     }
 
     #[test]
