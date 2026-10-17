@@ -90,6 +90,57 @@ pub struct Snapshot {
     pub error: Option<String>,
     /// the Wi-Fi link is up but not usable (no address, no DNS); None when it is fine or not connected
     pub problem: Option<LinkProblem>,
+    /// the VPN and WireGuard connections NetworkManager holds, with which ones are up
+    pub vpns: Vec<VpnConnection>,
+}
+
+/// A VPN configuration NetworkManager holds: a VPN plug-in connection (`vpn`) or a WireGuard one (`wireguard`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct VpnConnection {
+    pub name: String,
+    pub kind: String,
+    /// whether the tunnel is up now
+    pub active: bool,
+}
+
+impl VpnConnection {
+    /// What the VPN page shows beside the name.
+    pub fn status_label(&self) -> &'static str {
+        if self.active {
+            "Connected"
+        } else {
+            "Not Connected"
+        }
+    }
+}
+
+/// The VPN connections in `nmcli -t -f NAME,TYPE,ACTIVE connection show`: lines of name, type and `yes` or `no`, with
+/// colons in a name escaped. Connections of other types (Wi-Fi, Ethernet, bridges) are left out.
+pub fn parse_vpn_connections(text: &str) -> Vec<VpnConnection> {
+    text.lines()
+        .filter_map(|line| {
+            let f = fields(line);
+            if f.len() < 3 {
+                return None;
+            }
+            let (active, kind) = (f[f.len() - 1].as_str(), f[f.len() - 2].as_str());
+            if !matches!(kind, "vpn" | "wireguard") {
+                return None;
+            }
+            let name = f[..f.len() - 2].join(":");
+            (!name.trim().is_empty()).then(|| VpnConnection { name, kind: kind.to_string(), active: active == "yes" })
+        })
+        .collect()
+}
+
+/// The `nmcli` arguments that bring the VPN connection `name` up or down. Refuses a blank name or one with a control
+/// character (the name is a single argument, so it cannot add options).
+pub fn vpn_args(name: &str, up: bool) -> Result<Vec<String>, String> {
+    if name.trim().is_empty() || name.chars().any(char::is_control) {
+        return Err("That VPN name cannot be used".into());
+    }
+    let args: &[&str] = if up { &["--wait", "6", "connection", "up", "id"] } else { &["connection", "down", "id"] };
+    Ok(args.iter().map(|a| a.to_string()).chain([name.to_string()]).collect())
 }
 pub enum Request {
     Wifi(WifiAction),
@@ -100,6 +151,8 @@ pub enum Request {
     Offer(Offer),
     /// Takes down the network offered by [`Request::Offer`].
     StopOffer,
+    /// Brings the VPN connection `name` up (`up`) or down.
+    Vpn { name: String, up: bool },
 }
 
 /// A VPN request. The system network service (NetworkManager, with its VPN and WireGuard plug-ins) keeps the
@@ -436,6 +489,9 @@ fn read() -> Snapshot {
             n.saved = s.saved.iter().any(|v| v.ssid == n.ssid);
         }
     }
+    if let Ok(text) = output("nmcli", &["-t", "-f", "NAME,TYPE,ACTIVE", "connection", "show"]) {
+        s.vpns = parse_vpn_connections(&text);
+    }
     if let Ok(text) = output("powerprofilesctl", &["list"]) {
         for line in text.lines() {
             let name = line
@@ -501,6 +557,11 @@ fn apply(request: Request) -> Result<(), String> {
         Request::Offer(offer) => start_offer(&offer),
         Request::StopOffer => stop_offer(),
         Request::Vpn(action) => apply_vpn(action),
+        Request::Vpn { name, up } => {
+            let args = vpn_args(&name, up)?;
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            output("nmcli", &args)
+        }
         Request::Wifi(action) => match action {
             WifiAction::Scan => output("nmcli", &["--wait", "5", "device", "wifi", "rescan"]),
             WifiAction::Enable(on) => {
@@ -549,6 +610,8 @@ fn apply(request: Request) -> Result<(), String> {
 /// The VPN configurations the Settings VPN page lists. The shell keeps no profile list of its own (NetworkManager keeps
 /// them, and `VpnAction` brings one up or down by name), so the page's list is empty and says so. `VpnProfile` is the
 /// shape a profile the shell stores will take.
+/// The VPN profiles the SDK's `VpnManager` model keeps for apps. The Settings VPN page lists the connections
+/// NetworkManager holds instead (`Snapshot::vpns`); no profile is stored through the model yet, so this list is empty.
 pub fn vpn_profiles() -> Vec<VpnProfile> {
     Vec::new()
 }
@@ -565,9 +628,36 @@ pub fn vpn_summary(profile: &VpnProfile) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{security_of, vpn_profiles, vpn_summary};
+    use super::{parse_vpn_connections, security_of, vpn_args, vpn_profiles, vpn_summary, VpnConnection};
     use crate::net::wifi_config::{Eap, Security};
     use bifrost_core::tunnel::{VpnProfile, VpnProtocol};
+
+    #[test]
+    fn vpn_connections_are_read_from_the_terse_list_and_other_types_are_left_out() {
+        let text = "Home Wi-Fi:802-11-wireless:yes\nOffice VPN:vpn:no\nwg0:wireguard:yes\nlo:loopback:yes\nCafe\\: guest:vpn:yes\n:vpn:no\nbad\n";
+        let vpns = parse_vpn_connections(text);
+        assert_eq!(
+            vpns,
+            vec![
+                VpnConnection { name: "Office VPN".into(), kind: "vpn".into(), active: false },
+                VpnConnection { name: "wg0".into(), kind: "wireguard".into(), active: true },
+                VpnConnection { name: "Cafe: guest".into(), kind: "vpn".into(), active: true },
+            ],
+            "an escaped colon stays in the name, a blank name and a short line are skipped"
+        );
+        assert_eq!(vpns[0].status_label(), "Not Connected");
+        assert_eq!(vpns[1].status_label(), "Connected");
+        assert!(parse_vpn_connections("").is_empty());
+    }
+
+    #[test]
+    fn the_vpn_request_is_one_nmcli_command_with_the_name_as_a_single_argument() {
+        assert_eq!(vpn_args("Office VPN", true).unwrap(), ["--wait", "6", "connection", "up", "id", "Office VPN"]);
+        assert_eq!(vpn_args("wg0", false).unwrap(), ["connection", "down", "id", "wg0"]);
+        assert_eq!(vpn_args("--help", true).unwrap().last().map(String::as_str), Some("--help"), "the name follows id, so it is a value and not an option");
+        assert!(vpn_args("  ", true).is_err());
+        assert!(vpn_args("a\nb", true).is_err());
+    }
 
     #[test]
     fn vpn_summary_names_protocol_server_and_default_port() {

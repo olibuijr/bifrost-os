@@ -49,8 +49,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "has: open-about pane intent in the settings catalogue; missing: the App Intents runtime is not wired to Search or the agent socket",
-   "rea": []
+   "note": "the open-about intent opens the About pane; Search lists every settings intent among its Shortcuts and opens the pane (quicksearch.rs, Settings::open_page_id).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane"
+    }
+   ],
+   "ready_note": "the open-about App Intent is in the settings catalogue, found in Search and opens the About pane; the checks run the catalogue and the Search path"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsExtension.appex",
@@ -125,10 +139,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/accessibility/shortcut.rs, springboard/src/shell/accessibility/shortcut_panel.rs",
    "status": "partial",
-   "note": "has: open-accessibility pane intent only; missing: the glanceable widget",
-   "rea": []
+   "note": "the open-accessibility and open-accessibility-shortcut intents open those panes from Search, and Option+Cmd+F5 opens the Accessibility Shortcut panel, the glanceable switch panel for the chosen features.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::shortcut::tests"
+    }
+   ],
+   "ready_note": "the accessibility intents open the Accessibility and Shortcut panes and the Accessibility Shortcut panel is the glanceable switch; the checks run the intent catalogue and the shortcut feature switching"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccountsUISettingsAppIntents.appex",
@@ -237,9 +265,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: intent that opens the BifrOSt Account card on the root page (account.rs); missing: sign-in intents",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: App Intents of the Apple Account settings (sign in, account recovery and iCloud services) for Apple's account servers; the index shows only an ExtensionKit appex with Metadata.appintents. BifrOSt has its own BifrOSt Account pane with sign-in against BifrOSt Cloud (account_page.rs) and the open-account intent, which are separate features, not a mirror of the Apple account.",
    "rea": []
   },
   {
@@ -257,9 +285,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/account.rs",
-   "status": "partial",
-   "note": "has: BifrOSt Account card and profile (account.rs); missing: sign-in flow and service toggles",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the Apple Account pane (iCloud, media purchases, device list, recovery) for Apple's account servers; the index shows an appex with an Assets.car, icon and search terms for that pane. BifrOSt has its own BifrOSt Account pane and sign-in against BifrOSt Cloud (account_page.rs), a separate feature.",
    "rea": []
   },
   {
@@ -311,10 +339,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/passcode.rs, springboard/src/shell/passwords_page.rs",
    "status": "partial",
-   "note": "has: Passcode and Passwords pane intents (passwords_page.rs:46); missing: biometric sensor intents (no hardware path)",
-   "rea": []
+   "note": "the open-passcode and open-passwords intents open the Passcode and Passwords panes from Search. The fingerprint-sensor part of the reference pane is Apple sensor hardware and is not mirrored.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "the Passcode and Passwords panes have App Intents that open them from Search; the checks run the catalogue (the biometric sensor intents are Apple hardware and out of scope)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Bluetooth.appex",
@@ -360,10 +397,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/control_center.rs",
    "status": "partial",
-   "note": "has: Bluetooth pane intent; missing: the widget",
-   "rea": []
+   "note": "the open-bluetooth intent opens the Bluetooth pane from Search, and Control Centre has a Bluetooth tile that flips the radio (control_center.rs, toggle_bluetooth), the glanceable control.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::control_center::tests::bluetooth_hook_flips_the_radio_only_with_a_controller"
+    }
+   ],
+   "ready_note": "the Bluetooth pane has an App Intent and Control Centre has the Bluetooth switch tile; the checks run the intent catalogue and the tile's radio hook"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CDs & DVDs Settings Extension.appex",
@@ -460,10 +511,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs:1283",
+   "bifrost": "springboard/src/shell/pages.rs (Control Centre and Menu Bar pages), springboard/src/shell/options.rs (MenuExtra)",
    "status": "partial",
-   "note": "has: Included Controls list (pages.rs:1283); missing: per-control menu bar choices",
-   "rea": []
+   "note": "Settings > Control Centre lists the controls it holds, and Settings > Menu Bar has a switch per control for what the menu bar shows (CPU, memory, battery, network, Control Centre), saved as menu_extras and read by the menu bar (desktop_bar.rs).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_menu_bar_page_has_one_switch_per_control_and_follows_the_saved_choice"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_control_centre_page_lists_the_controls_it_holds"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::options::tests"
+    }
+   ],
+   "ready_note": "the Control Centre page lists its controls and the Menu Bar page chooses which controls the menu bar shows, saved in the options; the checks run both pages and the option round trip"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ControlCenterSettingsIntents.appex",
@@ -534,10 +604,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/account.rs",
+   "bifrost": "springboard/src/shell/users_page.rs",
    "status": "partial",
-   "note": "has: BifrOSt Account sign-in state and profile (account.rs); missing: sign-in and sign-out against the cloud API",
-   "rea": []
+   "note": "this legacy pane is Users & Groups: Settings > Users & Groups lists the people and shared groups, adds and removes accounts, sets passwords (old password asked first for the installed account), edits groups and managed-account content limits through privd (users_page.rs).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::users_page::tests"
+    }
+   ],
+   "ready_note": "Users & Groups is the Settings pane that replaces Accounts: people, groups, passwords and limits; the checks run its pages and edit rules"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Appearance.prefPane",
@@ -583,9 +662,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/account.rs",
-   "status": "partial",
-   "note": "has: BifrOSt Account card and profile (account.rs); missing: sign-in flow and service toggles",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the legacy Apple Account pane (iCloud sign-in and services) for Apple's account servers. BifrOSt has its own BifrOSt Account pane and sign-in against BifrOSt Cloud (account_page.rs), a separate feature.",
    "rea": []
   },
   {

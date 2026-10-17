@@ -198,6 +198,8 @@ pub enum Toggle {
     GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
+    /// Accessibility > Switch Scanning (`a11y_switch_scan`)
+    SwitchScan,
     /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
@@ -467,6 +469,8 @@ pub enum Action {
     Account(super::account_page::Act),
     /// Bluetooth: type the PIN or passkey the device asked for while pairing (`addr`)
     BluetoothPrompt { addr: String, passkey: bool },
+    /// VPN: bring the NetworkManager connection `name` up (`up`) or down
+    Vpn { name: String, up: bool },
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
@@ -1437,6 +1441,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                             "Opening, closing and switching apps cross-fade instead of zooming."
                         }),
                     Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
+                    Group::new(vec![Item::new("Switch Scanning").switch(a.switch_scan, Action::Toggle(Toggle::SwitchScan))])
+                        .header("SWITCH")
+                        .footer("A highlight steps through the screen by itself. Press Ctrl+Alt+Space to press the highlighted element, or Ctrl+Alt+Right to step by hand."),
                     Group::new(vec![Item::new("Accessibility Shortcut").value(shortcut_label(&a.shortcut)).link(PageId::AccessibilityShortcut)])
                         .header("SHORTCUT")
                         .footer("Press Option+Cmd+F5 to open a panel where you switch the chosen features on or off."),
@@ -2094,6 +2101,52 @@ mod tests {
     }
 
     #[test]
+    fn the_menu_bar_page_has_one_switch_per_control_and_follows_the_saved_choice() {
+        use crate::shell::options::MenuExtra;
+        let info = info();
+        let mut opts = Options::default();
+        let s = spec(PageId::MenuBar, &model(&info, &opts));
+        let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["CPU Usage", "Memory Usage", "Battery", "Wi-Fi and Network", "Control Center"]);
+        assert!(s.groups[0].items.iter().all(|i| i.accessory == Accessory::Switch(true)), "every control shows by default");
+        assert_eq!(s.groups[0].items[2].action, Action::Toggle(Toggle::MenuExtra(MenuExtra::Battery)));
+        opts.menu_extras = MenuExtra::Battery.bit() | MenuExtra::ControlCenter.bit();
+        let s = spec(PageId::MenuBar, &model(&info, &opts));
+        let on: Vec<bool> = s.groups[0].items.iter().map(|i| i.accessory == Accessory::Switch(true)).collect();
+        assert_eq!(on, [false, false, true, false, true]);
+    }
+
+    #[test]
+    fn the_control_centre_page_lists_the_controls_it_holds() {
+        let (info, opts) = (info(), Options::default());
+        let s = spec(PageId::ControlCentre, &model(&info, &opts));
+        let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Brightness", "Volume", "Wi-Fi", "Screen Lock", "Focus"]);
+        assert_eq!(s.groups[0].items[4].value, "Off");
+    }
+
+    #[test]
+    fn the_vpn_page_lists_the_held_connections_and_a_tap_flips_one() {
+        use crate::shell::desktop_network::{Snapshot, VpnConnection};
+        let (mut info, opts) = (info(), Options::default());
+        let empty = spec(PageId::Vpn, &model(&info, &opts));
+        assert_eq!(empty.groups[0].items[0].label, "No VPN Configurations");
+        info.desktop_network = Some(Snapshot {
+            vpns: vec![
+                VpnConnection { name: "Office".into(), kind: "vpn".into(), active: false },
+                VpnConnection { name: "wg0".into(), kind: "wireguard".into(), active: true },
+            ],
+            ..Snapshot::default()
+        });
+        let s = spec(PageId::Vpn, &model(&info, &opts));
+        let items = &s.groups[0].items;
+        assert_eq!((items[0].label.as_str(), items[0].value.as_str()), ("Office", "Not Connected"));
+        assert_eq!((items[1].label.as_str(), items[1].value.as_str()), ("wg0", "Connected"));
+        assert_eq!(items[0].action, Action::Vpn { name: "Office".into(), up: true }, "a tap on a disconnected VPN connects it");
+        assert_eq!(items[1].action, Action::Vpn { name: "wg0".into(), up: false }, "a tap on a connected one disconnects it");
+    }
+
+    #[test]
     fn root_lists_the_bifrost_sections_with_live_values() {
         let (info, opts) = (info(), Options::default());
         let s = spec(PageId::Root, &model(&info, &opts));
@@ -2575,7 +2628,7 @@ fn desktop_network_page(info:&Info)->Spec {
     let wifi=network.is_some_and(|n|n.wifi_available);
     let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
     Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
-        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi),Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn),Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS"),
+        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet), Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi), Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn), Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS", Item::new("VPN").icon(Icon::General).value(match network.map_or(&[][..], |n|n.vpns.as_slice()){[]=>"None", v if v.iter().any(|c|c.active)=>"Connected", _=>"Not Connected"}).link(PageId::Vpn)]).header("CONNECTIONS"),
         rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
     ]}
 }
@@ -2593,4 +2646,8 @@ fn desktop_vpn_page(_info:&Info)->Spec {
     let profiles=super::desktop_network::vpn_profiles();
     let items:Vec<Item>=if profiles.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{profiles.iter().map(|p|Item::new(p.name.clone()).value(super::desktop_network::vpn_summary(p))).collect()};
     Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service (NetworkManager). Shortcuts and Search connect and disconnect one by its name; this list does not show them yet.")]}
+fn desktop_vpn_page(info:&Info)->Spec {
+    let vpns:&[super::desktop_network::VpnConnection]=info.desktop_network.as_ref().map_or(&[],|n|n.vpns.as_slice());
+    let items:Vec<Item>=if vpns.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{vpns.iter().map(|v|Item::new(v.name.clone()).value(v.status_label()).action(Action::Vpn{name:v.name.clone(),up:!v.active})).collect()};
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("These are the VPN and WireGuard connections the system network service holds. Tap one to connect or disconnect it. Adding a configuration is done with the network service (nmcli connection import) and is not built into this page yet.")]}
 }

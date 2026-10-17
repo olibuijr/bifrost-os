@@ -48,11 +48,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/input_methods/jyutping.rs",
    "status": "gap",
-   "note": "gap: the repo has no evidence of the language TYIM serves (the row has no description, role or doc, and no docs mention it), so no composer is written; Tibetan or Dzongkha are guesses only. Needs the TYIM bundle or its layout data to decide.",
+   "note": "Built 2026-10-17: the bundle's resources (cantonesePhonetic.tiff, pinyin.tiff, a Preferences.prefPane) show TYIM is the Traditional Chinese Cantonese input method. jyutping.rs is the Jyutping composer (source bifrost.inputmethod.TYIM.Jyutping, language yue-Hant): letters build syllables checked against the Jyutping initials and finals, a tone digit 1-6 ends a syllable, several syllables make a word, space picks the first candidate and a digit after the tone picks another. Seed dictionary only (about seventy readings); a larger table replaces it without changing the composer. Not built: the Cantonese pinyin layout.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::jyutping::tests"
+    }
+   ],
+   "ready_note": "the Jyutping composer is a built-in input method source (source list, controller factory and plugin engine name); the checks run its syllable rules, candidates and controller"
   },
   {
    "id": "path:/System/Library/Input Methods/TamilIM.app",
@@ -99,9 +108,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/handwriting.rs, springboard/ui/src/scribble.rs",
-   "status": "partial",
-   "note": "existing handwriting layout and scribble models; no handwriting recogniser and no trackpad path",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the input method that recognises Chinese characters drawn on a trackpad (the bundle's strings are zh-Hans, zh-Hant and yue-Hant) with trained handwriting-recognition models, which are Apple ML model packs BifrOSt does not carry or mirror. BifrOSt has the stroke layout and a single-stroke glyph recogniser for Latin letters and digits (ui/src/handwriting.rs, glyph_recognizer.rs) and types Chinese through the pinyin, zhuyin and Jyutping composers.",
    "rea": [],
    "method": "manual"
   },

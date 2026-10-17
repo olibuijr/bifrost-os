@@ -48,11 +48,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/hwkeys.rs (KeyRepeat::accent_hold), springboard/src/shell/compose_window.rs",
+   "bifrost": "springboard/src/shell/hwkeys.rs (KeyRepeat::accent_hold), springboard/src/shell/compose_window.rs, springboard/apps/keyboard/src/keyboard.rs",
    "status": "partial",
-   "note": "heuristic: no counterpart yet round 75, host only: Search field only; was gap.",
+   "note": "a letter held on a hardware keyboard opens its accent list instead of repeating (KeyRepeat::accent_hold, wired in the input loop in src/bin/shell.rs) in the Search field and in a focused app text field, and a digit picks an accent (compose_window.rs); the on-screen keyboard slides out the accents of a held letter (apps/keyboard).",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::hwkeys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::compose_window::tests"
+    }
+   ],
+   "ready_note": "holding a letter opens its accent list on hardware and on-screen keyboards, and a digit picks one; the checks run the key-repeat hold rule and the accent window"
   }
  ]
 }

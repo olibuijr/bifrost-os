@@ -48,11 +48,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/switch_scan.rs",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/switch_scan.rs, springboard/src/shell/accessibility/mod.rs, springboard/ui/src/switch_scan.rs",
    "status": "partial",
-   "note": "existing Switch Control scanning model; no on-screen assistive keyboard",
+   "note": "Built 2026-10-17: Settings > Accessibility > Switch Scanning (a11y_switch_scan) turns on auto scanning: the reader's cursor steps through the menu bar, open menu and front window every 1.5 s, speaking and ringing each element, and Ctrl+Alt+Space presses the one it rests on (Ctrl+Alt+Right steps by hand). Not built: an on-screen assistive keyboard panel and switch hardware other than a key.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::switch_scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "switch_scan::tests"
+    }
+   ],
+   "ready_note": "Switch Scanning steps the screen reader's cursor on a timer (Reader::scan_due, Shell::switch_scan_tick) and the existing activate chord presses the element; the checks run the scan timer, the setting's persistence, the scan model and the reader"
   },
   {
    "id": "path:/System/Library/Input Methods/CharacterPalette.app",
@@ -71,9 +95,18 @@
    "doc": "",
    "bifrost": "springboard/src/shell/character_viewer.rs",
    "status": "partial",
-   "note": "existing character viewer (emoji catalogue) with a Symbols tab of symbol emoji (character_viewer SYMBOLS); Built 2026-10-17: a Text Symbols tab with arrows, math, currency and punctuation in text presentation, drawn with the text font (character_viewer TEXT_SYMBOLS; tests character_viewer::tests). Still open: the search field over the catalogue. Built 2026-10-17: search_text_symbols finds text symbols by their names (TEXT_NAMES); tests character_viewer::tests. Still missing: the search field that calls it, and names for the emoji.",
+   "note": "Edit > Emoji & Symbols is the character viewer: emoji categories, Symbols, Text Symbols and the Kana palette in tabs and pages; a pick types into the Search field or copies. Built 2026-10-17: typing in the panel searches the text symbols by name and the kana by romaji (Escape clears, Return picks the first result). Not built: names for the emoji (so no emoji search), recent emoji, and the Unicode category tables.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::character_viewer::tests"
+    }
+   ],
+   "ready_note": "the character viewer panel browses, searches and inserts emoji, symbols, text symbols and kana; the checks run its paging, tabs, search and hit tests"
   },
   {
    "id": "path:/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle",

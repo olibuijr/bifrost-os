@@ -261,8 +261,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/internet_accounts_page.rs",
    "status": "partial",
-   "note": "has: Internet Accounts page: mail, calendar and contact accounts with per-service switches; missing: provider sign-in",
-   "rea": []
+   "note": "Settings > Internet Accounts lists mail, calendar and contact accounts with a switch per service, adds an account from its address, user name and password (the password goes to the passwords group, never the list file), removes accounts, and lists and clears the account types apps may use. Sign-in through a third-party provider's web flow is not mirrored; accounts are set up with their own servers.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::internet_accounts_page::tests"
+    }
+   ],
+   "ready_note": "the Internet Accounts pane adds, switches and removes accounts and shows the accounts apps saved; the checks run its page and file operations"
   },
   {
    "id": "path:/System/Library/PreferencePanes/InternetAccounts.prefPane",
@@ -281,8 +290,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/internet_accounts_page.rs",
    "status": "partial",
-   "note": "has: Internet Accounts page: mail, calendar and contact accounts, per-service switches, add and remove; missing: provider sign-in (OAuth) and account detail",
-   "rea": []
+   "note": "Settings > Internet Accounts lists mail, calendar and contact accounts with a switch per service, adds an account from its address, user name and password (the password goes to the passwords group, never the list file), removes accounts, and lists and clears the account types apps may use. Sign-in through a third-party provider's web flow is not mirrored; accounts are set up with their own servers.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::internet_accounts_page::tests"
+    }
+   ],
+   "ready_note": "the Internet Accounts pane adds, switches and removes accounts and shows the accounts apps saved; the checks run its page and file operations"
   }
  ]
 }

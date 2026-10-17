@@ -18,6 +18,11 @@ screenshot selection and pass it to apps, so nothing reaches an app from the des
   - `search(providers, scene, limit)`: asks every provider and stamps each match with the provider's own app id, so an
     app cannot answer for another app.
 
+- The intent path (2026-10-17): a provider app declares `visual_search::intent()` (`visual-search`, parameters `kind`
+  and `labels`) and answers it with `visual_search::perform(provider, params)`; the reply value is the match list
+  (`matches_to_json`), which a caller reads with `matches_from_json` and merges across providers with `collect`. Pixels
+  do not cross the intent socket. Tests: `visual_search::tests` in the SDK.
+
 ## Official API names mirrored
 
 - Visual Intelligence framework: https://developer.apple.com/documentation/visualintelligence

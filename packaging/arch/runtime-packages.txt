@@ -162,3 +162,5 @@ tesseract-data-eng
 tesseract-data-isl
 exfatprogs
 dosfstools
+tesseract
+tesseract-data-eng

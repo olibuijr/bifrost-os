@@ -37,6 +37,8 @@ pub const ZOOMS: [(&str, f32); 2] = [("Standard", 1.0), ("Larger", 1.15)];
 pub const HOLD_MS: [(&str, u32); 5] = [("Off", 0), ("0.5 s", 500), ("1 s", 1000), ("1.5 s", 1500), ("2 s", 2000)];
 /// Reduce Motion: an open, close or switch becomes a cross-fade this long.
 pub const REDUCED_MS: f64 = 150.0;
+/// Switch Scanning: how long the highlight rests on an element before it moves to the next (ms).
+pub const SWITCH_SCAN_MS: f64 = 1500.0;
 /// Screen Reader speaking rate choices, in words per minute (the engine's `-s` option).
 pub const SPEECH_RATES: [(&str, u32); 3] = [("Slow", 140), ("Normal", 180), ("Fast", 240)];
 /// Screen Reader pitch choices (the engine's `-p` option, 0 to 99).
@@ -62,6 +64,9 @@ pub struct AccessibilitySettings {
     pub guided_access: bool,
     /// Screen Reader: a keyboard cursor walks the visible Settings page and speaks each element (`reader`).
     pub screen_reader: bool,
+    /// Switch Scanning: the screen reader's cursor steps through the screen on a timer (`SWITCH_SCAN_MS`) and Ctrl+Alt+Space
+    /// presses the element it rests on, so one switch can drive the whole screen (`reader::Reader::scan_due`).
+    pub switch_scan: bool,
     /// Sticky Keys: a modifier tapped once holds for the next key, tapped twice it locks (`sticky_keys`, read by `HwKeys`).
     pub sticky_keys: bool,
     /// Dwell Control: index into `dwell::DELAYS_MS` (0 is Off). The shell's input loop clicks a resting pointer (`dwell_delay_ms`).
@@ -95,7 +100,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings {text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0, live_captions: false};
+    pub const DEFAULT: Self = AccessibilitySettings {text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0, live_captions: false, switch_scan: false};
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -113,6 +118,7 @@ impl AccessibilitySettings {
             dim_flashing_lights: flag("a11y_dim_flashing_lights", d.dim_flashing_lights),
             guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
+            switch_scan: flag("a11y_switch_scan", d.switch_scan),
             sticky_keys: flag("a11y_sticky_keys", d.sticky_keys),
             dwell: index("a11y_dwell", dwell::DELAYS_MS.len()).unwrap_or(d.dwell),
             slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
@@ -143,6 +149,7 @@ impl AccessibilitySettings {
             ("a11y_dim_flashing_lights", flag(self.dim_flashing_lights)),
             ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
+            ("a11y_switch_scan", flag(self.switch_scan)),
             ("a11y_sticky_keys", flag(self.sticky_keys)),
             ("a11y_dwell", &self.dwell.to_string()),
             ("a11y_slow_keys", &self.slow.to_string()),
@@ -309,6 +316,16 @@ mod tests {
         a.save(&mut p);
         assert!(AccessibilitySettings::load(&p).live_captions);
         assert_eq!(p.get("a11y_live_captions"), Some("1"));
+    }
+
+    #[test]
+    fn switch_scanning_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).switch_scan);
+        let a = AccessibilitySettings { switch_scan: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).switch_scan);
+        assert!(SWITCH_SCAN_MS > 0.0);
     }
 
     #[test]

@@ -752,6 +752,10 @@ impl Shell {
             self.compose_type(out);
             return vec![];
         }
+        // the character viewer takes the typing for its search, unless a Search field or the assistant panel is open
+        if self.char_viewer.is_some() && !self.quicksearch.is_shown() && !self.assistant.is_shown() {
+            return self.char_viewer_key(out);
+        }
         // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
         if self.screen == Screen::Lock {
             self.login_ensure(t);
@@ -964,9 +968,9 @@ impl Shell {
                 self.cmdtab_release(t);
                 vec![]
             }
-            Shortcut::ReaderStep(forward) if self.reader_active() => self.reader_step(forward, t),
+            Shortcut::ReaderStep(forward) if self.reader_active() => self.reader_step(forward, t, forward) if self.screen_reader_on() || self.switch_scan_on() => self.reader_step(forward),
             Shortcut::ReaderRotor(forward) if self.screen_reader_on() => self.reader_rotor(forward, t),
-            Shortcut::ReaderActivate if self.reader_active() => self.reader_activate(t),
+            Shortcut::ReaderActivate if self.reader_active() => self.reader_activate(t, ) || self.switch_scan_on() => self.reader_activate(t),
             Shortcut::SpeakSelection => {
                 self.speak_selection();
                 vec![]
