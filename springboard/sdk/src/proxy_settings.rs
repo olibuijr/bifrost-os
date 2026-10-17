@@ -33,7 +33,7 @@ impl ProxyServer {
     /// Reads `http://host:port`, `https://host:port`, `host:port` or `host`. A missing port is
     /// [`DEFAULT_PROXY_PORT`]. A trailing slash is ignored. An IPv6 address is written in brackets.
     pub fn parse(value: &str) -> Result<ProxyServer, ProxyError> {
-        let value = value.trim().trim_end_matches('/');
+        let value = value.trim();
         if value.is_empty() {
             return Err(ProxyError::Empty);
         }
@@ -47,6 +47,8 @@ impl ProxyServer {
             }
             None => value,
         };
+        // Anything after the authority is a path, which a proxy URL may end with (`http://host:3128/`).
+        let rest = rest.split('/').next().unwrap_or("");
         if rest.is_empty() {
             return Err(ProxyError::Empty);
         }
