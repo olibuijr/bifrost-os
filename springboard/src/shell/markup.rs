@@ -57,6 +57,8 @@ pub struct Markup {
     base: Image,
     canvas: Image,
     strokes: Vec<Stroke>,
+    /// strokes taken back by undo, newest last, so redo can put them back
+    undone: Vec<Stroke>,
     tool: Tool,
     color: usize,
     drawing: bool,
@@ -80,7 +82,7 @@ enum Hit {
 impl Markup {
     pub fn new(frame: Image, path: PathBuf, s: f32) -> Self {
         let (w, h) = (frame.w as i32, frame.h as i32);
-        Markup { path, canvas: frame.clone(), base: frame, strokes: vec![], tool: Tool::Pen, color: 2, drawing: false, mask: vec![], pressed: None, w, h, s }
+        Markup { path, canvas: frame.clone(), base: frame, strokes: vec![], undone: vec![], tool: Tool::Pen, color: 2, drawing: false, mask: vec![], pressed: None, w, h, s }
     }
 
     pub fn tool(&self) -> Tool {
@@ -167,6 +169,7 @@ impl Markup {
                     self.pressed = Some(h);
                 } else if self.pic().contains(x, y) {
                     self.drawing = true;
+                    self.undone.clear();
                     self.mask = vec![false; self.base.w * self.base.h];
                     let p = self.to_image(x, y);
                     let color = self.stroke_color();
@@ -212,16 +215,34 @@ impl Markup {
         COLORS[self.color]
     }
 
+    pub fn can_redo(&self) -> bool {
+        !self.undone.is_empty()
+    }
+
     pub fn undo(&mut self) {
-        if self.strokes.pop().is_some() {
-            self.canvas = self.base.clone();
-            let strokes = std::mem::take(&mut self.strokes);
-            for (i, st) in strokes.iter().enumerate() {
-                self.mask = vec![false; self.base.w * self.base.h];
-                self.paint(st, 0, st.pts.len().saturating_sub(1).max(0), i);
-            }
-            self.strokes = strokes;
+        if let Some(st) = self.strokes.pop() {
+            self.undone.push(st);
+            self.repaint();
         }
+    }
+
+    /// Put back the stroke the last undo took away. A new stroke clears the redo history.
+    pub fn redo(&mut self) {
+        if let Some(st) = self.undone.pop() {
+            self.strokes.push(st);
+            self.repaint();
+        }
+    }
+
+    /// Redraw the base picture with every kept stroke, in order.
+    fn repaint(&mut self) {
+        self.canvas = self.base.clone();
+        let strokes = std::mem::take(&mut self.strokes);
+        for (i, st) in strokes.iter().enumerate() {
+            self.mask = vec![false; self.base.w * self.base.h];
+            self.paint(st, 0, st.pts.len().saturating_sub(1).max(0), i);
+        }
+        self.strokes = strokes;
     }
 
     fn stamp_last(&mut self, i: usize, from: usize) {
@@ -336,6 +357,27 @@ mod tests {
         assert_ne!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
         m.undo();
         assert_eq!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
+        assert!(!m.can_undo());
+    }
+
+    #[test]
+    fn redo_restores_the_stroke_undo_took_and_a_new_stroke_clears_redo() {
+        let base = Image { w: 100, h: 100, px: vec![pack(0, 0, 0, 255); 100 * 100] };
+        let mut m = Markup::new(base, PathBuf::from("/x.png"), 1.0);
+        m.strokes.push(Stroke { tool: Tool::Pen, color: WHITE, pts: vec![(10.0, 10.0), (60.0, 10.0)] });
+        m.stamp_last(0, 0);
+        m.undo();
+        assert!(m.can_redo());
+        assert_eq!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
+        m.redo();
+        assert!(!m.can_redo());
+        assert!(m.can_undo());
+        assert_ne!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
+        m.undo();
+        assert!(m.can_redo());
+        m.undone.clear(); // what a new stroke does on touch-down
+        assert!(!m.can_redo());
+        m.redo();
         assert!(!m.can_undo());
     }
 }
