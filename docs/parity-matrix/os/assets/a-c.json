@@ -1005,7 +1005,21 @@
    "status": "partial",
    "note": "Avenir Next Condensed resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Lato (ttf-lato, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Lato'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Avenir Next.ttc",
@@ -1026,7 +1040,21 @@
    "status": "partial",
    "note": "Avenir Next resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Lato (ttf-lato, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Lato'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Avenir.ttc",
@@ -1047,7 +1075,21 @@
    "status": "partial",
    "note": "Avenir resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Lato (ttf-lato, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Lato'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/CJKSymbolsFallback.ttc",
@@ -1234,7 +1276,21 @@
    "status": "partial",
    "note": "AmericanTypewriter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute IBM Plex Serif (ttf-ibm-plex, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'IBM Plex Serif'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Andale Mono.ttf",
@@ -1255,7 +1311,20 @@
    "status": "partial",
    "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera-derived free licence) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Apple Chancery.ttf",
@@ -1363,7 +1432,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Noto Sans Black (noto-fonts, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Black.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf",
@@ -1587,7 +1669,21 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Nunito'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
@@ -1608,7 +1704,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), Latin stand-in; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial.ttf",
@@ -1658,7 +1767,20 @@
    "status": "partial",
    "note": "Athelas resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Liberation Serif (ttf-liberation, OFL-1.1) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Ayuthaya.ttf",
@@ -1795,7 +1917,21 @@
    "status": "partial",
    "note": "Baskerville resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL-1.1-RFN) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Libertinus Serif'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Beirut.ttc",
@@ -1845,7 +1981,21 @@
    "status": "partial",
    "note": "BigCaslon resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL-1.1-RFN) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Libertinus Serif'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni 72 OS.ttc",
@@ -2055,7 +2205,21 @@
    "status": "partial",
    "note": "Charter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Charis SIL (ttf-charis, OFL-1.1-RFN) for the same role; design-similar (derived from Bitstream Charter).",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Charis SIL'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Cochin.ttc",
@@ -2076,7 +2240,21 @@
    "status": "partial",
    "note": "Cochin resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL-1.1-RFN) for the same role; design-similar.",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "fc-list : family | grep -qx 'Libertinus Serif'",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Comic Sans MS Bold.ttf",
