@@ -894,6 +894,7 @@ pub mod image_capture;
 pub mod network_stream;
 pub mod link_fetch;
 pub mod map_snapshotter;
+pub mod pcsc;
 
 /// The Metal-shaped GPU API (`bifrost_gpu`): device, textures, buffers, command queues and buffers, render and compute
 /// encoders, pipelines, shared events. Apps that draw on the GPU use it directly; `gpu_pass` checks the passes first.

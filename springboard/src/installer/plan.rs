@@ -54,7 +54,8 @@ pub struct Config {
 
 /// Units the installer enables on the installed system (`systemctl enable`). `avahi-daemon` is the system's
 /// multicast DNS and DNS-SD responder (the `.local` names and service browsing), and `cups.socket` starts the
-/// print scheduler on the first client connection, so printing needs no always-on daemon.
+/// print scheduler on the first client connection, so printing needs no always-on daemon. `pcscd.socket` does the same
+/// for the smart card daemon, which card readers and the PC/SC API need.
 pub const ENABLED_UNITS: &[&str] = &[
     "bifrost-update-guard.service",
     "springboard.service",
@@ -67,6 +68,7 @@ pub const ENABLED_UNITS: &[&str] = &[
     "bifrost-mcp.service",
     "avahi-daemon.service",
     "cups.socket",
+    "pcscd.socket",
 ];
 pub const DEFAULT_APPEARANCE: &str = "dark";
 pub const DEFAULT_ACCENT: &str = "blue";
@@ -1116,6 +1118,7 @@ mod tests {
     fn the_installer_enables_the_mdns_responder_and_the_print_scheduler() {
         assert!(super::ENABLED_UNITS.contains(&"avahi-daemon.service"));
         assert!(super::ENABLED_UNITS.contains(&"cups.socket"));
+        assert!(super::ENABLED_UNITS.contains(&"pcscd.socket"), "card readers need the PC/SC daemon on demand");
         assert!(super::ENABLED_UNITS.contains(&"bifrost-update-guard.service"), "the boot guard stays enabled");
         assert_eq!(super::ENABLED_UNITS.iter().filter(|u| u.ends_with(".service") || u.ends_with(".socket")).count(), super::ENABLED_UNITS.len());
     }
