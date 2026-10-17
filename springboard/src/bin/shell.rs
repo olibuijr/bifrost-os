@@ -257,6 +257,7 @@ fn run() -> std::io::Result<()> {
     let panel_rates = disp.rates.clone();
     let panel_sizes = disp.sizes.clone();
     let brightness_supported = power::find_backlight(std::path::Path::new("/sys/class/backlight")).is_some();
+    let ambient_light_supported = springboard::bare::ambient_sensor::sensor_present();
     let battery_present=power::find_battery(std::path::Path::new("/sys/class/power_supply")).is_some();
     // timedatectl spawns (NTP state, timezone) and the uptime read: at most every 15 s, not on every info tick
     let clock_info: std::cell::RefCell<(f64, String, i64)> = std::cell::RefCell::new((f64::NEG_INFINITY, String::new(), 0));
@@ -295,6 +296,7 @@ fn run() -> std::io::Result<()> {
             display_rates: panel_rates.clone(),
             display_sizes: panel_sizes.clone(),
             brightness_supported,
+            ambient_light_supported,
             battery_present,
             desktop_network: None,
             wifi: wifi_text,
@@ -473,6 +475,9 @@ fn run() -> std::io::Result<()> {
     let mut last_profile_check = f64::NEG_INFINITY;
     // Game Mode is checked four times a second: entering must feel immediate (see `shell::gamemode`)
     let mut last_game_check = f64::NEG_INFINITY;
+    // Automatically Adjust Brightness: the ambient light sensor is read every couple of seconds while the screen is on
+    let mut auto_light = springboard::bare::ambient_sensor::AutoLight::new();
+    let mut auto_light_was_on = false;
     let mut profile_game = false;
     boost.set_profile(springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, power::battery().0, power::battery().1, low_power));
     let chord_key = |code: u16| match code {
@@ -1204,6 +1209,19 @@ fn run() -> std::io::Result<()> {
             low_power = shell.low_power();
             eprintln!("springboard: low power mode {}", if low_power { "on" } else { "off" });
             if shell.screen_on() {
+                power::set_brightness(panel_level(level, low_power, max));
+            }
+        }
+        let auto_light_on = shell.screen_on() && shell.auto_brightness();
+        if auto_light_on != auto_light_was_on {
+            auto_light_was_on = auto_light_on;
+            // switched on (or the screen woke): the first reading is written at once
+            auto_light.restart();
+        }
+        if auto_light_on {
+            if let Some(b) = auto_light.poll_default(t) {
+                level = b.max(0.02);
+                brightness_unsaved = Some(t);
                 power::set_brightness(panel_level(level, low_power, max));
             }
         }

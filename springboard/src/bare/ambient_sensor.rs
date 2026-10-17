@@ -51,6 +51,11 @@ impl Default for AutoBrightness {
     }
 }
 
+/// Whether the machine has an ambient light sensor.
+pub fn sensor_present() -> bool {
+    find_illuminance(Path::new(IIO_ROOT)).is_some()
+}
+
 /// Reads the sensor under the IIO root, if the machine has one.
 pub fn read_default() -> Option<f32> {
     let dir = find_illuminance(Path::new(IIO_ROOT))?;
@@ -63,6 +68,53 @@ pub fn poll_brightness(root: &Path, auto: &mut AutoBrightness, gate: &mut Bright
     let dir = find_illuminance(root)?;
     let lux = read_lux(&dir).ok()?;
     gate.update(auto.push(lux))
+}
+
+/// Milliseconds between two reads of the sensor.
+pub const POLL_MS: f64 = 2000.0;
+/// How far the brightness must move before the panel is written again (a fraction of full brightness).
+const STEP: f32 = 0.05;
+
+/// Automatic brightness as the shell runs it: the sensor is read at most every `POLL_MS`, smoothed, and a level comes back
+/// only when it has moved `STEP` from the one last written.
+pub struct AutoLight {
+    auto: AutoBrightness,
+    gate: BrightnessGate,
+    next_ms: f64,
+}
+
+impl AutoLight {
+    pub fn new() -> Self {
+        AutoLight { auto: AutoBrightness::new(), gate: BrightnessGate::new(STEP).expect("STEP is in (0, 1]"), next_ms: f64::NEG_INFINITY }
+    }
+
+    /// One turn of the loop at `now_ms` over the sensors under `root`: None before `POLL_MS` have passed since the last
+    /// read, and when the light has not moved the brightness far enough; otherwise the level to write.
+    pub fn poll(&mut self, root: &Path, now_ms: f64) -> Option<f32> {
+        if now_ms < self.next_ms {
+            return None;
+        }
+        self.next_ms = now_ms + POLL_MS;
+        poll_brightness(root, &mut self.auto, &mut self.gate)
+    }
+
+    /// `poll` on the machine's own sensors.
+    pub fn poll_default(&mut self, now_ms: f64) -> Option<f32> {
+        self.poll(Path::new(IIO_ROOT), now_ms)
+    }
+
+    /// Forgets the level last written, so the next reading is written whatever it is (automatic brightness was just
+    /// switched on, or the screen woke).
+    pub fn restart(&mut self) {
+        self.gate = BrightnessGate::new(STEP).expect("STEP is in (0, 1]");
+        self.next_ms = f64::NEG_INFINITY;
+    }
+}
+
+impl Default for AutoLight {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -164,5 +216,43 @@ mod tests {
         let mut gate = BrightnessGate::new(0.05).unwrap();
         assert_eq!(poll_brightness(&root, &mut auto, &mut gate), None);
         assert_eq!(gate.applied(), None);
+    }
+
+    #[test]
+    fn the_sensor_is_read_every_two_seconds_and_a_level_comes_back_only_for_a_real_change() {
+        let root = fake_tree("autolight", &[("iio:device0", &[("in_illuminance_raw", "10000")])]);
+        let mut light = AutoLight::new();
+        assert!(near(light.poll(&root, 0.0).expect("the first reading is written"), 1.0));
+        fs::write(root.join("iio:device0").join("in_illuminance_raw"), "1").unwrap();
+        assert_eq!(light.poll(&root, POLL_MS - 1.0), None, "the sensor is not read again yet");
+        // the room goes dark: the level eases down over several readings and is written once it has moved a step
+        let mut written = Vec::new();
+        for i in 1..=40 {
+            if let Some(level) = light.poll(&root, i as f64 * POLL_MS) {
+                written.push(level);
+            }
+        }
+        assert!(!written.is_empty() && written[0] <= 0.951, "{written:?}");
+        assert!(written.windows(2).all(|w| w[1] < w[0]), "it only gets darker: {written:?}");
+        assert!(written.len() < 20, "writes are a step apart, not one per reading: {written:?}");
+        assert!(written.iter().all(|l| *l >= bifrost_ui::ambient_light::MIN_BRIGHTNESS), "{written:?}");
+    }
+
+    #[test]
+    fn restarting_writes_the_next_reading_at_once() {
+        let root = fake_tree("autolight-restart", &[("iio:device0", &[("in_illuminance_raw", "10000")])]);
+        let mut light = AutoLight::new();
+        assert!(light.poll(&root, 0.0).is_some());
+        assert_eq!(light.poll(&root, POLL_MS), None, "the same light writes nothing");
+        light.restart();
+        assert!(near(light.poll(&root, POLL_MS + 1.0).expect("written again"), 1.0));
+    }
+
+    #[test]
+    fn a_machine_without_a_sensor_never_gets_a_level() {
+        let root = fake_tree("autolight-none", &[("iio:device0", &[("in_accel_x_raw", "1")])]);
+        let mut light = AutoLight::new();
+        assert_eq!(light.poll(&root, 0.0), None);
+        assert_eq!(light.poll(&root, 10.0 * POLL_MS), None);
     }
 }

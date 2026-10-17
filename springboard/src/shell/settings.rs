@@ -3029,6 +3029,7 @@ impl Settings {
             Toggle::Handoff => flip(&mut self.opts.handoff),
             Toggle::UniversalClipboard => flip(&mut self.opts.universal_clipboard),
             Toggle::PipAuto => flip(&mut self.opts.pip_auto),
+            Toggle::AutoBrightness => flip(&mut self.opts.auto_brightness),
             Toggle::BgRefresh => flip(&mut self.opts.bg_refresh),
             Toggle::SuspendBackground => flip(&mut self.opts.suspend_background),
             Toggle::FourFinger => flip(&mut self.opts.four_finger),

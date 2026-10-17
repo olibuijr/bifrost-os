@@ -225,6 +225,8 @@ pub enum Toggle {
     /// Continuity: share copies between the account's devices (sealed; off by default)
     UniversalClipboard,
     PipAuto,
+    /// Displays > Automatically Adjust Brightness: the ambient light sensor drives the panel (needs a sensor)
+    AutoBrightness,
     BgRefresh,
     SuspendBackground,
     FourFinger,
@@ -1862,7 +1864,11 @@ pub fn desktop_display(m: &Model<'_>) -> Spec {
     let mut groups = vec![Group::new(display).header("CONNECTED DISPLAY")
         .footer("Native is the panel's own resolution unless another is chosen. The highest refresh rate is used unless another is chosen. Interface Scale changes the size of windows, menus and controls.")];
     if m.info.brightness_supported {
-        groups.push(Group::new(vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))]).header("BRIGHTNESS"));
+        let mut rows = vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))];
+        if m.info.ambient_light_supported {
+            rows.push(Item::new("Automatically Adjust Brightness").switch(m.opts.auto_brightness, Action::Toggle(Toggle::AutoBrightness)));
+        }
+        groups.push(Group::new(rows).header("BRIGHTNESS"));
     }
     groups.push(Group::new(vec![Item::new("Night Shift").value(super::night_shift::published().label()).link(PageId::NightShift)]));
     groups.push(Group::new(vec![Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass))]).header("LIQUID GLASS")
@@ -2157,6 +2163,29 @@ mod tests {
         info.brightness_supported = true;
         let s = desktop_display(&model(&info, &opts));
         assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
+        assert_eq!(s.groups[1].items.len(), 1, "no light sensor, no automatic brightness switch");
+    }
+
+    #[test]
+    fn a_light_sensor_adds_the_automatic_brightness_switch_under_the_slider() {
+        let mut info = info();
+        info.display_mode = Some((2048, 1152, 60));
+        info.brightness_supported = true;
+        info.ambient_light_supported = true;
+        let mut opts = Options::default();
+        let rows = |opts: &Options| desktop_display(&model(&info, opts)).groups[1].items.clone();
+        let off = rows(&opts);
+        assert_eq!(off.len(), 2);
+        assert_eq!(off[1].label, "Automatically Adjust Brightness");
+        assert_eq!(off[1].action, Action::Toggle(Toggle::AutoBrightness));
+        assert_eq!(off[1].accessory, super::super::list::Accessory::Switch(false));
+        opts.auto_brightness = true;
+        let on = rows(&opts);
+        assert_eq!(on[1].accessory, super::super::list::Accessory::Switch(true), "the switch follows the option");
+        // a panel that cannot be dimmed shows neither the slider nor the switch
+        info.brightness_supported = false;
+        let none = desktop_display(&model(&info, &opts));
+        assert!(!none.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "Automatically Adjust Brightness"));
     }
 
     #[test]

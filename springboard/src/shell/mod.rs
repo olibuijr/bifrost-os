@@ -261,6 +261,8 @@ pub struct Info {
     /// the sizes the panel offers, largest first (Settings > Displays > Resolution)
     pub display_sizes: Vec<(u32, u32)>,
     pub brightness_supported: bool,
+    /// the machine has an ambient light sensor, so Displays can offer Automatically Adjust Brightness
+    pub ambient_light_supported: bool,
     pub battery_present: bool,
     pub desktop_network: Option<desktop_network::Snapshot>,
     pub hour: i32,
@@ -1323,6 +1325,11 @@ impl Shell {
     /// the frame rate while it is on.
     pub fn low_power(&self) -> bool {
         self.options().low_power
+    }
+
+    /// Displays > Automatically Adjust Brightness: the ambient light sensor sets the panel brightness.
+    pub fn auto_brightness(&self) -> bool {
+        self.options().auto_brightness
     }
 
     /// Game Mode's wish: Settings allows it (Automatic) and an installed game is in front, full screen.

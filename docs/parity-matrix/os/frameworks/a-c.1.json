@@ -2617,11 +2617,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/ambient_light.rs; springboard/ui/src/ambient_light.rs; springboard/src/bare/ambient_sensor.rs",
+   "bifrost": "springboard/core/src/ambient_light.rs; springboard/ui/src/ambient_light.rs; springboard/src/bare/ambient_sensor.rs; springboard/src/shell/pages.rs; springboard/src/shell/options.rs; springboard/src/bin/shell.rs",
    "status": "partial",
    "note": "Raw-count conversion, smoothing, brightness mapping are pure models. The IIO illuminance reader exists (springboard/src/bare/ambient_sensor.rs). Built 2026-10-17: BrightnessGate (applies a new panel level only after a full step of change) and poll_brightness (one sensor poll through smoothing and the gate); tests ambient_light::tests and ambient_sensor::tests. Still open: the shell does not call poll_brightness on a timer, so the panel is not yet driven by the sensor. The inferred helper framework is not modelled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ambient_light::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::ambient_sensor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::options::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the shell now drives the panel from the ambient light sensor. The IIO reader, smoothing and log-scale brightness map were already models; bare::ambient_sensor::AutoLight adds the timer (a read every 2 s, a write only when the level moved 5 percent) and the shell loop applies it while the screen is on. Settings > Displays shows Automatically Adjust Brightness when the machine has a sensor (option auto_brightness, off until chosen). Not verified on hardware with a sensor: the test machines have none, so the loop is covered by the temp-directory sensor tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AMPDesktopUI.framework",
