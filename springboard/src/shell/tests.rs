@@ -1734,6 +1734,79 @@
     }
 
     #[test]
+    fn brightness_keys_step_the_panel_and_show_the_same_hud_as_volume() {
+        use bifrost_ui::osd::Level;
+        let (down, up) = (224, 225);
+        let mut sh = shell();
+        assert!(sh.is_locked());
+        assert_eq!(sh.info.brightness, 0.5);
+        assert_eq!(sh.hw_brightness_key(up, true, 1000.0), Some(vec![Effect::Brightness(9.0 / 16.0)]), "works on the lock screen");
+        assert_eq!(sh.info.brightness, 9.0 / 16.0);
+        assert!(sh.hud.shown() && sh.hud.kind() == Level::Brightness && sh.hud.level() == 9.0 / 16.0);
+        assert_eq!(sh.hw_brightness_key(up, false, 1010.0), Some(vec![]), "a release is taken and does nothing");
+        assert_eq!(sh.hw_brightness_key(down, true, 1100.0), Some(vec![Effect::Brightness(0.5)]));
+        let mut buf = vec![0u32; 1200 * 1920];
+        let d = sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1200.0).clone();
+        assert!(d.is_all());
+        let (x, y, w, h) = VolumeHud::rect(&sh.ui, sh.w);
+        assert_ne!(buf[(y + h / 2.0) as usize * 1200 + (x + w - sh.ui.pt(20.0)) as usize], rgba(20, 20, 30, 255), "the HUD covers the wallpaper");
+        assert_eq!(sh.next_wake(1200.0), Some(1100.0 + volume_hud::HOLD_MS));
+        // a volume key brings the speaker back on the same panel
+        sh.event(Event::VolumeUp, 1300.0);
+        assert!(sh.hud.kind() == Level::Volume);
+        // the lowest step stays lit, the highest is full
+        for i in 0..40 {
+            sh.hw_brightness_key(down, true, 2000.0 + i as f64);
+        }
+        assert_eq!(sh.info.brightness, 1.0 / 16.0);
+        for i in 0..40 {
+            sh.hw_brightness_key(up, true, 3000.0 + i as f64);
+        }
+        assert_eq!(sh.info.brightness, 1.0);
+        assert_eq!(sh.hw_brightness_key(30, true, 4000.0), None, "other keys are not ours");
+    }
+
+    #[test]
+    fn brightness_keys_leave_a_dark_screen_and_the_control_center_alone() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        swipe(&mut sh, 1100.0, 5.0, 500.0, 1000.0);
+        settle(&mut sh, 1110.0);
+        assert!(sh.cc.is_shown());
+        assert_eq!(sh.hw_brightness_key(225, true, 2000.0), Some(vec![Effect::Brightness(9.0 / 16.0)]));
+        assert!(!sh.hud.shown(), "the sheet's slider moves instead of the HUD");
+        sh.set_volume(0.5);
+        sh.cc.hide();
+        assert_eq!(sh.event(Event::Power, 5000.0), vec![Effect::ScreenOff]);
+        assert_eq!(sh.hw_brightness_key(225, true, 6000.0), Some(vec![]), "no wake, no backlight in the dark");
+        assert!(!sh.hud.shown());
+        assert_eq!(sh.info.brightness, 9.0 / 16.0);
+    }
+
+    #[test]
+    fn keyboard_backlight_keys_need_a_backlight_and_use_its_steps() {
+        use bifrost_ui::osd::Level;
+        let (down, up) = (229, 230);
+        let mut sh = shell();
+        assert_eq!(sh.keyboard_backlight(), None);
+        assert_eq!(sh.hw_brightness_key(up, true, 1000.0), None, "no LED: the key is left to the next handler");
+        sh.set_keyboard_backlight(0.0, 3);
+        assert_eq!(sh.hw_brightness_key(up, true, 1000.0), Some(vec![Effect::KeyboardBacklight(1.0 / 3.0)]));
+        assert!(sh.hud.shown() && sh.hud.kind() == Level::KeyboardBrightness);
+        assert_eq!(sh.info.brightness, 0.5, "the panel is untouched");
+        sh.hw_brightness_key(up, true, 1100.0);
+        sh.hw_brightness_key(up, true, 1200.0);
+        assert_eq!(sh.keyboard_backlight(), Some(1.0), "stops at the top step");
+        assert_eq!(sh.hw_brightness_key(down, true, 1300.0), Some(vec![Effect::KeyboardBacklight(2.0 / 3.0)]));
+        for _ in 0..5 {
+            sh.hw_brightness_key(down, true, 1400.0);
+        }
+        assert_eq!(sh.keyboard_backlight(), Some(0.0), "the backlight can go fully off");
+        sh.set_keyboard_backlight(0.5, 0);
+        assert_eq!(sh.keyboard_backlight(), None, "zero steps means none");
+    }
+
+    #[test]
     fn control_center_slider_and_keys_share_one_level() {
         let mut sh = shell();
         unlock(&mut sh);

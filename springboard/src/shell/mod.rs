@@ -385,6 +385,8 @@ pub enum Effect {
     BluetoothOutput,
     /// media volume 0..=1 from the Control Center slider
     Volume(f32),
+    /// keyboard backlight level 0..=1 from the keyboard backlight keys; the binary writes it to the LED
+    KeyboardBacklight(f32),
     /// a timer or alarm went off: sound it
     Alarm,
     /// arm the RTC to wake the device at this Unix time (0 = disarm)
@@ -588,6 +590,8 @@ pub struct Shell {
     /// the volume-key HUD; `hud_drawn` says the last frame had it
     hud: VolumeHud,
     hud_drawn: bool,
+    /// the keyboard backlight: its level 0..=1 and how many steps the hardware has; None without one
+    kbd_backlight: Option<(f32, u32)>,
     /// the input source HUD; `input_hud_drawn` says the last frame had it
     input_hud: SourceHud,
     input_hud_drawn: bool,
@@ -994,6 +998,7 @@ impl Shell {
             cc: ControlCenter::default(),
             hud: VolumeHud::default(),
             hud_drawn: false,
+            kbd_backlight: None,
             input_hud: SourceHud::default(),
             input_hud_drawn: false,
             input_memory: input_memory::InputMemory::default(),

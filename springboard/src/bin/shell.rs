@@ -376,6 +376,11 @@ fn run() -> std::io::Result<()> {
     let wallpaper = springboard::first_frame_cache::wallpaper().map_or(wallpaper, |i| View { w: i.w, h: i.h, px: &i.px[..] });
     let mut shell = Shell::new(w as i32, h as i32, font, mono, wallpaper, icon, gather(level, &current_wallpaper, &history));
     shell.set_volume(vol.level());
+    {
+        // the keyboard backlight keys step the LED the machine has (none on most desktops)
+        let steps = power::keyboard_backlight_max();
+        shell.set_keyboard_backlight(if steps > 0 { power::keyboard_backlight() as f32 / steps as f32 } else { 0.0 }, steps.max(0) as u32);
+    }
     // the stills of the dynamic wallpaper, in index order (the day is cut into one slice per still)
     let dynamic_stills: Vec<String> = springboard::shell::prefs::Prefs::load(format!("{dir}/wallpapers/index.ini")).entries().map(|(id, _)| id.to_string()).collect();
     // wallpaper changes the info tick asks for; they join the next turn's effects
@@ -968,6 +973,11 @@ fn run() -> std::io::Result<()> {
                     if shell.hw_media_key(code, down, t) {
                         continue;
                     }
+                    // the brightness keys step the panel or the keyboard backlight and show the HUD
+                    if let Some(fx) = shell.hw_brightness_key(code, down, t) {
+                        effects.extend(fx);
+                        continue;
+                    }
                     // Deildu or Files on screen: they take their own keys (power, volume and wake stay here)
                     if shell.hw_key(code, down, t) {
                         continue;
@@ -1142,6 +1152,7 @@ fn run() -> std::io::Result<()> {
                     }
                     power::set_brightness(panel_level(level, low_power, max));
                 }
+                Effect::KeyboardBacklight(f) => power::set_keyboard_backlight((f * power::keyboard_backlight_max() as f32).round() as i64),
                 Effect::Volume(v) => {
                     vol = Volume::new(v);
                     let _ = audio_tx.send(AudioJob::Volume(vol));
