@@ -766,7 +766,8 @@ BEGIN:VEVENT\r\nUID:bad\r\nSUMMARY:No start\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
         let ics = from_calendar_event(&e);
         assert_eq!(ics.uid, "7@springboard.tab");
         assert_eq!(ics.end, l(d(2026, 10, 5), 11, 30));
-        assert_eq!(to_calendar_event(&ics, 7), Some(e));
+        // a plain (non-repeating) event keeps the UID of the object it came from, so the round trip carries it back
+        assert_eq!(to_calendar_event(&ics, 7), Some(CalendarEvent { uid: ics.uid.clone(), ..e }));
         let mut all_day = from_calendar_event(&CalendarEvent {
             id: 8,
             date: d(2026, 10, 31),
