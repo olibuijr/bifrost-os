@@ -90,7 +90,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/console-desktop/src/columns.rs (ColumnSet, layout); springboard/apps/console-desktop/src/main.rs:448 (View > Visible Columns submenu); springboard/apps/console-desktop/src/console.rs:814",
    "note": "View > Visible Columns lists the seven columns with checkmarks and toggles each one (console.rs:814); PID starts hidden and the last visible column cannot be hidden. The model and layout are tested in columns.rs. Not yet verified on Midget.",
-   "wire": "Add View > Visible Columns using columns::Visible and size the table with Visible::widths."
+   "wire": "Verify on Midget: toggle each column in View > Visible Columns and check the table re-lays out; the last visible column cannot be hidden (tests in columns.rs)."
   },
   {
    "feature": "Show Activities / Show Sources toggles",
@@ -108,7 +108,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/console-desktop/src/console.rs:834 (toggle_expanded); springboard/apps/console-desktop/src/console.rs:808 (MENU_EXPAND); springboard/apps/console-desktop/src/rows.rs",
    "note": "View > Expand Message shows the selected message whole and grows its row; Collapse All Messages undoes every expansion. Tested in wire_tests.rs and rows.rs. Expansion applies to the one selected message: Apple's multi-row selection is not built. Not yet verified on Midget.",
-   "wire": "Keep a columns::Expanded set and size rows with row_lines; menu items in main.rs."
+   "wire": "Verify on Midget: expand a message, collapse it, and use Collapse All Messages; the row heights must follow (tests in rows.rs). Still missing: the grouped activities outline for Show Activities."
   },
   {
    "feature": "Show messages after selected / only this subsystem",
