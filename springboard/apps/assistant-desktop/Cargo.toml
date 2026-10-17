@@ -11,6 +11,7 @@ path = "src/lib.rs"
 bifrost-app = { path = "../../sdk" }
 bifrost-core = { path = "../../core" }
 springboard = { path = "../.." }
+assistant-client = { package = "bifrost-assistant-client", path = "../../assistant-client" }
 
 [dev-dependencies]
 springboard = { path = "../..", features = ["testkit"] }

@@ -7,8 +7,7 @@ use std::path::Path;
 
 pub const MODELS: [(&str, &str); 3] = [("claude-sonnet-5-5", "Claude Sonnet 5.5"), ("claude-opus-5-5", "Claude Opus 5.5"), ("claude-haiku-5-5", "Claude Haiku 5.5")];
 pub const DEFAULT_MODEL: &str = "claude-sonnet-5-5";
-pub const KEY_SERVICE: &str = "is.olibuijr.assistant";
-pub const KEY_ACCOUNT: &str = "anthropic-api-key";
+pub use assistant_client::{KEY_ACCOUNT, KEY_SERVICE};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message {

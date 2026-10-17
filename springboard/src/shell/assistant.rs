@@ -8,15 +8,19 @@
 //!   speaks) and the parsed reply, which is either a plain answer or one intent call checked against the catalogue.
 //! - Gate: an intent call is only proposed as a confirmation card. [`execute`] runs one only after [`Gate::confirm`].
 //!
-//! Nothing leaves the machine until a backend is chosen. The HTTPS transport is not in the shell yet (see
-//! `docs/bifrost-ui.md`, "Assistant system service").
+//! Nothing leaves the machine until a backend is chosen. [`ask`] sends one intent request through the shared
+//! `assistant-client` crate on a worker thread; no UI calls it yet (see `docs/bifrost-ui.md`, "Assistant system
+//! service").
 
 use super::intents::{self, ManifestIntent};
 use super::prefs::Prefs;
-use bifrost_core::json::{self, quote, Json};
 use std::collections::BTreeSet;
 use std::io;
 use std::time::Duration;
+
+// The intent protocol and the HTTPS client are shared with the Assistant app (`springboard/assistant-client`).
+pub use assistant_client::intents::{card_text, intent_request_body, parse_param, parse_reply, reply_text, safe_id, Call, Catalogue, Entry, Param, Reply};
+pub use assistant_client::{Connection, Error};
 
 pub const KEY_ENABLED: &str = "assistant.enabled";
 pub const KEY_CHORD: &str = "assistant.shortcut";
@@ -29,8 +33,6 @@ pub const KEY_APP_PREFIX: &str = "assistant.app.";
 const KEY_A: u16 = 30;
 /// Longest intent description sent to a backend, in characters.
 const DESCRIPTION_MAX: usize = 300;
-/// Output limit of one reply.
-pub const MAX_TOKENS: u32 = 1024;
 
 /// Where requests go. `Off` sends nothing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -179,48 +181,6 @@ impl Settings {
     }
 }
 
-/// One parameter of an intent, from a manifest spec `name:type` (a trailing `?` when optional).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Param {
-    pub name: String,
-    pub ty: String,
-    pub optional: bool,
-}
-
-/// An id the shell accepts: letters, digits, `-` and `_`.
-fn safe_id(text: &str) -> bool {
-    !text.is_empty() && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-}
-
-pub fn parse_param(spec: &str) -> Option<Param> {
-    let (name, ty) = spec.split_once(':')?;
-    let optional = ty.ends_with('?');
-    let ty = ty.trim_end_matches('?');
-    (safe_id(name) && !ty.is_empty()).then(|| Param { name: name.to_string(), ty: ty.to_string(), optional })
-}
-
-/// One intent the assistant may call.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Entry {
-    pub app_id: String,
-    pub app_name: String,
-    pub intent_id: String,
-    pub title: String,
-    pub description: String,
-    pub params: Vec<Param>,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Catalogue {
-    pub entries: Vec<Entry>,
-}
-
-impl Catalogue {
-    pub fn find(&self, app_id: &str, intent_id: &str) -> Option<&Entry> {
-        self.entries.iter().find(|e| e.app_id == app_id && e.intent_id == intent_id)
-    }
-}
-
 /// Builds the catalogue from `(app id, app name, intents)` of the installed apps. Only apps the person allowed count.
 /// An intent with an unsafe id, no title, or a malformed parameter spec is left out whole.
 pub fn build<'a>(apps: impl IntoIterator<Item = (&'a str, &'a str, &'a [ManifestIntent])>, settings: &Settings) -> Catalogue {
@@ -247,142 +207,11 @@ pub fn build<'a>(apps: impl IntoIterator<Item = (&'a str, &'a str, &'a [Manifest
     Catalogue { entries }
 }
 
-/// The instructions every request carries. The catalogue follows them in the system prompt.
-pub const SYSTEM: &str = "You are the assistant of BifrOSt OS. Reply with one JSON object and nothing else. \
-To answer the person: {\"answer\":\"<text>\"}. To run one of the actions listed below: \
-{\"app\":\"<app id>\",\"intent\":\"<intent id>\",\"params\":{\"<name>\":\"<value>\"},\"summary\":\"<one line>\"}. \
-Use only the listed app and intent ids and only the listed parameter names. If no action fits, answer.";
-
-/// The catalogue as a JSON array, the form the backend reads.
-pub fn catalogue_json(catalogue: &Catalogue) -> String {
-    let items: Vec<String> = catalogue
-        .entries
-        .iter()
-        .map(|e| {
-            let params: Vec<String> = e
-                .params
-                .iter()
-                .map(|p| format!("{{\"name\":{},\"type\":{},\"optional\":{}}}", quote(&p.name), quote(&p.ty), p.optional))
-                .collect();
-            format!(
-                "{{\"app\":{},\"app_name\":{},\"intent\":{},\"title\":{},\"description\":{},\"params\":[{}]}}",
-                quote(&e.app_id),
-                quote(&e.app_name),
-                quote(&e.intent_id),
-                quote(&e.title),
-                quote(&e.description),
-                params.join(",")
-            )
-        })
-        .collect();
-    format!("[{}]", items.join(","))
-}
-
 /// The messages one turn sends. Earlier turns go only when history is on; otherwise the request stands alone.
 pub fn turn_messages(history: bool, earlier: &[(bool, String)], text: &str) -> Vec<(bool, String)> {
     let mut out: Vec<(bool, String)> = if history { earlier.to_vec() } else { Vec::new() };
     out.push((true, text.to_string()));
     out
-}
-
-/// The Messages API request body (no streaming): the system prompt with the catalogue, then the messages `(is_user, text)`.
-pub fn request_body(model: &str, catalogue: &Catalogue, messages: &[(bool, String)]) -> String {
-    let system = format!("{SYSTEM}\n\nActions:\n{}", catalogue_json(catalogue));
-    let wire: Vec<String> = messages
-        .iter()
-        .map(|(user, text)| format!("{{\"role\":\"{}\",\"content\":{}}}", if *user { "user" } else { "assistant" }, quote(text)))
-        .collect();
-    format!("{{\"model\":{},\"max_tokens\":{MAX_TOKENS},\"system\":{},\"messages\":[{}]}}", quote(model), quote(&system), wire.join(","))
-}
-
-/// The text of a Messages API reply: its text blocks joined, or the API's error message.
-pub fn reply_text(body: &str) -> Result<String, String> {
-    let v = json::parse(body).map_err(|e| format!("malformed reply: {e}"))?;
-    if let Some(err) = v.get("error") {
-        return Err(err.str_field("message").unwrap_or_else(|| "The API reported an error.".into()));
-    }
-    let blocks = v.get("content").and_then(Json::as_array).ok_or_else(|| "The reply had no content.".to_string())?;
-    Ok(blocks
-        .iter()
-        .filter(|b| b.str_field("type").as_deref() == Some("text"))
-        .filter_map(|b| b.str_field("text"))
-        .collect::<Vec<_>>()
-        .join(""))
-}
-
-/// One intent call, checked against the catalogue.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Call {
-    pub app_id: String,
-    pub app_name: String,
-    pub intent_id: String,
-    pub title: String,
-    pub params: Vec<(String, String)>,
-    pub summary: String,
-}
-
-/// What the assistant answered: text to show, or an intent call to confirm.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Reply {
-    Answer(String),
-    Intent(Call),
-}
-
-/// The JSON object inside a reply (a fenced block or prose around it is allowed), from its first `{` to its last `}`.
-fn json_object(text: &str) -> Option<&str> {
-    let start = text.find('{')?;
-    let end = text.rfind('}')?;
-    (end > start).then(|| &text[start..=end])
-}
-
-/// Parses a backend reply. Text with no JSON object is a plain answer. A JSON object must be an answer or an intent
-/// call on a catalogue entry with known parameter names and every required parameter present.
-pub fn parse_reply(text: &str, catalogue: &Catalogue) -> Result<Reply, String> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return Err("The assistant sent an empty reply.".into());
-    }
-    let Some(object) = json_object(trimmed) else { return Ok(Reply::Answer(trimmed.to_string())) };
-    let Ok(v) = json::parse(object) else { return Ok(Reply::Answer(trimmed.to_string())) };
-    if let Some(answer) = v.str_field("answer") {
-        return Ok(Reply::Answer(answer));
-    }
-    let (Some(app_id), Some(intent_id)) = (v.str_field("app"), v.str_field("intent")) else {
-        return Err("The assistant's reply was neither an answer nor an action.".into());
-    };
-    let entry = catalogue
-        .find(&app_id, &intent_id)
-        .ok_or_else(|| format!("The assistant asked for an action that is not allowed: {intent_id}."))?;
-    let mut params: Vec<(String, String)> = Vec::new();
-    if let Some(Json::Obj(pairs)) = v.get("params") {
-        for (name, value) in pairs {
-            let Some(value) = value.as_str() else { return Err(format!("Parameter {name} is not text.")) };
-            if !entry.params.iter().any(|p| &p.name == name) {
-                return Err(format!("Unknown parameter {name}."));
-            }
-            params.push((name.clone(), value.to_string()));
-        }
-    }
-    if let Some(missing) = entry.params.iter().find(|p| !p.optional && !params.iter().any(|(n, _)| n == &p.name)) {
-        return Err(format!("Missing parameter {}.", missing.name));
-    }
-    Ok(Reply::Intent(Call {
-        app_id: entry.app_id.clone(),
-        app_name: entry.app_name.clone(),
-        intent_id: entry.intent_id.clone(),
-        title: entry.title.clone(),
-        params,
-        summary: v.str_field("summary").unwrap_or_default(),
-    }))
-}
-
-/// The confirmation card: "Create note 'Groceries' in Notes?"
-pub fn card_text(call: &Call) -> String {
-    let mut text = call.title.clone();
-    for (_, value) in &call.params {
-        text.push_str(&format!(" '{value}'"));
-    }
-    format!("{text} in {}?", call.app_name)
 }
 
 /// Holds the one intent call waiting for the person. Proposing never runs anything; only [`Gate::confirm`] hands a
@@ -431,9 +260,27 @@ pub fn speech_engine(path_var: &str) -> Option<&'static str> {
         .find(|engine| path_var.split(':').any(|dir| std::path::Path::new(dir).join(engine).is_file()))
 }
 
+/// Asks the chosen backend for one reply to `messages` (the turn from [`turn_messages`]) with the `intents` catalogue.
+/// Blocking: call it from a worker thread, never the UI thread. Nothing is sent while the backend is off.
+pub fn ask(settings: &Settings, connection: &Connection, messages: &[(bool, String)], intents: &Catalogue) -> Result<Reply, Error> {
+    if settings.backend == Backend::Off {
+        return Err(Error::NoBackend);
+    }
+    assistant_client::ask(connection, messages, intents)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_core::json;
+
+    #[test]
+    fn ask_sends_nothing_while_the_backend_is_off() {
+        let connection = Connection { api_key: "unused".into(), model: "claude-haiku-5-5".into() };
+        let messages = turn_messages(false, &[], "hello");
+        let off = Settings { backend: Backend::Off, ..allowed(&["n.app"]) };
+        assert_eq!(ask(&off, &connection, &messages, &Catalogue::default()), Err(Error::NoBackend));
+    }
 
     fn intent(id: &str, title: &str, params: &[&str]) -> ManifestIntent {
         ManifestIntent {
@@ -615,7 +462,7 @@ mod tests {
 
     #[test]
     fn the_request_carries_the_catalogue_and_no_tools() {
-        let body = request_body("claude-haiku-5-5", &sample(), &[(true, "Note groceries".to_string())]);
+        let body = intent_request_body("claude-haiku-5-5", &sample(), &[(true, "Note groceries".to_string())]);
         let v = json::parse(&body).unwrap();
         assert_eq!(v.str_field("model").as_deref(), Some("claude-haiku-5-5"));
         assert!(v.get("tools").is_none());

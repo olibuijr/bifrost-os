@@ -316,8 +316,19 @@ name = "bifrost-assistant"
 version = "1.4.1"
 dependencies = [
  "bifrost-app",
+ "bifrost-assistant-client",
  "bifrost-core",
  "springboard",
+]
+
+[[package]]
+name = "bifrost-assistant-client"
+version = "0.1.0"
+dependencies = [
+ "bifrost-core",
+ "rustls",
+ "rustls-graviola",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -4060,6 +4071,7 @@ dependencies = [
 name = "springboard"
 version = "0.8.2"
 dependencies = [
+ "bifrost-assistant-client",
  "bifrost-audio-hal",
  "bifrost-audio-toolbox",
  "bifrost-audio-types",
