@@ -1135,23 +1135,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/smb.rs, springboard/src/keychain.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient.",
+   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient. Lead 2026-10-17: not ready: Files Connect to Server does not offer smb:// yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "smb::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "keychain::tests"
-    }
-   ],
-   "ready_note": "SMB client for apps: bifrost_app::smb parses smb:// addresses (a password in the address is refused), builds smbclient command lines with the password in the environment and never in arguments, holds the session to SMB 2.02 or newer with encryption when offered, lists shares and folders, downloads files, validates names against command injection and maps NT_STATUS replies to errors. The wire engine is Samba's smbclient (packaging/arch/runtime-packages.txt: smbclient, samba, cifs-utils); share logins are stored in the keychain (keychain::share_login). Not wired yet: the Files Connect to Server sheet still lists ftp:// only, and shares are not mounted into the file tree."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SMBClientEngine.framework",
@@ -1170,18 +1156,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/smb.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb.",
+   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb. Lead 2026-10-17: not ready: Files Connect to Server does not offer smb:// yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "smb::tests"
-    }
-   ],
-   "ready_note": "The engine under the SMB client is Samba's smbclient (packaged), driven by bifrost_app::smb: protocol floor SMB 2.02, encryption when offered, timeouts, listing parsers and status mapping, all tested without a server. Not wired yet: the Files Connect to Server sheet still lists ftp:// only."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SMCT.framework",
