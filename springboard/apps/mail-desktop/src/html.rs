@@ -35,6 +35,13 @@ pub struct Sanitized {
 /// Returns `html` with everything unsafe removed. Remote images are dropped unless `allow_remote_images` is set;
 /// inline `data:` images in a raster format are kept.
 pub fn sanitize(html: &str, allow_remote_images: bool) -> Sanitized {
+    sanitize_with_parts(html, allow_remote_images, &[])
+}
+
+/// Like [`sanitize`], and `cids` maps the Content-IDs of the message's inline parts (without the angle brackets) to
+/// their `data:image/...;base64,` URIs. An image that refers to `cid:ID` takes that URI when it is listed, and is
+/// dropped otherwise.
+pub fn sanitize_with_parts(html: &str, allow_remote_images: bool, cids: &[(String, String)]) -> Sanitized {
     let lower = html.to_ascii_lowercase();
     let mut out = String::with_capacity(html.len());
     let mut blocked = 0;
@@ -72,9 +79,10 @@ pub fn sanitize(html: &str, allow_remote_images: bool) -> Sanitized {
         if !ALLOWED.contains(&name) {
             continue;
         }
+        let mut resolved: Option<String> = None;
         if name == "img" {
-            let src = attr(&tag.attrs, "src").unwrap_or("");
-            match image_kind(src) {
+            let src = resolve_cid(attr(&tag.attrs, "src").unwrap_or(""), cids);
+            match image_kind(&src) {
                 Some(Image::Inline) => {}
                 Some(Image::Remote) if allow_remote_images => {}
                 Some(Image::Remote) => {
@@ -83,10 +91,15 @@ pub fn sanitize(html: &str, allow_remote_images: bool) -> Sanitized {
                 }
                 None => continue,
             }
+            resolved = Some(src);
         }
         out.push('<');
         out.push_str(name);
         for (key, value) in &tag.attrs {
+            let value = match resolved.as_deref() {
+                Some(src) if key == "src" => src,
+                _ => value.as_str(),
+            };
             if keep_attr(name, key, value) {
                 out.push(' ');
                 out.push_str(key);
@@ -185,6 +198,17 @@ fn safe_link(value: &str) -> bool {
         Some((scheme, _)) => matches!(scheme, "http" | "https" | "mailto"),
         None => false,
     }
+}
+
+/// The source an image really loads from: a `cid:` reference becomes the data URI of its inline part when `cids`
+/// lists it. Any other value is returned as it is, and an unknown `cid:` becomes empty (so the image is dropped).
+fn resolve_cid(value: &str, cids: &[(String, String)]) -> String {
+    let v = value.trim();
+    if !v.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("cid:")) {
+        return v.to_string();
+    }
+    let id = v[4..].trim().trim_start_matches('<').trim_end_matches('>');
+    cids.iter().find(|(k, _)| k == id).map(|(_, uri)| uri.clone()).unwrap_or_default()
 }
 
 fn image_kind(value: &str) -> Option<Image> {
@@ -397,6 +421,41 @@ mod tests {
         assert_eq!(text, "One & two\nThree four");
         assert_eq!(to_text("a<br>b"), "a\nb");
         assert_eq!(to_text("&lt;b&gt; &amp;lt;"), "<b> &lt;");
+    }
+
+    #[test]
+    fn forms_and_controls_are_unwrapped_without_their_actions() {
+        let s = clean("<form action=\"https://x/steal\"><input name=\"pw\"><button onclick=\"go()\">Go</button>ok</form>");
+        assert_eq!(s, "Gook");
+        assert!(!s.contains("form") && !s.contains("input") && !s.contains("onclick"));
+        assert_eq!(clean("<img src=\"x.png\" onerror=\"alert(1)\">"), "");
+    }
+
+    #[test]
+    fn cid_images_take_their_inline_part_only_when_listed() {
+        let cids = vec![("logo1".to_string(), "data:image/png;base64,iVBORw0=".to_string())];
+        let s = sanitize_with_parts("<p><img src=\"cid:logo1\" alt=\"L\"></p>", false, &cids);
+        assert_eq!(s.html, "<p><img src=\"data:image/png;base64,iVBORw0=\" alt=\"L\" /></p>");
+        assert_eq!(s.remote_images_blocked, 0);
+        let s = sanitize_with_parts("<img src=\"<CID:logo1>\"><img src=\"cid:missing\">", false, &cids);
+        assert_eq!(s.html, "<img src=\"data:image/png;base64,iVBORw0=\" />");
+        // a cid part that is not a raster image is never shown
+        let svg = vec![("s".to_string(), "data:image/svg+xml;base64,PHN2Zz4=".to_string())];
+        assert_eq!(sanitize_with_parts("<img src=\"cid:s\">", true, &svg).html, "");
+    }
+
+    #[test]
+    fn remote_images_stay_blocked_even_beside_inline_parts() {
+        let cids = vec![("a".to_string(), "data:image/gif;base64,R0lG".to_string())];
+        let s = sanitize_with_parts("<img src=\"https://t.example/p.gif\"><img src=\"cid:a\">", false, &cids);
+        assert_eq!(s.html, "<img src=\"data:image/gif;base64,R0lG\" />");
+        assert_eq!(s.remote_images_blocked, 1);
+    }
+
+    #[test]
+    fn non_ascii_sources_do_not_panic() {
+        assert_eq!(clean("<img src=\"Þ\">"), "");
+        assert_eq!(sanitize_with_parts("<img src=\"ÞÞ\">", false, &[]).html, "");
     }
 
     #[test]
