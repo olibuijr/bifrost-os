@@ -60,3 +60,58 @@ impl TextureCatalog {
         self.entries.keys().map(|k| k.as_str()).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn icons() -> TextureCatalog {
+        let mut c = TextureCatalog::new();
+        assert!(c.add("folder", 1.0, "folder.png"));
+        assert!(c.add("folder", 3.0, "folder@3x.png"));
+        assert!(c.add("folder", 2.0, "folder@2x.png"));
+        c
+    }
+
+    #[test]
+    fn the_smallest_variant_that_is_big_enough_is_used() {
+        let c = icons();
+        assert_eq!(c.resolve("folder", 1.0), Some("folder.png"));
+        assert_eq!(c.resolve("folder", 1.5), Some("folder@2x.png"));
+        assert_eq!(c.resolve("folder", 2.0), Some("folder@2x.png"));
+        assert_eq!(c.resolve("folder", 2.5), Some("folder@3x.png"));
+    }
+
+    #[test]
+    fn a_scale_above_every_variant_uses_the_largest() {
+        assert_eq!(icons().resolve("folder", 4.0), Some("folder@3x.png"));
+    }
+
+    #[test]
+    fn an_unknown_name_resolves_to_nothing() {
+        assert_eq!(icons().resolve("trash", 1.0), None);
+        assert!(TextureCatalog::new().names().is_empty());
+    }
+
+    #[test]
+    fn bad_entries_and_repeated_scales_are_refused() {
+        let mut c = icons();
+        assert!(!c.add("", 1.0, "x.png"));
+        assert!(!c.add("x", 1.0, ""));
+        assert!(!c.add("x", 0.0, "x.png"));
+        assert!(!c.add("x", -1.0, "x.png"));
+        assert!(!c.add("x", f64::NAN, "x.png"));
+        assert!(!c.add("folder", 2.0, "other.png"));
+        assert_eq!(c.resolve("folder", 2.0), Some("folder@2x.png"));
+        assert!(c.resolve("x", 1.0).is_none());
+    }
+
+    #[test]
+    fn scales_and_names_are_listed_in_order() {
+        let mut c = icons();
+        assert!(c.add("app", 1.0, "app.png"));
+        assert_eq!(c.scales("folder"), vec![1.0, 2.0, 3.0]);
+        assert!(c.scales("missing").is_empty());
+        assert_eq!(c.names(), vec!["app", "folder"]);
+    }
+}
