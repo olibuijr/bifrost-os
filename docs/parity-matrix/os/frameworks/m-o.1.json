@@ -3600,8 +3600,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index lists only directories for this bundle and no binary is extracted, so its helper role is unknown.",
+   "status": "n/a",
+   "note": "n/a: helper kit of the Messages app. The index lists only two plug-in bundles (PlugIns/FavoritesController.bundle, PlugIns/FileTransferController.bundle) and MessagesHelperKitLocalizable.loctable: favourites and file transfer inside Messages, which rides on iMessage, an Apple-only protocol with no open equivalent that BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3692,11 +3692,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/metaquery.rs; springboard/cmd/src/mdfind.rs; springboard/src/shell/spotindex.rs; springboard/sdk/src/metadata_query.rs",
    "status": "os",
-   "note": "Could not classify: the name does not say which metadata it handles, and the reference index holds no binary to inspect.",
+   "note": "File and item metadata helpers (inferred from the name; the index lists only Info.plist, version.plist and the binary link). BifrOSt builds the metadata queries, the command-line finder and the search index in its own modules.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "metaquery::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "mdfind::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    }
+   ],
+   "ready_note": "Host tests for the metadata query model (predicates on name, kind, size, time and named attributes, sorting), the mdfind command and the per-app search index. The job is inferred from the name, not read from the reference binary."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalMetrics.framework",

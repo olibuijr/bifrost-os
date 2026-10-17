@@ -2144,6 +2144,15 @@ mod tests {
     }
 
     #[test]
+    fn the_reset_page_offers_a_confirmed_erase_of_all_content() {
+        let info = info();
+        let opts = Options::default();
+        let s = spec(PageId::Reset, &model(&info, &opts));
+        let erase = s.groups.iter().flat_map(|g| &g.items).find(|i| i.label == "Erase All Content and Settings").expect("the Reset page has the erase row");
+        assert_eq!(erase.action, Action::Run(Command::EraseContent), "the row asks for confirmation through the command");
+    }
+
+    #[test]
     fn desktop_display_shows_panel_mode_and_only_working_controls() {
         let mut info = info();
         info.display_mode = Some((2048, 1152, 60));
