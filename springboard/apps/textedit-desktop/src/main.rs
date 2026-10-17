@@ -48,7 +48,6 @@ use spell::Spelling;
 use std::ops::Range;
 use text::{Align, Cell, Kind, Style, Transform, OBJECT};
 use bifrost_app::graphics_imageio;
-use bifrost_app::pasteboard::NativePasteboard;
 use view::{Action, Button, Focus, Hit};
 
 /// The layout of the document as last drawn, and the misspelled words of its text, kept until the text, the width or
@@ -385,6 +384,8 @@ impl TextEditApp {
         let scaled = zoomed(cells, zoom);
         let layout = layout::layout_tabs(&scaled, width, &measure, doc.text.tab_width() * zoom);
         let misspelled = if self.spelling.enabled { self.spelling.misspelled(cells) } else { Vec::new() };
+        // the measure borrows the pictures' sizes; it ends before the pictures move into the cache
+        drop(measure);
         self.cache = Some(Cache { doc: id, revision: self.revision, width, zoom, art, cells: scaled, layout, misspelled });
     }
 

@@ -410,6 +410,7 @@ mod tests {
     }
 
     use crate::proto::{ToApp, ToShell, TouchKind};
+    use crate::App;
 
     /// Records what the window callbacks receive.
     #[derive(Default)]

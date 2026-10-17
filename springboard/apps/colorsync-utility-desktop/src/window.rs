@@ -247,6 +247,7 @@ impl ColourUtility {
     }
 
     /// The rectangle of profile row `index`, moved by the list's scroll.
+    #[cfg(test)]
     pub fn row_rect(&self, index: usize) -> Rect {
         Rect { x: 0.0, y: UNIFIED_BAR_PT + LIST_TOP_PT + index as f32 * ROW_PT - self.side_scroll, w: SIDE_PT, h: ROW_PT }
     }

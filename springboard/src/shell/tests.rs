@@ -124,6 +124,7 @@
 
     /// A tablet with the desktop up and one window (the Terminal) placed so that its bottom edge runs under the
     /// on-screen keyboard.
+    #[cfg(test)]
     fn tablet_desk_with_window_under_keyboard() -> Shell {
         let mut sh = desktop_shell();
         sh.form = bifrost_ui::form_factor::FormFactor::Tablet;

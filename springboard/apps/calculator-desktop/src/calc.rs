@@ -1262,7 +1262,7 @@ impl Calculator {
             Target::Mode(mode) => self.set_mode(mode),
             Target::Key(i) => self.press_index(ui, i),
             Target::Backspace => self.press_basic(ui, Key::Backspace),
-            Target::ShowConvert => self.convert = Some(Converter { rates: self.rates.clone(), ..Converter::default() }),
+            Target::ShowConvert => self.convert = Some(Converter::with_rates(self.rates.clone())),
             Target::LeaveConvert => self.convert = None,
             Target::Category(index) => {
                 if let (Some(conv), Some(category)) = (self.convert.as_mut(), Category::ALL.get(index)) {

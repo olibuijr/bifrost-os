@@ -1139,7 +1139,7 @@ impl MailWindow {
     }
 
     /// Save on the rule editor of the rule at `index`: the rule takes the form's values.
-    fn submit_edit_rule(&mut self, index: usize, form: &Form) {
+    fn submit_edit_rule(&mut self, index: usize, form: &crate::state::Form) {
         match self.mail.rule_from_form_at(form, Some(index)) {
             Ok(rule) => {
                 if let Some(slot) = self.mail.prefs.rules.get_mut(index) {
@@ -2004,6 +2004,7 @@ impl MailWindow {
     }
 
     /// True when the open message carries files.
+    #[allow(dead_code)] // not wired yet
     fn open_has_files(&self) -> bool {
         open_has_files(&self.mail)
     }

@@ -2053,7 +2053,9 @@ impl Contacts {
             MENU_LAST_FIRST => self.set_name_order(names::NameOrder::LastFirst),
             MENU_LAST_IMPORT => self.show_list(ui, Filter::LastImport),
             MENU_DUPLICATES => self.show_list(ui, Filter::Duplicates),
-            MENU_OPEN_WINDOW => self.ask_card_window(),
+            MENU_OPEN_WINDOW => {
+                self.ask_card_window();
+            }
             MENU_MY_CARD => self.make_my_card(),
             MENU_GO_MY_CARD => self.go_to_my_card(ui),
             MENU_COMPANY => self.toggle_company(ui),

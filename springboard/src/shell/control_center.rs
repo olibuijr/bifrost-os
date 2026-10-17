@@ -557,7 +557,15 @@ impl Shell {
         self.ext
             .iter()
             .flatten()
-            .flat_map(|h| h.controls.iter().map(move |c| AppControlEntry { app_id: h.id.clone(), control: c.clone(), identifier: c.identifier(&h.id) }))
+            .flat_map(|h| {
+                // the controls the app's manifest declares (`[[control]]`); the host's `controls` is its UI tree
+                let declared = super::apphost::installed()
+                    .iter()
+                    .find(|a| a.manifest.id == h.id)
+                    .map(|a| a.manifest.controls.clone())
+                    .unwrap_or_default();
+                declared.into_iter().map(move |c| AppControlEntry { app_id: h.id.clone(), identifier: c.identifier(&h.id), control: c })
+            })
             .collect()
     }
 
@@ -1487,11 +1495,11 @@ mod tests {
         // four to a row: the fifth control wraps to the second row, under the first
         let (x4, y4, _, _) = app_tile_rect(&sh.ui, sh.w, 4);
         assert!((x4 - x0).abs() < 0.5 && y4 > y0 + h0 / 2.0);
-        let centre = |i: usize| {
+        let tile_centre = |i: usize| {
             let (x, y, w, h) = app_tile_rect(&sh.ui, sh.w, i);
             (x + w / 2.0, y + h / 2.0)
         };
-        let (cx, cy) = centre(1);
+        let (cx, cy) = tile_centre(1);
         assert_eq!(app_hit(&sh.ui, sh.w, 2, cx, cy), Some(1));
         assert_eq!(app_hit(&sh.ui, sh.w, 1, cx, cy), None, "a tile past the count does not answer");
         assert_eq!(app_hit(&sh.ui, sh.w, 3, x0 + w0 / 2.0, y0 - 1.0), None, "the gap above a row is not a tile");

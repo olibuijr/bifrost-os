@@ -163,6 +163,7 @@ impl NewFilter {
 }
 
 /// The unplayed episodes of all shows, newest first, at most `limit`: (show index, episode index).
+#[cfg(test)]
 pub fn latest(shows: &[Show], library: &Library, limit: usize) -> Vec<(usize, usize)> {
     latest_filtered(shows, library, NewFilter::Unplayed, |_| false, limit)
 }

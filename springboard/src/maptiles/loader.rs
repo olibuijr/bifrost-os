@@ -246,8 +246,8 @@ impl TileLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::net::fake::Fake;
-    use super::source::MapType;
+    use super::super::net::fake::Fake;
+    use super::super::source::MapType;
 
     fn png() -> Vec<u8> {
         crate::pngenc::encode_rgb(4, 4, &[0xff80_4020; 16])
@@ -303,7 +303,7 @@ mod tests {
         let source = MapType::Standard.source("1.0.0");
         let t = TileId { z: 2, x: 1, y: 1 };
         TileCache::new(&root, &source.cache_key()).write(t, &png()).unwrap();
-        let mut loader = TileLoader::new(&root, source, Arc::new(super::net::Offline));
+        let mut loader = TileLoader::new(&root, source, Arc::new(super::super::net::Offline));
         assert!(loader.want(&[t]));
         assert!(loader.image(t).is_some());
         assert!(!loader.busy(), "a fresh cached tile asks for nothing");
@@ -316,21 +316,21 @@ mod tests {
         let t = TileId { z: 2, x: 1, y: 1 };
         // a base tile of the same host must not show up as traffic
         TileCache::new(&root, &source.cache_key()).write(t, &png()).unwrap();
-        let mut loader = TileLoader::overlay(&root, source.clone(), Arc::new(super::net::Offline), super::source::TRAFFIC_MAX_AGE);
+        let mut loader = TileLoader::overlay(&root, source.clone(), Arc::new(super::super::net::Offline), super::super::source::TRAFFIC_MAX_AGE);
         loader.set_online(false);
         assert!(!loader.want(&[t]));
         assert!(loader.image(t).is_none());
         TileCache::new(&root, &source.overlay_cache_key()).write(t, &png()).unwrap();
         assert!(loader.want(&[t]));
         assert!(loader.image(t).is_some());
-        assert_eq!(loader.max_age(), super::source::TRAFFIC_MAX_AGE, "traffic tiles go stale sooner than map tiles");
-        assert_eq!(TileLoader::new(&root, source, Arc::new(super::net::Offline)).max_age(), MAX_TILE_AGE);
+        assert_eq!(loader.max_age(), super::super::source::TRAFFIC_MAX_AGE, "traffic tiles go stale sooner than map tiles");
+        assert_eq!(TileLoader::new(&root, source, Arc::new(super::super::net::Offline)).max_age(), MAX_TILE_AGE);
     }
 
     #[test]
     fn offline_loader_asks_for_nothing() {
         let root = dir("off");
-        let mut loader = TileLoader::new(&root, MapType::Standard.source("1.0.0"), Arc::new(super::net::Offline));
+        let mut loader = TileLoader::new(&root, MapType::Standard.source("1.0.0"), Arc::new(super::super::net::Offline));
         loader.set_online(false);
         loader.want(&[TileId { z: 2, x: 0, y: 0 }]);
         assert!(!loader.busy());
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn a_download_counts_its_tiles_and_cancels() {
         let root = dir("job");
-        let mut loader = TileLoader::new(&root, MapType::Standard.source("1.0.0"), Arc::new(super::net::Offline));
+        let mut loader = TileLoader::new(&root, MapType::Standard.source("1.0.0"), Arc::new(super::super::net::Offline));
         assert_eq!(loader.download_progress(), None);
         loader.set_online(false);
         loader.start_download(vec![TileId { z: 1, x: 0, y: 0 }, TileId { z: 1, x: 1, y: 0 }]);

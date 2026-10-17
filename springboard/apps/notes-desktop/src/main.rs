@@ -8,14 +8,14 @@ use ::notes::notes::system;
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::app_windows::WindowId;
 use bifrost_app::windows::{self, Level};
-use notes::notes::note_windows;
+use ::notes::notes::note_windows;
 use bifrost_app::widgets_timeline;
 use bifrost_app::KeyInput;
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::app_events::AppEvent;
-use notes::scripting;
+use ::notes::scripting;
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::status_item::{MenuItem as StatusMenuItem, StatusBar, StatusItem, StatusItemLength};
 use bifrost_core::json::Json;
@@ -265,6 +265,25 @@ const KEY_Z: u32 = 44;
 const KEY_C: u32 = 46;
 
 impl NotesApp {
+    /// Opens a note in a window of its own (`Ctx::open_window`). A note that is already open is focused, not opened
+    /// twice; a window the shell refuses leaves the note where it was.
+    fn open_note_window(&mut self, ctx: &Ctx, id: &str) -> bool {
+        let Some(n) = &mut self.notes else { return false };
+        if let Some(window) = n.windows.window_of(id) {
+            n.windows.focus(window);
+            return true;
+        }
+        let Some(title) = n.note_title(id) else { return false };
+        match ctx.open_window(note_windows::window_spec(&title)) {
+            Ok(window) => {
+                n.windows.bind(window, id);
+                n.windows.focus(window);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
     /// File > Import to Notes (Cmd+O): the open panel answers in `document`.
     fn open_import(&mut self, ctx: &Ctx) {
         self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &["public.text", "public.html", "public.rtf"]));
@@ -515,24 +534,6 @@ impl App for NotesApp {
         }
     }
 
-    /// Opens a note in a window of its own (`Ctx::open_window`). A note that is already open is focused, not opened
-    /// twice; a window the shell refuses leaves the note where it was.
-    fn open_note_window(&mut self, ctx: &Ctx, id: &str) -> bool {
-        let Some(n) = &mut self.notes else { return false };
-        if let Some(window) = n.windows.window_of(id) {
-            n.windows.focus(window);
-            return true;
-        }
-        let Some(title) = n.note_title(id) else { return false };
-        match ctx.open_window(note_windows::window_spec(&title)) {
-            Ok(window) => {
-                n.windows.bind(window, id);
-                n.windows.focus(window);
-                true
-            }
-            Err(_) => false,
-        }
-    }
 
     fn intents(&self) -> Vec<Intent> {
         vec![

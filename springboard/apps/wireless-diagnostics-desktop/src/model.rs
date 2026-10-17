@@ -302,6 +302,7 @@ impl History {
         self.values.len()
     }
 
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -312,6 +313,7 @@ impl History {
     }
 
     /// The most recent reading that is there.
+    #[cfg(test)]
     pub fn latest(&self) -> Option<i32> {
         self.values.iter().rev().find_map(|v| *v)
     }

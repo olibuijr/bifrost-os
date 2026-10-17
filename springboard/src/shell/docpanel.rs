@@ -1568,6 +1568,7 @@ impl super::Shell {
     /// file in place. Photos picks the change up on its next scan. False when the app or the file cannot be opened.
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn photo_edit_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
+        use super::apps::{apps, AppId};
         let Some(def) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return false };
         let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let Some(broker) = self.doc_broker() else { return false };

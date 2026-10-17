@@ -444,6 +444,7 @@ impl SysInfo {
     }
 
     /// The summary rows of the selected category after the find (the card, or one line per item).
+    #[cfg(test)]
     pub fn rows(&self) -> Vec<Row> {
         self.view().content.summary_rows()
     }
@@ -644,6 +645,7 @@ impl SysInfo {
     }
 
     /// The report as plain text, as Save writes it by default.
+    #[cfg(test)]
     pub fn report_text(&self) -> String {
         model::text_of(&self.export_contents())
     }

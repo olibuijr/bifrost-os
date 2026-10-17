@@ -494,7 +494,7 @@ pub fn require_screen_recording(app_id: &str) -> Result<(), String> {
         Status::Authorized => Ok(()),
         Status::NotDetermined => {
             let name = apphost::installed().iter().find(|a| a.manifest.id == app_id).map(|a| a.manifest.name.clone()).unwrap_or_else(|| app_id.to_string());
-            privacy_permissions::queue_prompt(app_id, &name, Kind::Media(Media::Screen));
+            privacy_permissions::queue_prompt(app_id, &name, Kind::Media(Media::Screen), "");
             Err("screen recording is not authorized yet: the person has been asked".into())
         }
         Status::Restricted => Err("screen recording is restricted on this system".into()),

@@ -83,8 +83,8 @@ fn combine(ss_m: &[u8; 32], ss_x: &[u8; 32], ct_x: &[u8; 32], pk_x: &[u8; 32]) -
     sha3_256(&input)
 }
 
-/// A public encapsulation key: `pk_M || pk_X`.
-#[derive(Clone, PartialEq, Eq)]
+/// A public encapsulation key: `pk_M || pk_X`. Public, so `Debug` may show it.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct EncapsulationKey {
     bytes: Vec<u8>,
 }

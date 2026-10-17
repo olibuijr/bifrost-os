@@ -491,7 +491,7 @@ impl Shell {
     /// The Options menu turned the microphone on: asks for it now when the person has not answered yet.
     pub fn ask_microphone(&self) {
         if self.capture_prefs.microphone && matches!(privacy_permissions::access(CAPTURE_APP).status(Media::Audio), Status::NotDetermined) {
-            privacy_permissions::queue_prompt(CAPTURE_APP, CAPTURE_NAME, Kind::Media(Media::Audio));
+            privacy_permissions::queue_prompt(CAPTURE_APP, CAPTURE_NAME, Kind::Media(Media::Audio), "");
         }
     }
 
@@ -501,7 +501,7 @@ impl Shell {
         match privacy_permissions::access(CAPTURE_APP).status(Media::Audio) {
             Status::Authorized => {}
             Status::NotDetermined => {
-                privacy_permissions::queue_prompt(CAPTURE_APP, CAPTURE_NAME, Kind::Media(Media::Audio));
+                privacy_permissions::queue_prompt(CAPTURE_APP, CAPTURE_NAME, Kind::Media(Media::Audio), "");
                 eprintln!("springboard: recording: the microphone needs an answer first; this recording is silent");
                 return None;
             }

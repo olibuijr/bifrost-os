@@ -682,7 +682,7 @@ mod tests {
     fn prefs_round_trip_and_tolerate_garbage() {
         let dir = scratch("prefs");
         assert_eq!(load_prefs(&dir), Prefs::default());
-        let set = Prefs { sort: SortKey::Title, checked_to_bottom: true, oldest_first: true, math_results: true, resume_quick: true, group_by_date: true, layout: super::gallery::Layout::Gallery };
+        let set = Prefs { sort: SortKey::Title, checked_to_bottom: true, oldest_first: true, math_results: true, resume_quick: true, group_by_date: true, layout: super::super::gallery::Layout::Gallery };
         save_prefs(&dir, set).unwrap();
         assert_eq!(load_prefs(&dir), set);
         std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\nlayout=grid\n").unwrap();

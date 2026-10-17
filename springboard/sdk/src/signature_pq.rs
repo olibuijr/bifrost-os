@@ -43,6 +43,12 @@ pub struct PublicKey {
     bytes: Vec<u8>,
 }
 
+impl std::fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PublicKey({:?}, {} bytes)", self.variant, self.bytes.len())
+    }
+}
+
 impl PublicKey {
     /// A key from bytes received from a peer. The length is checked here.
     pub fn from_bytes(variant: Variant, bytes: &[u8]) -> Result<PublicKey, SignatureError> {

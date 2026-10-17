@@ -104,7 +104,7 @@ impl LocateWindow {
     fn draw_switch(&mut self, ui: &Ui, s: &mut Surface) {
         let b = self.switch_box();
         let on = self.panel.sharing();
-        fill(s, ui, b.x, b.y, b.w, b.h, if on { LINK.now() } else { SEPARATOR_C.now() });
+        fill(s, ui, b.x, b.y, b.w, b.h, if on { LINK } else { SEPARATOR_C.now() });
         let knob = b.h - 4.0;
         let kx = if on { b.x + b.w - knob - 2.0 } else { b.x + 2.0 };
         fill(s, ui, kx, b.y + 2.0, knob, knob, CARD_BG.now());
@@ -112,7 +112,7 @@ impl LocateWindow {
 
     fn draw_join(&mut self, ui: &Ui, s: &mut Surface) {
         let b = self.join_box();
-        fill(s, ui, b.x, b.y, b.w, b.h, LINK.now());
+        fill(s, ui, b.x, b.y, b.w, b.h, LINK);
         self.line(ui, s, "Join my account from this computer", MAC_BODY_PT, CARD_BG.now(), b.x + 10.0, b.y + 5.0, b.w - 20.0);
     }
 
@@ -126,7 +126,7 @@ impl LocateWindow {
         for (i, name) in rows.iter().enumerate() {
             self.line(ui, s, &format!("{name} is asking to join your account."), MAC_BODY_PT, LABEL.now(), x, row_name_top(i), w);
             let a = approve_box(i);
-            fill(s, ui, a.x, a.y, a.w, a.h, LINK.now());
+            fill(s, ui, a.x, a.y, a.w, a.h, LINK);
             self.line(ui, s, "Approve", MAC_BODY_PT, CARD_BG.now(), a.x + 12.0, a.y + 5.0, a.w - 24.0);
             let d = deny_box(i);
             fill(s, ui, d.x, d.y, d.w, d.h, SEPARATOR_C.now());

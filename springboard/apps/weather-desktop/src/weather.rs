@@ -186,6 +186,7 @@ enum Target {
 enum Done {
     Forecast { key: String, result: Result<Forecast, WeatherError> },
     /// a place named by a `weather:` link, looked up by name
+    #[allow(dead_code)]
     Linked { name: String, result: Result<Vec<Location>, String> },
     Places { query: String, result: Result<Vec<Location>, String> },
     Quotes(Result<Vec<Quote>, String>),
@@ -2411,7 +2412,7 @@ mod tests {
     }
 
     /// An app over `names` as saved places (the first selected), with the window wide enough for the sidebar.
-    fn app_with(tag: &str, names: &[&str]) -> (Weather, Ui, PathBuf) {
+    pub(super) fn app_with(tag: &str, names: &[&str]) -> (Weather, Ui, PathBuf) {
         let dir = temp(tag);
         let places: Vec<Location> = names.iter().enumerate().map(|(i, n)| place(n, 60.0 + i as f64)).collect();
         Store::new(dir.clone()).save_locations(&places);
@@ -2734,7 +2735,7 @@ mod wire_tests {
 
     #[test]
     fn my_location_leads_the_sidebar_until_location_is_refused() {
-        let (mut app, _ui, dir) = app_with("here-row", &["A", "B"]);
+        let (mut app, _ui, dir) = super::tests::app_with("here-row", &["A", "B"]);
         assert_eq!(app.here_offset(), 1, "listed while location is not asked, so the person can pick it");
         assert_eq!(app.sidebar().items.len(), 3);
         app.stop_here(LocationError::Denied);

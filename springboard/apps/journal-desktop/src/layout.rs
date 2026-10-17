@@ -77,6 +77,7 @@ impl Layout {
         ((self.h - LIST_TOP_PT).max(0.0) / ROW_H_PT).floor() as usize
     }
 
+    #[allow(dead_code)] // not wired yet
     pub fn row(&self, slot: usize) -> Rect {
         Rect { x: 0.0, y: LIST_TOP_PT + slot as f32 * ROW_H_PT, w: SIDEBAR_PT, h: ROW_H_PT }
     }

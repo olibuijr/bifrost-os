@@ -248,7 +248,6 @@ pub fn save(base: &[u8], doc: &Doc, edits: &Edits) -> Result<Vec<u8>, String> {
 
     let mut objects: BTreeMap<u32, Obj> = BTreeMap::new();
     let mut page_dicts: BTreeMap<usize, Dict> = BTreeMap::new();
-    let mut expected_pages = pages.len();
 
     // the pages kept, in their order (a deletion or a move changes it); an insert adds its pages at a place in it
     let mut kept: Vec<usize> = (0..pages.len()).collect();
@@ -262,7 +261,7 @@ pub fn save(base: &[u8], doc: &Doc, edits: &Edits) -> Result<Vec<u8>, String> {
         }
         kept = order.clone();
     }
-    expected_pages = kept.len();
+    let mut expected_pages = kept.len();
     let identity = kept.len() == pages.len() && kept.iter().enumerate().all(|(i, &p)| i == p);
     if !identity || edits.insert.is_some() {
         let cat = doc.catalog().ok_or("the file has no catalog")?;

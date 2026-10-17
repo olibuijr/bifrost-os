@@ -67,6 +67,8 @@ impl Style {
 }
 
 /// Spacing between two atom classes, as in the TeXbook's table.
+// the full TeX spacing set; the table uses the script-aware Med and Thick variants (MedNs, ThickNs) today
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Gap {
     None,

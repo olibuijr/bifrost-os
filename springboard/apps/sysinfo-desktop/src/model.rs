@@ -429,6 +429,7 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
 }
 
 /// The summary rows of a category: the card, or the item lines. Kept for callers that need the flat view.
+#[cfg(test)]
 pub fn rows(category: Category, r: &Report, x: &Extras) -> Vec<Row> {
     content(category, r, x).summary_rows()
 }
@@ -491,6 +492,7 @@ pub fn text_of(contents: &[(Category, Content)]) -> String {
     out
 }
 
+#[cfg(test)]
 /// The live report as plain text. `mini` keeps only the Overview.
 pub fn report_text(r: &Report, x: &Extras, mini: bool) -> String {
     text_of(&contents(r, x, mini))

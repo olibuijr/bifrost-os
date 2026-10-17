@@ -123,6 +123,7 @@ enum Voices {
 
 /// The app's utterance: its id, its engine and whether the engine is paused.
 struct Speaking {
+    #[allow(dead_code)]
     id: u32,
     process: Box<dyn Process>,
     paused: bool,

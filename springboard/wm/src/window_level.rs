@@ -31,6 +31,7 @@ use std::sync::Mutex;
 use smithay::{
     reexports::wayland_server::{
         backend::GlobalId, protocol::wl_surface::WlSurface, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New,
+        Resource,
     },
     wayland::compositor::with_states,
 };

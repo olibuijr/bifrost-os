@@ -114,17 +114,6 @@ impl App for MailApp {
         self.with_window(ctx, |mail| mail.menu(ctx, id))
     }
 
-    /// The window with focus decides which compose a key or a command acts on: the focused compose window's message.
-    fn route_focus(&mut self, ctx: &Ctx) {
-        let focused = ctx.windows().focused();
-        if let Some(mail) = &mut self.window {
-            if self.composes.owns(focused) {
-                self.composes.activate(mail, focused);
-            } else if focused.is_main() {
-                self.composes.deactivate(mail);
-            }
-        }
-    }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         if matches!(ev, Input::Key(_) | Input::Command(_)) {
@@ -222,25 +211,6 @@ impl App for MailApp {
         true
     }
 
-    /// Keeps Core Search in step with the newest messages of the mailbox on screen: subjects and senders only.
-    fn index_tick(&mut self, ctx: &Ctx, t: f64) {
-        if t < self.next_index {
-            return;
-        }
-        self.next_index = t + INDEX_EVERY_MS;
-        let Some(w) = &self.window else { return };
-        let m = &w.mail;
-        let account = m.accounts.get(m.account).map(|a| a.id.clone());
-        let p = index::plan(&mut self.indexed, m.prefs.show_in_search, account.as_deref(), &m.mailbox, &m.rows);
-        let spot = bifrost_app::quicksearch::CSSearchableIndex::default_index();
-        if !p.changed.is_empty() {
-            spot.index_searchable_items(ctx, &p.changed);
-        }
-        if !p.gone.is_empty() {
-            let refs: Vec<&str> = p.gone.iter().map(String::as_str).collect();
-            spot.delete_searchable_items(ctx, &refs);
-        }
-    }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
         if let Some(mail) = &mut self.window {
@@ -287,6 +257,40 @@ impl App for MailApp {
 
     fn wake_fd(&self) -> Option<i32> {
         self.window.as_ref().and_then(|mail| mail.wake_fd())
+    }
+}
+
+impl MailApp {
+    /// The window with focus decides which compose a key or a command acts on: the focused compose window's message.
+    fn route_focus(&mut self, ctx: &Ctx) {
+        let focused = ctx.windows().focused();
+        if let Some(mail) = &mut self.window {
+            if self.composes.owns(focused) {
+                self.composes.activate(mail, focused);
+            } else if focused.is_main() {
+                self.composes.deactivate(mail);
+            }
+        }
+    }
+
+    /// Keeps Core Search in step with the newest messages of the mailbox on screen: subjects and senders only.
+    fn index_tick(&mut self, ctx: &Ctx, t: f64) {
+        if t < self.next_index {
+            return;
+        }
+        self.next_index = t + INDEX_EVERY_MS;
+        let Some(w) = &self.window else { return };
+        let m = &w.mail;
+        let account = m.accounts.get(m.account).map(|a| a.id.clone());
+        let p = index::plan(&mut self.indexed, m.prefs.show_in_search, account.as_deref(), &m.mailbox, &m.rows);
+        let spot = bifrost_app::quicksearch::CSSearchableIndex::default_index();
+        if !p.changed.is_empty() {
+            spot.index_searchable_items(ctx, &p.changed);
+        }
+        if !p.gone.is_empty() {
+            let refs: Vec<&str> = p.gone.iter().map(String::as_str).collect();
+            spot.delete_searchable_items(ctx, &refs);
+        }
     }
 }
 

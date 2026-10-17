@@ -624,7 +624,7 @@ pub enum OverlayOut {
 }
 
 impl Overlay {
-    #[cfg(test)]
+    /// The flow over the device passcode file at `path` (Screen Time's passcode uses `with_store`).
     pub fn new(path: &Path, purpose: Purpose, custom: bool, w: i32, h: i32) -> Self {
         Self::with_store(Store::load(path), purpose, custom, w, h)
     }

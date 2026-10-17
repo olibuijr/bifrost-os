@@ -61,6 +61,12 @@ pub struct EncapsulationKey {
     bytes: Vec<u8>,
 }
 
+impl std::fmt::Debug for EncapsulationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EncapsulationKey({:?}, {} bytes)", self.variant, self.bytes.len())
+    }
+}
+
 impl EncapsulationKey {
     /// A key from bytes received from a peer. The length and the modulus check run here, once.
     pub fn from_bytes(variant: Variant, bytes: &[u8]) -> Result<EncapsulationKey, KemError> {
@@ -176,6 +182,12 @@ pub mod xwing {
     #[derive(Clone, PartialEq, Eq)]
     pub struct EncapsulationKey {
         inner: wire::EncapsulationKey,
+    }
+
+    impl std::fmt::Debug for EncapsulationKey {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "EncapsulationKey(X-Wing, {} bytes)", self.inner.bytes().len())
+        }
     }
 
     impl EncapsulationKey {

@@ -16,7 +16,7 @@ use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXS, WHITE};
 use bifrost_app::kit::ui::system::{FIND_HIGHLIGHT, SYSTEM_ORANGE};
-use bifrost_app::kit::{colors, rgba, Image, Surface, TextCache, Ui, Weight};
+use bifrost_app::kit::{colors, Image, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 
 pub const TOOLBAR_PT: f32 = 52.0;
@@ -689,7 +689,7 @@ impl MailWindow {
         }
     }
 
-    fn draw_toolbar(&mut self, s: &mut Surface, ui: &Ui, w: f32, top: f32) {
+    fn draw_toolbar(&mut self, s: &mut Surface, ui: &Ui, w: f32, _top: f32) {
         widgets::toolbar_band(s, ui, bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT });
         let title = if self.mail.accounts.is_empty() { "Mail" } else { mailbox_title(&self.mail.mailbox) };
         let model = toolbar_model(&self.mail);

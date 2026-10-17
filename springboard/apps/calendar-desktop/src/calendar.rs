@@ -47,7 +47,7 @@ use springboard::shell::ui::{centred, home_zone, Ui, Weight, WHITE};
 use bifrost_app::kit::colors;
 use bifrost_app::controls::calendar_participant::Participant;
 use bifrost_app::kit::ui::{CARD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C};
-use bifrost_app::kit::ui::MAC_TITLE2_PT;
+use bifrost_app::kit::ui::{MAC_TITLE2_PT, MAC_TITLE3_PT};
 use springboard::shell::Event;
 use bifrost_app::controls::calendar_store_changes::StoreChangeHub;
 use springboard::deildu::scroll::Scroller;

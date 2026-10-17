@@ -216,6 +216,7 @@ impl Model {
     }
 
     /// Adds the job to the choice, or takes it out when it is in.
+    #[cfg(test)]
     pub fn toggle_job(&mut self, id: i32) {
         if !self.selected_jobs.remove(&id) {
             self.selected_jobs.insert(id);
@@ -432,6 +433,7 @@ pub fn row_summary(p: &Printer, offline: bool) -> String {
     parts.join(", ")
 }
 
+#[cfg(test)]
 /// The summary of a printer that answers.
 pub fn printer_summary(p: &Printer) -> String {
     row_summary(p, false)

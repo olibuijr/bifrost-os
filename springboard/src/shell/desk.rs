@@ -2108,7 +2108,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false});
                         continue;
                     }
                 }

@@ -1115,7 +1115,7 @@ impl Shell {
         s.fill_rrect(f.x as f32, f.y as f32, f.w as f32, f.h as f32, f.w as f32 / 2.0, DETAIL_BG.now());
         let box_pt = ui.pt(11.0);
         let (bxf, byf) = (f.x as f32 + (f.w as f32 - box_pt) / 2.0, f.y as f32 + (f.h as f32 - box_pt) / 2.0);
-        s.stroke_rrect(bxf, byf, box_pt, box_pt, ui.pt(2.0), ui.pt(1.5), LINK.now());
+        s.stroke_rrect(bxf, byf, box_pt, box_pt, ui.pt(2.0), ui.pt(1.5), LINK);
 
         // title (centred, cut to fit between the buttons) and the "n of N" counter, left of the full-screen button
         let title = p.current().map(|i| if i.title.is_empty() { i.url.as_str() } else { i.title.as_str() }).unwrap_or("");
@@ -1247,7 +1247,7 @@ impl Shell {
         s.fill_rrect(track.x as f32, track.y as f32, track.w as f32, track.h as f32, track.h as f32 / 2.0, SEPARATOR_C.now());
         let done = track.w as f32 * t.fraction();
         if done > 0.0 {
-            s.fill_rrect(track.x as f32, track.y as f32, done, track.h as f32, track.h as f32 / 2.0, LINK.now());
+            s.fill_rrect(track.x as f32, track.y as f32, done, track.h as f32, track.h as f32 / 2.0, LINK);
         }
         let time = t.label();
         self.label(&time, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY, |im| {

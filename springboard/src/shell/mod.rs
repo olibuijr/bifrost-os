@@ -1315,7 +1315,7 @@ impl Shell {
         o.game_notice_shown = true;
         o.save(&mut self.prefs);
         let body = "Game Mode gives the full-screen game in front the processor while it plays. Turn it off from the menu bar, or in Settings > General.";
-        self.notify(notify::store::Notification::new(AppId::Settings, "Game Mode is on".into(), body.into(), crate::bare::sys::wall_time().0));
+        self.notify(notify::store::Notification::new(AppId::Settings, "Game Mode is on", body, crate::bare::sys::wall_time().0));
     }
 
     /// Battery › Power Mode as the user left it; the binary maps it to the CPU profile.
@@ -3137,12 +3137,13 @@ impl Shell {
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
         self.st_mark(t);
-        let fx = self.tick_inner(t);
+        let fx = self.tick_pumped(t);
         self.st_mark(t);
         fx
     }
 
-    fn tick_inner(&mut self, t: f64) -> Vec<Effect> {
+    /// The per-frame chores around `tick_inner`: input pump, appearance, Dock, effects and key clicks.
+    fn tick_pumped(&mut self, t: f64) -> Vec<Effect> {
         keyboard::pump();
         self.appearance_tick(t);
         self.terminal_follow_scheme();

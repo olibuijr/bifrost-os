@@ -380,6 +380,7 @@ impl SystemService for PrivacyPermissions {
                 .find(|a| a.manifest.id == app_id)
                 .map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
             queue_prompt(app_id, &name, kind, if kind == Kind::Location { purpose.trim() } else { "" });
+        }
         Ok(reply)
     }
 }
@@ -544,8 +545,8 @@ mod tests {
     #[test]
     fn a_queued_request_is_shown_once_and_answered_by_the_person() {
         let id = "is.example.sheet";
-        queue_prompt(id, "Maps", Kind::Location);
-        queue_prompt(id, "Maps", Kind::Location);
+        queue_prompt(id, "Maps", Kind::Location, "");
+        queue_prompt(id, "Maps", Kind::Location, "");
         let p = take_prompt().expect("one prompt");
         assert_eq!(p.app_name, "Maps");
         assert!(take_prompt().is_none(), "the repeat was not queued twice");
@@ -556,7 +557,7 @@ mod tests {
     #[test]
     fn a_media_sheet_that_is_denied_writes_denied() {
         let id = "is.example.mic";
-        queue_prompt(id, "Voice", Kind::Media(Media::Audio));
+        queue_prompt(id, "Voice", Kind::Media(Media::Audio), "");
         let p = take_prompt().unwrap();
         decide(&p, false);
         assert!(!access(id).can_capture(Media::Audio));
@@ -566,7 +567,7 @@ mod tests {
     #[test]
     fn a_request_answered_in_settings_before_its_turn_is_dropped() {
         let id = "is.example.late";
-        queue_prompt(id, "Late", Kind::Location);
+        queue_prompt(id, "Late", Kind::Location, "");
         set_location_by_user(id, false);
         assert!(take_prompt().is_none());
     }

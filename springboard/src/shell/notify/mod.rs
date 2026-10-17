@@ -1652,7 +1652,8 @@ mod tests {
         assert_eq!(groups.len(), 2, "one stack per thread");
         assert_eq!(groups[0].thread, "chat:1", "the newest stack first");
         sh.clear_group(AppId::Files, "chat:1");
-        let left: Vec<&str> = sh.notify.store.groups().iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
+        let groups = sh.notify.store.groups();
+        let left: Vec<&str> = groups.iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
         assert_eq!(left, vec!["yo"]);
     }
 

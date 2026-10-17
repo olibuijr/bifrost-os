@@ -374,7 +374,7 @@ impl Shell {
     }
 
     /// The API key from the keychain item the Assistant app also uses, if one is saved.
-    fn assistant_key(&self) -> Option<String> {
+    fn assistant_api_key(&self) -> Option<String> {
         let store = crate::keychain::Store::open(&super::apphost::root(), KEY_APP).ok()?;
         String::from_utf8(store.get(assistant_client::KEY_SERVICE, assistant_client::KEY_ACCOUNT).ok()?).ok()
     }
@@ -424,7 +424,7 @@ impl Shell {
     fn assistant_send(&mut self) {
         let settings = self.assistant_settings();
         let Some(messages) = self.assistant.begin(&self.ui, &settings) else { return };
-        let Some(api_key) = self.assistant_key() else {
+        let Some(api_key) = self.assistant_api_key() else {
             self.assistant.fail("No API key is saved for the assistant. Add it to the keychain item is.olibuijr.assistant / anthropic-api-key.");
             return;
         };

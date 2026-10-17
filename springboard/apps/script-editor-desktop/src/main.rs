@@ -27,6 +27,7 @@ const MENU_RUN: u32 = 0x5301;
 const MENU_STOP: u32 = 0x5302;
 
 /// Seconds between wake-ups while a script runs, so its result shows without waiting for input.
+#[allow(dead_code)] // not wired yet
 const POLL_WAKE_SECS: f64 = 0.1;
 
 // key codes the shell sends for keys without text

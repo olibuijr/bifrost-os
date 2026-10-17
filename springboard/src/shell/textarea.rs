@@ -60,7 +60,7 @@ fn line_px(ui: &Ui, pt: f32) -> f32 {
 }
 
 /// Typesets the TeX source `src` at `px`, or `None` when it does not parse (the source is then shown as text).
-fn formula(ui: &Ui, src: &str, px: f32, display: bool) -> Option<Layout> {
+fn formula(_ui: &Ui, src: &str, px: f32, display: bool) -> Option<Layout> {
     let metrics = math::system::metrics();
     let opts = if display { MathOptions::display(px) } else { MathOptions::text(px) };
     typeset_tex(src, opts, &metrics).ok()

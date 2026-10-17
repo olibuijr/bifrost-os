@@ -71,6 +71,7 @@ pub fn stem_of(name: &str) -> String {
 }
 
 /// `dir/name` with `ext` appended, numbered " 2", " 3" and so on while the path is taken.
+#[cfg(test)]
 pub fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     let make = |n: usize| {
         let file = if n == 1 { format!("{stem}{ext}") } else { format!("{stem} {n}{ext}") };

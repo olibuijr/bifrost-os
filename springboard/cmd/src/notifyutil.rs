@@ -55,7 +55,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
     let mut verbose = false;
     let mut timeout_ms = None;
     let mut it = args.iter().peekable();
-    let mut set = |a: Action, action: &mut Option<Action>| -> Result<(), String> {
+    let set = |a: Action, action: &mut Option<Action>| -> Result<(), String> {
         if action.is_some() {
             return Err("give one of -p, -w, -1, -g or -s".into());
         }

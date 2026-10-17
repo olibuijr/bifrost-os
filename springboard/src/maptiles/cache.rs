@@ -160,7 +160,7 @@ mod tests {
         assert!(tiles.iter().filter(|t| t.z == 10).count() >= 1);
         assert!(tiles.iter().filter(|t| t.z == 11).count() >= tiles.iter().filter(|t| t.z == 10).count());
         assert!(tiles.iter().all(|t| t.z == 10 || t.z == 11));
-        assert!(tiles.contains(&super::tiles::tile_at(64.1466, -21.9426, 10)));
+        assert!(tiles.contains(&super::super::tiles::tile_at(64.1466, -21.9426, 10)));
         assert_eq!(area.count(), (tiles.len(), true));
     }
 

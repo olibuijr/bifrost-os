@@ -190,6 +190,7 @@ impl Freeform {
     }
 
     /// Insert > Text Box or Sticky Note with a click on the board: the next press makes one.
+    #[cfg(test)]
     pub fn choose_text_tool(&mut self, ui: &Ui, kind: ItemKind) {
         self.finish_edit(ui);
         self.tool = if kind == ItemKind::Sticky { Tool::Sticky } else { Tool::Text };

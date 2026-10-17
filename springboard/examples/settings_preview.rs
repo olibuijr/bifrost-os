@@ -106,6 +106,7 @@ fn main() {
         .collect();
     let info = Info {
         captive_portal: None,
+        display_sizes: Vec::new(),
         battery_present: true,
         desktop_network: Default::default(),
         display_mode: None,

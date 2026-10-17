@@ -109,7 +109,7 @@ impl Lyrics {
     /// The lyrics of the song at `song`: the `.lrc` file beside it, else the lyrics tagged in the file. None when neither
     /// gives lines, or the text is too big.
     pub fn load(song: &Path) -> Option<Lyrics> {
-        load_sidecar(song).or_else(|| load_embedded(song))
+        Self::load_sidecar(song).or_else(|| Self::load_embedded(song))
     }
 
     fn load_embedded(song: &Path) -> Option<Lyrics> {

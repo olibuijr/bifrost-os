@@ -5,8 +5,8 @@
 //! `engine`, pagination in `layout`, persistence in `store`.
 
 pub use springboard::shell::books::engine;
-#[cfg(test)]
 pub mod face;
+#[cfg(test)]
 pub mod icon;
 pub mod layout;
 pub mod narrate;
@@ -526,7 +526,7 @@ impl Books {
     pub fn reading(&self) -> Option<&Path> {
         match self.screen {
             Screen::Reader => self.reader.as_ref().map(|r| r.path.as_path()),
-            Screen::Library => None,
+            Screen::Library | Screen::Settings => None,
         }
     }
 

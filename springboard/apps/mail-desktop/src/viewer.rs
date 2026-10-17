@@ -7,7 +7,7 @@ use crate::draw::{fit, put, wrap, BODY_LINE_PT, FOOT_LINE_PT, READER_PAD_PT, TIT
 use bifrost_app::kit::ui::{CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S};
 use bifrost_app::kit::{Scroller, Surface, TextCache, Ui, Weight};
 use bifrost_app::app_windows::{WindowId, WindowSpec};
-use bifrost_app::{Ctx, TouchKind};
+use bifrost_app::TouchKind;
 
 /// The window size in points for a viewer. Viewers open at this size and the shell lets the user resize them.
 pub const VIEWER_W: f32 = 560.0;

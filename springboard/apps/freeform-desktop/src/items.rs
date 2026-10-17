@@ -241,6 +241,7 @@ impl Items {
         self.list.iter().rev().find(|i| i.contains(x, y)).map(|i| i.id)
     }
 
+    #[cfg(test)]
     pub fn move_by(&mut self, id: u32, dx: f32, dy: f32) {
         if let Some(i) = self.get_mut(id) {
             i.x += dx;

@@ -151,7 +151,6 @@ impl PresetStore {
     pub fn from_text(text: &str) -> PresetStore {
         let mut store = PresetStore::new();
         let mut current: Option<Preset> = None;
-        let mut skipping = false;
         let finish = |store: &mut PresetStore, current: &mut Option<Preset>| {
             if let Some(preset) = current.take() {
                 let _ = store.add(preset);
@@ -164,7 +163,7 @@ impl PresetStore {
             }
             if let Some(inner) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
                 finish(&mut store, &mut current);
-                skipping = !valid_name(inner) || store.get(inner).is_some();
+                let skipping = !valid_name(inner) || store.get(inner).is_some();
                 if !skipping {
                     let base = PrintInfo::default();
                     current = Preset::from_info(inner, &base).ok();

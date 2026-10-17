@@ -183,8 +183,6 @@ pub enum Toggle {
     GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
-    /// Accessibility > Screen Reader > Speech: rate, pitch and voice (`a11y_speech_*`)
-    ScreenReaderSpeech,
     AutoTime,
     LowPower,
     BatteryPercent,

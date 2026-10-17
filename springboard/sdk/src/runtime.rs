@@ -1200,7 +1200,7 @@ fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 
 /// The drawing shared by the main window and the extra windows: `draw` paints slot `i`, the other buffer is brought up
 /// to date, and `frame` builds the message that carries the damage. Returns whether a frame went out.
 #[allow(clippy::too_many_arguments)]
-fn paint_slot(chan: &Channel, slots: &mut [Slot; 2], i: usize, (w, h): (usize, usize), t: f64, first: bool, full: bool, last_all: &mut bool, draw: impl FnOnce(&mut Surface) -> Damage, frame: impl FnOnce(u32, Vec<Rect>) -> ToShell) -> bool {
+fn paint_slot(chan: &Channel, slots: &mut [Slot; 2], i: usize, (w, h): (usize, usize), _t: f64, first: bool, full: bool, last_all: &mut bool, draw: impl FnOnce(&mut Surface) -> Damage, frame: impl FnOnce(u32, Vec<Rect>) -> ToShell) -> bool {
     let (lo, hi) = slots.split_at_mut(1);
     let (cur, other) = if i == 0 { (&mut lo[0], &mut hi[0]) } else { (&mut hi[0], &mut lo[0]) };
     let t0 = now_ms();

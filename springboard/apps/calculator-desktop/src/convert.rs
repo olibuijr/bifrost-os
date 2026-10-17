@@ -241,6 +241,7 @@ fn from_base(kind: Kind, base: f64) -> Option<f64> {
 
 /// `value` in unit `from` expressed in unit `to` of the same category; None for an index out of range.
 /// Currency needs rates, so without them it gives None; see `convert_with`.
+#[cfg(test)]
 pub fn convert(category: Category, value: f64, from: usize, to: usize) -> Option<f64> {
     convert_with(category, value, from, to, None)
 }
@@ -280,6 +281,13 @@ pub struct Converter {
     input: String,
     /// The day's currency rates, when they are loaded.
     pub rates: Option<Rates>,
+}
+
+impl Converter {
+    /// A converter with the day's currency rates (or none yet), every other field at its default.
+    pub fn with_rates(rates: Option<Rates>) -> Converter {
+        Converter { rates, ..Converter::default() }
+    }
 }
 
 impl Default for Converter {

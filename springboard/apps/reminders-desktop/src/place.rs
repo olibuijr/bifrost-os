@@ -54,6 +54,9 @@ pub struct Place {
     pub trigger: Trigger,
 }
 
+// coordinates are checked finite when a place is made or read, so equality is total
+impl Eq for Place {}
+
 impl Place {
     /// Whether the place is usable: a finite position on the globe, a radius in range and a name.
     pub fn valid(&self) -> bool {

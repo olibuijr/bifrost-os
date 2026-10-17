@@ -291,7 +291,9 @@ fn folded_fields(contact: &super::contactstore::Contact) -> [String; 3] {
 
 /// Candidates of the sources that never change while the shell runs, folded once.
 struct Fixed {
+    #[allow(dead_code)]
     settings: Vec<(Hit, String)>,
+    #[allow(dead_code)]
     cities: Vec<(Hit, String)>,
     aliases: Vec<(Hit, String)>,
 }

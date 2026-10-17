@@ -5,7 +5,7 @@
 //!
 //! This file holds the line model, its geometry and the taps; `draw.rs` paints it and `mod.rs` routes the events.
 
-use super::store::{self, Theme};
+use super::store::Theme;
 use super::{nav_bottom_pt, Books, Screen, Target};
 use springboard::shell::ui::Ui;
 use std::path::PathBuf;

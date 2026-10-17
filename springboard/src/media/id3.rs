@@ -47,8 +47,8 @@ fn chap(d: &[u8], h: Header) -> Option<(String, Chapter)> {
     let nul = d.iter().position(|&b| b == 0)?;
     let id = String::from_utf8_lossy(&d[..nul]).into_owned();
     let times = d.get(nul + 1..nul + 17)?;
-    let start = be32(times, 0) as u64;
-    let end = be32(times, 4) as u64;
+    let start = be32(&times[0..4]) as u64;
+    let end = be32(&times[4..8]) as u64;
     let subs = d.get(nul + 17..).unwrap_or(&[]);
     let (mut title, mut image) = (None, None);
     let mut p = 0;

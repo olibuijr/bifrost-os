@@ -451,6 +451,11 @@ impl MessagesWindow {
                 Err(e) => self.model.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
             Pending::Forget | Pending::Discard => {}
+            // keychain requests are answered through `keychain`, not here: keep them waiting
+            p @ (Pending::Lookup(_) | Pending::Store { .. }) => {
+                self.pending.insert(request, p);
+                return false;
+            }
         }
         self.dirty = true;
         true

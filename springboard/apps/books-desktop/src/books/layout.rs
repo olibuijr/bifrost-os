@@ -54,6 +54,7 @@ pub struct Layout {
     pub pages: Vec<Page>,
 }
 
+#[cfg(test)]
 pub const LINE_HEIGHT: f32 = 1.42;
 const PARA_GAP: f32 = 0.55;
 const HEADING_BEFORE: f32 = 1.0;

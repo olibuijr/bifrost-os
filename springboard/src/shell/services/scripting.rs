@@ -51,8 +51,6 @@ impl SystemService for Scripting {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn the_service_is_registered_under_scripting() {
         assert!(super::super::names(&super::super::all()).contains(&"scripting"));

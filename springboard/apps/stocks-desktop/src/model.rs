@@ -183,6 +183,7 @@ pub fn padded_range(lo: f64, hi: f64) -> (f64, f64) {
 }
 
 /// The per cent change from the first close to the last one (`None` with fewer than two bars or a zero first close).
+#[cfg(test)]
 pub fn period_change_pct(bars: &[Bar]) -> Option<f64> {
     let (first, last) = (bars.first()?, bars.last()?);
     if bars.len() < 2 || first.close == 0.0 {

@@ -41,6 +41,7 @@ const BUBBLE_SHARE: f32 = 0.62;
 /// Width of the outline around the message a quoted line jumped to.
 const HIGHLIGHT_PT: f32 = 2.0;
 const RADIUS_PT: f32 = m::CARD_RADIUS;
+#[allow(dead_code)] // not wired yet
 const BADGE_PT: f32 = 16.0;
 const SHEET_W_PT: f32 = 420.0;
 const SHEET_HEAD_PT: f32 = 44.0;
@@ -314,7 +315,7 @@ impl MessagesWindow {
         ]
     }
 
-    fn room_source_list(&self, lay: &Layout) -> SourceList {
+    fn room_source_list(&self, _lay: &Layout) -> SourceList {
         let rooms = self.model.visible_rooms();
         let items = rooms.iter().enumerate().map(|(i, room)| {
             let tags = room_tags(self.model.is_pinned(&room.id), self.model.is_muted(&room.id));
@@ -1088,7 +1089,9 @@ fn full_text(body: &Body) -> String {
         other => preview(other),
     }
 }
+#[cfg(test)]
 
+#[cfg(test)]
 fn badge_text(unread: u64) -> String {
     if unread > 99 {
         "99+".to_string()

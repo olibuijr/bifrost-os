@@ -22,7 +22,8 @@ pub const COMPILED_VERSION: f64 = 1.0;
 /// The canonical text of a script: CRLF line ends become LF, trailing blanks on each line are dropped, and the text
 /// ends with one newline. Two sources that differ only in that way compile to the same canonical text.
 pub fn canonical_source(source: &str) -> String {
-    let mut out: Vec<&str> = source.replace("\r\n", "\n").lines().map(|l| l.trim_end()).collect();
+    let unix = source.replace("\r\n", "\n");
+    let mut out: Vec<&str> = unix.lines().map(|l| l.trim_end()).collect();
     while out.last().is_some_and(|l| l.is_empty()) {
         out.pop();
     }

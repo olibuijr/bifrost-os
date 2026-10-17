@@ -164,10 +164,12 @@ fn parse_name(word: &str) -> Option<NameOrder> {
 
 /// Reads the identifier of My Card from `mycard.txt` (one line, the identifier). A missing or unreadable file means
 /// no card is marked.
+#[cfg(test)]
 pub fn load_me(path: &Path) -> Option<u64> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
+#[cfg(test)]
 /// Writes My Card's identifier, or removes the file for `None`.
 pub fn save_me(path: &Path, id: Option<u64>) -> io::Result<()> {
     match id {

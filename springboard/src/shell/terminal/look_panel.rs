@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn spacing_steps_within_the_range() {
-        let mut sh = super::super::tests::terminal(&["/bin/sh", "-c", "read x"]);
+        let mut sh = crate::shell::tests::terminal(&["/bin/sh", "-c", "read x"]);
         sh.terminal_look_row(CHAR_SPACING, 1);
         assert_eq!(sh.terminal_ui.look.char_spacing, 1.1);
         for _ in 0..30 {
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn wells_select_then_channels_edit_only_that_colour() {
-        let mut sh = super::super::tests::terminal(&["/bin/sh", "-c", "read x"]);
+        let mut sh = crate::shell::tests::terminal(&["/bin/sh", "-c", "read x"]);
         let before = sh.terminal_ui.look.palette(sh.terminal_ui.settings.theme);
         sh.terminal_look_row(WELL_FIRST + 2, 0);
         assert_eq!(sh.terminal_ui.look_well, 2);
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn bold_as_bright_toggles_and_saves() {
-        let mut sh = super::super::tests::terminal(&["/bin/sh", "-c", "read x"]);
+        let mut sh = crate::shell::tests::terminal(&["/bin/sh", "-c", "read x"]);
         assert!(sh.terminal_ui.look.bold_bright);
         sh.terminal_look_row(BOLD_BRIGHT, 0);
         assert!(!sh.terminal_ui.look.bold_bright);

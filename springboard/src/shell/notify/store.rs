@@ -437,7 +437,8 @@ mod tests {
         s.push(threaded(AppId::Settings, "t1", "other app", 3));
         assert!(s.clear_thread(AppId::Files, "t1"));
         assert!(!s.clear_thread(AppId::Files, "t1"), "already gone");
-        let titles: Vec<&str> = s.groups().iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
+        let groups = s.groups();
+        let titles: Vec<&str> = groups.iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
         assert_eq!(titles.len(), 2);
         assert!(titles.contains(&"two") && titles.contains(&"other app"));
     }

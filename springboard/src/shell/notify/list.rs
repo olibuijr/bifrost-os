@@ -94,6 +94,8 @@ pub struct Card {
     time: Image,
     /// the header row's app name (uppercase, secondary)
     name: Image,
+    /// drawn with the app's name and "Notification" instead of its text (Show Previews)
+    pub private: bool,
 }
 
 impl Card {
@@ -114,6 +116,7 @@ impl Card {
             body: ui.text(&ui.fit(&body, 15.0, text_w), 15.0, Weight::Regular, BODY),
             time,
             name,
+            private,
         }
     }
 

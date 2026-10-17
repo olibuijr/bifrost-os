@@ -956,20 +956,10 @@ mod tag {
     pub const WINDOW_RESIZE: u32 = 0x243;
     pub const WINDOW_BUFFERS: u32 = 0x244;
     pub const WINDOW_FRAME: u32 = 0x245;
-    pub const WINDOW_CLOSED: u32 = 0x1c8;
-    pub const WINDOW_CONFIGURE: u32 = 0x1c9;
-    pub const WINDOW_TOUCH: u32 = 0x1ca;
-    pub const WINDOW_RELEASE: u32 = 0x1cb;
     /// Shell -> app: window key focus changed (`ToApp::WindowFocus`).
     pub const WINDOW_FOCUS: u32 = 0x24f;
     /// Shell -> app: input for the key window (`ToApp::WindowInput`).
     pub const WINDOW_INPUT: u32 = 0x250;
-    pub const WINDOW_OPEN: u32 = 0x1c0;
-    pub const WINDOW_CLOSE: u32 = 0x1c1;
-    pub const WINDOW_TITLE: u32 = 0x1c2;
-    pub const WINDOW_RESIZE: u32 = 0x1c3;
-    pub const WINDOW_BUFFERS: u32 = 0x1c4;
-    pub const WINDOW_FRAME: u32 = 0x1c5;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -3079,7 +3069,6 @@ mod quick_action_tests {
         assert_eq!(ToShell::decode(&open), Err(DecodeError::BadValue));
     }
 
-    #[test]
     #[test]
     fn an_overlong_or_non_finite_window_message_is_refused() {
         let long = ToShell::WindowTitle { id: 1, title: "x".repeat(MAX_WINDOW_TITLE + 1) };
