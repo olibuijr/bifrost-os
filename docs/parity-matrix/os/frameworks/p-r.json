@@ -168,7 +168,21 @@
    "status": "partial",
    "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Built 2026-10-17: the guardian sheet (shell/guardian_sheet.rs) lists the oldest pending question as an alert card with one button per choice and answers it with respond; the shell's tick calls expire each frame so an unanswered question goes away on time, and the sheet closes with it (tests guardian_sheet::tests, services::permission_kit::tests). Not built: a live check on the lab machine, and no app can send a question on the lab image yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::guardian_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::permission_kit::tests"
+    }
+   ],
+   "ready_note": "Main job built: apps ask through the permission service (services/permission_kit.rs, SDK permission_kit::ask), the guardian sheet answers the oldest question (guardian_sheet.rs), and unanswered questions expire in the shell tick. Not checked on the lab machine yet; the verify runner does that."
   },
   {
    "id": "path:/System/Library/Frameworks/Photos.framework",
@@ -772,7 +786,7 @@
    "doc": "",
    "bifrost": "springboard/src/media/pip.rs; springboard/src/shell/pip.rs; springboard/src/shell/mod.rs; springboard/src/shell/services/picture_in_picture.rs",
    "status": "partial",
-   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Built 2026-10-17: Shell holds the window in shell/pip.rs Floating (controller, corner, aspect) and Shell::draw paints it over the screen between the menu bar and the dock while it is starting or active (Shell::pip_start, pip_stop; tests shell::pip::tests). Built 2026-10-17: the pip service (shell/services/picture_in_picture.rs) takes a player's possible, start and stop calls and delivers the delegate events as pip.will_start, pip.did_start, pip.will_stop and pip.did_stop (tests services::picture_in_picture::tests). Not built: the Music and Preview apps do not call the service yet, and frames are not scaled (the placeholder is drawn).",
+   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Built 2026-10-17: Shell holds the window in shell/pip.rs Floating (controller, corner, aspect) and Shell::draw paints it over the screen between the menu bar and the dock while it is starting or active (Shell::pip_start, pip_stop; tests shell::pip::tests). Built 2026-10-17: the pip service (shell/services/picture_in_picture.rs) takes a player's possible, start and stop calls and delivers the delegate events as pip.will_start, pip.did_start, pip.will_stop and pip.did_stop (tests services::picture_in_picture::tests). Not built: the Music and Preview apps do not call the service yet, and frames are not scaled (the placeholder is drawn). Built 2026-10-17: the SDK client springboard/sdk/src/picture_in_picture.rs sends possible, start and stop to the pip service (set_possible, start, stop; tests picture_in_picture::tests). Still open: no player app calls the client yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1811,8 +1825,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "Apple Phone app intents: they act on the telephony stack, which is carrier hardware and an Apple service BifrOSt cannot have. The App Intents layer itself is covered by the AppIntents row.",
    "rea": [],
    "method": "assessed"
   },
@@ -2111,8 +2125,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "status": "n/a",
+   "note": "Apple generative Photos features: the index holds a generative Metal pipeline (default.metallib) that runs Apple on-device generative models; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -2174,8 +2188,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "status": "n/a",
+   "note": "Apple Photos Intelligence (story curation on Apple models, with a story diagnostics plug-in); it needs Apple model packs and Apple services, so BifrOSt has no job for it.",
    "rea": [],
    "method": "assessed"
   },
@@ -2195,8 +2209,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "status": "n/a",
+   "note": "Core of Apple Photos Intelligence: the same Apple model-backed curation as PhotosIntelligence, with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
