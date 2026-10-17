@@ -385,7 +385,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/extensionfoundation.json",
    "status": "partial",
-   "note": "from SDK matrix extensionfoundation.json",
+   "note": "from SDK matrix extensionfoundation.json Refreshed 2026-10-17: Remaining: no shell wiring, no package loading, no XPC transport, no host-initiated extension launch, no share-sheet extensions; discovery is a registry over enabled extensions only.",
    "rea": [],
    "method": "assessed"
   },
@@ -637,7 +637,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-models.json",
    "status": "partial",
-   "note": "from SDK matrix foundation-models.json",
+   "note": "from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
    "rea": [],
    "method": "assessed"
   },

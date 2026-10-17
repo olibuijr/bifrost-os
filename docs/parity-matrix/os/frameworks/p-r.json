@@ -243,7 +243,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/preference-panes.json",
    "status": "partial",
-   "note": "from SDK matrix preference-panes.json",
+   "note": "from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format.",
    "rea": [],
    "method": "assessed"
   },
@@ -518,11 +518,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/quicklook-ui.json",
+   "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), springboard/proto/src/peek.rs, springboard/src/files/preview.rs, springboard/src/files/mod.rs",
    "status": "partial",
    "note": "from SDK matrix quicklook-ui.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preview::tests"
+    }
+   ],
+   "ready_note": "preview panel, item, thumbnail and provider model tests; the shell panel is not yet checked on Midget."
   },
   {
    "id": "path:/System/Library/Frameworks/RealityFoundation.framework",
@@ -3351,7 +3370,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/preference-panes.json",
    "status": "partial",
-   "note": "private framework, owner PreferencePanes; from SDK matrix preference-panes.json",
+   "note": "private framework, owner PreferencePanes; from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format.",
    "rea": [],
    "method": "assessed"
   },

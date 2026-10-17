@@ -1439,7 +1439,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-ai.json",
    "status": "partial",
-   "note": "from SDK matrix core-ai.json",
+   "note": "from SDK matrix core-ai.json Refreshed 2026-10-17: Remaining: no on-device model runtime (load, specialize, run), no compute stream API, no model cache, no inference tracing; the AI features use the cloud API.",
    "rea": [],
    "method": "assessed"
   },
@@ -1460,7 +1460,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-audio.json",
    "status": "partial",
-   "note": "from SDK matrix core-audio.json",
+   "note": "from SDK matrix core-audio.json Refreshed 2026-10-17: Remaining: no app device or stream I/O (audio_hal models only), no device property listeners, no virtual device publication (no plug-in loader), audio box state not applied to hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -1638,11 +1638,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-graphics.json",
+   "bifrost": "springboard/render/src/cg/ (path, raster, surface, context, color, image, paint, reusable_layer, pdf), springboard/render/src/gfx.rs (Surface, Image), springboard/sdk/src/graphics_context.rs, springboard/sdk/src/graphics_stroke.rs, springboard/sdk/src/graphics_gradient.rs, springboard/sdk/src/graphics_color.rs, springboard/sdk/src/graphics_imageio.rs, springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/graphics_pattern.rs, springboard/sdk/src/graphics_layer.rs, springboard/sdk/src/lib.rs (kit::cg re-export), springboard/ui/src/print.rs",
    "status": "partial",
    "note": "from SDK matrix core-graphics.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::paint::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::image::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::color::tests"
+    }
+   ],
+   "ready_note": "context, path, paint, image and colour host tests; partial features stay partial until verified on Midget."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreHID.framework",

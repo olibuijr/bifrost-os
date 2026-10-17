@@ -26,7 +26,7 @@
       "apple": "IOBluetoothServiceBrowserController: init, runModal, beginSheetModal(for:...), getResults, getRef, addAllowedUUID(Array), withServiceBrowserControllerRef",
       "bifrost": "springboard/core/src/bt_service_browser.rs; springboard/core/tests/parity_sdk-complete-47.rs; wired: springboard/core/src/bt_service_browser.rs via springboard/src/shell/services/bluetooth_service.rs (services method) and springboard/sdk/src/bluetooth_service.rs (services, services_from_reply); Settings row in springboard/src/shell/pages.rs BluetoothDetail",
       "status": "partial",
-      "note": "Headless tests in parity_sdk-complete-47.rs cover the UUID allow list, the filtered choice, cancel, panel text and option bits. Gap: the service list comes from an SDP query on the radio, which needs the lab machine, and audio routing is still decided from device class (class_is_audio), not from a service browse. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Headless tests in parity_sdk-complete-47.rs cover the UUID allow list, the filtered choice, cancel, panel text and option bits. Gap: the service list comes from an SDP query on the radio, which needs the lab machine, and audio routing is still decided from device class (class_is_audio), not from a service browse. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Refreshed 2026-10-17: covered by springboard/core/src/bt_service_browser.rs; tests bt_service_browser::tests."
     },
     {
       "feature": "Object push transfer UI (IOBluetoothObjectPushUIController)",
@@ -40,28 +40,28 @@
       "apple": "IOBluetoothPasskeyDisplay: sharedDisplayView, setPasskey(_:for:usingSSP:), advance/retreat/resetPasskeyIndicator, passkey, isIncomingRequest, returnImage",
       "bifrost": "springboard/ui/src/passkey_display.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The kernel's user-confirm request is auto-answered: confirm if the address matches the pairing we started, otherwise negative reply. The passkey is never shown to the user, so the user cannot compare or type one."
+      "note": "Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The kernel's user-confirm request is auto-answered: confirm if the address matches the pairing we started, otherwise negative reply. The passkey is never shown to the user, so the user cannot compare or type one. Refreshed 2026-10-17: covered by springboard/ui/src/passkey_display.rs; tests passkey_display::tests."
     },
     {
       "feature": "Accessibility ignored cells (IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell)",
       "apple": "IOBluetoothAccessibilityIgnoredImageCell, IOBluetoothAccessibilityIgnoredTextFieldCell (cells hidden from accessibility)",
       "bifrost": "springboard/ui/src/ax_ignored.rs (CellKind::is_ignored, exposed, ignored_count)",
       "status": "partial",
-      "note": "Image and text-field cells are ignored and filtered out of the exposed list, and tests in springboard/ui/tests/parity_sdk-gaps-03.rs cover it headless. Gap: the element map in ui/src/ax.rs has no ignored flag, the shell's accessibility bridge does not call this filter yet, and no Bluetooth picker cell is built on it."
+      "note": "Image and text-field cells are ignored and filtered out of the exposed list, and tests in springboard/ui/tests/parity_sdk-gaps-03.rs cover it headless. Gap: the element map in ui/src/ax.rs has no ignored flag, the shell's accessibility bridge does not call this filter yet, and no Bluetooth picker cell is built on it. Refreshed 2026-10-17: covered by springboard/ui/src/ax_ignored.rs; tests tests/parity_sdk-gaps-03.rs."
     },
     {
       "feature": "Bluetooth power, scan and device state (framework enumerations, constants, functions, BluetoothKeyboardReturnType)",
       "apple": "IOBluetoothUI Enumerations, Constants, Functions; struct BluetoothKeyboardReturnType; IOBluetoothUIUserLib.h",
       "bifrost": "springboard/src/bare/bluetooth.rs (State, Status, Device, Cmd::Enable, Cmd::Scan, Cmd::Connect, Cmd::Disconnect, Cmd::Forget); springboard/src/shell/control_center.rs:522 (toggle_bluetooth); wired: springboard/src/shell/pages.rs (bluetooth_spec: Scan for Devices row under OTHER DEVICES, sends Cmd::Scan when the radio is on and no scan is running); wired: springboard/src/bare/bluetooth.rs (Device.class, type_label) with the Settings detail page",
       "status": "partial",
-      "note": "Device state, power and discovery are real and tested (bluetooth.rs test a_failed_or_slow_pairing_reports_and_frees_the_slot, PAIR_MS timeout). No app-facing SDK API exposes them and there is no keyboard-return type; the Apple reference types have no counterpart. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Device state, power and discovery are real and tested (bluetooth.rs test a_failed_or_slow_pairing_reports_and_frees_the_slot, PAIR_MS timeout). No app-facing SDK API exposes them and there is no keyboard-return type; the Apple reference types have no counterpart. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Refreshed 2026-10-17: covered by springboard/src/bare/bluetooth.rs; tests as cited in the note (a_failed_or_slow_pairing_reports_and_frees_the_slot)."
     }
   ],
   "gaps": [
     "Apps list devices and read a pending pairing code through the SDK (bluetooth_service.rs), but pairing itself lives only in the Settings Bluetooth page (springboard/src/shell/pages.rs).",
     "No reusable device selector sheet or panel (IOBluetoothDeviceSelectorController).",
     "No passkey or numeric comparison pairing: pairing is hardwired to NoInputNoOutput (springboard/src/bare/bluetooth.rs:68-69), so devices that need a PIN or passkey cannot pair.",
-    "No SDP service browser: no service list or UUID-filtered selection (IOBluetoothServiceBrowserController).",
+    "No live SDP query: springboard/core/src/bt_service_browser.rs filters a service list it is given (UUID allow list, cancel); the radio service discovery is not implemented.",
     "No Bluetooth object push or file transfer (IOBluetoothObjectPushUIController). springboard/src/net/share.rs covers LAN sharing only.",
     "No UUID filter for pairing (addAllowedUUID and clearAllowedUUIDs).",
     "The Apple reference types (BluetoothKeyboardReturnType, the IOBluetoothUI constants and functions) have no BifrOSt counterpart."

@@ -405,7 +405,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/iobluetooth-ui.json",
    "status": "partial",
-   "note": "from SDK matrix iobluetooth-ui.json",
+   "note": "from SDK matrix iobluetooth-ui.json Refreshed 2026-10-17: Remaining: pairing panel only in Settings, no passkey pairing (always NoInputNoOutput), no live SDP query, no object push.",
    "rea": [],
    "method": "assessed"
   },
@@ -468,7 +468,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/iousbhost.json",
    "status": "partial",
-   "note": "from SDK matrix iousbhost.json",
+   "note": "from SDK matrix iousbhost.json Refreshed 2026-10-17: Remaining: no app transport (the claim plan is not sent to a device), no sandbox binding for USB nodes, no printer transport.",
    "rea": [],
    "method": "assessed"
   },

@@ -304,7 +304,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-models.json",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
    "rea": [],
    "method": "assessed"
   },
@@ -325,7 +325,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-models.json",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
    "rea": [],
    "method": "assessed"
   },
@@ -1198,7 +1198,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-models.json",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
    "rea": [],
    "method": "assessed"
   },
