@@ -6,8 +6,9 @@
 //! [`DecapsulationKey::decapsulate`]. A tampered ciphertext does not fail: it yields a different secret (implicit
 //! rejection), so the caller must check the secret with a later authenticated step, not with this call.
 //!
-//! Not here: X-Wing (ML-KEM with X25519), ML-DSA signatures, and the official FIPS 203 known-answer vectors, which are
-//! not in the repo yet; see the `Post-quantum KEM` row in `docs/parity-matrix/data/apple-cryptokit.json`.
+//! X-Wing hybrid (ML-KEM-768 with X25519) is in the [`xwing`] submodule with the same object shape. Not here: the
+//! official FIPS 203 known-answer vectors and the X-Wing draft vectors, which are not in the repo yet; see the
+//! `Post-quantum KEM` row in `docs/parity-matrix/data/apple-cryptokit.json`.
 
 use crate::entropy;
 use bifrost_core::mlkem::{self, Error as CoreError};
@@ -31,6 +32,8 @@ pub enum KemError {
     InvalidDecapsulationKey,
     /// The random pool could not supply the seeds.
     Unavailable,
+    /// An X-Wing X25519 peer key has small order, so its agreement is all zero (X-Wing only).
+    LowOrderPoint,
 }
 
 impl From<CoreError> for KemError {
@@ -143,6 +146,154 @@ impl DecapsulationKey {
     /// error; see the module notes.
     pub fn decapsulate(&self, ciphertext: &[u8]) -> Result<SharedSecret, KemError> {
         Ok(mlkem::decapsulate(self.variant, &self.bytes, ciphertext)?)
+    }
+}
+
+/// X-Wing: ML-KEM-768 with X25519 (draft-connolly-cfrg-xwing-kem). The decapsulation key is a 32-byte seed, the
+/// encapsulation key is 1216 bytes, and the ciphertext is 1120 bytes. The arithmetic lives in `bifrost_ui::xwing`;
+/// this module draws the seed and the encapsulation randomness from the kernel pool.
+pub mod xwing {
+    use super::{entropy, Encapsulation, KemError, SharedSecret};
+    use bifrost_ui::xwing as wire;
+
+    /// Length of the decapsulation key seed.
+    pub const SEED_LEN: usize = wire::SEED_LEN;
+    /// Length of the encapsulation key bytes.
+    pub const PUBLIC_KEY_LEN: usize = wire::PUBLIC_KEY_LEN;
+    /// Length of the ciphertext.
+    pub const CIPHERTEXT_LEN: usize = wire::CIPHERTEXT_LEN;
+
+    fn map_err(e: wire::Error) -> KemError {
+        match e {
+            wire::Error::KeyLength => KemError::IncorrectKeySize,
+            wire::Error::CiphertextLength => KemError::IncorrectCiphertextSize,
+            wire::Error::Mlkem(e) => KemError::from(e),
+            wire::Error::LowOrderPoint => KemError::LowOrderPoint,
+        }
+    }
+
+    /// A public encapsulation key: `pk_M || pk_X`.
+    #[derive(Clone, PartialEq, Eq)]
+    pub struct EncapsulationKey {
+        inner: wire::EncapsulationKey,
+    }
+
+    impl EncapsulationKey {
+        /// A key from bytes received from a peer. The length and the ML-KEM modulus check run here, once.
+        pub fn from_bytes(bytes: &[u8]) -> Result<EncapsulationKey, KemError> {
+            Ok(EncapsulationKey { inner: wire::EncapsulationKey::from_bytes(bytes).map_err(map_err)? })
+        }
+
+        /// The 1216-byte encoding: the ML-KEM-768 key, then the X25519 key.
+        pub fn bytes(&self) -> &[u8] {
+            self.inner.bytes()
+        }
+
+        /// Encapsulates to this key with fresh randomness from the kernel pool.
+        pub fn encapsulate(&self) -> Result<Encapsulation, KemError> {
+            let mut eseed = [0u8; wire::ENCAPSULATION_SEED_LEN];
+            entropy::copy_bytes(&mut eseed).map_err(|_| KemError::Unavailable)?;
+            let (shared_secret, ciphertext) = self.inner.encapsulate(&eseed).map_err(map_err)?;
+            Ok(Encapsulation { shared_secret, ciphertext })
+        }
+    }
+
+    /// A private decapsulation key: the 32-byte seed. `Debug` shows the scheme only, never the seed.
+    #[derive(Clone, PartialEq, Eq)]
+    pub struct DecapsulationKey {
+        inner: wire::DecapsulationKey,
+    }
+
+    impl std::fmt::Debug for DecapsulationKey {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "DecapsulationKey(XWing)")
+        }
+    }
+
+    impl DecapsulationKey {
+        /// A new key pair's private half: the seed comes from the kernel pool.
+        pub fn generate() -> Result<DecapsulationKey, KemError> {
+            let mut seed = [0u8; SEED_LEN];
+            entropy::copy_bytes(&mut seed).map_err(|_| KemError::Unavailable)?;
+            Ok(Self::from_seed(&seed))
+        }
+
+        /// The key that the 32-byte seed produces; the same seed always gives the same key.
+        pub fn from_seed(seed: &[u8; SEED_LEN]) -> DecapsulationKey {
+            DecapsulationKey { inner: wire::DecapsulationKey::from_seed(seed) }
+        }
+
+        /// A key from its stored seed, for example one read back from the keychain.
+        pub fn from_bytes(bytes: &[u8]) -> Result<DecapsulationKey, KemError> {
+            let seed: &[u8; SEED_LEN] = bytes.try_into().map_err(|_| KemError::IncorrectKeySize)?;
+            Ok(Self::from_seed(seed))
+        }
+
+        /// The 32-byte seed. Store it only in the keychain or in app memory.
+        pub fn bytes(&self) -> &[u8; SEED_LEN] {
+            self.inner.seed()
+        }
+
+        /// The public half, to publish to peers.
+        pub fn encapsulation_key(&self) -> EncapsulationKey {
+            EncapsulationKey { inner: self.inner.encapsulation_key() }
+        }
+
+        /// Recovers the shared secret from a ciphertext. An altered ciphertext gives a different secret, not an
+        /// error; check the secret with a later authenticated step.
+        pub fn decapsulate(&self, ciphertext: &[u8]) -> Result<SharedSecret, KemError> {
+            self.inner.decapsulate(ciphertext).map_err(map_err)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn sizes_match_the_draft() {
+            let dk = DecapsulationKey::generate().unwrap();
+            assert_eq!(dk.bytes().len(), 32);
+            let ek = dk.encapsulation_key();
+            assert_eq!(ek.bytes().len(), 1216);
+            assert_eq!(EncapsulationKey::from_bytes(ek.bytes()).unwrap(), ek);
+            let sent = ek.encapsulate().unwrap();
+            assert_eq!(sent.ciphertext.len(), 1120);
+        }
+
+        #[test]
+        fn random_round_trip_agrees_on_the_secret() {
+            let dk = DecapsulationKey::generate().unwrap();
+            let sent = dk.encapsulation_key().encapsulate().unwrap();
+            assert_eq!(dk.decapsulate(&sent.ciphertext).unwrap(), sent.shared_secret);
+        }
+
+        #[test]
+        fn seeded_round_trip_and_tamper_detection() {
+            let dk = DecapsulationKey::from_seed(&[0x33u8; 32]);
+            assert_eq!(DecapsulationKey::from_bytes(dk.bytes()).unwrap(), dk);
+            let sent = dk.encapsulation_key().encapsulate().unwrap();
+            let mut tampered = sent.ciphertext.clone();
+            tampered[1119] ^= 0x01;
+            assert_ne!(dk.decapsulate(&tampered).unwrap(), sent.shared_secret);
+            tampered = sent.ciphertext.clone();
+            tampered[0] ^= 0x01;
+            assert_ne!(dk.decapsulate(&tampered).unwrap(), sent.shared_secret);
+        }
+
+        #[test]
+        fn wrong_lengths_are_refused() {
+            assert_eq!(DecapsulationKey::from_bytes(&[0u8; 31]), Err(KemError::IncorrectKeySize));
+            assert_eq!(EncapsulationKey::from_bytes(&[0u8; 10]), Err(KemError::IncorrectKeySize));
+            let dk = DecapsulationKey::generate().unwrap();
+            assert_eq!(dk.decapsulate(&[0u8; 10]), Err(KemError::IncorrectCiphertextSize));
+        }
+
+        #[test]
+        fn debug_hides_the_seed() {
+            let dk = DecapsulationKey::from_seed(&[0x33u8; 32]);
+            assert_eq!(format!("{:?}", dk), "DecapsulationKey(XWing)");
+        }
     }
 }
 

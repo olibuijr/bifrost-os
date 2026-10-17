@@ -1183,6 +1183,7 @@ pub mod run_delegate;
 pub mod live_activity;
 pub mod remote_view;
 pub mod x25519;
+pub mod xwing;
 pub mod ed25519;
 pub mod web_usage;
 pub mod browser_settings;

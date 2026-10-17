@@ -3101,9 +3101,30 @@ SHAKE128 and SHAKE256 XOF added to `bifrost_core::sha3` (`Shake`). The SDK modul
 Decisions: the seeds are the caller's or the pool's, so the core draws no randomness; `DecapsulationKey` `Debug`
 shows the variant only. Known gap: the official FIPS 203 known-answer vectors are not in the repo, so the tests check
 lengths, the NTT round trip, NTT multiplication against a schoolbook product, byte and compress codecs, round trips
-and implicit rejection, and not interoperability. Out of scope: X-Wing (`XWingMLKEM768X25519`) and the
-`KEM`/`KEMPublicKey` type shapes. Parity: `Post-quantum KEM and signatures` row in
-`docs/parity-matrix/data/apple-cryptokit.json` (partial until the vectors pass and it runs on Midget).
+and implicit rejection, and not interoperability. Out of scope: the `KEM`/`KEMPublicKey` type shapes. Parity:
+`Post-quantum KEM and signatures` row in `docs/parity-matrix/data/apple-cryptokit.json` (partial until the vectors pass
+and it runs on Midget).
+
+### X-Wing (`XWingMLKEM768X25519`, `bifrost_app::kem::xwing`)
+
+The hybrid KEM of ML-KEM-768 and X25519, from the IETF draft `draft-connolly-cfrg-xwing-kem` (clean-room from the
+public draft). The arithmetic is in `bifrost_ui::xwing`, which can reach both `bifrost_core::mlkem` and
+`bifrost_ui::x25519`; the SDK module draws the entropy and keeps the object shape of `kem`:
+
+- `DecapsulationKey` is a 32-byte seed. SHAKE256 of the seed gives 96 bytes: `d` and `z` for ML-KEM-768 key generation,
+  then the X25519 secret. `from_seed`, `generate` (seed from the pool), `from_bytes` (32 bytes), `bytes`,
+  `encapsulation_key`, `decapsulate(ciphertext)`.
+- `EncapsulationKey` is `pk_M || pk_X`, 1216 bytes. `from_bytes` checks the length and the ML-KEM modulus, `bytes`,
+  `encapsulate()` (64 bytes of randomness from the pool: `m`, then the X25519 ephemeral scalar) returning
+  `Encapsulation { shared_secret, ciphertext }`, where the ciphertext is `ct_M || ct_X`, 1120 bytes.
+- The shared secret is SHA3-256 of `ss_M || ss_X || ct_X || pk_X || label`, with the six-byte label `\./` + `/^\`.
+- `KemError::LowOrderPoint` is new: an all-zero X25519 agreement (a small-order peer key) is refused. The draft's
+  handling of that case is not checked here; this is a choice to confirm against the draft.
+
+Known gap: the X-Wing draft test vectors are not in the repo, so the tests check sizes, deterministic round trips from
+fixed seeds, that tampering `ct_M` or `ct_X` changes the secret, the label bytes and the combiner input order. Nothing
+is checked against another X-Wing implementation. Still missing: the Apple-named `XWingMLKEM768X25519` type and the
+`KEM`/`KEMPublicKey` shapes.
 
 ### ML-DSA signatures (`MLDSA65`, `MLDSA87`, `bifrost_app::signature_pq`)
 
