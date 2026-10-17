@@ -90,6 +90,45 @@ impl PixelTransfer {
         }
         Some(Image { w: out_w, h: out_h, px })
     }
+
+    /// Shears a picture about its centre by the matrix `[[1, x_per_y], [y_per_x, 1]]`: a pixel moves horizontally by
+    /// `x_per_y` times its vertical offset and vertically by `y_per_x` times its horizontal offset (0 is no shear). The
+    /// output is the bounding box of the sheared picture, and pixels that fall outside the source are transparent.
+    /// Sampling is nearest-neighbour. Returns `None` for an empty picture, a non-finite factor, or a singular matrix
+    /// (`x_per_y * y_per_x == 1`), which has no inverse.
+    pub fn sheared(&self, img: &Image, x_per_y: f64, y_per_x: f64) -> Option<Image> {
+        if img.w == 0 || img.h == 0 || !x_per_y.is_finite() || !y_per_x.is_finite() {
+            return None;
+        }
+        let det = 1.0 - x_per_y * y_per_x;
+        if det.abs() < 1e-12 {
+            return None;
+        }
+        let (hw, hh) = (img.w as f64 / 2.0, img.h as f64 / 2.0);
+        // The forward map of each corner (relative to the centre) gives the bounding box of the output.
+        let (mut max_x, mut max_y) = (0.0f64, 0.0f64);
+        for (cx, cy) in [(-hw, -hh), (hw, -hh), (-hw, hh), (hw, hh)] {
+            max_x = max_x.max((cx + x_per_y * cy).abs());
+            max_y = max_y.max((y_per_x * cx + cy).abs());
+        }
+        let out_w = ceil_eps(2.0 * max_x);
+        let out_h = ceil_eps(2.0 * max_y);
+        let (ocx, ocy) = (out_w as f64 / 2.0, out_h as f64 / 2.0);
+        let mut px = vec![0u32; out_w * out_h];
+        for y in 0..out_h {
+            for x in 0..out_w {
+                // Inverse map of the output pixel centre: M^-1 = 1 / det * [[1, -x_per_y], [-y_per_x, 1]].
+                let dx = x as f64 + 0.5 - ocx;
+                let dy = y as f64 + 0.5 - ocy;
+                let sx = ((dx - x_per_y * dy) / det + hw).floor();
+                let sy = ((dy - y_per_x * dx) / det + hh).floor();
+                if sx >= 0.0 && sy >= 0.0 && (sx as usize) < img.w && (sy as usize) < img.h {
+                    px[y * out_w + x] = img.px[sy as usize * img.w + sx as usize];
+                }
+            }
+        }
+        Some(Image { w: out_w, h: out_h, px })
+    }
 }
 
 fn ceil_eps(v: f64) -> usize {
@@ -182,6 +221,29 @@ mod tests {
         let session = PixelTransfer::new(1, 1);
         assert!(session.rotated_by(&solid(0, 0, 0), 10.0).is_none());
         assert!(session.rotated_by(&solid(2, 2, 0), f64::NAN).is_none());
+    }
+
+    #[test]
+    fn a_zero_shear_keeps_the_size_and_the_pixels() {
+        let out = PixelTransfer::new(1, 1).sheared(&solid(3, 2, 0xff00_00ff), 0.0, 0.0).expect("sheared");
+        assert_eq!((out.w, out.h), (3, 2));
+        assert!(out.px.iter().all(|p| *p == 0xff00_00ff));
+    }
+
+    #[test]
+    fn a_horizontal_shear_widens_the_bounding_box_and_leaves_corners_transparent() {
+        let out = PixelTransfer::new(1, 1).sheared(&solid(4, 4, 0xff00_00ff), 0.5, 0.0).expect("sheared");
+        assert_eq!((out.w, out.h), (6, 4));
+        assert_eq!(out.px[0], 0xff00_00ff, "the top-left corner samples the source");
+        assert_eq!(out.px[5], 0, "the top-right corner falls outside the source");
+    }
+
+    #[test]
+    fn a_singular_shear_or_a_bad_factor_is_refused() {
+        let img = solid(2, 2, 0xff00_0000);
+        assert!(PixelTransfer::new(1, 1).sheared(&img, 1.0, 1.0).is_none(), "no inverse when the product is 1");
+        assert!(PixelTransfer::new(1, 1).sheared(&img, f64::NAN, 0.0).is_none());
+        assert!(PixelTransfer::new(1, 1).sheared(&solid(0, 0, 0), 0.0, 0.0).is_none());
     }
 
     #[test]
