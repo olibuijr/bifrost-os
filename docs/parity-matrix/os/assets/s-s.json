@@ -515,11 +515,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArabic",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArabic-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFArabicRounded.ttf",
@@ -536,11 +544,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArabicRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArabic-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFArmenian.ttf",
@@ -557,11 +573,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArmenian",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArmenian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArmenian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFArmenianRounded.ttf",
@@ -578,11 +602,19 @@
    "description": "",
    "role": "Script/language coverage font: SFArmenianRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArmenian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArmenian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFCamera.ttf",
@@ -621,8 +653,8 @@
    "role": "SF variant font: SFCompact",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "SF Compact is the watchOS system face (Apple Watch only); BifrOSt does not run on watch hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -642,8 +674,8 @@
    "role": "SF variant font: SFCompactItalic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "SF Compact is the watchOS system face (Apple Watch only); BifrOSt does not run on watch hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -663,8 +695,8 @@
    "role": "SF variant font: SFCompactRounded",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "SF Compact Rounded is the watchOS system face (Apple Watch only); BifrOSt does not run on watch hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -683,11 +715,19 @@
    "description": "",
    "role": "Script/language coverage font: SFGeorgian",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGeorgian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGeorgian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFGeorgianRounded.ttf",
@@ -704,11 +744,19 @@
    "description": "",
    "role": "Script/language coverage font: SFGeorgianRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGeorgian-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGeorgian-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFHebrew.ttf",
@@ -725,11 +773,19 @@
    "description": "",
    "role": "Script/language coverage font: SFHebrew",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHebrew-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFHebrewRounded.ttf",
@@ -746,11 +802,19 @@
    "description": "",
    "role": "Script/language coverage font: SFHebrewRounded",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHebrew-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFIndia.ttc",
@@ -767,11 +831,19 @@
    "description": "",
    "role": "Script/language coverage font: SFIndia",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/SFNS.ttf",
@@ -1518,11 +1590,19 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXTwoMath",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans Math (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMath-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMath-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoText-Italic.ttf",
@@ -1770,11 +1850,19 @@
    "description": "",
    "role": "Script/language coverage font: Sinhala MN",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSinhala-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansSinhala-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sinhala Sangam MN.ttc",
@@ -1791,11 +1879,19 @@
    "description": "",
    "role": "Script/language coverage font: Sinhala Sangam MN",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSinhala-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansSinhala-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Skia.ttf",
@@ -1875,11 +1971,19 @@
    "description": "",
    "role": "Script/language coverage font: SukhumvitSet",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SuperClarendon.ttc",
@@ -1917,11 +2021,19 @@
    "description": "",
    "role": "Symbol, dingbat or math font: Symbol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Standard Symbols PS (gsfonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/StandardSymbolsPS.otf"
+    }
+   ],
+   "ready_note": "StandardSymbolsPS (gsfonts, runtime package) is the open symbol face for this font. The Apple glyph set is not shipped; coverage is not metric-identical."
   },
   {
    "id": "path:/System/Library/Frameworks/MediaToolbox.framework/Versions/A/Resources/SFSymbolsNeededByCoreMedia-Semibold.ttf",
@@ -1939,8 +2051,8 @@
    "role": "SF variant font: SFSymbolsNeededByCoreMedia-Semibold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "Apple-internal symbol font that CoreMedia uses for its own transport glyphs; BifrOSt draws its media controls from its own icon set.",
    "rea": [],
    "method": "assessed"
   },
@@ -2250,11 +2362,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaDevanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaGujarati.ttc",
@@ -2271,11 +2391,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaGujarati",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGujarati-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaGurmukhi.ttc",
@@ -2292,11 +2420,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaGurmukhi",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGurmukhi-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaKannada.ttc",
@@ -2313,11 +2449,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaKannada",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaMalayalam.ttc",
@@ -2334,11 +2478,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaMalayalam",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMalayalam-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMalayalam-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaTamil.ttc",
@@ -2355,11 +2507,19 @@
    "description": "",
    "role": "Script/language coverage font: SamaTamil",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Sarabun.ttc",
@@ -2376,11 +2536,19 @@
    "description": "",
    "role": "Script/language coverage font: Sarabun",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SauberScript.ttc",
@@ -2418,11 +2586,19 @@
    "description": "",
    "role": "Script/language coverage font: Shobhika-Devanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SimSong.ttc",
@@ -2481,11 +2657,19 @@
    "description": "",
    "role": "Script/language coverage font: Srisakdi",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SF-Cash-Text-Condensed-Medium.otf",
@@ -2503,8 +2687,8 @@
    "role": "SF variant font: SF-Cash-Text-Condensed-Medium",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2524,8 +2708,8 @@
    "role": "SF variant font: SF-Cash-Text-Condensed-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2545,8 +2729,8 @@
    "role": "SF variant font: SF-Cash-Text-Condensed-Semibold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2566,8 +2750,8 @@
    "role": "SF variant font: SFCash-Chiseled",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -2587,8 +2771,8 @@
    "role": "SF variant font: SFCash-Plain",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "Apple Cash card typeface for Wallet and Apple Pay payment screens; an Apple service face BifrOSt has no use for.",
    "rea": [],
    "method": "assessed"
   },
@@ -3019,8 +3203,8 @@
    "role": "SF variant font: SFProRoundedStatusBar",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "n/a",
+   "note": "Apple status-bar glyph face for the iOS and iPadOS status bar; BifrOSt's menu bar is drawn in the system face, so this face has no role.",
    "rea": [],
    "method": "assessed"
   }

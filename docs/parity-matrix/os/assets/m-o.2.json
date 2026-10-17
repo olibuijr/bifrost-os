@@ -424,11 +424,19 @@
    "description": "",
    "role": "Script/language coverage font: NotoSansSiddham-Regular",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSiddham-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansSiddham-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSoraSompeng-Regular.ttf",
@@ -503,11 +511,19 @@
    "description": "",
    "role": "Script/language coverage font: NotoSansSunuwar-Regular",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSunuwar-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansSunuwar-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSylotiNagri-Regular.ttf",
@@ -785,11 +801,19 @@
    "description": "",
    "role": "Script/language coverage font: NotoSansTifinagh-Regular",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTifinagh-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTifinagh-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTirhuta-Regular.ttf",
@@ -1038,11 +1062,19 @@
    "description": "",
    "role": "Script/language coverage font: NotoSerifNyiakengPuachueHmong-Regular",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifNPHmong-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifNPHmong-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifYezidi-Regular.otf",
@@ -1059,11 +1091,19 @@
    "description": "",
    "role": "Script/language coverage font: NotoSerifYezidi-Regular",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifYezidi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifYezidi-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Oriya MN.ttc",
@@ -1080,11 +1120,19 @@
    "description": "",
    "role": "Script/language coverage font: Oriya MN",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOriya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOriya-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Oriya Sangam MN.ttc",
@@ -1101,11 +1149,19 @@
    "description": "",
    "role": "Script/language coverage font: Oriya Sangam MN",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOriya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOriya-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/makeAlias-bottom.pdf",
@@ -1126,7 +1182,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::DragLink), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::DragLink is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/makeAlias-top.pdf",
@@ -1147,7 +1212,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::DragLink), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::DragLink is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/move-bottom.pdf",
@@ -1228,7 +1302,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::OperationNotAllowed), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::OperationNotAllowed is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/notAllowed-overlay.pdf",
@@ -1249,7 +1332,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::OperationNotAllowed), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::OperationNotAllowed is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/notAllowed-top.pdf",
@@ -1270,7 +1362,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::OperationNotAllowed), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::OperationNotAllowed is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeEastWest-bottom.pdf",
@@ -1291,7 +1392,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeftRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeEastWest-top.pdf",
@@ -1312,7 +1422,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeftRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthEastSouthWest-bottom.pdf",
@@ -1393,7 +1512,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUpDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthSouth-top.pdf",
@@ -1414,7 +1542,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUpDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthWestSouthEast-bottom.pdf",
@@ -1512,11 +1649,19 @@
    "description": "",
    "role": "Script/language coverage font: Nisan",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHebrew-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Maku-Devanagari.ttc",
@@ -1533,11 +1678,19 @@
    "description": "",
    "role": "Script/language coverage font: Maku-Devanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Mali.ttc",
@@ -1575,11 +1728,19 @@
    "description": "",
    "role": "Script/language coverage font: Modak-Devanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Mukta-Devanagari.ttc",
@@ -1596,11 +1757,19 @@
    "description": "",
    "role": "Script/language coverage font: Mukta-Devanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/MuktaMalar-Tamil.ttc",
@@ -1617,11 +1786,19 @@
    "description": "",
    "role": "Script/language coverage font: MuktaMalar-Tamil",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/MuktaVaani-Gujarati.ttc",
@@ -1638,11 +1815,19 @@
    "description": "",
    "role": "Script/language coverage font: MuktaVaani-Gujarati",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGujarati-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/MyriadArabic.ttc",
@@ -1659,11 +1844,19 @@
    "description": "",
    "role": "Script/language coverage font: MyriadArabic",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansArabic-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NanumGothic.ttc",
@@ -1743,11 +1936,19 @@
    "description": "",
    "role": "Script/language coverage font: Niramit",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NomNaTong.otf",
@@ -1785,11 +1986,19 @@
    "description": "",
    "role": "Script/language coverage font: NotoSerifKannada",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifKannada-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NovemberBanglaTraditional.ttf",
@@ -1806,11 +2015,19 @@
    "description": "",
    "role": "Script/language coverage font: NovemberBanglaTraditional",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBengali-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBengali-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NovemberIndia.otf",
@@ -1848,11 +2065,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedDevanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedGujarati.ttc",
@@ -1869,11 +2094,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedGujarati",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGujarati-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedGurmukhi.ttc",
@@ -1890,11 +2123,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedGurmukhi",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGurmukhi-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedKannada.ttc",
@@ -1911,11 +2152,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedKannada",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedMeeteiMayek.ttc",
@@ -1932,11 +2181,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedMeeteiMayek",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMeeteiMayek-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMeeteiMayek-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedOdia.ttc",
@@ -1953,11 +2210,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedOdia",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOriya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOriya-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedOlChiki.ttc",
@@ -1974,11 +2239,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedOlChiki",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOlChiki-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOlChiki-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedTamil.ttc",
@@ -1995,11 +2268,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedTamil",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedTelugu.ttc",
@@ -2016,11 +2297,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCompressedTelugu",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTelugu-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedDevanagari.ttc",
@@ -2037,11 +2326,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedDevanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedGujarati.ttc",
@@ -2058,11 +2355,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedGujarati",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGujarati-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedGurmukhi.ttc",
@@ -2079,11 +2384,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedGurmukhi",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGurmukhi-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedKannada.ttc",
@@ -2100,11 +2413,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedKannada",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedMeeteiMayek.ttc",
@@ -2121,11 +2442,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedMeeteiMayek",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMeeteiMayek-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMeeteiMayek-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedOdia.ttc",
@@ -2142,11 +2471,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedOdia",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOriya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOriya-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedOlChiki.ttc",
@@ -2163,11 +2500,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedOlChiki",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOlChiki-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOlChiki-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedTamil.ttc",
@@ -2184,11 +2529,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedTamil",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedTelugu.ttc",
@@ -2205,11 +2558,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberCondensedTelugu",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTelugu-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberDevanagari.ttc",
@@ -2226,11 +2587,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberDevanagari",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberGujarati.ttc",
@@ -2247,11 +2616,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberGujarati",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGujarati-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberGurmukhi.ttc",
@@ -2268,11 +2645,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberGurmukhi",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGurmukhi-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberIndia.otf",
@@ -2310,11 +2695,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberKannada",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberMeeteiMayek.ttc",
@@ -2331,11 +2724,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberMeeteiMayek",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMeeteiMayek-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMeeteiMayek-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberOdia.ttc",
@@ -2352,11 +2753,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberOdia",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOriya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOriya-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberOlChiki.ttc",
@@ -2373,11 +2782,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberOlChiki",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOlChiki-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOlChiki-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberTamil.ttc",
@@ -2394,11 +2811,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberTamil",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberTelugu.ttc",
@@ -2415,11 +2840,19 @@
    "description": "",
    "role": "Script/language coverage font: OctoberTelugu",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTelugu-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Ornanong.ttc",

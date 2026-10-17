@@ -404,11 +404,19 @@
    "description": "",
    "role": "Script/language coverage font: PlantagenetCherokee",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansCherokee-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansCherokee-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Raanana.ttc",
@@ -425,11 +433,19 @@
    "description": "",
    "role": "Script/language coverage font: Raanana",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansHebrew-Regular.ttf from the noto-fonts runtime package is the open script face BifrOSt uses for this script (font fallback chain). The Apple face is not shipped; glyph shapes and metrics differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Rockwell.ttc",
@@ -552,7 +568,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeEast-top.pdf",
@@ -573,7 +598,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeEastWest-bottom.pdf",
@@ -594,7 +628,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeftRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeEastWest-top.pdf",
@@ -615,7 +658,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeftRight is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeLeft-bottom.pdf",
@@ -756,7 +808,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUp is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorth-top.pdf",
@@ -777,7 +838,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUp is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthEast-bottom.pdf",
@@ -798,7 +868,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthEast-top.pdf",
@@ -819,7 +898,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthEastSouthWest-bottom.pdf",
@@ -900,7 +988,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUpDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthSouth-top.pdf",
@@ -921,7 +1018,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeUpDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthWest-bottom.pdf",
@@ -942,7 +1048,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthWest-top.pdf",
@@ -963,7 +1078,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeNorthWestSouthEast-bottom.pdf",
@@ -1104,7 +1228,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouth-top.pdf",
@@ -1125,7 +1258,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeDown is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthEast-bottom.pdf",
@@ -1146,7 +1288,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthEast-top.pdf",
@@ -1167,7 +1318,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthWestSouthEast is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthWest-bottom.pdf",
@@ -1188,7 +1348,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeSouthWest-top.pdf",
@@ -1209,7 +1378,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeNorthEastSouthWest is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeUp-bottom.pdf",
@@ -1350,7 +1528,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeft is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeWest-top.pdf",
@@ -1371,7 +1558,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Layered art for Kind::ResizeLeft is drawn in springboard/ui/src/cursor_art.rs; tests cursor_art::tests. The compositor maps the kind to its shape in springboard/src/bare/wayland.rs; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEast-bottom.pdf",
@@ -1392,7 +1588,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEast-top.pdf",
@@ -1413,7 +1618,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastNorthWest-bottom.pdf",
@@ -1434,7 +1648,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastNorthWest-top.pdf",
@@ -1455,7 +1678,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastSouthEast-bottom.pdf",
@@ -1476,7 +1708,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthEastSouthEast-top.pdf",
@@ -1497,7 +1738,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWest-bottom.pdf",
@@ -1518,7 +1768,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWest-top.pdf",
@@ -1539,7 +1798,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWestSouthWest-bottom.pdf",
@@ -1560,7 +1828,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateNorthWestSouthWest-top.pdf",
@@ -1581,7 +1858,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEast-bottom.pdf",
@@ -1602,7 +1888,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEast-top.pdf",
@@ -1623,7 +1918,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEastSouthWest-bottom.pdf",
@@ -1644,7 +1948,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthEastSouthWest-top.pdf",
@@ -1665,7 +1978,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthWest-bottom.pdf",
@@ -1686,7 +2008,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/rotateSouthWest-top.pdf",
@@ -1707,7 +2038,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art::tests"
+    }
+   ],
+   "ready_note": "Per-corner rotate art is drawn by bifrost_ui::cursor_art::rotate_art (rotate_variant names this shape's grips); tests cursor_art::tests. The compositor still sends the single rotate shape, so the per-corner shape is not on screen yet; Midget check open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/PortagoITC TT.ttf",
