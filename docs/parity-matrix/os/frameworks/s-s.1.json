@@ -1133,11 +1133,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/smb.rs, springboard/src/keychain.rs, packaging/arch/runtime-packages.txt",
+   "bifrost": "springboard/sdk/src/smb.rs; springboard/apps/files/src/server.rs; springboard/src/keychain.rs; packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient. Lead 2026-10-17: not ready: Files Connect to Server does not offer smb:// yet.",
+   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient. Wired 2026-10-17: Files, Go > Connect to Server, accepts smb:// addresses. With no user in the address it tries a guest listing of the server's shares; a user in the address, or a refused login, opens a sheet with a name and a masked password field. The browser then walks shares and folders. The login stays in memory for that browser and is not saved to the keychain or the recent-servers list.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "server::tests"
+    }
+   ],
+   "ready_note": "Connect to Server lists smb:// shares and folders and asks for the login on a sheet; tests cover address planning, share and folder rows, navigation and the sheet. A listing against a real server is tried on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SMBClientEngine.framework",
@@ -1154,11 +1163,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/smb.rs, packaging/arch/runtime-packages.txt",
+   "bifrost": "springboard/sdk/src/smb.rs; springboard/apps/files/src/server.rs; packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb. Lead 2026-10-17: not ready: Files Connect to Server does not offer smb:// yet.",
+   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb. Wired 2026-10-17: Files calls list_shares and list_dir through the smbclient runner from a background job and maps a refused login to the login sheet (apps/files/src/server.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "server::tests"
+    }
+   ],
+   "ready_note": "Files runs the smbclient listing calls and turns the client's answers into browser rows or a login prompt; the mapping is tested without a server."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SMCT.framework",

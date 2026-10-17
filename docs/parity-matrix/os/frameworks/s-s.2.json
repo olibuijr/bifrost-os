@@ -121,11 +121,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shortcuts/droplet.rs; springboard/src/shortcuts/flow.rs; springboard/src/shortcuts.rs",
+   "bifrost": "springboard/src/shortcuts/droplet.rs; springboard/src/shortcuts/flow.rs; springboard/src/shortcuts.rs; springboard/apps/shortcuts-desktop/src/main.rs; springboard/apps/shortcuts-desktop/src/widget.rs",
    "status": "os",
-   "note": "Built 2026-10-17: src/shortcuts/droplet.rs and flow::run_with_input. A shortcut with the automation When a File Is Dropped receives the dropped absolute paths, one per line, as its input (first step sees them as the output, Repeat with Each visits one per pass, at most 20). The automation kind existed; the input did not. Not wired to a drop target on the icon yet: the shell must call droplet::run. Lead 2026-10-17: not ready: no drop target calls droplet::run yet.",
+   "note": "Built 2026-10-17: src/shortcuts/droplet.rs and flow::run_with_input. A shortcut with the automation When a File Is Dropped receives the dropped absolute paths, one per line, as its input (first step sees them as the output, Repeat with Each visits one per pass, at most 20). The automation kind existed; the input did not. Wired 2026-10-17: the Shortcuts app registers for dropped files; a drop on a droplet's tile in the grid, or on the app's Dock icon, calls droplet::run with the files' paths and shows the steps. A Dock drop goes to the droplet in front or the only droplet; with several the app says where to drop.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "tests::a_drag_of_files"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "tests::dropping_files"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "tests::a_drop_off"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "tests::files_dropped_on_the_dock"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "tests::with_several_droplets"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests::only_a_droplets"
+    }
+   ],
+   "ready_note": "Dropping files on a droplet tile runs it with the paths as input; a Dock-icon drop runs the only droplet. Tests drive the drag replies, the Perform path and the Dock-drop wait."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ShortcutsAgent.framework",
@@ -142,11 +176,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shortcuts/describe.rs; springboard/apps/shortcuts-desktop/src/automation.rs; springboard/apps/shortcuts-desktop/src/runner.rs",
+   "bifrost": "springboard/src/shortcuts/describe.rs; springboard/apps/shortcuts-desktop/src/widget.rs; springboard/apps/shortcuts-desktop/src/automation.rs; springboard/apps/shortcuts-desktop/src/runner.rs",
    "status": "os",
-   "note": "Built 2026-10-17: src/shortcuts/describe.rs, Describe a Shortcut without a language model. A sentence is cut into clauses and matched to the device steps (Wi-Fi, Low Power, Do Not Disturb, brightness, screenshot, timer, open app or folder, notification, copy text); the draft is a normal shortcut and unrecognised clauses are returned, never guessed. The agent that runs and plans shortcuts for apps is automation.rs (run-shortcut and plan-shortcut intents) and runner.rs. Not wired to a button in the app yet. Lead 2026-10-17: not ready: no app control calls describe yet.",
+   "note": "Built 2026-10-17: src/shortcuts/describe.rs, Describe a Shortcut without a language model. A sentence is cut into clauses and matched to the device steps (Wi-Fi, Low Power, Do Not Disturb, brightness, screenshot, timer, open app or folder, notification, copy text); the draft is a normal shortcut and unrecognised clauses are returned, never guessed. The agent that runs and plans shortcuts for apps is automation.rs (run-shortcut and plan-shortcut intents) and runner.rs. Wired 2026-10-17: the Shortcuts gallery has a Describe a Shortcut row that opens a text field; Return drafts the shortcut with describe::draft, opens it in the editor and says which clauses were left out.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests::a_described"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests::a_sentence"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests::an_empty_sentence"
+    }
+   ],
+   "ready_note": "The gallery field drafts a shortcut from a sentence and opens it; nothing is guessed or run."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ShortcutsLanguage.framework",

@@ -3724,11 +3724,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/svg_table.rs (SvgTable, glyph_markup, rasterize_glyph); springboard/render/src/svg.rs",
+   "bifrost": "springboard/render/src/svg_table.rs (SvgTable, glyph_markup, rasterize_glyph); springboard/render/src/svg.rs; springboard/render/src/font.rs",
    "status": "partial",
-   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs; the text engine does not call it yet. Lead 2026-10-17: not ready: the text engine does not call rasterize_glyph, so colour glyphs still draw as outlines.",
+   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs. Wired 2026-10-17: Font::parse keeps the SVG table index and the text renderer (render_placed) draws each glyph the table covers in colour, replacing its outline; a glyph whose document cannot be drawn keeps its outline.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "font::tests::a_glyph"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "svg_table::tests"
+    }
+   ],
+   "ready_note": "Text drawn with a font that has an SVG table shows the colour glyphs; tests build a font with the table and compare the pixels."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OctagonTrust.framework",
