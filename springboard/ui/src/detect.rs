@@ -3,6 +3,7 @@
 //! Results are byte ranges into the input, cut only at ASCII bytes, so they are always char boundaries.
 //! Overlaps are resolved by kind priority (link, then date, then phone), so "2026-10-09" is a date, not a phone number.
 
+use crate::phone_rules;
 use std::ops::Range;
 
 /// The kinds of content the detector knows, the `NativeTextCheckingType` subset Bifrost uses.
@@ -32,6 +33,12 @@ impl Match {
     pub fn text<'a>(&self, source: &'a str) -> &'a str {
         &source[self.range.clone()]
     }
+}
+
+/// The E.164 form (`+` then digits) of a phone match, checked against the per-region rules in [`phone_rules`] for
+/// `region` (a region code such as `IS`). `None` for a match of another kind or a number the rules do not accept.
+pub fn phone_e164(m: &Match, source: &str, region: &str) -> Option<String> {
+    (m.kind == Kind::Phone).then(|| phone_rules::to_e164(m.text(source), region)).flatten()
 }
 
 /// Finds every `kinds` item in `text`, sorted by position and without overlaps.
@@ -520,6 +527,23 @@ mod tests {
         assert_eq!(texts("(021) 555-1234", &all), vec![(Kind::Phone, "(021) 555-1234".into())]);
         assert!(texts("id 12345678", &all).is_empty(), "a bare run of digits is not a phone number");
         assert!(texts("abc555 1234", &all).is_empty(), "digits glued to a word are not a number");
+    }
+
+    #[test]
+    fn a_phone_match_gives_its_e164_form_for_a_known_region() {
+        let s = "Hringdu í +354 555-1234 eða 555 1234";
+        let found = find(s, &[Kind::Phone]);
+        assert_eq!(found.len(), 2);
+        assert_eq!(phone_e164(&found[0], s, "IS").as_deref(), Some("+3545551234"));
+        assert_eq!(phone_e164(&found[1], s, "is").as_deref(), Some("+3545551234"), "the region code is case-insensitive");
+        assert_eq!(phone_e164(&found[0], s, "XX"), None, "an unknown region gives no number");
+    }
+
+    #[test]
+    fn a_match_of_another_kind_gives_no_phone_number() {
+        let s = "https://x.is/555 1234";
+        let found = find(s, &[Kind::Link]);
+        assert_eq!(phone_e164(&found[0], s, "IS"), None);
     }
 
     #[test]
