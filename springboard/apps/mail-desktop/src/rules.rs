@@ -118,6 +118,26 @@ pub fn actions_from(move_to: &str, mark_read: &str, flag: &str) -> Result<Vec<Ac
     Ok(actions)
 }
 
+/// The line the Rules pane shows for a rule: its name, what it looks for, and what it does.
+pub fn describe(rule: &Rule) -> String {
+    let mut looks = Vec::new();
+    for (label, text) in [("from", &rule.from), ("to", &rule.to), ("subject", &rule.subject)] {
+        if !text.trim().is_empty() {
+            looks.push(format!("{label} contains {}", text.trim()));
+        }
+    }
+    let does: Vec<String> = rule
+        .actions
+        .iter()
+        .map(|a| match a {
+            Action::MoveTo(name) => format!("move to {name}"),
+            Action::MarkRead => "mark read".to_string(),
+            Action::Flag(color) => format!("flag {}", color.label()),
+        })
+        .collect();
+    format!("{}: {} then {}", rule.name, looks.join(", "), does.join(", "))
+}
+
 /// What happens to one message: the actions of every rule that matches it, in rule order. Once an action moves the
 /// message the rules after it are not run (the message is no longer here).
 pub fn outcome(rules: &[Rule], summary: &Summary) -> Vec<Action> {

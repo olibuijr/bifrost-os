@@ -122,6 +122,7 @@ pub const MENU_EXPORT_PDF: u32 = 76;
 pub const MENU_ALL_HEADERS: u32 = 77;
 pub const MENU_IGNORE_FOLLOW_UP: u32 = 78;
 pub const MENU_NEW_VIEWER: u32 = 79;
+pub const MENU_RULES_PANE: u32 = 80;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -416,6 +417,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_EXPORT_MBOX, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Rules"),
+        AppMenuItem::new(MENU_RULES_PANE, "Rules...").depth(1).enabled(!mail.accounts.is_empty()),
         AppMenuItem::new(MENU_NEW_RULE, "New Rule...").depth(1).enabled(!mail.accounts.is_empty() && mail.prefs.rules.len() < MAX_RULES),
         AppMenuItem::new(MENU_APPLY_RULES, "Apply Rules").depth(1).enabled(!mail.prefs.rules.is_empty()),
     ];
@@ -1124,6 +1126,29 @@ impl MailWindow {
         self.data_dir.join("drafts").join(format!("{name}.eml"))
     }
 
+    /// Remove in the Rules pane: the rule goes, and the pane lists the rest.
+    fn remove_rule(&mut self, index: usize) {
+        if index < self.mail.prefs.rules.len() {
+            self.mail.prefs.rules.remove(index);
+            self.save_prefs();
+            self.mail.open_rules_pane();
+        }
+    }
+
+    /// Save on the rule editor of the rule at `index`: the rule takes the form's values.
+    fn submit_edit_rule(&mut self, index: usize, form: &Form) {
+        match self.mail.rule_from_form_at(form, Some(index)) {
+            Ok(rule) => {
+                if let Some(slot) = self.mail.prefs.rules.get_mut(index) {
+                    *slot = rule;
+                }
+                self.save_prefs();
+                self.mail.close_sheet();
+            }
+            Err(e) => self.mail.status = e,
+        }
+    }
+
     /// Load Remote Content: the open message's remote content may load.
     fn load_remote(&mut self) {
         if let Some(uid) = self.mail.open {
@@ -1285,6 +1310,11 @@ impl MailWindow {
             MENU_NEW_RULE => {
                 if self.sheet_free() {
                     self.mail.open_rule();
+                }
+            }
+            MENU_RULES_PANE => {
+                if self.sheet_free() {
+                    self.mail.open_rules_pane();
                 }
             }
             MENU_APPLY_RULES => self.apply_rules_to_shown(),
@@ -2191,6 +2221,7 @@ impl MailWindow {
             }
             Some(Sheet::Prompt(prompt)) => self.submit_prompt(ctx, prompt),
             Some(Sheet::Question(compose)) => self.save_question(&compose),
+            Some(Sheet::Rules(..)) => self.mail.close_sheet(),
             None => {}
         }
     }
@@ -2236,6 +2267,7 @@ impl MailWindow {
                 Err(e) => self.mail.status = e,
             },
             PromptKind::Activity => self.mail.close_sheet(),
+            PromptKind::EditRule(index) => self.submit_edit_rule(index, &prompt.form),
             PromptKind::EditAccount(id) => self.submit_edit_account(ctx, &id, &prompt.form),
             PromptKind::RemoveAccount(id) => self.submit_remove_account(ctx, &id, &prompt.form),
         }
@@ -2749,10 +2781,14 @@ impl MailWindow {
             crate::draw::Hit::Fold(uid) => self.mail.toggle_conversation(uid),
             crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
             crate::draw::Hit::LoadRemote => self.load_remote(),
+            crate::draw::Hit::Attach if matches!(self.mail.sheet, Some(Sheet::Rules(..))) => self.mail.open_rule(),
             crate::draw::Hit::Attach => self.pick_files(ctx),
+            crate::draw::Hit::EditRule(index) => self.mail.open_rule_editor(index),
             crate::draw::Hit::RemoveAttachment(index) => {
                 if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {
                     compose.detach(index);
+                } else if matches!(self.mail.sheet, Some(Sheet::Rules(..))) {
+                    self.remove_rule(index);
                 }
             }
             crate::draw::Hit::FindPrevious => self.step_match(false),

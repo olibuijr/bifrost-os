@@ -438,6 +438,8 @@ pub enum PromptKind {
     SmartMailbox,
     /// New Rule.
     Rule,
+    /// Edit Rule: the rule at this place in the list.
+    EditRule(usize),
     /// Signature, other addresses and undo-send delay of the shown account.
     Settings,
     /// Account Settings: the setup form of the account with this id.
@@ -469,6 +471,8 @@ pub enum Sheet {
     Prompt(Prompt),
     /// Closing a message that has text: Save This Message, Don't Save, or Cancel (back to the message).
     Question(Compose),
+    /// Mailbox > Rules: the form is empty; the names are the rules' lines, in order (see `rules::describe`).
+    Rules(Form, Vec<String>),
 }
 
 impl Sheet {
@@ -479,6 +483,7 @@ impl Sheet {
             Sheet::Compose(compose) | Sheet::Question(compose) => &compose.form,
             Sheet::Mailbox(sheet) => &sheet.form,
             Sheet::Prompt(prompt) => &prompt.form,
+            Sheet::Rules(form, _) => form,
         }
     }
 
@@ -488,6 +493,7 @@ impl Sheet {
             Sheet::Compose(compose) | Sheet::Question(compose) => &mut compose.form,
             Sheet::Mailbox(sheet) => &mut sheet.form,
             Sheet::Prompt(prompt) => &mut prompt.form,
+            Sheet::Rules(form, _) => form,
         }
     }
 
@@ -500,6 +506,7 @@ impl Sheet {
             Sheet::Compose(compose) if compose.in_reply_to.is_some() => "Reply",
             Sheet::Compose(_) => "New Message",
             Sheet::Question(_) => "Save This Message?",
+            Sheet::Rules(..) => "Rules",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename Mailbox",
             Sheet::Mailbox(_) => "New Mailbox",
             Sheet::Prompt(prompt) => match prompt.kind {
@@ -507,6 +514,7 @@ impl Sheet {
                 PromptKind::Redirect => "Redirect",
                 PromptKind::SmartMailbox => "New Smart Mailbox",
                 PromptKind::Rule => "New Rule",
+                PromptKind::EditRule(_) => "Edit Rule",
                 PromptKind::Settings => "Mail Settings",
                 PromptKind::EditAccount(_) => "Account Settings",
                 PromptKind::RemoveAccount(_) => "Remove Account",
@@ -523,13 +531,14 @@ impl Sheet {
             Sheet::Setup(_) => "Add Account",
             Sheet::Compose(_) => "Send",
             Sheet::Question(_) => "Save",
+            Sheet::Rules(..) => "Done",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename",
             Sheet::Mailbox(_) => "Create",
             Sheet::Prompt(prompt) => match prompt.kind {
                 PromptKind::Remind => "Remind Me",
                 PromptKind::Redirect => "Redirect",
                 PromptKind::SmartMailbox | PromptKind::Rule => "Add",
-                PromptKind::Settings | PromptKind::EditAccount(_) => "Save",
+                PromptKind::Settings | PromptKind::EditAccount(_) | PromptKind::EditRule(_) => "Save",
                 PromptKind::RemoveAccount(_) => "Remove",
                 PromptKind::Activity => "Done",
             },
@@ -1346,7 +1355,44 @@ impl Mail {
     }
 
     /// The rule a New Rule form describes. The mailbox to move to must exist in the shown account.
+    /// Mailbox > Rules: the rules as a list, each with Remove; a name opens its editor.
+    pub fn open_rules_pane(&mut self) {
+        let names = self.prefs.rules.iter().map(rules::describe).collect();
+        self.sheet = Some(Sheet::Rules(Form::new(Vec::new()), names));
+    }
+
+    /// Edit Rule: the editor of the rule at `index`, filled in from the rule.
+    pub fn open_rule_editor(&mut self, index: usize) {
+        let Some(rule) = self.prefs.rules.get(index).cloned() else { return };
+        let move_to = rule.actions.iter().find_map(|a| match a {
+            rules::Action::MoveTo(name) => Some(name.clone()),
+            _ => None,
+        });
+        let flag = rule.actions.iter().find_map(|a| match a {
+            rules::Action::Flag(color) => Some(color.label().to_string()),
+            _ => None,
+        });
+        let mark = if rule.actions.contains(&rules::Action::MarkRead) { "yes" } else { "no" };
+        self.open_prompt(
+            PromptKind::EditRule(index),
+            vec![
+                Field::new("Name", "Receipts", &rule.name),
+                Field::new("From contains", "shop.example", &rule.from),
+                Field::new("To contains", "", &rule.to),
+                Field::new("Subject contains", "receipt", &rule.subject),
+                Field::new("Move to mailbox", "Receipts", &move_to.unwrap_or_default()),
+                Field::new("Mark as read", "yes", mark),
+                Field::new("Flag colour", "red, orange, yellow, green, blue, purple, gray", &flag.unwrap_or_default()),
+            ],
+        );
+    }
+
     pub fn rule_from_form(&self, form: &Form) -> Result<Rule, String> {
+        self.rule_from_form_at(form, None)
+    }
+
+    /// The rule a form describes. `except` is the place of the rule being edited, which may keep its own name.
+    pub fn rule_from_form_at(&self, form: &Form, except: Option<usize>) -> Result<Rule, String> {
         let name = form.value("Name").trim().to_string();
         if name.is_empty() {
             return Err("Name the rule".into());
@@ -1363,7 +1409,7 @@ impl Mail {
             self.mailboxes.iter().find(|m| m.eq_ignore_ascii_case(target)).cloned().ok_or_else(|| format!("There is no mailbox named {target}"))?
         };
         let actions = rules::actions_from(&target, form.value("Mark as read"), form.value("Flag colour"))?;
-        if self.prefs.rules.iter().any(|r| r.name.eq_ignore_ascii_case(&name)) {
+        if self.prefs.rules.iter().enumerate().any(|(i, r)| Some(i) != except && r.name.eq_ignore_ascii_case(&name)) {
             return Err(format!("There is already a rule named {name}"));
         }
         Ok(Rule { name, from, to, subject, actions })

@@ -114,6 +114,8 @@ pub enum Hit {
     LoadRemote,
     /// Don't Save on the question sheet: the message is discarded.
     Discard,
+    /// A rule's name in the Rules pane: its editor opens.
+    EditRule(usize),
     /// The disclosure triangle of a conversation: folds or unfolds it. The UID is its first message's.
     Fold(u32),
     /// A file named in the open message, by its place in the message.
@@ -301,6 +303,7 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     let foot = ui.pt(SHEET_FOOT_PT);
     let heights: Vec<f32> = shown.iter().map(|f| field_height(ui, f.label)).collect();
     let (note_h, files) = match sheet {
+        Sheet::Rules(_, names) => (0.0, names.len()),
         Sheet::Compose(c) => (if c.signature.trim().is_empty() { 0.0 } else { ui.pt(NOTE_PT) }, c.attachments.len()),
         _ => (0.0, 0),
     };
@@ -337,7 +340,7 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     let primary = [px + pw - pad - bw, by, bw, bh];
     let cancel = [primary[0] - ui.pt(SPACE_S) - bw, by, bw, bh];
     let discard = matches!(sheet, Sheet::Question(_)).then(|| [cancel[0] - ui.pt(SPACE_S) - bw, by, bw, bh]);
-    let attach = matches!(sheet, Sheet::Compose(_)).then(|| [px + pad, by, bw, bh]);
+    let attach = matches!(sheet, Sheet::Compose(_) | Sheet::Rules(..)).then(|| [px + pad, by, bw, bh]);
     SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, discard, attach, note, files: rows, choices: matched }
 }
 
@@ -563,6 +566,11 @@ impl MailWindow {
             }
             if let Some(index) = l.files.iter().position(|(_, remove)| inside(*remove, x, y)) {
                 return Hit::RemoveAttachment(index);
+            }
+            if matches!(sheet, Sheet::Rules(..)) {
+                if let Some(index) = l.files.iter().position(|(row, _)| inside(*row, x, y)) {
+                    return Hit::EditRule(index);
+                }
             }
             if let Some(index) = l.choices.iter().position(|r| inside(*r, x, y)) {
                 return Hit::Choice(index);
@@ -1101,6 +1109,14 @@ impl MailWindow {
             }
         }
 
+        if let Sheet::Rules(_, names) = sheet {
+            for (name, (row, remove)) in names.iter().zip(&l.files) {
+                let text = fit(ui, name, MAC_FOOTNOTE_PT, Weight::Regular, (row[2] - remove[2]).max(0.0));
+                put_mid(s, &mut self.labels, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), row[0], row[1] + row[3] / 2.0);
+                put_centred(s, &mut self.labels, ui, "Remove", MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), remove[0] + remove[2] / 2.0, remove[1] + remove[3] / 2.0);
+            }
+        }
+
         // Open Quickly: the mailboxes the field matches, the first one is the one Return opens
         for (index, (name, row)) in matches.iter().zip(&l.choices).enumerate() {
             if index == 0 {
@@ -1113,8 +1129,9 @@ impl MailWindow {
 
         let (cr, pr) = (l.cancel, l.primary);
         if let Some(ar) = l.attach {
+            let label = if matches!(sheet, Sheet::Rules(..)) { "Add Rule..." } else { "Attach..." };
             s.fill_rrect(ar[0], ar[1], ar[2], ar[3], ui.pt(RADIUS_PT), FIELD_BG.now());
-            put_centred(s, &mut self.labels, ui, "Attach...", MAC_BODY_PT, Weight::Regular, LABEL.now(), ar[0] + ar[2] / 2.0, ar[1] + ar[3] / 2.0);
+            put_centred(s, &mut self.labels, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), ar[0] + ar[2] / 2.0, ar[1] + ar[3] / 2.0);
         }
         if let Some(dr) = l.discard {
             s.fill_rrect(dr[0], dr[1], dr[2], dr[3], ui.pt(RADIUS_PT), FIELD_BG.now());
