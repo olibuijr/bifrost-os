@@ -61,14 +61,20 @@ fn line_px(ui: &Ui, pt: f32) -> f32 {
 
 /// Typesets the TeX source `src` at `px`, or `None` when it does not parse (the source is then shown as text).
 fn formula(ui: &Ui, src: &str, px: f32, display: bool) -> Option<Layout> {
-    let metrics = math::metrics::FontFaceMetrics { font: &ui.font, constants: None };
+    let metrics = math::system::metrics();
     let opts = if display { MathOptions::display(px) } else { MathOptions::text(px) };
     typeset_tex(src, opts, &metrics).ok()
 }
 
-/// Draws a typeset formula with its baseline origin at (`x`, `baseline`), one glyph image per symbol, placed by
-/// the same rule as the math painter (the image's baseline sits `pad + ascent` below its top).
+/// Draws a typeset formula with its baseline origin at (`x`, `baseline`). With the installed math font the glyphs
+/// are painted from that face; otherwise each symbol is an image of the UI font, placed by the same rule as the
+/// math painter (the image's baseline sits `pad + ascent` below its top).
 fn paint_formula(s: &mut Surface, ui: &Ui, lay: &Layout, x: f32, baseline: f32, color: u32) {
+    let ink = if color == super::ui::WHITE { super::ui::LABEL.now() } else { color };
+    if let Some(font) = math::system::math_font() {
+        math::paint::paint(lay, s, (x, baseline), font.face, ink);
+        return;
+    }
     for g in &lay.glyphs {
         let asc = ui.font.line_metrics(g.size).ascent;
         let (gx, gy) = math::paint::run_origin(g, (x, baseline), asc);
