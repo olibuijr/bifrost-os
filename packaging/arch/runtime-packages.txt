@@ -139,4 +139,6 @@ ttf-lato
 ttf-nunito
 ttf-libertinus
 ttf-charis
+adobe-source-serif-fonts
+adobe-source-sans-fonts
 ttf-ibm-plex

@@ -168,6 +168,16 @@ const FACES: &[(&str, &str)] = &[
     ("baskerville", "Libertinus Serif"), ("big caslon", "Libertinus Serif"), ("cochin", "Libertinus Serif"),
     ("charter", "Charis SIL"),
     ("american typewriter", "IBM Plex Serif"),
+    // faces from the macOS asset inventory (docs/parity-matrix/os/assets): the open stand-ins for their families
+    ("lato", "Lato"),
+    ("menlo", "DejaVu Sans Mono"), ("monaco", "DejaVu Sans Mono"),
+    ("new york", "Source Serif 4"),
+    ("optima", "Libertinus Sans"), ("marion", "Libertinus Serif"), ("luminari", "Noto Serif Display"),
+    ("journal sans inline", "Source Sans 3"), ("microsoft sans serif", "Liberation Sans"),
+    ("kokonor", "Noto Serif Tibetan"),
+    ("nanum gothic", "Noto Sans CJK KR"), ("nanumgothic", "Noto Sans CJK KR"),
+    ("nanum myeongjo", "Noto Serif CJK KR"), ("nanummyeongjo", "Noto Serif CJK KR"),
+    ("nom na tong", "Noto Serif CJK SC"),
 ];
 
 /// The open face mapped to `family` in `FACES`, if any.
@@ -329,6 +339,23 @@ mod tests {
         let avenir = candidates(&FontSpec::new().family("Avenir"));
         assert_eq!(avenir[0].family.as_deref(), Some("Lato"));
         assert!(avenir.iter().all(|s| s.family.as_deref() != Some("Avenir")));
+    }
+
+    #[test]
+    fn asset_inventory_faces_have_an_open_stand_in() {
+        assert_eq!(substitute("Lato")[0], "Lato");
+        assert_eq!(substitute("Menlo")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("Monaco")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("New York")[0], "Source Serif 4");
+        assert_eq!(substitute("Optima")[0], "Libertinus Sans");
+        assert_eq!(substitute("Marion")[0], "Libertinus Serif");
+        assert_eq!(substitute("Luminari")[0], "Noto Serif Display");
+        assert_eq!(substitute("Journal Sans Inline")[0], "Source Sans 3");
+        assert_eq!(substitute("Microsoft Sans Serif")[0], "Liberation Sans");
+        assert_eq!(substitute("Kokonor")[0], "Noto Serif Tibetan");
+        assert_eq!(substitute("Nanum Gothic")[0], "Noto Sans CJK KR");
+        assert_eq!(substitute("NanumMyeongjo")[0], "Noto Serif CJK KR");
+        assert_eq!(substitute("Nom Na Tong")[0], "Noto Serif CJK SC");
     }
 
     #[test]

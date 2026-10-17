@@ -526,7 +526,20 @@
    "status": "partial",
    "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera-derived free licence) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Monaco.ttf",
@@ -547,7 +560,20 @@
    "status": "partial",
    "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera-derived free licence) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/MuktaMahee.ttc",
@@ -597,7 +623,20 @@
    "status": "partial",
    "note": "NewYork resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Serif 4 (adobe-source-serif-fonts, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/NewYorkItalic.ttf",
@@ -618,7 +657,20 @@
    "status": "partial",
    "note": "NewYorkItalic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4Variable-Italic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Serif 4 Italic (adobe-source-serif-fonts, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Noteworthy.ttc",
@@ -834,7 +886,20 @@
    "status": "partial",
    "note": "Optima resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Sans (ttf-libertinus, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Malayalam MN.ttc",
@@ -913,7 +978,20 @@
    "status": "partial",
    "note": "Marion resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Microsoft Sans Serif.ttf",
@@ -934,7 +1012,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Sans (ttf-liberation), Arial-metric stand-in; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Liberation Sans (ttf-liberation, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Mishafi Gold.ttf",
