@@ -124,6 +124,11 @@ pub fn gallery_row_rect(ui: &Ui, w: i32, index: usize) -> (f32, f32, f32, f32) {
     (x, y + ui.pt(ROW_PT) * index as f32, ui.pt(2.0 * BIG_PT + GAP_PT), ui.pt(ROW_PT))
 }
 
+/// Left edge of a module row's Menu Bar switch: it sits left of the panel switch, which is 12 pt from the row's end.
+pub fn menu_bar_switch_x(ui: &Ui, row_x: f32, row_w: f32) -> f32 {
+    row_x + row_w - 2.0 * ui.pt(SWITCH_W_PT) - ui.pt(24.0)
+}
+
 /// The Edit Controls row under (x, y), of `rows` rows.
 pub fn gallery_hit(ui: &Ui, w: i32, rows: usize, x: f32, y: f32) -> Option<usize> {
     (0..rows).find(|&i| inside(gallery_row_rect(ui, w, i), x, y))
@@ -602,11 +607,34 @@ impl Shell {
         DEFAULT_MODULES.len() + self.cc_candidates().len() + 1
     }
 
-    /// Uses the Edit Controls row `index`: a module is shown or hidden, an app control is added or removed, Done closes.
-    fn cc_gallery_tap(&mut self, index: usize) {
+    /// The modules that have their own menu bar item (`MENU_BAR_PREF`).
+    fn cc_menu_bar_items(&self) -> Vec<Tile> {
+        parse_menu_bar_items(self.prefs.get(MENU_BAR_PREF).unwrap_or(""))
+    }
+
+    /// Whether (x, y) is on the Menu Bar switch of module row `index`, which sits left of the panel switch.
+    fn in_menu_bar_switch(&self, x: f32, index: usize) -> bool {
+        if index >= DEFAULT_MODULES.len() {
+            return false;
+        }
+        let (rx, _, rw, _) = gallery_row_rect(&self.ui, self.w, index);
+        let left = menu_bar_switch_x(&self.ui, rx, rw);
+        x >= left && x < left + self.ui.pt(SWITCH_W_PT + 6.0)
+    }
+
+    /// Uses the Edit Controls row `index`. A module is shown or hidden, or with `menu_bar` its own menu bar item is
+    /// turned on or off. An app control is added or removed. The last row, Done, closes the list.
+    fn cc_gallery_tap(&mut self, index: usize, menu_bar: bool) {
         let modules = DEFAULT_MODULES.len();
         if index < modules {
             let tile = DEFAULT_MODULES[index];
+            if menu_bar {
+                let mut items = self.cc_menu_bar_items();
+                let on = has_menu_bar_item(&items, tile);
+                set_menu_bar_item(&mut items, tile, !on);
+                let _ = self.prefs.set(MENU_BAR_PREF, &format_menu_bar_items(&items));
+                return;
+            }
             let mut slots = self.cc_slots();
             if let Some(slot) = slots.iter_mut().find(|m| m.tile == tile) {
                 slot.shown = !slot.shown;
@@ -629,6 +657,7 @@ impl Shell {
         let candidates = self.cc_candidates();
         let rows = DEFAULT_MODULES.len() + candidates.len() + 1;
         let slots = self.cc_slots();
+        let bar_items = self.cc_menu_bar_items();
         let (x0, y0, w0, _) = gallery_row_rect(ui, self.w, 0);
         s.fill_rrect(x0, y0 + slide, w0, ui.pt(ROW_PT) * rows as f32, ui.pt(RADIUS_PT), a(rgba(118, 118, 128, 96)));
         for i in 0..rows {
@@ -650,6 +679,10 @@ impl Shell {
             s.blit(&label, (x + ui.pt(12.0)) as i32, (y + (h - label.h as f32) / 2.0) as i32, 255, alpha);
             let (sw, sh) = (ui.pt(SWITCH_W_PT), ui.pt(SWITCH_H_PT));
             draw_switch(s, ui, x + w - sw - ui.pt(12.0), y + (h - sh) / 2.0, if on { 1.0 } else { 0.0 });
+            if i < DEFAULT_MODULES.len() {
+                let bar_on = has_menu_bar_item(&bar_items, DEFAULT_MODULES[i]);
+                draw_switch(s, ui, menu_bar_switch_x(ui, x, w), y + (h - sh) / 2.0, if bar_on { 1.0 } else { 0.0 });
+            }
         }
     }
 
@@ -728,7 +761,8 @@ impl Shell {
                 vec![]
             }
             Some(Touch::Gallery(index)) if self.cc_gallery_at(x, y) == Some(index) => {
-                self.cc_gallery_tap(index);
+                let menu_bar = self.in_menu_bar_switch(x, index);
+                self.cc_gallery_tap(index, menu_bar);
                 vec![]
             }
             Some(Touch::Outside(mut d)) => {
@@ -1475,10 +1509,10 @@ mod tests {
     fn gallery_module_row_hides_and_shows_a_module_and_saves_it() {
         let mut sh = shell();
         let wifi = DEFAULT_MODULES.iter().position(|&t| t == Tile::Wifi).unwrap();
-        sh.cc_gallery_tap(wifi);
+        sh.cc_gallery_tap(wifi, false);
         assert!(!tile_visible(&sh.cc_slots(), Tile::Wifi));
         assert!(sh.prefs.get(MODULES_PREF).unwrap_or("").contains("-wifi"));
-        sh.cc_gallery_tap(wifi);
+        sh.cc_gallery_tap(wifi, false);
         assert!(tile_visible(&sh.cc_slots(), Tile::Wifi));
         assert!(!sh.prefs.get(MODULES_PREF).unwrap_or("").contains("-wifi"));
     }
@@ -1508,8 +1542,20 @@ mod tests {
         assert!(sh.cc.editing);
         let (rx, ry, rw, rh) = gallery_row_rect(&sh.ui, sh.w, 0);
         assert_eq!(sh.cc_gallery_at(rx + rw / 2.0, ry + rh / 2.0), Some(0));
-        sh.cc_gallery_tap(sh.cc_gallery_rows() - 1);
+        sh.cc_gallery_tap(sh.cc_gallery_rows() - 1, false);
         assert!(!sh.cc.editing);
+    }
+
+    #[test]
+    fn gallery_menu_bar_switch_turns_a_module_item_on_and_off() {
+        let mut sh = shell();
+        let wifi = DEFAULT_MODULES.iter().position(|&t| t == Tile::Wifi).unwrap();
+        sh.cc_gallery_tap(wifi, true);
+        assert_eq!(parse_menu_bar_items(sh.prefs.get(MENU_BAR_PREF).unwrap_or("")), vec![Tile::Wifi]);
+        // the module itself is still on the panel: the two switches are independent
+        assert!(tile_visible(&sh.cc_slots(), Tile::Wifi));
+        sh.cc_gallery_tap(wifi, true);
+        assert!(parse_menu_bar_items(sh.prefs.get(MENU_BAR_PREF).unwrap_or("")).is_empty());
     }
 
     #[test]
