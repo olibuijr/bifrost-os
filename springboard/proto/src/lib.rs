@@ -25,7 +25,7 @@ pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePrio
 pub use guided::GuidedRestriction;
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
-pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_CRITICAL, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, NotifTrigger, Payload, TextInput, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_CRITICAL, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 
 pub const MAX_PACKET: usize = 16 * 1024;
 /// The most user info pairs a quick action may carry on the wire.
@@ -840,6 +840,9 @@ pub enum ToShell {
     /// `UNUserNotificationCenter.requestAuthorization(options:)`: `options` is the `NOTIF_AUTH_*` bit set. Answered with
     /// `NotificationAuthorized`: at once when the app was asked before, otherwise after the first-time alert. Tag 0x14b.
     NotifyAuthorize { request: u32, options: u8 },
+    /// `UNUserNotificationCenter.add` with a calendar or time-interval trigger. The trigger sets the time, so
+    /// `req.delay_ms` and `req.repeats` are not used. Answered with `NotificationStatus`. Tag 0x14c.
+    NotifySchedule { request: u32, req: NotifRequest, trigger: NotifTrigger },
     /// `NativeSharingServicePicker.show(relativeTo:)`: `anchor` is in window points. Answered with `ShareDone`.
     Share { request: u32, items: Vec<Payload>, anchor: UiRect },
     /// `SMAppService.mainApp` register, unregister or status; always answered with `LoginItemStatus`. Tag 0x1b0.
@@ -1812,7 +1815,7 @@ impl ToShell {
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
             m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);

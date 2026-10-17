@@ -6,7 +6,7 @@
 //! app was not running (the shell starts it and delivers the response once it is up). Needs the `notifications`
 //! permission in the manifest; without it every `add` answers `NotifStatus::NotPermitted`.
 
-pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, NotifTrigger, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -188,6 +188,17 @@ pub fn request_authorization(ctx: &Ctx, options: AuthorizationOptions) -> u32 {
     let request = ctx.next_request();
     ctx.send_to_shell(ToShell::NotifyAuthorize { request, options: options.0 & NOTIF_AUTH_MASK });
     request
+}
+
+/// `add(_:)` with a calendar or time-interval trigger (`UNCalendarNotificationTrigger`, `UNTimeIntervalNotificationTrigger`).
+/// The request's own delay and repeat fields are not used; `trigger` sets the time. The answer is [`Event::Status`] with
+/// the returned request id. A request with an identifier already pending or delivered replaces it, and the pending
+/// requests of both kinds are listed by [`pending`] and removed by [`remove_pending`]. The shell keeps them across a
+/// restart and fires them on time.
+pub fn schedule(ctx: &Ctx, request: Request, trigger: NotifTrigger) -> u32 {
+    let id = ctx.next_request();
+    ctx.send_to_shell(ToShell::NotifySchedule { request: id, req: request.0, trigger });
+    id
 }
 
 #[cfg(test)]
