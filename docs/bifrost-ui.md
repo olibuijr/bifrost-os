@@ -4809,8 +4809,19 @@ Status: the model, parsing, registration and request mapping are in place with h
 toggle values kept by the shell. Its keys persist in the `control_center_modules` pref as `app:<identifier>` items
 (`join_pref`, `pref_app_keys`). Menu bar items per module persist in `control_center_menu_bar`
 (`parse_menu_bar_items`, `set_menu_bar_item`), and `battery_show_percent` gates the battery percentage.
-Not done: the Control Center panel does not draw app-control tiles, the Edit Controls gallery is not drawn, the
-menu bar does not draw module items from the pref, and the battery item does not draw the percentage. Per-app
+Done on the mobile Control Center sheet (`shell/control_center.rs`): app-control tiles sit in a four-across grid under
+the built-in modules (`app_tile_rect`, `app_hit`); a tap uses the control through `AppControls::press` and sends its
+request on a worker thread (`intents::exchange`). An Edit Controls button under the tiles opens a list of every module
+and every app control the running apps declare (`cc_gallery_*`). Each module row has a panel switch and a Menu Bar
+switch; each app row adds or removes its tile. Every change saves through `join_pref` and `MENU_BAR_PREF`, and an app
+control named in the saved list comes back once its app runs. The battery item draws its percentage beside the glyph
+when `battery_show_percent` is `1` (`battery_bar_label`). Tests: tile hit-testing, list add/remove persistence, menu
+bar switch, battery label (`shell/control_center.rs` tests).
+Not done: the Settings switch for `battery_show_percent` (no page yet); the menu bar does not yet draw one status
+item per module from `control_center_menu_bar` (it needs a `Menu` variant and a dispatch that opens the panel on that
+module); the desktop Control Center (`draw_desktop_cc`) does not draw app-control tiles or the Edit Controls button;
+the Edit Controls list does not scroll, and it lists only apps that are running. Not verified on device or host: the
+commits were written without a build, so the lead's `cargo test` run is the first check. Per-app
 energy is not built: `activity-desktop/src/sample.rs` has the `/proc` CPU-time sampler, but it lives in the app and
 is not shared with the shell. Apple parity gap: ControlWidgetButton, ControlWidgetToggle and ControlValueProvider
 on screen.
