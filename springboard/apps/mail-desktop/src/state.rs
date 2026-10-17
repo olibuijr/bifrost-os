@@ -1301,6 +1301,7 @@ impl Mail {
                 Field::yes_no("Plain text messages only", self.prefs.plain_text),
                 Field::yes_no("Bold unread messages", self.prefs.bold_unread),
                 Field::yes_no("Load remote content", self.prefs.remote_content),
+                Field::yes_no("Signature above the quoted text", self.prefs.signature_above_quote),
             ],
         );
         Ok(())
@@ -1413,6 +1414,9 @@ impl Mail {
         if form.fields.iter().any(|f| f.label == "Load remote content") {
             self.prefs.remote_content = is_yes(form.value("Load remote content"));
         }
+        if form.fields.iter().any(|f| f.label == "Signature above the quoted text") {
+            self.prefs.signature_above_quote = is_yes(form.value("Signature above the quoted text"));
+        }
         Ok(())
     }
 
@@ -1498,7 +1502,11 @@ impl Mail {
             reply_to: message::split_addresses(compose.form.value("Reply-To")),
             priority: compose.priority,
             subject: compose.form.value("Subject").to_string(),
-            body: with_signature(compose.form.value("Message"), &compose.signature),
+            body: if self.prefs.signature_above_quote {
+                with_signature_above_quote(compose.form.value("Message"), &compose.signature)
+            } else {
+                with_signature(compose.form.value("Message"), &compose.signature)
+            },
             in_reply_to: compose.in_reply_to.clone(),
             references: compose.references.clone(),
             attachments: compose.attachments.clone(),
@@ -1580,6 +1588,28 @@ pub fn with_signature(body: &str, signature: &str) -> String {
         format!("\n\n-- \n{signature}")
     } else {
         format!("{body}\n\n-- \n{signature}")
+    }
+}
+
+/// The signature placed above the quoted text of a reply: it goes before the attribution line ("On ..., X wrote:"). A
+/// message without one gets the signature at the end, as `with_signature` gives it.
+pub fn with_signature_above_quote(body: &str, signature: &str) -> String {
+    let signature = signature.trim_end();
+    if signature.trim().is_empty() {
+        return body.to_string();
+    }
+    let lines: Vec<&str> = body.split('\n').collect();
+    let Some(at) = lines.iter().position(|line| line.starts_with("On ") && line.trim_end().ends_with("wrote:")) else {
+        return with_signature(body, signature);
+    };
+    let above = lines[..at].join("\n");
+    let top = above.trim_end();
+    let below = lines[at..].join("\n");
+    let block = format!("-- \n{signature}");
+    if top.is_empty() {
+        format!("{block}\n\n{below}")
+    } else {
+        format!("{top}\n\n{block}\n\n{below}")
     }
 }
 
@@ -2165,6 +2195,8 @@ mod tests {
         assert_eq!(with_signature("Hello\n\n", "Ana\n"), "Hello\n\n-- \nAna");
         assert_eq!(with_signature("", "Ana"), "\n\n-- \nAna");
         assert_eq!(with_signature("Hello", "  \n"), "Hello");
+        assert_eq!(with_signature_above_quote("Thanks\n\nOn Mon, Ana wrote:\n> hi", "Ana"), "Thanks\n\n-- \nAna\n\nOn Mon, Ana wrote:\n> hi");
+        assert_eq!(with_signature_above_quote("Hello", "Ana"), "Hello\n\n-- \nAna", "no quote: the end");
         let mut mail = Mail::new(vec![account("work")]);
         mail.prefs.set_signature("work", "Ana");
         mail.open_compose(None);
