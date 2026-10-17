@@ -19,6 +19,8 @@ use bifrost_app::dispatch::{DispatchQueue, Qos};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Listing {
     pub mailboxes: Vec<String>,
+    /// The account's Drafts mailbox by special use (`\Drafts`), when the server flags one.
+    pub drafts: Option<String>,
     pub messages: Vec<Listed>,
 }
 
@@ -111,13 +113,15 @@ pub fn list(transport: &dyn Transport, account: &Account, password: &str, mailbo
 fn fetch_listing(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Result<Listing, String> {
     let mut session = session::connect(transport, accounts::incoming(account)?)?;
     session.login(&account.username, password)?;
-    let mailboxes: Vec<String> = session.list()?.into_iter().map(|m| m.name).collect();
+    let listed = session.list()?;
+    let drafts = crate::imap::drafts_name(&listed).map(str::to_string);
+    let mailboxes: Vec<String> = listed.into_iter().map(|m| m.name).collect();
     session.select(mailbox)?;
     let uids = session.uids()?;
     let newest: Vec<u32> = uids.iter().rev().take(LIST_LIMIT).copied().collect();
     let messages = session.headers(&newest)?;
     session.logout();
-    Ok(Listing { mailboxes, messages })
+    Ok(Listing { mailboxes, drafts, messages })
 }
 
 /// The whole text of one message. Opening it sets the Seen flag on the server.

@@ -86,6 +86,8 @@ pub const MENU_REMOVE_ATTACHMENTS: u32 = 40;
 pub const MENU_ADD_TO_CONTACTS: u32 = 41;
 pub const MENU_FORWARD_ATTACHMENT: u32 = 42;
 pub const MENU_REDIRECT: u32 = 43;
+/// Message > Edit Draft: the open message of the Drafts mailbox opens in a compose sheet.
+pub const MENU_EDIT_DRAFT: u32 = 81;
 pub const MENU_SEND_LATER: u32 = 44;
 pub const MENU_UNDO_SEND: u32 = 45;
 pub const MENU_REMIND: u32 = 46;
@@ -334,6 +336,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
         AppMenuItem::new(MENU_FORWARD_ATTACHMENT, "Forward as Attachment").enabled(loaded),
         AppMenuItem::new(MENU_REDIRECT, "Redirect...").enabled(loaded),
+        AppMenuItem::new(MENU_EDIT_DRAFT, "Edit Draft").enabled(loaded && mail.is_drafts()),
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_SEND, "Send").key("cmd+shift+d").enabled(compose_open),
         AppMenuItem::new(MENU_SEND_LATER, "Send Later").enabled(compose_open).checked(mail.send_later_shown()),
@@ -1205,6 +1208,7 @@ impl MailWindow {
             MENU_FORWARD => self.forward(),
             MENU_FORWARD_ATTACHMENT => self.forward_attachment(),
             MENU_REDIRECT => self.redirect(),
+            MENU_EDIT_DRAFT => self.edit_draft(),
             MENU_SEND => self.submit(ctx),
             MENU_SEND_LATER => {
                 let shown = self.mail.send_later_shown();
@@ -1430,6 +1434,7 @@ impl MailWindow {
                 Ok(listing) => {
                     let count = listing.messages.len();
                     self.note(format!("{}: {mailbox} read, {count} message{}", self.account_name(&account), if count == 1 { "" } else { "s" }));
+                    self.mail.drafts_mailbox = listing.drafts.clone();
                     let notices = self.mail.apply_listing(&account, &mailbox, listing.mailboxes, listing.messages);
                     // a message a rule moves or reads raises no notification
                     let quiet = self.apply_rules_to_arrivals();
@@ -2587,6 +2592,16 @@ impl MailWindow {
         self.mail.open_draft(draft);
     }
 
+    /// Message > Edit Draft: the open message (of the Drafts mailbox) goes back into a compose sheet.
+    fn edit_draft(&mut self) {
+        if !self.open_body_loaded() || !self.sheet_free() {
+            return;
+        }
+        let Some(raw) = self.mail.open.and_then(|uid| self.mail.bodies.get(&uid)).cloned() else { return };
+        self.mail.open_draft_copy(&raw);
+        self.dirty = true;
+    }
+
     /// Message > Redirect: asks who should get the open message.
     fn redirect(&mut self) {
         if self.open_body_loaded() && self.sheet_free() {
@@ -2894,6 +2909,22 @@ mod tests {
 
     /// A mail with everything that makes a menu long: many mailboxes, every rule, a smart mailbox, an open message with a
     /// file, and (when asked) a message being written.
+    #[test]
+    fn edit_draft_reopens_a_saved_copy_under_its_message_id() {
+        let mut mail = Mail::new(Vec::new());
+        mail.mailbox = "Kladdur".into();
+        mail.drafts_mailbox = Some("Kladdur".into());
+        assert!(mail.is_drafts());
+        mail.mailbox = INBOX.into();
+        assert!(!mail.is_drafts());
+        let raw = "Message-ID: <7.1@x>\r\nTo: bo@example.com\r\nSubject: Drog\r\n\r\nHi\r\n";
+        mail.open_draft_copy(raw);
+        match &mail.sheet {
+            Some(Sheet::Compose(c)) => assert_eq!(c.draft_id, "<7.1@x>"),
+            _ => panic!("no compose sheet"),
+        }
+    }
+
     fn busy_mail(compose: bool) -> Mail {
         let mut mail = Mail::new(vec![Account::new(Kind::Mail, "work", "Work", "me")]);
         mail.mailboxes = std::iter::once(INBOX.to_string()).chain((0..60).map(|n| format!("Box {n}"))).collect();
