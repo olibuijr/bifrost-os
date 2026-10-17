@@ -33,10 +33,10 @@ use bifrost_ui::photo_access::{Access, Answer, Status};
 use bifrost_ui::photo_adjustment::AdjustmentData;
 use bifrost_ui::photo_changes::{self, Asset};
 use bifrost_ui::photo_fetch::{self, FetchOptions, Item, Sort};
-use bifrost_ui::photo_media::{kind_for_name, Kind};
+use bifrost_ui::photo_media::{self, kind_for_name, Kind};
 use bifrost_ui::photo_project::{Change, Project};
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The manifest permission that lets an app use the library.
@@ -125,7 +125,7 @@ fn num(v: usize) -> Json {
     Json::Num(v as f64)
 }
 
-fn asset_json(p: &Photo, kind: Kind) -> Json {
+fn asset_json(p: &Photo, kind: Kind, live: bool) -> Json {
     let (w, h) = pixel_size(p);
     Json::Obj(vec![
         ("id".into(), Json::Str(local_identifier(p))),
@@ -133,7 +133,9 @@ fn asset_json(p: &Photo, kind: Kind) -> Json {
         ("width".into(), num(w)),
         ("height".into(), num(h)),
         ("created".into(), Json::Num(p.mtime.max(0) as f64)),
+        ("modified".into(), Json::Num(p.mtime.max(0) as f64)),
         ("favorite".into(), Json::Bool(false)),
+        ("live".into(), Json::Bool(live)),
     ])
 }
 
@@ -158,15 +160,43 @@ fn granted(access: &Access) -> bool {
     matches!(access.status(), Status::Authorized | Status::Limited)
 }
 
+thread_local! {
+    /// The Live Photo identifier of each file, with the time and size it was read at (a changed file is read again).
+    static CONTENT_IDS: RefCell<BTreeMap<PathBuf, (i64, u64, Option<String>)>> = RefCell::new(BTreeMap::new());
+}
+
+/// The Live Photo identifier of a file, read once per change of its time or size.
+fn content_id_of(p: &Photo) -> Option<String> {
+    if let Some((mtime, size, id)) = CONTENT_IDS.with(|c| c.borrow().get(&p.path).cloned()) {
+        if mtime == p.mtime && size == p.size {
+            return id;
+        }
+    }
+    let id = library::content_id(&p.path);
+    CONTENT_IDS.with(|c| c.borrow_mut().insert(p.path.clone(), (p.mtime, p.size, id.clone())));
+    id
+}
+
+/// The photos an app with `access` sees, in library order, each with whether it is a Live Photo still. The movie of a
+/// Live Photo is not listed on its own: it belongs to its still.
+pub fn listed<'a>(photos: &'a [Photo], access: &Access) -> Vec<(&'a Photo, bool)> {
+    let seen: Vec<&Photo> = photos.iter().filter(|p| access.allows(&local_identifier(p))).collect();
+    let items: Vec<photo_media::Item> = seen.iter().map(|p| photo_media::Item { name: p.name(), content_id: content_id_of(p) }).collect();
+    let pairs = photo_media::pair_moving(&items);
+    let movies: BTreeSet<usize> = pairs.iter().map(|p| p.movie).collect();
+    let stills: BTreeSet<usize> = pairs.iter().map(|p| p.still).collect();
+    seen.iter().enumerate().filter(|(i, _)| !movies.contains(i)).map(|(i, p)| (*p, stills.contains(&i))).collect()
+}
+
 /// The visible assets in the default fetch order (oldest first): the listing a change observer compares.
 pub fn listing(photos: &[Photo], access: &Access) -> Vec<Asset> {
-    let seen: Vec<&Photo> = photos.iter().filter(|p| access.allows(&local_identifier(p))).collect();
-    let items: Vec<Item> = seen.iter().enumerate().map(|(i, p)| library_item(i, p)).collect();
+    let seen = listed(photos, access);
+    let items: Vec<Item> = seen.iter().enumerate().map(|(i, (p, _))| library_item(i, p)).collect();
     let opts = FetchOptions { sort: Sort::OldestFirst, ..FetchOptions::default() };
     photo_fetch::fetch(&items, &opts)
         .into_iter()
         .filter_map(|it| it.id.parse::<usize>().ok())
-        .map(|i| Asset { id: local_identifier(seen[i]), modified: seen[i].mtime.max(0) as u64 })
+        .map(|i| Asset { id: local_identifier(seen[i].0), modified: seen[i].0.mtime.max(0) as u64 })
         .collect()
 }
 
@@ -330,23 +360,18 @@ pub fn answer(app_id: &str, has_permission: bool, method: &str, params: &Json, p
             if !matches!(access.status(), Status::Authorized | Status::Limited) {
                 return Err("photo library access is not granted".into());
             }
-            let visible = |p: &&Photo| access.allows(&local_identifier(p));
             if method == "image" {
                 let id = params.str_field("id").ok_or("id is required")?;
-                let p = photos.iter().filter(visible).find(|p| local_identifier(p) == id).ok_or_else(|| format!("no asset {id}"))?;
+                let p = listed(photos, &access).into_iter().map(|(p, _)| p).find(|p| local_identifier(p) == id).ok_or_else(|| format!("no asset {id}"))?;
                 let (w, h) = pixel_size(p);
                 return Ok(Json::Obj(vec![("path".into(), Json::Str(p.path.to_string_lossy().into_owned())), ("width".into(), num(w)), ("height".into(), num(h))]));
             }
             let opts = options_of(params)?;
-            let seen: Vec<&Photo> = photos.iter().filter(visible).collect();
-            let items: Vec<Item> = seen
-                .iter()
-                .enumerate()
-                .map(|(i, p)| Item { id: format!("{i:08}"), kind: kind_for_name(&p.name()), favourite: false, trashed: false, created: p.mtime.max(0) as u64 })
-                .collect();
+            let seen = listed(photos, &access);
+            let items: Vec<Item> = seen.iter().enumerate().map(|(i, (p, _))| library_item(i, p)).collect();
             let rows: Vec<Json> = photo_fetch::fetch(&items, &opts)
                 .into_iter()
-                .filter_map(|it| it.id.parse::<usize>().ok().map(|i| asset_json(seen[i], it.kind)))
+                .filter_map(|it| it.id.parse::<usize>().ok().map(|i| asset_json(seen[i].0, it.kind, seen[i].1)))
                 .collect();
             Ok(Json::Obj(vec![("assets".into(), Json::Arr(rows))]))
         }
@@ -366,8 +391,7 @@ pub fn answer(app_id: &str, has_permission: bool, method: &str, params: &Json, p
                 return Err("photo library access is not granted".into());
             }
             let id = params.str_field("id").ok_or("id is required")?;
-            let visible = |p: &&Photo| access.allows(&local_identifier(p));
-            let p = photos.iter().filter(visible).find(|p| local_identifier(p) == id).ok_or_else(|| format!("no asset {id}"))?;
+            let p = listed(photos, &access).into_iter().map(|(p, _)| p).find(|p| local_identifier(p) == id).ok_or_else(|| format!("no asset {id}"))?;
             let sidecar = sidecar_path(&p.path);
             match params.str_field("op").as_deref() {
                 Some("get") => {
@@ -547,6 +571,17 @@ mod tests {
         let r = answer(app, true, "image", &params(vec![("id", Json::Str(id("a.png", 100)))]), &library()).unwrap();
         assert_eq!(r.str_field("path").as_deref(), Some("/nonexistent/Pictures/a.png"));
         assert!(answer(app, true, "image", &params(vec![("id", Json::Str("PH-0".into()))]), &library()).is_err());
+    }
+
+    #[test]
+    fn plain_pictures_are_listed_and_not_live() {
+        let app = "is.example.photos-plain";
+        granted(app);
+        let r = answer(app, true, "fetch", &params(vec![("limit", Json::Num(0.0))]), &library()).unwrap();
+        let rows = r.get("assets").and_then(Json::as_array).unwrap();
+        assert_eq!(rows.len(), 4, "the video is a movie, not a live photo, and is listed");
+        assert!(rows.iter().all(|a| a.get("live") == Some(&Json::Bool(false))));
+        assert!(rows.iter().all(|a| a.get("modified") == a.get("created")));
     }
 
     #[test]
