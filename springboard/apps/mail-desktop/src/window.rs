@@ -187,6 +187,7 @@ enum Pending {
     /// "Add to Contacts" from the banner for a phone number: the contact being saved.
     PhoneSave(String),
     /// Recipient suggestions: the answer to the question whether Mail may read the address book.
+    BookAccess,
     /// Recipient suggestions: the names and email addresses of the address book.
     BookFetch,
     /// A password item being deleted. Nothing follows its answer.

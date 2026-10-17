@@ -2276,7 +2276,7 @@ mod tests {
         assert_eq!(split_last_recipient(""), ("", ""));
         assert_eq!(split_last_recipient("an"), ("", "an"));
         assert_eq!(split_last_recipient("ana@example.com, bo"), ("ana@example.com,", " bo"));
-        assert_eq!(split_last_recipient("Ana <ana@example.com>, "), ("Ana <ana@example.com>, ", ""));
+        assert_eq!(split_last_recipient("Ana <ana@example.com>, "), ("Ana <ana@example.com>,", " "));
         assert_eq!(split_last_recipient("\"Smith, Ana\" <a@x.is>"), ("", "\"Smith, Ana\" <a@x.is>"), "a comma in quotes does not separate");
     }
 

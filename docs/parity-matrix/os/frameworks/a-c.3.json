@@ -2185,11 +2185,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/recipient_autocomplete.rs, springboard/ui/src/recipient_recents.rs",
+   "bifrost": "springboard/ui/src/recipient_autocomplete.rs, springboard/ui/src/recipient_recents.rs, springboard/apps/mail-desktop/src/state.rs (Mail::sync_recipient_field, accept_recipient), springboard/apps/mail-desktop/src/window.rs (suggestion keys and address book fetch), springboard/apps/mail-desktop/src/draw.rs (suggestion rows under the focused field), springboard/apps/mail-desktop/src/people.rs (book_entry)",
    "status": "partial",
-   "note": "Recipient completion for address fields: contacts and the recent recipients merged, ranked and de-duplicated by recipient_autocomplete.rs. Tests: bifrost_ui::recipient_autocomplete::tests. Lead 2026-10-17: not ready: Mail compose does not call recipient_autocomplete yet.",
+   "note": "Recipient completion for address fields: contacts and the recent recipients merged, ranked and de-duplicated by recipient_autocomplete.rs. Tests: bifrost_ui::recipient_autocomplete::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "people::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recipient_autocomplete::tests"
+    }
+   ],
+   "ready_note": "Mail compose wires it: the To, Cc and Bcc fields suggest from the address book (read through the Contacts service once the person lets Mail) and the recent recipients, with the arrow keys, Return, Tab, Escape and a tap working the list under the field."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsAutocompleteUI.framework",
@@ -2206,11 +2225,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/recipient_autocomplete.rs (RecipientField), springboard/ui/src/contact_picker.rs",
+   "bifrost": "springboard/ui/src/recipient_autocomplete.rs, springboard/ui/src/recipient_recents.rs, springboard/apps/mail-desktop/src/state.rs (Mail::sync_recipient_field, accept_recipient), springboard/apps/mail-desktop/src/window.rs (suggestion keys and address book fetch), springboard/apps/mail-desktop/src/draw.rs (suggestion rows under the focused field), springboard/apps/mail-desktop/src/people.rs (book_entry)",
    "status": "partial",
-   "note": "The recipient field behind completion: recipient_autocomplete.rs RecipientField (tokens, suggestion list, highlight, commit and remove keys) and the picker model in contact_picker.rs. The widget that draws it is the caller's. Lead 2026-10-17: not ready: Mail compose does not call recipient_autocomplete yet.",
+   "note": "The recipient field behind completion: recipient_autocomplete.rs RecipientField (tokens, suggestion list, highlight, commit and remove keys) and the picker model in contact_picker.rs. The widget that draws it is the caller's.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "people::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recipient_autocomplete::tests"
+    }
+   ],
+   "ready_note": "Mail draws the suggestion rows (name, label and address, highlighted row) right under the focused recipient field and routes the keys to the RecipientField model. The token chips of the reference widget are not built: a finished recipient stays text in the field."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsDonation.framework",
@@ -2227,11 +2265,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/contact_donation.rs",
+   "bifrost": "springboard/ui/src/contact_donation.rs; springboard/src/shell/services/contacts.rs (donate, suggestions, feedback); springboard/src/shell/contactdonations.rs; springboard/sdk/src/contacts.rs (suggested); springboard/apps/mail-desktop/src/people.rs, springboard/apps/mail-desktop/src/window.rs (read_open_message); springboard/apps/contacts-desktop/src/suggested.rs, springboard/apps/contacts-desktop/src/contacts.rs (Suggested Contacts screen)",
    "status": "partial",
-   "note": "Suggested contacts from donations: apps donate a name and one email address or phone number, the store keeps and ranks them, hides people already in the address book, and builds the contact on accept. Local only; text file form for storage. Lead 2026-10-17: not ready: nothing calls contact_donation yet.",
+   "note": "Suggested contacts from donations: apps donate a name and one email address or phone number, the store keeps and ranks them, hides people already in the address book, and builds the contact on accept. Local only; text file form for storage.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "people::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactdonations::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::suggested::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "suggested::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "contacts::tests::donated_people"
+    }
+   ],
+   "ready_note": "Mail donates the sender and the other recipients of a read message to the contacts service (once per message; not the person's own addresses, system mailboxes or bulk mail; switch in Mail Settings, Suggest people to Contacts). The shell keeps the donations beside the contacts file; the Contacts app lists them as Suggested Contacts. Local only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsDonationFeedback.framework",
@@ -2248,11 +2325,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/contact_donation.rs (DonationStore::feedback)",
+   "bifrost": "springboard/ui/src/contact_donation.rs; springboard/src/shell/services/contacts.rs (donate, suggestions, feedback); springboard/src/shell/contactdonations.rs; springboard/sdk/src/contacts.rs (suggested); springboard/apps/mail-desktop/src/people.rs, springboard/apps/mail-desktop/src/window.rs (read_open_message); springboard/apps/contacts-desktop/src/suggested.rs, springboard/apps/contacts-desktop/src/contacts.rs (Suggested Contacts screen)",
    "status": "partial",
-   "note": "Local feedback on suggested contacts: accept or dismiss, kept as blocked and accepted lists beside the donations (contact_donation.rs). No upload. Lead 2026-10-17: not ready: nothing calls contact_donation yet.",
+   "note": "Local feedback on suggested contacts: accept or dismiss, kept as blocked and accepted lists beside the donations (contact_donation.rs). No upload.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "people::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactdonations::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::suggested::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "suggested::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "contacts::tests::donated_people"
+    }
+   ],
+   "ready_note": "The Contacts app shows Suggested Contacts (sidebar row, detail pane) with Add and Dismiss; the answers go back to the contacts service, which records accepted and blocked addresses so a dismissed address is never offered again. Only the Contacts app can read the suggestions or answer them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsFoundation.framework",
@@ -5830,11 +5946,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs",
+   "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs; springboard/apps/mail-desktop/src/found.rs; springboard/apps/mail-desktop/src/state.rs (Mail::refresh_found_in, found_accept); springboard/apps/mail-desktop/src/draw.rs (draw_found_banner); springboard/apps/mail-desktop/src/window.rs (found_link)",
    "status": "gap",
-   "note": "The suggestion engine and its data tables (airport and time zone tables, attribute names, reverse-template scripts and classifier calibration for finding events, flights and contacts in mail). Built 2026-10-17 (wave 12): springboard/ui/src/found_in.rs reads a message for meeting times (proposed_event), flights with the airports named beside them (a table of 49 airports with city and time zone), emails, phone numbers and street addresses (detect), and remembers the suggestions turned down. The reference's classifier calibrations are ML model data and are not mirrored; everything runs on the device. Lead 2026-10-17: not ready: found_in is not wired into the Mail reading pane yet.",
+   "note": "The suggestion engine and its data tables (airport and time zone tables, attribute names, reverse-template scripts and classifier calibration for finding events, flights and contacts in mail). Built 2026-10-17 (wave 12): springboard/ui/src/found_in.rs reads a message for meeting times (proposed_event), flights with the airports named beside them (a table of 49 airports with city and time zone), emails, phone numbers and street addresses (detect), and remembers the suggestions turned down. The reference's classifier calibrations are ML model data and are not mirrored; everything runs on the device.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "found::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "found_in::tests"
+    }
+   ],
+   "ready_note": "Mail reads the open message with found_in::extract once its text is here and keeps the suggestions in a Pager; turned-down and taken ones are not offered again from the same message in this run. The reference classifier calibrations are ML model data and are not mirrored; everything runs on the device."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSuggestionsML.framework",
@@ -5872,11 +6007,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs",
+   "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs; springboard/apps/mail-desktop/src/found.rs; springboard/apps/mail-desktop/src/state.rs (Mail::refresh_found_in, found_accept); springboard/apps/mail-desktop/src/draw.rs (draw_found_banner); springboard/apps/mail-desktop/src/window.rs (found_link)",
    "status": "gap",
-   "note": "Suggestion views for Mail, Messages and Search: a suggested-event popover, a paging popover and a found-in suggestion view. Built 2026-10-17 (wave 12): found_in::Pager is the model of the paging popover (page label, next, previous, dismiss, accept returning an Action) and Found carries the row text and the 'Found in <app>' line; the view draws it with the SDK popover and list kits. Wiring into Mail's reading pane is the app's step. Lead 2026-10-17: not ready: found_in is not wired into the Mail reading pane yet.",
+   "note": "Suggestion views for Mail, Messages and Search: a suggested-event popover, a paging popover and a found-in suggestion view. Built 2026-10-17 (wave 12): found_in::Pager is the model of the paging popover (page label, next, previous, dismiss, accept returning an Action) and Found carries the row text and the 'Found in <app>' line; the view draws it with the SDK popover and list kits. Wiring into Mail's reading pane is the app's step.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "found::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "found_in::tests"
+    }
+   ],
+   "ready_note": "Mail's reading pane shows the Found in Mail banner above the text: the suggestion, its detail, a page label (1 of 3) with Previous and Next, and Add and Dismiss. Add sends an event to Calendar, an email address or phone number to Contacts, and an address to Maps; a flight is shown and can be dismissed (nothing in BifrOSt tracks flights)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSuggestionsUIMacHelper.framework",
@@ -5893,11 +6047,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs",
+   "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs; springboard/apps/mail-desktop/src/found.rs; springboard/apps/mail-desktop/src/state.rs (Mail::refresh_found_in, found_accept); springboard/apps/mail-desktop/src/draw.rs (draw_found_banner); springboard/apps/mail-desktop/src/window.rs (found_link)",
    "status": "os",
-   "note": "Helper bundle for the suggestion views (Info.plist and version.plist only). Its job is hosting CoreSuggestionsUI in a separate process; BifrOSt draws the views in-process from the found_in models. Lead 2026-10-17: not ready: found_in is not wired into the Mail reading pane yet.",
+   "note": "Helper bundle for the suggestion views (Info.plist and version.plist only). Its job is hosting CoreSuggestionsUI in a separate process; BifrOSt draws the views in-process from the found_in models.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "found::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "found_in::tests"
+    }
+   ],
+   "ready_note": "The helper hosts the suggestion views out of process; BifrOSt draws the same banner in Mail's own process (Mail reading pane), so the helper itself is not needed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSymbolication.framework",
