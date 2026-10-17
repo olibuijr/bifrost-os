@@ -38,6 +38,7 @@ impl Shell {
     /// Runs a final transcript as a Voice Control command. None when the transcript is not a command; otherwise the
     /// result of pressing the named element (its address and effects, or why it could not be pressed), as `ax press`
     /// answers it.
+    #[cfg_attr(not(test), allow(dead_code))] // not wired yet: no Voice Control session starts the recognizer
     pub(in crate::shell) fn voice_press(&mut self, transcript: &Transcript, t: f64) -> Option<Result<(String, Vec<Effect>), String>> {
         match parse(transcript)? {
             Command::Press(name) => Some(self.ax_press(&name, t)),

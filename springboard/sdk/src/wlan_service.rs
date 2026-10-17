@@ -29,7 +29,7 @@ use bifrost_core::json::Json;
 pub const SERVICE: &str = "wifi";
 
 /// One Wi-Fi interface, as `CWInterface` reports it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct WifiInterface {
     /// The interface name, such as `wlan0`.
     pub name: String,

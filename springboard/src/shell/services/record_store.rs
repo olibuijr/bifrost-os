@@ -148,7 +148,7 @@ pub fn epoch_now() -> u64 {
 /// The answer to `changes`. When the store did not move past `since`, nothing. Otherwise the records of `entity` that
 /// writes changed since `since` (from the log), and the ids of those that are gone in `removed`. A client older than
 /// the kept log, or ahead of the store, gets every record of the entity with `full` set.
-pub fn changes_json(slot: &Slot, since: u64, entity: &str) -> Json {
+pub(crate) fn changes_json(slot: &Slot, since: u64, entity: &str) -> Json {
     let changed = slot.revision != since;
     let full = since < slot.log_base || since > slot.revision;
     let mut records = Vec::new();

@@ -487,7 +487,7 @@ impl ListView {
 
     /// What lies under (x, y) when the list starts at `top` on a `w` px wide screen.
     pub fn hit(&self, ui: &Ui, w: i32, top: f32, x: f32, y: f32) -> Option<Hit> {
-        let (cw, ch) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
+        let (cw, _ch) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
         let inside = |(rx, ry, rw, rh): Rect| x >= rx && x < rx + rw && y >= ry && y < ry + rh;
         if !self.is_empty() && self.mode == Mode::Center && inside(self.clear_all_rect(ui, w, top)) {
             return Some(Hit::ClearAll);

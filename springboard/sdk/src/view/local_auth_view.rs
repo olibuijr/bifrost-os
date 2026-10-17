@@ -8,7 +8,7 @@ use crate::kit::ui::{CAPSULE_BG, CONTROL_PRESSED, LABEL_2, SYSTEM_GREEN, TINT};
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
 use bifrost_ui::auth_view::{AuthView, BiometryKind, ControlSize, Event as AuthEvent, ViewState};
-use bifrost_ui::{Node, Rect, Role};
+use bifrost_ui::{Node, Role};
 
 /// The accessibility label for a biometric kind (names only; no platform product names).
 pub fn kind_label(kind: BiometryKind) -> &'static str {
@@ -78,12 +78,12 @@ impl View for LocalAuthenticationView {
         let fill = match self.model.state() {
             ViewState::Succeeded => SYSTEM_GREEN,
             ViewState::Evaluating => TINT,
-            ViewState::Failed | ViewState::LockedOut => LABEL_2,
+            ViewState::Failed | ViewState::LockedOut => LABEL_2.now(),
             ViewState::Idle => {
                 if self.pressed {
-                    CONTROL_PRESSED
+                    CONTROL_PRESSED.now()
                 } else {
-                    CAPSULE_BG
+                    CAPSULE_BG.now()
                 }
             }
         };
