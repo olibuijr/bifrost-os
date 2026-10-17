@@ -767,7 +767,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/sips.rs",
    "status": "partial",
-   "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Built 2026-10-17: -s format png|jpeg writes PNG or JPEG with --out (sips::tests); GIF output and other -s properties are still refused.",
+   "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Built 2026-10-17: -s format png|jpeg writes PNG or JPEG with --out (sips::tests); GIF output and other -s properties are still refused. Built 2026-10-17: -s format gif writes a GIF89a with a fixed 3-3-2 palette and LZW (sips::tests); other -s properties are still refused.",
    "rea": [],
    "method": "assessed"
   },
@@ -3817,7 +3817,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/softwareupdate.rs",
    "status": "partial",
-   "note": "--schedule is refused; software updates go through bifrost pc midget update",
+   "note": "--schedule on|off and the schedule query are built (softwareupdate::tests); updates install through bifrost pc midget update, not through a general software update service.",
    "rea": [],
    "method": "assessed"
   },
