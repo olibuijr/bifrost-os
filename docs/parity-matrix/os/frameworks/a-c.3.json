@@ -2987,7 +2987,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_client.rs; springboard/sdk/src/dav_sync.rs",
    "status": "partial",
-   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. The module docs describe reads only, so writing edits back to the server is not covered.",
+   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. Writes: put_resource and delete_resource (sdk dav_client.rs) send PUT and DELETE with If-Match, If-None-Match for creates, and map 412 to a conflict. Not built: dav_sync does not yet push local edits or queue them, so Calendar and Contacts edits stay local.",
    "rea": [],
    "method": "assessed"
   },
@@ -3906,9 +3906,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/services/contacts.rs",
+   "bifrost": "springboard/src/shell/services/contacts.rs (split_name); springboard/ui/src/contact_fetch.rs (MiddleName, NameSuffix); springboard/ui/src/contact_vcard.rs",
    "status": "partial",
-   "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). Not built: middle and suffix parts, and the bundled frequency and surname tables.",
+   "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). The contact fetch layer now has middle_name and name_suffix keys (ui contact_fetch.rs, additive), and the vCard reader already splits middle and suffix parts (contact_vcard.rs). Not built: the store holds one name string, so the shell does not yet split a typed name into middle and suffix, and the bundled frequency and surname tables are missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -4053,11 +4053,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/detect.rs",
+   "bifrost": "springboard/ui/src/detect.rs; springboard/ui/src/phone_rules.rs",
    "status": "partial",
-   "note": "Backs the Data Detection row. Phone numbers in text are found by pattern detection. The reference's per-region ruleset for parsing, validation and formatting is not implemented.",
+   "note": "Backs the Data Detection row. Phone numbers in text are found by pattern detection (detect.rs). phone_rules.rs ships the parsing, validation and E.164 rules for the 20 most common regions as data, scoped to that list. Not built: rules for other regions, the full numbering plans, and the link from the detector to to_e164.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "phone_rules::tests"
+    }
+   ],
+   "ready_note": "Rules for 20 common regions with E.164 normalisation and validation (phone_rules tests). Other regions and the detector link are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework",
@@ -5361,11 +5370,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/sha256.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
+   "bifrost": "springboard/sdk/src/crypto_kit.rs; springboard/core/src/sha256.rs; springboard/core/src/sha512.rs; springboard/core/src/hkdf.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
    "status": "partial",
-   "note": "The primitives the bridge exposes to the crypto kit (SHA-2, AES-GCM, X25519, Ed25519) are pure Rust and tested headless. Gap: apps cannot call them yet.",
+   "note": "The primitives the bridge exposes to the crypto kit are pure Rust and tested headless. The SDK crypto_kit module now gives apps SHA-256, SHA-384 and SHA-512, HKDF-SHA256, AES-GCM keys, X25519 key agreement and Ed25519 signing, with ChaCha20-Poly1305 and HMAC-SHA256 from their own modules. Not built: SHA-384 and SHA-512 HMAC.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crypto_kit::tests"
+    }
+   ],
+   "ready_note": "App-facing digests, HKDF, AES-GCM, X25519 and Ed25519 in sdk crypto_kit (its tests check RFC and NIST vectors)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CryptoKitPrivate.framework",
@@ -5382,9 +5400,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/sha256.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
+   "bifrost": "springboard/sdk/src/crypto_kit.rs; springboard/core/src/sha256.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
    "status": "partial",
-   "note": "The private layer's primitives are covered by the same pure Rust modules. Gap: there is no hardware-backed key path and no app entry point.",
+   "note": "The private layer uses the same pure Rust modules as the public crypto kit, which apps can now call through sdk crypto_kit. Gap: there is no hardware-backed key path, and the private key-object types are not exposed.",
    "rea": [],
    "method": "assessed"
   },

@@ -9,6 +9,10 @@ use std::collections::{BTreeMap, BTreeSet};
 pub enum Key {
     GivenName,
     FamilyName,
+    /// The middle names (`CNContactMiddleNameKey`), between the given and family name.
+    MiddleName,
+    /// The suffix after the name, such as `Jr.` or `III` (`CNContactNameSuffixKey`).
+    NameSuffix,
     Organization,
     Phones,
     Emails,
@@ -21,9 +25,11 @@ pub enum Key {
 
 impl Key {
     /// Every key, in declaration order.
-    pub const ALL: [Key; 10] = [
+    pub const ALL: [Key; 12] = [
         Key::GivenName,
         Key::FamilyName,
+        Key::MiddleName,
+        Key::NameSuffix,
         Key::Organization,
         Key::Phones,
         Key::Emails,
@@ -41,6 +47,8 @@ impl Key {
         match self {
             Key::GivenName => "given_name",
             Key::FamilyName => "family_name",
+            Key::MiddleName => "middle_name",
+            Key::NameSuffix => "name_suffix",
             Key::Organization => "organization",
             Key::Phones => "phones",
             Key::Emails => "emails",
@@ -348,5 +356,21 @@ mod tests {
         assert_eq!(DateComponents::from_text("1815-12-10"), DateComponents::new(Some(1815), 12, 10));
         assert_eq!(DateComponents::new(None, 13, 1), None);
         assert_eq!(DateComponents::from_text("nonsense"), None);
+    }
+
+    #[test]
+    fn middle_name_and_suffix_are_fetchable_and_default_to_absent() {
+        let mut r = sample();
+        r.set(Key::MiddleName, Value::Text("Augusta".into()));
+        r.set(Key::NameSuffix, Value::Text("III".into()));
+        let keys = Keys::new(&[Key::MiddleName, Key::NameSuffix, Key::FamilyName]).unwrap();
+        let p = project(&r, &keys);
+        assert_eq!(p.text(Key::MiddleName), Ok("Augusta"));
+        assert_eq!(p.text(Key::NameSuffix), Ok("III"));
+        assert_eq!(p.get(Key::GivenName), Err(Error::NotFetched(Key::GivenName)));
+        let bare = project(&Record::new(1), &Keys::new(&[Key::MiddleName, Key::NameSuffix]).unwrap());
+        assert_eq!(bare.get(Key::MiddleName), Ok(None));
+        assert_eq!(Key::from_name("name_suffix"), Some(Key::NameSuffix));
+        assert_eq!(Key::from_name("middle_name"), Some(Key::MiddleName));
     }
 }

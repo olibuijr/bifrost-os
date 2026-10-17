@@ -117,6 +117,7 @@ pub mod crypto_key;
 pub mod kem;
 pub mod signature_pq;
 pub mod chacha_poly;
+pub mod crypto_kit;
 pub mod encrypted_archive;
 pub mod keychain_protection;
 pub mod keychain_keys;
