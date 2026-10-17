@@ -175,6 +175,7 @@ pub mod chacha_poly;
 pub mod spellcheck;
 pub mod text_replacements;
 pub mod volume;
+pub mod ddc_ci;
 pub mod low_space;
 pub mod identity;
 pub mod reachability;
