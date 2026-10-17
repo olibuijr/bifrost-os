@@ -768,7 +768,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/look_up_popover.rs, springboard/ui/src/detect.rs",
    "status": "partial",
-   "note": "Look Up popover offers actions for a word and data detectors find dates, links and numbers; no general suggested-actions panel. built on os/team-l-07-system-ui; not yet verified on Midget",
+   "note": "Look Up popover offers actions for a word and data detectors find dates, links and numbers; no general suggested-actions panel. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: suggested-actions model (springboard/ui/src/suggested_actions.rs) that lists detected items with their actions in reading order; tests suggested_actions::tests. The panel is not drawn or wired into the shell yet.",
    "rea": []
   }
  ]

@@ -661,6 +661,7 @@ pub mod markup_ink;
 pub mod quick_actions;
 pub mod launch;
 pub mod detect;
+pub mod suggested_actions;
 pub mod phone_number;
 pub mod prefs_layout;
 pub mod search;
