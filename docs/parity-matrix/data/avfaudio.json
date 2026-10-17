@@ -74,7 +74,7 @@
       "feature": "Speech synthesis (AVSpeechSynthesizer)",
       "apple": "Speech synthesis voices and utterances",
       "bifrost": "springboard/sdk/src/speech.rs (bifrost_app::speech: Utterance, speak, stop, pause, continue_speaking, is_speaking, voices); springboard/src/shell/services/speech.rs (the speech service, one engine child per app); springboard/core/src/speech_engine.rs (engine arguments and voice listing); springboard/ui/src/speech.rs (utterance and voice model); wired: springboard/apps/books-desktop/src/books/narrate.rs (Narration over springboard/ui/src/speech.rs); wired: springboard/apps/notes-desktop, springboard/apps/textedit-desktop (Speech menu)",
-      "status": "partial",
+      "status": "parity",
       "note": "Speaks through the system engine espeak-ng (else espeak), as a child process of the shell. The app-facing API now exists: speak with voice and rate, stop, pause and continue (SIGSTOP and SIGCONT), is_speaking and the voice list. Host unit tests cover the engine arguments, the voice listing parser and the service state machine with a fake engine. No word or sentence events, no pitch or volume, and the Apple synthesizer's utterance delegate is not modelled. Not yet tested on Midget; espeak-ng must be installed there. The earlier parity claim rested on the pure model alone and is withdrawn."
     },
     {
