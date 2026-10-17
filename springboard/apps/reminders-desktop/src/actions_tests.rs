@@ -50,6 +50,28 @@ fn titles(app: &Reminders) -> Vec<String> {
 }
 
 #[test]
+fn a_deleted_reminder_waits_in_recently_deleted_and_restores_from_there() {
+    let (mut app, ui, path) = app("recently-deleted");
+    add(&mut app, &ui, "Buy milk", 0.0);
+    let id = app.data.items[0].id;
+    assert!(app.show_item(id));
+    assert!(app.delete_selected(&ui, 10.0));
+    assert!(app.data.items.is_empty());
+    assert_eq!(app.kept_count, 1, "the sidebar count sees the kept reminder");
+    app.activate(&ui, Target::Deleted, 20.0);
+    let kept: Vec<String> = app.deleted.clone().expect("the page is open").into_iter().map(|r| r.title).collect();
+    assert_eq!(kept, vec!["Buy milk".to_string()]);
+    // the page draws with its row and restore link
+    let mut buf = vec![0u32; 1200 * 1920];
+    app.draw(&mut bifrost_app::kit::Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 30.0);
+    app.activate(&ui, Target::Restore(id), 40.0);
+    assert_eq!(titles(&app), vec!["Buy milk".to_string()]);
+    assert!(app.deleted.as_ref().expect("still on the page").is_empty());
+    assert_eq!(app.kept_count, 0);
+    cleanup(&path);
+}
+
+#[test]
 fn duplicate_places_an_incomplete_copy_after_the_original() {
     let (mut app, ui, path) = app("duplicate");
     add(&mut app, &ui, "Buy milk", 0.0);
