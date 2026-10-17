@@ -5322,3 +5322,33 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
   sentence boundaries with an optional overlap. No caller yet. Parity row: ChunkingLibrary.
 - **Cloth (`bifrost_ui::cloth`)**: `Cloth` is a CPU Verlet cloth sheet with pins, gravity, wind, a ground plane and mesh triangles.
   No GPU path. No caller yet. Parity row: ClothPhysics.
+
+### Public framework settle wave (slice o06, wave 13, 2026-10-17)
+
+- **USB host transport (`bifrost_core::usb_host`, `bifrost_app::usb_device::UsbHostDevice`)**: opens a `/dev/bus/usb` node, reads the
+  cached descriptors, claims interfaces, selects configuration and alternate setting, and moves control, bulk and interrupt
+  transfers; `list_nodes` lists devices from sysfs. Isochronous transfers need an URB queue and are not in it. A sandboxed app
+  reaches only the nodes its sandbox binds, and none is bound for apps yet (owner decision open). Parity row: IOUSBHost.
+- **PTP cameras (`bifrost_core::ptp`, `bifrost_app::image_capture`)**: the Picture Transfer Protocol (container codec, DeviceInfo and
+  ObjectInfo datasets, a session with list, download, thumbnail, delete, capture, battery, clock), a USB transport, and
+  `MemoryCamera` for tests. `ImageCapture` fills the `camera_device` model from it. Scanners stay the `scan_job` model (SANE
+  transport not wired). Parity row: ImageCaptureCore.
+- **Network connection (`bifrost_app::network_stream`, `avahi_browse`)**: `NetworkStream` opens the socket behind a `Connection` (TCP
+  with no-delay, keepalive and connect timeout, TLS through `tls_client`, UDP, a local path). `avahi_browse::browse` fills a
+  `network_browser::Browser` from the local Avahi daemon. QUIC and custom framers are not built. Parity row: Network.
+- **Packet tunnel host (`bifrost_core::tun_device`, `bifrost_app::packet_tunnel`)**: a Linux tun interface that moves IP packets, the `ip`
+  commands that address it, and the full-tunnel and split-tunnel route plan (the server and excluded networks stay on the
+  uplink). IKEv2 and IPsec negotiation are not in tree. Parity row: NetworkExtension.
+- **Audio scene (`bifrost_app::audio_scene`)**: the OpenAL-shaped context (buffers, sources, listener, mixer to stereo) over
+  `positional_audio`. Doppler and multichannel buffers are not built. Parity row: OpenAL.
+- **Link metadata fetch (`bifrost_app::link_fetch`)**: the request behind `LPMetadataProvider`. Parity row: LinkPresentation.
+- **Map snapshots (`bifrost_app::map_snapshotter`)**: tiles from a `TileSource` (`TileDirectory` reads the Maps app's tile cache layout),
+  routes and pins composed into an image. Parity row: MapKit.
+- **PC/SC (`bifrost_app::pcsc`)**: a client over `libpcsclite` (context, readers, reader states mapped to the slot manager, connect,
+  transmit); `pcscd.socket` is now enabled by the installer. Parity row: PCSC.
+- **Video analyzer (`bifrost_ui::video_analyzer`)**: measures decoded frames (luma histogram, motion) and answers highlight segments
+  and the key frame with no model. Face detection still needs an open model. Parity row: MediaIntelligence.
+- **GPU and core re-exports**: `bifrost_app::gpu` is `bifrost_gpu`, and the core models the system frameworks hand to apps (RFCOMM,
+  SDP, OBEX, Matter, GeoJSON, code requirements, surface registry, serial lines and others) are re-exported from `bifrost_app`.
+- **Left open this wave**: Matter (the secure channel and commissioning transports are a whole engine) and MediaIntelligence (no
+  open face model). MatterSupport is n/a (an ecosystem app extension point).
