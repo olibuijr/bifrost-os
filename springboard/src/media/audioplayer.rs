@@ -68,7 +68,7 @@ pub struct Snapshot {
     pub repeat: Repeat,
     pub queue_len: usize,
     pub volume: f32,
-    /// the playback rate (0.5 to 2.0); positions are song time, whatever the rate
+    /// the playback rate (0.5 to 3.0); positions are song time, whatever the rate
     pub rate: f32,
     pub error: Option<String>,
     /// the state of the stream while a live track is current
@@ -287,7 +287,7 @@ impl AudioPlayer {
         self.shared.lock().unwrap_or_else(|p| p.into_inner()).queue.set_repeat(r);
     }
 
-    /// Playback speed, 0.5 to 2.0 (NaN is normal speed). The pitch is kept: the audio is time-stretched, not resampled.
+    /// Playback speed, 0.5 to 3.0 (NaN is normal speed). The pitch is kept: the audio is time-stretched, not resampled.
     /// The rate stays set across songs until it is changed again.
     pub fn set_rate(&mut self, rate: f32) {
         self.shared.lock().unwrap_or_else(|p| p.into_inner()).rate = timestretch::clamp_rate(rate);

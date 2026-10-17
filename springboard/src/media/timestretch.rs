@@ -7,7 +7,7 @@
 //! pitch stays put. Resampling alone would change the pitch with the speed, which is why this module exists.
 //!
 //! Rules of this model:
-//! - The rate is 0.5 to 2.0 ([`clamp_rate`]; NaN becomes 1.0). The caller bypasses the stretcher at exactly 1.0.
+//! - The rate is 0.5 to 3.0 ([`clamp_rate`]; NaN becomes 1.0). The caller bypasses the stretcher at exactly 1.0.
 //! - The output lags the input by up to `WINDOW + SEEK` frames: the newest frames wait for their search range. The
 //!   held-back tail is dropped by [`Stretcher::reset`] (a song change or a seek).
 //! - The result does not depend on how the input is split into `push` calls.
@@ -15,7 +15,7 @@
 /// Slowest playback rate the player accepts.
 pub const RATE_MIN: f32 = 0.5;
 /// Fastest playback rate the player accepts.
-pub const RATE_MAX: f32 = 2.0;
+pub const RATE_MAX: f32 = 3.0;
 
 /// Frames per analysis window (about 21 ms at 48 kHz).
 const WINDOW: usize = 1024;
@@ -24,7 +24,7 @@ const HOP: usize = WINDOW / 2;
 /// How far from the nominal start a segment may move to match the previous one, in frames (about 5 ms at 48 kHz).
 const SEEK: usize = 256;
 
-/// Clamps a playback rate to 0.5 to 2.0. NaN becomes 1.0.
+/// Clamps a playback rate to 0.5 to 3.0. NaN becomes 1.0.
 pub fn clamp_rate(rate: f32) -> f32 {
     if rate.is_nan() {
         1.0
@@ -205,7 +205,7 @@ mod tests {
     fn output_length_is_input_length_over_the_rate() {
         // 1 s of audio: the output is within 5 % of input / rate (the held-back window is about 27 ms)
         let input = sine(440.0, 48_000);
-        for rate in [0.5f32, 0.75, 1.0, 1.5, 2.0] {
+        for rate in [0.5f32, 0.75, 1.0, 1.5, 2.0, 3.0] {
             let out = stretch(rate, &input);
             let frames = (out.len() / 2) as f64;
             let expect = 48_000.0 / rate as f64;
