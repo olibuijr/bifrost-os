@@ -129,6 +129,7 @@ pub mod local_push;
 pub mod app_metrics;
 pub mod daily_metric_report;
 pub mod asset_pack_file;
+pub mod keybag;
 pub mod mediaext;
 pub mod smf;
 pub mod midi_synth;
