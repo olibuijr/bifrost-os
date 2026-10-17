@@ -30,7 +30,43 @@ Contract: `docs/audio-architecture.md`. Task: `docs/audio/05-server-core.md`.
 
 1. **Done record.** The client memfd is `layout.total` bytes where `total` includes a 64-byte `Activation` at the end (`done_offset = total - 64`, `required = 1`). The client calls `shm::finish(&my_activation, &[&done], now)` when its IOProc finished. The server sleeps on `done.wake`. The HAL (task 06) must do this; `examples/sine-client.rs` shows it.
 2. **Device object ids** are `1000 + index` inside `ServerCore` until task 02's tree assigns ids (`DEVICE_ID_BASE`, `ServerCore::device_id`). `Owned(SYSTEM_OBJECT)` falls back to this list when the object tree says unknown.
-3. **`ObjectApi` trait** (control.rs): the seam through which `Get/Set/Listen/Unlisten/Owned` reach task 02's tree. `NoObjects` is the stand-in.
+3. **`ObjectApi` trait** (control.rs): the seam through which `Get/Set/Listen/Unlisten/Owned` reach task 02's tree. `NoObjects` is the stand-in. `AppState` (above) answers first for the objects it publishes.
+
+## Applications, sessions, DSP and levels (wiring, 2026-10-17)
+
+`ServerCore` now holds an `AppState` (`server/src/apps.rs`) that joins the policy crate's models and the engine's analysis
+to the object tree. `Get`, `Set`, `Listen`, `Unlisten` and `Owned` go to it first; what it does not publish (unknown
+object or property) goes on to the `ObjectApi` behind it.
+
+- **Transports.** `main.rs` builds one `CompositeDriver` whose providers are the selected drivers (`alsa`, `loopback`,
+  `plugin`, `null`, in the order given; `DEFAULT_DRIVERS` stays `alsa,loopback` and `plugin` stays opt-in). The core opens a
+  device through the provider that owns its uid, a uid two providers publish belongs to the first (the loser is logged at
+  start-up), and a device that appears later is served by the same composite. Device objects publish their `TRANSPORT`
+  (four-character code: `pci `, `usb `, `hdmi`, `blue`, `netw`, `virt`, `grup`, `bltn`).
+- **Process objects.** Hello makes a `Process` object (id `0x10000` + process number, never reused; connections of one pid
+  share it) listed in the System object's `PROCESSES` and carrying `APP_ID`, `PROCESS_PID`, `RUNNING_OUTPUT`,
+  `RUNNING_INPUT` and the session properties. It goes when the last connection of the pid closes.
+- **Sessions.** The process (or a policy client) sets `SESSION_CATEGORY` (`ambient`, `solo-ambient`, `playback`, `record`,
+  `play-and-record`, empty to end the session), `SESSION_MIXES`, `SESSION_DUCKS` and `SESSION_ACTIVE`; `policy::sessions::Arbiter`
+  decides. `AddIoProc` and `StartIoProc` ask `check_stream`: a direction the category forbids is `PermissionDenied`, output
+  while another session holds the audio is `Hogged`. Pause, resume, duck and unduck become the `session_gain` of the
+  application's `ClientSlot`s (an atomic the mixer multiplies into the stream volume, so the change ramps over 10 ms).
+  An application with no session is unmanaged.
+- **DSP.** `policy::dsp::DspManager` (loaded from `/etc/bifrost/audio/dsp.conf`, `BIFROST_AUDIO_DSP` or `--dsp`; a file that does
+  not parse is refused whole) gives each device a plan per direction. `server/src/dsp.rs` compiles it (all state allocated on the
+  control thread) and posts it through the device's `DspMailbox`; the IO thread swaps it in with `try_lock` when the generation
+  changed and never frees the old one. The output chain runs on the master after the mix, the input chain on the capture before
+  it reaches the clients. The category used for the bypass table is the one of the stream that has run longest on the device in
+  that direction. The plan and its latency are the device's `DSP_PLAN` and `DSP_LATENCY` per scope. Stages: gain, eq (peaking),
+  compressor, noise-gate, delay, limiter.
+- **Levels.** The IO thread copies the final master (and the capture) into a `LevelTap` (atomic stores only). Every 100 ms the
+  control thread analyses the newest 4096 frames of each running device (`engine::analysis`: peak, RMS, eight octave bands) and
+  publishes the text form as the device's `LEVEL` per scope; listeners get a coalesced `Changed`. Silence after silence publishes
+  nothing.
+
+Not done: per-application DSP stages (`DspManager::set_app_chain`) are held but not run, because they would have to run on one
+application's stream, not on the device master; the object tree behind `ObjectApi` is still `NoObjects`, so device properties other
+than the ones above (rate, buffer size, controls) answer unknown; the input level is measured only while a client reads input.
 
 ## Left (todo_left)
 
