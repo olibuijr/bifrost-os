@@ -3,8 +3,10 @@
 //!
 //! The session, profile, tool, schema and budget types are `bifrost_ui` models, re-exported here. [`run_turn`] runs one
 //! turn of a [`Session`] against a [`ModelProvider`]: the provider is the only part that reaches a model, and the SDK
-//! ships no provider. [`on_device_availability`] tells an app whether this machine can run a model itself. BifrOSt has
-//! no on-device model yet, so it reports [`Availability::Unavailable`] and an app must fall back to something else.
+//! ships no cloud provider. [`LocalModelProvider`] is the on-device one: it talks to the local inference engine over a
+//! loopback port and refuses any other address, so nothing leaves the machine. [`on_device_availability`] says whether
+//! the system itself ships a model (it does not yet, so it reports [`Availability::Unavailable`]); an app that wants the
+//! local engine builds a provider from a [`LocalEndpoint`] and asks [`LocalModelProvider::availability`].
 //! A provider that sends the conversation off the device is the app's own choice, and the app has to tell the user.
 
 pub use bifrost_ui::context_window::{estimate_tokens, fit, Fitted};
@@ -13,12 +15,15 @@ pub use bifrost_ui::model_provider::{run_turn, ModelProvider, ProviderError, Rep
 pub use bifrost_ui::model_session::{DynamicInstructions, Frame, Profile, PropertyKey, PropertyValue, Session, SessionProperties};
 pub use bifrost_ui::model_tool::{Tool, ToolError, ToolSet};
 pub use bifrost_ui::transcript::{Entry, Segment, ToolCall, ToolOutput, Transcript};
+pub use crate::local_model::{EndpointError, LocalEndpoint, LocalModelProvider};
 
 /// Why the on-device model cannot be used.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unavailable {
     /// No language model is installed on this machine.
     NoOnDeviceModel,
+    /// The local inference engine is not accepting connections on its port.
+    LocalEngineNotRunning,
 }
 
 /// Whether the on-device language model can answer on this machine.

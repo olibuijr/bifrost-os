@@ -377,6 +377,8 @@ pub mod file_provider;
 pub mod file_manager;
 /// File-manager sync extensions: badges, shortcut-menu items, a toolbar button and folder observation for Files.
 pub mod file_manager_sync;
+/// A model provider for the local inference engine on a loopback port (`LocalModelProvider`).
+pub mod local_model;
 pub mod url;
 pub mod url_background;
 pub mod multipart;
