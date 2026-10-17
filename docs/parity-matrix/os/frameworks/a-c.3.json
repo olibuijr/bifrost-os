@@ -1319,7 +1319,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Gap: verifying the signature of app bundles before they run. The store checks only a SHA-256 digest (springboard/src/shell/store/install.rs), so build a detached-signature check in the store install path and a signing step in the packaging scripts.",
+   "note": "Gap: verifying the signature of app bundles before they run. Built 2026-10-17: install_package_signed (springboard/src/shell/store/install.rs) checks a detached ML-DSA-65 signature from a publisher key over the package bytes before the SHA-256 check and unpack; tests shell::store::install::tests. Still missing: no publisher key is pinned in the shell and the packaging scripts do not sign packages yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1579,8 +1579,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/wm/src/lib.rs; docs/window-server.md",
-   "status": "partial",
-   "note": "Same window server as the non-UI compositor row. The reverse-engineering build variant of the reference has no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "The reverse-engineering build variant of the non-UI compositor is a vendor test build for analysing the framework, not a runtime service; BifrOSt has no such variant. The window server itself is covered by the CompositorNonUI row.",
    "rea": [],
    "method": "assessed"
   },
@@ -1603,7 +1603,16 @@
    "status": "partial",
    "note": "bifrost-wm owns window stacking, focus, input routing and compositing. Not covered: the reference's non-UI compositor services and its private display protocols.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "wm::tests"
+    }
+   ],
+   "ready_note": "bifrost-wm owns stacking, focus, input routing and compositing; its host tests cover the window stack, input and compose paths. The reference's private non-UI display protocols are not mirrored and no app uses them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CompositorServices_MetalBinaryArchive.framework",
@@ -1621,8 +1630,8 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
-   "status": "partial",
-   "note": "The GPU shader cache is Mesa's on-disk cache, shipped by the mesa runtime package. Not covered: the reference's binary archive format and API, which no app can use.",
+   "status": "n/a",
+   "note": "Metal's binary archive is a format of Apple's Metal GPU API, which BifrOSt does not implement. The GPU shader cache is Mesa's on-disk cache (packaging/arch/runtime-packages.txt, mesa).",
    "rea": [],
    "method": "assessed"
   },
@@ -2623,7 +2632,21 @@
    "status": "partial",
    "note": "Accessibility settings (zoom, reduce motion, contrast, transparency, touch accommodations) and the AT-SPI bridge that exports app trees to screen readers exist. Coverage of the reference's full accessibility runtime is not verified.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi::model::tests"
+    }
+   ],
+   "ready_note": "Accessibility settings and the AT-SPI tree model that the bridge exports are covered by host tests. The live bridge to a screen reader is not tested on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreAccessories.framework",
@@ -2644,7 +2667,21 @@
    "status": "partial",
    "note": "Attach and detach events, matching listeners and one-owner opening of USB accessories exist. The reference accessory daemon's host attestation and certified-accessory authentication are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "accessory_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessory_access::tests"
+    }
+   ],
+   "ready_note": "Attach and detach events, listener matching and one-owner opening of USB accessories are covered by host tests. Host attestation and certified-accessory authentication are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreAnalytics.framework",
