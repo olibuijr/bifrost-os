@@ -20,6 +20,7 @@ pub mod banner;
 pub mod center;
 pub mod list;
 pub mod lockwidgets;
+pub mod modes;
 pub mod permission;
 pub mod schedule;
 pub mod store;
