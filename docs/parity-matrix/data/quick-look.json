@@ -33,7 +33,7 @@
    "apple": "Quick Look previews for common file types (https://developer.apple.com/documentation/quicklook)",
    "bifrost": "springboard/src/files/preview.rs (preview_for, is_pdf, wrap_lines, Zoom, decode_allowed, image_size); springboard/src/files/mod.rs (spawn_preview at :411; step_preview, previous and next, at :449); springboard/apps/files/src/peek.rs (Files::peek); wired: springboard/src/shell/preview_panel.rs (kind_for via bifrost_ui preview Registry; PDF and audio bodies)",
    "status": "partial",
-   "note": "The preview choice, text wrapping, zoom and pan limits, decode bounds and header sizes are tested headless in springboard/tests/parity_sdk-tests-16.rs. Covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. It is inside Files, not an SDK API, and it does not use the SDK PreviewPanel. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+   "note": "The preview choice, text wrapping, zoom and pan limits, decode bounds and header sizes are tested headless in springboard/tests/parity_sdk-tests-16.rs. Files covers images, text, PDF (through the Books engine as text), audio with an explicit Play button, video and an info page. The shell panel (springboard/src/shell/preview_panel.rs) now also gives video and font items an info line and folders an item count and size (kind dispatch and folder summary tested in that file). Still open in the panel: audio and video transport, PDF pages, font sample text. Files does not use the SDK PreviewPanel. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
   },
   {
    "feature": "Markup on picture previews",
@@ -47,7 +47,7 @@
    "apple": "QLPreviewProvider, QLFilePreviewRequest, QLPreviewReply, QLPreviewReplyAttachment, QLPreviewingController (https://developer.apple.com/documentation/quicklook/data-based-preview-extensions)",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/ui/src/preview.rs; wired: springboard/apps/files/src/peek.rs (PictureFile, picture_registry, Files::peek)",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets a third-party app register a file type and supply its own preview. Apps only get the panel model and thumbnail path. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "Manifest model (ui/src/preview_manifest.rs): [[preview]] blocks (id, types, generator, timeout_ms) parse, and a generator Wait falls back to the generic preview on a late, missing or relative answer. Not yet wired: the shell does not call the generator over the app control socket, and no app declares a preview. Earlier: pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps only get the panel model and thumbnail path. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
   },
   {
    "feature": "PDF multi-page preview context",
@@ -67,7 +67,9 @@
  "gaps": [
   "The shell does not draw the floating preview panel: ToShell::Preview and ToShell::PreviewClose are decoded in springboard/proto/src/peek.rs and no handler was found under springboard/src.",
   "No app uses the SDK PreviewPanel or ThumbnailCache. Files keeps its own preview (springboard/apps/files/src/peek.rs).",
-  "No third-party preview extension API (QLPreviewProvider, QLPreviewingController, QLFilePreviewRequest, QLPreviewReply).",
+  "No third-party preview extension API reaches the shell yet (QLPreviewProvider, QLPreviewingController, QLFilePreviewRequest, QLPreviewReply): the [[preview]] manifest model exists (ui/src/preview_manifest.rs) but the generator is not called over the control socket.",
+  "The panel is not full-screen or resizable, has no Markup button, no audio or video transport, no PDF page rendering and no font sample text.",
+  "The File > Quick Look menu-bar item is not added (Space and the context menu Preview work).",
   "No QLThumbnailGenerator equivalent: no generator for a file type, no icon-mode badge, no async update, and no drawing of the thumbnail in the panel.",
   "No QLPreviewView, previewItemDisplayState, transition source frames or full-screen mode.",
   "Doc error in docs/bifrost-ui.md:1420: names springboard/sdk/src/quicklook.rs and springboard/proto/src/quicklook.rs, which do not exist. The files are springboard/sdk/src/peek.rs and springboard/proto/src/peek.rs.",

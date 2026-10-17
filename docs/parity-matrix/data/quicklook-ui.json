@@ -40,7 +40,7 @@
       "apple": "Quick Look generates previews for common file types (text, images, audio, video, PDF, documents)",
       "bifrost": "springboard/src/files/preview.rs (preview_for, line 28: text, image, audio card, video, PDF, folder summary, info card); springboard/src/files/mod.rs (spawn_preview: PDF text via the Books engine)",
       "status": "partial",
-      "note": "The preview choice by file type, text wrapping and picture size checks are tested headless in springboard/tests/parity_sdk-tests-16.rs. Only the Files app uses these. The SDK offers no built-in renderer, so other apps get nothing unless they render thumbnails themselves."
+      "note": "The preview choice by file type, text wrapping and picture size checks are tested headless in springboard/tests/parity_sdk-tests-16.rs. Only the Files app uses these. The shell panel also gives video, font and folder items a preview kind (springboard/src/shell/preview_panel.rs, tested there). The SDK offers no built-in renderer, so other apps get nothing unless they render thumbnails themselves."
     },
     {
       "feature": "Thumbnails (QLThumbnailGenerator)",
@@ -61,7 +61,7 @@
       "apple": "QLPreviewingController: preparePreviewOfFile(at:completionHandler:), preparePreviewOfSearchableItem(...), providePreview(for:completionHandler:)",
       "bifrost": "springboard/ui/src/preview.rs (Subject, Registry::register_searchable, Registry::provider_for_subject, Registry::unregister)",
       "status": "partial",
-      "note": "The model routes a file by its type and a searchable item by its longest matching domain, and unregister removes a provider with its types and domains. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_narrow_searchable_domain_beats_a_broader_one, file_subjects_must_name_an_absolute_file, searchable_subjects_drop_a_blank_query) and ui/tests/parity_sdk-complete-11.rs (unregistering_a_provider_removes_its_types_and_domains). Gap: no app registration reaches the shell and no searchable item preview is drawn; both need the shell side and a check on Midget."
+      "note": "The model routes a file by its type and a searchable item by its longest matching domain, and unregister removes a provider with its types and domains. App manifests can now declare [[preview]] blocks (ui/src/preview_manifest.rs, with a generator Wait that falls back to the generic preview on timeout; tests in that file), but the shell does not call them yet. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_narrow_searchable_domain_beats_a_broader_one, file_subjects_must_name_an_absolute_file, searchable_subjects_drop_a_blank_query) and ui/tests/parity_sdk-complete-11.rs (unregistering_a_provider_removes_its_types_and_domains). Gap: no app registration reaches the shell and no searchable item preview is drawn; both need the shell side and a check on Midget."
     },
     {
       "feature": "Data-based preview extensions (QLPreviewProvider)",
