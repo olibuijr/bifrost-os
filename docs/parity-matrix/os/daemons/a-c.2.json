@@ -1718,7 +1718,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_resolve.rs",
    "status": "partial",
-   "note": "App Intents declarations and parameter resolution are modelled in intents.rs and intent_resolve.rs. Not built: the suggested-entities and automatic shortcut index that linkd keeps across apps.",
+   "note": "Built 2026-10-17: cross-app donation index in springboard/sdk/src/donations.rs (SharedDonationIndex: donations from every app ranked together, forget_app; tests donations::shared_tests). Open: the shell suggestion list does not read it yet, and linkd does not keep it across restarts; the row stays partial.",
    "rea": []
   },
   {
@@ -1778,7 +1778,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/locale.rs",
    "status": "partial",
-   "note": "Locale formatting and Localizable.strings lookup for en and is are in locale.rs. Not built: a system-wide language switch service that tells running apps to reload.",
+   "note": "Built 2026-10-17: language generation file in springboard/sdk/src/locale.rs (announce_language_change, language_generation, LanguageWatch; tests locale::tests). Open: no switch service calls announce_language_change when the person changes language, so the row stays partial.",
    "rea": []
   },
   {
@@ -3957,7 +3957,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/recent_items.rs, springboard/sdk/src/document.rs",
    "status": "partial",
-   "note": "The shell keeps the recently used app list in recent_items.rs. The recent documents store is built in sdk document.rs (DocumentController recents, newest first, MAX_RECENTS, persisted under document.recents). Not built: the Recents service that apps share across processes.",
+   "note": "Built 2026-10-17: document recents re-read the shared store on every use, so a controller sees recents another process wrote (springboard/sdk/src/document.rs; tests document::tests::recents_written_by_another_controller_are_seen_on_the_next_read). Open: the shell recent-apps list is still in-process, so the row stays partial.",
    "rea": []
   },
   {
