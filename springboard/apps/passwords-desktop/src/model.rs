@@ -68,6 +68,14 @@ where
     password_gen::generate_with(&Rules::standard(length), below).map_err(|e| e.to_string())
 }
 
+/// The one-time code a revealed login secret gives at a Unix time, when the secret is an `otpauth://totp/` URI: the
+/// code and the seconds until it changes. `None` for any other secret.
+pub fn verification_code(secret: &str, unix_time: u64) -> Option<(String, u64)> {
+    let otp = bifrost_app::totp::parse_otpauth(secret)?;
+    let code = otp.code_at(unix_time).ok()?;
+    Some((code, otp.seconds_left(unix_time)))
+}
+
 /// One row of an import or export: a login with its password.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
@@ -273,5 +281,13 @@ mod tests {
         let text = render_export(&entries);
         assert_eq!(text, "site,account,password\r\na.example,me,\"pa,\"\"ss\"\"\"\r\n");
         assert_eq!(parse_import(&text).unwrap().entries, entries);
+    }
+
+    #[test]
+    fn a_secret_that_is_an_otpauth_uri_gives_its_current_code() {
+        let uri = "otpauth://totp/Example:me?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Example";
+        assert_eq!(verification_code(uri, 59), Some(("287082".to_string(), 1)));
+        assert_eq!(verification_code(uri, 60), Some(("359152".to_string(), 30)));
+        assert_eq!(verification_code("hunter2", 59), None);
     }
 }

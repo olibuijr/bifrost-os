@@ -79,13 +79,72 @@ pub fn hotp(key: &[u8], counter: u64, digits: u32) -> Result<String, Error> {
 
 /// The code a base32 secret gives at a Unix time (seconds).
 pub fn code_at(secret: &str, unix_time: u64, digits: u32) -> Result<String, Error> {
+    code_at_with(secret, unix_time, digits, PERIOD)
+}
+
+/// The code a base32 secret gives at a Unix time (seconds) for a step of `period` seconds. A zero period counts as one second.
+pub fn code_at_with(secret: &str, unix_time: u64, digits: u32, period: u64) -> Result<String, Error> {
     let key = decode_base32(secret)?;
-    hotp(&key, unix_time / PERIOD, digits)
+    hotp(&key, unix_time / period.max(1), digits)
 }
 
 /// Seconds until the current code changes, for a countdown beside the code.
 pub fn seconds_left(unix_time: u64) -> u64 {
     PERIOD - unix_time % PERIOD
+}
+
+/// The settings of one time-based code, as a site's `otpauth://totp/` URI gives them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Otp {
+    /// The base32 secret, as written in the URI.
+    pub secret: String,
+    /// Digits in a code, 6 to 8.
+    pub digits: u32,
+    /// Seconds per code, at least 1.
+    pub period: u64,
+}
+
+impl Otp {
+    /// The code at a Unix time (seconds).
+    pub fn code_at(&self, unix_time: u64) -> Result<String, Error> {
+        code_at_with(&self.secret, unix_time, self.digits, self.period)
+    }
+
+    /// Seconds until this code changes.
+    pub fn seconds_left(&self, unix_time: u64) -> u64 {
+        self.period - unix_time % self.period
+    }
+}
+
+/// Reads `otpauth://totp/LABEL?secret=...&digits=6&period=30&algorithm=SHA1`, the URI a site's QR code encodes.
+/// Only time-based codes with SHA1 are computed; the label and issuer are not needed to make the code, so they are
+/// ignored. `None` for another scheme or type, a missing or malformed secret, a digit count outside 6 to 8, a zero
+/// period, or another algorithm.
+pub fn parse_otpauth(uri: &str) -> Option<Otp> {
+    let query = uri.trim().strip_prefix("otpauth://totp/")?.split_once('?')?.1;
+    let mut secret = None;
+    let mut digits = DIGITS;
+    let mut period = PERIOD;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        match key.to_ascii_lowercase().as_str() {
+            "secret" => secret = Some(value.to_string()),
+            "digits" => digits = value.parse().ok()?,
+            "period" => period = value.parse().ok()?,
+            "algorithm" => {
+                if !value.eq_ignore_ascii_case("SHA1") {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+    let secret = secret.filter(|s| !s.is_empty())?;
+    if !(6..=8).contains(&digits) || period == 0 {
+        return None;
+    }
+    decode_base32(&secret).ok()?;
+    Some(Otp { secret, digits, period })
 }
 
 #[cfg(test)]
@@ -137,5 +196,37 @@ mod tests {
     fn rejects_digit_counts_outside_six_to_eight() {
         assert_eq!(hotp(b"k", 0, 5), Err(Error::Digits(5)));
         assert_eq!(code_at(SECRET, 59, 9), Err(Error::Digits(9)));
+    }
+
+    #[test]
+    fn parses_an_otpauth_uri_with_the_default_settings() {
+        let uri = format!("otpauth://totp/Example:alice?secret={SECRET}&issuer=Example");
+        let otp = parse_otpauth(&uri).unwrap();
+        assert_eq!(otp, Otp { secret: SECRET.to_string(), digits: DIGITS, period: PERIOD });
+        assert_eq!(otp.code_at(59), Ok("287082".to_string()));
+        assert_eq!(otp.seconds_left(89), 1);
+    }
+
+    #[test]
+    fn reads_digits_period_and_algorithm_from_the_uri() {
+        let uri = format!("otpauth://totp/x?secret={SECRET}&digits=8&period=60&algorithm=sha1");
+        let otp = parse_otpauth(&uri).unwrap();
+        assert_eq!((otp.digits, otp.period), (8, 60));
+        assert_eq!(otp.code_at(59), Ok("94287082".to_string()));
+        assert_eq!(otp.seconds_left(60), 60);
+        assert_eq!(code_at_with(SECRET, 59, 8, 60), Ok("94287082".to_string()));
+    }
+
+    #[test]
+    fn refuses_what_it_cannot_compute() {
+        assert_eq!(parse_otpauth("https://example.com/?secret=GEZDGNBVGY3TQOJQ"), None);
+        assert_eq!(parse_otpauth("otpauth://hotp/x?secret=GEZDGNBVGY3TQOJQ&counter=0"), None);
+        assert_eq!(parse_otpauth("otpauth://totp/x"), None);
+        assert_eq!(parse_otpauth("otpauth://totp/x?secret="), None);
+        assert_eq!(parse_otpauth("otpauth://totp/x?secret=GE1"), None);
+        assert_eq!(parse_otpauth("otpauth://totp/x?secret=GEZ&digits=5"), None);
+        assert_eq!(parse_otpauth("otpauth://totp/x?secret=GEZ&digits=six"), None);
+        assert_eq!(parse_otpauth("otpauth://totp/x?secret=GEZ&period=0"), None);
+        assert_eq!(parse_otpauth("otpauth://totp/x?secret=GEZ&algorithm=SHA256"), None);
     }
 }

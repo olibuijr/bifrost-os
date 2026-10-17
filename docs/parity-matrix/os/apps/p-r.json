@@ -18,11 +18,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/passwords-desktop",
+   "bifrost": "springboard/apps/passwords-desktop, springboard/sdk/src/totp.rs",
    "status": "partial",
    "note": "Passwords app: Logins, Notes, Certificates tabs, search, reveal, copy, generate, delete, CSV import and export; settings page stays in the shell; lacks verification codes and security recommendations; one-time codes (RFC 6238) are built in the SDK as sdk totp (totp::tests) but the app does not show them yet",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-passwords",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "totp::tests"
+    }
+   ],
+   "ready_note": "logins, notes, certificates, search, CSV import and export, generator (model::tests); one-time codes from otpauth secrets (model::tests, totp::tests). Security recommendations are not built."
   },
   {
    "id": "path:/System/Applications/Phone.app",

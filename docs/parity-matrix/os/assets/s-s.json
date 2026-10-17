@@ -564,11 +564,25 @@
    "description": "",
    "role": "Dynamic desktop wallpaper (light/dark and time-of-day variants in one HEIC)",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/shell/settings.rs",
    "status": "partial",
    "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    }
+   ],
+   "ready_note": "time-of-day dynamic desktop and its Settings switch: shell::wallpaper_schedule::tests, shell::settings::tests. The light and dark variant pair is not matched (BifrOSt ships no dark stills)."
   },
   {
    "id": "path:/System/Library/Desktop Pictures/Sonoma.heic",
@@ -585,11 +599,25 @@
    "description": "",
    "role": "Dynamic desktop wallpaper (light/dark and time-of-day variants in one HEIC)",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/shell/settings.rs",
    "status": "partial",
    "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    }
+   ],
+   "ready_note": "time-of-day dynamic desktop and its Settings switch: shell::wallpaper_schedule::tests, shell::settings::tests. The light and dark variant pair is not matched (BifrOSt ships no dark stills)."
   },
   {
    "id": "path:/System/Library/Fonts/SFArabic.ttf",
