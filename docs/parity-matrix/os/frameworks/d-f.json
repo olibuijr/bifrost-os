@@ -965,73 +965,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/language_model.rs; springboard/ui/src/model_session.rs, model_provider.rs, model_tool.rs, tool_calls.rs, transcript.rs, generation_schema.rs, guardrail.rs, context_window.rs, model_attachment.rs; springboard/apps/assistant-desktop/src/session.rs, model.rs",
    "status": "partial",
-   "note": "from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
+   "note": "from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents. Lead 2026-10-17: not ready: no on-device model ships, so the session reports Unavailable.",
    "rea": [],
-   "method": "manual",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "language_model::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "model_session::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "model_provider::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "model_tool::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "tool_calls::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "transcript::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "generation_schema::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "guardrail::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "context_window::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "model_attachment::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-assistant",
-     "filter": "session::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-assistant",
-     "filter": "model::tests"
-    }
-   ],
-   "ready_note": "The session API an app uses: sessions with profiles and dynamic instructions, transcripts, tool calling with the turn loop (run_turn), guided generation schemas with validation, guardrails and the context-window budget, driven end to end by the Assistant app. The model is a provider the app supplies (the SDK ships none); on_device_availability reports Unavailable because BifrOSt has no on-device language model, so apps must fall back, and any provider that leaves the device must be disclosed to the person. Remaining: streamed output and constrained decoding."
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DAAPKit.framework",
