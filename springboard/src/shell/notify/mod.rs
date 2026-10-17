@@ -666,6 +666,7 @@ impl Shell {
     pub(super) fn notify_load(&mut self, path: &str) {
         self.notify.store = Store::load(path);
         self.notify.load_modes(path);
+        self.usernotif.load_granted(std::path::Path::new(path).with_file_name("authorization.ini"));
         self.store_changed();
     }
 
