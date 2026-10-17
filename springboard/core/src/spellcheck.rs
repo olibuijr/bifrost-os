@@ -55,6 +55,16 @@ pub trait Dictionary {
     fn contains(&self, word: &str) -> bool;
     /// Ranked correction guesses.
     fn suggest(&self, word: &str) -> Vec<String>;
+    /// Dictionary words that start with `prefix` (case-insensitive, the prefix itself excluded), for predictive
+    /// completion. A backend with no word enumeration keeps the empty default.
+    fn completions(&self, _prefix: &str) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+/// Sorts words shortest first, then alphabetically, so the likeliest short completions lead.
+fn shortest_first(words: &mut [String]) {
+    words.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
 }
 
 /// In-memory word list; lookups are case-insensitive. Suggestions are words at edit distance 1.
@@ -98,6 +108,15 @@ impl Dictionary for WordList {
         let mut out: Vec<String> =
             self.words.iter().filter(|c| edit1(&w, &c.chars().collect::<Vec<_>>())).cloned().collect();
         out.sort();
+        out
+    }
+    fn completions(&self, prefix: &str) -> Vec<String> {
+        let p = prefix.to_lowercase();
+        if p.is_empty() {
+            return Vec::new();
+        }
+        let mut out: Vec<String> = self.words.iter().filter(|w| w.starts_with(&p) && w.as_str() != p).cloned().collect();
+        shortest_first(&mut out);
         out
     }
 }
@@ -186,6 +205,24 @@ impl SpellChecker {
     pub fn guesses(&self, text: &str, range: Range<usize>) -> Vec<String> {
         self.dict.suggest(&text[range])
     }
+    /// Predictive completions for the word being typed (`prefix`, the text since the last space). Learned words come
+    /// first, then dictionary words; each group is shortest first and the list holds at most `limit` words. An empty
+    /// prefix gives no completions, since every word would match it.
+    pub fn completions(&self, prefix: &str, limit: usize) -> Vec<String> {
+        let p = prefix.to_lowercase();
+        if p.is_empty() {
+            return Vec::new();
+        }
+        let mut learned: Vec<String> = self.learned.iter().filter(|w| w.starts_with(&p) && w.as_str() != p).cloned().collect();
+        shortest_first(&mut learned);
+        for w in self.dict.completions(prefix) {
+            if !learned.contains(&w) {
+                learned.push(w);
+            }
+        }
+        learned.truncate(limit);
+        learned
+    }
     /// `check(_:types:)`: spelling results only; grammar and detector types are not produced here.
     pub fn check(&self, text: &str, types: CheckingTypes) -> Vec<CheckingResult> {
         let mut out = Vec::new();
@@ -252,5 +289,61 @@ mod tests {
         assert!(c2.check_spelling(t, 0).is_some());
         c2.ignore_word("WROLD");
         assert!(c2.check_spelling(t, 0).is_none());
+    }
+}
+
+#[cfg(test)]
+mod completion_tests {
+    use super::*;
+
+    #[test]
+    fn a_prefix_completes_to_dictionary_words_shortest_first() {
+        let c = SpellChecker::new(Box::new(WordList::new("en", ["hello", "help", "helper", "world"])));
+        assert_eq!(c.completions("hel", 10), ["help", "hello", "helper"]);
+        assert_eq!(c.completions("HEL", 2), ["help", "hello"]);
+        assert!(c.completions("xyz", 10).is_empty());
+    }
+
+    #[test]
+    fn an_empty_or_exact_prefix_gives_no_completion_for_an_exact_word() {
+        let c = SpellChecker::new(Box::new(WordList::new("en", ["help", "helper"])));
+        assert!(c.completions("", 10).is_empty());
+        assert_eq!(c.completions("help", 10), ["helper"]);
+    }
+
+    #[test]
+    fn learned_words_lead_and_are_not_repeated() {
+        struct Mem(std::collections::BTreeMap<String, String>);
+        impl KeyValues for Mem {
+            fn get_string(&self, key: &str) -> Option<String> {
+                self.0.get(key).cloned()
+            }
+            fn put_string(&mut self, key: &str, value: &str) {
+                self.0.insert(key.to_string(), value.to_string());
+            }
+        }
+        let mut d = Mem(Default::default());
+        let mut c = SpellChecker::new(Box::new(WordList::new("en", ["hello", "help"])));
+        c.learn_word("helium", &mut d);
+        c.learn_word("help", &mut d);
+        assert_eq!(c.completions("hel", 10), ["help", "helium", "hello"]);
+    }
+
+    #[test]
+    fn a_backend_without_enumeration_offers_no_dictionary_completion() {
+        struct Plain;
+        impl Dictionary for Plain {
+            fn language(&self) -> &str {
+                "en"
+            }
+            fn contains(&self, _word: &str) -> bool {
+                false
+            }
+            fn suggest(&self, _word: &str) -> Vec<String> {
+                Vec::new()
+            }
+        }
+        let c = SpellChecker::new(Box::new(Plain));
+        assert!(c.completions("hel", 10).is_empty());
     }
 }
