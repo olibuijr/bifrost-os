@@ -530,6 +530,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut ctx: Option<Ctx> = None;
     let mut pending_activity: Vec<crate::quicksearch::UserActivity> = Vec::new();
     let mut slots: Option<[Slot; 2]> = None;
+    // the extra windows' pixels, by window id (see `draw_windows`)
+    let mut window_pixels: std::collections::BTreeMap<u32, WindowPixels> = std::collections::BTreeMap::new();
     let mut last: Option<usize> = None;
     let mut first_frame = true;
     let mut restore_tried = false;
@@ -675,7 +677,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                     if size != (cfg.w, cfg.h) || slots.is_none() {
                         size = (cfg.w, cfg.h);
-                        generation = generation.wrapping_add(1).max(1);
+                        generation = next_generation(generation);
                         match alloc(&chan, cfg.w, cfg.h, generation) {
                             Some(s) => slots = Some(s),
                             None => {
@@ -737,8 +739,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= crate::app_windows::deliver_window(&mut app, c, &m, now_ms()).unwrap_or(false);
                     }
                 }
-                // the shell is done with a buffer of a window; the per-window slot sets are not built yet (see app_windows)
-                ToApp::WindowRelease { .. } => {}
+                // the shell is done with one of a window's buffers
+                ToApp::WindowRelease { id, buf, generation: g } => {
+                    release_window_buffer(&mut window_pixels, id, buf, g);
+                }
                 ToApp::Resume => {
                     active = true;
                     if let Some(c) = &ctx {
@@ -918,9 +922,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             busy = true;
         }
         flush_restorable(&app, c, false);
-        if (active || repaint_suspended) && need_frame {
+        let frame_due = (active || repaint_suspended) && need_frame;
+        if frame_due {
             if let Some(slots) = slots.as_mut() {
-                let target = (0..2).find(|&i| !slots[i].held && Some(i) != last).or_else(|| (0..2).find(|&i| !slots[i].held));
+                let target = pick_free([slots[0].held, slots[1].held], last);
                 if let Some(i) = target {
                     need_frame = false;
                     bifrost_ui::ax::begin_frame();
@@ -943,6 +948,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
             }
+        }
+        // the extra windows: each is drawn when a frame is due, when it changed, and once after it opened or resized
+        if active || repaint_suspended {
+            draw_windows(&chan, &mut app, c, &mut window_pixels, t, frame_due);
         }
         if materials!=materials_seen {let _=chan.send(&ToShell::Materials(materials.clone()).encode(),&[]);materials_seen=materials.clone();}
         if busy || first_turn {
@@ -1004,16 +1013,111 @@ fn reconfigure(c: &mut Ctx, cfg: Configure) {
 }
 
 fn alloc(chan: &Channel, w: u32, h: u32, generation: u32) -> Option<[Slot; 2]> {
+    alloc_pair(chan, "bifrost-frame", w, h, |w, h| ToShell::Buffers { w, h, generation })
+}
+
+/// Makes two shared-memory buffers of `w` by `h` pixels named `name`-0 and `name`-1, and sends the shell their
+/// descriptors in the message `buffers` builds. The main window and each extra window get their own pair.
+fn alloc_pair(chan: &Channel, name: &str, w: u32, h: u32, buffers: impl FnOnce(u32, u32) -> ToShell) -> Option<[Slot; 2]> {
     let bytes = (w as usize * h as usize * 4).max(4);
     let mk = |n: &str| -> Option<(Owned, Slot)> {
         let fd = shm_create(n, bytes).ok()?;
         let map = Map::new(&fd, bytes).ok()?;
         Some((fd, Slot { map, held: false, stale: Vec::new(), stale_all: true }))
     };
-    let (fa, a) = mk("bifrost-frame-0")?;
-    let (fb, b) = mk("bifrost-frame-1")?;
-    chan.send(&ToShell::Buffers { w, h, generation }.encode(), &[fa.0, fb.0]).ok()?;
+    let (fa, a) = mk(&format!("{name}-0"))?;
+    let (fb, b) = mk(&format!("{name}-1"))?;
+    chan.send(&buffers(w, h).encode(), &[fa.0, fb.0]).ok()?;
     Some([a, b])
+}
+
+/// The next buffer-set generation (wrapping, never 0: 0 is the value of a window with no buffers yet).
+fn next_generation(g: u32) -> u32 {
+    g.wrapping_add(1).max(1)
+}
+
+/// The slot to draw into: a free one other than the last frame's when there is one, else the last frame's if it is free.
+fn pick_free(held: [bool; 2], last: Option<usize>) -> Option<usize> {
+    (0..2).find(|&i| !held[i] && Some(i) != last).or_else(|| (0..2).find(|&i| !held[i]))
+}
+
+/// The pixel size of a window of `w` by `h` points at `scale` pixels per point, kept inside the shell's limit.
+fn window_px(w: f32, h: f32, scale: f32) -> (u32, u32) {
+    let px = |v: f32| if v.is_finite() { (v * scale).round().clamp(1.0, 8192.0) as u32 } else { 1 };
+    (px(w), px(h))
+}
+
+/// The pixels of one extra window: its own slot pair, the size they were made for and what the shell has of them.
+struct WindowPixels {
+    size: (u32, u32),
+    generation: u32,
+    slots: [Slot; 2],
+    last: Option<usize>,
+    first: bool,
+    last_all: bool,
+    /// Something changed since the window last drew (an event, a resize, a new buffer set): draw it at the next turn.
+    dirty: bool,
+}
+
+/// Records the shell's `Release` of one of a window's buffers. A release for another generation is stale and ignored.
+fn release_window_buffer(pixels: &mut std::collections::BTreeMap<u32, WindowPixels>, id: u32, buf: u32, generation: u32) -> bool {
+    match pixels.get_mut(&id) {
+        Some(p) if p.generation == generation => match p.slots.get_mut(buf as usize) {
+            Some(b) => {
+                b.held = false;
+                true
+            }
+            None => false,
+        },
+        _ => false,
+    }
+}
+
+/// Gives every extra window of the app its own slot pair (`WindowBuffers`, again when its pixel size changed), and draws
+/// each window that is dirty (or all of them when `due`, a frame is due for the app): `App::draw_window` into a free
+/// slot, then `WindowFrame`. A window the app or the shell closed loses its pixels here.
+fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std::collections::BTreeMap<u32, WindowPixels>, t: f64, due: bool) {
+    let scale = ctx.cfg.scale;
+    // the registry is borrowed only for this listing: the app may open or close windows from its draw
+    let open: Vec<(u32, (u32, u32))> = ctx.windows.borrow().list().iter().filter(|w| !w.id.is_main()).map(|w| (w.id.0, window_px(w.width, w.height, scale))).collect();
+    pixels.retain(|id, _| open.iter().any(|(o, _)| o == id));
+    for (id, size) in open {
+        if pixels.get(&id).map(|p| p.size) != Some(size) {
+            let generation = next_generation(pixels.get(&id).map_or(0, |p| p.generation));
+            let Some(slots) = alloc_pair(chan, &format!("bifrost-frame-win{id}"), size.0, size.1, |w, h| ToShell::WindowBuffers { id, w, h, generation }) else {
+                eprintln!("bifrost-app: cannot allocate frame buffers for window {id}");
+                continue;
+            };
+            pixels.insert(id, WindowPixels { size, generation, slots, last: None, first: true, last_all: false, dirty: true });
+        }
+        let Some(p) = pixels.get_mut(&id) else { continue };
+        if due {
+            p.dirty = true;
+        }
+        if !p.dirty {
+            continue;
+        }
+        let Some(i) = pick_free([p.slots[0].held, p.slots[1].held], p.last) else { continue };
+        let first = p.first;
+        let sent = paint_slot(
+            chan,
+            &mut p.slots,
+            i,
+            (size.0 as usize, size.1 as usize),
+            t,
+            first,
+            false,
+            &mut p.last_all,
+            |s| app.draw_window(ctx, crate::app_windows::WindowId(id), s, t),
+            |buf, damage| ToShell::WindowFrame { id, buf, damage },
+        );
+        // a draw that changed nothing is done too: the window waits for the next event, not for a free slot
+        p.first = false;
+        p.dirty = false;
+        if sent {
+            p.last = Some(i);
+        }
+    }
 }
 
 /// Delivers the last of a run of moves of one touch (`t_ms` is the shell's stamp of that last sample).
@@ -1036,11 +1140,30 @@ fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: T
 /// out. An app whose last frame repainted everything (`last_all`) is drawn first and only then is the part of the
 /// stale area its damage did not cover copied up, so a full repaint costs no copy at all.
 fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 2], i: usize, t: f64, first: bool, last_all: &mut bool) -> bool {
+    let full = app.full_redraw();
+    let canvas = app.draws_canvas();
     let (w, h) = (ctx.cfg.w as usize, ctx.cfg.h as usize);
+    paint_slot(
+        chan,
+        slots,
+        i,
+        (w, h),
+        t,
+        first,
+        full,
+        last_all,
+        |s| if canvas { app.draw_canvas(ctx, s, t) } else { app.draw(ctx, s, t) },
+        |buf, damage| ToShell::Frame { buf, damage },
+    )
+}
+
+/// The drawing shared by the main window and the extra windows: `draw` paints slot `i`, the other buffer is brought up
+/// to date, and `frame` builds the message that carries the damage. Returns whether a frame went out.
+#[allow(clippy::too_many_arguments)]
+fn paint_slot(chan: &Channel, slots: &mut [Slot; 2], i: usize, (w, h): (usize, usize), t: f64, first: bool, full: bool, last_all: &mut bool, draw: impl FnOnce(&mut Surface) -> Damage, frame: impl FnOnce(u32, Vec<Rect>) -> ToShell) -> bool {
     let (lo, hi) = slots.split_at_mut(1);
     let (cur, other) = if i == 0 { (&mut lo[0], &mut hi[0]) } else { (&mut hi[0], &mut lo[0]) };
     let t0 = now_ms();
-    let full = app.full_redraw();
     let defer = !full && *last_all && !first;
     if full {
         cur.stale.clear();
@@ -1049,7 +1172,7 @@ fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 
     }
     let t1 = now_ms();
     let mut surface = Surface { w, h, stride: w, px: cur.map.pixels_mut(), y0: 0 };
-    let mut damage = if app.draws_canvas() { app.draw_canvas(ctx, &mut surface, t) } else { app.draw(ctx, &mut surface, t) };
+    let mut damage = draw(&mut surface);
     let t2 = now_ms();
     if first {
         damage = Damage::new(w, h);
@@ -1075,7 +1198,7 @@ fn draw_into<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, slots: &mut [Slot; 
         }
     }
     cur.held = true;
-    let _ = chan.send(&ToShell::Frame { buf: i as u32, damage: rects }.encode(), &[]);
+    let _ = chan.send(&frame(i as u32, rects).encode(), &[]);
     true
 }
 
@@ -1475,6 +1598,116 @@ mod audit_fix_tests {
         assert!(ctx.ui.bold, "Bold Text survives a resize");
         assert_eq!((ctx.cfg.w, ctx.cfg.h, ctx.ui.s, ctx.ui.text_scale), (200, 150, 2.0, 1.5));
         assert_eq!(ctx.take_sent(), [ToShell::OpenUrl { url: "https://example.com".into() }], "the queue is not dropped");
+    }
+}
+
+#[cfg(test)]
+mod window_pixel_tests {
+    use super::*;
+    use crate::app_windows::{WindowId, WindowSpec};
+    use std::collections::BTreeMap;
+
+    /// Paints the main window and every extra window fully, and records which windows were drawn.
+    #[derive(Default)]
+    struct Two {
+        drawn: Vec<u32>,
+        main_drawn: usize,
+    }
+
+    impl App for Two {
+        fn id(&self) -> &str {
+            "is.test.two"
+        }
+        fn draw(&mut self, _ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
+            self.main_drawn += 1;
+            let mut d = Damage::new(s.w, s.h);
+            d.all();
+            d
+        }
+        fn draw_window(&mut self, _ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
+            self.drawn.push(window.0);
+            let mut d = Damage::new(s.w, s.h);
+            d.all();
+            d
+        }
+    }
+
+    #[test]
+    fn each_window_gets_its_own_slot_pair_and_the_shell_is_told_each_pair() {
+        let (a, b) = crate::proto::sys::socketpair_pair().unwrap();
+        let one = alloc_pair(&a, "bifrost-frame-win1", 10, 10, |w, h| ToShell::WindowBuffers { id: 1, w, h, generation: 1 }).expect("window 1");
+        let two = alloc_pair(&a, "bifrost-frame-win2", 10, 10, |w, h| ToShell::WindowBuffers { id: 2, w, h, generation: 1 }).expect("window 2");
+        assert_ne!(one[0].map.pixels().as_ptr(), two[0].map.pixels().as_ptr());
+        assert_ne!(one[0].map.pixels().as_ptr(), one[1].map.pixels().as_ptr());
+        for want in [1, 2] {
+            let Ok(Recv::Packet(p, fds)) = b.recv(false) else { panic!("the shell gets the buffers") };
+            let ToShell::WindowBuffers { id, w, h, generation } = ToShell::decode(&p).unwrap() else { panic!("WindowBuffers") };
+            assert_eq!((id, w, h, generation), (want, 10, 10, 1));
+            assert_eq!(fds.len(), 2);
+        }
+    }
+
+    #[test]
+    fn the_slot_choice_skips_the_last_frame_and_the_held_slots() {
+        assert_eq!(pick_free([false, false], Some(0)), Some(1));
+        assert_eq!(pick_free([false, true], Some(0)), Some(0));
+        assert_eq!(pick_free([true, false], None), Some(1));
+        assert_eq!(pick_free([true, true], None), None);
+    }
+
+    #[test]
+    fn generations_count_up_and_never_reach_zero() {
+        assert_eq!(next_generation(0), 1);
+        assert_eq!(next_generation(4), 5);
+        assert_eq!(next_generation(u32::MAX), 1);
+    }
+
+    #[test]
+    fn a_window_is_sized_in_pixels_at_the_scale_and_kept_in_range() {
+        assert_eq!(window_px(480.0, 560.0, 1.5), (720, 840));
+        assert_eq!(window_px(f32::NAN, 10.0, 1.0), (1, 10));
+        assert_eq!(window_px(1.0e9, 0.0, 1.0), (8192, 1));
+    }
+
+    #[test]
+    fn an_extra_window_is_drawn_when_new_or_due_and_its_pixels_go_when_it_closes() {
+        let (a, _b) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let id = ctx.windows.borrow_mut().open(WindowSpec::new("Card", 40.0, 30.0)).unwrap();
+        let mut app = Two::default();
+        let mut pixels = BTreeMap::new();
+        draw_windows(&a, &mut app, &ctx, &mut pixels, 0.0, false);
+        assert_eq!(app.drawn, vec![id.0]);
+        assert_eq!(pixels[&id.0].size, (40, 30));
+        // nothing changed and no frame is due: the window is not drawn again
+        draw_windows(&a, &mut app, &ctx, &mut pixels, 1.0, false);
+        assert_eq!(app.drawn.len(), 1);
+        // a frame is due for the app: the window is drawn again
+        draw_windows(&a, &mut app, &ctx, &mut pixels, 2.0, true);
+        assert_eq!(app.drawn.len(), 2);
+        // closed: its pixels go, and the main window was never drawn through the window path
+        ctx.windows.borrow_mut().close(id).unwrap();
+        draw_windows(&a, &mut app, &ctx, &mut pixels, 3.0, true);
+        assert!(pixels.is_empty());
+        assert_eq!(app.drawn.len(), 2);
+        assert_eq!(app.main_drawn, 0);
+    }
+
+    #[test]
+    fn a_release_frees_only_the_buffer_and_generation_it_names() {
+        let (a, _b) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let id = ctx.windows.borrow_mut().open(WindowSpec::new("Card", 8.0, 8.0)).unwrap().0;
+        let mut app = Two::default();
+        let mut pixels = BTreeMap::new();
+        draw_windows(&a, &mut app, &ctx, &mut pixels, 0.0, false);
+        let g = pixels[&id].generation;
+        assert!(pixels[&id].slots[0].held);
+        assert!(!release_window_buffer(&mut pixels, id, 0, g + 1), "a stale generation is ignored");
+        assert!(pixels[&id].slots[0].held);
+        assert!(release_window_buffer(&mut pixels, id, 0, g));
+        assert!(!pixels[&id].slots[0].held);
+        assert!(!release_window_buffer(&mut pixels, 99, 0, g), "an unknown window is ignored");
     }
 }
 

@@ -4106,7 +4106,7 @@ cannot be closed) and the windows the app opens, front to back, the first one fo
   damage; `window_closed(ctx, window)` is a no-op. Override them to serve the app's extra windows.
 
 Wire protocol (`springboard/proto`, tags 0x1c0 to 0x1cb): the app sends `WindowOpen {id, title, w, h}`, `WindowClose {id}`,
-`WindowTitle {id, title}`, `WindowResize {id, w, h}` (`WindowBuffers` and `WindowFrame` are defined for the pixels, not sent yet).
+`WindowTitle {id, title}`, `WindowResize {id, w, h}`, and for the pixels `WindowBuffers {id, w, h, generation}` and `WindowFrame {id, buf, damage}`.
 The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {id, w, h}`, `WindowTouch {id, touch, kind, x, y,
 t_ms}` and `WindowRelease {id, buf, generation}`. Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
@@ -4118,11 +4118,26 @@ SDK (`Ctx`): `open_window`, `close_window`, `set_window_title`, `resize_window` 
 Shell (`springboard/src/shell/app_window_table.rs`): `WindowTable` keeps each app's extra windows front to back (open, close, retitle,
 resize, focus, close_app, `of_app` for the Window menu and the Dock list), with per-app limit 7 and unique ids per app.
 
-Not done (so no window is on screen yet): the SDK run loop does not give a window its own shared-memory slots or call `draw_window`
-for it, the direct Wayland path has no second toplevel (it is off: `LAYER_CONTEXT_WIRED` is false), the desk does not read
-`WindowTable` or draw the windows with traffic lights, and the Window menu and Dock do not list them. Contacts' Card > Open in
-Separate Window and its double-click are not wired, so the Contacts row stays gap. Dictionary, Mail, Calendar and Maps stay gap
-and name this API in their `wire`.
+Each extra window has its own shared-memory slot pair (`springboard/sdk/src/runtime.rs`, `alloc_pair`, `draw_windows`): the SDK
+sends `WindowBuffers {id, w, h, generation}` with the two descriptors, draws the window with `App::draw_window` into a free slot
+(`pick_free`, the same rule as the main window), and sends `WindowFrame {id, buf, damage}`. The window size in pixels is its
+point size times the scale (`window_px`, capped at 8192). A window is drawn when a frame is due for the app or when it is dirty
+(a new buffer set, an event). `WindowRelease {id, buf, generation}` frees a slot only when the generation matches (a stale
+release is ignored). A window the app closes loses its pixels at the next draw.
+
+Shell (`springboard/src/shell/apphost.rs`): each `AppHost` holds its app's `WindowTable` (`pub windows`) and maps each extra
+window's buffers (`window_buffers`, the main window's size and seal checks). `window_frame(id)` gives the newest frame, and
+`window_blitted(id)` gives the replaced buffer back to the app. `close_window_from_shell`, `configure_window` and `touch_window`
+send `WindowClosed`, `WindowConfigure` and `WindowTouch`. The table drops a window the app's exit closes. Tests:
+`window_table_tests` in `apphost.rs`, `window_pixel_tests` in `runtime.rs`.
+
+Not done, so no extra window is on screen yet: the desk (`src/shell/desk.rs`) does not draw the windows. Its `Win` records are
+keyed by `AppId` throughout (about a hundred call sites: hit tests, stacking, raise, close, the Dock and the Cmd+Tab list), so a
+window needs a key of (app, window id) first. Until the desk calls `window_blitted`, an extra window's frames stall after two
+frames, because nothing gives the replaced buffer back. The Window menu (`desktop_bar.rs`) and the Dock do not list the windows.
+The direct Wayland path has no second toplevel (`LAYER_CONTEXT_WIRED` is false). Contacts' Card > Open in Separate Window and its
+double-click are not wired: its card view is drawn by the whole Contacts model at the main window's size, so a card window needs
+a card-only draw first. The Contacts row stays gap. Dictionary, Mail, Calendar and Maps stay gap and name this API in their `wire`.
 
 Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene
 lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for tabs too).

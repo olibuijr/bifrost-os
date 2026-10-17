@@ -6,6 +6,7 @@
 //! switcher card and the crash screenshot) and releases the older one when a
 //! newer frame arrives, so the app always has exactly one free buffer.
 
+use super::app_window_table::WindowTable;
 use crate::gfx::{Damage, Surface};
 use bifrost_proto::sys::{self, Channel, Map, Recv};
 use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, CHORD_CTRL, CHORD_SHIFT, SDK_VERSION};
@@ -341,6 +342,17 @@ struct Buf {
     map: Map,
 }
 
+/// One extra window's shared buffers and what the shell holds of its frames (the same roles as the main window's
+/// `bufs`, `shown`, `release_after_blit` and `pending`).
+struct WinBufs {
+    generation: u32,
+    bufs: Vec<Buf>,
+    size: (usize, usize),
+    shown: Option<usize>,
+    release_after_blit: Option<usize>,
+    pending: Damage,
+}
+
 /// Packets queued for an app whose socket is full; past this the app is killed.
 const MAX_BACKLOG: usize = 256;
 /// Messages read from one app per shell pass: a flood past this waits for the next pass instead of starving the rest.
@@ -436,6 +448,10 @@ pub struct AppHost {
     frame_scale: f32,
     /// Set when a direct app demoted to `Route::Shm`; `take_fallback` reads it once so the shell opens its window.
     fallback: bool,
+    /// The extra windows the app has open, front to back (`ToShell::WindowOpen` and friends). The desk draws each one.
+    pub windows: WindowTable,
+    /// Each extra window's buffers, by window id (`ToShell::WindowBuffers`).
+    window_bufs: std::collections::BTreeMap<u32, WinBufs>,
 }
 
 impl AppHost {
@@ -537,6 +553,8 @@ impl AppHost {
             frames: bifrost_ui::touch::TouchTracker::with_scale(cfg.scale),
             frame_scale: cfg.scale,
             fallback: false,
+            windows: WindowTable::new(),
+            window_bufs: std::collections::BTreeMap::new(),
         }
     }
 
@@ -919,6 +937,28 @@ impl AppHost {
                 }
             }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
+            ToShell::WindowOpen { id, title, w, h } => {
+                // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
+                if self.windows.open(&self.id, id, &title, w, h).is_err() {
+                    self.send(&ToApp::WindowClosed { id });
+                }
+                out.frame = true;
+            }
+            ToShell::WindowClose { id } => {
+                self.windows.close(&self.id, id);
+                self.window_bufs.remove(&id);
+                out.frame = true;
+            }
+            ToShell::WindowTitle { id, title } => {
+                self.windows.retitle(&self.id, id, &title);
+                out.frame = true;
+            }
+            ToShell::WindowResize { id, w, h } => {
+                let _ = self.windows.resize(&self.id, id, w, h);
+                out.frame = true;
+            }
+            ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
+            ToShell::WindowFrame { id, buf, damage } => self.window_frame_arrived(id, buf, damage, out),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},
             ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.frame=true;}},
@@ -931,6 +971,100 @@ impl AppHost {
     pub fn frame(&self) -> Option<(&[u32], usize, usize)> {
         let b = self.bufs.get(self.shown?)?;
         Some((b.map.pixels(), self.buffer_size.0, self.buffer_size.1))
+    }
+
+    /// `ToShell::WindowBuffers`: maps one extra window's two buffers, with the main window's size and seal checks. A window
+    /// the table does not hold gets nothing.
+    fn window_buffers(&mut self, id: u32, w: u32, h: u32, generation: u32, fds: Vec<sys::Owned>) {
+        let (w, h) = (w as usize, h as usize);
+        let bytes = w * h * 4;
+        if fds.len() != 2 || w == 0 || h == 0 || w > 8192 || h > 8192 || !self.window_open(id) {
+            return;
+        }
+        let safe = fds.iter().all(|f| sys::shm_len(f).is_ok_and(|n| n >= bytes) && sys::seal_shrink(f).is_ok());
+        if !safe {
+            return;
+        }
+        let bufs: Vec<Buf> = fds.iter().filter_map(|f| Map::new(f, bytes).ok()).map(|map| Buf { map }).collect();
+        if bufs.len() == 2 {
+            self.window_bufs.insert(id, WinBufs { generation, bufs, size: (w, h), shown: None, release_after_blit: None, pending: Damage::new(w, h) });
+        }
+    }
+
+    /// `ToShell::WindowFrame`: the window's newest frame. The buffer it replaced is given back once that one is blitted.
+    fn window_frame_arrived(&mut self, id: u32, buf: u32, damage: Vec<bifrost_proto::Rect>, out: &mut Pumped) {
+        let buf = buf as usize;
+        let Some(wb) = self.window_bufs.get_mut(&id) else { return };
+        if buf >= wb.bufs.len() {
+            return;
+        }
+        let mut give_back = None;
+        if let Some(old) = wb.shown.filter(|&o| o != buf) {
+            give_back = wb.release_after_blit.replace(old).filter(|&p| p != old && p != buf);
+        }
+        wb.shown = Some(buf);
+        for r in damage {
+            wb.pending.add(r[0] as i32, r[1] as i32, r[2] as i32, r[3] as i32);
+        }
+        let generation = wb.generation;
+        out.frame = true;
+        if let Some(prev) = give_back {
+            self.send(&ToApp::WindowRelease { id, buf: prev as u32, generation });
+        }
+    }
+
+    fn window_open(&self, id: u32) -> bool {
+        self.windows.of_app(&self.id).iter().any(|w| w.id == id)
+    }
+
+    /// The newest frame of one extra window: its pixels, width and height (the desk draws it like the main window).
+    #[allow(dead_code)] // the desk draws the windows once it reads the table (docs/bifrost-ui.md, "Several windows per app")
+    pub fn window_frame(&self, id: u32) -> Option<(&[u32], usize, usize)> {
+        let wb = self.window_bufs.get(&id)?;
+        let b = wb.bufs.get(wb.shown?)?;
+        Some((b.map.pixels(), wb.size.0, wb.size.1))
+    }
+
+    /// The desk copied an extra window's newest frame: the buffer that frame replaced goes back to the app.
+    #[allow(dead_code)]
+    pub fn window_blitted(&mut self, id: u32) {
+        let Some(wb) = self.window_bufs.get_mut(&id) else { return };
+        wb.pending.clear();
+        let Some(old) = wb.release_after_blit.take() else { return };
+        let generation = wb.generation;
+        self.send(&ToApp::WindowRelease { id, buf: old as u32, generation });
+    }
+
+    /// The shell's close control on one of the app's extra windows: the table drops it and the app is told. False when
+    /// the window is not open.
+    #[allow(dead_code)]
+    pub fn close_window_from_shell(&mut self, id: u32) -> bool {
+        if self.windows.close(&self.id, id).is_none() {
+            return false;
+        }
+        self.window_bufs.remove(&id);
+        self.send(&ToApp::WindowClosed { id });
+        true
+    }
+
+    /// The shell resized one of the app's extra windows (points). False when the window is not open.
+    #[allow(dead_code)]
+    pub fn configure_window(&mut self, id: u32, w: f32, h: f32) -> bool {
+        if self.windows.resize(&self.id, id, w, h).is_err() {
+            return false;
+        }
+        self.send(&ToApp::WindowConfigure { id, w, h });
+        true
+    }
+
+    /// A touch inside one of the app's extra windows, with window-local coordinates in points. False when it is not open.
+    #[allow(dead_code)]
+    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32) -> bool {
+        if !self.window_open(id) {
+            return false;
+        }
+        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms });
+        true
     }
 
     /// Whether frames arrived that `blit` has not yet copied.
@@ -967,6 +1101,9 @@ impl AppHost {
 
     fn finish(&mut self, code: i32) {
         self.status = Status::Exited(code);
+        // an app that exits takes its extra windows with it
+        self.windows.close_app(&self.id);
+        self.window_bufs.clear();
         bifrost_core::log::shell_logger("apphost").notice(format!("app {} exited {code}", self.id));
     }
 
@@ -2035,6 +2172,97 @@ pub fn migrate_legacy(root: &Path, id: &str, data: &Path) {
             std::fs::rename(&from, data.join(new)).is_ok()
         };
         eprintln!("springboard: moved {} into {} for {id}: {}", from.display(), data.display(), if ok { "ok" } else { "FAILED" });
+    }
+}
+
+#[cfg(test)]
+mod window_table_tests {
+    use super::*;
+
+    fn cfg() -> Configure {
+        Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false }
+    }
+
+    /// Every message the shell has queued for the app so far.
+    fn sent(peer: &Channel) -> Vec<ToApp> {
+        let mut out = Vec::new();
+        while let Recv::Packet(p, _) = peer.recv(false).unwrap() {
+            out.push(ToApp::decode(&p).unwrap());
+        }
+        out
+    }
+
+    #[test]
+    fn the_window_table_follows_the_messages_the_app_sends() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 2, title: "Grace".into(), w: 480.0, h: 560.0 }, Vec::new(), &mut out);
+        let ids = |h: &AppHost| h.windows.of_app("fixture").iter().map(|w| w.id).collect::<Vec<u32>>();
+        assert_eq!(ids(&host), vec![2, 1], "the newest window is in front");
+        assert!(out.frame, "a window change asks the desk for a frame");
+        host.handle(ToShell::WindowTitle { id: 1, title: "Ada L.".into() }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowResize { id: 1, w: 320.0, h: 240.0 }, Vec::new(), &mut out);
+        let one = host.windows.of_app("fixture")[1];
+        assert_eq!((one.title.as_str(), one.w, one.h), ("Ada L.", 320.0, 240.0));
+        host.handle(ToShell::WindowClose { id: 2 }, Vec::new(), &mut out);
+        assert_eq!(ids(&host), vec![1]);
+    }
+
+    #[test]
+    fn a_window_the_table_refuses_is_closed_again_for_the_app() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        let refused = crate::shell::app_window_table::MAX_PER_APP as u32 + 1;
+        for id in 1..=refused {
+            host.handle(ToShell::WindowOpen { id, title: "w".into(), w: 10.0, h: 10.0 }, Vec::new(), &mut out);
+        }
+        assert_eq!(host.windows.of_app("fixture").len(), crate::shell::app_window_table::MAX_PER_APP);
+        assert_eq!(sent(&peer), vec![ToApp::WindowClosed { id: refused }]);
+    }
+
+    #[test]
+    fn a_window_gets_its_own_buffers_and_its_frame_is_given_back_once_blitted() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 2.0, h: 2.0 }, Vec::new(), &mut out);
+        let bytes = 2 * 2 * 4;
+        let fds = vec![sys::shm_create("test-window-0", bytes).unwrap(), sys::shm_create("test-window-1", bytes).unwrap()];
+        host.handle(ToShell::WindowBuffers { id: 1, w: 2, h: 2, generation: 7 }, fds, &mut out);
+        assert!(host.window_frame(1).is_none(), "no frame before the first one");
+        host.handle(ToShell::WindowFrame { id: 1, buf: 0, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
+        assert_eq!(host.window_frame(1).map(|(_, w, h)| (w, h)), Some((2, 2)));
+        host.handle(ToShell::WindowFrame { id: 1, buf: 1, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
+        assert!(sent(&peer).is_empty(), "the replaced buffer waits until its frame is blitted");
+        host.window_blitted(1);
+        assert_eq!(sent(&peer), vec![ToApp::WindowRelease { id: 1, buf: 0, generation: 7 }]);
+        host.handle(ToShell::WindowFrame { id: 9, buf: 0, damage: vec![] }, Vec::new(), &mut out);
+        assert!(host.window_frame(9).is_none(), "a frame for a window that is not open is dropped");
+    }
+
+    #[test]
+    fn the_shell_closing_a_window_drops_it_and_tells_the_app_once() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0 }, Vec::new(), &mut out);
+        assert!(host.configure_window(3, 20.0, 30.0));
+        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5));
+        assert!(host.close_window_from_shell(3));
+        assert!(!host.close_window_from_shell(3), "a window closes once");
+        assert!(!host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 6), "no touch reaches a closed window");
+        assert!(host.windows.of_app("fixture").is_empty());
+        assert_eq!(
+            sent(&peer),
+            vec![
+                ToApp::WindowConfigure { id: 3, w: 20.0, h: 30.0 },
+                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 5 },
+                ToApp::WindowClosed { id: 3 },
+            ]
+        );
     }
 }
 
