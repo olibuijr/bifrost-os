@@ -74,11 +74,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs",
+   "bifrost": "springboard/src/shell/services/event_services.rs, springboard/src/shell/services/universal_access_control.rs",
    "status": "partial",
-   "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
+   "note": "Accessibility authorization warning. BifrOSt gates the same capability by the manifest `accessibility` permission (events service) and the per-app Universal Access policy.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::event_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::universal_access_control::tests"
+    }
+   ],
+   "ready_note": "Control of the computer through accessibility is consented to up front: an app must hold the `accessibility` permission in its manifest (shown by the App Store at install), the events service refuses every call without it, and a per-app policy can deny zoom, screen reader, keyboard or pointer features. There is no separate start-up warning dialog because there is no pre-authorised list to re-confirm."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.universalaccesscontrol.plist",
@@ -414,7 +428,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/services/voice_banking.rs",
    "status": "gap",
-   "note": "Records voice samples and trains a personal synthetic voice for accessibility speech; ui/src/speech.rs synthesises speech, but no voice sample store or training exists, so build them.; built 2026-10-17: the sample store (voice_banking service, a11y_voice_bank pref) keeps one good sample per script phrase, refuses bad rates and lengths, and reports progress; tests shell::services::voice_banking::tests. Still missing: the app must upload the audio itself (the shell keeps metadata only) and training a personal voice from the samples.",
+   "note": "Records voice samples and trains a personal synthetic voice for accessibility speech; ui/src/speech.rs synthesises speech, but no voice sample store or training exists, so build them.; built 2026-10-17: the sample store (voice_banking service, a11y_voice_bank pref) keeps one good sample per script phrase, refuses bad rates and lengths, and reports progress; tests shell::services::voice_banking::tests. Still missing: the app must upload the audio itself (the shell keeps metadata only) and training a personal voice from the samples. Reviewed 2026-10-17 (wave 13): left gap. The sample store is real (tests shell::services::voice_banking::tests), but the job the person sees is a personal voice that speaks, which needs a trainable speech model; ui/src/speech.rs is a rule-based synthesiser with no speaker adaptation, so training is an engine to design, not a row-sized change.",
    "rea": []
   },
   {
@@ -508,8 +522,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried reading the launchd plist (environment, launch events, no service name); the binary is not extracted, so the purpose is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: application launch warm-up for the reference OS (usr/libexec/warmd and warmd_agent with a _warmd role account and a system plist in the index, no resources); the warm-up is tuned to that OS's shared cache and storage stack. On Linux the kernel page cache and readahead do this, and BifrOSt keeps no warm-up daemon.",
    "rea": []
   },
   {
@@ -721,9 +735,21 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "OpenSSH is provided by the Arch system layer; BifrOSt has no repo-managed agent service or Settings UI",
+   "note": "OpenSSH ssh-agent: provided by the Arch openssh package (ssh-agent, ssh-add); no BifrOSt wrapper or Settings UI.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh-agent"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/ssh-add"
+    }
+   ],
+   "ready_note": "OpenSSH's own ssh-agent and ssh-add are installed with the openssh package of the Arch layer (sshd is enabled by the installer); a session starts the agent on demand like the reference's launch-on-demand agent. BifrOSt adds no wrapper."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/bootps.plist",
@@ -1583,9 +1609,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
-   "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: collects installer failure diagnostics for the vendor's diagnostics pipeline (installerdiagwatcher inside InstallerDiagnostics.framework in the index). BifrOSt uploads no diagnostics; the updater keeps a local install log (springboard::install_log).",
    "rea": [],
    "method": "rule"
   },
@@ -1604,11 +1630,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
+   "bifrost": "springboard/updated, springboard/src/shell/update.rs, springboard/src/shell/ota.rs",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Installer progress display: the update agent pushes phase and download progress and the Software Update page draws it.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ota::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "Install progress is shown by the Software Update page: the update agent (updated) pushes its State and Phase (checking, downloading with a progress push every second, staged, installing) and the shell draws the percentage and the offer; failures are written once to the install log."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.Kerberos.digest-service.plist",
@@ -1625,9 +1670,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: Open Directory digest authentication helper (DIGEST-MD5 against the directory server). DIGEST-MD5 is obsolete (RFC 6331) and BifrOSt has no directory-server role; only the launchd plist is in the index. Kerberos client use goes through the krb5 package and the SDK krb5_client.",
    "rea": [],
    "method": "rule"
   },
@@ -1675,11 +1720,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/gss_krb5.rs",
+   "bifrost": "springboard/sdk/src/gss_krb5.rs, springboard/sdk/src/krb5_client.rs",
    "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "note": "Kerberos credential cache manager. The krb5 library stores caches itself (FILE, DIR, KEYRING); SDK gss_krb5 names caches and krb5_client runs kinit and klist. No KCM daemon.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "krb5_client::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gss_krb5::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/kinit"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/klist"
+    }
+   ],
+   "ready_note": "Credential caches are kept by the Kerberos library in files, directories or the kernel keyring, not by a cache daemon: kinit and klist run from the SDK (krb5_client.rs, krb5 package) against the cache an app names (gss_krb5.rs), and a cache can be copied between names. KCM: names are parsed so a cache served by another system daemon can still be used. BifrOSt runs no KCM server."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.Kerberos.kdc.plist",
@@ -1725,9 +1792,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: kpasswd request and reply framing (RFC 3244) in the SDK, tests kpasswd::tests. Still missing: ticket verification and the password change backend.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the password-change service of a Kerberos realm's KDC (server side of kpasswd). A desktop is a client of a realm, not a KDC; the client half (kpasswd request and reply framing, RFC 3244) is in springboard/sdk/src/kpasswd.rs, and the MIT kadmind on Arch serves the realm for anyone who runs one.",
    "rea": [],
    "method": "rule"
   },
@@ -1783,9 +1850,18 @@
    "doc": "",
    "bifrost": "springboard/src/shell/services/local_auth.rs",
    "status": "partial",
-   "note": "Account password only; no biometric agent",
+   "note": "Authentication prompt agent. Account password only through the shell's own sheet (local_auth service); fingerprint (fprintd) is not wired to it yet.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "App authentication (LAContext) is done by the local_auth service: the shell draws its own password sheet with the app's reason, checks the password through the login backend (the app never sees it) and answers the app; the biometrics policy reports biometry_not_available. Open: fingerprint login (fprintd is in the runtime packages) is not wired to this service."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.LocalAuthentication.userauthd.plist",
@@ -1955,11 +2031,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
+   "bifrost": "springboard/src/shell/services/wifi.rs, springboard/src/shell/desktop_network.rs, springboard/sdk/src/wlan_service.rs",
    "status": "partial",
-   "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
+   "note": "Internet sharing: the wifi service hosts an access point or ad-hoc network through NetworkManager (shared connection). Ethernet sharing is not offered.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::wifi::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan_service::tests"
+    }
+   ],
+   "ready_note": "Internet sharing over Wi-Fi: an app (or the menu bar) asks the wifi service to host an access point or an open ad-hoc network on a wireless interface and NetworkManager shares the connection (DHCP, DNS and NAT); stop_hosting takes it down. Validation of interface, SSID and passphrase is tested. Open: sharing out of an Ethernet port is not offered."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.PasswordService.plist",
@@ -2128,9 +2218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/rfb",
-   "status": "partial",
-   "note": "rule: remote framebuffer service; Remote app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: privileged helper of the vendor's remote management product (Apple Remote Desktop), a proprietary management protocol with no open equivalent. The open path, sharing a screen over RFB, is covered by the Remote app and the Screen Sharing viewer (springboard/apps/remote, springboard/rfb).",
    "rea": [],
    "method": "rule"
   },
@@ -2254,10 +2344,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net/mod.rs",
+   "bifrost": "springboard/src/privd/methods.rs, springboard/src/net/mod.rs",
    "status": "partial",
    "note": "Covers the network changes the shell makes itself (rtnetlink, DHCP, wpa_supplicant); the privileged helper that writes system network preferences is not replicated. Built 2026-10-17: privd method network.dns_set writes the user's DNS servers as a systemd-resolved drop-in (validated IPv4/IPv6 addresses, at most four; an empty list removes it); tests privd::methods::tests.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "The privileged network helper is bifrost-privd: the shell asks it (fixed argv, validated parameters, one audit line per call) to write the user's DNS servers as a systemd-resolved drop-in (network.dns_set: IPv4/IPv6 literals only, at most four, empty list removes it); address, Wi-Fi and DHCP changes run in the shell itself over rtnetlink and wpa_supplicant."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.SafeEjectGPUStartupDaemon.plist",
@@ -2356,11 +2455,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/pref_domains.rs",
+   "bifrost": "springboard/src/shell/ota.rs, springboard/src/shell/update.rs, springboard/src/shell/backup_page.rs",
    "status": "partial",
-   "note": "rule: defaults and preference domain models; Settings app",
+   "note": "Software update settings: Automatic Updates and backup-before-update options on the Software Update page, applied by the ota checker.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ota::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup_page::tests"
+    }
+   ],
+   "ready_note": "Software Update settings: Automatic Updates (the auto_update option) drives the background checker and download (ota tick), the schedule is written by ota::set_schedule, the Software Update and Backup pages show and change the switches, and the download is checked against its SHA-256 before it is staged."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.UserEventAgent-System.plist",
@@ -2377,11 +2495,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/pref_domains.rs",
+   "bifrost": "springboard/src/shell/services/notify_bus.rs, springboard/src/shell/services/event_services.rs",
    "status": "partial",
-   "note": "rule: defaults and preference domain models; Settings app",
+   "note": "System event dispatch: the shell posts system.* notifications on the notify_bus service; device and file triggers for jobs are udev and systemd units.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::notify_bus::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::event_services::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/systemd-udevd"
+    }
+   ],
+   "ready_note": "System events reach apps through the notify_bus service (named notifications, system.* names the shell posts when disk, network, power, appearance and similar state changes); starting jobs on device or file events is systemd with udev, the same job the reference's event agent does for launchd."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.UserNotificationCenter.plist",
@@ -2484,11 +2620,49 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/window_fx.rs",
+   "bifrost": "springboard/wm, springboard/src/shell/window_fx.rs",
    "status": "partial",
-   "note": "role filled by the shell compositor path (window_fx.rs) over labwc; no separate window-server process; labwc owns the display",
+   "note": "Window server: bifrost-wm owns the display (windows, decorations, outputs, input); the shell draws the desktop and window effects.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/bifrost-wm"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "decorations::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "scene_stack::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "output_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "transform::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::window_fx::tests"
+    }
+   ],
+   "ready_note": "BifrOSt has its own window server: bifrost-wm (springboard/wm, docs/window-server.md) owns the display, the windows, decorations, output layout, input and key bindings, and the shell draws the desktop and the window effects (window_fx.rs). It runs from the session script as /usr/bin/bifrost-wm."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.WirelessRadioManager-osx.plist",
@@ -3049,10 +3223,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/privd/disk.rs, springboard/core/src/disk_request.rs, springboard/apps/diskutil-desktop/src/forms.rs",
    "status": "os",
-   "note": "Tried reading the launchd plist (launched argument, one Mach service); its job is block restore of disk images, but the installer's image path was not checked, so the owner is unassigned.",
-   "rea": []
+   "note": "Block-level volume restore: Disk Utility's Restore sheet and the privd disk.restore_volume request.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::disk::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "forms::tests"
+    }
+   ],
+   "ready_note": "Volume restore (copy a volume or an attached disk image onto another volume) is Disk Utility > Restore: the form picks sources that fit, the request is checked by bifrost_core disk_request and planned against a fresh snapshot by privd before the root daemon copies."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.assetsubscriptiond.plist",
@@ -3092,9 +3285,25 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "at job runner: the Arch `at` package (atd.service) is installed, not enabled by default; no BifrOSt wrapper.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/at"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/atd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/atd.service"
+    }
+   ],
+   "ready_note": "The `at` package (at, atd and atd.service) is in the runtime packages, so one-shot jobs can be scheduled from a terminal. Like the reference, the runner is not enabled by default and has no Settings switch."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.attentionawarenessd.plist",
@@ -3348,11 +3557,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/privd/server.rs",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "Audit trail: privd journals one audit line per privileged call (server::audit_line, tests privd::server::tests); the Linux audit package is installed, not enabled by default.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::server::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/auditd"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: every call the root daemon handles leaves one audit line in the journal (method, outcome, door: root socket, console shell or other), never the parameters, with hostile method names kept on one line (server::audit_line). The kernel audit daemon (the audit package) is installed for system-call level records but is not enabled by default."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.autofsd.plist",
@@ -3969,8 +4191,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried reading the launchd plist (keep alive, initial system support, one XPC service); the binary is not extracted, so the purpose is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: daemon for the vendor's own wireless/peripheral silicon (Centauri*: DriverKit frameworks CentauriAlpha, CentauriBeta, CentauriControl, CentauriDebug, CentauriManager, driver extensions AppleCentauri*, CentauriDiagnostic and a notification bundle in the index). Vendor hardware management and diagnostics with no Linux counterpart.",
    "rea": []
   },
   {
@@ -4369,7 +4591,30 @@
    "bifrost": "springboard/src/net/mod.rs, springboard/src/net/wifi.rs, springboard/src/net/state_publish.rs, springboard/core/src/system_config_store.rs",
    "status": "partial",
    "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant). Built 2026-10-17: the system configuration store (bifrost-core system_config_store, re-exported by the SDK) is published by the Wi-Fi manager: State:/Network address, primary interface, router and Wi-Fi network name, stale keys removed (tests system_config_store::tests, net::state_publish::tests). Open: the store lives in the shell process only (other processes need a published copy); no DNS resolver or proxy service is provided.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "system_config_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::state_publish::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/systemd-resolved"
+    }
+   ],
+   "ready_note": "The system configuration store (State:/Network address, primary interface, router, Wi-Fi name; stale keys removed) is kept by the shell's Wi-Fi manager and read by apps through the SDK; address, Wi-Fi and link state come from rtnetlink, DHCP and wpa_supplicant, and DNS resolution is systemd-resolved with the user's servers set through privd. Open: the store lives in the shell process, so other processes get a copy through the SDK, and no proxy configuration service exists."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.configureLocalKDC.plist",
@@ -4582,8 +4827,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried reading the launchd plist (one Mach service, interactive spawn); the binary is not extracted, so the purpose is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: remote-control input for the vendor's infrared remote (CoreRC.framework with a CoreRCHIDService plug-in and a CoreRCPlugin session filter in the index). Linux receives infrared remotes through the kernel rc-core input devices without a BifrOSt daemon, and the vendor remote protocol has no open equivalent.",
    "rea": []
   },
   {
