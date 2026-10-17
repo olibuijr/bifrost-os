@@ -22,11 +22,11 @@ use bifrost_locate::panel::{Panel, Row, Section, LOCATION_UNAVAILABLE, ONBOARDIN
 /// The sidebar's width in points.
 pub const SIDEBAR_PT: f32 = 200.0;
 /// The distance from the content edge to its text, in points.
-const INSET_PT: f32 = 24.0;
+pub(crate) const INSET_PT: f32 = 24.0;
 /// The line pitch of the content text, in points.
-const LINE_PT: f32 = 22.0;
+pub(crate) const LINE_PT: f32 = 22.0;
 /// The content's top edge, in points.
-const TOP_PT: f32 = 56.0;
+pub(crate) const TOP_PT: f32 = 56.0;
 
 /// The sidebar row id of a section: the section's position plus one, as the source list publishes it.
 pub fn row_id(section: Section) -> u32 {
@@ -64,6 +64,10 @@ pub struct LocateWindow {
     pub reporter: Reporter,
     pub locate_asked: bool,
     pub notice_seq: u32,
+    /// The width of the window in points, as the last draw saw it: the controls' right edge.
+    pub width_pt: f32,
+    /// The devices the person has already approved or denied, so a stale pending list does not show them again.
+    pub handled_pending: Vec<String>,
     /// Location: the manager, the delegate its answers go to, the device id the cloud gave at registration, and
     /// whether a fix is wanted for a report.
     pub location: LocationManager,
@@ -76,7 +80,7 @@ pub struct LocateWindow {
 
 impl LocateWindow {
     pub fn new(onboarded: bool) -> LocateWindow {
-        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), keys: Keys::default(), link: None, session_request: None, enrollment: Enrollment::Idle, device_key: None, approvals: Approvals::default(), shared: Vec::new(), reporter: Reporter::new(), locate_asked: false, notice_seq: 0, location: LocationManager::new(), fixes: Default::default(), device_id: None, want_report: false, asked_location: false, labels: TextCache::default() }
+        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), keys: Keys::default(), link: None, session_request: None, enrollment: Enrollment::Idle, device_key: None, approvals: Approvals::default(), shared: Vec::new(), reporter: Reporter::new(), locate_asked: false, notice_seq: 0, width_pt: 0.0, handled_pending: Vec::new(), location: LocationManager::new(), fixes: Default::default(), device_id: None, want_report: false, asked_location: false, labels: TextCache::default() }
     }
 
     /// A keychain reply. A key that was just stored is the account key for this device. Returns whether a frame is needed.
@@ -150,6 +154,7 @@ impl LocateWindow {
 
     pub fn draw(&mut self, ui: &Ui, s: &mut Surface) {
         let (w_pt, h_pt) = (s.w as f32 / ui.pt(1.0), s.h as f32 / ui.pt(1.0));
+        self.width_pt = w_pt;
         fill(s, ui, 0.0, 0.0, w_pt, h_pt, CONTENT_BG.now());
         let bounds = Rect { x: 0.0, y: 0.0, w: SIDEBAR_PT, h: h_pt };
         widgets::source_list(s, ui, bounds, &self.sidebar(), 0.0, None);
@@ -164,6 +169,7 @@ impl LocateWindow {
             self.line(ui, s, &line, MAC_BODY_PT, LABEL.now(), x, y, max);
             y += LINE_PT;
         }
+        self.draw_controls(ui, s);
         if self.panel.needs_onboarding() {
             self.draw_onboarding(ui, s, x, w_pt, h_pt);
         }
@@ -173,21 +179,31 @@ impl LocateWindow {
     fn body(&self, section: Section) -> Vec<String> {
         match section {
             Section::Devices => {
+                let mut lines = Vec::new();
+                if let Some(waiting) = self.enrollment.waiting_line() {
+                    lines.push(waiting.to_string());
+                }
                 let rows = self.panel.rows();
                 if rows.is_empty() {
-                    return vec!["No devices yet. A device appears here once it is signed in to your BifrOSt Account.".into()];
+                    lines.push("No devices yet. A device appears here once it is signed in to your BifrOSt Account.".into());
+                } else {
+                    lines.extend(rows.iter().map(device_line));
                 }
-                rows.iter().map(device_line).collect()
+                lines
             }
-            Section::People => vec![
-                format!("Share My Location is {}.", if self.panel.sharing() { "on" } else { "off" }),
-                "Contacts who share their location with you appear here.".into(),
-            ],
+            Section::People => {
+                let mut lines = vec![format!("Share My Location is {}.", if self.panel.sharing() { "on" } else { "off" })];
+                let shared = self.shared_lines();
+                if shared.is_empty() {
+                    lines.push("Contacts who share their location with you appear here.".into());
+                } else {
+                    lines.push("Shared with you".into());
+                    lines.extend(shared);
+                }
+                lines
+            }
             Section::Items => vec!["Tags and accessories are not supported on BifrOSt yet.".into()],
-            Section::Me => vec![
-                format!("Share My Location: {}", if self.panel.sharing() { "on" } else { "off" }),
-                format!("Location: {}", self.panel.location_status.as_deref().unwrap_or(LOCATION_UNAVAILABLE)),
-            ],
+            Section::Me => vec!["Share My Location".into(), format!("Location: {}", self.panel.location_status.as_deref().unwrap_or(LOCATION_UNAVAILABLE))],
         }
     }
 
@@ -206,7 +222,7 @@ impl LocateWindow {
     }
 
     /// Text at a point, the top of the line, cut to `max` points.
-    fn line(&mut self, ui: &Ui, s: &mut Surface, label: &str, pt: f32, color: u32, x: f32, top_pt: f32, max: f32) {
+    pub(crate) fn line(&mut self, ui: &Ui, s: &mut Surface, label: &str, pt: f32, color: u32, x: f32, top_pt: f32, max: f32) {
         let fitted = ui.fit(label, pt, ui.pt(max.max(0.0)));
         let img = self.labels.get(ui, &fitted, pt, Weight::Regular, color);
         let top = ui.pt(top_pt);
@@ -229,7 +245,7 @@ fn device_line(row: &Row) -> String {
 }
 
 /// A filled rectangle in points.
-fn fill(s: &mut Surface, ui: &Ui, x: f32, y: f32, w: f32, h: f32, color: u32) {
+pub(crate) fn fill(s: &mut Surface, ui: &Ui, x: f32, y: f32, w: f32, h: f32, color: u32) {
     s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(w.max(0.0)), ui.pt(h.max(0.0)), 0.0, color);
 }
 

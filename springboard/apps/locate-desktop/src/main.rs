@@ -2,6 +2,7 @@
 //! through the SDK. The first run shows what is shared; the marker file in the app's data folder remembers that it
 //! was dismissed. Control methods (`locate.locate`, `locate.play_sound`, `locate.share`) are served from `window`.
 
+mod surfaces;
 mod sync;
 mod window;
 
@@ -36,9 +37,11 @@ impl App for LocateApp {
         let h = ctx.cfg.h as f32 / ctx.ui.pt(1.0); // the sidebar is measured in points
         match ev {
             Input::Touch { kind: TouchKind::Down, x, y, .. } => {
-                let Some(section) = self.w.section_at(x, y, h) else { return false };
-                self.w.panel.select(section);
-                true
+                if let Some(section) = self.w.section_at(x, y, h) {
+                    self.w.panel.select(section);
+                    return true;
+                }
+                self.w.tap(ctx, x, y)
             }
             Input::Key(KeyInput::Code(13)) if self.w.panel.needs_onboarding() => {
                 self.w.panel.finish_onboarding();

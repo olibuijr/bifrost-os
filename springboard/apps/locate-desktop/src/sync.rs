@@ -51,7 +51,7 @@ impl Delegate for Fixes {
 /// How often a sharing device checks whether a report is due, in milliseconds.
 const REPORT_TICK_MS: f64 = 60_000.0;
 
-fn unix_now() -> i64 {
+pub fn unix_now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
@@ -197,7 +197,10 @@ impl LocateWindow {
                 self.open_devices(&mut list);
                 self.panel.apply_list(&list);
             }
-            Event::Pending(list) => self.approvals.sync(list),
+            Event::Pending(list) => {
+                let fresh = list.into_iter().filter(|p| !self.handled_pending.contains(&p.id)).collect();
+                self.approvals.sync(fresh);
+            }
             Event::Shared(list) => self.shared = list,
             Event::Enrolled(id) => {
                 self.enrollment.start(&id);
