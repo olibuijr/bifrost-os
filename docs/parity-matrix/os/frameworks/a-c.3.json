@@ -5517,9 +5517,18 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/crypto_kit.rs; springboard/core/src/sha256.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
    "status": "partial",
-   "note": "The private layer uses the same pure Rust modules as the public crypto kit, which apps can now call through sdk crypto_kit. Gap: there is no hardware-backed key path, and the private key-object types are not exposed.",
+   "note": "The private layer uses the same pure Rust modules as the public crypto kit, which apps can now call through sdk crypto_kit. Gap: there is no hardware-backed key path, and the private key-object types are not exposed. Built 2026-10-17: SigningPublicKey and KeyAgreementPublicKey objects in the SDK crypto kit (sdk crypto_kit); tests crypto_kit::tests. The hardware-backed key path needs a secure key store that this hardware does not have, so it stays out of scope.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crypto_kit::tests"
+    }
+   ],
+   "ready_note": "SDK crypto kit: digests, HKDF, AES-GCM, X25519 and Ed25519 keys and public key objects; crypto_kit::tests"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/acfs.framework",
