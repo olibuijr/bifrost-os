@@ -3348,11 +3348,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/usb_approval.rs",
+   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs",
    "status": "os",
-   "note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI. Lead 2026-10-17: not ready: the shell does not yet call the arrival flow on a udev USB event or draw the approval sheet.",
+   "note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usb_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the bus scan runs the arrival flow (Approvals::arrive_with), an unknown device the kernel holds blocked stays blocked while the three-button approval sheet is up, the answer is written through privd (usb.authorize) and saved in usb_approvals.txt, a known device is allowed or denied without a sheet, the sheet waits for the unlock and goes with an unplugged device. Not verified on Midget. A stock kernel authorizes every device at once, so the sheet only meets devices held back (usbcore.authorized_default=2); setting that policy is not done here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMKit.framework",
@@ -3369,11 +3388,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/usb_approval.rs",
+   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs",
    "status": "os",
-   "note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI. Lead 2026-10-17: not ready: the shell does not yet call the arrival flow on a udev USB event or draw the approval sheet.",
+   "note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usb_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the bus scan runs the arrival flow (Approvals::arrive_with), an unknown device the kernel holds blocked stays blocked while the three-button approval sheet is up, the answer is written through privd (usb.authorize) and saved in usb_approvals.txt, a known device is allowed or denied without a sheet, the sheet waits for the unlock and goes with an unplugged device. Not verified on Midget. A stock kernel authorizes every device at once, so the sheet only meets devices held back (usbcore.authorized_default=2); setting that policy is not done here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMUI.framework",
@@ -3390,11 +3428,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/usb_approval.rs",
+   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs",
    "status": "gap",
-   "note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests). Not wired yet: the shell does not call arrive on a udev USB event and does not draw the sheet from Prompt; that is shell wiring on top of this tested core. Lead 2026-10-17: not ready: the shell does not yet call the arrival flow on a udev USB event or draw the approval sheet.",
+   "note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usb_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the bus scan runs the arrival flow (Approvals::arrive_with), an unknown device the kernel holds blocked stays blocked while the three-button approval sheet is up, the answer is written through privd (usb.authorize) and saved in usb_approvals.txt, a known device is allowed or denied without a sheet, the sheet waits for the unlock and goes with an unplugged device. Not verified on Midget. A stock kernel authorizes every device at once, so the sheet only meets devices held back (usbcore.authorized_default=2); setting that policy is not done here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HMFoundation.framework",

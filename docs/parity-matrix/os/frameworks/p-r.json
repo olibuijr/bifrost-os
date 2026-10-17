@@ -1417,11 +1417,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/pacman_progress.rs; springboard/src/shell/package_install_sheet.rs",
+   "bifrost": "springboard/core/src/pacman_progress.rs; springboard/src/shell/package_install_sheet.rs; springboard/src/shell/pacman_update.rs; springboard/src/shell/workspace.rs; springboard/src/privd/methods.rs",
    "status": "gap",
-   "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first. Built 2026-10-17: pacman_progress reads the steps of the latest transaction from the pacman log and gives a fraction for a progress bar (tests pacman_progress::tests). Built 2026-10-17: pacman_progress::progress gives the sheet's fraction against the packages it listed, and confirmation_needed says an install waits for the person before pacman runs its scripts (tests pacman_progress::tests). Built 2026-10-17: the install sheet (shell/package_install_sheet.rs) asks before the install runs, shows the install's progress from the pacman log, and needs the person's Install (tests package_install_sheet::tests). Not built: the shell has no generic install action to open the sheet from, so it is not reachable yet; the Software Update page already confirms its own pacman run. Lead 2026-10-17: not ready: no shell action opens the install sheet yet.",
+   "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first. Built 2026-10-17: pacman_progress reads the steps of the latest transaction from the pacman log and gives a fraction for a progress bar (tests pacman_progress::tests). Built 2026-10-17: pacman_progress::progress gives the sheet's fraction against the packages it listed, and confirmation_needed says an install waits for the person before pacman runs its scripts (tests pacman_progress::tests). Built 2026-10-17: the install sheet (shell/package_install_sheet.rs) asks before the install runs, shows the install's progress from the pacman log, and needs the person's Install (tests package_install_sheet::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::package_install_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pacman_progress::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: opening a package archive in Files (workspace OpenFile) or a bifrost-package: store link opens the install sheet, nothing runs until Install is pressed (Return never installs), the install runs on a worker through privd (package.install_file, package.install_repo) with the progress read from the pacman log since the start, and the sheet shows the result with Done. privd refuses bad paths and names before pacman runs. Not verified on Midget; the real pacman path is untested on the host."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PacketFilter.framework",

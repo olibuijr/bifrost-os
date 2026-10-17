@@ -229,22 +229,54 @@ impl Prompt {
     }
 }
 
+/// The privd method that writes a device port's `authorized` attribute for the shell, which cannot write sysfs itself:
+/// params `port` (a device port such as `1-4`) and `allow` (a boolean).
+pub const M_USB_AUTHORIZE: &str = "usb.authorize";
+
+/// The USB device ports below `devices_root` that carry a device: the bus-port names (`1-2`, `1-2.4`), without root
+/// hubs (`usbN`) and interfaces (`1-2:1.0`), sorted. The caller reads each device's ids and serial from the same
+/// directory.
+pub fn device_ports(devices_root: &std::path::Path) -> Vec<String> {
+    let mut ports: Vec<String> = std::fs::read_dir(devices_root)
+        .map(|d| d.filter_map(|e| e.ok()).filter_map(|e| e.file_name().into_string().ok()).collect())
+        .unwrap_or_default();
+    ports.retain(|p| !p.starts_with("usb") && authorized_path(p).is_some() && devices_root.join(p).join("idVendor").is_file());
+    ports.sort();
+    ports
+}
+
 impl Approvals {
     /// A device appeared on `port`: decide, and apply the decision to the kernel unless the user must be asked (the
     /// device is held blocked meanwhile). A device whose ids cannot make a key (odd serial) is blocked, never allowed unseen.
     pub fn arrive(&self, devices_root: &std::path::Path, port: &str, vendor: &str, product: &str, serial: &str, name: &str) -> std::io::Result<Step> {
-        let kernel = read_kernel(devices_root, port).unwrap_or(false);
+        let kernel = read_kernel(devices_root, port);
+        self.arrive_with(kernel, vendor, product, serial, name, &mut |d| enforce(devices_root, port, d).map(|_| ()))
+    }
+
+    /// `arrive` with the kernel's state given and the write left to the caller: the shell cannot write sysfs, so its
+    /// `apply` asks privd (`M_USB_AUTHORIZE`). `kernel` is the device's `authorized` state, `None` when unreadable
+    /// (treated as blocked). `apply` always gets the decision to write (a prompt writes Deny); the shell skips a write that changes nothing.
+    pub fn arrive_with(
+        &self,
+        kernel: Option<bool>,
+        vendor: &str,
+        product: &str,
+        serial: &str,
+        name: &str,
+        apply: &mut dyn FnMut(Decision) -> std::io::Result<()>,
+    ) -> std::io::Result<Step> {
+        let kernel = kernel.unwrap_or(false);
         let Some(key) = device_key(vendor, product, serial) else {
-            enforce(devices_root, port, Decision::Deny)?;
+            apply(Decision::Deny)?;
             return Ok(Step::Applied(Decision::Deny));
         };
         match self.decide(&key, kernel) {
             Decision::Prompt => {
-                enforce(devices_root, port, Decision::Deny)?;
+                apply(Decision::Deny)?;
                 Ok(Step::Ask { key, prompt: Prompt::for_device(name) })
             }
             d => {
-                enforce(devices_root, port, d)?;
+                apply(d)?;
                 Ok(Step::Applied(d))
             }
         }
@@ -252,9 +284,15 @@ impl Approvals {
 
     /// The user answered the sheet: record it and write the result to the kernel.
     pub fn finish(&mut self, devices_root: &std::path::Path, port: &str, key: &str, answer: Answer) -> std::io::Result<Decision> {
+        self.finish_with(key, answer, &mut |d| enforce(devices_root, port, d).map(|_| ()))
+    }
+
+    /// `finish` with the write left to the caller (see `arrive_with`). The answer is recorded even when the write fails,
+    /// so the next arrival of the device applies it again.
+    pub fn finish_with(&mut self, key: &str, answer: Answer, apply: &mut dyn FnMut(Decision) -> std::io::Result<()>) -> std::io::Result<Decision> {
         self.answer(key, answer);
         let d = if matches!(answer, Answer::DenyAlways) { Decision::Deny } else { Decision::Allow };
-        enforce(devices_root, port, d)?;
+        apply(d)?;
         Ok(d)
     }
 }
@@ -400,5 +438,41 @@ mod tests {
         let read = Approvals::from_text(messy);
         assert_eq!(read.stored("046d:c52b:-"), Some(true));
         assert_eq!(read.to_text(), "046d:c52b:- allow\n");
+    }
+
+    #[test]
+    fn arrive_with_leaves_the_write_to_the_caller() {
+        let mut a = Approvals::new();
+        let mut written = Vec::new();
+        let step = a.arrive_with(Some(false), "046d", "c52b", "", "Keyboard", &mut |d| {
+            written.push(d);
+            Ok(())
+        });
+        let Step::Ask { key, .. } = step.unwrap() else { panic!("expected a prompt") };
+        assert_eq!(written, vec![Decision::Deny], "held blocked while the sheet is up");
+        written.clear();
+        assert_eq!(a.finish_with(&key, Answer::AllowOnce, &mut |d| { written.push(d); Ok(()) }).unwrap(), Decision::Allow);
+        assert_eq!(written, vec![Decision::Allow]);
+        // a kernel-authorized, unknown device needs no prompt; an unreadable attribute counts as blocked
+        assert_eq!(a.arrive_with(Some(true), "1234", "0001", "S", "", &mut |_| Ok(())).unwrap(), Step::Applied(Decision::Allow));
+        assert!(matches!(a.arrive_with(None, "1234", "0002", "S", "", &mut |_| Ok(())).unwrap(), Step::Ask { .. }));
+        // a failed write is an error, but the answer stays recorded
+        let err = a.finish_with("1234:0002:S", Answer::DenyAlways, &mut |_| Err(std::io::Error::other("no"))).unwrap_err();
+        assert_eq!(err.to_string(), "no");
+        assert_eq!(a.stored("1234:0002:S"), Some(false));
+    }
+
+    #[test]
+    fn device_ports_lists_devices_only() {
+        let root = sysfs("ports", "1-2", "1");
+        for dir in ["usb1", "1-2:1.0", "1-3"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        std::fs::write(root.join("1-2").join("idVendor"), "046d\n").unwrap();
+        std::fs::write(root.join("usb1").join("idVendor"), "1d6b\n").unwrap();
+        // 1-3 has no idVendor yet: it is still enumerating
+        assert_eq!(device_ports(&root), vec!["1-2".to_string()]);
+        assert!(device_ports(&root.join("missing")).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

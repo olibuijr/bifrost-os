@@ -2,7 +2,8 @@
 
 Code: `springboard/src/shell/permission_sheet.rs`, `services/privacy_permissions.rs`, `auth_sheet.rs`,
 `services/local_auth.rs`, `account_access_sheet.rs`, `contactpick.rs`, `guardian_sheet.rs`, `services/permission_kit.rs`,
-`volume_sheet.rs`. Each sheet is an alert card that takes every touch until the person answers.
+`volume_sheet.rs`, `usb_sheet.rs`, `network_auth_sheet.rs` with `services/network_auth.rs`, `package_install_sheet.rs`.
+Each sheet is an alert card that takes every touch until the person answers.
 
 All sheets default to refusal: an unanswered question never grants.
 
@@ -26,6 +27,33 @@ All sheets default to refusal: an unanswered question never grants.
 
 - An app's `accounts` request_access call queues a question. The sheet offers Allow, then Don't Allow (the default).
 - The answer goes back through the service and is stored with `bifrost_ui::account_store::set_access`.
+
+## USB accessories (`usb_sheet.rs`, `bifrost_core::usb_approval`)
+
+- The shell reads `/sys/bus/usb/devices` once a second. A device on a port it has not handled goes through
+  `Approvals::arrive_with`: a stored denial blocks it, a stored allowance or a kernel-authorized device is allowed, and an
+  unknown device the kernel holds blocked gets the sheet (Always Allow, Allow Once, Don't Allow) and stays blocked until
+  the answer. The sheet waits while the screen is locked and goes with a device that is unplugged.
+- The `authorized` attribute is written by privd (`usb.authorize`); the shell skips a write that changes nothing.
+  "Always" answers are kept in `usb_approvals.txt` in the settings folder, "Allow Once" until the shell restarts.
+- On a stock kernel every device is authorized at once, so the sheet meets only devices the system holds back, for
+  example with `usbcore.authorized_default=2` (authorize internal devices only). Setting that policy is not done here.
+
+## Network logins (`network_auth_sheet.rs`, `services/network_auth.rs`, `net_auth.rs`)
+
+- An app with the `network` permission calls the `network_auth` service's `request_login` for an SMB share
+  (`kind: "share", host, share`) or an 802.1X network (`kind: "wifi", ssid`). A saved login in the keychain group
+  `is.bifrost.network-auth` is returned at once; otherwise the reply is `pending` and the shell asks: user name (starting
+  from a refused name), password in a secure field, then whether to remember the login. Cancel or Escape ends it.
+- `refused: true` forgets the saved login and makes the sheet say it was not accepted. The typed login goes back to the
+  app once; it is saved only when the person chose Remember.
+
+## Package install (`package_install_sheet.rs`, `pacman_update::Source`)
+
+- Opening a package archive (`name-version-release-arch.pkg.tar.zst`) from Files (the workspace `OpenFile` route), or a
+  store link `bifrost-package:install/name,name`, opens the sheet. Install runs `pacman -U` or `pacman -S --needed`
+  through privd (`package.install_file`, `package.install_repo`) on a worker thread; the sheet follows the pacman log for
+  its progress and then shows the result. Return never installs: only the Install button does.
 
 ## Contacts picker (`contactpick.rs`)
 

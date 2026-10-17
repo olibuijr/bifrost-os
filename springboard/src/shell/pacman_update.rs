@@ -138,12 +138,112 @@ pub fn removable_from(listing: &str) -> Vec<String> {
 /// guard protects.
 pub const PROTECTED_PACKAGES: [&str; 9] = ["springboard-shell", "base", "linux", "linux-rt", "linux-firmware", "pacman", "systemd", "glibc", "sudo"];
 
+/// A plain pacman package name: lower-case letters, digits and `@._+-`, not starting with `-` (so it cannot read as a flag).
+pub fn plain_name(package: &str) -> bool {
+    !package.is_empty() && package.len() <= 128 && !package.starts_with('-') && package.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "@._+-".contains(c))
+}
+
+/// The archive endings pacman installs from a file.
+pub const PACKAGE_EXTENSIONS: [&str; 2] = [".pkg.tar.zst", ".pkg.tar.xz"];
+
+/// The package name in a package archive's file name (`name-version-release-arch.pkg.tar.zst`), or `None` when the file is
+/// not named like a package. The name is checked like a name given to `remove_args`.
+pub fn package_file_name(file: &str) -> Option<String> {
+    let base = PACKAGE_EXTENSIONS.iter().find_map(|e| file.strip_suffix(e))?;
+    let mut parts = base.rsplitn(4, '-');
+    let (arch, release, version, name) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
+    (!arch.is_empty() && !release.is_empty() && !version.is_empty() && plain_name(name)).then(|| name.to_string())
+}
+
+/// Whether a file is named like a package archive.
+pub fn is_package_file(file: &str) -> bool {
+    package_file_name(file).is_some()
+}
+
+/// Most packages one install may name.
+pub const MAX_INSTALL_NAMES: usize = 16;
+
+/// The pacman arguments that install packages from the sync databases: `-S --needed --noconfirm` and the names. The shell
+/// has already asked the person. Refuses an empty list, too many names, and a name that is not a plain package name.
+pub fn install_repo_args(names: &[String]) -> Result<Vec<String>, String> {
+    if names.is_empty() || names.len() > MAX_INSTALL_NAMES {
+        return Err(format!("an install names 1 to {MAX_INSTALL_NAMES} packages"));
+    }
+    if let Some(bad) = names.iter().find(|n| !plain_name(n)) {
+        return Err(format!("{bad:?} is not a package name"));
+    }
+    let mut args: Vec<String> = ["-S", "--needed", "--noconfirm"].iter().map(|s| s.to_string()).collect();
+    args.extend(names.iter().cloned());
+    Ok(args)
+}
+
+/// The pacman arguments that install one package archive from `file`, without a prompt (the shell has asked).
+pub fn install_file_args(file: &str) -> Vec<String> {
+    vec!["-U".into(), "--noconfirm".into(), file.into()]
+}
+
+/// The package names in a store link, `bifrost-package:install/name,name` (a `//` after the colon is allowed), or `None` when
+/// the text is not such a link or a name is not a plain package name.
+pub fn package_link(url: &str) -> Option<Vec<String>> {
+    let (scheme, rest) = url.trim().split_once(':')?;
+    if !scheme.eq_ignore_ascii_case("bifrost-package") {
+        return None;
+    }
+    let names: Vec<String> = rest.trim_start_matches('/').strip_prefix("install/")?.split(',').map(str::to_string).collect();
+    install_repo_args(&names).ok()?;
+    Some(names)
+}
+
+/// What the person asked to install.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// A package archive on disk (`.pkg.tar.zst`), for instance one downloaded in Files.
+    File(std::path::PathBuf),
+    /// Packages from the sync databases, named by a store link.
+    Repo(Vec<String>),
+}
+
+impl Source {
+    /// The packages this install adds, for the confirmation sheet, or why it cannot be offered.
+    pub fn packages(&self) -> Result<Vec<String>, String> {
+        match self {
+            Source::File(path) => {
+                let file = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                package_file_name(file).map(|n| vec![n]).ok_or_else(|| format!("{file:?} is not a package file"))
+            }
+            Source::Repo(names) => install_repo_args(names).map(|_| names.clone()),
+        }
+    }
+
+    /// Runs the install: through privd for a user session, in this process for the root shell and host tests. Blocking;
+    /// the caller has asked the person.
+    pub fn run(&self) -> Result<(), String> {
+        self.packages()?;
+        let c = crate::privd_client::connect();
+        if !c.is_local() {
+            return match self {
+                Source::File(path) => c.package_install_file(&path.to_string_lossy()),
+                Source::Repo(names) => c.package_install_repo(names),
+            }
+            .map_err(|e| e.to_string());
+        }
+        let args = match self {
+            Source::File(path) => install_file_args(&path.to_string_lossy()),
+            Source::Repo(names) => install_repo_args(names)?,
+        };
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        match run("pacman", &args)? {
+            (0, _) => Ok(()),
+            (code, out) => Err(format!("pacman exited with {code}: {}", last_line(&out))),
+        }
+    }
+}
+
 /// The pacman arguments that remove one package, without a prompt because the shell has already confirmed the
 /// removal. Plain `-R` only: pacman refuses to remove a package that others need, and no dependencies are removed
 /// with it. Refuses a name that is not a plain package name, a name that reads as a flag, and a protected package.
 pub fn remove_args(package: &str) -> Result<Vec<String>, String> {
-    let plain = !package.is_empty() && !package.starts_with('-') && package.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "@._+-".contains(c));
-    if !plain {
+    if !plain_name(package) {
         return Err(format!("{package:?} is not a package name"));
     }
     if PROTECTED_PACKAGES.contains(&package) {
@@ -261,6 +361,45 @@ pub fn rollback_local() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_package_file_name_gives_the_package_name() {
+        assert_eq!(package_file_name("foo-1.0-1-x86_64.pkg.tar.zst").as_deref(), Some("foo"));
+        assert_eq!(package_file_name("gtk4-demo-4.12.0-2-any.pkg.tar.xz").as_deref(), Some("gtk4-demo"));
+        assert_eq!(package_file_name("python@3.12-3.12.1-1-x86_64.pkg.tar.zst").as_deref(), Some("python@3.12"));
+        for bad in ["foo.pkg.tar.zst", "foo-1.0.pkg.tar.zst", "foo-1.0-1-x86_64.tar.gz", "Foo-1-1-any.pkg.tar.zst", "-foo-1-1-any.pkg.tar.zst", "foo-1-1-.pkg.tar.zst", "notes.txt", ""] {
+            assert!(!is_package_file(bad), "{bad:?}");
+        }
+        assert!(is_package_file("a-1-1-any.pkg.tar.zst"));
+    }
+
+    #[test]
+    fn repo_installs_name_plain_packages_only() {
+        assert_eq!(install_repo_args(&["htop".into(), "gtk4-demo".into()]).unwrap(), vec!["-S", "--needed", "--noconfirm", "htop", "gtk4-demo"]);
+        assert!(install_repo_args(&[]).is_err());
+        assert!(install_repo_args(&["--overwrite=*".into()]).is_err(), "a flag is not a name");
+        assert!(install_repo_args(&["a b".into()]).is_err());
+        assert!(install_repo_args(&vec!["a".to_string(); MAX_INSTALL_NAMES + 1]).is_err());
+        assert_eq!(install_file_args("/var/x/a-1-1-any.pkg.tar.zst"), vec!["-U", "--noconfirm", "/var/x/a-1-1-any.pkg.tar.zst"]);
+    }
+
+    #[test]
+    fn a_store_link_names_the_packages_to_install() {
+        assert_eq!(package_link("bifrost-package:install/htop"), Some(vec!["htop".to_string()]));
+        assert_eq!(package_link("BIFROST-PACKAGE://install/htop,gtk4-demo"), Some(vec!["htop".to_string(), "gtk4-demo".to_string()]));
+        for bad in ["https://install/htop", "bifrost-package:remove/htop", "bifrost-package:install/", "bifrost-package:install/htop,", "bifrost-package:install/--force", "bifrost-package:install/ht op", "htop"] {
+            assert_eq!(package_link(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_source_lists_the_packages_the_sheet_asks_about() {
+        use std::path::PathBuf;
+        assert_eq!(Source::File(PathBuf::from("/home/o/Downloads/foo-1.0-1-x86_64.pkg.tar.zst")).packages().unwrap(), vec!["foo"]);
+        assert!(Source::File(PathBuf::from("/home/o/Downloads/notes.txt")).packages().is_err());
+        assert_eq!(Source::Repo(vec!["a".into(), "b".into()]).packages().unwrap().len(), 2);
+        assert!(Source::Repo(vec![]).packages().is_err());
+    }
 
     #[test]
     fn remove_args_name_one_package_without_dependencies() {

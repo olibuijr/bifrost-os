@@ -2092,11 +2092,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/keychain.rs (save_share_login, share_login, share_access, answer_share_prompt, forget_share_login); springboard/src/net_auth.rs (share_prompt, wifi_prompt, validate, complete_share); springboard/sdk/src/wifi_secrets.rs (eap_access, answer_eap_prompt, forget_eap)",
+   "bifrost": "springboard/src/net_auth.rs; springboard/src/keychain.rs; springboard/src/shell/network_auth_sheet.rs; springboard/src/shell/services/network_auth.rs",
    "status": "gap",
-   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs). Built 2026-10-17: the saved-or-prompt decision for both kinds, and the prompt model with its answer checks (springboard/src/net_auth.rs). Not built: the shell sheet that draws the prompt. Lead 2026-10-17: not ready: the share and Wi-Fi prompt model is built but no sheet draws it.",
+   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs). Built 2026-10-17: the saved-or-prompt decision for both kinds, and the prompt model with its answer checks (springboard/src/net_auth.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::network_auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::network_auth::tests"
+    }
+   ],
+   "ready_note": "Host tests for the shell path: the network_auth service answers a saved share or 802.1X login from the keychain group, queues a sheet otherwise, the shell draws the user name, password and remember steps, Cancel and Escape end it, a refused login is forgotten and the retry wording shown, and the typed login reaches the app once and the keychain only on Remember. Not verified on Midget. The SDK's WifiSecrets store stays in memory; 802.1X logins are kept in the keychain group instead. Apps (Files for shares) still have to call request_login; no app does yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetFSServer.framework",
