@@ -26,7 +26,7 @@
    "apple": "AVPictureInPictureController, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate, AVPlayerViewPictureInPictureDelegate, AVPictureInPictureVideoCallViewController",
    "bifrost": "springboard/ui/src/pip_window.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs, springboard/ui/tests/parity_sdk-tests-08.rs (pip_*)",
    "status": "partial",
-   "note": "Pure controller and placement: start, finish, stop and suspend in order, the delegate events, automatic start in the background, window size, corner placement and snapping. These are tested headless in ui/tests/parity_sdk-tests-15.rs and parity_sdk-tests-08.rs. Not wired into apps or the shell and not verified on Midget. Only the Start PiP Automatically preference exists; no floating video window is drawn, no app-facing start/stop API, and nothing reads pip_auto when the Home button is pressed."
+   "note": "Pure controller and placement: start, finish, stop and suspend in order, the delegate events, automatic start in the background, window size, corner placement and snapping. These are tested headless in ui/tests/parity_sdk-tests-15.rs and parity_sdk-tests-08.rs. Not wired into apps or the shell and not verified on Midget. Only the Start PiP Automatically preference exists; no floating video window is drawn, no app-facing start/stop API, and nothing reads pip_auto when the Home button is pressed. Built 2026-10-17: SDK bifrost_app::picture_in_picture (Pip: controller, window rect, corner snapping); tests springboard/sdk/src/picture_in_picture.rs::tests. Shell placement not wired yet."
   },
   {
    "feature": "Playback of immersive, multiview and interstitial media",

@@ -260,6 +260,8 @@ pub mod store_receipt;
 /// StoreKit-shaped purchase models for the PC App Store: products and their types, purchases and their outcomes,
 /// the entitlement ledger, subscriptions, promotions. No payment is taken here.
 pub use bifrost_ui::{entitlement, product, promotion, purchase, subscription};
+/// Picture in Picture for video players: life cycle, delegate events and the floating window's rectangle and corner.
+pub mod picture_in_picture;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;
