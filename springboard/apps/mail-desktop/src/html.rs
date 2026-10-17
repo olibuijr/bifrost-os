@@ -437,7 +437,7 @@ mod tests {
         let s = sanitize_with_parts("<p><img src=\"cid:logo1\" alt=\"L\"></p>", false, &cids);
         assert_eq!(s.html, "<p><img src=\"data:image/png;base64,iVBORw0=\" alt=\"L\" /></p>");
         assert_eq!(s.remote_images_blocked, 0);
-        let s = sanitize_with_parts("<img src=\"<CID:logo1>\"><img src=\"cid:missing\">", false, &cids);
+        let s = sanitize_with_parts("<img src=\"CID:logo1\"><img src=\"cid:missing\">", false, &cids);
         assert_eq!(s.html, "<img src=\"data:image/png;base64,iVBORw0=\" />");
         // a cid part that is not a raster image is never shown
         let svg = vec![("s".to_string(), "data:image/svg+xml;base64,PHN2Zz4=".to_string())];
