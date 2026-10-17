@@ -364,7 +364,8 @@ impl super::Shell {
             self.notify_remove(id);
         }
         let (title, body) = display(&req);
-        let n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
+        let mut n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
+        n.thread = req.thread.clone();
         let id = self.notify_id(n);
         if let Some(count) = req.badge {
             if let Some(Some(h)) = self.ext.get_mut(slot as usize) {

@@ -139,6 +139,8 @@ fn app_name(app: AppId) -> &'static str {
 /// An app's group as drawn: its newest cards and how many more there are.
 pub struct GroupView {
     pub app: AppId,
+    /// the thread of the stack; empty for notifications without one
+    pub thread: String,
     /// notifications in the group
     pub count: usize,
     /// drawn as an expanded group (always in Notification Center)
@@ -204,9 +206,11 @@ impl ListView {
                 let shown = if expanded { EXPANDED.min(g.items.len()) } else { 1 };
                 let hidden = g.items.len() - shown;
                 let muted = opts.muted.contains(&g.app);
-                let name = if muted { format!("{} (Muted)", app_name(g.app)) } else { app_name(g.app).to_string() };
+                let title = if g.thread.is_empty() { app_name(g.app).to_string() } else { format!("{} \u{b7} {}", app_name(g.app), g.thread) };
+                let name = if muted { format!("{title} (Muted)") } else { title };
                 GroupView {
                     app: g.app,
+                    thread: g.thread.clone(),
                     count: g.items.len(),
                     expanded,
                     muted,
@@ -463,10 +467,10 @@ mod tests {
     use crate::shell::tests::ui;
 
     fn groups() -> Vec<Group> {
-        let n = |app, title: &str, id| Notification { app, title: title.into(), body: "body".into(), time: 0, id };
+        let n = |app, title: &str, id| Notification { app, title: title.into(), body: "body".into(), time: 0, id, thread: String::new() };
         vec![
-            Group { app: AppId::Files, items: vec![n(AppId::Files, "Alarm", 9), n(AppId::Files, "Timer", 8), n(AppId::Files, "Older", 7), n(AppId::Files, "Oldest", 6), n(AppId::Files, "Ancient", 5)] },
-            Group { app: AppId::Settings, items: vec![n(AppId::Settings, "Low Battery", 4)] },
+            Group { app: AppId::Files, thread: String::new(), items: vec![n(AppId::Files, "Alarm", 9), n(AppId::Files, "Timer", 8), n(AppId::Files, "Older", 7), n(AppId::Files, "Oldest", 6), n(AppId::Files, "Ancient", 5)] },
+            Group { app: AppId::Settings, thread: String::new(), items: vec![n(AppId::Settings, "Low Battery", 4)] },
         ]
     }
 

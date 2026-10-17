@@ -20,6 +20,8 @@ pub struct Notification {
     pub time: i64,
     /// assigned by the store on `push`; 0 before
     pub id: u64,
+    /// the app's thread identifier (`threadIdentifier`); empty when the app gave none
+    pub thread: String,
 }
 
 /// Which part of the file the parser is in.
@@ -34,14 +36,16 @@ enum Section {
 
 impl Notification {
     pub fn new(app: AppId, title: impl Into<String>, body: impl Into<String>, time: i64) -> Self {
-        Notification { app, title: title.into(), body: body.into(), time, id: 0 }
+        Notification { app, title: title.into(), body: body.into(), time, id: 0, thread: String::new() }
     }
 }
 
-/// An app's notifications, newest first.
+/// One stack in the lists: an app's notifications of one thread, newest first.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Group {
     pub app: AppId,
+    /// the thread the stack holds; empty for notifications without one
+    pub thread: String,
     pub items: Vec<Notification>,
 }
 
@@ -125,7 +129,7 @@ impl Store {
                     _ => Section::Item,
                 };
                 if section == Section::Item {
-                    current = id.parse().ok().map(|id| Notification { app: AppId::Settings, title: String::new(), body: String::new(), time: 0, id });
+                    current = id.parse().ok().map(|id| Notification { app: AppId::Settings, title: String::new(), body: String::new(), time: 0, id, thread: String::new() });
                 }
                 continue;
             }
@@ -169,6 +173,7 @@ impl Store {
                         "time" => n.time = v.parse().unwrap_or(0),
                         "title" => n.title = v.to_string(),
                         "body" => n.body = v.to_string(),
+                        "thread" => n.thread = v.to_string(),
                         _ => {}
                     }
                 }
@@ -211,6 +216,9 @@ impl Store {
         }
         for n in &self.items {
             out.push_str(&format!("[{}]\napp={}\ntime={}\ntitle={}\nbody={}\n", n.id, app_key(n.app), n.time, clean(&n.title), clean(&n.body)));
+            if !n.thread.is_empty() {
+                out.push_str(&format!("thread={}\n", clean(&n.thread)));
+            }
         }
         out
     }
@@ -335,6 +343,17 @@ impl Store {
         changed
     }
 
+    /// Drops every notification of `app` in `thread` (a stack in the lists); true if there were any.
+    pub fn clear_thread(&mut self, app: AppId, thread: &str) -> bool {
+        let before = self.items.len();
+        self.items.retain(|n| !(n.app == app && n.thread == thread));
+        let changed = self.items.len() != before;
+        if changed {
+            self.save();
+        }
+        changed
+    }
+
     /// Drops everything.
     pub fn clear(&mut self) {
         if !self.items.is_empty() {
@@ -343,14 +362,15 @@ impl Store {
         }
     }
 
-    /// Notifications grouped per app, newest first inside each group; the
-    /// group with the newest notification comes first.
+    /// Notifications grouped per app and thread, newest first inside each group; the
+    /// group with the newest notification comes first. Notifications without a thread
+    /// stack under the app's empty-thread group.
     pub fn groups(&self) -> Vec<Group> {
         let mut groups: Vec<Group> = Vec::new();
         for n in self.items.iter().rev() {
-            match groups.iter_mut().find(|g| g.app == n.app) {
+            match groups.iter_mut().find(|g| g.app == n.app && g.thread == n.thread) {
                 Some(g) => g.items.push(n.clone()),
-                None => groups.push(Group { app: n.app, items: vec![n.clone()] }),
+                None => groups.push(Group { app: n.app, thread: n.thread.clone(), items: vec![n.clone()] }),
             }
         }
         groups
@@ -383,6 +403,48 @@ mod tests {
 
     fn note(app: AppId, title: &str, time: i64) -> Notification {
         Notification::new(app, title, format!("body of {title}"), time)
+    }
+
+    fn threaded(app: AppId, thread: &str, title: &str, time: i64) -> Notification {
+        Notification { thread: thread.into(), ..note(app, title, time) }
+    }
+
+    #[test]
+    fn notifications_stack_per_app_and_thread_newest_first() {
+        let mut s = Store::memory();
+        s.push(threaded(AppId::Terminal, "room-a", "A1", 1));
+        s.push(threaded(AppId::Terminal, "room-b", "B1", 2));
+        s.push(note(AppId::Terminal, "loose", 3));
+        s.push(threaded(AppId::Terminal, "room-a", "A2", 4));
+        let g = s.groups();
+        assert_eq!(g.len(), 3, "one stack per thread of the app");
+        assert_eq!((g[0].thread.as_str(), g[0].items.len()), ("room-a", 2), "the newest stack comes first");
+        assert_eq!(g[0].items[0].title, "A2", "newest first inside the stack");
+        assert_eq!(g[1].thread, "", "the loose notification has its own stack");
+        assert_eq!(g[2].thread, "room-b");
+    }
+
+    #[test]
+    fn clear_thread_removes_only_that_stack() {
+        let mut s = Store::memory();
+        s.push(threaded(AppId::Files, "t1", "one", 1));
+        s.push(threaded(AppId::Files, "t2", "two", 2));
+        s.push(threaded(AppId::Settings, "t1", "other app", 3));
+        assert!(s.clear_thread(AppId::Files, "t1"));
+        assert!(!s.clear_thread(AppId::Files, "t1"), "already gone");
+        let titles: Vec<&str> = s.groups().iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
+        assert_eq!(titles.len(), 2);
+        assert!(titles.contains(&"two") && titles.contains(&"other app"));
+    }
+
+    #[test]
+    fn the_thread_survives_a_restart() {
+        let path = scratch("thread-notifications.ini");
+        let _ = std::fs::remove_file(&path);
+        let mut s = Store::load(&path);
+        s.push(threaded(AppId::Files, "chat:7", "hello", 5));
+        let back = Store::load(&path);
+        assert_eq!(back.groups()[0].thread, "chat:7");
     }
 
     #[test]

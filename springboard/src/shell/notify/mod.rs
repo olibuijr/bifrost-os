@@ -436,6 +436,23 @@ impl Shell {
         }
     }
 
+    /// The thread of lock-screen group `group` (empty when there is none).
+    fn lock_thread(&self, group: usize) -> String {
+        self.notify.lock.as_ref().and_then(|l| l.groups.get(group)).map(|g| g.thread.clone()).unwrap_or_default()
+    }
+
+    /// Clears one stack of an app: the notifications of `app` in `thread` (the Clear button of a group).
+    pub(super) fn clear_group(&mut self, app: AppId, thread: &str) {
+        if self.notify.store.clear_thread(app, thread) {
+            self.store_changed();
+        }
+        if self.notify.banner_card.as_ref().is_some_and(|c| c.app == app) {
+            if let Some(b) = &mut self.notify.banner {
+                b.dismiss(self.notify.t);
+            }
+        }
+    }
+
     /// Drops one notification (a swipe on a card of an expanded stack).
     fn clear_notification(&mut self, id: u64) {
         let banner = self.notify.banner.as_ref().is_some_and(|b| b.id == id);
@@ -863,10 +880,11 @@ impl Shell {
                 match (tc.horizontal, tc.aim) {
                     (None, Aim::Card { .. }) if tc.base < 0.0 => self.notify.revealed = None,
                     (None, aim) => self.lock_tap(aim, t),
-                    (Some(_), Aim::Card { id, app, whole, .. }) => {
+                    (Some(_), Aim::Card { id, app, whole, group, .. }) => {
                         if -total > cw * CLEAR_FRACTION {
                             if whole {
-                                self.clear_notifications(app);
+                                let thread = self.lock_thread(group);
+                                self.clear_group(app, &thread);
                             } else {
                                 self.clear_notification(id);
                             }
@@ -890,6 +908,7 @@ impl Shell {
     /// A tap that stayed put on `aim`.
     fn lock_tap(&mut self, aim: Aim, t: f64) {
         let group_app = |sh: &Self, i: usize| sh.notify.lock.as_ref().and_then(|l| l.groups.get(i)).map(|g| g.app);
+        let group_stack = |sh: &Self, i: usize| sh.notify.lock.as_ref().and_then(|l| l.groups.get(i)).map(|g| (g.app, g.thread.clone()));
         match aim {
             Aim::Card { group, app, .. } => {
                 let stacked = self.notify.lock.as_ref().and_then(|l| l.groups.get(group)).is_some_and(|g| g.stacked());
@@ -901,8 +920,8 @@ impl Shell {
                 }
             }
             Aim::Button(Hit::Clear(i)) => {
-                if let Some(app) = group_app(self, i) {
-                    self.clear_notifications(app);
+                if let Some((app, thread)) = group_stack(self, i) {
+                    self.clear_group(app, &thread);
                 }
             }
             Aim::Button(Hit::Mute(i)) => {
@@ -919,12 +938,15 @@ impl Shell {
             Aim::Button(Hit::ClearAll) => self.clear_all_notifications(),
             Aim::Button(Hit::Card { .. }) => {}
             Aim::Revealed(slot) => {
-                if let Some(Aim::Card { id, app, whole, .. }) = self.notify.revealed.take() {
+                if let Some(Aim::Card { id, app, whole, group, .. }) = self.notify.revealed.take() {
                     self.dirty = true;
                     match slot {
                         0 => self.toggle_mute(app),
                         1 => self.open_from_notification(app, t),
-                        _ if whole => self.clear_notifications(app),
+                        _ if whole => {
+                            let thread = self.lock_thread(group);
+                            self.clear_group(app, &thread);
+                        }
                         _ => self.clear_notification(id),
                     }
                 }
@@ -1508,6 +1530,23 @@ mod tests {
             tap(&mut sh, tx, ty, 5000.0);
         }
         assert!(!sh.app_muted(AppId::Settings), "a second tap unmutes");
+    }
+
+    #[test]
+    fn clearing_a_stack_removes_only_its_thread_of_the_app() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let threaded = |thread: &str, title: &str| Notification { thread: thread.into(), ..note(AppId::Files, title) };
+        sh.notify(threaded("chat:1", "hi"));
+        sh.notify(threaded("chat:2", "yo"));
+        sh.notify(threaded("chat:1", "again"));
+        let groups = sh.visible_groups(Mode::Center);
+        assert_eq!(groups.len(), 2, "one stack per thread");
+        assert_eq!(groups[0].thread, "chat:1", "the newest stack first");
+        sh.clear_group(AppId::Files, "chat:1");
+        let left: Vec<&str> = sh.notify.store.groups().iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
+        assert_eq!(left, vec!["yo"]);
     }
 
     #[test]
