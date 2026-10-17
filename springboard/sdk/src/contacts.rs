@@ -222,9 +222,42 @@ pub fn preview(choice: Choice) -> Result<Status, Error> {
     Access::new().request(choice)
 }
 
+/// vCard 3.0 and 4.0 for the full contact model (`bifrost_ui::contact_vcard`, the same code the Contacts app uses for
+/// its import and export). `vcard::serialize` writes contacts as CRLF-terminated cards, and `vcard::contacts` reads
+/// every card back, skipping properties the model has no field for. Text over `vcard::MAX_BYTES` is refused, and
+/// `vcard::Error` names the failure. An app builds its own [`Contact`] values, so it never needs the store file.
+pub mod vcard {
+    pub use bifrost_ui::contact_book::{label, Contact, LabeledValue};
+    pub use bifrost_ui::contact_vcard::{contacts, serialize, Version};
+    pub use bifrost_ui::vcard::{Error, MAX_BYTES, MAX_CARDS};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_sdk_vcard_round_trips_a_contact_in_both_versions() {
+        let mut ada = vcard::Contact {
+            given_name: "Ada".into(),
+            family_name: "Lovelace".into(),
+            organization_name: "Analytical Engines".into(),
+            ..vcard::Contact::default()
+        };
+        ada.phone_numbers.push(vcard::LabeledValue::new(Some(vcard::label::MOBILE), "+354 555 1234".into()));
+        ada.email_addresses.push(vcard::LabeledValue::new(Some(vcard::label::WORK), "ada@example.org".into()));
+        for version in [vcard::Version::V3, vcard::Version::V4] {
+            let text = vcard::serialize(std::slice::from_ref(&ada), version);
+            assert!(text.starts_with("BEGIN:VCARD\r\n"), "{version:?}");
+            assert_eq!(vcard::contacts(&text).unwrap(), vec![ada.clone()], "{version:?}");
+        }
+    }
+
+    #[test]
+    fn oversized_vcard_text_is_refused() {
+        let big = "x".repeat(vcard::MAX_BYTES + 1);
+        assert_eq!(vcard::contacts(&big), Err(vcard::Error::TooLarge));
+    }
 
     fn reply(rows: Vec<Json>) -> Json {
         Json::Obj(vec![("contacts".into(), Json::Arr(rows))])
