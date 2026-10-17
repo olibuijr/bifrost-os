@@ -10,6 +10,7 @@ kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["documents"]
 package_types = ["rtfd"]
+handles = ["public.rtfd:default"]
 window = "full-size"
 
 [[service]]

@@ -11,7 +11,7 @@ pub(crate) fn tagged_entries(index: &TagIndex, only: Option<Tag>) -> Vec<Entry> 
         .filter_map(|path| {
             let md = std::fs::metadata(&path).ok()?;
             let name = path.file_name()?.to_string_lossy().into_owned();
-            let is_dir = md.is_dir();
+            let is_dir = md.is_dir() && !fs::is_package_name(&name);
             Some(Entry {
                 kind: fs::kind_of(&name, is_dir),
                 name,

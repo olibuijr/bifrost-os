@@ -97,7 +97,7 @@ impl SmartFolder {
                 let path = e.path();
                 let Ok(link) = std::fs::symlink_metadata(&path) else { continue };
                 let md = if link.file_type().is_symlink() { std::fs::metadata(&path).unwrap_or(link.clone()) } else { link.clone() };
-                let is_dir = md.is_dir();
+                let is_dir = md.is_dir() && !fs::is_package_name(&name);
                 if is_dir && !link.file_type().is_symlink() && depth < MAX_DEPTH {
                     pending.push((path.clone(), depth + 1));
                 }
