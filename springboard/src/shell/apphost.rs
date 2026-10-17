@@ -321,7 +321,19 @@ pub fn late_crashes() -> Vec<(String, i32)> {
 }
 pub fn register(root: &Path) {
     let _ = ROOT.set(root.to_path_buf());
-    if let Ok(mut g) = INSTALLED.write() { *g = Some(scan(root).into()); }
+    let apps = scan(root);
+    sync_app_types(&apps);
+    if let Ok(mut g) = INSTALLED.write() { *g = Some(apps.into()); }
+}
+/// Registers the document types every installed app declares in its manifest (`[[exported_types]]` and
+/// `[[imported_types]]`), so `uttype` lookups, Open With and the share menu see them. An app whose declarations
+/// conflict is left out and reported on stderr; the others still register (`register_manifests`).
+fn sync_app_types(apps: &[Installed]) {
+    let texts: Vec<(&str, String)> = apps.iter().filter_map(|a| std::fs::read_to_string(a.dir.join("manifest.toml")).ok().map(|t| (a.manifest.id.as_str(), t))).collect();
+    let refs: Vec<&str> = texts.iter().map(|(_, t)| t.as_str()).collect();
+    for (i, e) in bifrost_ui::uttype_declarations::register_manifests(&refs) {
+        eprintln!("springboard: app {} declares document types that were not registered: {e:?}", texts[i].0);
+    }
 }
 fn merge_installed(old: &[Installed], scanned: Vec<Installed>) -> Vec<Installed> {
     let mut all = old.to_vec();
@@ -337,6 +349,7 @@ pub fn refresh() -> bool {
     let Ok(mut g) = INSTALLED.write() else { return false };
     let all = merge_installed(g.as_deref().unwrap_or(&[]), scanned);
     if g.as_deref() == Some(all.as_slice()) { return false; }
+    sync_app_types(&all);
     *g = Some(all.into());
     true
 }
