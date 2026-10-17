@@ -35,6 +35,22 @@ pub fn position(kana: char) -> Option<(usize, usize)> {
     ROWS.iter().enumerate().find_map(|(r, (_, cells))| cells.iter().position(|cell| *cell == Some(kana)).map(|c| (r, c)))
 }
 
+/// The kana under a point in a palette `width` by `height` pixels, with its origin at the top left. The grid is five
+/// columns by eleven rows: the ten chart rows, then ん alone on the last row under column 0. `None` outside the palette
+/// or on a cell the chart leaves empty.
+pub fn cell_at(x: f32, y: f32, width: f32, height: f32) -> Option<char> {
+    if !(width > 0.0 && height > 0.0 && x >= 0.0 && y >= 0.0 && x < width && y < height) {
+        return None;
+    }
+    let rows = ROWS.len() + 1;
+    let col = ((x / width * COLUMNS.len() as f32) as usize).min(COLUMNS.len() - 1);
+    let row = ((y / height * rows as f32) as usize).min(rows - 1);
+    if row == ROWS.len() {
+        return (col == 0).then_some(NASAL);
+    }
+    ROWS[row].1[col]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,6 +79,27 @@ mod tests {
         assert_eq!(position('ゆ'), Some((7, 2)));
         assert_eq!(position(NASAL), None, "ん sits outside the grid");
         assert_eq!(position('x'), None);
+    }
+
+    #[test]
+    fn a_point_hits_the_kana_under_it() {
+        let (w, h) = (500.0, 1100.0);
+        // each cell is 100 px wide and 100 px tall
+        assert_eq!(cell_at(10.0, 10.0, w, h), Some('あ'));
+        assert_eq!(cell_at(450.0, 950.0, w, h), Some('を'), "the bottom right cell is wo");
+        assert_eq!(cell_at(150.0, 150.0, w, h), Some('き'), "row k, column i");
+        assert_eq!(cell_at(10.0, 1050.0, w, h), Some(NASAL), "ん sits under column a on the last row");
+        assert_eq!(cell_at(150.0, 1050.0, w, h), None, "nothing else sits on the last row");
+    }
+
+    #[test]
+    fn a_point_on_an_empty_cell_or_outside_hits_nothing() {
+        let (w, h) = (500.0, 1100.0);
+        assert_eq!(cell_at(150.0, 750.0, w, h), None, "row y, column i is empty");
+        assert_eq!(cell_at(-1.0, 10.0, w, h), None);
+        assert_eq!(cell_at(10.0, 1100.0, w, h), None, "the far edge is outside");
+        assert_eq!(cell_at(500.0, 10.0, w, h), None);
+        assert_eq!(cell_at(10.0, 10.0, 0.0, h), None, "an empty palette has no cells");
     }
 
     #[test]
