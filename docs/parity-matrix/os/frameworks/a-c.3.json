@@ -1765,7 +1765,16 @@
    "status": "partial",
    "note": "systemd-logind tracks sessions and seats and handles suspend, which is the job of the console session framework; the bare shell suspends through it. Not covered: the seat and session-switching API the framework offered to clients.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "systemd-logind.service",
+     "state": "active"
+    }
+   ],
+   "ready_note": "systemd-logind runs on the installed system and holds the sessions and seats; the bare shell suspends through it. Seat and session-switching client API is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ConstantClasses.framework",
@@ -2290,7 +2299,16 @@
    "status": "partial",
    "note": "The shell's Control Center draws the swipe-down cluster of module tiles, including Wi-Fi and now-playing controls, over a frosted copy of the screen. The reference's user-editable module list and per-module settings are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::control_center::tests"
+    }
+   ],
+   "ready_note": "The swipe-down module cluster with Wi-Fi and now-playing controls is covered and tested. The user-editable module list is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ConversationKit.framework",
@@ -2899,7 +2917,16 @@
    "status": "partial",
    "note": "Output and input device lists, per-role defaults, volume and route-change events exist, and the audio setup app shows the devices. Wireless speaker routing with a route picker is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::audio_devices::tests"
+    }
+   ],
+   "ready_note": "Output and input device lists, per-role defaults and route-change events are covered and tested. Wireless speaker route picker is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreDiagnostics.framework",
@@ -2920,7 +2947,16 @@
    "status": "partial",
    "note": "Local crash.log entries, the quit-unexpectedly alert and a report saved next to the data are in place. Nothing is uploaded to a vendor, and general usage analytics are not collected.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::diag::tests"
+    }
+   ],
+   "ready_note": "Local crash.log entries, the quit-unexpectedly alert and the saved report are covered and tested. No vendor upload or usage analytics, by design."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreDuet.framework",
@@ -4684,7 +4720,21 @@
    "status": "partial",
    "note": "The clock is corrected over SNTP once the network has an address, and zone offsets and daylight saving come from the system tz database. Gap: the reference's time-source plug-ins (a paired-device clock and a virtual-machine clock) have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::ntp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::timezone::tests"
+    }
+   ],
+   "ready_note": "SNTP clock correction and tz-database zone rules are covered and tested. Paired-device and VM clock plug-ins are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreTransparency.framework",
@@ -4915,7 +4965,16 @@
    "status": "partial",
    "note": "The Wi-Fi service's interface discovery, scanning, joining and link status are covered by the modules that CoreWLANKit uses. Gap: the service's roaming and diagnostic logic have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi::tests"
+    }
+   ],
+   "ready_note": "Interface discovery, scanning, joining and link status are covered and tested. Roaming and diagnostic logic are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Cosmo.framework",
