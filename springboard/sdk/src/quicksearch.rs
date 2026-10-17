@@ -321,6 +321,12 @@ impl CSSearchableIndex {
         for chunk in wire.chunks(MAX_ITEMS) {
             ctx.send_to_shell(ToShell::QuickSearchIndex(chunk.to_vec()));
         }
+        // The shell drops an item at its expiry through the search-index service, sent after the batch so the item
+        // exists when the expiry is set.
+        for i in items.iter().filter(|i| i.expiration_date.is_some() && IndexError::check(i).is_ok()) {
+            let at = i.expiration_date.unwrap_or(0).max(0) as u64;
+            crate::search_ranking::expire(ctx, &i.unique_identifier, Some(at));
+        }
         refused
     }
 
@@ -381,6 +387,32 @@ impl CSSearchableIndex {
     pub fn reindex_identifiers_with(&self, ctx: &Ctx, identifiers: &[&str], delegate: &dyn CSSearchableIndexDelegate) -> Vec<(usize, IndexError)> {
         let items = delegate.searchable_items_for(ctx, identifiers);
         self.index_checked(ctx, &items)
+    }
+}
+
+/// `CSIndexExtensionRequestHandler`: the app-side answers to a regeneration request for its index. The shell does not
+/// send these requests yet, so the app calls [`IndexExtensionRequests::reindex_all`] or
+/// [`IndexExtensionRequests::reindex_identifiers`] itself. The return value is the acknowledgement: the refused items
+/// by position and reason, empty when every item was sent.
+pub struct IndexExtensionRequests<'d> {
+    delegate: &'d dyn CSSearchableIndexDelegate,
+}
+
+impl<'d> IndexExtensionRequests<'d> {
+    /// Handles requests for `delegate`'s items.
+    pub fn new(delegate: &'d dyn CSSearchableIndexDelegate) -> Self {
+        IndexExtensionRequests { delegate }
+    }
+
+    /// `searchableIndex(_:reindexAllSearchableItemsWithAcknowledgementHandler:)`: clears the index and indexes again.
+    pub fn reindex_all(&self, ctx: &Ctx) -> Vec<(usize, IndexError)> {
+        CSSearchableIndex::default_index().reindex_all_with(ctx, self.delegate)
+    }
+
+    /// `searchableIndex(_:reindexSearchableItemsWithIdentifiers:acknowledgementHandler:)`: indexes the items for
+    /// `identifiers` and keeps the others.
+    pub fn reindex_identifiers(&self, ctx: &Ctx, identifiers: &[&str]) -> Vec<(usize, IndexError)> {
+        CSSearchableIndex::default_index().reindex_identifiers_with(ctx, identifiers, self.delegate)
     }
 }
 
@@ -664,5 +696,41 @@ mod tests {
     fn continue_activity_reaches_the_wire_format() {
         let m = crate::proto::ToApp::ContinueActivity { activity_type: ACTION_TYPE.into(), unique_id: "n1".into(), domain: "notes".into() };
         assert_eq!(crate::proto::ToApp::decode(&m.encode()), Ok(m));
+    }
+
+    #[test]
+    fn an_expiration_date_is_sent_to_the_shell_after_the_item() {
+        let c = ctx();
+        let timed = CSSearchableItem::new("t1", "notes", CSSearchableItemAttributeSet::new("Ticket")).expiration_date(1_800_000_000);
+        CSSearchableIndex::default_index().index_searchable_items(&c, &[timed]);
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 2);
+        assert_eq!(batch_ids(&sent[0]), ["t1"]);
+        let ToShell::ServiceCall { service, method, body, .. } = &sent[1] else { panic!("no expiry call") };
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "expire");
+        assert!(body.contains("1800000000") && body.contains("t1"));
+    }
+
+    #[test]
+    fn index_extension_reindex_all_clears_then_indexes_and_acknowledges_refusals() {
+        let c = ctx();
+        let store = Store(vec![item("a"), item("")]);
+        let refused = IndexExtensionRequests::new(&store).reindex_all(&c);
+        assert_eq!(refused, vec![(1, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        assert_eq!(sent[0], ToShell::QuickSearchDelete { kind: DELETE_ALL, values: vec![] });
+        assert_eq!(batch_ids(&sent[1]), ["a"]);
+    }
+
+    #[test]
+    fn index_extension_reindex_identifiers_keeps_the_other_items() {
+        let c = ctx();
+        let store = Store(vec![item("a"), item("b")]);
+        let refused = IndexExtensionRequests::new(&store).reindex_identifiers(&c, &["a"]);
+        assert!(refused.is_empty());
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(batch_ids(&sent[0]), ["a"]);
     }
 }
