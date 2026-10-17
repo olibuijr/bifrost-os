@@ -136,6 +136,46 @@ fn walk(base: &Path, rel: &str, out: &mut Vec<String>, depth: u32) {
     }
 }
 
+/// The file, in the data folder, that holds the items the backup leaves out (see [`exclusions`]).
+pub const EXCLUSIONS_FILE: &str = "backup-exclusions.txt";
+
+/// The items excluded from backup, read from `dir/backup-exclusions.txt`. A missing file excludes nothing.
+pub fn exclusions(dir: &Path) -> bifrost_core::backup_exclusion::ExclusionSet {
+    let text = std::fs::read_to_string(dir.join(EXCLUSIONS_FILE)).unwrap_or_default();
+    bifrost_core::backup_exclusion::from_text(&text)
+}
+
+/// Writes the exclusion set to `dir/backup-exclusions.txt`.
+pub fn save_exclusions(dir: &Path, set: &bifrost_core::backup_exclusion::ExclusionSet) -> io::Result<()> {
+    write_atomic(&dir.join(EXCLUSIONS_FILE), bifrost_core::backup_exclusion::to_text(set))
+}
+
+/// Whether the file `rel` (relative to `dir`) is excluded: it or a folder above it is an excluded item. The model
+/// reports each item on its own, so the folders on the way down are checked here.
+fn excluded_under(set: &bifrost_core::backup_exclusion::ExclusionSet, dir: &Path, rel: &str) -> bool {
+    let mut path = dir.to_path_buf();
+    for part in rel.split('/') {
+        path.push(part);
+        if set.is_excluded(&path.to_string_lossy()).unwrap_or(false) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The unix times of the backups in `dir/backups`, from their names, in no particular order.
+pub fn archive_times(dir: &Path) -> Vec<u64> {
+    std::fs::read_dir(dir.join(BACKUP_DIR))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().into_string().ok()?;
+            name.strip_prefix("backup-")?.strip_suffix(".sbk")?.parse::<u64>().ok()
+        })
+        .collect()
+}
+
 /// The files of every source that exists under `dir`, sorted.
 pub fn collect(dir: &Path) -> Vec<String> {
     let mut v = vec![];
@@ -200,8 +240,9 @@ pub fn open(bytes: &[u8], key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<
 /// Writes an archive of `dir`'s data to `out` (via a temporary name), sealed under `key`; returns the file count.
 pub fn create_with(dir: &Path, out: &Path, key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<usize> {
     let mut entries = vec![];
+    let excluded = exclusions(dir);
     for name in collect(dir) {
-        if name_ok(&name) {
+        if name_ok(&name) && !excluded_under(&excluded, dir, &name) {
             entries.push((name.clone(), std::fs::read(dir.join(&name))?));
         }
     }
@@ -350,6 +391,25 @@ mod tests {
         assert_eq!(restore(&dst, &out).unwrap(), 2);
         assert_eq!(std::fs::read_to_string(dst.join("Notes/1.md")).unwrap(), "note");
         assert!(!dst.join("unrelated.bin").exists());
+    }
+
+    #[test]
+    fn excluded_items_and_the_folders_above_them_stay_out_of_the_archive() {
+        let src = scratch("excl");
+        std::fs::create_dir_all(src.join("Notes/private")).unwrap();
+        std::fs::write(src.join("Notes/1.md"), "keep").unwrap();
+        std::fs::write(src.join("Notes/private/2.md"), "secret").unwrap();
+        std::fs::write(src.join("settings.ini"), "a=b\n").unwrap();
+        let mut set = bifrost_core::backup_exclusion::ExclusionSet::new();
+        set.set_excluded(&src.join("Notes/private").to_string_lossy(), true).unwrap();
+        save_exclusions(&src, &set).unwrap();
+        assert_eq!(exclusions(&src), set);
+        let out = src.join("out.sbk");
+        assert_eq!(create(&src, &out).unwrap(), 2);
+        let dst = scratch("excl-dst");
+        assert_eq!(restore(&dst, &out).unwrap(), 2);
+        assert!(dst.join("Notes/1.md").exists());
+        assert!(!dst.join("Notes/private/2.md").exists());
     }
 
     #[test]

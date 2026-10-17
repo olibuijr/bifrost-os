@@ -60,9 +60,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
    "rea": [],
    "method": "rule"
   },
@@ -102,9 +102,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
    "rea": [],
    "method": "rule"
   },
@@ -179,9 +179,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs",
+   "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs, springboard/src/shell/services/directory.rs, springboard/src/shell/services/console_seat.rs",
    "status": "partial",
-   "note": "rule: directory and session models",
+   "note": "rule: directory and session models; the local account directory is served read-only by the `directory` service and the console user by `console`; creating users and changing passwords are not built",
    "rea": [],
    "method": "rule"
   },
@@ -553,9 +553,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs",
+   "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs, springboard/src/shell/services/peer_hub.rs",
    "status": "partial",
-   "note": "rule: nearby and peer session models",
+   "note": "rule: nearby and peer session models; the `peer` service connects apps inside the shell (named listeners, request and reply); AirPlay discovery and streaming are not built",
    "rea": [],
    "method": "rule"
   },
@@ -795,9 +795,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs",
    "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is BlueZ's obex daemon, not built here",
    "rea": [],
    "method": "rule"
   },
@@ -1869,9 +1869,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs, springboard/src/shell/services/trust_eval.rs",
    "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "note": "rule: keychain, trust and local authentication models; the `trust` service evaluates chains and fails closed (no signature check yet), so it never reports a chain trusted; network TLS is verified by rustls",
    "rea": [],
    "method": "rule"
   },
@@ -2851,11 +2851,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/snapshot_backup.rs, springboard/core/src/backup_exclusion.rs",
+   "bifrost": "springboard/core/src/snapshot_backup.rs, springboard/core/src/backup_exclusion.rs, springboard/src/shell/services/snapshots.rs, springboard/src/shell/services/backup_exclusions.rs, springboard/src/shell/backup.rs",
    "status": "partial",
    "note": "rule: snapshot backup model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::snapshots::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::backup_exclusions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "snapshot_backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::text_tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The hourly schedule, retention and exclusions run in the shell: `snapshots` takes an encrypted archive of the backed-up folders into the data folder's backups when an external disk is attached, prunes by the retention plan, and the backup writer skips excluded items (`backup-exclusions`). Restore is the existing staged restore. Nothing is written while the data folder is on the system disk."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.backupd.plist",
@@ -2872,11 +2901,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/snapshot_backup.rs, springboard/core/src/backup_exclusion.rs",
+   "bifrost": "springboard/core/src/snapshot_backup.rs, springboard/core/src/backup_exclusion.rs, springboard/src/shell/services/snapshots.rs, springboard/src/shell/services/backup_exclusions.rs, springboard/src/shell/backup.rs",
    "status": "partial",
    "note": "rule: snapshot backup model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::snapshots::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::backup_exclusions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "snapshot_backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::text_tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The hourly schedule, retention and exclusions run in the shell: `snapshots` takes an encrypted archive of the backed-up folders into the data folder's backups when an external disk is attached, prunes by the retention plan, and the backup writer skips excluded items (`backup-exclusions`). Restore is the existing staged restore. Nothing is written while the data folder is on the system disk."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.betaenrollmentd.plist",
@@ -2996,9 +3054,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs",
    "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is BlueZ's obex daemon, not built here",
    "rea": [],
    "method": "rule"
   },
@@ -3204,9 +3262,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/pref_domains.rs",
+   "bifrost": "springboard/sdk/src/defaults.rs, springboard/core/src/pref_domains.rs, springboard/src/shell/services/domains.rs",
    "status": "partial",
-   "note": "rule: defaults and preference domain models; Settings app",
+   "note": "rule: defaults and preference domain models; the `domains` service shares text values per app and per first-party suite, synchronised on write; numbers, flags and data are not served yet",
    "rea": [],
    "method": "rule"
   },
@@ -3914,9 +3972,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs",
+   "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
    "status": "partial",
-   "note": "rule: record store models",
+   "note": "rule: record store models; the `records` service gives each app its own store, in memory for the shell's lifetime; no file backend, no sync and no shared stores yet",
    "rea": [],
    "method": "rule"
   },

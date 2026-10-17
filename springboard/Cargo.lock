@@ -632,6 +632,9 @@ dependencies = [
 [[package]]
 name = "bifrost-core"
 version = "0.1.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "bifrost-daw"
