@@ -90,7 +90,7 @@ impl View for LocalAuthenticationView {
         let d = ui.pt(f.w.min(f.h));
         let x = ui.pt(f.x) + (ui.pt(f.w) - d) / 2.0;
         let y = ui.pt(f.y) + (ui.pt(f.h) - d) / 2.0;
-        s.fill_rrect(RectF::new(x, y, d, d), d / 2.0, fill.now());
+        s.fill_rrect(RectF::new(x, y, d, d), d / 2.0, fill);
         if self.base.focused {
             focus_ring(s, ui, f, f.w.min(f.h) / 2.0);
         }
