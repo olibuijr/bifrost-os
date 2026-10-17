@@ -62,6 +62,7 @@ pub mod background_tasks;
 pub mod launch_prefetch;
 pub mod startup_disk;
 pub mod dhcp6_server;
+pub mod endpoint_security;
 pub mod motion_activity;
 pub mod rumble;
 pub mod force_effect;
