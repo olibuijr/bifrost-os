@@ -650,8 +650,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple crash symbolication service for Mach-O crash logs. BifrOSt crashes are symbolicated from ELF cores by systemd-coredump.",
    "rea": [],
    "method": "assessed"
   },
@@ -671,8 +671,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple-internal telemetry store (Tea). BifrOSt collects no telemetry, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -692,8 +692,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple-internal telemetry framework (Tea). BifrOSt collects no telemetry, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -713,8 +713,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple-internal telemetry settings (Tea). BifrOSt collects no telemetry, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -734,8 +734,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple-internal telemetry state (Tea). BifrOSt collects no telemetry, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -776,8 +776,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Sandboxed parser service for carrier telephony messages. BifrOSt has no carrier telephony stack.",
    "rea": [],
    "method": "assessed"
   },
@@ -797,8 +797,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Carrier telephony helpers for the cellular stack. BifrOSt PCs have no cellular modem.",
    "rea": [],
    "method": "assessed"
   },
@@ -818,8 +818,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Carrier telephony and FaceTime call services. BifrOSt PCs have no cellular modem and no Apple calling service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1174,11 +1174,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/speech_engine.rs, springboard/sdk/src/speech.rs, springboard/src/shell/services/speech.rs, springboard/cmd/src/say.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Speech runs through espeak-ng: engine programs, voice and rate arguments and the voice listing parser are in core speech_engine; the speech shell service and the SDK speech API drive it; the say tool speaks from the command line.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "speech_engine::tests"
+    }
+   ],
+   "ready_note": "Voice and rate argument building and voice listing parsing are tested in core speech_engine. The shell speech service and the SDK speech API call the same engine (espeak-ng)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextToSpeechBundleSupport.framework",
@@ -1196,8 +1205,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple voice-asset bundle loader. BifrOSt speaks with espeak-ng and its own voice data, so there is no bundle format to load.",
    "rea": [],
    "method": "assessed"
   },
@@ -1447,9 +1456,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/timemachine.rs",
+   "status": "partial",
+   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Gap: privd does not implement backup.snapshot or backup.prune, so no snapshot is taken or pruned yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1468,9 +1477,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/timemachine.rs",
+   "status": "partial",
+   "note": "Same model as TimeMachine (schedule, retention, exclusions, restore paths, tested). Gap: privd does not implement backup.snapshot or backup.prune, so no snapshot is taken or pruned yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1489,11 +1498,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/net/ntp.rs, springboard/src/bin/shell.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Network time: an SNTP client in net::ntp syncs the clock, the shell starts it at boot and honours the automatic-time setting.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::ntp::tests"
+    }
+   ],
+   "ready_note": "The SNTP request packet, timestamp conversion and status text are tested in net::ntp; the shell enables and spawns the sync at start."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Timeline.framework",
@@ -3190,9 +3208,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "bifrost": "springboard/src/shell/store/install.rs",
+   "status": "partial",
+   "note": "Store apps are removed by install::uninstall and uninstall_local, which are tested. Gap: there is no system-wide removal of OS-provided apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -3316,11 +3334,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/cmd/src/softwareupdate.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Automatic update checks: the softwareupdate command reads and sets the background check schedule and reports the update state.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "softwareupdate::tests"
+    }
+   ],
+   "ready_note": "Schedule switching, state listing and option parsing for the background update checks are tested in cmd softwareupdate."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UpdateCycleSupport.framework",
@@ -4199,8 +4226,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple-internal visual regression harness. BifrOSt has its own snapshot kit in springboard/sdk/src/testing.rs.",
    "rea": [],
    "method": "assessed"
   },
