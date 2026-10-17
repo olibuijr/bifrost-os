@@ -271,6 +271,27 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
     })
 }
 
+/// What `App::window_input` does unless the app overrides it: keys and commands go to `window_event` of the window
+/// (as `Input::Key` and `Input::Command`); a menu item and a text edit go to the main window's `menu_action` and
+/// `text_input`, and drop for an extra window. An app that handles its own keys calls this for the rest.
+pub fn default_window_input<A: crate::App + ?Sized>(app: &mut A, ctx: &crate::Ctx, window: WindowId, input: crate::proto::WindowInput) -> bool {
+    use crate::proto::WindowInput;
+    match input {
+        WindowInput::Key(k) => app.window_event(ctx, window, crate::Input::Key(k)),
+        WindowInput::Command(c) => app.window_event(ctx, window, crate::Input::Command(c)),
+        WindowInput::MenuAction(id) if window.is_main() => app.menu_action(ctx, id),
+        text @ (WindowInput::SetMarkedText { .. } | WindowInput::UnmarkText { .. } | WindowInput::DeleteSurrounding { .. }) if window.is_main() => {
+            app.text_input(ctx, text.to_app(0))
+        }
+        _ => false,
+    }
+}
+
+/// Cmd+W (evdev W with the Meta chord): the key that closes the window it is typed in.
+pub fn is_close_window_key(key: &crate::proto::KeyInput) -> bool {
+    key.as_chord() == Some((17, crate::proto::CHORD_META))
+}
+
 /// Records a focus change in the key window cell. Focusing window `window` makes it key; losing focus only clears it when
 /// it was the key window, so a late "lost" for an old window cannot take the key from the window that is key now.
 pub(crate) fn apply_focus(key: &std::cell::Cell<u32>, window: u32, focused: bool) {
@@ -554,6 +575,15 @@ mod tests {
         let ctx = crate::runtime::test_ctx();
         let app = KeyFake::default();
         assert!(app.menus_for(&ctx, WindowId(1)) == app.main_menu(&ctx));
+    }
+
+    #[test]
+    fn only_cmd_w_is_the_close_window_key() {
+        use crate::proto::{KeyInput, CHORD_CTRL, CHORD_META};
+        assert!(is_close_window_key(&KeyInput::chord(17, CHORD_META)));
+        assert!(!is_close_window_key(&KeyInput::chord(17, CHORD_CTRL)));
+        assert!(!is_close_window_key(&KeyInput::Code(17)));
+        assert!(!is_close_window_key(&KeyInput::Text("w".into())));
     }
 
     fn touch_down(id: u32) -> ToApp {

@@ -575,16 +575,7 @@ pub trait App {
     /// `window_event` (as `Input::Key` and `Input::Command`), a menu item and a text edit to the main window's
     /// `menu_action` and `text_input`, and drops the rest for extra windows. True when the app needs a new frame.
     fn window_input(&mut self, ctx: &Ctx, window: app_windows::WindowId, input: crate::proto::WindowInput) -> bool {
-        use crate::proto::WindowInput;
-        match input {
-            WindowInput::Key(k) => self.window_event(ctx, window, Input::Key(k)),
-            WindowInput::Command(c) => self.window_event(ctx, window, Input::Command(c)),
-            WindowInput::MenuAction(id) if window.is_main() => self.menu_action(ctx, id),
-            text @ (WindowInput::SetMarkedText { .. } | WindowInput::UnmarkText { .. } | WindowInput::DeleteSurrounding { .. }) if window.is_main() => {
-                self.text_input(ctx, text.to_app(0))
-            }
-            _ => false,
-        }
+        app_windows::default_window_input(self, ctx, window, input)
     }
     /// Draws into `surface` (premultiplied pixels, stride = width) and returns what changed.
     /// The first frame after a (re)allocation is always sent in full.
