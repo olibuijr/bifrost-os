@@ -403,6 +403,41 @@ pub struct ControlCenter {
     pub route_choice: Option<crate::media::route::Route>,
     /// the headset is in the jack: Headphones is listed in the output menu
     pub headphones_present: bool,
+    /// the Up Next picker opened from the Now Playing card
+    pub up_next: Option<UpNext>,
+}
+
+/// The Up Next picker: the shown app's queue, picked from with `bifrost_ui::media_picker` (one choice).
+#[derive(Debug)]
+pub struct UpNext {
+    pub panel: bifrost_ui::Rect,
+    pub items: Vec<super::services::now_playing::QueueItem>,
+    pub picker: bifrost_ui::media_picker::MediaPicker,
+}
+
+impl UpNext {
+    /// The picker for a queue, drawn in `panel`. Entry `i` is picker item `i`.
+    pub fn new(items: Vec<super::services::now_playing::QueueItem>, panel: bifrost_ui::Rect) -> UpNext {
+        let picker_items = items
+            .iter()
+            .enumerate()
+            .map(|(i, it)| bifrost_ui::media_picker::PickItem {
+                id: i as u64,
+                kind: bifrost_ui::media_picker::Kind::Song,
+                title: it.title.clone(),
+                artist: it.artist.clone(),
+                album: String::new(),
+                playable: it.playable,
+            })
+            .collect();
+        let picker = bifrost_ui::media_picker::MediaPicker::new(picker_items, vec![bifrost_ui::media_picker::Kind::Song], bifrost_ui::media_picker::Selection::One);
+        UpNext { panel, items, picker }
+    }
+}
+
+/// The Up Next button at the top right of the Now Playing card (x, y, w, h in px).
+fn up_next_button((x, y, w, _h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+    (x + w - ui.pt(DK_PAD_PT + 66.0), y + ui.pt(10.0), ui.pt(60.0), ui.pt(20.0))
 }
 
 /// The Sound module's output menu: its panel and one row per output (`bifrost_ui::route_picker`).
@@ -428,7 +463,7 @@ fn route_of_id(id: &str) -> Option<crate::media::route::Route> {
 
 impl Default for ControlCenter {
     fn default() -> Self {
-        ControlCenter { route_menu: None, route_choice: None, headphones_present: false, state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
+        ControlCenter { route_menu: None, route_choice: None, headphones_present: false, up_next: None, state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
     }
 }
 
@@ -1494,6 +1529,18 @@ mod tests {
     use crate::gfx::Surface;
 
     #[test]
+    fn up_next_picks_a_playable_entry_only() {
+        use super::super::services::now_playing::QueueItem;
+        let item = |title: &str, playable: bool| QueueItem { title: title.into(), artist: String::new(), playable };
+        let panel = bifrost_ui::Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 };
+        let mut up = UpNext::new(vec![item("A", true), item("B", false)], panel);
+        assert!(up.picker.toggle(1).is_err(), "an unplayable entry is listed but not pickable");
+        assert!(up.picker.toggle(0).is_ok());
+        assert_eq!(up.picker.chosen(), &[0]);
+        assert!(UpNext::new(Vec::new(), panel).items.is_empty(), "an empty queue opens the empty state");
+    }
+
+    #[test]
     fn sound_output_menu_lists_the_outputs_and_a_pick_reaches_the_binary() {
         use crate::media::route::Route;
         let mut sh = shell();
@@ -2143,6 +2190,7 @@ impl Shell {
         }
         self.notify.center.hide();
         self.cc.route_menu = None;
+        self.cc.up_next = None;
         self.cc.backlight = desk_backlight();
         // a live overlay over the desktop, like the menu-bar menus: no snapshot
         self.cc.backdrop = None;
@@ -2153,6 +2201,22 @@ impl Shell {
     /// Pointer input while the desktop panel is up: a click outside closes it
     /// (and is consumed, as a menu does), modules act on release.
     pub(super) fn cc_desk_event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // an open Up Next picker takes the next press: an entry picks it, an unplayable one keeps the picker open,
+        // and anything else closes it
+        if let Event::Down(x, y) = ev {
+            if let Some(mut up) = self.cc.up_next.take() {
+                self.dirty = true;
+                let row_h = self.ui.pt(super::list::ROW_PT);
+                if let Some(i) = super::pickers::row_at(up.panel, row_h, up.items.len(), x, y) {
+                    if up.picker.toggle(i as u64).is_ok() {
+                        super::services::now_playing::choose_up_next(i);
+                    } else {
+                        self.cc.up_next = Some(up);
+                    }
+                }
+                return vec![];
+            }
+        }
         // an open output menu takes the next press: a row picks that output, anything else closes the menu
         if let Event::Down(x, y) = ev {
             if let Some(menu) = self.cc.route_menu.take() {
@@ -2168,6 +2232,15 @@ impl Shell {
         let at = |x: f32, y: f32| tiles.iter().copied().find(|&(_, r)| inside(r, x, y));
         match ev {
             Event::Down(x, y) => match at(x, y) {
+                Some((Tile::MediaPlay, r)) if inside(up_next_button(r, &self.ui), x, y) => {
+                    let row_h = self.ui.pt(super::list::ROW_PT);
+                    let items = now_playing::up_next();
+                    let panel_w = r.2;
+                    let panel = bifrost_ui::Rect { x: r.0, y: r.1 + r.3 + self.ui.pt(6.0), w: panel_w, h: items.len().max(1) as f32 * row_h + self.ui.pt(super::pickers::FOOTER_PT) };
+                    self.cc.up_next = Some(UpNext::new(items, panel));
+                    self.dirty = true;
+                    vec![]
+                }
                 Some((Tile::MediaPlay, r)) => {
                     let (bx, by, bw, bh) = media_bar(r, &self.ui);
                     let zone = (bx - self.ui.pt(6.0), by - self.ui.pt(6.0), bw + self.ui.pt(12.0), bh + self.ui.pt(12.0));
@@ -2281,6 +2354,8 @@ impl Shell {
                 Tile::MediaPlay => {
                     desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     self.draw_media_tile(s, (x, y, w, h), alpha, None);
+                    let (bx, by, _, _) = up_next_button((x, y, w, h), ui);
+                    self.label("Up Next", 12.0, Weight::Semibold, SYSTEM_BLUE, |im| s.blit(im, bx as i32, by as i32, 255, alpha));
                 }
                 _ => {
                     desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), h / 2.0, alpha);
@@ -2328,9 +2403,19 @@ impl Shell {
                 }
             }
         }
-        // the output menu, over the modules
+        // the output menu and the Up Next picker, over the modules
         if let Some(menu) = &self.cc.route_menu {
             super::pickers::draw_route_menu(s, &self.ui, menu.panel, &menu.rows, None);
+        }
+        if let Some(up) = &self.cc.up_next {
+            let rows: Vec<super::pickers::PickerRow> = up
+                .items
+                .iter()
+                .enumerate()
+                .map(|(i, it)| super::pickers::PickerRow { title: it.title.clone(), subtitle: it.artist.clone(), chosen: up.picker.chosen().contains(&(i as u64)), enabled: it.playable })
+                .collect();
+            let footer = if rows.is_empty() { "Nothing up next".to_string() } else { format!("{} up next", rows.len()) };
+            super::pickers::draw_media_picker(s, &self.ui, up.panel, &rows, &footer);
         }
     }
 }
