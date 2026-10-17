@@ -166,9 +166,158 @@ impl Approvals {
     }
 }
 
+/// Where the kernel lists USB devices; tests pass a scratch directory with the same layout.
+pub const SYSFS_USB_DEVICES: &str = "/sys/bus/usb/devices";
+
+/// The `authorized` file of a port below `devices_root`. Same port rule as `authorized_path`.
+pub fn authorized_file(devices_root: &std::path::Path, port: &str) -> Option<std::path::PathBuf> {
+    authorized_path(port)?;
+    Some(devices_root.join(port).join("authorized"))
+}
+
+/// The kernel's current authorization of a port, `None` when the file is missing or unreadable.
+pub fn read_kernel(devices_root: &std::path::Path, port: &str) -> Option<bool> {
+    parse_authorized(&std::fs::read_to_string(authorized_file(devices_root, port)?).ok()?)
+}
+
+/// Writes a decision back to the kernel. `Prompt` writes nothing and returns `Ok(false)`; an invalid port is an error.
+pub fn enforce(devices_root: &std::path::Path, port: &str, decision: Decision) -> std::io::Result<bool> {
+    let Some(value) = sysfs_value(decision) else { return Ok(false) };
+    let file = authorized_file(devices_root, port).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a USB port name"))?;
+    std::fs::write(file, value)?;
+    Ok(true)
+}
+
+/// What the shell does after a new device appears.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// The decision was applied to the kernel; nothing to show.
+    Applied(Decision),
+    /// Show `prompt` for this device, then call `Approvals::finish` with the key and the button's answer.
+    Ask { key: String, prompt: Prompt },
+}
+
+/// The words of the approval sheet for one device. The shell draws them; the button at an index maps to an `Answer`
+/// through `Prompt::answer_for`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prompt {
+    pub title: String,
+    pub message: String,
+    /// Button labels, in order: allow always, allow once, don't allow.
+    pub buttons: [&'static str; 3],
+}
+
+impl Prompt {
+    /// The sheet for a device called `name` (the product string; empty when the device has none).
+    pub fn for_device(name: &str) -> Prompt {
+        let name = name.trim();
+        let (title, shown) = if name.is_empty() {
+            ("Allow this accessory to connect?".to_string(), "A USB accessory".to_string())
+        } else {
+            (format!("Allow \u{201c}{name}\u{201d} to connect?"), format!("\u{201c}{name}\u{201d}"))
+        };
+        Prompt {
+            title,
+            message: format!("{shown} was plugged in. An accessory can type and click as you, so allow it only if you recognise it."),
+            buttons: ["Always Allow", "Allow Once", "Don\u{2019}t Allow"],
+        }
+    }
+
+    /// The answer for the button at `index`; `None` outside the three buttons.
+    pub fn answer_for(index: usize) -> Option<Answer> {
+        [Answer::AllowAlways, Answer::AllowOnce, Answer::DenyAlways].get(index).copied()
+    }
+}
+
+impl Approvals {
+    /// A device appeared on `port`: decide, and apply the decision to the kernel unless the user must be asked (the
+    /// device is held blocked meanwhile). A device whose ids cannot make a key (odd serial) is blocked, never allowed unseen.
+    pub fn arrive(&self, devices_root: &std::path::Path, port: &str, vendor: &str, product: &str, serial: &str, name: &str) -> std::io::Result<Step> {
+        let kernel = read_kernel(devices_root, port).unwrap_or(false);
+        let Some(key) = device_key(vendor, product, serial) else {
+            enforce(devices_root, port, Decision::Deny)?;
+            return Ok(Step::Applied(Decision::Deny));
+        };
+        match self.decide(&key, kernel) {
+            Decision::Prompt => {
+                enforce(devices_root, port, Decision::Deny)?;
+                Ok(Step::Ask { key, prompt: Prompt::for_device(name) })
+            }
+            d => {
+                enforce(devices_root, port, d)?;
+                Ok(Step::Applied(d))
+            }
+        }
+    }
+
+    /// The user answered the sheet: record it and write the result to the kernel.
+    pub fn finish(&mut self, devices_root: &std::path::Path, port: &str, key: &str, answer: Answer) -> std::io::Result<Decision> {
+        self.answer(key, answer);
+        let d = if matches!(answer, Answer::DenyAlways) { Decision::Deny } else { Decision::Allow };
+        enforce(devices_root, port, d)?;
+        Ok(d)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sysfs(name: &str, port: &str, value: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("usb-approval-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(port)).unwrap();
+        std::fs::write(root.join(port).join("authorized"), value).unwrap();
+        root
+    }
+
+    #[test]
+    fn enforce_writes_the_decision_and_refuses_a_path_walk() {
+        let root = sysfs("enforce", "1-2", "1");
+        assert_eq!(read_kernel(&root, "1-2"), Some(true));
+        assert!(enforce(&root, "1-2", Decision::Deny).unwrap());
+        assert_eq!(read_kernel(&root, "1-2"), Some(false));
+        assert!(!enforce(&root, "1-2", Decision::Prompt).unwrap(), "a prompt writes nothing");
+        assert_eq!(read_kernel(&root, "1-2"), Some(false));
+        assert!(enforce(&root, "../x", Decision::Allow).is_err());
+        assert_eq!(read_kernel(&root, "9-9"), None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_new_device_is_held_until_the_user_answers_then_remembered() {
+        let root = sysfs("arrive", "1-4", "0");
+        let mut a = Approvals::new();
+        let step = a.arrive(&root, "1-4", "046d", "c52b", "", "Keyboard").unwrap();
+        let Step::Ask { key, prompt } = step else { panic!("expected a prompt") };
+        assert_eq!(key, "046d:c52b:-");
+        assert!(prompt.title.contains("Keyboard") && prompt.message.contains("type and click"));
+        assert_eq!(read_kernel(&root, "1-4"), Some(false), "held while the sheet is up");
+        assert_eq!(Prompt::answer_for(0), Some(Answer::AllowAlways));
+        assert_eq!(Prompt::answer_for(2), Some(Answer::DenyAlways));
+        assert_eq!(Prompt::answer_for(3), None);
+        assert_eq!(a.finish(&root, "1-4", &key, Answer::AllowAlways).unwrap(), Decision::Allow);
+        assert_eq!(read_kernel(&root, "1-4"), Some(true));
+        // unplugged and plugged in again: no prompt, allowed straight away
+        enforce(&root, "1-4", Decision::Deny).unwrap();
+        assert_eq!(a.arrive(&root, "1-4", "046d", "c52b", "", "Keyboard").unwrap(), Step::Applied(Decision::Allow));
+        assert_eq!(read_kernel(&root, "1-4"), Some(true));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_denied_device_and_an_unkeyable_device_stay_blocked() {
+        let root = sysfs("deny", "1-5", "1");
+        let mut a = Approvals::new();
+        a.answer("1234:0001:S1", Answer::DenyAlways);
+        assert_eq!(a.arrive(&root, "1-5", "1234", "0001", "S1", "").unwrap(), Step::Applied(Decision::Deny));
+        assert_eq!(read_kernel(&root, "1-5"), Some(false));
+        enforce(&root, "1-5", Decision::Allow).unwrap();
+        assert_eq!(a.arrive(&root, "1-5", "1234", "0001", "two words", "").unwrap(), Step::Applied(Decision::Deny));
+        assert_eq!(read_kernel(&root, "1-5"), Some(false));
+        assert!(Prompt::for_device("").title.contains("this accessory"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn device_key_normalises_ids_and_marks_missing_serial() {
