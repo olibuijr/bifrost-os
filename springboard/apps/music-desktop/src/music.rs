@@ -3204,7 +3204,7 @@ mod tests {
     fn scanned(title: &str, artist: &str, added: u64) -> Scanned {
         Scanned {
             path: PathBuf::from(format!("/m/{title}.mp3")),
-            tags: Tags { title: Some(title.into()), artist: Some(artist.into()), album: Some("Album".into()), album_artist: None, track: None, year: None, cover: None },
+            tags: Tags { title: Some(title.into()), artist: Some(artist.into()), album: Some("Album".into()), album_artist: None, track: None, year: None, cover: None, lyrics: None },
             duration_ms: Some(200_000.0),
             has_cover: false,
             added,

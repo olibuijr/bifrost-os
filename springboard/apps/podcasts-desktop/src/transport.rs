@@ -4,9 +4,9 @@
 
 use bifrost_app::controls::skip_interval::{Direction, SkipCommand};
 
-/// The rates the speed menu offers, slowest first. The audio service has no rate command yet, so the chosen rate
-/// is kept for the session and shown; the engine plays at 1x.
-pub const RATES: [f64; 7] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+/// The rates the speed menu offers, slowest first. Each one is sent to the audio service as `SetRate`, which
+/// time-stretches the audio so the pitch stays put.
+pub const RATES: [f64; 9] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 
 /// Back skip, in seconds: the mini player's back button, the Now Playing sheet's back button and the system's
 /// skip-backward command.
@@ -80,7 +80,16 @@ mod tests {
         assert_eq!(rate_index(0.5), Some(0));
         assert_eq!(rate_index(1.0), Some(2));
         assert_eq!(rate_index(2.0), Some(6));
+        assert_eq!(rate_index(3.0), Some(8));
+        assert_eq!(rate_index(3.5), None);
         assert_eq!(rate_index(1.4), None);
+    }
+
+    #[test]
+    fn the_rates_stay_inside_the_service_range() {
+        assert!(RATES.iter().all(|&r| (0.5..=3.0).contains(&r)));
+        assert_eq!(RATES.first().copied(), Some(0.5));
+        assert_eq!(RATES.last().copied(), Some(3.0));
     }
 
     #[test]

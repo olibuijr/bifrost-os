@@ -112,6 +112,11 @@ fn apply(tags: &mut Tags, f: Frame) {
                 tags.cover = picture(&f.data, f.id[3] == b' ');
             }
         }
+        b"USLT" | b"ULT " => {
+            if tags.lyrics.is_none() {
+                tags.lyrics = lyrics(&f.data);
+            }
+        }
         _ => {}
     }
 }
@@ -129,6 +134,18 @@ fn picture(d: &[u8], v22: bool) -> Option<Vec<u8>> {
     p += terminator(d.get(p..)?, enc)?;
     let pic = d.get(p..)?;
     (!pic.is_empty()).then(|| pic.to_vec())
+}
+
+/// The lyrics text of a USLT (2.2 ULT) frame body: encoding, three language bytes, the content descriptor
+/// (terminated in the frame's encoding), then the lyrics. The text is decoded with the frame's own encoding.
+fn lyrics(d: &[u8]) -> Option<String> {
+    let enc = *d.first()?;
+    let rest = d.get(4..)?;
+    let skip = terminator(rest, enc)?;
+    let body = rest.get(skip..)?;
+    let mut text = vec![enc];
+    text.extend_from_slice(body);
+    decode_text(&text).filter(|s| !s.trim().is_empty())
 }
 
 /// Length of the string at the start of `d` including its terminator, for
@@ -302,6 +319,22 @@ mod tests {
         body.extend(b"\xFF\xD8\xFF\xE0");
         let t = parse(&tag(2, 0, &body)).unwrap();
         assert_eq!(t.cover.as_deref(), Some(&b"\xFF\xD8\xFF\xE0"[..]));
+    }
+
+    #[test]
+    fn uslt_lyrics_skip_the_language_and_descriptor() {
+        let mut body = vec![0u8];
+        body.extend(b"eng");
+        body.push(0); // empty descriptor
+        body.extend(b"la\nla");
+        let t = parse(&tag(3, 0, &frame(b"USLT", &body, false, 0))).unwrap();
+        assert_eq!(t.lyrics.as_deref(), Some("la\nla"));
+        let mut utf16 = vec![1u8];
+        utf16.extend(b"eng");
+        utf16.extend([0xFF, 0xFE, 0, 0]);
+        utf16.extend("Hi".encode_utf16().flat_map(|u| u.to_le_bytes()));
+        let t = parse(&tag(4, 0, &frame(b"USLT", &utf16, true, 0))).unwrap();
+        assert_eq!(t.lyrics.as_deref(), Some("Hi"));
     }
 
     #[test]

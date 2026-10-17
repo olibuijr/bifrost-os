@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.0 — 2026-10-17
+
+- Playback speed is applied: the speed menu, Controls > Playback Speed and Slower/Faster send the rate to the audio
+  service as SetRate, which time-stretches the audio so the pitch stays. The rates run from 0.5x to 3x, and the chosen
+  rate is sent again when the audio service restarts. Before, the speed was shown but the engine played at 1x.
+- New Episodes has smart filters in the View menu: Show Unplayed (the default), Show Downloaded, Show Played and Show All
+  Episodes. The list follows the choice (library::latest_filtered and NewFilter, tested in library.rs).
+
 ## 1.12.4 — 2026-10-14
 
 - Clarify that the periodic wake is a media-service clock interval, not window sizing.

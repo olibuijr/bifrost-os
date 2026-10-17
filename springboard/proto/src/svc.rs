@@ -221,7 +221,7 @@ pub mod audio {
         pub muted: bool,
         pub error: Option<String>,
         pub live: Option<Live>,
-        /// the playback rate (0.5 to 2.0), applied as a time-stretch: the pitch does not change
+        /// the playback rate (0.5 to 3.0), applied as a time-stretch: the pitch does not change
         pub rate: f32,
     }
 
@@ -242,7 +242,7 @@ pub mod audio {
         SetShuffle { on: bool, seed: u64 },
         SetRepeat(Repeat),
         SetVolume(f32),
-        /// playback speed, 0.5 to 2.0; audiod time-stretches so the pitch stays put
+        /// playback speed, 0.5 to 3.0; audiod time-stretches so the pitch stays put
         SetRate(f32),
         SetMuted(bool),
         Stop,

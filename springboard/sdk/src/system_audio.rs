@@ -25,7 +25,7 @@ pub const SOCKET_ENV: &str = "BIFROST_SERVICE_SOCK";
 pub const DEFAULT_SOCKET: &str = "/var/lib/springboard/run/is.olibuijr.audio.sock";
 /// The slowest and fastest playback rates the service takes.
 pub const RATE_MIN: f32 = 0.5;
-pub const RATE_MAX: f32 = 2.0;
+pub const RATE_MAX: f32 = 3.0;
 
 /// Why a command is refused, or a call to the service fails.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,7 +33,7 @@ pub enum AudioError {
     EmptyQueue,
     StartOutOfRange { start: u32, len: usize },
     InvalidVolume,
-    /// A playback rate outside 0.5 to 2.0, or not a number.
+    /// A playback rate outside 0.5 to 3.0, or not a number.
     InvalidRate,
     InvalidPosition,
     EmptyPath,
@@ -141,7 +141,7 @@ impl Command {
         Ok(Command(Cmd::SetVolume(volume)))
     }
 
-    /// Playback speed: 0.5 to 2.0 (1 is normal). audiod keeps the pitch, so only the tempo changes.
+    /// Playback speed: 0.5 to 3.0 (1 is normal). audiod keeps the pitch, so only the tempo changes.
     pub fn rate(rate: f32) -> Result<Command, AudioError> {
         if !(RATE_MIN..=RATE_MAX).contains(&rate) {
             return Err(AudioError::InvalidRate);
@@ -250,7 +250,8 @@ mod tests {
         assert_eq!(Command::rate(0.5).map(|c| c.0), Ok(Cmd::SetRate(0.5)));
         assert_eq!(Command::rate(1.5).map(|c| c.0), Ok(Cmd::SetRate(1.5)));
         assert_eq!(Command::rate(2.0).map(|c| c.0), Ok(Cmd::SetRate(2.0)));
-        for bad in [0.49f32, 2.01, 0.0, -1.0, f32::NAN, f32::INFINITY] {
+        assert_eq!(Command::rate(3.0).map(|c| c.0), Ok(Cmd::SetRate(3.0)));
+        for bad in [0.49f32, 3.01, 0.0, -1.0, f32::NAN, f32::INFINITY] {
             assert_eq!(Command::rate(bad), Err(AudioError::InvalidRate), "{bad}");
         }
     }
