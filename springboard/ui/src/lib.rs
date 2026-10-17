@@ -719,6 +719,7 @@ pub mod ambient_light;
 pub mod ambient_occlusion;
 pub mod morph_skin;
 pub mod shading;
+pub mod raster3d;
 pub mod composition;
 pub mod candidates;
 pub mod imsession;
