@@ -8,7 +8,8 @@
 //! When the totals move backwards (the shell restarted and the counters started again), the difference saturates at
 //! zero for that field rather than wrapping.
 
-use bifrost_core::app_metrics::Totals;
+use crate::app_metrics::Totals;
+use crate::json::Json;
 
 /// The length of one report window, in milliseconds (24 hours).
 pub const REPORT_INTERVAL_MS: u64 = 24 * 60 * 60 * 1000;
@@ -112,6 +113,44 @@ impl PastPayloads {
     }
 }
 
+/// The payload as the JSON object an app receives: the window in milliseconds, the foreground and background time, the
+/// ending counts (indexed as `Totals::endings`) and the first-draw counts per bucket.
+pub fn payload_json(p: &DailyPayload) -> Json {
+    let counts = |xs: &[u32]| Json::Arr(xs.iter().map(|n| Json::Num(*n as f64)).collect());
+    Json::Obj(vec![
+        ("begin_ms".into(), Json::Num(p.window.begin_ms as f64)),
+        ("end_ms".into(), Json::Num(p.window.end_ms as f64)),
+        ("foreground_ms".into(), Json::Num(p.totals.foreground_ms as f64)),
+        ("background_ms".into(), Json::Num(p.totals.background_ms as f64)),
+        ("endings".into(), counts(&p.totals.endings)),
+        ("first_draw".into(), counts(&p.totals.first_draw)),
+    ])
+}
+
+/// Reads a payload back from [`payload_json`]. `None` for another shape, or when a count list has the wrong length.
+pub fn payload_from_json(body: &Json) -> Option<DailyPayload> {
+    let num = |k: &str| match body.get(k)? {
+        Json::Num(n) if *n >= 0.0 => Some(*n as u64),
+        _ => None,
+    };
+    let counts = |k: &str, n: usize| -> Option<Vec<u32>> {
+        let items = body.get(k)?.as_array()?;
+        if items.len() != n {
+            return None;
+        }
+        items.iter().map(|v| match v {
+            Json::Num(c) if *c >= 0.0 => Some(*c as u32),
+            _ => None,
+        }).collect()
+    };
+    let endings: [u32; 6] = counts("endings", 6)?.try_into().ok()?;
+    let first_draw: [u32; 7] = counts("first_draw", 7)?.try_into().ok()?;
+    Some(DailyPayload {
+        window: Window { begin_ms: num("begin_ms")?, end_ms: num("end_ms")? },
+        totals: Totals { foreground_ms: num("foreground_ms")?, background_ms: num("background_ms")?, endings, first_draw },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,5 +222,18 @@ mod tests {
         assert_eq!(archive.len(), MAX_PAST_PAYLOADS);
         assert_eq!(archive.all()[0].window.begin_ms, 2);
         assert_eq!(archive.all()[6].window.begin_ms, 8);
+    }
+
+    #[test]
+    fn a_payload_survives_the_json_an_app_receives() {
+        let mut t = totals(5000, 700, 2, 3);
+        t.endings[1] = 4;
+        let p = DailyPayload { window: Window { begin_ms: 10, end_ms: 86_400_010 }, totals: t };
+        let body = payload_json(&p);
+        assert!(matches!(body.get("foreground_ms"), Some(Json::Num(n)) if *n == 5000.0));
+        assert_eq!(payload_from_json(&body), Some(p));
+        assert!(payload_from_json(&Json::Null).is_none());
+        let short = Json::Obj(vec![("begin_ms".into(), Json::Num(1.0))]);
+        assert!(payload_from_json(&short).is_none());
     }
 }

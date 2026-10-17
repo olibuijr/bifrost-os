@@ -181,7 +181,7 @@ pub mod schedulers;
 pub mod webdriver;
 pub mod call_stack_tree;
 pub mod hitch_ratio;
-pub mod daily_metric_report;
+pub use bifrost_core::daily_metric_report;
 pub mod status_item;
 pub mod share;
 pub mod proxy_settings;

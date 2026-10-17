@@ -12,7 +12,7 @@
       "apple": "MXMetricManager, MetricReport (async sequences, once per day, previous 24 h)",
       "bifrost": "springboard/sdk/src/daily_metric_report.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced."
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced. Built 2026-10-17: Built 2026-10-17: the shell feeds per-app totals (launch, foreground, close, normal ending) and runs the daily schedule for subscribed apps, which get a didReceiveDailyReport event and can read their archive (springboard/src/shell/services/metric_reports.rs, service metrics; the model moved to core/src/daily_metric_report.rs with payload_json and payload_from_json); tests metric_reports::tests and daily_metric_report tests. Gaps: background time is not tracked, first draw is not hooked, and the SDK does not yet wrap the metrics service. Not run: lead runs the tests."
     },
     {
       "feature": "Immediate diagnostic reports (DiagnosticReport)",
