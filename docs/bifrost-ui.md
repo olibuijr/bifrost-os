@@ -2841,10 +2841,30 @@ Screen Time and slot-notification agents have no counterpart and stay `gap`. Par
 `Location` mirrors `CLLocation` (coordinate, horizontal accuracy, timestamp, `distance_from`); `reverse_geocode` returns a
 city-level `Placemark`. Authorization is the privacy grant (Settings > Privacy > App Permissions > Location); errors are
 `bifrost_ui::location_auth::LocationError`. The shell side is `springboard/src/shell/services/location.rs`.
-Honest limits: no GPS hardware and no Wi-Fi positioning. A fix is a manual location from the shell prefs
-(`location.manual.*`, 100 m) or an IP lookup that is off by default (`location.ip.enabled`, `location.ip.endpoint`, about
-25 km); altitude is always absent; reverse geocoding knows only those places within 50 km, not a worldwide gazetteer;
-no heading, regions or background updates. Host-tested only; the rows stay partial until checked on Midget.
+
+Privacy model (owner decision, follows the reference platform):
+- **Global switch**: `location.services.enabled` (default `1`); `0` denies every app whatever its grant
+  (`services::location::effective_status`).
+- **Precise Location per app**: `location.precise.<app id>` (default off = approximate). An approximate app gets its
+  coordinates moved to the centre of a 0.027 degree grid (about 3 km, `location_auth::approximate`) and an accuracy of
+  3 km (`location_auth::APPROXIMATE_ACCURACY`). Precise apps get the fixed fix unchanged.
+- **Purpose string**: `location_auth::request_purpose` returns the app's text for the level or `Missing`; a blank text
+  must refuse the request, so no prompt shows without a reason. Not wired yet: no manifest field carries the text.
+- **Retention**: the last fix lives in memory only. The service records when each app last got a fix
+  (`Location::last_use`), in memory, never on disk and never a location history.
+- **No third-party lookup**: the IP-address estimate (`location.ip.*`) was removed. bifrost-cloud has no geo endpoint
+  (checked `~/Projects/bifrost-cloud`: `device_locations` is encrypted sharing data, not IP geolocation), so there is no
+  IP source. GeoClue2 is not built (no D-Bus client for it is in use; `zbus` exists only for AT-SPI and Wayland).
+
+Sources: one, the fixed location from the shell prefs (`location.manual.*`, 100 m). Settings has no row yet to set it
+or the switches: they are read from the prefs file only. Gaps still open: the Settings > Privacy > Location page
+(city search, global switch, per-app access and last-use list), the menu bar location indicator, the manifest
+purpose field, and the Weather "My Location" wiring (its LOCATION constant is still `NotDetermined`, because the
+weather app does not run with an SDK `Ctx`).
+
+Altitude is always absent; reverse geocoding knows only the fixed place within 50 km, not a worldwide gazetteer;
+no heading, regions or background updates. Host-tested only (not run in this round); the rows stay partial until
+checked on Midget.
 
 ## Core Image: distortion, stylize, halftone, tile and the filter catalogue (`bifrost_render`)
 
