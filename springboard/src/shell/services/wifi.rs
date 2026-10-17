@@ -399,7 +399,8 @@ mod tests {
         assert!(check_password("correct horse").is_ok());
         assert!(check_password(&"a".repeat(63)).is_ok());
         assert!(check_password(&"a".repeat(64)).is_ok());
-        assert!(check_password(&"g".repeat(64)).is_ok());
+        // 64 characters are a key only when they are hex; a passphrase stops at 63.
+        assert!(check_password(&"g".repeat(64)).is_err());
         assert!(check_password(&"a".repeat(65)).is_err());
     }
 
