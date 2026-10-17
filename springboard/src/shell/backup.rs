@@ -274,12 +274,28 @@ pub fn backup_path(dir: &Path, unix: u64) -> PathBuf {
     dir.join(BACKUP_DIR).join(format!("backup-{unix}.sbk"))
 }
 
-/// Backs up now; returns the file and how many files it holds.
+/// Backs up now into the data folder; returns the file and how many files it holds.
 pub fn back_up_now(dir: &Path) -> io::Result<(PathBuf, usize)> {
+    back_up_to(dir, dir)
+}
+
+/// Backs up the data in `dir` into `dest/backups` (the chosen disk, Settings > Backup). The key stays with the data in
+/// `dir`; only the archive goes to `dest`.
+pub fn back_up_to(dir: &Path, dest: &Path) -> io::Result<(PathBuf, usize)> {
     let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-    let path = backup_path(dir, unix);
+    let path = backup_path(dest, unix);
+    std::fs::create_dir_all(dest.join(BACKUP_DIR))?;
     let n = create(dir, &path)?;
     Ok((path, n))
+}
+
+/// The folder backups are kept in: the chosen destination, or the data folder when none is chosen (`chosen` empty).
+pub fn destination_root(data_dir: &Path, chosen: &str) -> PathBuf {
+    if chosen.is_empty() {
+        data_dir.to_path_buf()
+    } else {
+        PathBuf::from(chosen)
+    }
 }
 
 /// The newest backup in `dir/backups` (by the number in its name) and its unix time.
@@ -348,6 +364,13 @@ pub fn apply_pending(dir: &Path) -> Option<io::Result<usize>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_chosen_disk_holds_the_archives_and_the_data_stays_put() {
+        assert_eq!(destination_root(Path::new("/home/u/.local/share/bifrost"), ""), PathBuf::from("/home/u/.local/share/bifrost"));
+        assert_eq!(destination_root(Path::new("/data"), "/run/media/u/USB"), PathBuf::from("/run/media/u/USB"));
+        assert_eq!(backup_path(Path::new("/run/media/u/USB"), 7), PathBuf::from("/run/media/u/USB/backups/backup-7.sbk"));
+    }
 
     fn scratch(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("sb-backup-{name}-{}", std::process::id()));

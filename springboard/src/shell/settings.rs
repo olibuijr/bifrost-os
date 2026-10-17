@@ -684,7 +684,7 @@ impl Settings {
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
             PageId::LocationServices => super::location_page::spec(&self.location, super::services::location::now_unix()),
-            PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: self.loads.latest_backup.value }),
+            PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: self.loads.latest_backup.value, destination: &self.opts.backup_destination }),
             _ => spec(id, &self.model()),
         }
     }
@@ -916,7 +916,10 @@ impl Settings {
             }
             PageId::Graphics => self.loads.gpus.start("gpu-read", super::gpu_page::read_system),
             PageId::Diagnostics => self.loads.crashes.start("diag-read", move || diag::load(&dir)),
-            PageId::Backup | PageId::SoftwareUpdate => self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t)),
+            PageId::Backup | PageId::SoftwareUpdate => {
+                let root = backup::destination_root(&dir, &self.opts.backup_destination);
+                self.loads.latest_backup.start("backup-read", move || backup::latest(&root).map(|(_, t)| t))
+            }
             PageId::Passwords => {
                 let root = super::apphost::root();
                 self.loads.logins.start("logins-read", move || crate::credentials::logins(&root));
@@ -1412,7 +1415,7 @@ impl Settings {
                 Ok(n) => format!("Backed up {n} files."),
                 Err(e) => format!("Backup failed: {e}"),
             };
-            let dir = self.data_dir.clone();
+            let dir = backup::destination_root(&self.data_dir, &self.opts.backup_destination);
             self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t));
             self.rebuild(ui);
             frame = true;
@@ -2536,6 +2539,16 @@ impl Settings {
                         self.apply_pointer();
                         vec![]
                     }
+                    Pick::BackupDestination(k) => {
+                        if let Some((_, path)) = super::backup_page::destination_choices().get(k) {
+                            self.opts.backup_destination = path.clone();
+                            self.opts.save(prefs);
+                            // the newest backup is read from the new place
+                            let root = backup::destination_root(&self.data_dir, &self.opts.backup_destination);
+                            self.loads.latest_backup.start("backup-read", move || backup::latest(&root).map(|(_, t)| t));
+                        }
+                        vec![]
+                    }
                     Pick::SpotlightExclude(k) => {
                         if self.opts.spotlight.remove_excluded(k) {
                             self.opts.save(prefs);
@@ -3066,12 +3079,13 @@ impl Settings {
             Command::BackUpNow => {
                 // the copy of every data file runs on a worker; the note reports the result when it lands
                 let dir = self.data_dir.clone();
-                self.backup_rx = Some(read_on_worker("backup-now", move || backup::back_up_now(&dir).map(|(_, n)| n).map_err(|e| e.to_string())));
+                let dest = backup::destination_root(&dir, &self.opts.backup_destination);
+                self.backup_rx = Some(read_on_worker("backup-now", move || backup::back_up_to(&dir, &dest).map(|(_, n)| n).map_err(|e| e.to_string())));
                 self.backup_note = "Backing up…".into();
                 self.rebuild(ui);
                 vec![]
             }
-            Command::RestoreBackup => match backup::latest(&self.data_dir).map(|(p, _)| backup::stage(&self.data_dir, &p)) {
+            Command::RestoreBackup => match backup::latest(&backup::destination_root(&self.data_dir, &self.opts.backup_destination)).map(|(p, _)| backup::stage(&self.data_dir, &p)) {
                 Some(Ok(_)) => vec![Effect::Restart],
                 other => {
                     self.backup_note = format!("Restore failed: {}", other.map_or("no backup".to_string(), |r| r.map_or_else(|e| e.to_string(), |_| String::new())));
@@ -3080,11 +3094,11 @@ impl Settings {
                 }
             },
             Command::DeleteBackups => {
-                self.backup_note = match backup::delete_backups(&self.data_dir) {
+                let dir = backup::destination_root(&self.data_dir, &self.opts.backup_destination);
+                self.backup_note = match backup::delete_backups(&dir) {
                     Ok(n) => format!("Deleted {n} backups."),
                     Err(e) => format!("Delete failed: {e}"),
                 };
-                let dir = self.data_dir.clone();
                 self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t));
                 self.rebuild(ui);
                 vec![]
@@ -3108,7 +3122,8 @@ impl Settings {
                     // the copy runs on a worker; `poll_install` restarts once it is in, and a failed backup stops the install
                     // so the data is never replaced unsaved
                     let dir = self.data_dir.clone();
-                    self.install_rx = Some(read_on_worker("update-backup", move || backup::back_up_now(&dir).map(|(_, n)| n).map_err(|e| e.to_string())));
+                    let dest = backup::destination_root(&dir, &self.opts.backup_destination);
+                    self.install_rx = Some(read_on_worker("update-backup", move || backup::back_up_to(&dir, &dest).map(|(_, n)| n).map_err(|e| e.to_string())));
                     self.backup_note = "Backing up before the update…".into();
                     self.rebuild(ui);
                     return vec![];

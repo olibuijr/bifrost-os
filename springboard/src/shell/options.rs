@@ -196,15 +196,17 @@ pub struct Options {
     pub game_notice_shown: bool,
     /// Settings > Spotlight: the categories Search lists and the folders it leaves out (its own keys, `spotlight_scope`)
     pub spotlight: super::spotlight_scope::Scope,
+    /// Settings > Backup: the disk backups go to (its mount point); empty keeps them in the data folder
+    pub backup_destination: String,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, universal_clipboard: false, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0, game_mode: GamePref::Automatic, game_notice_shown: false, spotlight: Default::default() }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, universal_clipboard: false, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0, game_mode: GamePref::Automatic, game_notice_shown: false, spotlight: Default::default(), backup_destination: String::new() }
     }
 }
 
-const KEYS: [&str; 58] = ["auto_lock_ms","system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "clock_date", "clock_day", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "universal_clipboard", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "double_click_ms", "mouse_acceleration", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off", "lock_grace_seconds", "game_mode", "game_mode_notice_shown"];
+const KEYS: [&str; 59] =["auto_lock_ms","system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "clock_date", "clock_day", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "universal_clipboard", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "double_click_ms", "mouse_acceleration", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off", "lock_grace_seconds", "game_mode", "game_mode_notice_shown", "backup_destination"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -270,6 +272,7 @@ impl Options {
             shortcuts_off: p.get_parsed::<u32>("shortcuts_off").unwrap_or(d.shortcuts_off),
             game_mode: p.get("game_mode").and_then(GamePref::parse).unwrap_or(d.game_mode),
             game_notice_shown: flag("game_mode_notice_shown", d.game_notice_shown),
+            backup_destination: p.get("backup_destination").unwrap_or("").to_string(),
             spotlight: {
                 // Search reads the scope from memory, so it is installed as the settings are read
                 let scope = super::spotlight_scope::Scope::load(p);
@@ -342,6 +345,7 @@ impl Options {
             self.lock_grace_s.to_string(),
             self.game_mode.key().into(),
             flag(self.game_notice_shown).into(),
+            self.backup_destination.clone(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {

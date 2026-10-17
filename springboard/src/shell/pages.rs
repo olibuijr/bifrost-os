@@ -254,6 +254,8 @@ pub enum Pick {
     MouseSecondary(usize),
     /// Settings > Spotlight > Privacy: stop excluding the folder at this index
     SpotlightExclude(usize),
+    /// Settings > Backup > Backup Destination: the index into `backup_page::destination_choices`
+    BackupDestination(usize),
     /// Keyboard > Modifier Keys: the modifier key (index into `kb_input::REMAPPABLE`) sends the choice (index into `kb_input::REMAP_TARGETS`)
     Remap(usize, usize),
     /// Settings > Sound: the n-th listed output / input becomes the default
