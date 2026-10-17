@@ -3989,12 +3989,24 @@ cannot be closed) and the windows the app opens, front to back, the first one fo
   and other windows to nothing; `draw_window(ctx, window, surface, t)` sends the main window to `draw` and others to an empty
   damage; `window_closed(ctx, window)` is a no-op. Override them to serve the app's extra windows.
 
-Status (2026-10-17): the registry, the trait hooks and the Contacts card model (`springboard/apps/contacts-desktop/src/card_windows.rs`,
-`CardWindows`: one card per window, a card already open is focused) are built and tested headless. Not done: the shell does not host a
-second window of an app. The runtime gives one surface and one toplevel per app process, and the shell's `scenes` service
-(`springboard/src/shell/services/scene_services.rs`) keeps scene window records but never draws them. So a window opened here is not on
-screen yet, and the runtime does not call `draw_window` for it. Until that lands, Contacts' Card > Open in Separate Window and the
-double-click are not wired; the Dictionary, Mail, Calendar and Maps rows stay gap and name this API in their `wire`.
+Wire protocol (`springboard/proto`, tags 0x1c0 to 0x1cb): the app sends `WindowOpen {id, title, w, h}`, `WindowClose {id}`,
+`WindowTitle {id, title}`, `WindowResize {id, w, h}` (`WindowBuffers` and `WindowFrame` are defined for the pixels, not sent yet).
+The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {id, w, h}`, `WindowTouch {id, touch, kind, x, y,
+t_ms}` and `WindowRelease {id, buf, generation}`. Titles are cut to 512 bytes; non-finite or negative sizes are refused.
+
+SDK (`Ctx`): `open_window`, `close_window`, `set_window_title`, `resize_window` change the app's registry and send the message;
+`windows()` reads it. The run loop routes `WindowClosed`, `WindowConfigure` and `WindowTouch` through
+`app_windows::deliver_window`: a closed window gets no touch, a closed window's close is applied once, and the app's
+`window_event` and `window_closed` run with no registry borrow held.
+
+Shell (`springboard/src/shell/app_window_table.rs`): `WindowTable` keeps each app's extra windows front to back (open, close, retitle,
+resize, focus, close_app, `of_app` for the Window menu and the Dock list), with per-app limit 7 and unique ids per app.
+
+Not done (so no window is on screen yet): the SDK run loop does not give a window its own shared-memory slots or call `draw_window`
+for it, the direct Wayland path has no second toplevel (it is off: `LAYER_CONTEXT_WIRED` is false), the desk does not read
+`WindowTable` or draw the windows with traffic lights, and the Window menu and Dock do not list them. Contacts' Card > Open in
+Separate Window and its double-click are not wired, so the Contacts row stays gap. Dictionary, Mail, Calendar and Maps stay gap
+and name this API in their `wire`.
 
 Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene
 lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for tabs too).

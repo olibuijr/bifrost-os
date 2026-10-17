@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.1 — 2026-10-17
+
+- Card windows now bind to the SDK window ids (`card_windows.rs`, `CardWindows::bind`), so the app keeps one window registry. Nothing is opened from the UI yet.
+
 ## 1.11.0 — 2026-10-17
 
 - Card windows model (`card_windows.rs`): a contact can be opened in its own window through the SDK window registry, and a card that is already open is focused. The window is not drawn yet, because the shell does not host a second window of an app; the Card > Open in New Window menu item and the double-click are not wired.
