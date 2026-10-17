@@ -775,8 +775,6 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 | ToApp::WindowTitleDoubleClick { .. }
                 | ToApp::WindowFocus { .. }
                 | ToApp::WindowInput { .. }) => {
-||||||| parent of 7c4df9ad3 (feat(sdk): key window routing for extra windows)
-                m @ (ToApp::WindowClosed { .. } | ToApp::WindowConfigure { .. } | ToApp::WindowTouch { .. }) => {
                     if let Some(c) = &ctx {
                         need_frame |= crate::app_windows::deliver_window(&mut app, c, &m, now_ms()).unwrap_or(false);
                     }

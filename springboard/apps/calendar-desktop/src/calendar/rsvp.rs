@@ -1,10 +1,12 @@
 //! Answers to invitations (iTIP, RFC 5546). An imported event lists its invitees with ATTENDEE lines; when the account's
 //! own address is one of them with PARTSTAT=NEEDS-ACTION, the user can Accept, Maybe or Decline. The answer is written
 //! into the event's PARTSTAT in calendar.ics, and a METHOD:REPLY calendar holding only the replying ATTENDEE line is
-//! written to `itip-replies/` beside the events file. Nothing sends that reply yet: the SDK has no mail compose hand-off
-//! and CalDAV has no PUT path (see the Invitees row of docs/parity-matrix/apps/calendar.json).
+//! written to `itip-replies/` beside the events file. The reply opens in Mail (`mail_compose`) addressed to the organiser,
+//! with that .ics attached. An event the account organises, with invitees, sends a METHOD:REQUEST to them the same way
+//! when it is saved (`invite_attendees`). Both go through the outbox (`Calendar::take_outgoing`), which the app drains.
 use super::ics::{self, IcsCalendar, IcsEvent};
 use super::invitees;
+use super::store::CalendarEvent;
 use super::{exchange, Calendar};
 use bifrost_app::controls::calendar_participant::{Participant, Status};
 use bifrost_app::controls::internet_accounts::{self, Service};
@@ -13,6 +15,17 @@ use std::path::{Path, PathBuf};
 
 /// The folder beside the events file that holds the replies waiting to be sent.
 pub const REPLY_DIR: &str = "itip-replies";
+/// The folder beside the events file that holds the invitations (METHOD:REQUEST) sent for saved events.
+pub const REQUEST_DIR: &str = "itip-requests";
+
+/// A message for Mail: the recipients, the subject and the body, with the .ics file to attach.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Outgoing {
+    pub to: Vec<String>,
+    pub subject: String,
+    pub body: String,
+    pub file: PathBuf,
+}
 
 /// The three answers the editor offers, in the order it lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,9 +57,14 @@ impl Answer {
     }
 }
 
-/// The address of an attendee without its `mailto:` scheme, compared without case (the scheme may be upper case).
+/// The address of a `mailto:` URL without its scheme (the scheme may be upper case).
+pub fn mailto_address(url: &str) -> &str {
+    url.split_once(':').filter(|(scheme, _)| scheme.eq_ignore_ascii_case("mailto")).map_or(url, |(_, rest)| rest)
+}
+
+/// The address of an attendee without its `mailto:` scheme, compared without case.
 fn address_of(p: &Participant) -> &str {
-    p.url().split_once(':').filter(|(scheme, _)| scheme.eq_ignore_ascii_case("mailto")).map_or(p.url(), |(_, rest)| rest)
+    mailto_address(p.url())
 }
 
 /// The attendee line of the account's own address, if the account is one of the invitees.
@@ -112,14 +130,84 @@ pub fn reply_file_name(uid: &str) -> String {
 
 /// Writes the reply beside the events file, in `itip-replies/`. Returns the path written.
 pub fn save_reply(events_path: &Path, uid: &str, text: &str) -> std::io::Result<PathBuf> {
-    let dir = events_path.parent().unwrap_or(Path::new(".")).join(REPLY_DIR);
+    save_in(events_path, REPLY_DIR, uid, text)
+}
+
+/// Writes an iTIP file for event `uid` into `dir` beside the events file. Returns the path written.
+pub fn save_in(events_path: &Path, dir: &str, uid: &str, text: &str) -> std::io::Result<PathBuf> {
+    let dir = events_path.parent().unwrap_or(Path::new(".")).join(dir);
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(reply_file_name(uid));
     springboard::shell::fsutil::write_atomic(&path, &text.to_string())?;
     Ok(path)
 }
 
+/// The Mail message that carries an answer to the organiser: the verb of the answer as the subject, and the reply file.
+pub fn reply_mail(organizer: &str, answer: Answer, title: &str, file: PathBuf) -> Outgoing {
+    let verb = match answer {
+        Answer::Accept => "Accepted",
+        Answer::Maybe => "Tentative",
+        Answer::Decline => "Declined",
+    };
+    Outgoing {
+        to: vec![mailto_address(organizer).to_string()],
+        subject: format!("{verb}: {title}"),
+        body: format!("The reply to \"{title}\" is attached.\n"),
+        file,
+    }
+}
+
+/// The METHOD:REQUEST calendar for a saved event: the event's own lines with its invitees and organiser (RFC 5546 3.2.2).
+pub fn request_text(event: &IcsEvent, timezones: &[(String, i32)], stamp: &str) -> String {
+    ics::write_single(event, timezones, stamp).replacen("VERSION:2.0\r\n", "VERSION:2.0\r\nMETHOD:REQUEST\r\n", 1)
+}
+
 impl Calendar {
+    /// The messages for Mail that the last actions queued (replies and invitations). The app sends them.
+    pub fn take_outgoing(&mut self) -> Vec<Outgoing> {
+        std::mem::take(&mut self.outbox)
+    }
+
+    /// After an event is saved: when the account organises the imported event `original` (the event before the edit,
+    /// matched as `invitees::index_for` matches it), its invitees get the saved event as a METHOD:REQUEST in the outbox.
+    /// An event the account does not organise, or with no invitees, sends nothing.
+    pub(super) fn invite_attendees(&mut self, original: &CalendarEvent, saved: &CalendarEvent) {
+        let Some(email) = self.account_email.clone() else { return };
+        let rich = self.rich_events();
+        let Some(index) = invitees::index_for(&rich, &original.title, original.date, original.minute, original.all_day) else { return };
+        let imported = &rich.events[index];
+        let organised = imported.organizer.as_deref().is_some_and(|o| mailto_address(o).eq_ignore_ascii_case(email.trim()));
+        if !organised {
+            return;
+        }
+        let to: Vec<String> = imported
+            .attendees
+            .iter()
+            .map(|p| address_of(p).to_string())
+            .filter(|a| !a.eq_ignore_ascii_case(email.trim()))
+            .collect();
+        if to.is_empty() {
+            return;
+        }
+        let mut event = ics::from_calendar_event(saved);
+        event.uid = imported.uid.clone();
+        event.location = saved.location.clone();
+        event.notes = saved.notes.clone();
+        event.organizer = imported.organizer.clone();
+        event.attendees = imported.attendees.clone();
+        let stamp = ics::stamp(self.wall.unix);
+        let text = request_text(&event, &rich.timezones, &stamp);
+        match save_in(&self.path, REQUEST_DIR, &event.uid, &text) {
+            Ok(file) => self.outbox.push(Outgoing {
+                to,
+                subject: format!("Invitation: {}", saved.title),
+                body: format!("You are invited to \"{}\". The invitation is attached.\n", saved.title),
+                file,
+            }),
+            Err(e) => self.notice = Some(format!("The invitation could not be written: {e}")),
+        }
+    }
+
     /// Whether the account has an invitation to answer among `people` (the open event's invitees).
     pub(super) fn awaiting_reply(&self, people: &[Participant]) -> bool {
         self.account_email.as_deref().is_some_and(|email| awaiting(people, email))
@@ -132,7 +220,7 @@ impl Calendar {
     }
 
     /// Accept, Maybe or Decline on the open invitation. The answer is written into calendar.ics, the reply is saved in
-    /// `itip-replies/`, and the editor reads its invitees again. Nothing is sent: no transport takes the reply yet.
+    /// `itip-replies/` and queued for Mail, addressed to the organiser, and the editor reads its invitees again.
     pub(super) fn respond_to_invitation(&mut self, answer: Answer) {
         let Some(draft) = self.editor.as_ref() else { return };
         let (title, date, minute, all_day) = (draft.event.title.clone(), draft.event.date, draft.event.minute, draft.event.all_day);
@@ -149,19 +237,23 @@ impl Calendar {
         let stamp = ics::stamp(self.wall.unix);
         match respond(&mut rich, index, &email, answer, &stamp) {
             Ok(reply) => {
+                let organizer = rich.events[index].organizer.clone().unwrap_or_default();
                 let saved = springboard::shell::fsutil::write_atomic(&exchange::rich_path(&self.path), &ics::write(&rich, &stamp))
                     .map_err(|e| e.to_string())
                     .and_then(|_| save_reply(&self.path, &uid, &reply).map_err(|e| e.to_string()));
-                if let Err(message) = saved {
-                    self.notice = Some(message);
-                    return;
+                match saved {
+                    Ok(file) => self.outbox.push(reply_mail(&organizer, answer, &title, file)),
+                    Err(message) => {
+                        self.notice = Some(message);
+                        return;
+                    }
                 }
                 let people = invitees::for_event(&rich, &title, date, minute, all_day);
                 if let Some(draft) = self.editor.as_mut() {
                     draft.invitees = people;
                 }
                 self.declined_for = None;
-                self.notice = Some(format!("{} saved. The reply is not sent yet.", answer.label()));
+                self.notice = Some(format!("{} saved. The reply opens in Mail.", answer.label()));
                 self.dirty = true;
             }
             Err(message) => self.notice = Some(message.into()),
@@ -279,5 +371,27 @@ mod tests {
     fn reply_files_are_named_by_a_safe_uid() {
         assert_eq!(reply_file_name("a/b c@x"), "a_b_c@x.ics");
         assert_eq!(reply_file_name("evt-1@x"), "evt-1@x.ics");
+    }
+
+    #[test]
+    fn a_reply_goes_to_the_organiser_with_its_verb_as_the_subject() {
+        let mail = reply_mail("mailto:bo@example.is", Answer::Maybe, "Review", PathBuf::from("/x/itip-replies/a.ics"));
+        assert_eq!(mail.to, vec!["bo@example.is".to_string()]);
+        assert_eq!(mail.subject, "Tentative: Review");
+        assert!(mail.body.contains("\"Review\""));
+        assert_eq!(mailto_address("MAILTO:bo@example.is"), "bo@example.is");
+        assert_eq!(mailto_address("bo@example.is"), "bo@example.is");
+    }
+
+    #[test]
+    fn a_request_is_a_method_request_calendar_with_the_invitees() {
+        let mut ev = IcsEvent::new("evt-2@x", "Planning", ics::Local::new(springboard::shell::calendar::Date { year: 2026, month: 10, day: 20 }, 540), ics::Local::new(springboard::shell::calendar::Date { year: 2026, month: 10, day: 20 }, 600));
+        ev.organizer = Some("mailto:bo@example.is".into());
+        let text = request_text(&ev, &[], "20261017T090000Z");
+        let lines = ics::unfold(&text);
+        assert_eq!(lines[0], "BEGIN:VCALENDAR");
+        assert!(lines.iter().any(|l| l == "METHOD:REQUEST"));
+        assert!(lines.iter().any(|l| l == "UID:evt-2@x"));
+        assert!(lines.iter().any(|l| l == "ORGANIZER:mailto:bo@example.is"));
     }
 }

@@ -59,7 +59,7 @@ pub fn hand_off(ctx: &Ctx, handoff: &Handoff) {
         Handoff::Call(number) => ctx.open_url(&tel_url(number)),
         Handoff::Mail(address) => {
             let draft = bifrost_app::controls::compose_handoff::Compose { to: vec![address.clone()], ..Default::default() };
-            let _ = bifrost_app::mail_compose::compose(ctx, &draft);
+            let _ = bifrost_app::mail_compose::compose(ctx, &draft, &[]);
         }
     }
 }
