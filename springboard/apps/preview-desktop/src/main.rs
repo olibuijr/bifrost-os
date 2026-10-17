@@ -28,7 +28,9 @@ mod signature;
 
 use bifrost_app::controls::{Node, Role};
 use bifrost_app::kit::{Damage, Surface, Ui};
+use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::proto::DocMode;
+use bifrost_app::services::{is_viewable_path, ServiceCall};
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
 use bifrost_app::{screenshot, speech};
@@ -2241,6 +2243,30 @@ fn item_labelled(action: Action, label: &str, enabled: bool, checked: bool) -> A
 }
 
 impl App for Viewer {
+    fn rpc_methods(&self) -> Vec<&'static str> {
+        vec!["service.open_images"]
+    }
+
+    /// Services menu: "Open Images in Viewer" on a picture or PDF selection. The first picture or PDF of the paths
+    /// opens, since the Viewer shows one document at a time.
+    fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        if method != "service.open_images" {
+            return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}")));
+        }
+        if ctx.is_none() {
+            return Err(RpcError::new(INTERNAL_ERROR, "Viewer is not running yet"));
+        }
+        let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no paths"))?;
+        let path = call
+            .paths
+            .iter()
+            .find(|p| is_viewable_path(p.as_str()) && Path::new(p.as_str()).is_file())
+            .map(PathBuf::from)
+            .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no picture or PDF in the selection"))?;
+        self.open_path(&path);
+        Ok(Json::Obj(Vec::new()))
+    }
+
     fn id(&self) -> &str {
         "is.olibuijr.preview.desktop"
     }

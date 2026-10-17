@@ -55,6 +55,8 @@ pub struct Manifest {
     pub schemes: Vec<String>,
     /// App Intents declared as `[[intent]]` tables (`shell::intents`); Search lists the shortcuts.
     pub intents: Vec<super::intents::ManifestIntent>,
+    /// `[[service]]` tables: Services menu entries this app provides for a selection (`bifrost_ui::app_services`).
+    pub services: Vec<bifrost_ui::app_services::ServiceDecl>,
     /// `[[quick_action]]` tables: the static Home Screen quick actions (`shell::quick_actions`).
     pub quick_actions: Vec<bifrost_ui::quick_actions::ShortcutItem>,
     /// `[privacy] location = "..."`: the reason shown when the app asks for location (the purpose string). A
@@ -91,6 +93,8 @@ impl Manifest {
         let mut table: Option<bool> = None;
         // inside a `[privacy]` table the keys are the purpose strings (`location`); any other header ends it
         let mut privacy = false;
+        // inside a `[[service]]` table keys belong to the service
+        let mut service = false;
         for line in text.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -102,10 +106,20 @@ impl Manifest {
                 if line == "[[intent]]" {
                     m.intents.push(Default::default());
                 }
+                service = line == "[[service]]";
+                if service {
+                    m.services.push(Default::default());
+                }
                 continue;
             }
             let Some((k, v)) = line.split_once('=') else { continue };
             let (k, v) = (k.trim(), v.trim());
+            if service {
+                if let Some(d) = m.services.last_mut() {
+                    d.set(k, v);
+                }
+                continue;
+            }
             let strs = || -> Vec<String> { v.trim_start_matches('[').trim_end_matches(']').split(',').map(|s| unquote(s.trim())).filter(|s| !s.is_empty()).collect() };
             if privacy {
                 if k == "location" {
@@ -2528,5 +2542,34 @@ mod route_tests {
         host.sudden = false;
         let _ = host.begin_quit(0.0);
         host.kill();
+    }
+}
+
+#[cfg(test)]
+mod service_manifest_tests {
+    use super::Manifest;
+
+    #[test]
+    fn service_tables_are_read_and_do_not_leak_into_the_app_keys() {
+        let m = Manifest::parse(
+            "id = \"is.olibuijr.preview.desktop\"\nname = \"Viewer\"\nversion = \"0.11.8\"\nexec = \"bifrost-viewer\"\n\n[[service]]\ntitle = \"Open Images in Viewer\"\nsend_types = [\"public.image\", \"public.pdf\"]\nreturn_types = []\nmethod = \"open_images\"\n\n[[service]]\ntitle = \"Copy Path\"\nsend_types = [\"bifrost.file-path-text\"]\nreturn_types = [\"public.utf8-plain-text\"]\nmethod = \"copy_path\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.id, "is.olibuijr.preview.desktop");
+        assert_eq!(m.name, "Viewer");
+        assert!(m.intents.is_empty());
+        assert_eq!(m.services.len(), 2);
+        assert_eq!(m.services[0].title, "Open Images in Viewer");
+        assert_eq!(m.services[0].send_types, vec!["public.image".to_string(), "public.pdf".to_string()]);
+        assert!(m.services[0].return_types.is_empty());
+        assert_eq!(m.services[0].method, "open_images");
+        assert_eq!(m.services[1].return_types, vec!["public.utf8-plain-text".to_string()]);
+        assert_eq!(m.services[1].rpc_method(), "service.copy_path");
+    }
+
+    #[test]
+    fn a_manifest_without_services_has_none() {
+        let m = Manifest::parse("id = \"a.b\"\nname = \"X\"\nexec = \"x\"\n").unwrap();
+        assert!(m.services.is_empty());
     }
 }

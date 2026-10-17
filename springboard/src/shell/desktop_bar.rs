@@ -499,7 +499,7 @@ impl Shell {
                     Action::Zoom=>{if let Some(id)=self.foreign_active(){let max=self.desk.as_ref().is_some_and(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).any(|w|w.id==id&&w.maximized));effects.push(Effect::ForeignWindowMaximize(id,!max));}else if let Some(i)=self.desk.as_ref().and_then(|d|d.wins.iter().rposition(|w|!w.minimized)){self.desk_zoom_window(i);}},
                     Action::Foreign(id)=>effects.push(Effect::ActivateForeign(id)),
                     Action::Print=>self.print_sheet_open(t),
-                    Action::Service(i)=>{if let Some(service)=bifrost_ui::services_menu::Service::ALL.get(i as usize).copied(){effects.extend(self.run_service(service,t));}},
+                    Action::Service(i)=>{if let Some(service)=bifrost_ui::services_menu::Service::ALL.get(i as usize).copied(){effects.extend(self.run_service(service,t));}else{self.run_app_service(i as usize,t);}},
                     Action::CharacterViewer=>self.char_viewer_open(),
                     Action::KeyboardViewer=>self.keyboard_viewer_open(),
                     Action::Recent(n)=>{if let Some(app)=self.recent_app_at(n as usize){self.desk_open(app,t);}},

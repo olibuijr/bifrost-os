@@ -428,10 +428,10 @@
    "feature": "Services: open images",
    "area": "integration",
    "apple": "Info.plist NSServices",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The desktop Services menu (springboard/ui/src/services_menu.rs) is a fixed set of shell services with no app registration, so an open-images entry needs a shell change first",
-   "wire": "Add an image selection service to ui/src/services_menu.rs that routes the picture to the Viewer (open_path)"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/manifest.toml ([[service]] \"Open Images in Viewer\", send_types public.image and public.pdf); springboard/apps/preview-desktop/src/main.rs (rpc service.open_images opens the first picture or PDF); springboard/ui/src/app_services.rs (types, matching, request codec); springboard/src/shell/services_route.rs (app services in the App menu's Services rows)",
+   "note": "Implemented from the code, not yet built or run on the host or Midget. The Viewer opens one document, so the first picture or PDF of the selection opens. The shell's Services rows list every installed app's [[service]] whose send type the selection carries; the frontmost app's own services are listed too.",
+   "wire": "Build, run the focused tests, then check Services > Open Images in Viewer on a picture file selected in Files on Midget."
   },
   {
    "feature": "3D scene viewing",

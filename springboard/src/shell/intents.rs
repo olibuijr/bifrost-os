@@ -85,7 +85,17 @@ pub fn run_with(app_id: &str, intent_id: &str, params: &[(&str, &str)], wait: Du
     run_at(&socket_path(app_id), &request_line_with(intent_id, params), wait)
 }
 
+/// Sends one JSON-RPC request line to a running app's control socket and returns the raw reply. Retries the connect
+/// while the app starts (up to `wait`). Blocking: run it off the UI thread. Services use it for `service.<method>`.
+pub fn exchange(app_id: &str, line: &str, wait: Duration) -> Result<String, String> {
+    exchange_at(&socket_path(app_id), line, wait)
+}
+
 fn run_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Option<String>, String> {
+    parse_reply(&exchange_at(path, line, wait)?)
+}
+
+fn exchange_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<String, String> {
     let deadline = Instant::now() + wait;
     let mut stream = loop {
         match UnixStream::connect(path) {
@@ -99,7 +109,7 @@ fn run_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Option<S
     let _ = stream.shutdown(std::net::Shutdown::Write);
     let mut reply = String::new();
     stream.read_to_string(&mut reply).map_err(|e| e.to_string())?;
-    parse_reply(&reply)
+    Ok(reply)
 }
 
 #[cfg(test)]

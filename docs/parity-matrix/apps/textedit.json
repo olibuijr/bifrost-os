@@ -419,10 +419,10 @@
    "feature": "Services: new window with selection / open selected file",
    "area": "integration",
    "apple": "Info.plist NSServices: New window containing selection; Open selected file",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No services provider. The shell's Services list (springboard/ui/src/services_menu.rs) is fixed, and the document controller opens files only through the panel, so the two services need a shell change and a controller path that opens a named file.",
-   "wire": "Add the two services to the shell's Services list, routed to a text intent that creates a document with the text or opens the named path; needs the SDK controller path."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/manifest.toml ([[service]] \"New Window Containing Selection\" and \"Open Selected File\"); springboard/apps/textedit-desktop/src/main.rs (rpc service.new_window_with_text, service.open_selected_file); springboard/ui/src/app_services.rs (bifrost.file-path-text type for a selected path); springboard/src/shell/services_route.rs",
+   "note": "Implemented from the code, not yet built or run on the host or Midget. Open Selected File opens the file as an untitled document (the controller opens files only through the panel, which needs a grant), so Save asks for a place to write it. New Window opens a new document in the editor's list rather than a separate window.",
+   "wire": "Build, run the focused tests, then select text and a text file path in another app and check both services on Midget; decide whether Open Selected File should open a real file grant."
   },
   {
    "feature": "Help",

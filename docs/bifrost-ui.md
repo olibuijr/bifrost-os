@@ -1369,6 +1369,44 @@ Gaps (Apple behaviour not matched yet):
 drag and drop, no multi-line text view, and the
 accessibility `Node` is flat, so nesting is reported by `ax_tree()` and sent as `NodeExt` parents.
 
+## App services (Services menu, `NSServices`, `bifrost_ui::app_services`)
+
+Apps add entries to the App menu's Services submenu. Each entry is a `[[service]]` table in `manifest.toml`:
+
+```toml
+[[service]]
+title = "Open Images in Viewer"
+send_types = ["public.image", "public.pdf"]
+return_types = []
+method = "open_images"
+```
+
+- `title` is the menu row; `send_types` are the types of the selection the service takes (any one matches);
+  `return_types` is non-empty when the service answers with a text value; `method` names the control call
+  `service.<method>` (`[a-z0-9_-]`).
+- The selection's types come from the pasteboard (`bifrost_ui::app_services::selection_types`): every file selection
+  carries `public.file-url`, plus `public.image` and `public.pdf` when a file has that extension; text carries
+  `public.utf8-plain-text`, plus `bifrost.file-path-text` (the shell's own type, not an Apple UTI) when the text is one
+  absolute path to a file. The App menu lists the built-in services, then every installed app's matching service in
+  install order (`services_route::app_services_for`).
+- Choosing a row opens the provider (or activates it) and sends `service.<method>` over its control socket:
+  `{"type": <uti>, "text": ...}` for text, `{"type": <uti>, "paths": [...]}` for files and path text. The app answers
+  with `ServiceCall::from_params` (SDK `bifrost_app::services`); a `return_types` service answers
+  `{"value": text}` (`value_result`), and the shell puts that text on the pasteboard and the clipboard.
+- Apps implement `rpc_methods` and `rpc` as for any control method. Viewer opens the first picture or PDF of the
+  selection (`service.open_images`). TextEdit adds New Window Containing Selection (`service.new_window_with_text`) and
+  Open Selected File (`service.open_selected_file`); the latter opens a named file as an untitled document, since the
+  document controller only opens files through a panel grant.
+- Decisions and gaps:
+  - The shell reads the selection from the pasteboard, which apps fill on copy and selection. It does not ask the
+    frontmost app for its selection types over the control socket: that call would block the menu on the UI thread.
+  - The frontmost app's own services are listed too (the reference model lists every provider).
+  - The returned text is put on the pasteboard; the shell does not type it into the frontmost app.
+  - A service whose app is not running gets the call after the app opens (retried for 8 seconds).
+  - Not verified on Midget yet: the rows, the open, and the return path.
+- Tests: `app_services` (manifest keys, matching, payloads, the request line, reply parsing) and
+  `apphost::service_manifest_tests`.
+
 ## Assistant (`springboard/apps/assistant-desktop`)
 
 A chat client for the Anthropic Messages API, built on the kit only (`source_list`, `toolbar`, system `Pair` colours with `.now()`).
