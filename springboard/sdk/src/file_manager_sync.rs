@@ -11,11 +11,15 @@
 //! Rules kept from the reference behaviour: an extension only sees and badges paths inside the folders it asked to
 //! observe; a badge must be registered (id, label, image name) before an item can carry it; setting the badge id to
 //! `None` clears it; an extension that asks for a badge on a path outside its folders is refused. Nothing is queried
-//! remotely and no extension code runs in the file manager's process: a later extension host speaks this same API
-//! over a socket.
+//! remotely and no extension code runs in the file manager's process: the extension host speaks this same API over a
+//! socket.
 //!
-//! Gaps: no extension process and no IPC yet, no enable screen in Settings, no service-name list, and badge images
-//! are names for the shell's icon set (there is no image data path).
+//! Out of process: an extension app declares its folders in `manifest.toml` (`file_manager_folders`) and answers
+//! `ae.filemanager.*` events on its control socket with [`serve`]; the file manager keeps a [`RemoteExtension`] for it
+//! (see the notes above that type). The Files app is the host.
+//!
+//! Gaps: no enable screen in Settings, no service-name list, badge images are names for the shell's icon set (there is
+//! no image data path), and nothing starts an extension app that is not running.
 
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
@@ -99,6 +103,14 @@ pub trait SyncExtension {
     /// The toolbar button, if the extension has one.
     fn toolbar(&self) -> Option<ToolbarButton> {
         None
+    }
+    /// The person chose the item `item` of a menu of `kind` that this extension filled; the controller holds the folder
+    /// and the selection the menu was for.
+    fn perform(&mut self, _kind: MenuKind, _item: u32, _controller: &SyncController) {}
+    /// Called on every tick of the file manager. An extension that answers from elsewhere (see [`RemoteExtension`])
+    /// hands what arrived to the controller here and returns true when something to draw changed.
+    fn poll(&mut self, _controller: &mut SyncController) -> bool {
+        false
     }
 }
 
@@ -339,6 +351,393 @@ impl SyncHost {
     }
 }
 
+// --- out of process: the extension app behind its control socket --------------------------------------------------
+//
+// An extension app declares the folders it watches in its manifest (`file_manager_folders`). The file manager keeps a
+// [`RemoteExtension`] for it in the [`SyncHost`]: the same questions the in-process model asks (begin and end
+// observing, a badge for a path, the menu items, a tap on one) go to the app as `ae.filemanager.<id>` events on its
+// control socket, and the app answers them with [`serve`] from its `rpc` handler. Nothing leaves the folders the
+// manifest names: the host only asks about paths inside them, and the app's own controller refuses the rest.
+//
+// The file manager must not wait on another app while it draws. Badges are asked for on a worker thread, in batches,
+// and the answers wait in a cache that the file manager reads on its next draw ([`SyncHost::poll`] reports when one
+// changed); an answer is asked for again after [`STALE_AFTER`]. Menu items are asked for on the spot with a short
+// timeout, and an app that does not answer is left alone for [`MUTE_FOR`].
+
+use crate::app_events::{AppEvent, AppEventReply, ERR_TARGET_UNREACHABLE, ERR_TIMEOUT};
+use crate::control::{RpcError, INVALID_PARAMS, METHOD_NOT_FOUND};
+use bifrost_core::json::Json;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+/// The event class of every request to an extension app.
+pub const EVENT_CLASS: &str = "filemanager";
+/// Most paths in one badge request.
+pub const MAX_PATHS: usize = 64;
+/// Most selected paths a menu request carries.
+pub const MAX_SELECTED: usize = 256;
+/// A badge answer is asked for again after this long.
+pub const STALE_AFTER: Duration = Duration::from_secs(5);
+/// An app that did not answer a menu request is not asked again for this long.
+pub const MUTE_FOR: Duration = Duration::from_secs(30);
+const BADGE_TIMEOUT: Duration = Duration::from_secs(2);
+const MENU_TIMEOUT: Duration = Duration::from_millis(200);
+const PERFORM_TIMEOUT: Duration = Duration::from_secs(5);
+
+impl MenuKind {
+    /// The name the kind has on the wire.
+    pub fn name(self) -> &'static str {
+        match self {
+            MenuKind::ContextualItems => "items",
+            MenuKind::ContextualContainer => "container",
+            MenuKind::Sidebar => "sidebar",
+            MenuKind::Toolbar => "toolbar",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<MenuKind> {
+        [MenuKind::ContextualItems, MenuKind::ContextualContainer, MenuKind::Sidebar, MenuKind::Toolbar].into_iter().find(|k| k.name() == s)
+    }
+}
+
+fn paths_json(paths: &[PathBuf]) -> Json {
+    Json::Arr(paths.iter().filter_map(|p| p.to_str()).map(|s| Json::Str(s.to_string())).collect())
+}
+
+fn paths_of(v: Option<&Json>, limit: usize) -> Vec<PathBuf> {
+    v.and_then(Json::as_array).unwrap_or(&[]).iter().filter_map(Json::as_str).map(PathBuf::from).take(limit).collect()
+}
+
+fn invalid(what: &str) -> RpcError {
+    RpcError::new(INVALID_PARAMS, what.to_string())
+}
+
+fn obj(fields: Vec<(&str, Json)>) -> Json {
+    Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
+
+/// The extension app's side: answers one `ae.filemanager.*` event with `ext` and its `controller`. Call it from the
+/// app's `rpc` handler for the methods that start with `ae.filemanager.` (`AppEvent::from_method`).
+pub fn serve(ev: &AppEvent, controller: &mut SyncController, ext: &mut dyn SyncExtension) -> Result<Json, RpcError> {
+    if ev.class != EVENT_CLASS {
+        return Err(RpcError::new(METHOD_NOT_FOUND, format!("no handler for {}", ev.method())));
+    }
+    let p = &ev.params;
+    let path_of = |key: &str| -> Result<PathBuf, RpcError> {
+        let raw = p.str_field(key).ok_or_else(|| invalid("a path is missing"))?;
+        clean(Path::new(&raw)).map_err(|_| invalid("the path is not absolute or holds .."))
+    };
+    let context = |controller: &mut SyncController| -> Result<MenuKind, RpcError> {
+        let kind = p.str_field("kind").and_then(|k| MenuKind::parse(&k)).ok_or_else(|| invalid("the menu kind is unknown"))?;
+        let targeted = path_of("targeted")?;
+        let selected = paths_of(p.get("selected"), MAX_SELECTED);
+        controller.set_context(Some(&targeted), &selected);
+        Ok(kind)
+    };
+    match ev.id.as_str() {
+        "describe" => {
+            let badges = controller.badges().iter().map(|b| obj(vec![("id", Json::Str(b.id.clone())), ("label", Json::Str(b.label.clone())), ("image", Json::Str(b.image.clone()))])).collect();
+            let toolbar = match ext.toolbar() {
+                Some(t) => obj(vec![("name", Json::Str(t.name)), ("image", Json::Str(t.image)), ("tool_tip", Json::Str(t.tool_tip))]),
+                None => Json::Null,
+            };
+            Ok(obj(vec![("badges", Json::Arr(badges)), ("toolbar", toolbar)]))
+        }
+        "observe" => {
+            let dir = path_of("folder")?;
+            if !controller.observes(&dir) {
+                return Err(invalid("the folder is not one the extension observes"));
+            }
+            if matches!(p.get("begin"), Some(Json::Bool(true))) {
+                ext.begin_observing(&dir);
+            } else {
+                ext.end_observing(&dir);
+            }
+            Ok(obj(vec![]))
+        }
+        "badges" => {
+            let mut items = Vec::new();
+            for raw in paths_of(p.get("paths"), MAX_PATHS) {
+                let badge = match clean(&raw) {
+                    Ok(path) if controller.observes(&path) => {
+                        ext.request_badge(controller, &path);
+                        controller.badge_for(&path).map(|b| Json::Str(b.id.clone())).unwrap_or(Json::Null)
+                    }
+                    _ => Json::Null,
+                };
+                items.push(obj(vec![("path", Json::Str(raw.to_string_lossy().into_owned())), ("badge", badge)]));
+            }
+            Ok(obj(vec![("items", Json::Arr(items))]))
+        }
+        "menu" => {
+            let kind = context(controller)?;
+            if controller.targeted_url().is_none() {
+                return Ok(obj(vec![("items", Json::Arr(vec![]))]));
+            }
+            let mut items = ext.menu(kind, controller);
+            items.truncate(MAX_MENU_ITEMS);
+            let rows = items.into_iter().map(|i| obj(vec![("id", Json::Num(f64::from(i.id))), ("title", Json::Str(i.title)), ("enabled", Json::Bool(i.enabled))])).collect();
+            Ok(obj(vec![("items", Json::Arr(rows))]))
+        }
+        "perform" => {
+            let kind = context(controller)?;
+            if controller.targeted_url().is_none() {
+                return Err(invalid("the folder is not one the extension observes"));
+            }
+            let item = p.get("item").and_then(Json::as_u64).and_then(|n| u32::try_from(n).ok()).ok_or_else(|| invalid("the menu item is missing"))?;
+            ext.perform(kind, item, controller);
+            Ok(obj(vec![]))
+        }
+        _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("no handler for {}", ev.method()))),
+    }
+}
+
+/// How a request reaches the extension app: the event and how long to wait. The real one is [`socket_transport`].
+pub type Transport = Arc<dyn Fn(&AppEvent, Duration) -> AppEventReply + Send + Sync>;
+
+/// The transport over the control socket of the extension app.
+pub fn socket_transport(socket: PathBuf) -> Transport {
+    Arc::new(move |ev: &AppEvent, timeout: Duration| crate::app_events::send_message(&socket, ev, timeout))
+}
+
+enum Job {
+    Describe,
+    Observe { dir: PathBuf, begin: bool },
+    Badges(Vec<PathBuf>),
+    Perform { kind: MenuKind, item: u32, targeted: PathBuf, selected: Vec<PathBuf> },
+}
+
+enum Answer {
+    Described { badges: Vec<Badge>, toolbar: Option<ToolbarButton> },
+    Badges(Vec<(PathBuf, Option<String>)>),
+}
+
+fn event(id: &str, fields: Vec<(&str, Json)>) -> AppEvent {
+    AppEvent::new(EVENT_CLASS, id, obj(fields))
+}
+
+fn context_event(id: &str, kind: MenuKind, item: Option<u32>, targeted: &Path, selected: &[PathBuf]) -> AppEvent {
+    let mut fields = vec![("kind", Json::Str(kind.name().into())), ("targeted", Json::Str(targeted.to_string_lossy().into_owned())), ("selected", paths_json(selected))];
+    if let Some(item) = item {
+        fields.push(("item", Json::Num(f64::from(item))));
+    }
+    event(id, fields)
+}
+
+/// The worker: one request at a time, badge requests that wait together are sent as one.
+fn work(transport: Transport, jobs: Receiver<Job>, answers: Sender<Answer>) {
+    let mut backlog: VecDeque<Job> = VecDeque::new();
+    loop {
+        let Some(job) = backlog.pop_front().or_else(|| jobs.recv().ok()) else { break };
+        match job {
+            Job::Describe => {
+                let reply = transport(&event("describe", vec![]), BADGE_TIMEOUT);
+                if reply.ok() {
+                    let badges = reply
+                        .result
+                        .get("badges")
+                        .and_then(Json::as_array)
+                        .unwrap_or(&[])
+                        .iter()
+                        .filter_map(|b| Some(Badge { id: b.str_field("id")?, label: b.str_field("label").unwrap_or_default(), image: b.str_field("image").unwrap_or_default() }))
+                        .collect();
+                    let toolbar = reply.result.get("toolbar").filter(|t| t.get("name").is_some()).and_then(|t| {
+                        Some(ToolbarButton { name: t.str_field("name")?, image: t.str_field("image").unwrap_or_default(), tool_tip: t.str_field("tool_tip").unwrap_or_default() })
+                    });
+                    let _ = answers.send(Answer::Described { badges, toolbar });
+                    wake();
+                }
+            }
+            Job::Observe { dir, begin } => {
+                let _ = transport(&event("observe", vec![("folder", Json::Str(dir.to_string_lossy().into_owned())), ("begin", Json::Bool(begin))]), BADGE_TIMEOUT);
+            }
+            Job::Badges(mut paths) => {
+                while paths.len() < MAX_PATHS {
+                    match jobs.try_recv() {
+                        Ok(Job::Badges(more)) => paths.extend(more),
+                        Ok(other) => {
+                            backlog.push_back(other);
+                            break;
+                        }
+                        Err(_) => break,
+                    }
+                }
+                paths.truncate(MAX_PATHS);
+                let reply = transport(&event("badges", vec![("paths", paths_json(&paths))]), BADGE_TIMEOUT);
+                let mut got: HashMap<PathBuf, Option<String>> = HashMap::new();
+                if reply.ok() {
+                    for item in reply.result.get("items").and_then(Json::as_array).unwrap_or(&[]) {
+                        if let Some(path) = item.str_field("path") {
+                            got.insert(PathBuf::from(path), item.str_field("badge"));
+                        }
+                    }
+                }
+                // a path the app did not answer for (or a failed call) is cached as "no badge" until it goes stale
+                let rows = paths.into_iter().map(|p| {
+                    let badge = got.remove(&p).flatten();
+                    (p, badge)
+                });
+                let _ = answers.send(Answer::Badges(rows.collect()));
+                wake();
+            }
+            Job::Perform { kind, item, targeted, selected } => {
+                let _ = transport(&context_event("perform", kind, Some(item), &targeted, &selected), PERFORM_TIMEOUT);
+            }
+        }
+    }
+}
+
+/// Wakes the app loop (the main queue) so it reads the answer without waiting for input.
+fn wake() {
+    crate::dispatch::DispatchQueue::main().async_(|| {});
+}
+
+/// An extension app seen from the file manager. See the module notes above.
+pub struct RemoteExtension {
+    jobs: Sender<Job>,
+    answers: Receiver<Answer>,
+    transport: Transport,
+    cache: HashMap<PathBuf, (Option<String>, Instant)>,
+    asked: HashSet<PathBuf>,
+    toolbar: Option<ToolbarButton>,
+    muted_until: Option<Instant>,
+    stale_after: Duration,
+}
+
+impl RemoteExtension {
+    /// Connects through `transport` and asks the app to describe its badges and toolbar button.
+    pub fn connect(transport: Transport) -> RemoteExtension {
+        let (jobs, job_rx) = channel();
+        let (answer_tx, answers) = channel();
+        let worker = transport.clone();
+        std::thread::spawn(move || work(worker, job_rx, answer_tx));
+        let _ = jobs.send(Job::Describe);
+        RemoteExtension { jobs, answers, transport, cache: HashMap::new(), asked: HashSet::new(), toolbar: None, muted_until: None, stale_after: STALE_AFTER }
+    }
+
+    /// How long a badge answer is trusted before it is asked for again.
+    pub fn set_stale_after(&mut self, after: Duration) {
+        self.stale_after = after;
+    }
+
+    /// Whether menu requests are being skipped because the app did not answer the last one.
+    pub fn muted(&self) -> bool {
+        self.muted_until.is_some_and(|t| Instant::now() < t)
+    }
+
+    fn apply(controller: &mut SyncController, path: &Path, badge: Option<&str>) {
+        // a badge the app never registered is refused by the controller; the draw then shows none
+        let _ = controller.set_badge(path, badge);
+    }
+}
+
+impl SyncExtension for RemoteExtension {
+    fn begin_observing(&mut self, dir: &Path) {
+        let _ = self.jobs.send(Job::Observe { dir: dir.to_path_buf(), begin: true });
+    }
+
+    fn end_observing(&mut self, dir: &Path) {
+        let _ = self.jobs.send(Job::Observe { dir: dir.to_path_buf(), begin: false });
+    }
+
+    fn request_badge(&mut self, controller: &mut SyncController, path: &Path) {
+        if let Some((badge, at)) = self.cache.get(path) {
+            Self::apply(controller, path, badge.as_deref());
+            if at.elapsed() < self.stale_after {
+                return;
+            }
+        }
+        if self.asked.len() < 4 * MAX_PATHS && self.asked.insert(path.to_path_buf()) {
+            let _ = self.jobs.send(Job::Badges(vec![path.to_path_buf()]));
+        }
+    }
+
+    fn menu(&mut self, kind: MenuKind, controller: &SyncController) -> Vec<MenuItem> {
+        let Some(targeted) = controller.targeted_url() else { return Vec::new() };
+        if self.muted() {
+            return Vec::new();
+        }
+        let reply = (self.transport)(&context_event("menu", kind, None, targeted, controller.selected_item_urls()), MENU_TIMEOUT);
+        if !reply.ok() {
+            if matches!(reply.error_number, ERR_TIMEOUT | ERR_TARGET_UNREACHABLE) {
+                self.muted_until = Some(Instant::now() + MUTE_FOR);
+            }
+            return Vec::new();
+        }
+        reply
+            .result
+            .get("items")
+            .and_then(Json::as_array)
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(|i| {
+                Some(MenuItem { id: u32::try_from(i.get("id")?.as_u64()?).ok()?, title: i.str_field("title")?, enabled: !matches!(i.get("enabled"), Some(Json::Bool(false))) })
+            })
+            .take(MAX_MENU_ITEMS)
+            .collect()
+    }
+
+    fn perform(&mut self, kind: MenuKind, item: u32, controller: &SyncController) {
+        if let Some(targeted) = controller.targeted_url() {
+            let _ = self.jobs.send(Job::Perform { kind, item, targeted: targeted.to_path_buf(), selected: controller.selected_item_urls().to_vec() });
+        }
+    }
+
+    fn toolbar(&self) -> Option<ToolbarButton> {
+        self.toolbar.clone()
+    }
+
+    fn poll(&mut self, controller: &mut SyncController) -> bool {
+        let mut changed = false;
+        while let Ok(answer) = self.answers.try_recv() {
+            match answer {
+                Answer::Described { badges, toolbar } => {
+                    for b in badges {
+                        let _ = controller.set_badge_image(&b.id, &b.label, &b.image);
+                    }
+                    self.toolbar = toolbar;
+                    changed = true;
+                }
+                Answer::Badges(rows) => {
+                    for (path, badge) in rows {
+                        self.asked.remove(&path);
+                        let before = self.cache.insert(path.clone(), (badge.clone(), Instant::now())).map(|(b, _)| b);
+                        if before.as_ref() != Some(&badge) {
+                            changed = true;
+                        }
+                        Self::apply(controller, &path, badge.as_deref());
+                    }
+                }
+            }
+        }
+        changed
+    }
+}
+
+impl SyncHost {
+    /// Hands the answers that came from the extension apps to their controllers. True when something to draw changed.
+    pub fn poll(&mut self) -> bool {
+        let mut changed = false;
+        for e in &mut self.extensions {
+            changed |= e.extension.poll(&mut e.controller);
+        }
+        changed
+    }
+
+    /// The person chose `item` of a menu `extension` filled, for the folder `targeted` and the `selected` items.
+    pub fn perform(&mut self, extension: &str, kind: MenuKind, item: u32, targeted: &Path, selected: &[PathBuf]) -> Result<(), SyncError> {
+        let e = self.extensions.iter_mut().find(|e| e.id == extension).ok_or(SyncError::UnknownExtension)?;
+        e.controller.set_context(Some(targeted), selected);
+        if e.controller.targeted_url().is_none() {
+            return Err(SyncError::NotObserved);
+        }
+        e.extension.perform(kind, item, &e.controller);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,5 +912,177 @@ mod tests {
         let mut h = SyncHost::new();
         h.register("many", controller(&["/d"]), Box::new(Many));
         assert_eq!(h.menu(MenuKind::Sidebar, Path::new("/d"), &[]).len(), MAX_MENU_ITEMS);
+    }
+
+    // --- out of process ---
+
+    use std::sync::Mutex;
+
+    /// An extension app in a test: the served side, plus a log of what it was asked.
+    struct Served {
+        controller: SyncController,
+        ext: Box<dyn SyncExtension + Send>,
+        asked: Vec<String>,
+    }
+
+    struct App {
+        performed: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl SyncExtension for App {
+        fn request_badge(&mut self, c: &mut SyncController, path: &Path) {
+            if path.extension().is_some_and(|e| e == "tmp") {
+                c.set_badge(path, Some("pending")).unwrap();
+            }
+        }
+        fn menu(&mut self, kind: MenuKind, c: &SyncController) -> Vec<MenuItem> {
+            match kind {
+                MenuKind::ContextualItems if !c.selected_item_urls().is_empty() => vec![MenuItem::new(7, "Share Link")],
+                MenuKind::ContextualContainer => vec![MenuItem { id: 8, title: "Sync This Folder".into(), enabled: false }],
+                _ => Vec::new(),
+            }
+        }
+        fn perform(&mut self, kind: MenuKind, item: u32, c: &SyncController) {
+            let names: Vec<String> = c.selected_item_urls().iter().map(|p| p.display().to_string()).collect();
+            self.performed.lock().unwrap().push(format!("{} {item} {}", kind.name(), names.join(",")));
+        }
+        fn toolbar(&self) -> Option<ToolbarButton> {
+            Some(ToolbarButton { name: "Cloud".into(), image: "cloud".into(), tool_tip: "Sync status".into() })
+        }
+    }
+
+    /// The transport of the test: the app's `serve` behind a lock, recording the event methods.
+    fn served(dirs: &[&str]) -> (Transport, Arc<Mutex<Served>>, Arc<Mutex<Vec<String>>>) {
+        let performed = Arc::new(Mutex::new(Vec::new()));
+        let state = Arc::new(Mutex::new(Served { controller: controller(dirs), ext: Box::new(App { performed: performed.clone() }), asked: Vec::new() }));
+        let shared = state.clone();
+        let transport: Transport = Arc::new(move |ev: &AppEvent, _: Duration| {
+            let mut s = shared.lock().unwrap();
+            s.asked.push(format!("{} {}", ev.id, ev.params.encode()));
+            let Served { controller, ext, .. } = &mut *s;
+            match serve(ev, controller, ext.as_mut()) {
+                Ok(result) => AppEventReply { error_number: 0, error_string: None, result },
+                Err(e) => AppEventReply { error_number: e.code, error_string: Some(e.message), result: Json::Null },
+            }
+        });
+        (transport, state, performed)
+    }
+
+    fn until(host: &mut SyncHost, what: &str, mut done: impl FnMut(&mut SyncHost) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            host.poll();
+            if done(host) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("timed out waiting for {what}");
+    }
+
+    fn remote_host(dirs: &[&str]) -> (SyncHost, Arc<Mutex<Served>>, Arc<Mutex<Vec<String>>>) {
+        let (transport, state, performed) = served(dirs);
+        let mut c = SyncController::default();
+        c.set_directory_urls(&dirs.iter().map(PathBuf::from).collect::<Vec<_>>()).unwrap();
+        let mut ext = RemoteExtension::connect(transport);
+        ext.set_stale_after(Duration::from_secs(3600));
+        let mut host = SyncHost::new();
+        host.register("cloud", c, Box::new(ext));
+        (host, state, performed)
+    }
+
+    #[test]
+    fn the_app_describes_its_badges_and_a_badge_arrives_for_the_next_draw() {
+        let (mut host, _state, _) = remote_host(&["/home/a/Sync"]);
+        until(&mut host, "the badge descriptions", |h| h.controller("cloud").is_some_and(|c| c.badges().len() == 2));
+        assert_eq!(host.toolbar_buttons().first().map(|(id, b)| (id.as_str(), b.name.as_str())), Some(("cloud", "Cloud")));
+        let tmp = Path::new("/home/a/Sync/draft.tmp");
+        // the first draw has no answer yet; the app is asked on the side and the answer lands in the cache
+        assert!(host.badges_for(tmp).is_empty());
+        until(&mut host, "the badge answer", |h| !h.badges_for(tmp).is_empty());
+        assert_eq!(host.badges_for(tmp)[0].id, "pending");
+        // a path the app has no badge for stays clear
+        let plain = Path::new("/home/a/Sync/report.txt");
+        host.badges_for(plain);
+        until(&mut host, "the clear answer", |h| h.controller("cloud").is_some_and(|c| c.badge_for(plain).is_none()));
+        assert!(host.badges_for(plain).is_empty());
+    }
+
+    #[test]
+    fn only_paths_inside_the_observed_folders_are_ever_sent() {
+        let (mut host, state, _) = remote_host(&["/home/a/Sync"]);
+        host.folder_opened(Path::new("/home/a/Sync")).unwrap();
+        assert_eq!(host.folder_opened(Path::new("/home/a/Documents")), Ok(0));
+        for outside in ["/home/a/Documents/x.tmp", "/etc/passwd"] {
+            assert!(host.badges_for(Path::new(outside)).is_empty());
+        }
+        assert!(host.menu(MenuKind::ContextualItems, Path::new("/home/a/Documents"), &[PathBuf::from("/home/a/Documents/x")]).is_empty());
+        host.badges_for(Path::new("/home/a/Sync/in.tmp"));
+        until(&mut host, "the answer", |h| !h.badges_for(Path::new("/home/a/Sync/in.tmp")).is_empty());
+        let asked = state.lock().unwrap().asked.join("\n");
+        assert!(asked.contains("/home/a/Sync/in.tmp"), "{asked}");
+        assert!(!asked.contains("Documents") && !asked.contains("passwd"), "{asked}");
+    }
+
+    #[test]
+    fn menu_items_come_from_the_app_and_a_tap_goes_back_to_it() {
+        let (mut host, _state, performed) = remote_host(&["/home/a/Sync"]);
+        let dir = Path::new("/home/a/Sync");
+        let picked = [PathBuf::from("/home/a/Sync/a.txt"), PathBuf::from("/home/b/outside.txt")];
+        let items = host.menu(MenuKind::ContextualItems, dir, &picked);
+        assert_eq!(items, vec![HostMenuItem { extension: "cloud".into(), item: MenuItem::new(7, "Share Link") }]);
+        let folder = host.menu(MenuKind::ContextualContainer, dir, &[]);
+        assert_eq!(folder.len(), 1);
+        assert!(!folder[0].item.enabled, "a disabled row stays disabled");
+        host.perform("cloud", MenuKind::ContextualItems, 7, dir, &picked).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while performed.lock().unwrap().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // the selection the app saw was narrowed to its folder
+        assert_eq!(*performed.lock().unwrap(), vec!["items 7 /home/a/Sync/a.txt".to_string()]);
+        assert_eq!(host.perform("gone", MenuKind::Toolbar, 1, dir, &[]), Err(SyncError::UnknownExtension));
+        assert_eq!(host.perform("cloud", MenuKind::Toolbar, 1, Path::new("/elsewhere"), &[]), Err(SyncError::NotObserved));
+    }
+
+    #[test]
+    fn an_app_that_does_not_answer_is_left_alone_for_a_while() {
+        let calls = Arc::new(Mutex::new(0usize));
+        let seen = calls.clone();
+        let dead: Transport = Arc::new(move |_: &AppEvent, _: Duration| {
+            *seen.lock().unwrap() += 1;
+            AppEventReply { error_number: ERR_TARGET_UNREACHABLE, error_string: Some("down".into()), result: Json::Null }
+        });
+        let mut c = SyncController::default();
+        c.set_directory_urls(&[PathBuf::from("/home/a/Sync")]).unwrap();
+        let mut host = SyncHost::new();
+        host.register("cloud", c, Box::new(RemoteExtension::connect(dead)));
+        let dir = Path::new("/home/a/Sync");
+        let before = *calls.lock().unwrap();
+        assert!(host.menu(MenuKind::ContextualContainer, dir, &[]).is_empty());
+        let after_first = *calls.lock().unwrap();
+        assert!(after_first > before);
+        assert!(host.menu(MenuKind::ContextualContainer, dir, &[]).is_empty());
+        // the second menu was not even asked: only the describe/observe traffic on the worker may add calls
+        std::thread::sleep(Duration::from_millis(50));
+        let menus_asked = *calls.lock().unwrap() - after_first;
+        assert!(menus_asked <= 1, "the muted app is not asked for a menu again ({menus_asked})");
+    }
+
+    #[test]
+    fn serve_refuses_what_it_cannot_answer() {
+        let mut c = controller(&["/home/a/Sync"]);
+        let mut app = App { performed: Arc::new(Mutex::new(Vec::new())) };
+        let ask = |id: &str, params: Json| serve(&AppEvent::new(EVENT_CLASS, id, params), &mut controller(&["/home/a/Sync"]), &mut App { performed: Arc::new(Mutex::new(Vec::new())) });
+        assert_eq!(ask("nope", Json::Null).unwrap_err().code, METHOD_NOT_FOUND);
+        let relative = obj(vec![("folder", Json::Str("Sync".into())), ("begin", Json::Bool(true))]);
+        assert_eq!(ask("observe", relative).unwrap_err().code, INVALID_PARAMS);
+        let outside = obj(vec![("folder", Json::Str("/etc".into())), ("begin", Json::Bool(true))]);
+        assert_eq!(ask("observe", outside).unwrap_err().code, INVALID_PARAMS);
+        let other_class = AppEvent::new("notes", "make", Json::Null);
+        assert_eq!(serve(&other_class, &mut c, &mut app).unwrap_err().code, METHOD_NOT_FOUND);
+        let traversal = obj(vec![("paths", Json::Arr(vec![Json::Str("/home/a/Sync/../../etc/passwd".into())]))]);
+        let reply = ask("badges", traversal).unwrap();
+        assert_eq!(reply.get("items").and_then(Json::as_array).map(|i| i[0].get("badge").cloned()), Some(Some(Json::Null)));
     }
 }

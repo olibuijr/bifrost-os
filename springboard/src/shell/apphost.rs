@@ -46,6 +46,10 @@ pub struct Manifest {
     /// `index_extension = true`: the app answers the shell's reindex requests (`CSIndexExtensionRequestHandler`). The
     /// shell asks once per run, when the app has no items in the Search index (see `request_index_extensions`).
     pub index_extension: bool,
+    /// `file_manager_folders = ["~/Cloud"]`: the app is a file-manager sync extension for these folders (`~/` is the
+    /// home folder). Files runs the extension through the app's control socket and only ever asks it about items inside
+    /// them (`bifrost_app::file_manager_sync`, [`Manifest::file_manager_dirs`]).
+    pub file_manager_folders: Vec<String>,
     /// `"native"`: a native Wayland app owns its GPU surfaces instead of using SDK frames. `"full-size"`: an SDK app
     /// with a full-size-content window (no title row; the traffic lights sit over its sidebar).
     pub window: String,
@@ -102,6 +106,23 @@ impl Manifest {
         let max = fixed.or_else(|| parse_size(&self.max_size));
         SizeLimits { initial, min, max, fixed: fixed.is_some() }
     }
+    /// The folders of `file_manager_folders` as absolute paths: `~/x` is under `home`, a relative path, a path with `..`,
+    /// the root and the home folder itself are left out (an extension watches folders, never everything).
+    pub fn file_manager_dirs(&self, home: &Path) -> Vec<PathBuf> {
+        let mut out: Vec<PathBuf> = Vec::new();
+        for raw in &self.file_manager_folders {
+            let path = match raw.strip_prefix("~/") {
+                Some(rest) => home.join(rest),
+                None => PathBuf::from(raw),
+            };
+            let clean = path.is_absolute() && !path.components().any(|c| matches!(c, std::path::Component::ParentDir));
+            if clean && path != Path::new("/") && path != home && !out.contains(&path) {
+                out.push(path);
+            }
+        }
+        out
+    }
+
     /// Not an app: a system package or service (never on the home grid, never spawned by the shell).
     pub fn is_system(&self) -> bool {
         super::kinds::Kind::of(&self.kind).hidden_from_grid()
@@ -182,6 +203,7 @@ impl Manifest {
                 "category" => m.category = unquote(v),
                 "game" => m.game = unquote(v) == "true",
                 "index_extension" => m.index_extension = unquote(v) == "true",
+                "file_manager_folders" => m.file_manager_folders = strs(),
                 "permissions" => m.permissions = strs(),
                 "keychain_groups" => m.keychain_groups = strs(),
                 "entitlements" => m.entitlements = strs(),
@@ -2176,6 +2198,15 @@ mod tests {
         assert_eq!(m.package_types, vec!["rtfd".to_string()]);
         let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
         assert!(none.package_types.is_empty());
+    }
+    #[test]
+    fn file_manager_extensions_declare_the_folders_they_watch() {
+        let m = Manifest::parse("id = \"is.a.cloud\"\nname = \"Cloud\"\nexec = \"x\"\nfile_manager_folders = [\"~/Cloud\", \"/mnt/sync\", \"~/\", \"/\", \"docs\", \"~/../etc\", \"/mnt/sync\"]\n").unwrap();
+        assert_eq!(m.file_manager_folders.len(), 7);
+        let home = Path::new("/home/ann");
+        assert_eq!(m.file_manager_dirs(home), vec![PathBuf::from("/home/ann/Cloud"), PathBuf::from("/mnt/sync")]);
+        let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
+        assert!(none.file_manager_dirs(home).is_empty());
     }
     #[test]
     fn quit_plan_kills_terminable_apps_and_gives_the_rest_a_deadline() {
