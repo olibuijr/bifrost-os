@@ -6484,8 +6484,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: no BifrOSt-visible function. The index holds only an Info.plist and the name points to frame-flow processing that runs on the vendor's neural accelerator and models; BifrOSt has no such hardware path. Identity inferred from the name and flagged for review.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1302 B only). Name suggests frame flow or frame-interpolation processing for video or animation. That could be a software (GPU) feature rather than vendor hardware, so the earlier 'neural accelerator' reading is unsupported. Needs: strings when decodable; BifrOSt would need a frame-interpolation kernel in its video path if a player or camera feature uses it.",
    "rea": [],
    "method": "assessed"
   },

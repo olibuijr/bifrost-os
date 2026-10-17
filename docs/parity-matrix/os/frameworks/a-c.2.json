@@ -3384,8 +3384,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: the reference index holds only the framework shell (no resources, strings, plists or host bundle), so it ships no user-visible function; by name it answers 'is this Apple service or feature offered on this device or region', which is gated on Apple accounts and services BifrOSt does not mirror. Purpose inferred from the name; no BifrOSt feature depends on it.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1314 B, version.plist 464 B, no resources, daemon or host bundle). By name it answers whether a feature or service is available on this device, region or account, which could be an Apple-account gate or a local capability check. Needs: strings and the Info.plist keys when decodable; BifrOSt might need a small feature-availability query in the SDK if callers ask for one.",
    "rea": [],
    "method": "assessed"
   },
@@ -3965,8 +3965,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: a headless XPC service (BinaryAssetTagService) with a FeatureFlags domain plist and no resources or UI strings. It tags binaries for Apple's own build and release attribution, internal tooling with no user-visible function. Purpose inferred from the name and the headless shape; BifrOSt packages are identified by the package database and manifest.toml.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Headless XPC service BinaryAssetTagService.xpc (620 KB) with a feature-flag domain plist System/Library/FeatureFlags/Domain/BinaryAssetTag.plist, Info.plist and version.plist, no UI or strings. Name suggests it attaches an asset tag (origin or provenance) to binaries, possibly for crash or asset attribution, but internal tooling is an inference, not evidence. Needs: the XPC Info.plist and binary strings to see which asset system calls it; BifrOSt would need a package-origin tag only if crash reports or app provenance use one.",
    "rea": [],
    "method": "assessed"
   },
@@ -5554,8 +5554,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: a shim over Apple's private on-device ML and analytics runtime (CPML). The bundle is only a binary with Info.plist and version.plist (no resources, no XPC service, no plug-in), so it has no user-visible function of its own; ML model and analytics plumbing is not mirrored. Judged from the name and the empty bundle.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1442 B, version.plist 463 B, no resources, XPC service or plug-in). Name suggests a compatibility shim to a private machine-learning component (CPML plus BestShim). No bundle in the index names it. Needs: linked-library data from the dyld cache when available; BifrOSt would need a local model-runtime adapter only if a user-visible feature calls it.",
    "rea": [],
    "method": "assessed"
   },

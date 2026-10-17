@@ -1311,8 +1311,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: the index lists only Info.plist, version.plist and a signature: no resources, XPC service or plug-in, and no other bundle names it, so its job cannot be read from the reference. It sits among the Apple ML framework codenames (Morpheus, ModelManager) and is treated as Apple internal ML plumbing, not mirrored. Low confidence; revisit only if a hosting bundle shows a user-visible job.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1340 B, version.plist 459 B); no other bundle names it. Its grouping with other Apple ML codenames in the earlier note is a guess. Needs: exports and callers.",
    "rea": [],
    "method": "assessed"
   },
@@ -1530,8 +1530,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: the index lists only Info.plist and a signature (no resources, XPC service or plug-in) and no other bundle names it, so no user-visible job can be shown. Treated as Apple internal support code, not mirrored. Low confidence; revisit if a hosting bundle shows otherwise.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1416 B) that shares the Multiverse name with the system daemon usr/libexec/multiversed (launchd plist present), so it is probably the client library for that daemon. See com.apple.multiversed. Needs: daemon Mach service and callers.",
    "rea": [],
    "method": "assessed"
   },
@@ -1743,8 +1743,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: API half of an NDO pair with NDOUI (the index lists Info.plist, version.plist and a signature; NDOUI adds Assets.car and a localised string table). A client API plus UI for an online Apple service, which BifrOSt does not mirror (accounts, stores, offers). Low confidence on the exact service; no local function is shown.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. API half of a pair with NDOUI (Info.plist 1402 B, version.plist 464 B). NDO is not an expansion the index gives; the 'online Apple service' reading is a guess. Needs: NDOUI strings (Localizable.loctable) when decodable to see which feature the screens belong to.",
    "rea": [],
    "method": "assessed"
   },
@@ -1764,8 +1764,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: UI half of an NDO pair with NDOAPI (the index lists Assets.car, Localizable.loctable and localisations, and no daemon or XPC service): screens for an online Apple service, which BifrOSt does not mirror. Low confidence on the exact service; no local function is shown.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. UI half of a pair with NDOAPI: Assets.car (29.6 KB), a 15.9 KB Localizable.loctable and localisations, no daemon or XPC service. The strings and assets would name the feature but are not decodable here. Needs: decode the loctable and Assets.car; BifrOSt would need equivalent screens only if the feature is local.",
    "rea": [],
    "method": "assessed"
   },

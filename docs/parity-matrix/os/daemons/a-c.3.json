@@ -5848,8 +5848,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: private DoubleAgent.framework daemon whose launchd plist declares only a control Mach service, a host special-port service and a filesystem label hook (with its own sandbox profile com.apple.doubleagentd.sb in the reference index). Those are XNU Mach port interfaces with no user-visible or app-visible function and no Linux analogue. The binary is not extracted, so the exact purpose is unconfirmed.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. A documented system daemon, not an Apple-cloud service: usr/share/man/man8/doubleagentd.8 (1.5 KB) exists, with a launchd plist (786 B), a sandbox profile System/Library/Sandbox/Profiles/com.apple.doubleagentd.sb (2.4 KB) and the 219 KB binary System/Library/PrivateFrameworks/DoubleAgent.framework/doubleagentd. The earlier reading of the plist as Mach-port plumbing only could not be verified (plist contents are not decodable here). Needs: read the man page, plist and sandbox rules once decodable to find what it mediates; then decide between a BifrOSt service and n/a.",
    "rea": [],
    "method": "assessed"
   },

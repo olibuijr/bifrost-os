@@ -3138,7 +3138,7 @@
    "doc": "",
    "bifrost": "",
    "status": "n/a",
-   "note": "n/a: regional power-grid data (carbon intensity and forecasts for clean-energy charging) fetched from vendor servers. The index holds only Info.plist and version.plist. BifrOSt makes no such cloud lookups (privacy-first); identity inferred from the name and flagged for review.",
+   "note": "n/a: Apple-server grid forecast service for Clean Energy Charging (regional carbon-intensity forecasts fetched from Apple's backend and used by the power stack to time laptop charging); evidence: framework with Info.plist and version.plist only, no resources, plus the reference OS's Clean Energy Charging feature, which depends on that Apple service. BifrOSt has no such cloud lookup (privacy-first) and battery.rs has no grid-aware charging.",
    "rea": [],
    "method": "assessed"
   },
@@ -6197,8 +6197,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: camera-group bundle of the reference OS's camera pipeline for Apple camera hardware (the bundle holds only Info.plist and version.plist, no resources). BifrOSt reads cameras through V4L2 (shell/camera); no Apple camera hardware to drive. Low confidence: the name is the only evidence of the exact feature.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1449 B, version.plist 458 B). Name suggests camera framing or motion smoothing with inertia, as in subject-following auto-framing, which is a software feature BifrOSt could build on V4L2 (shell/camera has no auto-framing). The Apple-camera-hardware reading is unsupported. Needs: strings and callers when decodable.",
    "rea": [],
    "method": "assessed"
   },
