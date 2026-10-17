@@ -201,6 +201,11 @@ pub trait Host {
     /// `do shell script`: the command's standard output; a failing command is an error.
     fn shell(&mut self, command: &str) -> Result<String, ScriptError>;
     fn sleep(&mut self, secs: f64);
+    /// The installed app id a script's name for an app refers to (`"Notes"` and `"is.example.notes"` are one app), or
+    /// `None` when the host cannot tell. The JavaScript runner checks its permission rule against both forms.
+    fn app_id(&mut self, _app: &str) -> Option<String> {
+        None
+    }
 }
 
 enum Flow {

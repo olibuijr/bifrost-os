@@ -10,12 +10,12 @@
 use bifrost_app::app_events::{self, AppEvent};
 use bifrost_core::json::Json;
 use bifrost_core::script::{self, dictionary::Dictionary, interp::{self, Host, ScriptError, Value}};
-use springboard::shell::{apphost, intents};
+use springboard::shell::{apphost, intents, js_automation};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub const USAGE: &str = "usage: osascript [-s s|o] [-l AppleScript] [-e statement]... [file [argument ...]]\n       osascript [-s s|o] -e statement ... [argument ...]";
+pub const USAGE: &str = "usage: osascript [-s s|o] [-l AppleScript|JavaScript] [-e statement]... [file [argument ...]]\n       osascript [-s s|o] -e statement ... [argument ...]";
 
 /// `errAEEventNotHandled`-style numbers are in `interp`; this one is `errAENoSuchObject`-like: the app is not running.
 const ERR_NOT_RUNNING: i64 = -600;
@@ -35,10 +35,19 @@ pub enum Input {
     Stdin,
 }
 
+/// The language of the script: the AppleScript-style language (`bifrost_core::script`) or JavaScript
+/// (`springboard::shell::js_automation`, run with every grant because the person started it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Language {
+    AppleScript,
+    JavaScript,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     pub input: Input,
     pub style: Style,
+    pub language: Language,
     pub argv: Vec<String>,
 }
 
@@ -53,6 +62,7 @@ pub enum Parsed {
 pub fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut lines: Vec<String> = Vec::new();
     let mut style = Style::Plain;
+    let mut language = Language::AppleScript;
     let mut file: Option<PathBuf> = None;
     let mut argv: Vec<String> = Vec::new();
     let mut positional = false;
@@ -91,8 +101,9 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
                 }
                 "-l" => {
                     match next.as_deref() {
-                        Some("AppleScript") => {}
-                        Some(other) => return Err(format!("language {other} is not supported; only AppleScript is")),
+                        Some("AppleScript") => language = Language::AppleScript,
+                        Some("JavaScript") => language = Language::JavaScript,
+                        Some(other) => return Err(format!("language {other} is not supported; use AppleScript or JavaScript")),
                         None => return Err("-l needs a language".into()),
                     }
                     i += 1;
@@ -117,7 +128,7 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
     } else {
         Input::Stdin
     };
-    Ok(Parsed::Run(Options { input, style, argv }))
+    Ok(Parsed::Run(Options { input, style, language, argv }))
 }
 
 /// The script text. A file holding an `osacompile` output is read back to its canonical source.
@@ -221,11 +232,23 @@ impl Host for SystemHost {
     fn sleep(&mut self, secs: f64) {
         std::thread::sleep(Duration::from_secs_f64(secs.max(0.0)));
     }
+
+    fn app_id(&mut self, app: &str) -> Option<String> {
+        find_app(&self.apps(), app).map(|a| a.manifest.id.clone())
+    }
 }
 
 /// Runs the script with the system host and returns the result to print, if any.
 pub fn run(opts: &Options) -> Result<Option<String>, String> {
     let source = read_source(&opts.input)?;
+    if opts.language == Language::JavaScript {
+        let run = js_automation::run(&source, &opts.argv, Box::new(SystemHost::new()), js_automation::Policy::allow_all());
+        for line in &run.output {
+            eprintln!("{line}");
+        }
+        let value = run.result.map_err(|e| format!("execution error: {e}"))?;
+        return Ok(render(&value, opts.style));
+    }
     let mut host = SystemHost::new();
     let value = interp::run_source(&source, &mut host, &opts.argv).map_err(|e| format!("execution error: {e}"))?;
     Ok(render(&value, opts.style))
@@ -276,7 +299,9 @@ mod tests {
         assert_eq!(run_of(&["-s", "s", "-e", "return 1"]).style, Style::Source);
         assert_eq!(run_of(&["-s", "o", "-l", "AppleScript", "-e", "return 1"]).style, Style::Plain);
         assert!(parse(&args(&["-s", "q", "-e", "x"])).is_err());
-        assert!(parse(&args(&["-l", "JavaScript", "-e", "x"])).is_err());
+        assert!(parse(&args(&["-l", "Perl", "-e", "x"])).is_err());
+        assert_eq!(run_of(&["-l", "JavaScript", "-e", "1"]).language, Language::JavaScript);
+        assert_eq!(run_of(&["-e", "1"]).language, Language::AppleScript);
         assert!(parse(&args(&["-s"])).is_err());
     }
 
