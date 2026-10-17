@@ -5200,8 +5200,13 @@ the model is host-tested, but no shell or app drives it yet. Every row stays par
   `PHContentEditingOutput`, and `revert`. Adjustments are stored as records (`bifrost_ui::photo_adjustment`), so the original is
   never rewritten. Not wired: there is no extension host, so no third-party editor loads.
 - **Photo picker (`bifrost_app::photo_picker`)**: `PHPickerConfiguration` (filters, selection limit, `to_params`), `PHPickerResult`,
-  `PHPickerViewController::present`, `decode_reply` and `check_limit`. Not wired: the shell does not answer the `picker` call yet, so
-  the reply is an error and an app must fall back.
+  `PHPickerViewController::present`, `is_pending`, `decode_reply`, `decode_event` and `check_limit`. Wired (2026-10-17): the `picker`
+  call opens the shell's photo picker sheet (`springboard/src/shell/photo_pick_sheet.rs`, model `photo_pick.rs`): a grid of the
+  library's thumbnails with the app's filters (All, Photos, Videos tabs when more than one kind is allowed) and selection limit
+  (0: none, default 1, which replaces the choice). The call answers `{status: "pending"}` at once; the person's choice arrives as
+  the `picker_did_finish` event (`{results: [{id}], cancelled}`, ids in pick order) and the app can then read exactly those
+  assets with `image {id}`, with no photos permission and no view of the rest of the library. Gaps: no keyboard control in the
+  sheet, Live Photos and movies show a still or the first frame and do not play, and a pick does not survive a shell restart.
 - **Media format (`bifrost_app::media_format`)**: `FormatDescription::video(codec, w, h)` and `sound(codec, SoundFormat)`. The codec is
   a four-character code (space-padded when short); sides are at most `MAX_SIDE` (16384). Pure data, no decoder. No caller found.
   Parity row: `core-media.json`.

@@ -13,6 +13,7 @@ pub mod apphost;
 pub mod app_window_table;
 pub mod helpbook;
 pub mod folder_actions;
+pub mod file_import;
 pub mod touch_frames;
 pub mod intents;
 pub mod preview_gen;
@@ -124,6 +125,8 @@ pub mod malware_gate;
 pub mod background;
 pub mod package_install_sheet;
 pub mod contact_pick_sheet;
+pub mod photo_pick;
+pub mod photo_pick_sheet;
 mod auth_sheet;
 mod volume_sheet;
 mod account_access_sheet;
@@ -656,6 +659,8 @@ pub struct Shell {
     ota: Option<ota::Ota>,
     /// Folder Actions: the attachments saved under the data dir, rescanned from the tick (see `folder_actions`).
     folder_actions: folder_actions::Watcher,
+    /// the file importer: Documents, Desktop and Downloads kept in the Core Search index on a background thread (see `file_import`)
+    file_import: file_import::Importer,
     /// the shared weather summary: refreshed hourly and on wake, with no app window open
     weather_refresh: weather::Refresher,
     /// last time (ms) the apps registry was stat'ed for outside changes
@@ -801,6 +806,8 @@ pub struct Shell {
     suspender: background::Suspender,
     /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
     pick_sheet: Option<contact_pick_sheet::PickSheet>,
+    /// the photo picker sheet for an app's open photo pick (see `photo_pick_sheet.rs`)
+    photo_pick_sheet: Option<photo_pick_sheet::PhotoPickSheet>,
     /// the password sheet an app's local authentication asks for (see `auth_sheet.rs`)
     auth_sheet: Option<auth_sheet::AuthSheet>,
     volume_sheet: Option<volume_sheet::VolumeSheet>,
@@ -1057,6 +1064,7 @@ impl Shell {
             folder_actions: folder_actions::Watcher::new(folder_actions::Registry::from_text(
                 &std::fs::read_to_string(folder_actions::file_path(&apphost::root())).unwrap_or_default(),
             )),
+            file_import: Default::default(),
             weather_refresh: weather::Refresher::default(),
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
@@ -1146,6 +1154,7 @@ impl Shell {
             malware_alert: None,
             suspender: Default::default(),
             pick_sheet: None,
+            photo_pick_sheet: None,
             auth_sheet: None,
             volume_sheet: None,
             auth_clock: 0.0,
@@ -1521,6 +1530,7 @@ impl Shell {
     fn permission_tick(&mut self, t: f64) {
         services::privacy_permissions::persist_grants(&self.data_dir);
         self.pick_tick();
+        self.photo_pick_tick();
         // PermissionKit: drop the questions no guardian answered in time, and show the next one when no sheet is up
         self.guardian_now = t.max(0.0) as u64;
         if services::permission_kit::expire(self.guardian_now) > 0 {
@@ -1556,6 +1566,27 @@ impl Shell {
         }
         let Some((app, name)) = contactpick::open_app() else { return };
         self.pick_sheet = contact_pick_sheet::PickSheet::new(&self.ui, &app, &name);
+        self.dirty = true;
+        self.drawn = Drawn::Nothing;
+    }
+
+    /// Shows the photo picker sheet for an app's open photo pick when none is on screen, and feeds the sheet on screen its
+    /// thumbnails.
+    fn photo_pick_tick(&mut self) {
+        // the picture the person chose for the Today View's Photos widget
+        if let Some(keys) = photo_pick::take_widget_result() {
+            self.today.pin_photo(keys.first().map(String::as_str));
+            self.today_stale = true;
+            self.dirty = true;
+        }
+        if let Some(sheet) = self.photo_pick_sheet.as_mut() {
+            if sheet.prepare(&self.ui, self.w, self.h) {
+                self.dirty = true;
+            }
+            return;
+        }
+        let Some(pick) = photo_pick::take_waiting() else { return };
+        self.photo_pick_sheet = Some(photo_pick_sheet::PhotoPickSheet::new(pick, self.data_dir.join(photos::THUMB_DIR)));
         self.dirty = true;
         self.drawn = Drawn::Nothing;
     }
@@ -1704,6 +1735,29 @@ impl Shell {
                     let t = self.last_input;
                     self.resume_open(held, t);
                 }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.photo_pick_sheet.is_some() {
+            // the photo picker takes every touch until the person adds the pictures or cancels
+            let outcome = match self.photo_pick_sheet.as_mut() {
+                Some(sheet) => sheet.event(&self.ui, self.w, self.h, ev),
+                None => photo_pick_sheet::Outcome::Idle,
+            };
+            match outcome {
+                photo_pick_sheet::Outcome::Add => {
+                    if let Some(sheet) = self.photo_pick_sheet.take() {
+                        sheet.finish();
+                    }
+                }
+                photo_pick_sheet::Outcome::Cancel => {
+                    if let Some(sheet) = self.photo_pick_sheet.take() {
+                        sheet.cancel();
+                    }
+                }
+                photo_pick_sheet::Outcome::Idle | photo_pick_sheet::Outcome::Redraw => {}
             }
             self.drawn = Drawn::Nothing;
             self.dirty = true;
@@ -2467,7 +2521,19 @@ impl Shell {
             }
             Action::OpenDeildu(_) if self.screen == Screen::Lock => {}
             Action::OpenDeildu(p) => self.open_deildu(&p, t),
+            Action::ChoosePhoto if self.screen == Screen::Lock => {}
+            Action::ChoosePhoto => self.choose_widget_photo(),
         }
+    }
+
+    /// Opens the photo picker for the Today View's Photos widget: one picture from the library. The person's choice is
+    /// taken by `photo_pick_tick` and pins the widget to it.
+    fn choose_widget_photo(&mut self) {
+        let library = photos::library::scan(&self.photo_dirs);
+        let entries = services::photos::pick_entries(&library);
+        let pick = photo_pick::Pick::new(photo_pick::WIDGET_APP, "Photos Widget", vec![photo_pick::Filter::Images], 1, entries);
+        // a sheet already up for the widget keeps its place
+        let _ = photo_pick::start(pick);
     }
 
     /// The wallpaper catalogue shown by Settings › Wallpaper.
@@ -3516,6 +3582,7 @@ impl Shell {
         self.markup_tick();
         self.ota_tick(t);
         self.folder_actions_tick();
+        self.file_import_tick();
         if self.weather_refresh.due(t) {
             self.weather_refresh.start(weather::data_path().into());
         }
@@ -4137,7 +4204,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4157,6 +4224,9 @@ impl Shell {
                 m.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(p) = &self.pick_sheet {
+                p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(p) = &self.photo_pick_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
             }
             if self.auth_showing() {

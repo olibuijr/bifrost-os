@@ -19,6 +19,17 @@ pub fn thumbs(dir: &Path) -> Vec<PathBuf> {
     v
 }
 
+/// The cached thumbnail of the picture the person chose for the widget (`key` is the thumbnail key the picker gave); None
+/// when the key is blank or the file is gone. The file name follows `photos::thumbs::DiskCache::path`.
+pub fn pinned(dir: &Path, key: &str) -> Option<PathBuf> {
+    let safe: String = key.chars().filter(char::is_ascii_alphanumeric).collect();
+    if safe.is_empty() {
+        return None;
+    }
+    let path = dir.join(format!("{safe}.raw"));
+    path.is_file().then_some(path)
+}
+
 /// The thumbnail to show at `unix`: a new pick every minute.
 pub fn pick(thumbs: &[PathBuf], unix: i64) -> Option<&PathBuf> {
     if thumbs.is_empty() {
@@ -83,6 +94,19 @@ mod tests {
         assert_ne!(key(Some(&t[0])), key(None));
         std::fs::write(dir.join("c.raw"), b"junk").unwrap();
         assert!(render(1.5625, &dir.join("c.raw")).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_pinned_picture_is_found_by_its_key_and_only_while_its_thumbnail_exists() {
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-photos-widget-pin")).join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("0123abcd.raw"), raw(2, 2, pack(9, 9, 9, 255))).unwrap();
+        assert_eq!(pinned(&dir, "0123abcd"), Some(dir.join("0123abcd.raw")));
+        assert_eq!(pinned(&dir, "../0123abcd"), Some(dir.join("0123abcd.raw")), "a key is reduced to letters and digits");
+        assert_eq!(pinned(&dir, "ffff"), None, "no thumbnail, nothing pinned");
+        assert_eq!(pinned(&dir, ""), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
