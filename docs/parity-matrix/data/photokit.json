@@ -68,28 +68,28 @@
    "apple": "PHContentEditingController, Creating Photo Editing Extensions",
    "bifrost": "springboard/ui/src/photo_adjustment.rs (AdjustmentData, EditSession, EditError)",
    "status": "partial",
-   "note": "An edit is kept as an adjustment record (editor format, version, payload) that an editing session reads, commits from the same format and reverts to the original; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: no extension host loads third-party editors inside the Photos app, and the built-in editor (springboard/src/shell/photos/edit.rs) does not write these records yet. Built 2026-10-17: SDK contract in springboard/sdk/src/photo_editing.rs (PHContentEditingInput, PHContentEditingOutput, PHContentEditingSession over the ui photo_adjustment session); tests photo_editing::tests. Still a gap: no extension host loads third-party editors in the Photos app."
+   "note": "An edit is kept as an adjustment record (editor format, version, payload) that an editing session reads, commits from the same format and reverts to the original; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: no extension host loads third-party editors inside the Photos app, and the built-in editor (springboard/src/shell/photos/edit.rs) does not write these records yet. Built 2026-10-17: SDK contract in springboard/sdk/src/photo_editing.rs (PHContentEditingInput, PHContentEditingOutput, PHContentEditingSession over the ui photo_adjustment session); tests photo_editing::tests. Still a gap: no extension host loads third-party editors in the Photos app. Built 2026-10-17: Shell: editing get/commit/revert keeps the adjustment record as a sidecar beside the picture (original never rewritten). SDK: PHContentEditingOutput.save, load_adjustment, revert_adjustment, decode_adjustment. Still a gap: no extension host loads third-party editors."
   },
   {
    "feature": "System photo picker (UIKit, AppKit, SwiftUI)",
    "apple": "PHPickerViewController, PHPickerConfiguration, PHPickerResult, PhotosPicker, PhotosPickerItem, PHPickerFilter",
    "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs (bottom sheet of the newest photos from ~/Pictures); springboard/apps/notes-desktop/src/notes/attach.rs (attaches the chosen file)",
    "status": "partial",
-   "note": "Only Notes has a picker, and it is app-local. It scans ~/Pictures directly. No shared system picker, no filters, no multi-select and no privacy-scoped selection. The share sheet (springboard/sdk/src/share.rs) is a different surface. Built 2026-10-17: SDK PHPickerConfiguration (filters, selection limit, wire params), PHPickerViewController.present and PHPickerResult.decode_reply in springboard/sdk/src/photo_picker.rs; tests photo_picker::tests. The shell does not answer the picker call yet, and the Notes sheet is still app-local."
+   "note": "Only Notes has a picker, and it is app-local. It scans ~/Pictures directly. No shared system picker, no filters, no multi-select and no privacy-scoped selection. The share sheet (springboard/sdk/src/share.rs) is a different surface. Built 2026-10-17: SDK PHPickerConfiguration (filters, selection limit, wire params), PHPickerViewController.present and PHPickerResult.decode_reply in springboard/sdk/src/photo_picker.rs; tests photo_picker::tests. The shell does not answer the picker call yet, and the Notes sheet is still app-local. Built 2026-10-17: Shell answers the picker call by checking its filters and then refusing: a picker needs the person's own choice and there is no picker sheet yet, so no asset is chosen for an app. Still partial."
   },
   {
    "feature": "Live Photos",
    "apple": "PHLivePhoto, PHLivePhotoView, PHLivePhotoRequestOptions, Displaying Live Photos",
    "bifrost": "springboard/ui/src/photo_media.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The library reads still JPEG files only. No paired still and movie handling and no playback."
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The library reads still JPEG files only. No paired still and movie handling and no playback. Built 2026-10-17: Library pairs a still with its movie by the Apple content identifier (maker note for the still, movie metadata for the clip): the movie is not listed on its own, the still has live true. Checked on synthetic data only, not on camera files. Not on Midget."
   },
   {
    "feature": "Video assets",
    "apple": "PHAsset video media type, PHVideoRequestOptions, AVAsset delivery",
    "bifrost": "springboard/ui/src/photo_media.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No video assets in the Photos app. Media playback is a separate app (springboard/src/media/)."
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No video assets in the Photos app. Media playback is a separate app (springboard/src/media/). Built 2026-10-17: Movies are listed as video assets with their file time. Pixel size of a movie is not read yet (reported as 0 x 0)."
   },
   {
    "feature": "Slideshow",
@@ -103,14 +103,14 @@
    "apple": "PHProject, PHProjectExtensionController, PHProjectChangeRequest, PHProjectSection",
    "bifrost": "springboard/ui/src/photo_project.rs (Project, Project::apply, Change)",
    "status": "partial",
-   "note": "The project model (sections in order, asset membership, and change lists that apply all or nothing) is tested headless in springboard/ui/tests/parity_sdk-rest-03.rs. Gap: there is no PHProjectExtensionController or extension host, and the photo library does not store projects yet. Built 2026-10-17: SDK PHProjectChangeRequest in springboard/sdk/src/photo_project.rs (add, rename, remove and move sections, add and remove assets; applied as one unit over ui photo_project); tests photo_project::tests. Still a gap: no project extension host in the Photos app."
+   "note": "The project model (sections in order, asset membership, and change lists that apply all or nothing) is tested headless in springboard/ui/tests/parity_sdk-rest-03.rs. Gap: there is no PHProjectExtensionController or extension host, and the photo library does not store projects yet. Built 2026-10-17: SDK PHProjectChangeRequest in springboard/sdk/src/photo_project.rs (add, rename, remove and move sections, add and remove assets; applied as one unit over ui photo_project); tests photo_project::tests. Still a gap: no project extension host in the Photos app. Built 2026-10-17: Shell: project create/get/apply per app, all or nothing, held in memory for the session only (not written to disk). SDK: PHProjectChangeRequest.send and create_project, decode_project. Still a gap: no project extension host."
   },
   {
    "feature": "Change observation of the library",
    "apple": "PHPhotoLibraryChangeObserver, PHPhotoLibraryPersistentChangesObserver, PHChange",
    "bifrost": "springboard/ui/src/photo_changes.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs. Built 2026-10-17: PHChange.change_details in springboard/sdk/src/photo_library.rs returns the removed, inserted, moved and changed indexes between two fetches, using ui photo_changes; tests photo_library::tests::change_details_report_inserts_and_removals. The shell does not push change callbacks yet."
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs. Built 2026-10-17: PHChange.change_details in springboard/sdk/src/photo_library.rs returns the removed, inserted, moved and changed indexes between two fetches, using ui photo_changes; tests photo_library::tests::change_details_report_inserts_and_removals. The shell does not push change callbacks yet. Built 2026-10-17: Shell: observe/unobserve keep each observer's listing and push library_did_change (indexes) every two seconds when it differs (springboard/src/shell/services/photos.rs, tick). SDK: PHPhotoLibrary.start_observing/stop_observing and decode_change. Tests in both modules. Not run on Midget."
   },
   {
    "feature": "Background upload of asset resources",
