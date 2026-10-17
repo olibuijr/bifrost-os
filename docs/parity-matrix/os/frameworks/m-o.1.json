@@ -526,7 +526,16 @@
    "status": "partial",
    "note": "Nearby sharing finds peers with a UDP beacon and sends files and bytes over TCP after an explicit accept. Apps get no sessions, invitations or messages, and the SDK row records that nothing is encrypted in transit.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::share::"
+    }
+   ],
+   "ready_note": "Nearby sharing (UDP beacon discovery, TCP transfer after accept) in net::share, tested. App sessions and invitations are not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/MusicKit.framework",
@@ -736,7 +745,16 @@
    "status": "partial",
    "note": "Scripting runs through the JSON-RPC control socket that apps expose. Gap: there is no embeddable script editor component and no OSA language runtime.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "control::"
+    }
+   ],
+   "ready_note": "Scripting runs through the JSON-RPC control socket (bifrost-app control), tested. An embeddable script editor and an OSA language runtime are not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/OSAnalytics.framework",
@@ -757,7 +775,16 @@
    "status": "partial",
    "note": "Crash reports are listed and sent only when the user shares them; the report bundle is built and parsed in shell::diag and tested in that file. Gap: no app-facing analytics event API and no aggregated usage counters.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::diag::"
+    }
+   ],
+   "ready_note": "Crash report bundles are built and parsed in shell::diag, tested. Reference analytics upload is not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/OSLog.framework",
@@ -1275,7 +1302,16 @@
    "status": "partial",
    "note": "The shell checks for and applies over-the-air OS updates from the update manifest. The reference's data accessor for software update catalogues is not mirrored, so apps get no update data API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ota::"
+    }
+   ],
+   "ready_note": "The shell checks for and applies OS updates (shell::ota, 25 tests). The reference catalogue accessor is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MTInferenceToolLib.framework",
@@ -1338,7 +1374,16 @@
    "status": "partial",
    "note": "Shaders are GLSL that build.rs compiles to SPIR-V at build time and embeds in the binary. The reference compiles shaders at run time in a compiler service, and BifrOSt has no run-time shader compiler or app shader API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "shader::"
+    }
+   ],
+   "ready_note": "Shaders are GLSL compiled to SPIR-V at build time (bifrost-gpu shader, tested). Run-time compilation in a compiler service is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MTLSimDriver.framework",
@@ -1443,7 +1488,26 @@
    "status": "partial",
    "note": "The menu bar, dock and control centre are drawn by the shell, so the system chrome exists. Not mirrored: a shared chrome library that other apps link, and extension points for third-party items.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_dock::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::control_center::"
+    }
+   ],
+   "ready_note": "The menu bar, dock and control centre are drawn by the shell (shell::desktop_bar, shell::desktop_dock, shell::control_center), tested. A shared chrome library for other apps is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MachineSettings.framework",
@@ -1464,7 +1528,21 @@
    "status": "partial",
    "note": "The Settings app with its pages and search is in the shell. Not covered: a framework that other apps use to add their own settings panes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search::"
+    }
+   ],
+   "ready_note": "The Settings app with its pages and search (shell::settings, shell::settings_search), tested. A framework for apps to add panes is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacinTalk.framework",
@@ -1575,7 +1653,16 @@
    "status": "partial",
    "note": "The shell magnifier zooms the screen from magnifier.rs. Not mirrored: the reference zoom service process and its app intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::magnifier::"
+    }
+   ],
+   "ready_note": "The shell magnifier zoom (shell::magnifier), tested. The reference zoom service process is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MagnifierSupport.framework",
@@ -1596,7 +1683,16 @@
    "status": "partial",
    "note": "The shell magnifier zooms the screen from magnifier.rs. Not mirrored: the reference support code for the zoom feature and its app intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::magnifier::"
+    }
+   ],
+   "ready_note": "The shell magnifier zoom (shell::magnifier), tested. The reference support code and app intents are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Mail.framework",
@@ -1617,7 +1713,26 @@
    "status": "partial",
    "note": "The Mail app has accounts, the window, IMAP and SMTP transport. Not mirrored: a shared mail framework that other apps link.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "window::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "imap::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "smtp::"
+    }
+   ],
+   "ready_note": "Mail window, IMAP and SMTP transport in mail-desktop, tested. A shared mail framework for other apps is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailCore.framework",
@@ -1638,7 +1753,21 @@
    "status": "partial",
    "note": "Message headers, MIME parsing and draft rendering are in mail-desktop. Not covered: a shared mail model that other apps can open mailboxes through.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "message::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "mime::"
+    }
+   ],
+   "ready_note": "Message headers and MIME parsing in mail-desktop (message, mime), tested. A shared mail model for other apps is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailSearchSchemaManifest.framework",
@@ -1701,7 +1830,21 @@
    "status": "partial",
    "note": "The Mail window state and preferences are in mail-desktop. Not covered: support services that other mail components call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "prefs::"
+    }
+   ],
+   "ready_note": "Mail window state and preferences (state, prefs), tested. Support services for other components are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailUI.framework",
@@ -1722,7 +1865,21 @@
    "status": "partial",
    "note": "The Mail window's drawing and input are in mail-desktop. Not covered: a shared mail UI kit and the reference's mail web bundle.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "draw::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "window::"
+    }
+   ],
+   "ready_note": "Mail window drawing and input (draw, window), tested. A shared mail UI kit is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailWebProcessSupport.framework",
@@ -1743,7 +1900,16 @@
    "status": "partial",
    "note": "HTML mail is cleaned of scripts and remote content in html.rs and rendered in-process. Not mirrored: the reference's separate web process for mail content.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "html::"
+    }
+   ],
+   "ready_note": "HTML mail is cleaned of scripts and remote content in mail-desktop html, tested. The separate web process is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MallocStackLogging.framework",
@@ -2298,7 +2464,21 @@
    "status": "partial",
    "note": "Vibrancy and layer materials are modelled in the render crate and in the layers crate. Not covered: the reference's platter and vibrant style sets, which are resources and not code.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "vibrancy::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-layers",
+     "filter": "layer::"
+    }
+   ],
+   "ready_note": "Vibrancy and layer materials in bifrost-render vibrancy and bifrost-layers layer, tested. The reference platter and vibrant style sets are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MathTypesetting.framework",
@@ -2703,7 +2883,16 @@
    "status": "partial",
    "note": "Output routing between speaker and headphones, with the headphone safety cap, is in route.rs. Gap: no smart routing for browser media and no interruption priority between apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::"
+    }
+   ],
+   "ready_note": "Output routing between speaker and headphones with the headphone cap (media::route), tested. Smart routing for browser media is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaFoundation.framework",
@@ -2724,7 +2913,16 @@
    "status": "partial",
    "note": "The media core demuxes MP4 and decodes AAC and video in-process. Gap: no general codec registry and no plug-in format support beyond these.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::"
+    }
+   ],
+   "ready_note": "The media core demuxes MP4 and decodes AAC and video in process (springboard media module), tested. A general codec registry is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaIntentsAISBridge.framework",
@@ -2871,7 +3069,21 @@
    "status": "partial",
    "note": "The playback engine plays audio and video from the media player. Gap: there is no separate playback-core API that other apps can call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::player::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::audioplayer::"
+    }
+   ],
+   "ready_note": "The playback engine (media::player, media::audioplayer), tested. A separate playback-core API for other apps is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaRemote.framework",
@@ -2892,7 +3104,16 @@
    "status": "partial",
    "note": "Apps publish a Now Playing session and receive transport commands through the now_playing service, and Control Center and the menu bar show it. Gap: there is no system-wide media daemon for remote devices, and artwork is not carried.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::"
+    }
+   ],
+   "ready_note": "Apps publish a Now Playing session and receive transport commands through the now_playing service, tested. Device-to-device remote control is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaRemoteDaemonServices.framework",
@@ -2913,7 +3134,16 @@
    "status": "partial",
    "note": "The service side of the Now Playing session (publish, clear and command routing) is the now_playing service. The reference daemon's device-to-device remote is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::"
+    }
+   ],
+   "ready_note": "The service side of the Now Playing session (publish, clear, command routing) in shell::services::now_playing, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaServices.framework",
@@ -3018,7 +3248,16 @@
    "status": "partial",
    "note": "Apps publish menu bar extras (status items) that the shell draws in the menu bar. Gap: the reference menu bar agent's own system extras are not handled through this client, and the framework's bundled extras are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::extras::"
+    }
+   ],
+   "ready_note": "Apps publish menu bar extras that the shell draws (shell::extras), tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MenuBarClientCore.framework",
@@ -3039,7 +3278,16 @@
    "status": "partial",
    "note": "The core side of menu bar extras is covered by the same status-item registry in extras.rs. Gap: the reference framework's extra-layout rules are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::extras::"
+    }
+   ],
+   "ready_note": "The status-item registry in shell::extras, tested. The reference extra-layout rules are not reproduced."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessageProtection.framework",
@@ -3207,7 +3455,16 @@
    "status": "partial",
    "note": "The Messages app model (rooms, selection, composer and sign-in state) covers the chat job of this framework, as a homeserver client. Gap: the reference conversation, attachment and sync APIs are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-messages",
+     "filter": "model::"
+    }
+   ],
+   "ready_note": "The Messages app model (rooms, selection, composer, sign-in state) is tested. It is a homeserver client, not the reference transport."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesSecurityPolicy.framework",
@@ -3246,8 +3503,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index lists only directories for this bundle and no binary is extracted, so the settings it holds are unknown.",
+   "status": "n/a",
+   "note": "Settings for the reference's iCloud Messages sync (the MessagesSettings and iCloudMessagesSettings string tables seen in the reference index). That sync is an Apple account service BifrOSt does not run, so n/a.",
    "rea": [],
    "method": "assessed"
   },
@@ -3291,7 +3548,16 @@
    "status": "partial",
    "note": "The counter model in counter_sample covers the sampling side of GPU profiling that this framework feeds (data/metal.json). Gap: no hardware GPU counters are read on the desktop path.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "counter_sample::"
+    }
+   ],
+   "ready_note": "The counter model (bifrost-ui counter_sample) that GPU profiling feeds, tested. Hardware GPU counters are not covered."
   }
  ]
 }
