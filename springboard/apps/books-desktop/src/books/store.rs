@@ -243,7 +243,29 @@ pub struct Store {
     pub collections: Vec<Collection>,
     /// seconds read per day (day number, seconds), oldest first
     pub reading: Vec<(u32, u32)>,
+    /// library folders the user added in Settings, after the built-in ones
+    pub folders: Vec<PathBuf>,
+    /// the font family EPUB body text is set in, from the library; empty = the system face
+    pub family: String,
+    /// Settings > Open Books In: a book opens in continuous scrolling rather than paged
+    pub open_continuous: bool,
     clock: u64,
+}
+
+/// The family after stepping `delta` places through the Display panel's font row. The row runs over the system face
+/// (an empty name) and then `families` in order, and wraps round at both ends. An unknown `current` counts as the
+/// system face.
+pub fn family_step(families: &[String], current: &str, delta: i32) -> String {
+    let n = families.len() as i32 + 1;
+    let at = if current.is_empty() { 0 } else { families.iter().position(|f| f == current).map_or(0, |i| i as i32 + 1) };
+    let next = (at + delta).rem_euclid(n) as usize;
+    if next == 0 { String::new() } else { families[next - 1].clone() }
+}
+
+/// Whether the font family choice applies to a book at `path`. EPUB text is set in the chosen face; a PDF page draws
+/// as the document set it, so the Display panel's font row is disabled for it.
+pub fn family_applies(path: &Path) -> bool {
+    !matches!(engine::format_of(path), Some(engine::Format::Pdf))
 }
 
 fn clean(path: &Path) -> String {
@@ -272,6 +294,14 @@ impl Store {
                         margin: at(1).unwrap_or(DEFAULT_MARGIN).min(MARGINS.len() - 1),
                         justify: at(2) == Some(1),
                     };
+                }
+                ["F", name] => s.family = clean_name(name),
+                ["W", open] => s.open_continuous = *open == "1",
+                ["D", path] => {
+                    let path = PathBuf::from(path);
+                    if !s.folders.contains(&path) {
+                        s.folders.push(path);
+                    }
                 }
                 ["V", sort, view, goal] => {
                     s.library = LibraryPrefs { sort: SortBy::from_id(sort.parse().unwrap_or(0)), view: ViewMode::from_id(view.parse().unwrap_or(0)), goal: goal.parse().unwrap_or(0) };
@@ -344,6 +374,11 @@ impl Store {
         let st = &self.settings;
         let mut out = format!("S\t{}\t{}\t{}\t{}\t{}\n", st.size, st.theme.id(), st.spacing, st.margin, st.justify as u8);
         out.push_str(&format!("V\t{}\t{}\t{}\n", self.library.sort.id(), self.library.view.id(), self.library.goal));
+        out.push_str(&format!("F\t{}\n", clean_name(&self.family)));
+        out.push_str(&format!("W\t{}\n", self.open_continuous as u8));
+        for f in &self.folders {
+            out.push_str(&format!("D\t{}\n", clean(f)));
+        }
         for (day, secs) in &self.reading {
             out.push_str(&format!("T\t{day}\t{secs}\n"));
         }

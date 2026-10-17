@@ -6,6 +6,7 @@
 
 pub use springboard::shell::books::engine;
 #[cfg(test)]
+pub mod face;
 pub mod icon;
 pub mod layout;
 pub mod narrate;
@@ -13,6 +14,7 @@ pub mod quote;
 pub mod search_index;
 pub mod share;
 pub mod store;
+mod settings;
 
 mod draw;
 
@@ -40,11 +42,16 @@ use engine::{Book, Hit};
 use layout::{Layout, Metrics};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use store::{Pos, SortBy, Span, Status, Store, Theme, ViewMode, SIZES};
 
 #[cfg(test)]
 mod highlight_tests;
+#[cfg(test)]
+mod store_prefs_tests;
+#[cfg(test)]
+mod settings_wiring_tests;
 #[cfg(test)]
 mod connect_tests;
 #[cfg(test)]
@@ -108,6 +115,8 @@ const THEME_ROW_PT: f32 = 130.0;
 const SPACING_ROW_PT: f32 = 252.0;
 const MARGIN_ROW_PT: f32 = 330.0;
 const JUSTIFY_ROW_PT: f32 = 408.0;
+/// Display panel: the font row, under Justify Text
+const FAMILY_ROW_PT: f32 = 472.0;
 const CHOICE_PT: f32 = 44.0;
 
 /// A named colour at `a` opacity, premultiplied the way `gfx::rgba` does it. Derives tints from tokens.
@@ -252,6 +261,14 @@ pub enum Target {
     Spacing(usize),
     Margin(usize),
     Justify,
+    /// Display panel: the font row steps to the previous or next family of the library (`store::family_step`)
+    FontPrev,
+    FontNext,
+    /// Settings: Done, Add Folder, Remove on the folder at `k` in `Books::folder_rows`, and Open Books In (true = continuous)
+    SettingsDone,
+    AddFolder,
+    RemoveFolder(usize),
+    OpenMode(bool),
     PanelBody,
 }
 
@@ -345,6 +362,8 @@ impl Filter {
 enum Screen {
     Library,
     Reader,
+    /// Books > Settings
+    Settings,
 }
 
 pub struct Books {
@@ -390,6 +409,15 @@ pub struct Books {
     pub(super) page_scroll: Scroller,
     /// the distance from the top of one page to the top of the next in continuous scrolling, in px
     pitch: f32,
+    /// the EPUB body face for the family chosen in the Display panel, with the key it was built for; None inside is
+    /// a family whose font file could not be read (the system face is used)
+    face: Option<(face::FaceKey, Option<face::Face>)>,
+    /// the families of BifrOSt's font library, for the Display panel's font row
+    font_families: Vec<String>,
+    /// the request id of the Add Folder panel while it is open
+    folder_request: Option<u32>,
+    /// Settings asked for the Add Folder panel; the app opens it and takes this back
+    wants_folder_panel: bool,
 }
 
 impl Books {
@@ -438,6 +466,10 @@ impl Books {
             continuous: false,
             page_scroll: Scroller::new(),
             pitch: 1.0,
+            face: None,
+            font_families: face::families(&face::shell_dir()),
+            folder_request: None,
+            wants_folder_panel: false,
         };
         b.rescan();
         b
@@ -452,7 +484,8 @@ impl Books {
 
     /// Re-reads the folders; covers fill in as the probe thread finishes each book.
     pub fn rescan(&mut self) {
-        let paths = store::library(&self.store, &self.dirs);
+        let dirs = self.library_dirs();
+        let paths = store::library(&self.store, &dirs);
         let old: HashMap<PathBuf, Cover> = std::mem::take(&mut self.shelf).into_iter().map(|c| (c.path.clone(), c)).collect();
         let mut todo = vec![];
         self.shelf = paths
@@ -559,7 +592,13 @@ impl Books {
         r.note.focused = false;
         self.reader = Some(r);
         self.screen = Screen::Reader;
+        // Settings > Open Books In: a book opens continuous or paged, unless two pages are on
+        self.continuous = self.store.open_continuous && !self.two_pages();
         self.repaginate(ui, entry.map(|e| e.pos).unwrap_or_default());
+        if self.continuous {
+            self.fit_page_scroll(ui);
+            self.sync_scroll();
+        }
         self.save_now();
         self.dirty = true;
     }
@@ -592,6 +631,9 @@ impl Books {
 
     /// Rebuilds the pages for the current size and keeps `keep` on screen.
     fn repaginate(&mut self, ui: &Ui, keep: Pos) {
+        // the body text is measured in the chosen face, so the lines fit what is drawn
+        let face = self.body_face(ui);
+        let ui: &Ui = face.as_deref().unwrap_or(ui);
         let m = self.metrics(ui);
         let Some(r) = &mut self.reader else { return };
         // widths by (size, weight) then text, so a lookup borrows the text instead of allocating a key
@@ -869,6 +911,41 @@ impl Books {
         } else {
             self.labels.clear();
         }
+        self.dirty = true;
+    }
+
+    /// The face EPUB body text is set in: the family the Display panel chose, built once per family and size, and the
+    /// system face (None) when the family is the system one, the open book is a PDF, or the font file is missing.
+    pub(super) fn body_face(&mut self, ui: &Ui) -> Option<face::Face> {
+        let family = self.store.family.clone();
+        if family.is_empty() || !self.reader.as_ref().is_some_and(|r| store::family_applies(&r.path)) {
+            return None;
+        }
+        let key = face::FaceKey::of(&family, ui);
+        if let Some((k, built)) = &self.face {
+            if *k == key {
+                return built.clone();
+            }
+        }
+        let built = face::path_of(&face::shell_dir(), &family).and_then(|p| face::ui_for(ui, &p)).map(Rc::new);
+        self.face = Some((key, built.clone()));
+        built
+    }
+
+    /// Display panel: the font row moves `delta` places through the library's families (`store::family_step`). The
+    /// pages are laid out again in the new face and the reader keeps its place. A PDF keeps its own font.
+    pub(super) fn step_family(&mut self, ui: &Ui, delta: i32) {
+        if !self.reader.as_ref().is_some_and(|r| store::family_applies(&r.path)) {
+            return;
+        }
+        let next = store::family_step(&self.font_families, &self.store.family, delta);
+        if next == self.store.family {
+            return;
+        }
+        let keep = self.reader.as_ref().map(|r| r.layout.pos_of(r.page)).unwrap_or_default();
+        self.store.family = next;
+        self.save_now();
+        self.repaginate(ui, keep);
         self.dirty = true;
     }
 
@@ -1764,6 +1841,11 @@ impl Books {
             out.push((Target::Margin(i), (m + i as f32 * (mw + ui.pt(SPACE_M)), y + ui.pt(MARGIN_ROW_PT), mw, ui.pt(CHOICE_PT))));
         }
         out.push((Target::Justify, (m, y + ui.pt(JUSTIFY_ROW_PT), pw - 2.0 * m, ui.pt(CHOICE_PT))));
+        // the font row: a step back, the family's name between, and a step forward
+        let fy = y + ui.pt(FAMILY_ROW_PT);
+        let step = ui.pt(56.0);
+        out.push((Target::FontPrev, (m, fy, step, ui.pt(CHOICE_PT))));
+        out.push((Target::FontNext, (pw - m - step, fy, step, ui.pt(CHOICE_PT))));
         out
     }
 
@@ -1792,6 +1874,7 @@ impl Books {
                 let vis = self.visible();
                 (0..vis.len()).find(|&k| within(x, y, self.item_rect(ui, k))).map(|k| Target::Cover(vis[k])).or(Some(Target::Shelf))
             }
+            Screen::Settings => Some(self.settings_hit(ui, x, y)),
             Screen::Reader => {
                 let r = self.reader.as_ref()?;
                 if y < self.nav_bottom(ui) {
@@ -2053,6 +2136,12 @@ impl Books {
                 self.shelf_scroll.jump_top();
             }
             Target::ToggleSidebar => self.sidebar_hidden = !self.sidebar_hidden,
+            Target::FontPrev => self.step_family(ui, -1),
+            Target::FontNext => self.step_family(ui, 1),
+            Target::SettingsDone => self.close_settings(),
+            Target::AddFolder => self.wants_folder_panel = true,
+            Target::RemoveFolder(k) => self.remove_folder(k),
+            Target::OpenMode(continuous) => self.set_open_mode(continuous),
             Target::Slider | Target::PanelBody => {}
         }
     }
@@ -2259,6 +2348,7 @@ impl Books {
         match self.screen {
             Screen::Library => self.draw_library(s, ui),
             Screen::Reader => self.draw_reader(s, ui, t),
+            Screen::Settings => self.draw_settings(s, ui),
         }
     }
 }

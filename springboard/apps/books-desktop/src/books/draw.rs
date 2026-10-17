@@ -7,13 +7,14 @@ use bifrost_app::widgets;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE3_PT};
 use super::layout::Kind;
+use super::settings::{self, Line};
 use super::store::{Theme, SIZES};
 use super::*;
 use springboard::gfx::pack;
 use bifrost_app::controls::prefs_layout::m;
 use springboard::shell::cache::TextCache;
 use springboard::shell::ui::{centred, Weight, CARD_BG, CONTENT_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C, TRACK_C, WHITE};
-use bifrost_app::kit::ui::{AVATAR_FG, BLACK, DESTRUCTIVE, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_YELLOW, TINT};
+use bifrost_app::kit::ui::{LINK, AVATAR_FG, BLACK, DESTRUCTIVE, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_YELLOW, TINT};
 use bifrost_app::kit::ui::{READER_DARK_BG, READER_DARK_DIM, READER_DARK_INK, READER_DARK_SEP, READER_SEPIA_ACCENT, READER_SEPIA_BG, READER_SEPIA_DIM, READER_SEPIA_INK, READER_SEPIA_RAISED, READER_SEPIA_SEP, READER_WHITE_ACCENT, READER_WHITE_DIM, READER_WHITE_INK, READER_WHITE_RAISED, READER_WHITE_SEP};
 
 const BLUE: u32 = TINT;
@@ -91,6 +92,12 @@ fn highlight_colour(style: u8) -> u32 {
 
 /// Marks one run of text: a tint behind it, or a line under it for the underline style. `y` is the top of the line and
 /// `lh` its height.
+/// A choice button of the Settings window: the chosen one is filled in the tint and labelled white.
+fn settings_choice(labels: &mut TextCache, s: &mut Surface, ui: &Ui, (x, y, w, h): (f32, f32, f32, f32), name: &str, on: bool) {
+    s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), if on { TINT } else { FIELD_BG.now() });
+    put_mid(labels, s, ui, name, MAC_BODY_PT, if on { Weight::Semibold } else { Weight::Regular }, if on { WHITE } else { LABEL.now() }, x + w / 2.0, y + h / 2.0);
+}
+
 fn paint_highlight(s: &mut Surface, ui: &Ui, style: u8, x0: f32, x1: f32, y: f32, lh: f32) {
     if style == super::store::UNDERLINE {
         let thick = ui.pt(SPACE_XXS).max(1.0);
@@ -333,6 +340,9 @@ impl Books {
     /// Draws page `page_no` with its column shifted `dx` px to the right (a slide, the second page of a spread) and `dy` px
     /// down (continuous scrolling).
     fn draw_page(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, page_no: usize, dx: f32, dy: f32) {
+        // the body text is drawn in the chosen face, the same one the pages were laid out with
+        let face = self.body_face(ui);
+        let ui: &Ui = face.as_deref().unwrap_or(ui);
         let m = self.metrics(ui);
         let marked = self.reader.as_ref().is_some_and(|_r| !self.page_marks(page_no).is_empty());
         let justify = self.store.settings.justify;
@@ -610,6 +620,8 @@ impl Books {
     fn draw_display(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette) {
         let settings = self.store.settings;
         let (_, py, pw, _) = self.panel_rect(ui);
+        // a PDF keeps the font its document sets, so the font row is off for it
+        let applies = self.reader.as_ref().is_some_and(|r| store::family_applies(&r.path));
         for (target, (x, y, w, h)) in self.display_buttons(ui) {
             match target {
                 Target::SizeDown | Target::SizeUp => {
@@ -631,6 +643,12 @@ impl Books {
                 Target::Spacing(i) => self.draw_choice(s, ui, pal, (x, y, w, h), store::SPACINGS[i].0, i == settings.spacing),
                 Target::Margin(i) => self.draw_choice(s, ui, pal, (x, y, w, h), store::MARGINS[i].0, i == settings.margin),
                 Target::Justify => self.draw_choice(s, ui, pal, (x, y, w, h), "Justify Text", settings.justify),
+                Target::FontPrev | Target::FontNext => {
+                    s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), pal.raised);
+                    let colour = if applies { pal.fg } else { pal.dim };
+                    let glyph = if target == Target::FontPrev { "<" } else { ">" };
+                    put_mid(&mut self.labels, s, ui, glyph, MAC_BODY_PT, Weight::Medium, colour, x + w / 2.0, y + h / 2.0);
+                }
                 _ => {}
             }
         }
@@ -644,5 +662,88 @@ impl Books {
         // midway between the size buttons and the swatch row
         let size_y = py + ui.pt(SPACE_XXL) + ui.pt(56.0) + ui.pt(SPACE_XL + SPACE_XS);
         put_mid(&mut self.labels, s, ui, &size, MAC_BODY_PT, Weight::Regular, pal.dim, pw / 2.0, size_y);
+        // the family the body text is set in, between the two steps; a PDF names the font its pages keep
+        let fy = py + ui.pt(SPACE_XXL) + ui.pt(FAMILY_ROW_PT);
+        let name = if self.store.family.is_empty() { "System Font".to_string() } else { self.store.family.clone() };
+        let name_colour = if applies { pal.fg } else { pal.dim };
+        put_mid(&mut self.labels, s, ui, &name, MAC_BODY_PT, Weight::Regular, name_colour, pw / 2.0, fy + ui.pt(CHOICE_PT) / 2.0);
+        if !applies {
+            put_mid(&mut self.labels, s, ui, "PDF pages keep the font the document sets.", MAC_FOOTNOTE_PT, Weight::Regular, pal.dim, pw / 2.0, fy + ui.pt(CHOICE_PT + SPACE_M));
+        }
+    }
+
+    /// Books > Settings: the bar with Done, then the General and Reading groups, laid out by `settings.rs`.
+    pub(super) fn draw_settings(&mut self, s: &mut Surface, ui: &Ui) {
+        let (w, bar) = (self.w as f32, ui.pt(nav_bottom_pt()));
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
+        put_mid(&mut self.labels, s, ui, "Settings", MAC_TITLE3_PT, Weight::Bold, LABEL.now(), w / 2.0, bar / 2.0);
+        let rows = self.folder_rows();
+        let prefs = self.store.settings;
+        let continuous = self.store.open_continuous;
+        let targets = self.settings_targets(ui);
+        let at = |t: Target| targets.iter().find(|(x, _)| *x == t).map(|(_, r)| *r);
+        for (line, (x, y, cw, lh)) in settings::geometry(&settings::lines(rows.len()), ui, w, settings::content_top(ui)) {
+            let mid = y + lh / 2.0;
+            if !matches!(line, Line::Header(_) | Line::Note(_)) {
+                s.fill_rrect(x, y, cw, lh, ui.pt(CARD_R_PT), CARD_BG.now());
+            }
+            match line {
+                Line::Header(name) => {
+                    put(&mut self.labels, s, ui, &name.to_uppercase(), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), x + ui.pt(SPACE_S), mid - ui.pt(MAC_CAPTION1_PT));
+                }
+                Line::Folder(k) => {
+                    let (name, user) = match rows.get(k) {
+                        Some((p, user)) => (p.file_name().map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned()), *user),
+                        None => (String::new(), None),
+                    };
+                    put(&mut self.labels, s, ui, &name, MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), mid - ui.pt(MAC_BODY_PT));
+                    match (user, at(Target::RemoveFolder(k))) {
+                        (Some(_), Some((rx, ry, rw, rh))) => put_mid(&mut self.labels, s, ui, "Remove", MAC_BODY_PT, Weight::Regular, LINK, rx + rw / 2.0, ry + rh / 2.0),
+                        _ => put_right(&mut self.labels, s, ui, "Built In", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + cw - ui.pt(SPACE_L), mid),
+                    }
+                }
+                Line::AddFolder => {
+                    put(&mut self.labels, s, ui, "Add Folder...", MAC_BODY_PT, Weight::Regular, LINK, x + ui.pt(SPACE_L), mid - ui.pt(MAC_BODY_PT));
+                }
+                Line::OpenIn => {
+                    for (t, name, on) in [(Target::OpenMode(false), "Single Page", !continuous), (Target::OpenMode(true), "Continuous Scroll", continuous)] {
+                        if let Some(r) = at(t) {
+                            settings_choice(&mut self.labels, s, ui, r, name, on);
+                        }
+                    }
+                }
+                Line::TextSize => {
+                    put(&mut self.labels, s, ui, "Text Size", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), mid - ui.pt(MAC_BODY_PT));
+                    let size = SIZES[prefs.size.min(SIZES.len() - 1)] as i32;
+                    if let Some((sx, _, _, _)) = at(Target::SizeDown) {
+                        put_right(&mut self.labels, s, ui, &format!("{size} pt"), MAC_BODY_PT, Weight::Regular, LABEL_2.now(), sx - ui.pt(SPACE_M), mid);
+                    }
+                    for (t, small) in [(Target::SizeDown, true), (Target::SizeUp, false)] {
+                        let Some((bx, by, bw, bh)) = at(t) else { continue };
+                        let at_limit = if small { prefs.size == 0 } else { prefs.size + 1 >= SIZES.len() };
+                        s.fill_rrect(bx, by, bw, bh, ui.pt(RADIUS_PT), FIELD_BG.now());
+                        let colour = if at_limit { LABEL_2.now() } else { LABEL.now() };
+                        put_mid(&mut self.labels, s, ui, "A", if small { MAC_BODY_PT } else { MAC_TITLE1_PT }, Weight::Medium, colour, bx + bw / 2.0, by + bh / 2.0);
+                    }
+                }
+                Line::Theme => {
+                    for (i, theme) in Theme::ALL.iter().enumerate() {
+                        if let Some(r) = at(Target::ThemeButton(i)) {
+                            settings_choice(&mut self.labels, s, ui, r, theme.name(), prefs.theme == *theme);
+                        }
+                    }
+                }
+                Line::Justify => {
+                    put(&mut self.labels, s, ui, "Justify Text", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), mid - ui.pt(MAC_BODY_PT));
+                    put_right(&mut self.labels, s, ui, if prefs.justify { "On" } else { "Off" }, MAC_BODY_PT, Weight::Medium, LINK, x + cw - ui.pt(SPACE_L), mid);
+                }
+                Line::Note(text) => {
+                    put(&mut self.labels, s, ui, text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + ui.pt(SPACE_S), y + ui.pt(SPACE_XS));
+                }
+            }
+        }
+        if let Some((dx, dy, dw, dh)) = at(Target::SettingsDone) {
+            put_mid(&mut self.labels, s, ui, "Done", MAC_BODY_PT, Weight::Semibold, LINK, dx + dw / 2.0, dy + dh / 2.0);
+        }
     }
 }

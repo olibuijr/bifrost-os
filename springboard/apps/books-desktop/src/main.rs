@@ -35,6 +35,8 @@ const MENU_VIEW_GRID: u32 = 25;
 const MENU_VIEW_LIST: u32 = 26;
 const MENU_JUSTIFY: u32 = 27;
 const MENU_CONTINUOUS: u32 = 28;
+/// Books > Settings (File menu)
+const MENU_SETTINGS: u32 = 29;
 /// Submenu items count up from their base: Sort By (an index into `SortBy::ALL`), Reading Goal (into `store::GOALS`),
 /// Highlight Color (into `store::HIGHLIGHT_STYLES`), Line Spacing, Margins, and Add to Collection.
 const MENU_SORT_BASE: u32 = 30;
@@ -174,6 +176,8 @@ fn build_menus(m: &MenuState) -> Vec<AppMenu> {
                 AppMenuItem::new(MENU_ADD_TO_LIBRARY, "Add to Library...").key("cmd+o"),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(m.open && m.can_print),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_SETTINGS, "Settings...").key("cmd+,"),
             ],
         },
         AppMenu { title: "Library".into(), items: library },
@@ -224,6 +228,7 @@ impl BooksApp {
                     let on = !books.settings().justify;
                     books.set_justified(&ctx.ui, on);
                 }
+                MENU_SETTINGS => books.open_settings(),
                 MENU_CONTINUOUS => {
                     let on = !books.continuous();
                     books.set_continuous(&ctx.ui, on);
@@ -387,6 +392,12 @@ impl App for BooksApp {
             TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
         };
         b.touch(&ctx.ui, e, t);
+        // Settings > Add Folder: the folder panel is opened here, where the app context is
+        if b.take_folder_panel() {
+            let options = OpenOptions { title: "Add Folder to Library".into(), directories: true, files: false, ..OpenOptions::default() };
+            let request = ctx.open_panel(&options);
+            b.set_folder_request(request);
+        }
         true
     }
 
@@ -396,9 +407,27 @@ impl App for BooksApp {
         let docs = match ev {
             DocumentEvent::Opened(doc) => vec![doc],
             DocumentEvent::OpenedMany { docs, .. } => docs,
+            // a cancelled folder panel releases its request
+            DocumentEvent::Failed { request, .. } => {
+                if let Some(books) = &mut self.books {
+                    books.take_folder_request(request);
+                }
+                return false;
+            }
             _ => return false,
         };
         let Some(books) = &mut self.books else { return false };
+        // the answer to Settings > Add Folder: each chosen folder joins the library
+        if let Some(request) = docs.first().map(|d| d.request) {
+            if books.take_folder_request(request) {
+                for doc in &docs {
+                    if let Err(e) = books.add_folder_file(&doc.file) {
+                        books.show_error(e);
+                    }
+                }
+                return true;
+            }
+        }
         let mut added: Vec<(PathBuf, bool)> = Vec::new();
         for doc in &docs {
             let mut file = &doc.file;
