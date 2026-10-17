@@ -171,6 +171,8 @@ def main():
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-mcp", "-p", "bifrostd", "-p", "bifrost-audiod", "-p", "bifrost-audio-bench", "-p", "bifrost-alsa-plugin"], cwd=os.path.join(REPO, "springboard"))
         # the window server, its chrome clients and bifrost-log (the PKGBUILD builds the same set)
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-wm", "--bin", "bifrost-wm", "-p", "bifrost-chrome", "--bins", "-p", "bifrost-app", "--bin", "bifrost-log"], cwd=os.path.join(REPO, "springboard"))
+        # the command-line tools (springboard/cmd/src/bin); packaging/arch/package-files.sh installs every one of them
+        run(["cargo", "build", "--profile", prof, "-p", "bifrost-cmd", "--bins"], cwd=os.path.join(REPO, "springboard"))
     # the EFI loader is always built from source (even with --skip-build) and checked against its sources; run() exits on failure
     run([os.path.join(REPO, "tools/build-efi-boot.sh"), "release"])
     run([os.path.join(REPO, "tools/verify-efi-loader.sh"), os.path.join(REPO, "packaging/arch/recovery/bootweave.efi")])
@@ -199,7 +201,7 @@ def main():
         shutil.copy(os.path.join(src, f), work)
     refdir = os.path.join(REPO, "bifrost-ref/assets")
     ref_env = {"PC_REFASSETS": refdir} if ref_asset_files(refdir) else {}
-    env = {**os.environ, **ref_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_ALSA_PLUGIN": alsa_plugin, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
+    env = {**os.environ, **ref_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # keep the last 3 packages

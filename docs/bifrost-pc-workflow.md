@@ -484,6 +484,27 @@ to running an app with shell credentials. Remote sharing uses the SDK broker.
 Installed packages also use the [desktop app resource manager](app-manager.md).
 Inspect `/run/bifrost/app-resources.json` for actual per-app resource use and OOM events.
 
+## bifrost-cmd tools in the system package (2026-10-17)
+
+The command-line tools of `springboard/cmd` (crate `bifrost-cmd`, one binary per `src/bin/*.rs`) ship inside
+`springboard-shell`. Both the release PKGBUILD (`packaging/arch/PKGBUILD`) and `bifrost pc publish`
+(`tools/pc-publish.py`) build them with `cargo build -p bifrost-cmd --bins` in the same profile as the shell.
+`packaging/arch/package-files.sh` lists `springboard/cmd/src/bin/*.rs` and installs each built binary, so a new tool needs no
+packaging edit. A tool that is missing from the build fails the package, the same as a missing shell binary.
+
+Install path: `/usr/bin/<tool>` by default. A name that an Arch package installed by BifrOSt already owns goes to
+`/usr/lib/bifrost/cmd/bin/<tool>` instead, and `/etc/profile.d/bifrost-cmd.sh` appends that directory to PATH after `/usr/bin`,
+so the Arch file keeps the name for every shell. The collision list is the `cmd_colliding` array in `package-files.sh`, with
+one comment per entry:
+
+- `vis` (Arch extra `vis`, the editor), `units` (Arch `units`, the unit converter), `lastcomm` (Arch `acct`).
+
+Checked and kept in `/usr/bin`: `open`, `leave`, `say`, `defaults`, `pbcopy` and the other tools. No package in
+`packaging/arch/runtime-packages.txt` or `BASE_PACKAGES` (`springboard/src/installer/plan.rs`) owns those names. The
+`vis`, `units` and `lastcomm` entries were checked against the local sync database for the name only (`vis` is there, `units`
+and `lastcomm` did not show up in the local snapshot); file ownership needs `pacman -Fq` on a synced file database. Add a name to
+the array when a new Arch package claims it. Any other name collision fails at install time (pacman reports the file conflict).
+
 ## Store packages and the SDK protocol (2026-10-13)
 
 The shell and an app talk over the SDK protocol (`SDK_VERSION` in `springboard/proto/src/lib.rs`). An app built for
