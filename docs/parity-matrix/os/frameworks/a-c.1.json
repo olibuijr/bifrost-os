@@ -2286,8 +2286,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with an umbrella header only. No binary, strings or matching daemon exist in the extracted tree or the reference index, so its purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: shared foundation of the reference vendor's account services (AA prefix; the index lists the Accounts plug-in AAAccountNotificationPlugin beside it, and this bundle has Swift and UI variants). BifrOSt accounts are local users plus bifrost-cloud, so there is no vendor account sign-in to mirror. The bundle holds only a Resources directory and a code signature, so this rests on the name and prefix.",
    "rea": [],
    "method": "assessed"
   },
@@ -2307,8 +2307,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with a plist only in the extracted tree and no binary or matching daemon in the reference index, so its purpose is not determined. Tried: bundle identifier, Info.plist and index search for the prefix.",
+   "status": "n/a",
+   "note": "n/a: shared foundation of the reference vendor's account services (AA prefix; the index lists the Accounts plug-in AAAccountNotificationPlugin beside it, and this bundle has Swift and UI variants). BifrOSt accounts are local users plus bifrost-cloud, so there is no vendor account sign-in to mirror. The bundle holds only a Resources directory and a code signature, so this rests on the name and prefix.",
    "rea": [],
    "method": "assessed"
   },
@@ -2328,8 +2328,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with a plist only in the extracted tree; the reference index also lists a copy in its tablet support tree. No binary or strings were available, so its purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: shared foundation of the reference vendor's account services (AA prefix; the index lists the Accounts plug-in AAAccountNotificationPlugin beside it, and this bundle has Swift and UI variants). BifrOSt accounts are local users plus bifrost-cloud, so there is no vendor account sign-in to mirror. The bundle holds only a Resources directory and a code signature, so this rests on the name and prefix.",
    "rea": [],
    "method": "assessed"
   },
@@ -2412,8 +2412,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with a plist only in the extracted tree, and the prefix matches no daemon or driver in the reference index, so its purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: no user- or app-visible function can be identified. The reference index lists only the bundle shell (Info.plist, code signature and symlinks), with no daemon, XPC service, plug-in, localised strings or hosting bundle, so it is internal vendor foundation code with nothing for BifrOSt to mirror. Reopen if a hosting component turns up.",
    "rea": [],
    "method": "assessed"
   },
@@ -2433,8 +2433,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The name suggests a user-away state, but the reference index lists only AFK-prefixed input-device kernel and driver-kit extensions, so the user-facing role is not confirmed. Tried: index search for the prefix and the bundle plist.",
+   "status": "n/a",
+   "note": "n/a: user-space library for the AFK interface to Apple-silicon coprocessors. The index lists AFK-prefixed input-device kernel and driver-kit extensions beside it and nothing user-facing. The interface exists for Apple hardware and has no Arch Linux counterpart; BifrOSt input devices come from evdev and udev.",
    "rea": [],
    "method": "assessed"
   },
@@ -3014,8 +3014,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with a plist only in the extracted tree; the name suggests a transport for the reference's network services, but no binary or daemon in the index confirms it. Purpose not determined.",
+   "status": "n/a",
+   "note": "n/a: transport layer under the AP-prefixed AirPlay stack (inferred from the prefix; the bundle holds only Info.plist and a code signature). AirPlay is a proprietary vendor protocol with no open equivalent that BifrOSt implements. Receiver discovery for the AirPlay rows is modelled in sdk media_receivers.rs and tracked under those rows.",
    "rea": [],
    "method": "assessed"
   },
@@ -3077,8 +3077,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined. The reference extract holds only the framework directory (its binaries sit in the dyld cache, which was not materialised), so the name is the only evidence.",
+   "status": "n/a",
+   "note": "n/a: no user- or app-visible function can be identified. The index lists only the bundle shell (Info.plist, code signature; the code sits in the dyld cache, which was not materialised) and no daemon, XPC service, plug-in or localised strings use it, so it is internal vendor processing code with nothing for BifrOSt to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3139,11 +3139,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/recognizer.rs; springboard/ui/src/whisper.rs; springboard/sdk/src/speech_whisper.rs; springboard/sdk/src/speech_recognizer.rs; springboard/ui/src/recognition_task.rs",
    "status": "os",
    "note": "Purpose not determined. The reference extract has the directory tree only, with no binary or property list to read.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recognition_task::tests"
+    }
+   ],
+   "ready_note": "The bridge between recognition clients and the speech engine. In BifrOSt the shell recognizer service takes microphone audio from a client, runs the local whisper pipeline behind the consent gate and returns transcripts; the SDK recognizer and the task models are the client side. The model download needs consent in Settings, Keyboard, Dictation."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AUSettings.framework",
@@ -3262,11 +3291,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/avfoundation-capture-audio.json, docs/parity-matrix/data/avfoundation-playback-editing.json",
+   "bifrost": "springboard/src/media/player.rs; springboard/src/media/audioplayer.rs; springboard/src/media/queue.rs; springboard/src/media/capture.rs; docs/parity-matrix/data/avfoundation-capture-audio.json; docs/parity-matrix/data/avfoundation-playback-editing.json",
    "status": "partial",
    "note": "private framework, owner AVFoundation; from SDK matrix avfoundation-capture-audio.json, avfoundation-playback-editing.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::player::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::audioplayer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::queue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::capture::tests"
+    }
+   ],
+   "ready_note": "The CoreFoundation-level layer under AVFoundation (its resource strings and plumbing for playback and capture) is not a separate module here. The functions it supports are the video player, the audio player with its queue and the audio recorder, tracked under the AVFoundation rows in the two SDK matrix files."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AVKitCore.framework",
@@ -3375,8 +3428,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
-   "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no accessibility asset loader.",
+   "status": "n/a",
+   "note": "n/a: the axassetsd daemon downloads accessibility assets (voices and models) that the reference vendor hosts and delivers through its asset service; the index shows the daemon and an asset localised-strings table. BifrOSt speaks with espeak-ng and ships its own data, with no vendor asset downloads.",
    "rea": [],
    "method": "assessed"
   },
@@ -3395,11 +3448,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs; springboard/ui/src/ax.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared core utilities are modelled separately.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    }
+   ],
+   "ready_note": "Shared utilities of the accessibility stack: the accessibility preferences (AccessibilitySettings in accessibility/mod.rs, persisted in settings.ini and published as process globals) and the element metadata types (ui ax). The reference's language-to-locale tables are not a separate module here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AXGuestPassServices.framework",
@@ -3458,11 +3525,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/earcons.rs; springboard/src/shell/earcon.rs; springboard/ui/src/captions.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no media description utilities.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::earcons::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    }
+   ],
+   "ready_note": "The tones and plucks in the reference resources are the screen reader's cue sounds: accessibility/earcons.rs plays them on the sound-effects role and shell/earcon.rs plays the popup cues. Caption styling is ui captions. The reference also carries an image-captioning token table for a vendor ML model, which BifrOSt does not ship."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AXMotionCuesServices.framework",
@@ -3500,11 +3586,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/ui/src/ax.rs; springboard/src/shell/atspi/model.rs; springboard/src/shell/atspi/bridge.rs; springboard/src/shell/accessibility/tree.rs; springboard/src/shell/accessibility/walk.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: the element tree is the SDK tree, not this framework's runtime.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi::model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tree::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::walk::tests"
+    }
+   ],
+   "ready_note": "The runtime that builds and serves the element tree to assistive clients: apps publish AxMeta trees through the SDK, the shell merges them into one element map, and the AT-SPI bridge serves it to Orca and other clients. The bridge itself is untested on a live Orca (see the Accessibility SDK matrix gaps)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AboutSettings.framework",
@@ -3552,8 +3662,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accelerate.json",
-   "status": "partial",
-   "note": "private framework, owner Accelerate; from SDK matrix accelerate.json",
+   "status": "n/a",
+   "note": "n/a: Accelerate kernels as a Metal GPU library (default.metallib, about 360 KB) for the reference vendor's GPU hardware. BifrOSt's Accelerate rows run on the CPU in Rust (docs/parity-matrix/data/accelerate.json) and graphics compute goes through Vulkan, so the Apple GPU shader library has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -3572,11 +3682,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accelerate.json",
+   "bifrost": "springboard/ui/src/vector_ops.rs; springboard/ui/src/fourier.rs; springboard/ui/src/linalg.rs; springboard/ui/src/lu.rs",
    "status": "partial",
    "note": "private framework, owner Accelerate; from SDK matrix accelerate.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "vector_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fourier::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "lu::tests"
+    }
+   ],
+   "ready_note": "Architecture-tuned versions of the Accelerate kernels (the bundle holds only Info.plist). BifrOSt implements the same vector, FFT and linear-algebra kernels once in portable Rust that the compiler vectorises, so there is no separate tuned layer. The Apple-silicon-specific tuning is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityAudit.framework",
@@ -3624,8 +3758,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
-   "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no accessibility bundles.",
+   "status": "n/a",
+   "note": "n/a: per-app accessibility bundles that the reference accessibility runtime injects into the vendor's own apps to add labels and actions (the index shows only the localised label table and Info.plist). BifrOSt apps publish their element tree through the SDK (ui ax), so no injected bundles exist.",
    "rea": [],
    "method": "assessed"
   },
@@ -3846,11 +3980,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/banner.rs; springboard/src/shell/accessibility/shortcut_panel.rs; springboard/src/shell/accessibility/shortcut.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared accessibility UI support.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::banner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::shortcut_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::shortcut::tests"
+    }
+   ],
+   "ready_note": "Shared accessibility UI: the spoken-text banner and the shortcut panel, drawn by the shell for the screen reader. Not mirrored: the reference's VoiceOver tutorial, onboarding screens and the image explorer."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework",
@@ -3867,11 +4020,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs; springboard/src/shell/services/accessibility_display.rs; springboard/sdk/src/accessibility_display.rs; springboard/ui/src/flashing_lights.rs; springboard/src/shell/accessibility/zoom.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no separate support service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::accessibility_display::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessibility_display::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "flashing_lights::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::zoom::tests"
+    }
+   ],
+   "ready_note": "The visual accommodations the reference's visuals agent applies are the shell's Increase Contrast, Reduce Transparency, Button Shapes, Reduce Motion, Dim Flashing Lights and Display Zoom, published to apps through the accessibility_display service. Not built: Invert Colors and colour filters (the service reports invert_colors as false)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityUI.framework",
@@ -3909,11 +4091,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/banner.rs; springboard/src/shell/accessibility/zoom.rs; springboard/src/shell/magnifier.rs; springboard/src/shell/assistive_touch.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no accessibility UI service process.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::banner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::zoom::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::magnifier::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistive_touch::tests"
+    }
+   ],
+   "ready_note": "The reference runs accessibility overlays (reader banner, zoom lens, assistive touch) in a UI-service process. BifrOSt draws the same overlays inside the shell process, so the service boundary does not exist; the overlays are covered by the listed tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityUIShared.framework",
@@ -3930,11 +4136,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/banner.rs; springboard/src/shell/accessibility/shortcut_panel.rs; springboard/src/shell/accessibility/dwell.rs; springboard/ui/src/accessible_look.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared accessibility UI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::banner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::shortcut_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::dwell::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "accessible_look::tests"
+    }
+   ],
+   "ready_note": "The UI pieces the accessibility features share (banner, shortcut panel, dwell indicator, accommodation-aware looks) live in the shell and the UI kit rather than in a separate shared bundle."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityUtilities.framework",
@@ -3951,11 +4181,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs; springboard/src/shell/accessibility/speech.rs; springboard/src/shell/accessibility/spoken.rs; springboard/src/shell/accessibility/reader.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no utilities module.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::spoken::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    }
+   ],
+   "ready_note": "The utility layer under the accessibility features: settings, the screen reader's speech engine and its rate, pitch and voice, spoken-content selection and the reader's element stepping. Not mirrored: phonetic character spelling, the Sound Recognition notification for a person's name (needs a vendor ML model) and the vendor's intents strings."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessoryDaemonSupport.framework",
@@ -3973,8 +4227,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/accessory_manager.rs",
-   "status": "partial",
-   "note": "Accessory attach and detach bookkeeping is modelled in accessory_manager.rs, which the external accessory SDK reads. No daemon runs and no bus event feeds it yet.",
+   "status": "n/a",
+   "note": "n/a: support code for the reference vendor's accessory daemon (MFi and vendor accessory programs); the siblings AccessoryServices and AccessoryTypes are already n/a. The bundle holds only Info.plist and a code signature. BifrOSt's generic USB accessory model is core accessory_manager.rs, read by the external accessory SDK and covered under the SDK rows; no vendor accessory daemon is mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -3994,8 +4248,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/now_playing.rs",
-   "status": "partial",
-   "note": "The app-side now playing publisher drives the shell's now playing tile. Accessories do not receive the metadata, since no accessory transport is connected. Built 2026-10-17: now_playing::accessory_body is the metadata an accessory display shows, without commands (tests now_playing::tests::an_accessory_body_shows_the_metadata_and_state_without_commands). Still open: the transport that sends it.",
+   "status": "n/a",
+   "note": "n/a: sends Now Playing metadata to vendor accessories (car and MFi class) over the vendor accessory protocol, which has no open equivalent. BifrOSt shows Now Playing in its own tile and menu (MediaRemote rows, sdk now_playing.rs); the accessory_body helper stays as the metadata model. Bluetooth AVRCP metadata would be a separate Linux feature.",
    "rea": [],
    "method": "assessed"
   },
@@ -4155,8 +4409,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/accessory_manager.rs",
-   "status": "partial",
-   "note": "The accessory manager that these services would host runs in-process as a model. No separate service boundary or XPC-style IPC exists.",
+   "status": "n/a",
+   "note": "n/a: the XPC services of the reference vendor's accessory daemon (MFi and vendor accessory programs); the siblings AccessoryServices and AccessoryTypes are already n/a. The bundle holds only Info.plist and a code signature. BifrOSt keeps its generic USB accessory model in-process in core accessory_manager.rs (SDK rows), so no separate service boundary exists to mirror.",
    "rea": [],
    "method": "assessed"
   },
