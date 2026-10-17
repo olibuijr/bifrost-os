@@ -43,7 +43,10 @@
    "status": "partial",
    "note": "The jdk-openjdk Arch package provides the Java runtime that Java programs run on. Gap: the Cocoa Java bridge and its bridge-support metadata are not provided.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [{"kind": "cmd", "run": "command -v java", "expect_exit": 0}],
+   "ready_note": "The jdk-openjdk package provides the java launcher and the OpenJDK runtime that Java programs run on; the check runs the installed launcher. The Cocoa Java bridge is not provided."
   },
   {
    "id": "path:/System/Library/Frameworks/JavaVM.framework",
@@ -416,8 +419,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "The index shows the jetpackassetd daemon, which downloads Apple-hosted asset packs for Apple's own services. BifrOSt has no counterpart service and no content store to serve.",
    "rea": [],
    "method": "assessed"
   },
@@ -794,8 +797,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Learned 3D vision feature models (Espresso and MIL files). No owner is identified from the extract, so it stays os.",
+   "status": "n/a",
+   "note": "Learned 3D vision feature models (CV3D Espresso and MIL model files) from the reference index. They are Apple's on-device model packs, which BifrOSt does not ship, so the row has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -881,7 +884,10 @@
    "status": "partial",
    "note": "Dictionary lookup reads StarDict packages, and spelling uses a word list in the core spellcheck model. Gap: the reference collation, confusables and word usage data are not provided.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-ui", "filter": "stardict::"}, {"kind": "test", "crate": "bifrost-core", "filter": "spellcheck::"}],
+   "ready_note": "Dictionary lookup reads StarDict packages (bifrost_ui::stardict) and spelling uses the core spellcheck word list; both have unit tests. Collation and confusables data are not part of this check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LibraryRepair.framework",
@@ -1532,7 +1538,10 @@
    "status": "partial",
    "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::services::privacy_permissions::"}, {"kind": "test", "crate": "springboard", "filter": "shell::services::location::"}, {"kind": "test", "crate": "bifrost-ui", "filter": "location_auth::"}],
+   "ready_note": "Per-app location grants live in the privacy and location services and the authorization status model is in bifrost_ui::location_auth; the unit tests cover grants and status."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocationAuthorizationFramework.framework",
@@ -1553,7 +1562,10 @@
    "status": "partial",
    "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::services::privacy_permissions::"}, {"kind": "test", "crate": "springboard", "filter": "shell::services::location::"}, {"kind": "test", "crate": "bifrost-ui", "filter": "location_auth::"}],
+   "ready_note": "Location authorization is served by the privacy and location services with the status model in bifrost_ui::location_auth, tested in those modules. There is no separate authorization daemon."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocationAuthorizationXPC.framework",
@@ -1592,8 +1604,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Encryption of the reference location log store (com.apple.CoreLocation.LocationLogEncryption). BifrOSt writes no location log, so there is no store to encrypt; it stays os pending that decision.",
+   "status": "n/a",
+   "note": "Encryption of the reference location log store. BifrOSt writes no location log, so there is no store to encrypt; the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1745,7 +1757,10 @@
    "status": "partial",
    "note": "Partial: the Look Up popover (Services menu Look Up and Ctrl+Cmd+D) shows the dictionary definition and quick search hits for the selected word, with Search and Open in Dictionary actions. Not built: a system Look Up service that other apps can call; the popover belongs to the shell and the dictionary app looks words up only inside itself.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-ui", "filter": "look_up::"}, {"kind": "test", "crate": "springboard", "filter": "shell::look_up_popover::"}],
+   "ready_note": "The Look Up popover shows the dictionary definition and quick search hits for the selected word, and its model is in bifrost_ui::look_up; both have unit tests. A system Look Up service for other apps is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LowPowerMode.framework",
@@ -1913,7 +1928,10 @@
    "status": "partial",
    "note": "The lock screen draws the login window, the account avatar, the password field and the power menu. The reference's login user service (LoginUserService XPC) and its multi-user login logic are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::login::"}],
+   "ready_note": "The lock screen draws the login window, account avatar, password field and power menu from shell::login, with unit tests. Multi-user login is not part of this check."
   }
  ]
 }

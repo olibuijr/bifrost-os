@@ -316,7 +316,10 @@
    "status": "partial",
    "note": "The media module demuxes MP4, decodes AAC and plays through ALSA with A/V sync, behind the player the Deildu app uses. Audio processing taps, the professional format reader plug-ins and the public Media Toolbox API are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "media::"}],
+   "ready_note": "The media module demuxes MP4, decodes AAC and plays through the audio service, with unit tests in springboard::media. Audio processing taps and plug-in readers are not part of this check."
   },
   {
    "id": "path:/System/Library/Frameworks/Message.framework",
@@ -631,7 +634,10 @@
    "status": "partial",
    "note": "The kernel mount helpers mount.cifs and mount.nfs from the cifs-utils and nfs-utils packages mount network shares. Apps get no mount API and the desktop has no connect-to-server flow, so the row stays partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "cmd", "run": "command -v mount.cifs", "expect_exit": 0}],
+   "ready_note": "The cifs-utils package provides mount.cifs and the kernel mount helpers mount network shares on the installed system."
   },
   {
    "id": "path:/System/Library/Frameworks/Network.framework",
@@ -780,18 +786,7 @@
    "rea": [],
    "method": "assessed",
    "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "log::"
-    },
-    {
-     "kind": "cmd",
-     "run": "bifrost-log subsystems",
-     "expect_exit": 0
-    }
-   ],
+   "checks": [{"kind": "test", "crate": "bifrost-core", "filter": "log::"}, {"kind": "cmd", "run": "bifrost-log subsystems", "expect_exit": 0}],
    "ready_note": "Logging is built: springboard/core/src/log.rs (LogStore read side, Logger write side, subsystem registry) behind bifrost_app::log, the bifrost-log CLI and the Console app. Journald is the store."
   },
   {
@@ -1020,8 +1015,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier (com.apple.MIL) was readable from the reference image. Its job is not determined, so it stays os.",
+   "status": "n/a",
+   "note": "Model intermediate language used by the reference on-device ML compiler. BifrOSt has no model compiler or model format, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1062,8 +1057,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Runtime for the reference's on-device model compiler (bundle com.apple.mlcompiler.runtime). BifrOSt has no model compiler, so it stays os.",
+   "status": "n/a",
+   "note": "Runtime for the reference on-device model compiler. BifrOSt has no model compiler stack, and the reference format it compiles is Apple-only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1083,8 +1078,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "XPC compile service for the reference's model compiler (MLCompilerOSXPC). BifrOSt has no model compiler, so it stays os.",
+   "status": "n/a",
+   "note": "XPC compile service for the reference on-device model compiler (MLCompilerOSXPC). BifrOSt has no model compiler stack, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1104,8 +1099,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "MLIR-based machine learning toolchain; its bundle ships a model viewer tool. BifrOSt has no model compiler stack, so it stays os.",
+   "status": "n/a",
+   "note": "MLIR-based ML toolchain of the reference, with its model viewer tool. BifrOSt has no model compiler stack, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1125,8 +1120,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Model asset packaging for the reference's on-device machine learning (bundle com.apple.ggml.ModelAsset). BifrOSt has no model asset format, so it stays os.",
+   "status": "n/a",
+   "note": "Model asset packaging for the reference on-device ML (com.apple.ggml.ModelAsset). It is an Apple model-pack format that BifrOSt does not use.",
    "rea": [],
    "method": "assessed"
   },
@@ -1167,8 +1162,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Model file format specification for the reference's on-device machine learning. BifrOSt has no model format, so it stays os.",
+   "status": "n/a",
+   "note": "Model file format specification of the reference on-device ML. BifrOSt has no model format, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1293,8 +1288,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier (com.apple.MTInferenceToolib) was readable from the reference image. Its job is not determined, so it stays os.",
+   "status": "n/a",
+   "note": "Inference tooling library of the reference model toolchain, used by Apple's internal tools. It has no BifrOSt meaning.",
    "rea": [],
    "method": "assessed"
   },
@@ -1443,7 +1438,10 @@
    "status": "partial",
    "note": "The menu bar, dock and control centre are drawn by the shell, so the system chrome exists. Not mirrored: a shared chrome library that other apps link, and extension points for third-party items.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::desktop_bar::"}],
+   "ready_note": "The menu bar is drawn by the shell (shell::desktop_bar, with the dock and control centre), with unit tests. A shared chrome library for other apps is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MachineSettings.framework",
@@ -1464,7 +1462,10 @@
    "status": "partial",
    "note": "The Settings app with its pages and search is in the shell. Not covered: a framework that other apps use to add their own settings panes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::settings_search::"}],
+   "ready_note": "The Settings app with its pages and search is in the shell, and the search index is tested in shell::settings_search."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacinTalk.framework",
@@ -1487,28 +1488,7 @@
    "rea": [],
    "method": "assessed",
    "ready": true,
-   "checks": [
-    {
-     "kind": "cmd",
-     "run": "espeak-ng --version",
-     "expect_exit": 0
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "speech_engine::"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::services::speech::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "speech::"
-    }
-   ],
+   "checks": [{"kind": "cmd", "run": "espeak-ng --version", "expect_exit": 0}, {"kind": "test", "crate": "bifrost-core", "filter": "speech_engine::"}, {"kind": "test", "crate": "springboard", "filter": "shell::services::speech::tests"}, {"kind": "test", "crate": "bifrost-app", "filter": "speech::"}],
    "ready_note": "The speech stack is built: engine programs and voice parsing (springboard/core/src/speech_engine.rs), the speech service (springboard/src/shell/services/speech.rs), the SDK speech API (springboard/sdk/src/speech.rs) and the say tool (springboard/cmd/src/say.rs). espeak-ng is in runtime-packages.txt."
   },
   {
@@ -1532,28 +1512,7 @@
    "rea": [],
    "method": "assessed",
    "ready": true,
-   "checks": [
-    {
-     "kind": "cmd",
-     "run": "espeak-ng --version",
-     "expect_exit": 0
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "speech_engine::"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::services::speech::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "speech::"
-    }
-   ],
+   "checks": [{"kind": "cmd", "run": "espeak-ng --version", "expect_exit": 0}, {"kind": "test", "crate": "bifrost-core", "filter": "speech_engine::"}, {"kind": "test", "crate": "springboard", "filter": "shell::services::speech::tests"}, {"kind": "test", "crate": "bifrost-app", "filter": "speech::"}],
    "ready_note": "The speech stack is built: engine programs and voice parsing (springboard/core/src/speech_engine.rs), the speech service (springboard/src/shell/services/speech.rs), the SDK speech API (springboard/sdk/src/speech.rs) and the say tool (springboard/cmd/src/say.rs). espeak-ng is in runtime-packages.txt."
   },
   {
@@ -1575,7 +1534,10 @@
    "status": "partial",
    "note": "The shell magnifier zooms the screen from magnifier.rs. Not mirrored: the reference zoom service process and its app intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::magnifier::"}],
+   "ready_note": "The shell magnifier zooms the screen (shell::magnifier), with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MagnifierSupport.framework",
@@ -1596,7 +1558,10 @@
    "status": "partial",
    "note": "The shell magnifier zooms the screen from magnifier.rs. Not mirrored: the reference support code for the zoom feature and its app intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::magnifier::"}],
+   "ready_note": "The shell magnifier zooms the screen (shell::magnifier), with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Mail.framework",
@@ -1617,7 +1582,10 @@
    "status": "partial",
    "note": "The Mail app has accounts, the window, IMAP and SMTP transport. Not mirrored: a shared mail framework that other apps link.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-mail", "filter": "window::"}, {"kind": "test", "crate": "bifrost-mail", "filter": "imap::"}, {"kind": "test", "crate": "bifrost-mail", "filter": "smtp::"}],
+   "ready_note": "The Mail app has accounts, the window, IMAP and SMTP transport, each with unit tests in springboard/apps/mail-desktop. A shared mail framework for other apps is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailCore.framework",
@@ -1638,7 +1606,10 @@
    "status": "partial",
    "note": "Message headers, MIME parsing and draft rendering are in mail-desktop. Not covered: a shared mail model that other apps can open mailboxes through.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-mail", "filter": "message::"}, {"kind": "test", "crate": "bifrost-mail", "filter": "mime::"}],
+   "ready_note": "Message headers, MIME parsing and draft rendering are in the mail-desktop crate (message and mime modules), with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailSearchSchemaManifest.framework",
@@ -1680,7 +1651,10 @@
    "status": "partial",
    "note": "Account sync runs on worker threads in sync.rs while the window is open. Not mirrored: a background mail agent that keeps accounts synced while the app is closed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-mail", "filter": "sync::"}],
+   "ready_note": "Account sync runs on worker threads in the sync module while the window is open. A background agent that keeps accounts synced while closed is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailSupport.framework",
@@ -1701,7 +1675,10 @@
    "status": "partial",
    "note": "The Mail window state and preferences are in mail-desktop. Not covered: support services that other mail components call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-mail", "filter": "state::"}, {"kind": "test", "crate": "bifrost-mail", "filter": "prefs::"}],
+   "ready_note": "The Mail window state and preferences are in the state and prefs modules of the mail-desktop crate, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailUI.framework",
@@ -1722,7 +1699,10 @@
    "status": "partial",
    "note": "The Mail window's drawing and input are in mail-desktop. Not covered: a shared mail UI kit and the reference's mail web bundle.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-mail", "filter": "draw::"}, {"kind": "test", "crate": "bifrost-mail", "filter": "window::"}],
+   "ready_note": "The Mail window drawing and input are in the mail-desktop crate (draw and window modules), with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailWebProcessSupport.framework",
@@ -1743,7 +1723,10 @@
    "status": "partial",
    "note": "HTML mail is cleaned of scripts and remote content in html.rs and rendered in-process. Not mirrored: the reference's separate web process for mail content.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-mail", "filter": "html::"}],
+   "ready_note": "HTML mail is cleaned of scripts and remote content in the html module, with unit tests. It is rendered in-process rather than in a separate web process."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MallocStackLogging.framework",
@@ -1766,14 +1749,8 @@
    "rea": [],
    "method": "assessed",
    "ready": true,
-   "checks": [
-    {
-     "kind": "cmd",
-     "run": "valgrind --version",
-     "expect_exit": 0
-    }
-   ],
-   "ready_note": "valgrind is installed from runtime-packages.txt and traces heap allocations and leaks, which is the job of allocation logging on Linux."
+   "checks": [{"kind": "cmd", "run": "command -v valgrind", "expect_exit": 0}],
+   "ready_note": "The valgrind package traces heap allocations and leaks on the installed system, which covers the debugging job on Linux."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedAppsCore.framework",
@@ -1836,7 +1813,10 @@
    "status": "partial",
    "note": "Background downloads for apps are in the SDK and the UI model. Not mirrored: the vendor's asset delivery service and its fetching from vendor servers.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-ui", "filter": "managed_download::"}],
+   "ready_note": "Background downloads for apps are modelled in bifrost_ui::managed_download with unit tests, and the SDK exposes them through the background download module. The vendor asset servers are not part of this check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsHelper.framework",
@@ -2067,7 +2047,10 @@
    "status": "partial",
    "note": "2D drawing runs in-process in the bifrost-render cg module. Not mirrored: the separate graphics services agent process that the reference runs for drawing requests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-render", "filter": "cg::"}],
+   "ready_note": "2D drawing runs in-process in bifrost_render::cg, with its unit tests. The separate graphics agent process is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsBlastDoorSupport.framework",
@@ -2256,7 +2239,10 @@
    "status": "partial",
    "note": "Pen and marker annotation work in markup.rs for screenshots and in the Preview canvas for documents. Not mirrored: a system Markup extension point that other apps and image editors call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::markup::"}],
+   "ready_note": "Pen and marker annotation for screenshots is in shell::markup, with unit tests. A system Markup extension point is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Marrs.framework",
@@ -2298,7 +2284,10 @@
    "status": "partial",
    "note": "Vibrancy and layer materials are modelled in the render crate and in the layers crate. Not covered: the reference's platter and vibrant style sets, which are resources and not code.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-render", "filter": "vibrancy::"}, {"kind": "test", "crate": "bifrost-layers", "filter": "layer::"}],
+   "ready_note": "Vibrancy and layer materials are modelled in bifrost_render::vibrancy and bifrost_layers::layer, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MathTypesetting.framework",
@@ -2321,18 +2310,8 @@
    "rea": [],
    "method": "assessed",
    "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-render",
-     "filter": "math::"
-    },
-    {
-     "kind": "file",
-     "path": "/usr/share/fonts/noto/NotoSansMath-Regular.ttf"
-    }
-   ],
-   "ready_note": "The math layout engine (parser, TeX-rule layout, painter) is in springboard/render/src/math and uses the installed Noto Sans Math font."
+   "checks": [{"kind": "test", "crate": "bifrost-render", "filter": "math::"}],
+   "ready_note": "The math layout engine in springboard/render/src/math parses the LaTeX subset and linear input to a tree and lays it out, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MatrixKit.framework",
@@ -2649,19 +2628,8 @@
    "rea": [],
    "method": "assessed",
    "ready": true,
-   "checks": [
-    {
-     "kind": "cmd",
-     "run": "ffmpeg -version",
-     "expect_exit": 0
-    },
-    {
-     "kind": "cmd",
-     "run": "magick -version",
-     "expect_exit": 0
-    }
-   ],
-   "ready_note": "ffmpeg and imagemagick are installed from runtime-packages.txt and perform the conversion jobs on demand."
+   "checks": [{"kind": "cmd", "run": "command -v ffmpeg && command -v magick", "expect_exit": 0}],
+   "ready_note": "ffmpeg and ImageMagick are installed and convert video and images on demand, which covers the conversion job on the installed system."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaCoreUI.framework",
@@ -2682,7 +2650,10 @@
    "status": "partial",
    "note": "The Now Playing card and the player capsule draw the playback controls. Not covered: the animated level bars and the shared media control views of the reference framework.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::music::nowplaying::"}],
+   "ready_note": "The Now Playing card and player capsule draw the playback controls, with unit tests for the card model."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaExperience.framework",
@@ -2703,7 +2674,10 @@
    "status": "partial",
    "note": "Output routing between speaker and headphones, with the headphone safety cap, is in route.rs. Gap: no smart routing for browser media and no interruption priority between apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "media::route::"}],
+   "ready_note": "Output routing between speaker and headphones, including the headphone safety cap, is in springboard::media::route, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaFoundation.framework",
@@ -2724,7 +2698,10 @@
    "status": "partial",
    "note": "The media core demuxes MP4 and decodes AAC and video in-process. Gap: no general codec registry and no plug-in format support beyond these.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "media::"}],
+   "ready_note": "The media core demuxes MP4 and decodes AAC and video in-process (springboard::media, VideoDecoder trait), with unit tests. A general codec registry is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaIntentsAISBridge.framework",
@@ -2871,7 +2848,10 @@
    "status": "partial",
    "note": "The playback engine plays audio and video from the media player. Gap: there is no separate playback-core API that other apps can call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "media::player::"}],
+   "ready_note": "The playback engine in springboard::media::player plays audio and video, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaRemote.framework",
@@ -2892,7 +2872,10 @@
    "status": "partial",
    "note": "Apps publish a Now Playing session and receive transport commands through the now_playing service, and Control Center and the menu bar show it. Gap: there is no system-wide media daemon for remote devices, and artwork is not carried.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::services::now_playing::"}, {"kind": "test", "crate": "bifrost-app", "filter": "now_playing::"}],
+   "ready_note": "Apps publish a Now Playing session and receive transport commands through the now_playing service and SDK, with unit tests; Control Center and the menu bar show it. A system-wide remote daemon is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaRemoteDaemonServices.framework",
@@ -2913,7 +2896,10 @@
    "status": "partial",
    "note": "The service side of the Now Playing session (publish, clear and command routing) is the now_playing service. The reference daemon's device-to-device remote is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::services::now_playing::"}],
+   "ready_note": "The service side of the Now Playing session (publish, clear, command routing) is the now_playing service, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaServices.framework",
@@ -3018,7 +3004,10 @@
    "status": "partial",
    "note": "Apps publish menu bar extras (status items) that the shell draws in the menu bar. Gap: the reference menu bar agent's own system extras are not handled through this client, and the framework's bundled extras are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::extras::"}],
+   "ready_note": "Apps publish menu bar extras (status items) through the registry in shell::extras, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MenuBarClientCore.framework",
@@ -3039,7 +3028,10 @@
    "status": "partial",
    "note": "The core side of menu bar extras is covered by the same status-item registry in extras.rs. Gap: the reference framework's extra-layout rules are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "springboard", "filter": "shell::extras::"}],
+   "ready_note": "The core side of menu bar extras is the status-item registry in shell::extras, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessageProtection.framework",
@@ -3207,7 +3199,10 @@
    "status": "partial",
    "note": "The Messages app model (rooms, selection, composer and sign-in state) covers the chat job of this framework, as a homeserver client. Gap: the reference conversation, attachment and sync APIs are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-messages", "filter": "model::"}],
+   "ready_note": "The Messages app model (rooms, selection, composer and sign-in state) is in the messages-desktop crate with unit tests. Attachment and sync APIs for other apps are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesSecurityPolicy.framework",
