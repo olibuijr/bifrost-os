@@ -3344,8 +3344,27 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/defaults.rs, springboard/core/src/pref_domains.rs, springboard/src/shell/services/domains.rs",
+   "ready_note": "The domains service shares text, flag, number and hex data values per app and per first-party suite, synchronised on write (shell::services::domains::tests). Property list values are refused rather than served wrong; the model is bifrost_core::pref_domains.",
    "status": "partial",
-   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are not served yet",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pref_domains::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::domains::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    }
+   ],
+   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are served as hex (built 2026-10-17); property list values are not",
    "rea": [],
    "method": "rule"
   },
