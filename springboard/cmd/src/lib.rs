@@ -8,6 +8,7 @@ pub mod bzegrep;
 pub mod caffeinate;
 pub mod chflags;
 pub mod control;
+pub mod cu;
 pub mod network;
 pub mod notifyutil;
 pub mod networksetup;
