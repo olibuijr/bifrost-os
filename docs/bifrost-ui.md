@@ -3512,6 +3512,26 @@ smooths lux readings and maps light to a brightness fraction, but no sensor read
 `bifrost_ui::route_prediction::suggest` ranks known audio destinations by use count and recency; the picker has no
 persisted history or integration yet. These remain partial; see `docs/parity/os-gaps-03.md`.
 
+## Game Mode (GamePolicy, GamePolicyFoundation, GamePolicyServices, GamePolicyAgent)
+
+`springboard/src/shell/gamemode.rs` is the shell's Game Mode: a pure state machine (`Model`) with a 3 s leave
+hysteresis, `plan` for the effects of a change, and `GamePref` (Settings > General > Game Mode: Automatic or Off,
+stored as `game_mode` in settings.ini). A game is an installed app in the Games category or with `game = true` in its
+manifest (`apphost::Manifest::game`), and it counts only while it is the one in front and full screen. The shell
+checks four times a second (`bin/shell.rs`); entering takes effect at once.
+
+Built: the CPU profile goes to Performance while Game Mode is on (`bare::boost::set_profile` writes the governor and
+clock window), except under Low Power Mode, which still wins. Tests cover the transitions with a fake clock, the
+effect plan, the category and flag rule and the preference round trip.
+
+Not built, and named in `gamemode::SKIPPED`: the background task and file indexing pause (the shell has no background
+scheduler to pause), raising the game's process priority (bifrostd has no privileged knob for it), the Bluetooth sniff
+interval change for controllers and headsets (the shell's mgmt socket has no connection parameter update), the one-time
+notice and the menu bar item with "Turn Off Game Mode" (the notice hook logs only). The "full screen" signal is the
+shell's existing full-screen flag, which only video sets today, so a game has to be full screen through that path to
+trigger Game Mode; an SDK request for full screen does not exist yet. No framework API exists for apps to read the
+state. The rows GamePolicy, GamePolicyFoundation, GamePolicyServices and com.apple.GamePolicyAgent are `partial`.
+
 ## Unary file system module (FSKit `FSUnaryFileSystem`, `bifrost_app::fs_module`, `bifrost_app::fuse`)
 
 FSKit lets an app extension ship a file system module that runs in user space and is mounted by the system. Linux has
