@@ -22,6 +22,7 @@ use crate::proto::{AppMenu, AppMenuItem, DocErrorCode, DocMode, GrantId};
 use crate::{DocumentEvent, OpenOptions};
 use bifrost_ui::nav::{Alert, AlertStyle};
 use crate::document_package;
+use crate::revisions::RevisionStore;
 use bifrost_ui::undo::ChangeCount;
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -260,6 +261,8 @@ pub struct DocumentController<D: Document> {
     sent: Option<(String, bool, String)>,
     /// autosave delay in ms; `AUTOSAVE_DELAY_MS` unless changed
     pub autosave_delay: f64,
+    /// the saved versions of every open document, kept under `document-<id>`; each save adds one (see `on_saved`)
+    pub revisions: RevisionStore,
     now: f64,
 }
 
@@ -271,7 +274,7 @@ impl<D: Document> Default for DocumentController<D> {
 
 impl<D: Document> DocumentController<D> {
     pub fn new() -> Self {
-        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, now: 0.0 }
+        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
     }
 
     // ---- the document list ----
@@ -763,6 +766,14 @@ impl<D: Document> DocumentController<D> {
         }
         // a package keeps its folder, which a later save writes back to; a saved file has none
         e.package = if file.file.metadata().is_ok_and(|m| m.is_dir()) { package_path(&file.file) } else { None };
+        // every save is a version of the document; a folder package has no single byte stream, so it keeps none
+        if !file.file.metadata().is_ok_and(|m| m.is_dir()) {
+            let mut bytes = Vec::new();
+            let mut reader = &file.file;
+            if std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0)).is_ok() && reader.read_to_end(&mut bytes).is_ok() {
+                self.revisions.record(&format!("document-{}", doc.0), unix_now(), &bytes);
+            }
+        }
         if let Some(n) = untitled {
             let _ = std::fs::remove_file(autosave_path(&host.data_dir(), n));
         }
@@ -997,6 +1008,11 @@ fn package_path(file: &std::fs::File) -> Option<PathBuf> {
 
 fn autosave_path(data_dir: &Path, n: u32) -> PathBuf {
     data_dir.join(AUTOSAVE_DIR).join(format!("untitled-{n}.autosave"))
+}
+
+/// Seconds since the epoch, for the revision store's `saved_at`. Zero when the clock is before the epoch.
+fn unix_now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
 /// First line the type, then the content; written to a temporary name and renamed, so a crash leaves the old copy.
@@ -1502,6 +1518,23 @@ mod tests {
         assert_eq!(n, vec![Notice::Saved(id, SaveOp::Autosave)]);
         assert!(!c.is_edited(id));
         assert!(c.next_wake().is_none());
+    }
+
+    #[test]
+    fn every_save_keeps_a_revision_of_the_bytes_written() {
+        let m = Mock::new("revisions");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 6, "a");
+        let key = format!("document-{}", id.0);
+        assert!(c.revisions.list(&key).is_empty(), "opening is not a save");
+        c.save(&m, id);
+        let req = m.next.get();
+        c.handle(&m, DocumentEvent::SaveTo(m.file(req, "a.txt", 6, ""))).unwrap();
+        c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 6, "a"))).unwrap();
+        let revisions = c.revisions.list(&key);
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(revisions[0].bytes, b"a".to_vec());
+        assert_eq!(c.revisions.get(&key, revisions[0].seq).map(|r| r.bytes.clone()), Some(b"a".to_vec()));
     }
 
     #[test]

@@ -5981,9 +5981,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/spotindex.rs; springboard/sdk/src/quicksearch.rs",
+   "bifrost": "springboard/src/shell/spotindex.rs; springboard/sdk/src/quicksearch.rs; springboard/core/src/search_merge.rs",
    "status": "partial",
-   "note": "Apps index their own items and the Search panel lists matches under Documents, opening them in the app. Gap: there is no plugin point that lets an app add results from its own search code.",
+   "note": "Apps index their own items and the Search panel lists matches under Documents, opening them in the app. Gap: there is no plugin point that lets an app add results from its own search code. Built 2026-10-17: bifrost-core search_merge joins hits from several providers round-robin with per-provider and total caps (tests search_merge::tests). Open: no app-side provider call yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -6053,9 +6053,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs",
+   "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs; springboard/core/src/scene_set.rs",
    "status": "partial",
-   "note": "The shell starts apps over a socket pair, holds each app's newest presented surface and gives every app its own resource ownership. Gap: there is no scene model, so an app cannot host several scenes and per-scene state restore is missing.",
+   "note": "The shell starts apps over a socket pair, holds each app's newest presented surface and gives every app its own resource ownership. Gap: there is no scene model, so an app cannot host several scenes and per-scene state restore is missing. Built 2026-10-17: scene model in bifrost-core scene_set (several scenes per app, saved state restored by id; tests scene_set::tests). Open: not wired into the app host yet.",
    "rea": [],
    "method": "assessed"
   },
