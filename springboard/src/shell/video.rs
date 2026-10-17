@@ -12,12 +12,27 @@ pub struct MediaPlayer {
     h: i32,
     /// pictures go to the GPU unconverted (see `Player::set_gpu`)
     gpu: bool,
+    /// the playback rate chosen in the player's speed menu; it stays across movies
+    rate: f32,
     inner: Option<Media>,
 }
 
 impl MediaPlayer {
     pub fn new(w: i32, h: i32) -> Self {
-        MediaPlayer { w, h, gpu: false, inner: None }
+        MediaPlayer { w, h, gpu: false, rate: 1.0, inner: None }
+    }
+
+    /// Sets the playback rate (0.5 to 3.0, see `media::timestretch::clamp_rate`). A movie opened later starts at it too.
+    pub fn set_rate(&mut self, rate: f32) {
+        self.rate = crate::media::timestretch::clamp_rate(rate);
+        if let Some(m) = &mut self.inner {
+            m.set_rate(self.rate);
+        }
+    }
+
+    /// The playback rate in force.
+    pub fn rate(&self) -> f32 {
+        self.rate
     }
 }
 
@@ -42,6 +57,7 @@ impl Player for MediaPlayer {
         let mut m = Media::open(path)?;
         m.set_viewport(self.w as u32, self.h as u32);
         m.set_zero_copy(self.gpu);
+        m.set_rate(self.rate);
         m.play();
         self.inner = Some(m);
         Ok(())
@@ -143,5 +159,17 @@ mod tests {
         p.set_viewport(1920, 1200);
         p.toggle();
         assert!(p.open(Path::new("/nonexistent.mp4"), "video/mp4").is_err());
+    }
+
+    #[test]
+    fn the_rate_is_remembered_before_a_movie_opens_and_clamped() {
+        let mut p = MediaPlayer::new(1200, 1920);
+        assert_eq!(p.rate(), 1.0);
+        p.set_rate(1.5);
+        assert_eq!(p.rate(), 1.5);
+        p.set_rate(10.0);
+        assert_eq!(p.rate(), 3.0, "the ceiling is 3x");
+        p.set_rate(0.0);
+        assert_eq!(p.rate(), 0.5, "the floor is half speed");
     }
 }

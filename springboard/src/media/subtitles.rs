@@ -1,6 +1,7 @@
 //! Subtitle tracks for the video player: SubRip (`.srt`) and WebVTT (`.vtt`) cues parsed from text, and the cue on
 //! screen at a playback time. Pure: nothing here reads a file. `sidecar_candidates` only names the files next to a
-//! movie, and the owner reads the first one that exists.
+//! movie, and `sidecars_in` picks the subtitle files (with a label each) out of the names in the movie's folder; the
+//! owner reads the folder and the files.
 //!
 //! Both formats share the block layout (cues separated by blank lines, a timing line with `-->`, then the text), so one
 //! parser reads both. A cue identifier or SubRip index before the timing line is ignored, as are the WEBVTT header,
@@ -69,6 +70,59 @@ impl Track {
 /// `.srt` extension, then `.vtt`.
 pub fn sidecar_candidates(movie: &Path) -> Vec<PathBuf> {
     ["srt", "vtt"].iter().map(|ext| movie.with_extension(ext)).collect()
+}
+
+/// A subtitle file in the movie's folder and the label the subtitle picker shows for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Sidecar {
+    pub file_name: String,
+    pub label: String,
+}
+
+/// The language part of `file_name` when it is a subtitle file of `movie`: `Some(None)` for `name.srt` or `name.vtt`,
+/// `Some(Some("en"))` for `name.en.srt`, and `None` for any other file. The extension may be in any case. A language is
+/// a code of 2 to 8 letters, digits, `-` or `_` (`en`, `pt-BR`); the movie's own extension (`name.mp4.srt`) is not one.
+fn sidecar_language<'a>(movie: &Path, file_name: &'a str) -> Option<Option<&'a str>> {
+    let stem = movie.file_stem()?.to_str()?;
+    let rest = file_name.strip_prefix(stem)?.strip_prefix('.')?;
+    let (language, ext) = match rest.rsplit_once('.') {
+        Some((language, ext)) => (Some(language), ext),
+        None => (None, rest),
+    };
+    if !ext.eq_ignore_ascii_case("srt") && !ext.eq_ignore_ascii_case("vtt") {
+        return None;
+    }
+    let own_ext = movie.extension().and_then(|e| e.to_str()).unwrap_or("");
+    match language {
+        None => Some(None),
+        Some(l) if l.eq_ignore_ascii_case(own_ext) => Some(None),
+        Some(l) if (2..=8).contains(&l.len()) && l.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') => Some(Some(l)),
+        Some(_) => None,
+    }
+}
+
+/// The subtitle files among `names`, the file names in the movie's folder, sorted by name. The label is the language code
+/// (`en`), or "Subtitles" for a file with no language; two files that would share a label get their extension added
+/// ("Subtitles (SRT)" and "Subtitles (VTT)"). The owner reads the folder and the files.
+pub fn sidecars_in(movie: &Path, names: &[String]) -> Vec<Sidecar> {
+    let mut found: Vec<(String, String)> = names
+        .iter()
+        .filter_map(|n| sidecar_language(movie, n).map(|l| (n.clone(), l.unwrap_or("Subtitles").to_string())))
+        .collect();
+    found.sort();
+    let labels: Vec<String> = found.iter().map(|(_, l)| l.clone()).collect();
+    found
+        .into_iter()
+        .map(|(file_name, label)| {
+            let label = if labels.iter().filter(|l| **l == label).count() > 1 {
+                let ext = Path::new(&file_name).extension().and_then(|e| e.to_str()).unwrap_or("").to_uppercase();
+                format!("{label} ({ext})")
+            } else {
+                label
+            };
+            Sidecar { file_name, label }
+        })
+        .collect()
 }
 
 /// The `start --> end` line of a cue, as milliseconds. The end may carry WebVTT settings after it (`line:90%`), which are
@@ -236,6 +290,41 @@ mod tests {
     fn sidecars_are_named_after_the_movie() {
         let c = sidecar_candidates(Path::new("/movies/Trip.mp4"));
         assert_eq!(c, vec![PathBuf::from("/movies/Trip.srt"), PathBuf::from("/movies/Trip.vtt")]);
+    }
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|n| n.to_string()).collect()
+    }
+
+    #[test]
+    fn language_sidecars_are_found_by_name_and_labelled() {
+        let movie = Path::new("/movies/clip.mp4");
+        let found = sidecars_in(movie, &names(&["clip.mp4", "clip.is.srt", "clip.en.VTT", "other.srt", "clipboard.srt", "clip.txt"]));
+        assert_eq!(
+            found,
+            vec![
+                Sidecar { file_name: "clip.en.VTT".into(), label: "en".into() },
+                Sidecar { file_name: "clip.is.srt".into(), label: "is".into() },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_file_without_a_language_is_just_subtitles_and_two_of_them_get_their_extension() {
+        let movie = Path::new("clip.mp4");
+        let one = sidecars_in(movie, &names(&["clip.srt"]));
+        assert_eq!(one, vec![Sidecar { file_name: "clip.srt".into(), label: "Subtitles".into() }]);
+        let two = sidecars_in(movie, &names(&["clip.vtt", "clip.srt"]));
+        let labels: Vec<&str> = two.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(labels, vec!["Subtitles (SRT)", "Subtitles (VTT)"]);
+    }
+
+    #[test]
+    fn the_movies_own_extension_and_long_words_are_not_languages() {
+        let movie = Path::new("/m/clip.mp4");
+        // name.mp4.srt is the movie's own subtitle file; a word longer than a language code is not a sidecar
+        let found = sidecars_in(movie, &names(&["clip.mp4.srt", "clip.toolonglang.srt", "clip.x.srt"]));
+        assert_eq!(found, vec![Sidecar { file_name: "clip.mp4.srt".into(), label: "Subtitles".into() }]);
     }
 
     #[test]
