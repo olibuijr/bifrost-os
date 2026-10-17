@@ -4217,7 +4217,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ActionsAvailable); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Alert.aiff",
@@ -4238,7 +4247,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Alert); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AlertRepeat.aiff",
@@ -4259,7 +4277,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (AlertRepeat); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AnimationFlyToDownloads.aiff",
@@ -4280,7 +4307,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (AnimationFlyToDownloads); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AnimationShake.aiff",
@@ -4301,7 +4337,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (AnimationShake); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Announcement.aiff",
@@ -4322,7 +4367,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Announcement); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AttachmentBegin.aiff",
@@ -4343,7 +4397,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (AttachmentBegin); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AttachmentEnd.aiff",
@@ -4364,7 +4427,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (AttachmentEnd); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Back.aiff",
@@ -4385,7 +4457,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Back); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BackThrough.aiff",
@@ -4406,7 +4487,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BackThrough); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleChordClockTick.aiff",
@@ -4427,7 +4517,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BrailleChordClockTick); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleChordFailed.aiff",
@@ -4448,7 +4547,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BrailleChordFailed); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleChordMemorize.aiff",
@@ -4469,7 +4577,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BrailleChordMemorize); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleDisplayConnected.aiff",
@@ -4490,7 +4607,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BrailleDisplayConnected); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleDisplayDisconnected.aiff",
@@ -4511,7 +4637,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BrailleDisplayDisconnected); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BubbleAppear.aiff",
@@ -4532,7 +4667,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BubbleAppear); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BubbleDisappear.aiff",
@@ -4553,7 +4697,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (BubbleDisappear); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/CallOut.aiff",
@@ -4574,7 +4727,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (CallOut); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Capitals.aiff",
@@ -4595,7 +4757,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Capitals); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ClickFast.aiff",
@@ -4616,7 +4787,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ClickFast); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Slideshows.framework/Versions/A/Resources/Content/Fonts/Coolvetica.ttf",

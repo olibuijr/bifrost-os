@@ -74,6 +74,7 @@ pub mod kb_clicks;
 pub mod alert_sound;
 pub mod audio_graph;
 pub mod earcon;
+pub mod ui_sounds;
 pub mod hwkeys;
 pub mod backup;
 pub mod backup_page;

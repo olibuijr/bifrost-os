@@ -568,7 +568,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Tamil Sangam MN.ttc",
@@ -589,7 +597,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Telugu MN.ttc",
@@ -610,7 +626,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTelugu-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Telugu Sangam MN.ttc",
@@ -631,7 +655,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTelugu-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Thonburi.ttc",
@@ -652,7 +684,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Times New Roman Bold Italic.ttf",
@@ -978,7 +1018,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Times.ttc",
@@ -1091,7 +1139,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroBangla.ttc",
@@ -1112,7 +1168,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifBengali-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifBengali-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroGurmukhi.ttc",
@@ -1133,7 +1197,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifGurmukhi-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroHindi.ttc",
@@ -1154,7 +1226,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifDevanagari-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroKannada.ttc",
@@ -1175,7 +1255,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifKannada-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroMarathi.ttc",
@@ -1196,7 +1284,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifDevanagari-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroSanskrit.ttc",
@@ -1217,7 +1313,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifDevanagari-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroTamil.ttc",
@@ -1238,7 +1342,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifTamil-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TiroTelugu.ttc",
@@ -1259,7 +1371,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSerifTelugu-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ToppanBunkyuGothicPr6N.ttc",
@@ -1280,7 +1400,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ToppanBunkyuMidashiGothicStdN-ExtraBold.otf",
@@ -1301,7 +1429,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ToppanBunkyuMidashiMinchoStdN-ExtraBold.otf",
@@ -1322,7 +1458,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSerifCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ToppanBunkyuMinchoPr6N-Regular.otf",
@@ -1343,7 +1487,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSerifCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TsukushiAMaruGothic.ttc",
@@ -1364,7 +1516,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/TsukushiBMaruGothic.ttc",
@@ -1385,7 +1545,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/TrackingOff.aiff",
