@@ -127,6 +127,10 @@ pub fn dispatch(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, method: &str, para
         }
         _ => {}
     }
+    // file events of the whole computer go only to the shell, which hands them on to apps that declare the entitlement
+    if super::endpoint_security::handles(method) && !(peer.console_shell || peer.root_socket) {
+        return Err(PErr::new("unauthorized", "only the shell may use endpoint security"));
+    }
     let token = params.get("t").and_then(Json::as_str);
     if method == "account.set_password" {
         // before the token check: the first password of a fresh account needs no token (the gate decides
@@ -412,6 +416,17 @@ mod tests {
     fn root_socket_needs_no_token() {
         let r = handle_request(&TestGate { unlocked: Mutex::new(false) }, &FakeExec, Peer { root_socket: true, console_shell: false }, r#"{"id":1,"method":"time.set_ntp","params":{"on":true}}"#);
         assert!(r.contains("\"ok\":true"));
+    }
+
+    #[test]
+    fn endpoint_security_is_for_the_shell_only() {
+        let g = TestGate { unlocked: Mutex::new(true) };
+        let body = r#"{"id":1,"method":"endpoint_security.poll","params":{"t":"tok","app":"is.olibuijr.guard","id":1}}"#;
+        let other = Peer { root_socket: false, console_shell: false };
+        assert!(handle_request(&g, &FakeExec, other, body).contains("only the shell"), "an admitted tool that is not the shell is refused");
+        // the shell passes this check (the fake exec then rejects the method it does not know)
+        let shell = Peer { root_socket: false, console_shell: true };
+        assert!(handle_request(&g, &FakeExec, shell, body).contains("bad_params"));
     }
 
     #[test]

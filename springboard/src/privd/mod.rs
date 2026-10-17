@@ -15,6 +15,7 @@ use std::io::{self, Read, Write};
 pub mod accounts;
 pub mod auth;
 pub mod disk;
+pub mod endpoint_security;
 pub mod gate;
 pub mod loopdev;
 pub mod methods;

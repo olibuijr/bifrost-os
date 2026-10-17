@@ -6107,11 +6107,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/endpoint_security.rs, springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs",
+   "bifrost": "springboard/core/src/endpoint_security.rs, springboard/src/privd/endpoint_security.rs, springboard/src/shell/services/endpoint_security.rs, springboard/sdk/src/endpoint_security.rs, springboard/src/privd_client.rs, springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: bifrost_core::endpoint_security reads fanotify records, matches them to subscriptions with path muting, collects authorization answers (one deny denies, a missing answer allows at the deadline) and builds the kernel reply, with tests (endpoint_security::tests). Still missing, so the row stays partial: the root service that owns the fanotify descriptor, marks the mounts, resolves paths from /proc/self/fd, and relays events to subscribed apps over a socket with an entitlement check. That service and its app-facing SDK client need a design decision on who may subscribe.",
+   "note": "Built 2026-10-17: bifrost_core::endpoint_security reads fanotify records, matches them to subscriptions with path muting, collects authorization answers (one deny denies, a missing answer allows at the deadline) and builds the kernel reply. Wired 2026-10-17: bifrost-privd owns the fanotify descriptor (marks the real file systems from /proc/self/mountinfo, resolves paths from /proc/self/fd, never reads contents) and queues events per subscription; the shell service endpoint-security relays them to apps and answers, only for first-party system apps whose manifest declares entitlements = [\"endpoint-security\"]; bifrost_app::endpoint_security is the app client.",
    "rea": [],
-   "method": "built"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "endpoint_security::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::endpoint_security::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::server::tests::endpoint_security_is_for_the_shell_only"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::endpoint_security::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "endpoint_security::tests"
+    }
+   ],
+   "ready_note": "The path is real from the kernel feed to the app: privd (root) feeds the model from fanotify and queues events, the shell service checks the manifest entitlement on every call and relays poll/answer through privd, and a subscription ends when its app stops running. Only the shell may call privd's endpoint_security methods. Host tests drive the hub, the wire types, the entitlement rule and the shell service with a fake backend; the fanotify calls themselves (fanotify_init, fanotify_mark per file system, the read loop) cannot run in a host test and need a Midget run as root. Not done: the Settings > Privacy list of apps that hold the entitlement, and the manifest entitlement is not yet in app_policy::ENTITLEMENT_NAMES (the service reads the manifest itself)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.eoshostd.plist",

@@ -276,6 +276,37 @@ impl Client {
         self.call("service.set", vec![("id", privd::s(id)), ("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Endpoint security: subscribes `app` to the file events of `sub` (`endpoint_security.subscribe`). The shell calls
+    /// this only for an app that declares the `endpoint-security` entitlement. Returns the subscription id.
+    pub fn endpoint_subscribe(&self, app: &str, sub: &bifrost_core::endpoint_security::Subscription) -> Result<u32, ClientError> {
+        let j = sub.to_json();
+        let mut p = vec![("app", privd::s(app))];
+        for key in ["kinds", "auth", "muted"] {
+            if let Some(v) = j.get(key) {
+                p.push((key, v.clone()));
+            }
+        }
+        let r = self.call("endpoint_security.subscribe", p)?;
+        r.get("id").and_then(Json::as_u64).map(|n| n as u32).ok_or(ClientError { code: "internal".into(), message: "reply has no subscription id".into() })
+    }
+
+    pub fn endpoint_unsubscribe(&self, app: &str, id: u32) -> Result<(), ClientError> {
+        self.call("endpoint_security.unsubscribe", vec![("app", privd::s(app)), ("id", Json::Num(f64::from(id)))]).map(|_| ())
+    }
+
+    /// The queued events of a subscription, oldest first, and how many were dropped from a full queue since the start.
+    pub fn endpoint_poll(&self, app: &str, id: u32, max: usize) -> Result<(Vec<bifrost_core::endpoint_security::Delivered>, u64), ClientError> {
+        let r = self.call("endpoint_security.poll", vec![("app", privd::s(app)), ("id", Json::Num(f64::from(id))), ("max", Json::Num(max as f64))])?;
+        let events = r.get("events").and_then(Json::as_array).map(|a| a.iter().filter_map(bifrost_core::endpoint_security::Delivered::from_json).collect()).unwrap_or_default();
+        Ok((events, r.get("dropped").and_then(Json::as_u64).unwrap_or(0)))
+    }
+
+    /// An app's answer to an authorization event; true when it completed the round.
+    pub fn endpoint_answer(&self, app: &str, id: u32, round: u64, allow: bool) -> Result<bool, ClientError> {
+        let r = self.call("endpoint_security.answer", vec![("app", privd::s(app)), ("id", Json::Num(f64::from(id))), ("round", Json::Num(round as f64)), ("allow", Json::Bool(allow))])?;
+        Ok(r.get("resolved") == Some(&Json::Bool(true)))
+    }
+
     /// Settings > Sharing > Screen Sharing: the account whose password lets a viewer in (`screen_sharing.configure`).
     /// privd makes this computer's RSA key on the first call and writes the server configuration.
     pub fn screen_sharing_configure(&self, user: &str) -> Result<(), ClientError> {

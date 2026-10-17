@@ -12,6 +12,14 @@
 //!   deny from any of them denies it. When the deadline passes before every subscriber answered, the event is
 //!   allowed: a stuck security app must not freeze the computer. The round reports that it timed out.
 //! - Only the event's kinds, process id and path leave this module. File contents are never read.
+//! - Who may subscribe: only an app whose manifest declares the [`ENTITLEMENT`]. The shell service that apps call
+//!   makes that check (`shell/services/endpoint_security.rs`); the root service behind it (`privd/endpoint_security.rs`)
+//!   serves only the shell, so an app never reaches it directly.
+
+use crate::json::Json;
+
+/// The manifest entitlement (`entitlements = ["endpoint-security"]`) an app must declare to subscribe to file events.
+pub const ENTITLEMENT: &str = "endpoint-security";
 
 /// Kernel event bits (`FAN_*`).
 pub const ACCESS: u64 = 0x1;
@@ -42,6 +50,22 @@ pub enum Kind {
 impl Kind {
     pub const ALL: [Kind; 6] = [Kind::Access, Kind::Modify, Kind::CloseWrite, Kind::CloseNoWrite, Kind::Open, Kind::Exec];
 
+    /// The name on the wire.
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::Access => "access",
+            Kind::Modify => "modify",
+            Kind::CloseWrite => "close_write",
+            Kind::CloseNoWrite => "close_nowrite",
+            Kind::Open => "open",
+            Kind::Exec => "exec",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Kind> {
+        Kind::ALL.into_iter().find(|k| k.name() == name)
+    }
+
     /// The kernel bit for the notification of this kind.
     pub fn bit(self) -> u64 {
         match self {
@@ -63,6 +87,17 @@ pub enum AuthKind {
 }
 
 impl AuthKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            AuthKind::Open => "open",
+            AuthKind::Exec => "exec",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<AuthKind> {
+        [AuthKind::Open, AuthKind::Exec].into_iter().find(|k| k.name() == name)
+    }
+
     pub fn bit(self) -> u64 {
         match self {
             AuthKind::Open => OPEN_PERM,
@@ -256,6 +291,11 @@ pub struct AuthRound {
 }
 
 impl AuthRound {
+    /// The subscribers that were asked to answer.
+    pub fn asked(&self) -> &[u32] {
+        &self.asked
+    }
+
     /// Records a subscriber's answer. An answer from a subscriber that was not asked, or a second one, is ignored.
     pub fn answer(&mut self, id: u32, decision: Decision) {
         if self.asked.contains(&id) && !self.answers.iter().any(|(i, _)| *i == id) {
@@ -281,9 +321,139 @@ impl AuthRound {
     }
 }
 
+/// Most path prefixes one subscription may mute.
+pub const MAX_MUTED: usize = 32;
+/// Longest path the wire carries.
+pub const MAX_PATH: usize = 4096;
+
+fn names(j: &Json, key: &str) -> Result<Vec<String>, String> {
+    match j.get(key) {
+        None | Some(Json::Null) => Ok(Vec::new()),
+        Some(Json::Arr(items)) => items.iter().map(|v| v.as_str().map(str::to_string).ok_or_else(|| format!("{key} must hold strings"))).collect(),
+        Some(_) => Err(format!("{key} must be a list")),
+    }
+}
+
+impl Subscription {
+    /// Reads `{kinds: [..], auth: [..], muted: [..]}`. Unknown names, relative or oversized paths and an empty
+    /// subscription are refused, so a damaged request never subscribes to more than it names.
+    pub fn from_json(j: &Json) -> Result<Subscription, String> {
+        let mut s = Subscription::default();
+        for n in names(j, "kinds")? {
+            let k = Kind::from_name(&n).ok_or_else(|| format!("unknown event kind {n}"))?;
+            if !s.kinds.contains(&k) {
+                s.kinds.push(k);
+            }
+        }
+        for n in names(j, "auth")? {
+            let k = AuthKind::from_name(&n).ok_or_else(|| format!("unknown authorization kind {n}"))?;
+            if !s.auth.contains(&k) {
+                s.auth.push(k);
+            }
+        }
+        s.muted = names(j, "muted")?;
+        if s.muted.len() > MAX_MUTED {
+            return Err("too many muted paths".into());
+        }
+        if s.muted.iter().any(|m| !m.starts_with('/') || m.len() > MAX_PATH || m.contains('\0')) {
+            return Err("a muted path must be absolute".into());
+        }
+        if s.kinds.is_empty() && s.auth.is_empty() {
+            return Err("subscribe to at least one event kind".into());
+        }
+        Ok(s)
+    }
+
+    pub fn to_json(&self) -> Json {
+        let list = |v: Vec<&str>| Json::Arr(v.into_iter().map(|n| Json::Str(n.into())).collect());
+        Json::Obj(vec![
+            ("kinds".into(), list(self.kinds.iter().map(|k| k.name()).collect())),
+            ("auth".into(), list(self.auth.iter().map(|k| k.name()).collect())),
+            ("muted".into(), Json::Arr(self.muted.iter().map(|m| Json::Str(m.clone())).collect())),
+        ])
+    }
+}
+
+/// One event as an app receives it: what happened, who did it, and where. `round` is set when the app must answer an
+/// authorization (`auth` says which), and is the number to answer with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Delivered {
+    pub kinds: Vec<Kind>,
+    pub auth: Option<AuthKind>,
+    pub pid: i32,
+    pub path: String,
+    pub round: Option<u64>,
+}
+
+impl Delivered {
+    pub fn to_json(&self) -> Json {
+        let mut f = vec![
+            ("kinds".to_string(), Json::Arr(self.kinds.iter().map(|k| Json::Str(k.name().into())).collect())),
+            ("pid".to_string(), Json::Num(f64::from(self.pid))),
+            ("path".to_string(), Json::Str(self.path.clone())),
+        ];
+        if let Some(a) = self.auth {
+            f.push(("auth".into(), Json::Str(a.name().into())));
+        }
+        if let Some(r) = self.round {
+            f.push(("round".into(), Json::Num(r as f64)));
+        }
+        Json::Obj(f)
+    }
+
+    pub fn from_json(j: &Json) -> Option<Delivered> {
+        let kinds = j.get("kinds")?.as_array()?.iter().filter_map(|k| Kind::from_name(k.as_str()?)).collect();
+        Some(Delivered {
+            kinds,
+            auth: j.get("auth").and_then(Json::as_str).and_then(AuthKind::from_name),
+            pid: j.get("pid")?.number()? as i32,
+            path: j.get("path")?.as_str()?.to_string(),
+            round: j.get("round").and_then(Json::as_u64),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_subscription_travels_as_json_and_comes_back_the_same() {
+        let sub = Subscription { kinds: vec![Kind::Open, Kind::Exec], auth: vec![AuthKind::Exec], muted: vec!["/proc".into(), "/tmp/x".into()] };
+        assert_eq!(Subscription::from_json(&sub.to_json()), Ok(sub));
+    }
+
+    #[test]
+    fn a_damaged_subscription_is_refused() {
+        let j = |text: &str| crate::json::parse(text).unwrap();
+        assert!(Subscription::from_json(&j(r#"{"kinds":["teleport"]}"#)).is_err());
+        assert!(Subscription::from_json(&j(r#"{"auth":["modify"]}"#)).is_err(), "only open and exec can be authorized");
+        assert!(Subscription::from_json(&j(r#"{}"#)).is_err(), "nothing subscribed");
+        assert!(Subscription::from_json(&j(r#"{"kinds":["open"],"muted":["relative/path"]}"#)).is_err());
+        assert!(Subscription::from_json(&j(r#"{"kinds":"open"}"#)).is_err());
+        let many = format!(r#"{{"kinds":["open"],"muted":[{}]}}"#, vec![r#""/a""#; MAX_MUTED + 1].join(","));
+        assert!(Subscription::from_json(&j(&many)).is_err());
+        let one = Subscription::from_json(&j(r#"{"kinds":["open","open"],"auth":["open"]}"#)).unwrap();
+        assert_eq!(one.kinds, [Kind::Open]);
+        assert_eq!(one.auth, [AuthKind::Open]);
+    }
+
+    #[test]
+    fn a_delivered_event_round_trips() {
+        let e = Delivered { kinds: vec![Kind::Open], auth: Some(AuthKind::Open), pid: 42, path: "/etc/passwd".into(), round: Some(7) };
+        assert_eq!(Delivered::from_json(&e.to_json()), Some(e));
+        let n = Delivered { kinds: vec![Kind::Modify, Kind::CloseWrite], auth: None, pid: 1, path: "/home/a/f".into(), round: None };
+        assert_eq!(Delivered::from_json(&n.to_json()), Some(n));
+    }
+
+    #[test]
+    fn the_round_names_who_was_asked() {
+        let mut r = Router::new();
+        let a = r.subscribe(Subscription { auth: vec![AuthKind::Exec], ..Default::default() });
+        let _b = r.subscribe(Subscription { kinds: vec![Kind::Open], ..Default::default() });
+        let ev = RawEvent { mask: OPEN_EXEC_PERM, fd: 5, pid: 9 };
+        assert_eq!(r.auth_round(&ev, "/usr/bin/x").unwrap().asked(), [a]);
+    }
 
     fn record(mask: u64, fd: i32, pid: i32) -> Vec<u8> {
         let mut r = Vec::new();
