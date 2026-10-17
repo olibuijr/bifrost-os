@@ -250,8 +250,27 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/usernotif.rs",
+   "bifrost": "springboard/src/shell/usernotif.rs, springboard/src/shell/notify/store.rs, springboard/src/shell/notify/schedule.rs",
+   "ready_note": "Delivery, storage and scheduling of notifications run in the shell (usernotif.rs, notify/store.rs, notify/schedule.rs). Push delivery through the reference push service is an Apple service BifrOSt does not have, so it is not part of this row.",
    "status": "partial",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::schedule::tests"
+    }
+   ],
    "note": "role filled by usernotif.rs, notify/store.rs and notify/schedule.rs; no separate process; no per-app delivery daemon or push",
    "rea": [],
    "method": "audit"
@@ -1961,8 +1980,22 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/notify/permission.rs",
+   "bifrost": "springboard/src/shell/notify/permission.rs, springboard/src/shell/permission_sheet.rs",
+   "ready_note": "Notification permission requests are answered by the shell (notify/permission.rs) and shown as shell sheets (permission_sheet.rs). There is no separate process, which is a design choice, not a missing job.",
    "status": "partial",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::permission::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    }
+   ],
    "note": "role filled by notify/permission.rs and permission_sheet.rs; no separate process; alerts are shell sheets",
    "rea": [],
    "method": "audit"
