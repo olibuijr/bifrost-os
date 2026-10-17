@@ -1,0 +1,44 @@
+#version 450
+// Morph-target accumulation and linear-blend skinning, one invocation per vertex (GPU twin of
+// render/src/kernel_mesh_vertex.rs). The positions first receive `morph_weight * morph_delta` (a delta set the host
+// pre-scaled per target can use weight 1), then the weighted sum of the point through up to four joint matrices.
+// The palette holds GLSL (column-major) matrices; the CPU twin keeps m[row][col], so upload its transpose.
+// Our own implementation of the standard formulation.
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Positions { vec4 pos_in[]; };
+layout(std430, set = 0, binding = 1) readonly buffer MorphDelta { vec4 morph[]; };
+layout(std430, set = 0, binding = 2) readonly buffer Joints { uvec4 joint[]; };
+layout(std430, set = 0, binding = 3) readonly buffer Weights { vec4 weight[]; };
+layout(std430, set = 0, binding = 4) readonly buffer Palette { mat4 palette[]; };
+layout(std430, set = 0, binding = 5) writeonly buffer Output { vec4 pos_out[]; };
+
+layout(push_constant) uniform Push {
+    uint vertex_count;
+    uint joint_count;
+    float morph_weight;
+} pc;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= pc.vertex_count) {
+        return;
+    }
+    vec3 p = pos_in[i].xyz + pc.morph_weight * morph[i].xyz;
+    vec4 w = max(weight[i], vec4(0.0));
+    float total = w.x + w.y + w.z + w.w;
+    if (total <= 1e-9) {
+        pos_out[i] = vec4(p, 1.0);
+        return;
+    }
+    w /= total;
+    vec3 acc = vec3(0.0);
+    uvec4 j = joint[i];
+    for (int k = 0; k < 4; k++) {
+        if (w[k] > 0.0 && j[k] < pc.joint_count) {
+            acc += w[k] * (palette[j[k]] * vec4(p, 1.0)).xyz;
+        }
+    }
+    pos_out[i] = vec4(acc, 1.0);
+}

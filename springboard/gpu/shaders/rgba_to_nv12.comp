@@ -1,0 +1,43 @@
+#version 450
+// RGBA to NV12 conversion for capture (GPU twin of render/src/kernel_video_convert.rs): one invocation handles one 2x2
+// block, writes its four luma samples to the r8 plane and the averaged Cb/Cr pair to the rg8 plane at half size.
+// Limited range, BT.709 or BT.601 (flag), our own implementation of the published ITU matrices.
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform texture2D src_tex;
+layout(set = 0, binding = 1) uniform sampler smp;
+layout(set = 0, binding = 2, r8) uniform writeonly image2D luma_img;
+layout(set = 0, binding = 3, rg8) uniform writeonly image2D chroma_img;
+
+layout(push_constant) uniform Push {
+    vec2 size;  // source size in texels (even)
+    uint bt709; // 1 = BT.709, 0 = BT.601
+} pc;
+
+vec3 ycc(vec3 rgb, vec2 k) {
+    float kg = 1.0 - k.x - k.y;
+    float y = k.x * rgb.r + kg * rgb.g + k.y * rgb.b;
+    return vec3(y, (rgb.b - y) / (2.0 * (1.0 - k.y)), (rgb.r - y) / (2.0 * (1.0 - k.x)));
+}
+
+void main() {
+    ivec2 b = ivec2(gl_GlobalInvocationID.xy);
+    if (b.x * 2 >= int(pc.size.x) || b.y * 2 >= int(pc.size.y)) {
+        return;
+    }
+    vec2 k = pc.bt709 == 1u ? vec2(0.2126, 0.0722) : vec2(0.299, 0.114);
+    vec3 avg = vec3(0.0);
+    for (int j = 0; j < 2; j++) {
+        for (int i = 0; i < 2; i++) {
+            ivec2 p = b * 2 + ivec2(i, j);
+            vec3 rgb = texture(sampler2D(src_tex, smp), (vec2(p) + 0.5) / pc.size).rgb;
+            avg += rgb * 0.25;
+            float y = 16.0 / 255.0 + ycc(rgb, k).x * (219.0 / 255.0);
+            imageStore(luma_img, p, vec4(y, 0.0, 0.0, 1.0));
+        }
+    }
+    vec3 c = ycc(avg, k);
+    vec2 cc = vec2(128.0 / 255.0) + c.yz * (224.0 / 255.0);
+    imageStore(chroma_img, b, vec4(cc, 0.0, 1.0));
+}

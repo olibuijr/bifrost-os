@@ -1,0 +1,42 @@
+#version 450
+// Layer mask and extended-range tone map in one pass (GPU twin of render/src/kernel_layer_fx.rs): the layer's
+// premultiplied colour is scaled by the mask plane, then the colour is rolled off above the knee so the brightest
+// value approaches the display headroom. Our own implementation of the usual exponential roll-off.
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform texture2D layer_tex;
+layout(set = 0, binding = 1) uniform texture2D mask_tex;
+layout(set = 0, binding = 2) uniform sampler smp;
+layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D dst_img;
+
+layout(push_constant) uniform Push {
+    vec2 size;      // texels
+    float headroom; // display headroom, 1.0 = SDR white; at or below the knee there is no extended range
+    float knee;     // roll-off start, 0.8 for the CPU twin
+} pc;
+
+float roll_off(float x) {
+    x = max(x, 0.0);
+    if (pc.headroom <= pc.knee) {
+        return min(x, 1.0);
+    }
+    if (x <= pc.knee) {
+        return x;
+    }
+    float span = pc.headroom - pc.knee;
+    return pc.knee + span * (1.0 - exp(-(x - pc.knee) / span));
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.size.x) || p.y >= int(pc.size.y)) {
+        return;
+    }
+    vec2 uv = (vec2(p) + 0.5) / pc.size;
+    vec4 c = texture(sampler2D(layer_tex, smp), uv);
+    float m = texture(sampler2D(mask_tex, smp), uv).r;
+    c *= m;
+    c.rgb = vec3(roll_off(c.r), roll_off(c.g), roll_off(c.b));
+    imageStore(dst_img, p, c);
+}

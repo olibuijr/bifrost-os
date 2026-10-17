@@ -102,11 +102,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_array_ops.rs; springboard/gpu/shaders/array_softmax.comp",
+   "status": "partial",
+   "note": "The core array operations of a tensor compute library now exist on the CPU (kernel_array_ops.rs) with GLSL twins for matmul and softmax; neural-network layers are in bifrost-ui cnn_layers.rs. Quantised, FFT, convolution and sort kernels are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_array_ops::tests"
+    }
+   ],
+   "ready_note": "Ready (core operations): array kernels in springboard/render/src/kernel_array_ops.rs (matmul, transpose, unary maps exp/log/tanh/sigmoid/SiLU/GELU/ReLU, row bias, sum/mean/max/argmax along an axis, stable softmax and log-softmax, layer norm, RMS norm, cumulative sum, row gather, top-k), tests kernel_array_ops::tests; GLSL twins matmul.comp (existing) and the new array_softmax.comp (not wired to a pipeline). The large kernel catalogue of the reference library (quantised matmul, convolutions, FFT, sort) is not reproduced. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mvf.metallib",
@@ -174,11 +183,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_materialx.rs",
+   "status": "partial",
+   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_materialx::tests"
+    }
+   ],
+   "ready_note": "Ready (node subset and compiler): material-graph node library and graph compiler in springboard/render/src/kernel_materialx.rs (gradient and fractal noise, cellular noise, ramps, split, checkerboard, remap, contrast, HSV conversion, 2-D placement, normal-map node; ShaderGraph with CPU evaluation and GLSL code generation including a noise prelude that matches the CPU hash), tests kernel_materialx::tests. The simpler evaluator is shading_graph.rs; surface shading is pbr.rs. Only a subset of the standard node library is implemented, with scalar graphs; no GLSL shader file was added because the compiler emits GLSL at run time. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/opticalFlowMetalLib.metallib",
@@ -225,11 +243,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/compute.rs; springboard/ui/src/compute_dispatch.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/ui/src/compute.rs; springboard/ui/src/compute_dispatch.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_array_ops.rs; springboard/gpu/shaders/array_softmax.comp",
    "status": "partial",
-   "note": "Device placement, dispatch geometry and eager layers exist; no array kernel library ships and no shader runs these operations. Shader pass: open. This is a general array-op kernel library (matmul, reductions, elementwise), not a graphics shader; no GPU kernel is built.",
+   "note": "The core array operations of a tensor compute library now exist on the CPU (kernel_array_ops.rs) with GLSL twins for matmul and softmax; neural-network layers are in bifrost-ui cnn_layers.rs. Quantised, FFT, convolution and sort kernels are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_array_ops::tests"
+    }
+   ],
+   "ready_note": "Ready (core operations): array kernels in springboard/render/src/kernel_array_ops.rs (matmul, transpose, unary maps exp/log/tanh/sigmoid/SiLU/GELU/ReLU, row bias, sum/mean/max/argmax along an axis, stable softmax and log-softmax, layer norm, RMS norm, cumulative sum, row gather, top-k), tests kernel_array_ops::tests; GLSL twins matmul.comp (existing) and the new array_softmax.comp (not wired to a pipeline). The large kernel catalogue of the reference library (quantised matmul, convolutions, FFT, sort) is not reproduced. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/mxi_archive.metallib",
@@ -423,11 +450,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/render/src/kernel_materialx.rs",
    "status": "partial",
-   "note": "Materials are ordered named properties with a shading model; there is no shading graph compiler, so graph shaders are not generated. Shader pass: open. The job is a shading graph compiler that generates shaders from a node graph; that is a large job, not one kernel.",
+   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_materialx::tests"
+    }
+   ],
+   "ready_note": "Ready (node subset and compiler): material-graph node library and graph compiler in springboard/render/src/kernel_materialx.rs (gradient and fractal noise, cellular noise, ramps, split, checkerboard, remap, contrast, HSV conversion, 2-D placement, normal-map node; ShaderGraph with CPU evaluation and GLSL code generation including a noise prelude that matches the CPU hash), tests kernel_materialx::tests. The simpler evaluator is shading_graph.rs; surface shading is pbr.rs. Only a subset of the standard node library is implemented, with scalar graphs; no GLSL shader file was added because the compiler emits GLSL at run time. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-Common.metallib",

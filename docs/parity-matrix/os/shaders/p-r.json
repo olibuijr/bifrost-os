@@ -330,11 +330,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled. Shader pass: open. The job is feature detection and descriptor matching for photogrammetry, a multi-stage pipeline with no detector yet.",
+   "bifrost": "springboard/render/src/kernel_feature_match.rs",
+   "status": "partial",
+   "note": "Corner detection, binary descriptors and descriptor matching now exist on the CPU in kernel_feature_match.rs beside the stereo block matcher. Scale and rotation invariance, geometric verification and reconstruction are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_feature_match::tests"
+    }
+   ],
+   "ready_note": "Ready: feature detection and matching kernels in springboard/render/src/kernel_feature_match.rs (FAST-style segment-test corners with non-maximum suppression, 256-bit BRIEF-style descriptors from a fixed hash-derived pair pattern, Hamming distance, brute-force matching with ratio test and cross-check), tests kernel_feature_match::tests; dense two-view matching stays in stereo.rs. This is the detection and matching stage only, not a photogrammetry reconstruction; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Meshing_Kernels.metallib",
@@ -393,11 +402,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled. Shader pass: open. The encoder preprocessing kernels are not identified from the row, so there is no job to implement yet.",
+   "bifrost": "springboard/render/src/kernel_video_filters.rs",
+   "status": "partial",
+   "note": "Encoder-side analysis, deinterlace, temporal denoise, flow warp and pyramid kernels now exist on the CPU in kernel_video_filters.rs, next to block_motion.rs, frame_interp.rs and the shutter blend and deghost in temporal_upscale.rs. There is no GPU video pipeline yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_video_filters::tests"
+    }
+   ],
+   "ready_note": "Ready: video-processing kernels in springboard/render/src/kernel_video_filters.rs (SAD, 4x4 Hadamard SATD, 2x luma downscale, histogram scene-cut score, edge-directed deinterlace, motion-adaptive temporal denoise, flow warp, Gaussian pyramid step), tests kernel_video_filters::tests. Motion search is block_motion.rs, interpolation frame_interp.rs, shutter blend and median deghost temporal_upscale.rs; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   }
  ]
 }
