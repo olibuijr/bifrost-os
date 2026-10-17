@@ -12,6 +12,7 @@
 //! retry time the backend reports, or 30 seconds; a locked attempt is `authentication_failed` without asking the
 //! backend. Error names match `bifrost_app::local_auth::LAError::wire`.
 use super::{Shell, SystemService};
+use bifrost_core::biometry as bio;
 use bifrost_core::json::Json;
 use std::collections::BTreeMap;
 
@@ -79,13 +80,28 @@ fn policy(params: &Json) -> Result<Policy, String> {
     }
 }
 
+/// The device facts the shell knows: no biometric sensor, and the account password as the passcode.
+pub fn device_facts(password_set: bool) -> bio::Device {
+    bio::Device { biometry: bio::BiometryType::None, enrolled_sets: Vec::new(), passcode_set: password_set, failures: 0, max_failures: 3 }
+}
+
+/// The biometry model's requirement for an app policy: device-owner asks for the default (biometry, then passcode);
+/// the biometrics policy asks for biometry alone.
+fn requirement(policy: Policy) -> bio::Requirement {
+    match policy {
+        Policy::DeviceOwner => bio::Policy::DeviceOwner.requirement(),
+        Policy::Biometrics => bio::Policy::BiometricsOnly.requirement(),
+    }
+}
+
 impl LocalAuth {
-    /// The policy check without a prompt. `password_set` is whether the device has an account password.
+    /// The policy check without a prompt, decided by the biometry model. `password_set` is whether the device has an
+    /// account password.
     pub fn can_evaluate(policy: Policy, password_set: bool) -> Result<(), Failure> {
-        match policy {
-            Policy::Biometrics => Err(Failure::BiometryNotAvailable),
-            Policy::DeviceOwner if password_set => Ok(()),
-            Policy::DeviceOwner => Err(Failure::PasscodeNotSet),
+        match bio::resolve(requirement(policy), &device_facts(password_set), None) {
+            Ok(_) => Ok(()),
+            Err(bio::Failure::PasscodeNotSet) => Err(Failure::PasscodeNotSet),
+            Err(_) => Err(Failure::BiometryNotAvailable),
         }
     }
 
@@ -171,6 +187,14 @@ mod tests {
         assert_eq!(LocalAuth::can_evaluate(Policy::Biometrics, true), Err(Failure::BiometryNotAvailable));
         assert_eq!(LocalAuth::can_evaluate(Policy::DeviceOwner, true), Ok(()));
         assert_eq!(LocalAuth::can_evaluate(Policy::DeviceOwner, false), Err(Failure::PasscodeNotSet));
+    }
+
+    #[test]
+    fn the_biometry_model_decides_the_policy_check() {
+        assert_eq!(bio::resolve(requirement(Policy::DeviceOwner), &device_facts(true), None), Ok(bio::Method::Passcode));
+        assert_eq!(bio::resolve(requirement(Policy::DeviceOwner), &device_facts(false), None), Err(bio::Failure::PasscodeNotSet));
+        assert_eq!(bio::resolve(requirement(Policy::Biometrics), &device_facts(true), None), Err(bio::Failure::BiometryUnavailable));
+        assert_eq!(LocalAuth::can_evaluate(Policy::Biometrics, false), Err(Failure::BiometryNotAvailable));
     }
 
     #[test]
