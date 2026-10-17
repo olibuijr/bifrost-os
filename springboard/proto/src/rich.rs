@@ -613,13 +613,9 @@ pub(crate) mod tag {
     pub const NOTIFY_QUERY: u32 = 0x143;
     pub const NOTIFY_SETTINGS: u32 = 0x14a;
     pub const NOTIFY_AUTHORIZE: u32 = 0x14b;
-<<<<<<< HEAD
     pub const NOTIFY_PRESENT_REPLY: u32 = 0x14c;
     pub const NOTIFY_PRESENT_DELEGATE: u32 = 0x14d;
-||||||| c2b708986
-=======
     pub const NOTIFY_SCHEDULE: u32 = 0x14e;
->>>>>>> worktree-agent-ab1d49c0cdbfd05b4
     pub const SHARE: u32 = 0x144;
     pub const DRAG_BEGIN: u32 = 0x145;
     pub const DRAG_REGISTER: u32 = 0x146;
@@ -801,7 +797,6 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, *request);
             b.push(*options);
         }
-<<<<<<< HEAD
         ToShell::NotifyPresentDelegate { enabled } => {
             u32_(b, tag::NOTIFY_PRESENT_DELEGATE);
             b.push(*enabled as u8);
@@ -811,15 +806,12 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, *token);
             b.push(*options);
         }
-||||||| c2b708986
-=======
         ToShell::NotifySchedule { request, req, trigger } => {
             u32_(b, tag::NOTIFY_SCHEDULE);
             u32_(b, *request);
             put_request(b, req);
             put_trigger(b, trigger);
         }
->>>>>>> worktree-agent-ab1d49c0cdbfd05b4
         ToShell::DistPost { name, user_info } => {
             u32_(b, tag::DIST_POST);
             put_dist(b, name, user_info);
@@ -886,7 +878,6 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
             }
             ToShell::NotifyAuthorize { request, options }
         }
-<<<<<<< HEAD
         tag::NOTIFY_PRESENT_DELEGATE => ToShell::NotifyPresentDelegate { enabled: flag(r)? },
         tag::NOTIFY_PRESENT_REPLY => {
             let (token, options) = (r.u32()?, r.u8()?);
@@ -895,15 +886,12 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
             }
             ToShell::NotifyPresentReply { token, options }
         }
-||||||| c2b708986
-=======
         tag::NOTIFY_SCHEDULE => {
             let request = r.u32()?;
             let req = get_request(r)?;
             let trigger = get_trigger(r)?;
             ToShell::NotifySchedule { request, req, trigger }
         }
->>>>>>> worktree-agent-ab1d49c0cdbfd05b4
         tag::DIST_POST => {
             let (name, user_info) = get_dist(r)?;
             ToShell::DistPost { name, user_info }
