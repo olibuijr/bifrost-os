@@ -26,14 +26,14 @@
    "apple": "MPSImageErode, MPSImageDilate, MPSImageAreaMin, MPSImageAreaMax",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "Rectangular minimum and maximum (erode, dilate, area min and area max) are tested headless in tests/parity_sdk-complete-23.rs, including edge clamping and even-side refusal. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+   "note": "Rectangular minimum and maximum (erode, dilate, area min and area max) are tested headless in tests/parity_sdk-complete-23.rs, including edge clamping and even-side refusal. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
   },
   {
    "feature": "Convolution, median, Sobel and Laplacian filters",
    "apple": "MPSImageConvolution, MPSImageMedian, MPSImageSobel, MPSImageLaplacian",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "Convolution with a caller kernel, median, Sobel magnitude and Laplacian are tested headless in tests/parity_sdk-complete-23.rs with concrete pixel values. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+   "note": "Convolution with a caller kernel, median, Sobel magnitude and Laplacian are tested headless in tests/parity_sdk-complete-23.rs with concrete pixel values. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
   },
   {
    "feature": "Pyramid filters (Gaussian, Laplacian)",
@@ -47,14 +47,14 @@
    "apple": "MPSImageThresholdBinary, ThresholdToZero, ThresholdTruncate and their inverses",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "The five threshold modes (binary, binary inverse, to zero, to zero inverse, truncate) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+   "note": "The five threshold modes (binary, binary inverse, to zero, to zero inverse, truncate) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
   },
   {
    "feature": "Histogram, histogram equalization and specification",
    "apple": "MPSImageHistogram, MPSImageHistogramEqualization, MPSImageHistogramSpecification",
    "bifrost": "springboard/render/src/filter.rs",
    "status": "partial",
-   "note": "Histogram binning, histogram equalization and histogram specification (filter::specify) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps."
+   "note": "Histogram binning, histogram equalization and histogram specification (filter::specify) are tested headless in tests/parity_sdk-complete-23.rs. Gap: no app-facing image object, and the filters are not wired into the shell or apps. Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian over an Image); tests pixel_filter::tests. Not yet wired into the shell or apps, and no GPU dispatch."
   },
   {
    "feature": "Integral images and statistics (mean, variance, min and max)",
