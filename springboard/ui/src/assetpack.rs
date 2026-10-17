@@ -198,6 +198,21 @@ impl AssetPackManager {
         Ok(())
     }
 
+    /// Restores the installed version of a pack that an earlier run downloaded (the local state an app saved). The
+    /// pack must be in the manifest; a version above the manifest's is kept as is and reads as available.
+    pub fn set_installed(&mut self, id: &str, version: u32) -> Result<(), PackError> {
+        if self.manifest.asset_pack(id).is_none() {
+            return Err(PackError::UnknownPack(id.to_string()));
+        }
+        self.installed.insert(id.to_string(), version);
+        Ok(())
+    }
+
+    /// The installed version of a pack, `None` when it is not on the device.
+    pub fn installed_version(&self, id: &str) -> Option<u32> {
+        self.installed.get(id).copied()
+    }
+
     /// `remove(assetPackWithID:)`: returns the logical bytes freed. A pack that is not on the device frees nothing.
     pub fn remove(&mut self, id: &str) -> Result<u64, PackError> {
         let pack = self.manifest.asset_pack(id).ok_or_else(|| PackError::UnknownPack(id.to_string()))?;

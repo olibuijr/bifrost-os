@@ -447,6 +447,7 @@ pub mod picture_writer;
 pub mod photo_library;
 pub mod photo_picker;
 pub mod photo_intents;
+pub mod asset_packs;
 pub mod photo_editing;
 pub mod photo_project;
 pub mod image_blur;
