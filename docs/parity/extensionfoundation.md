@@ -39,9 +39,9 @@ Not run: per the task, no cargo build or test was run in this stage. Another sta
 
 ## Remaining gaps
 
-1. The shell does not read package manifests into the registry at login, on install or on removal.
-2. The shell launcher does not start an extension process for a host request, and does not report running or exit to the table. The launcher is `springboard/src/bare/app_policy.rs` and the app manager is `springboard/src/bare/app_manager.rs`.
-3. There is no connection handler type. An extension cannot receive a host connection through a closure, unlike the app control socket in `springboard/sdk/src/control.rs`.
+1. (Done 2026-10-17) `bifrost_ui::extension_manifest::scan` reads the `[[extension_point]]` and `[[extension]]` tables of installed manifests into the registry; `shell::extension_host::Host::installed` does it for the installed packages, and a switched-off extension is not offered. It is read when a host is created (the shell's snapshot, or Files at launch), not on install or removal.
+2. (Done 2026-10-17) `springboard/src/shell/extension_host.rs` starts the package's app binary in extension mode on the first call, marks the process running in the `ProcessTable` after `extension.ping`, and stops it after 30 s idle. It runs unsandboxed: `bare/app_policy` does not bind the socket directory.
+3. (Done 2026-10-17) `bifrost_app::extension_service::serve` is the extension side: it answers on the control socket with a `Service` closure-like handler (`FileProviderService` for file providers). The in-memory queues of the `ProcessTable` are not used for transport; the socket is.
 4. Share-sheet extensions installed by apps: the share menu (`springboard/sdk/src/share.rs`, shell side in `springboard/src/shell/sharing.rs`) does not read the registry.
 5. Extension point attributes for user interface and enhanced security are not modelled, and there is no availability update stream (Apple's deprecated `availabilityUpdates`, and `AppExtensionPoint.Monitor`).
 6. The `ExtensionPointDefining` protocol has no equivalent. A point is declared with a value, not a type conforming to a trait.

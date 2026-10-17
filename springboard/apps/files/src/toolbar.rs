@@ -47,6 +47,8 @@ impl Files {
             tag.map_or("Tags", |t| t.label()).into()
         } else if let Some(i) = smart::folder_index(&self.path) {
             self.smart.get(i).map_or("Smart Folder", |f| f.name.as_str()).into()
+        } else if provider::is_path(&self.path) {
+            provider::shared().title(&self.path)
         } else if self.in_recents() {
             "Recents".into()
         } else {

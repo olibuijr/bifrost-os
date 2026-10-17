@@ -56,6 +56,7 @@ mod ops;
 mod pathbar;
 mod perf;
 mod peek;
+mod provider;
 mod search;
 mod smart;
 mod server;
@@ -405,6 +406,10 @@ impl App for Files {
         }
         if let Some(folder) = handoff::take_request(&ctx.data_dir) {
             self.navigate(folder, true);
+            changed = true;
+        }
+        // a provider thread left a footer message (a download failed, or the file is on its way to its app)
+        if self.take_provider_notice() {
             changed = true;
         }
         // a folder's batches land as the worker reads them; the final listing replaces them and ends the load

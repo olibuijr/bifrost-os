@@ -39,7 +39,10 @@ impl Files {
         let smart = smart::folder_index(&path).and_then(|i| self.smart.get(i)).map(|f| (f.clone(), self.tag_index.clone()));
         let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
         // the stand-in listings have no folder above them to show
-        let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || smart::folder_index(&path).is_some() || path == self.bin();
+        let in_provider = provider::is_path(&path);
+        let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || smart::folder_index(&path).is_some() || path == self.bin() || in_provider;
+        // a provider folder is listed by its extension, which the host starts if it is not running
+        let providers = in_provider.then(provider::shared);
         let (sort, bin) = (self.sort, self.bin());
         let chain = if virtual_folder { vec![] } else { ancestor_chain(&path) };
         let work = move || {
@@ -50,6 +53,8 @@ impl Files {
                 Ok(folder.results(&index, now))
             } else if path == Path::new(fs::RECENTS) {
                 Ok(fs::recent_in(&roots, fs::RECENT_LIMIT))
+            } else if let Some(providers) = providers {
+                providers.list(&path)
             } else {
                 // a folder's rows go to the UI as they are read, so a large folder shows its first rows at once
                 fs::list_batched(&path, |batch| {
@@ -134,6 +139,10 @@ impl Files {
         let Some(e) = self.rows.get(i).cloned() else {
             return;
         };
+        if provider::is_path(&e.path) {
+            self.open_provider_item(e);
+            return;
+        }
         self.index_opened(&e);
         if e.is_dir {
             self.navigate(e.path, true)
@@ -484,6 +493,6 @@ impl Files {
     }
     /// Recents, Tags and Smart Folders list files from several places; nothing can be created or pasted into them.
     pub(crate) fn in_recents(&self) -> bool {
-        self.path == Path::new(fs::RECENTS) || self.path.starts_with(TAGGED) || smart::folder_index(&self.path).is_some()
+        self.path == Path::new(fs::RECENTS) || self.path.starts_with(TAGGED) || smart::folder_index(&self.path).is_some() || provider::is_path(&self.path)
     }
 }
