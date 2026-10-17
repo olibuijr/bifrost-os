@@ -23,6 +23,17 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
+/// Runs one thumbnail job so that a hostile or broken file cannot take the worker down with it. A decoder that panics
+/// on a damaged file would otherwise end the worker thread before it reports back, and the slot it held in
+/// [`WORKERS`] would never be given up. The panic becomes the job's error, the app hears `failed`, and the file is
+/// not drawn again as a thumbnail (the type icon is shown instead).
+pub fn contained<T>(work: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)) {
+        Ok(result) => result,
+        Err(_) => Err("this file could not be read safely, so no thumbnail was made".to_string()),
+    }
+}
+
 /// The preview panel asks through this service too; its own generator path (the `quick-look` service) answers it, so
 /// the app generators are not asked a second time for the panel's files.
 const PANEL_ASKER: &str = "shell.quick-look";
@@ -195,7 +206,7 @@ impl Thumbnails {
             std::thread::spawn(move || {
                 // providers are not Send: each worker builds its own generator over the shared cache directory
                 let g = Generator::new(cache);
-                let result = g.generate(&job.req);
+                let result = contained(|| g.generate(&job.req));
                 let _ = tx.send(Done { key: job.key, file: job.req.path.clone(), px: job.req.px(), result });
             });
         }
@@ -295,6 +306,14 @@ mod tests {
     use crate::shell::photos::thumbs::DiskCache;
     use std::path::PathBuf;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_job_that_panics_becomes_an_error_and_a_job_that_returns_is_untouched() {
+        let hostile: Result<u32, String> = contained(|| panic!("decoder fell over"));
+        assert_eq!(hostile, Err("this file could not be read safely, so no thumbnail was made".to_string()));
+        assert_eq!(contained(|| Ok::<u32, String>(7)), Ok(7));
+        assert_eq!(contained(|| Err::<u32, String>("unreadable".into())), Err("unreadable".to_string()));
+    }
 
     fn scratch(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("bifrost-thumbsvc-{name}-{}", std::process::id()));

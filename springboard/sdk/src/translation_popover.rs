@@ -66,13 +66,17 @@ impl TranslationPresenter {
         if !self.popover.is_presented() {
             return None;
         }
-        let preferred = match self.popover.arrow_edge() {
+        Some(place_popover(anchor, TRANSLATION_POPOVER_SIZE_PT, bounds, self.preferred_edge(), TRANSLATION_POPOVER_GAP_PT))
+    }
+
+    /// The side of the anchor the panel opens on when there is room, from the edge the popover was presented with.
+    pub fn preferred_edge(&self) -> Edge {
+        match self.popover.arrow_edge() {
             ArrowEdge::Top => Edge::Top,
             ArrowEdge::Bottom => Edge::Bottom,
             ArrowEdge::Leading => Edge::Left,
             ArrowEdge::Trailing => Edge::Right,
-        };
-        Some(place_popover(anchor, TRANSLATION_POPOVER_SIZE_PT, bounds, preferred, TRANSLATION_POPOVER_GAP_PT))
+        }
     }
 
     /// Hides the popover and drops its text and result.

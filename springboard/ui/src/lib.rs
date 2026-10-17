@@ -873,6 +873,7 @@ pub mod word_model;
 pub mod cloth;
 pub mod text_chunks;
 pub mod writing_assist;
+pub mod proofread;
 pub mod vcard;
 pub mod contact_book;
 pub mod contact_address;

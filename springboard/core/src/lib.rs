@@ -179,6 +179,8 @@ pub mod process_info;
 pub mod serial_line;
 pub mod idle_monitor;
 pub mod sleep_assertions;
+pub mod wake_schedule;
+pub mod launch_policy;
 pub mod app_transfer;
 pub mod app_disk_writes;
 pub mod device_registry;

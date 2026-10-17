@@ -757,11 +757,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/privacy_permissions.rs, springboard/src/shell/permission_sheet.rs, springboard/ui/src/capture_access.rs, springboard/ui/src/permission_question.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "permission_question::tests"
+    }
+   ],
+   "ready_note": "The per-app consent store is the shell privacy service (camera, microphone, screen recording and location answers, with the capture and contacts answers saved to privacy-grants.tsv so they survive a restart) on the capture_access model, with Settings > Privacy > App Permissions to change them and the permission sheet that asks. Host tests cover status, request, decide, restriction by parental limits and persistence. Location answers are not saved yet, and other consent categories (calendars) have their own models (calendar_access) outside the one store."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TCCAuthorizationService.framework",
@@ -778,11 +802,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/privacy_permissions.rs, springboard/sdk/src/privacy_permissions.rs, springboard/ui/src/capture_access.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_access::tests"
+    }
+   ],
+   "ready_note": "The authorization service apps call (status, can_capture, request, location_status, location_request) is the shell privacy service and its typed SDK client (sdk privacy_permissions), with host tests for every method and for an unknown method being an error."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TCCInterface.framework",
@@ -799,11 +842,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/permission_sheet.rs, springboard/src/shell/services/privacy_permissions.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::tests"
+    }
+   ],
+   "ready_note": "The prompt that asks the person to allow or refuse camera, microphone, screen recording or location is the permission sheet (the default answer is Don't Allow, so an unanswered question never grants) and the App Permissions page, with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TCCSystemMigration.framework",
@@ -1115,8 +1172,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple-internal component. The reference index shows only a binary, Info.plist and version.plist (no resources, no XPC service, no hosting bundle and no other bundle that links it), so no function that BifrOSt is missing can be named. Low confidence: evidence is the empty bundle only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1135,11 +1192,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/mcp/src/term.rs, springboard/src/shell/terminal/control.rs, springboard/sdk/src/intents.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mcp",
+     "filter": "term::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::terminal::control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "What the framework exposes (the Terminal's actions as tools an agent or a shortcut can call) is the term tool of the BifrOSt MCP server driving the shell's terminal control port (read screen, send keys, wait for output), and the app intents path for apps that declare intents. Host tests cover the verbs, the percent-encoding and the intent validation."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TestFlightCore.framework",
@@ -1178,8 +1254,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the bundle is a Metal shader library (default.metallib) for the shimmer and glow animation of the vendor's AI Writing Tools while it rewrites a selection, plus Info.plist and version.plist. It is a compiled GPU binary for a vendor-only effect; BifrOSt's proofreader (ui proofread) applies its suggestions inline without that effect, and BifrOSt's own text effects live in render motion.",
    "rea": [],
    "method": "assessed"
   },
@@ -1198,11 +1274,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/proofread.rs, springboard/ui/src/writing_assist.rs, springboard/core/src/spellcheck.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "proofread::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "writing_assist::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: ui proofread, an on-device rule-based proofreader (repeated words, extra spaces, space before punctuation, missing space after a comma, capital after a full stop, a and an, lone i) that offers its findings to the writing_assist Session, which applies and drops them safely; core spellcheck covers misspellings. The reference ships a neural grammar model (gecmodel); BifrOSt has no model, so rewriting and stylistic suggestions are not offered, and the rules beyond spacing run for English only. No app opens the assistant on a text view yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextComposerRuntime.framework",
@@ -1219,11 +1314,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/proofread.rs, springboard/ui/src/writing_assist.rs, springboard/core/src/spellcheck.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "proofread::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "writing_assist::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::tests"
+    }
+   ],
+   "ready_note": "The runtime of the writing assistant is the Session in ui writing_assist (one task at a time, pending suggestions, accept and reject with range mapping) fed by ui proofread; internal plumbing of the covered function, with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextGeneration.framework",
@@ -1282,11 +1396,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/input_method.rs, springboard/core/src/text_replacements.rs, springboard/src/shell/kb_input.rs, springboard/src/shell/textinput.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "text_replacements::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::textinput::tests"
+    }
+   ],
+   "ready_note": "Text input is covered end to end: the input method registration and per-client controller with marked text (ui input_method), the text input client of the shell (zwp_text_input_v3 semantics in shell textinput), hardware keyboard choices and text replacements (kb_input, core text_replacements), with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextInputCJK.framework",
@@ -1303,11 +1441,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/input_methods/mod.rs, springboard/src/shell/input_methods/han.rs, springboard/src/shell/input_methods/hangul.rs, springboard/src/shell/input_methods/zhuyin.rs, springboard/src/shell/input_methods/gojuon.rs, springboard/src/shell/input_methods/kana_typing.rs, springboard/src/shell/fcitx_bridge.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::han::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::hangul::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::zhuyin::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::gojuon::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::kana_typing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::fcitx_bridge::tests"
+    }
+   ],
+   "ready_note": "CJK input is the shell's own composition engines (kana, hangul, zhuyin, han lookup, and more for Indic scripts, Vietnamese and Ainu) plus the fcitx5 bridge for dictionary candidates, with host tests per engine. No dictionary is shipped, so kana and pinyin candidates come from fcitx5 when it is installed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextInputCore.framework",
@@ -1324,11 +1501,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/input_method.rs, springboard/ui/src/candidates.rs, springboard/ui/src/compose_method.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "candidates::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compose_method::tests"
+    }
+   ],
+   "ready_note": "The core of text input (compositions, candidate lists with paging and selection, the built-in compose method) is covered by ui input_method, candidates and compose_method with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextInputMenuUI.framework",
@@ -1345,11 +1541,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/input_source_hud.rs, springboard/src/shell/input_methods/mod.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_source_hud::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::tests"
+    }
+   ],
+   "ready_note": "The input source menu and the panel that names the new source after a switch are the shell's input menu and the input source HUD (hold 1.2 s, then fade), with the source registry in shell input_methods; host tests cover the HUD timing, the fixed box and the source list."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextInputSwift.framework",
@@ -1366,11 +1576,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/input_method.rs, springboard/src/shell/textinput.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::textinput::tests"
+    }
+   ],
+   "ready_note": "The Swift-side wrapper of the text input core; internal plumbing of the text input function that BifrOSt implements in ui input_method and shell textinput, with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextInputUI.framework",
@@ -1387,11 +1611,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/candidates.rs, springboard/ui/src/compose_method.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "candidates::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compose_method::tests"
+    }
+   ],
+   "ready_note": "The user interface of text input (the candidates window with its panel styles, caret-side preference and paging) is ui candidates, painted by the shell, with host tests. The dictation UI of the reference bundle is not part of this row: BifrOSt dictation is a separate speech feature."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextInputUIMacHelper.framework",
@@ -1408,11 +1646,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/textinput.rs, springboard/ui/src/candidates.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::textinput::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "candidates::tests"
+    }
+   ],
+   "ready_note": "The helper service that shows the cursor-following panel is the shell's candidate popup placement next to the caret rectangle (shell textinput, ui candidates), with host tests for placement and side preference."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextRecognition.framework",
@@ -1429,11 +1681,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/text_recognition.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "text_recognition::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: sdk text_recognition reads text from a picture on this computer with the tesseract program (packages tesseract, tesseract-data-eng and tesseract-data-isl added to the runtime set): words with rectangles and confidence, lines in reading order, language selection, installed-language listing and clear errors when the engine is missing. Host tests cover the table parsing, arguments and failures through a fake runner. Limits: no handwriting, no document-structure or barcode detection, and no live camera feed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextToSpeech.framework",
@@ -1669,11 +1930,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/texture_loader.rs, springboard/ui/src/texture_mip.rs, springboard/ui/src/texture_descriptor.rs, springboard/ui/src/procedural_texture.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "texture_loader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "texture_mip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "texture_descriptor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "procedural_texture::tests"
+    }
+   ],
+   "ready_note": "Texture input and output (loading a texture by name with options, mip chains, descriptors and procedural textures) is covered by the ui texture modules with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ThumbnailsBlastDoorSupport.framework",
@@ -1690,11 +1975,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/thumbnails.rs, springboard/src/thumbs/images.rs, springboard/src/thumbs/mod.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs::images::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: thumbnails of untrusted files are drawn on worker threads of the thumbnails service with size caps per provider (images, fonts, documents, PDF) and a decode allowance, and now a panicking decoder is contained (shell thumbnails contained) so a hostile file ends in a failed event and an icon, and the worker slot is released. BifrOSt decodes with memory-safe Rust code in the shell process; there is no separate sandboxed process like the reference's, so a decoder bug that does not panic is not isolated."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Tightbeam.framework",
@@ -1712,8 +2011,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple's internal serialization and IPC layer between the kernel, DriverKit drivers and system daemons (the index shows only Info.plist and version.plist in the bundle, a kernel-support header tb_connection.h and a DriverKit copy of the framework elsewhere). It is a vendor-only protocol for Apple's driver model; BifrOSt uses its own wire protocols (bifrost-wire, the privd protocol) and Linux drivers.",
    "rea": [],
    "method": "assessed"
   },
@@ -1832,11 +2131,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/timeline.rs, springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Timelines for glanceable content (dated entries, the entry on screen at a time, reload policies, the moment to ask the owner for new entries) are ui timeline with the shell widgets_timeline service and its SDK client, with host tests. The relevance ranking the reference adds for the widget stack is not modelled."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TimelineUI.framework",
@@ -1853,11 +2171,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/timeline.rs, springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "The views that show a timeline entry are the widgets and Notification Center surfaces fed by the widgets_timeline service, with host tests for entry selection and live activities."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TimerAppIntents.framework",
@@ -2101,11 +2438,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/alert_sound.rs, springboard/src/shell/sound_page.rs, springboard/src/shell/options.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sound_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::options::tests"
+    }
+   ],
+   "ready_note": "Choosing and previewing tones is Settings > Sound > Alert Sound (the list in options, the page in sound_page) with the synthesised tones in alert_sound, with host tests. BifrOSt ships no recorded ringtones: tones are synthesised from notes."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ToneLibrary.framework",
@@ -2122,11 +2478,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/alert_sound.rs, springboard/src/shell/earcon.rs, springboard/src/shell/ui_sounds.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "The library of alert and interface tones is the synthesised alert tones, earcons and interface sound cues (alert_sound, earcon, ui_sounds), named like the reference's cues and played by the sound-effects role of the audio server, with host tests. No recordings are shipped."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ToolKit.framework",
@@ -2143,11 +2518,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Exposing an app's actions as typed tools is app intents: apps declare intents in the manifest and in code (sdk intents: validation, entity queries, results), the shell lists them in Search without launching the app and runs one over the control socket (shell intents). The tool metadata service of the reference is the manifest reader. Host tests cover validation, listing and calls."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ToolRenderer.framework",
@@ -2164,11 +2553,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Rendering a tool for display (titles, descriptions, parameter and enum wording, the dialog of a result) is the intent title, description, parameter descriptions and IntentResult dialog in sdk intents and the Search section in shell intents, with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TranslationAPISupport.framework",
@@ -2185,11 +2588,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/translation.json",
+   "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/ui/src/translation_popover.rs, springboard/sdk/src/widgets.rs",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the system translation popover for apps is the popover model (ui translation_popover), the presenter that checks the pair and calls the engine (sdk translation_popover) and now the drawing next to the selection (sdk widgets translation_popover: language pair, translation or Translating or the reason, wrapped with an ellipsis), with host tests including a drawing test. The app writes the replacement into its document."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TranslationDaemon.framework",
@@ -2206,11 +2628,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/translation.json",
+   "bifrost": "springboard/sdk/src/translation.rs, springboard/sdk/src/translation_engine.rs, springboard/ui/src/translation.rs",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "translation::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: translation on this computer. Language availability and sessions (ui translation, sdk translation) with on-device phrase packs, and now sdk translation_engine: the rule-based apertium program over the pairs installed on the computer (pair discovery in either code spelling, availability, unknown-word marks removed) and a Chain that tries the phrase packs first. No neural engine is in the Arch repositories and no language pair package is in the runtime set, so only the phrase packs and pairs the person installs translate; there is no download service by design."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TranslationInference.framework",
