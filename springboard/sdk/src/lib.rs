@@ -452,6 +452,10 @@ pub mod bookmark;
 pub mod metadata_query;
 pub mod file_stat;
 pub mod file_descriptor;
+/// The system error numbers an app can match on (`Errno::NOENT`, `Errno::from_io`), shared with the shell.
+pub mod errno {
+    pub use bifrost_core::errno::*;
+}
 pub mod volume;
 pub mod identity;
 pub mod reachability;

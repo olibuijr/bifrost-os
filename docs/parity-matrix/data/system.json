@@ -12,7 +12,7 @@
       "apple": "FileDescriptor, FileDescriptor.AccessMode, OpenOptions, SeekOrigin, DuplicateOptions, PipeOptions (https://developer.apple.com/documentation/system/filedescriptor)",
       "bifrost": "springboard/sdk/src/file_descriptor.rs (FileDescriptor, Access, OpenFlags); springboard/sdk/src/runtime.rs:373 (takes ownership of a received descriptor as a File); springboard/proto/src/sys.rs:91 (Owned fd wrapper)",
       "status": "partial",
-      "note": "A typed FileDescriptor opens with an access mode and flags, reads and writes at the position or at an offset, seeks, duplicates and refuses I/O that its access mode forbids (headless tests in springboard/sdk/tests/parity_sdk-complete-36.rs). Gap: there is no pipe creation and no typed wrapper for a received descriptor, and the descriptor is not verified on Midget."
+      "note": "A typed FileDescriptor opens with an access mode and flags, reads and writes at the position or at an offset, seeks, duplicates and refuses I/O that its access mode forbids (headless tests in springboard/sdk/tests/parity_sdk-complete-36.rs). Gap: no typed wrapper for a received descriptor, and the descriptor is not verified on Midget. Built 2026-10-17: FileDescriptor::pipe creates a read end and a write end (springboard/sdk/src/file_descriptor.rs); tests file_descriptor::tests and sdk tests parity_sdk-os-11.rs."
     },
     {
       "feature": "Document grants (user-chosen file access without a path)",
@@ -100,11 +100,10 @@
     }
   ],
   "gaps": [
-    "No SDK file-descriptor type with typed open options, positional read and write, seek, duplicate and pipe creation.",
+    "No SDK file-descriptor type with typed open options, positional read and write, seek, duplicate and pipe creation (pipe creation built 2026-10-17; the rest is in the feature row).",
     "No SDK path type with component views. Apps use Rust std::path only.",
     "No SDK stat call or typed file mode, file type and permission set.",
     "No SDK call for volume capacity. disk_space in springboard/src/bare/sys.rs:125 is shell-only.",
-    "No typed Errno enum for apps.",
     "File coordination is advisory and has no relinquish or save-negotiation step (springboard/sdk/src/file_coordination.rs:1-20).",
     "The file-change feed must be polled by the app (springboard/sdk/src/fswatch.rs:185); no callback API."
   ]
