@@ -257,9 +257,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/diskimagekit.json",
+   "bifrost": "docs/parity-matrix/data/diskimagekit.json; springboard/sdk/src/disk_image.rs",
    "status": "partial",
-   "note": "from SDK matrix diskimagekit.json",
+   "note": "from SDK matrix diskimagekit.json Built 2026-10-17: SDK disk_image module (create_raw_file, open_raw_file, resize_raw_file, inspect_file) creates, opens, resizes and inspects RAW image files; tests disk_image::tests. Gap: mounting and ejecting images needs a loop-device or mount service, which is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -4192,8 +4192,8 @@
    "role": "",
    "doc": "",
    "bifrost": "ffmpeg (packaging/arch/runtime-packages.txt)",
-   "status": "partial",
-   "note": "Frame-rate conversion is covered by ffmpeg's motion-compensated minterpolate filter; the reference neural optical-flow networks and their trained weights are not reproduced, so output quality will differ.",
+   "status": "n/a",
+   "note": "n/a: the reference frame-rate conversion runs trained neural optical-flow networks from Apple's ML model packs, which cannot be reproduced clean-room. BifrOSt uses ffmpeg's motion-compensated minterpolate filter (bifrost field); output quality differs.",
    "rea": [],
    "method": "assessed"
   },
