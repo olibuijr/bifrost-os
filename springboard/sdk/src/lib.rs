@@ -266,6 +266,7 @@ pub mod peek;
 pub mod quick_look;
 pub mod permission_kit;
 pub mod authorization;
+pub mod content_kit;
 pub mod audio_session;
 pub mod video_playback;
 pub mod audio_hal;

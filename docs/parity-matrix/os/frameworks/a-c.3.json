@@ -1319,7 +1319,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Gap: verifying the signature of app bundles before they run. Built 2026-10-17: install_package_signed (springboard/src/shell/store/install.rs) checks a detached ML-DSA-65 signature from a publisher key over the package bytes before the SHA-256 check and unpack; tests shell::store::install::tests. Still missing: no publisher key is pinned in the shell and the packaging scripts do not sign packages yet.",
+   "note": "Gap: verifying the signature of app bundles before they run. Built 2026-10-17: install_package_signed (springboard/src/shell/store/install.rs) checks a detached ML-DSA-65 signature from a publisher key over the package bytes before the SHA-256 check and unpack; tests shell::store::install::tests. Still missing: no publisher key is pinned in the shell and the packaging scripts do not sign packages yet. Built 2026-10-17: pinned_publisher_keys(dir) loads the ML-DSA-65 *.pub keys from PINNED_PUBLISHER_KEYS (/etc/bifrost/publisher-keys); tests shell::store::install::tests::pinned_publisher_keys_load_only_well_formed_pub_files. Still missing: the store does not call install_package_signed yet, and no signing tool produces the detached signature.",
    "rea": [],
    "method": "assessed"
   },
@@ -1452,9 +1452,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/auth_prompt.rs (AuthPrompt)",
+   "bifrost": "springboard/ui/src/auth_prompt.rs (AuthPrompt), springboard/sdk/src/authorization.rs (Authorization::grant_after_prompt)",
    "status": "partial",
-   "note": "Attempts, lockout and the device-owner password prompt state are a pure model; login and unlock check the password through PAM in the privileged helper. Gap: the shell does not draw a reusable authorization sheet for apps, and there is no authorization API.",
+   "note": "Attempts, lockout and the device-owner password prompt state are a pure model; login and unlock check the password through PAM in the privileged helper. Gap: the shell does not draw a reusable authorization sheet for apps, and there is no authorization API. Built 2026-10-17: Authorization::grant_after_prompt grants rights only after an AuthPrompt succeeded, all or nothing; tests bifrost_app::authorization::tests. Still missing: the shell does not draw the sheet for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2220,9 +2220,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/content_sniff.rs (sniff; maps signatures to UTType identifiers)",
+   "bifrost": "springboard/ui/src/content_sniff.rs (sniff; maps signatures to UTType identifiers), springboard/sdk/src/content_kit.rs (identify)",
    "status": "partial",
-   "note": "A bounded pure sniffer recognizes common signatures and maps them to the identifiers in uttype.rs, with host integration tests. The ContentKit API was not confirmed from magic.mgc; this is not a magic-database-compatible engine, and no picker or preview consumer calls it yet.",
+   "note": "A bounded pure sniffer recognizes common signatures and maps them to the identifiers in uttype.rs, with host integration tests. The ContentKit API was not confirmed from magic.mgc; this is not a magic-database-compatible engine, and no picker or preview consumer calls it yet. Built 2026-10-17: the SDK identify(name, head) sniffs the bytes and lets the file name refine a ZIP container; tests bifrost_app::content_kit::tests. Still missing: no picker or preview consumer calls it.",
    "rea": [],
    "method": "assessed"
   },

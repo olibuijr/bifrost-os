@@ -497,6 +497,25 @@ pub fn install_package_signed(root: &Path, bytes: &[u8], sha256: &str, signature
     install_package(root, bytes, sha256, shell)
 }
 
+/// Where the shell pins the ML-DSA-65 publisher public keys: one raw key per `*.pub` file.
+pub const PINNED_PUBLISHER_KEYS: &str = "/etc/bifrost/publisher-keys";
+
+/// Loads the pinned publisher keys from `dir`. Only `*.pub` files whose length is exactly one ML-DSA-65 public key
+/// count; anything else in the directory is ignored. A missing directory yields no keys, so every signed package is
+/// refused.
+pub fn pinned_publisher_keys(dir: &Path) -> Vec<Vec<u8>> {
+    let want = bifrost_core::mldsa::Params::MlDsa65.public_key_len();
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut keys: Vec<Vec<u8>> = rd
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "pub"))
+        .filter_map(|e| std::fs::read(e.path()).ok())
+        .filter(|k| k.len() == want)
+        .collect();
+    keys.sort();
+    keys
+}
+
 /// Installs the (already verified) package `r` holds: the archive is indexed and
 /// unpacked straight from where it is, never loaded whole.
 fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Result<InstalledApp, String> {
@@ -866,6 +885,20 @@ pub mod tests {
         let app = install_package_signed(&root, &bytes, &sum(&bytes), &sig, &keys, "0.1.0").unwrap();
         assert_eq!(app.id, "is.olibuijr.calc");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn pinned_publisher_keys_load_only_well_formed_pub_files() {
+        use bifrost_core::mldsa::{keygen, Params};
+        let dir = scratch("pinned-keys");
+        let publisher = keygen(Params::MlDsa65, &[5u8; 32]);
+        std::fs::write(dir.join("publisher.pub"), &publisher.public_key).unwrap();
+        std::fs::write(dir.join("short.pub"), b"short").unwrap();
+        std::fs::write(dir.join("notes.txt"), &publisher.public_key).unwrap();
+        let keys = pinned_publisher_keys(&dir);
+        assert_eq!(keys, vec![publisher.public_key.clone()], "only the well-formed .pub key is pinned");
+        assert!(pinned_publisher_keys(&dir.join("missing")).is_empty(), "no directory, no keys");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
