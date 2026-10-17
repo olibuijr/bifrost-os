@@ -32,7 +32,7 @@
    "apple": "Shell > New Window (cmd+N), New Window with profile",
    "status": "gap",
    "bifrost": "",
-   "note": "One terminal per desktop window; no new-window action inside the app. Not started: Shell holds one tab set (Shell::term), so a second window needs that split first.",
+   "note": "One terminal per desktop window; no new-window action inside the app. Not started in the shell: Shell holds one tab set (Shell::term) and AppId::Terminal is a single desk window; the Terminal chrome and the window list are not split yet.",
    "wire": "Add TermKey::NewWindow to hwkeys.rs (cmd+N) that asks the shell to open a second Terminal window with its own tab set; terminal state (self.term) then needs a per-window TabSet instead of one on Shell."
   },
   {
@@ -150,7 +150,7 @@
    "status": "partial",
    "bifrost": "springboard/src/shell/terminal/look_panel.rs (Profile Editor, More row 38); springboard/src/term/look.rs (Look, saved and from_prefs); springboard/src/term/render.rs (cell_pair, Metrics::with_spacing); springboard/src/term/mod.rs (set_look)",
    "note": "Profile Editor (More > Profile Editor): 16 ANSI colour wells with red, green and blue steppers, Reset palette to theme, Bold as Bright, Allow Blink, character and line spacing steppers (0.8 to 2.0) and the cursor style. Saved in prefs as terminal.look.*, applied to every tab and to new tabs; the grid paints with the palette and the spacing. Tested: palette persistence round trip (look.rs), spacing changes the cell metrics (render.rs, term/mod.rs). Allow Blink is stored but nothing blinks yet.",
-   "wire": "Allow Blink needs an SGR 5 (blink) attribute in the iosterm core: its cell attributes use all eight bits. The font picker and the window background image (see Window background image and translucency) are still missing."
+   "wire": "Allow Blink needs an SGR 5 (blink) attribute in the iosterm core (../iOSTerm/src/cell.rs): its attribute byte uses all eight bits, so the attribute field must widen first. The font picker and the window background image (see Window background image and translucency) are still missing."
   },
   {
    "feature": "Cursor style and blink",
@@ -176,8 +176,8 @@
    "apple": "Profiles > Window: background image, opacity, blur",
    "status": "gap",
    "bifrost": "",
-   "note": "Clear profile alpha exists in the table but the view paints opaque.",
-   "wire": "Paint the profile alpha through the compositor in view.rs and add an image slot to the profile editor."
+   "note": "Profile look now stores the window opacity (0.5 to 1.0), a background image path with fit mode (fill, fit, tile) and dim, saved as terminal.look.opacity, terminal.look.image, terminal.look.image_mode and terminal.look.image_dim and clamped on read (term/look.rs, tested by persistence and bad-value tests). Not yet painted: the grid still draws opaque and no Profile Editor rows set these.",
+   "wire": "Paint the image and the profile alpha in view.rs through the material API so the desk shows through, then add opacity, image and dim rows to the Profile Editor (look_panel.rs)."
   },
   {
    "feature": "Default login shell and startup",
