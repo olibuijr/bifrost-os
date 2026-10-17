@@ -2,6 +2,7 @@
 pub mod chord_recovery;
 pub mod bluetooth;
 pub mod rfcomm;
+pub mod ambient_sensor;
 pub mod boost;
 pub mod control;
 pub mod cpuprofile;

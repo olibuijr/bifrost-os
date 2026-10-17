@@ -2833,11 +2833,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/night_shift.rs; springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/night_shift.rs; springboard/src/shell/pages.rs; springboard/src/bare/ambient_sensor.rs",
    "status": "partial",
-   "note": "Night Shift tints the final frame, and the Display & Brightness settings pane holds the brightness setting. The reference's ambient and True Tone sensing is not mirrored.",
+   "note": "Night Shift tints the final frame, and the Display & Brightness settings pane holds the brightness setting. The reference's ambient and True Tone sensing is not mirrored. Built 2026-10-17: IIO ambient light reader and the lux-to-brightness rule in springboard/src/bare/ambient_sensor.rs; tests bare::ambient_sensor::tests. Still open: the shell does not poll it or apply it to the panel, and True Tone is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::night_shift::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::ambient_sensor::tests"
+    }
+   ],
+   "ready_note": "Night Shift tint and its settings model (night_shift.rs tests), the Display & Brightness setting, and the IIO ambient light reader with the lux-to-brightness rule (bare::ambient_sensor::tests). Not mirrored: the shell does not poll the sensor or apply its brightness to the panel yet, and True Tone colour sensing is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreCDP.framework",
@@ -2984,7 +2998,16 @@
    "status": "partial",
    "note": "The shell's fcitx5 bridge switches to the Chinese input method when fcitx5 is installed, and does nothing otherwise. No pinyin dictionary or input-code tool ships with BifrOSt, so the candidates come from fcitx5 alone.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::fcitx_bridge::tests"
+    }
+   ],
+   "ready_note": "The fcitx5 bridge switches to the Chinese input method when fcitx5 is installed and does nothing otherwise (fcitx_bridge.rs tests). Candidates and the pinyin dictionary come from the fcitx5 packages; BifrOSt ships no dictionary of its own."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreComposite.framework",
@@ -3600,7 +3623,16 @@
    "status": "partial",
    "note": "Kana input runs through fcitx5 with its Japanese engine when fcitx5 is installed. The shell's Search field composes kana itself. No Japanese dictionary ships with BifrOSt.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::fcitx_bridge::tests"
+    }
+   ],
+   "ready_note": "Kana input runs through fcitx5 with its Japanese engine when fcitx5 is installed (fcitx_bridge.rs tests). The Japanese dictionary comes from the fcitx5 packages; BifrOSt ships none of its own."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreKDL.framework",
@@ -3766,7 +3798,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-ml.json",
    "status": "partial",
-   "note": "private framework, owner CoreML; from SDK matrix core-ml.json",
+   "note": "private framework, owner CoreML; from SDK matrix core-ml.json The framework holds three XPC services: E5MLCompiler, CoreMLSegmenter and CostModelSegmenter, which compile and partition Core ML models for Apple hardware. BifrOSt has no model compiler, so this stays open.",
    "rea": [],
    "method": "assessed"
   },
@@ -3786,8 +3818,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-ml.json",
-   "status": "partial",
-   "note": "private framework, owner CoreML; from SDK matrix core-ml.json",
+   "status": "n/a",
+   "note": "Apple test harness for its own Core ML models. The reference extract holds only the framework resources and signature, with no code, and no BifrOSt counterpart is expected; the Core ML area is tested with cargo test.",
    "rea": [],
    "method": "assessed"
   },
@@ -4285,7 +4317,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "A local store of recent people and addresses (a recents table with contacts and metadata, used as recipients for Mail and Messages). Build a recents store for recipients that the mail and messages apps feed; BifrOSt's recent items list covers only apps and documents (springboard/src/shell/recent_items.rs).",
+   "note": "A local store of recent people and addresses (a recents table with contacts and metadata, used as recipients for Mail and Messages). Build a recents store for recipients that the mail and messages apps feed; BifrOSt's recent items list covers only apps and documents (springboard/src/shell/recent_items.rs). Built 2026-10-17: recipient recents store in springboard/ui/src/recipient_recents.rs (most recent first, capped, favourites kept, case-insensitive addresses); tests recipient_recents::tests. Still open: Mail and Messages do not feed it yet.",
    "rea": [],
    "method": "assessed"
   },
