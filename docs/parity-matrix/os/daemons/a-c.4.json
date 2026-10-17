@@ -548,7 +548,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. System migration is not built; springboard/updated handles OS update offers only.",
    "rea": [],
    "method": "rule"
   },
@@ -569,7 +569,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. The install coordination proxy for app installs is not built; springboard/updated handles OS update offers only.",
    "rea": [],
    "method": "rule"
   },
@@ -590,7 +590,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. The install coordinator for app installs is not built; springboard/updated handles OS update offers only.",
    "rea": [],
    "method": "rule"
   },
@@ -895,7 +895,16 @@
    "bifrost": "springboard/src/shell/usernotif.rs",
    "status": "partial",
    "note": "Covers the notifications the shell raises to the user; kernel-originated alerts have no Linux counterpart and are not built.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif"
+    }
+   ],
+   "ready_note": "User notifications raised by the shell are in shell/usernotif.rs and covered by its tests. Kernel-originated alerts have no Linux counterpart and are not built."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.libsqlite3.dbtelemetryd.plist",
@@ -977,7 +986,15 @@
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "plocate provides locate and updatedb with a timer; the reference's Spotlight-backed index is not mirrored.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/plocate"
+    }
+   ],
+   "ready_note": "plocate is installed (packaging/arch/runtime-packages.txt) and provides locate and updatedb. The Spotlight-backed index is not mirrored."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.locationd.plist",
@@ -1247,7 +1264,15 @@
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
    "note": "Kernel module load messages reach the systemd journal; the reference's kext load log has no kext equivalent, so only the logging side is covered.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/systemd-journald"
+    }
+   ],
+   "ready_note": "Kernel module load messages reach the systemd journal, installed by the systemd package in packaging/arch/runtime-packages.txt. The kext-specific log has no Linux counterpart."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.lsd.plist",
@@ -2034,7 +2059,16 @@
    "bifrost": "springboard/core/src/sysinfo.rs",
    "status": "partial",
    "note": "Covers the device model, product name and memory summary; the reference's keyed device capability cache is not built.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sysinfo"
+    }
+   ],
+   "ready_note": "Device model, product name and memory summary are in core/src/sysinfo.rs and covered by its tests. The keyed capability cache is not built."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.modelcatalogd.plist",
@@ -2115,8 +2149,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "n/a",
+   "note": "Windows domain RPC endpoint for the security authority of a domain controller. BifrOSt is neither a domain controller nor a domain member, so there is no counterpart.",
    "rea": [],
    "method": "rule"
   },
@@ -2136,8 +2170,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "n/a",
+   "note": "Spotlight-over-SMB RPC endpoint, an Apple protocol. BifrOSt search is local (shell/spotindex.rs) and Samba has no mdssvc endpoint, so there is no counterpart.",
    "rea": [],
    "method": "rule"
   },
@@ -2157,8 +2191,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "n/a",
+   "note": "Windows domain netlogon RPC endpoint. BifrOSt does not run a domain controller or join domains, so there is no counterpart.",
    "rea": [],
    "method": "rule"
   },
@@ -3463,8 +3497,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/rfb",
-   "status": "partial",
-   "note": "rule: remote framebuffer service; Remote app",
+   "status": "n/a",
+   "note": "Pairs the Remote app with Apple TV and Apple devices using Apple pairing protocols. BifrOSt has no such devices or pairing protocol.",
    "rea": [],
    "method": "rule"
   },
@@ -4303,7 +4337,21 @@
    "status": "partial",
    "note": "rule: service discovery and DNS-SD model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dnssd"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dns_browse"
+    }
+   ],
+   "ready_note": "DNS-SD service model and browsing are in core/src/dnssd.rs and core/src/dns_browse.rs, covered by their tests."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.startupdiskhelper.plist",
@@ -4322,7 +4370,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. Startup disk selection is not built; springboard/updated handles OS update offers only.",
    "rea": [],
    "method": "rule"
   },
@@ -4486,7 +4534,16 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "The updated daemon (springboard/updated) checks, stages and applies OS update offers, covered by its tests in main.rs."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.swiftuitraced.plist",
