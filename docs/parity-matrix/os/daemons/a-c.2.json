@@ -713,7 +713,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/helpbook.rs; springboard/src/shell/help_viewer.rs; springboard/src/shell/desktop_bar.rs (Help menu search)",
+   "bifrost": "springboard/src/shell/helpbook.rs, springboard/src/shell/help_viewer.rs, springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "Help books ship in app packages (manifest `help`), the shell indexes them at start and after installs (helpbook.rs), every Help menu has a search field listing menu items and help topics, and the help viewer window shows a book with contents, search, back and forward and help:// links (help_viewer.rs). Not verified on Midget yet; built-in SDK apps without a native window get no \"<App> Help\" row.",
    "rea": []
