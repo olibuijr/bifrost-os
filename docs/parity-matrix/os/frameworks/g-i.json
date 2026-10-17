@@ -5911,9 +5911,28 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/testing.rs",
    "status": "partial",
-   "note": "The headless testing kit clicks, types into and queries a window by role and label without a shell or GPU (testing.rs). Gap: no hardware-level input injection is offered for tests that drive the real shell.",
+   "note": "The headless testing kit clicks, types into and queries a window by role and label without a shell or GPU (testing.rs). Gap: no hardware-level input injection is offered for tests that drive the real shell. Built 2026-10-17: TestWindow tap (point), swipe (down, interpolated moves, up) and type_into (tap an element, then type) inject synthetic pointer and key events through the real hit test; tests in sdk tests/testing.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tap_at_a_point_presses_the_button_under_it"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "type_into_taps_the_field_then_types"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "swipe_pans_a_scroll_view_under_the_finger"
+    }
+   ],
+   "ready_note": "Synthetic tap, swipe and type-into on the headless TestWindow are covered by sdk host tests. Hardware-level input injection into the real shell is not offered (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputToolKit.framework",
