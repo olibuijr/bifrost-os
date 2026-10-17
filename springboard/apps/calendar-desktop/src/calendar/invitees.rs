@@ -91,17 +91,19 @@ pub fn summary(people: &[Participant]) -> String {
 /// title, the same all-day flag, the same start minute (timed events) and an occurrence on `date`. The first
 /// matching event that has attendees wins; a store entry with no match has no invitees.
 pub fn for_event(rich: &IcsCalendar, title: &str, date: Date, minute: u16, all_day: bool) -> Vec<Participant> {
-    rich.events
-        .iter()
-        .find(|r| {
-            !r.attendees.is_empty()
-                && r.summary == title
-                && r.all_day == all_day
-                && (all_day || r.start.minute == minute)
-                && occurrences(r, date, date).contains(&date)
-        })
-        .map(|r| r.attendees.clone())
-        .unwrap_or_default()
+    index_for(rich, title, date, minute, all_day).map_or_else(Vec::new, |i| rich.events[i].attendees.clone())
+}
+
+/// The position in `rich.events` of the imported event with invitees that a store entry came from (the match `for_event`
+/// describes). Rsvp writes the answer into that event.
+pub fn index_for(rich: &IcsCalendar, title: &str, date: Date, minute: u16, all_day: bool) -> Option<usize> {
+    rich.events.iter().position(|r| {
+        !r.attendees.is_empty()
+            && r.summary == title
+            && r.all_day == all_day
+            && (all_day || r.start.minute == minute)
+            && occurrences(r, date, date).contains(&date)
+    })
 }
 
 /// The ATTENDEE line for one invitee, as the .ics writer keeps it. The name is quoted when it holds a separator.

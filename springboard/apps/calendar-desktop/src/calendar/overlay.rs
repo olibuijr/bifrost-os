@@ -5,7 +5,10 @@ use super::exchange::occurrences;
 use super::extras;
 use super::holidays;
 use super::ics;
+use super::invitees;
 use super::recur;
+use super::reminders;
+use super::rsvp;
 use super::store::CalendarEvent;
 use super::{chrome, Calendar, Date};
 use bifrost_app::kit::colors;
@@ -16,6 +19,10 @@ pub const LAYER_LOCAL: u32 = 1;
 pub const LAYER_HOLIDAYS: u32 = 2;
 pub const LAYER_SUBS: u32 = 10;
 pub const LAYER_CAL: u32 = 40;
+/// View > Show Reminders (a switch of the same kind as the calendar list rows).
+pub const LAYER_REMINDERS: u32 = 3;
+/// The calendar slot of the Reminders items: far above the holidays (0) and the subscriptions.
+pub const REMINDER_SLOT: usize = 1 << 19;
 
 /// Ids from here up belong to read-only events. A calendar's events take a block of `SLOT` ids.
 pub const BASE_ID: u64 = 1 << 40;
@@ -96,7 +103,26 @@ impl Calendar {
     /// The events the grids show: the saved ones (unless the Calendar row of the calendar list is off), then the
     /// read-only ones of the calendars that are on.
     pub(super) fn shown_events(&self) -> impl Iterator<Item = &CalendarEvent> + '_ {
-        self.events.iter().filter(move |e| self.local_shown(e.id)).chain(self.overlay.iter())
+        self.events.iter().filter(move |e| self.local_shown(e.id) && (self.prefs.show_declined || !self.declined.contains(&e.id))).chain(self.overlay.iter())
+    }
+
+    /// Works out which saved events the account declined, once per change of the saved events (their count is the key;
+    /// a reply changes it through `respond`). Without an account address nothing is declined.
+    pub(super) fn sync_declined(&mut self) {
+        let key = self.events.len();
+        if self.declined_for == Some(key) {
+            return;
+        }
+        self.declined_for = Some(key);
+        self.declined.clear();
+        let Some(email) = self.account_email.clone() else { return };
+        let rich = self.rich_events();
+        for e in &self.events {
+            let people = invitees::for_event(&rich, &e.title, e.date, e.minute, e.all_day);
+            if rsvp::declined(&people, &email) {
+                self.declined.insert(e.id);
+            }
+        }
     }
 
     /// Whether the saved event `id` is on a calendar that is shown. The built-in calendar follows the Calendar row; the
@@ -129,6 +155,7 @@ impl Calendar {
     /// Works the read-only events out again when the shown year or the set of calendars changed. They cover the shown
     /// year and the ones either side, so stepping across New Year needs no wait.
     pub(super) fn sync_overlay(&mut self) {
+        self.sync_declined();
         let key = (self.selected.year, self.overlay_version);
         if self.overlay_for == Some(key) {
             return;
@@ -138,6 +165,11 @@ impl Calendar {
         let mut events = vec![];
         if self.prefs.show_holidays {
             events.extend(holiday_events(first, last));
+        }
+        if self.prefs.show_reminders {
+            if let Some(path) = reminders::store_path(&self.path) {
+                events.extend(reminders::overlay_events(&reminders::load(&path), first, last, REMINDER_SLOT));
+            }
         }
         for (i, s) in self.subs.iter().enumerate().filter(|(_, s)| s.shown) {
             events.extend(ics_events(&s.text, i + 1, from, to));
@@ -159,7 +191,11 @@ impl Calendar {
     pub(super) fn explain_overlay(&mut self, id: u64) {
         let Some(title) = self.overlay.iter().find(|e| e.id == id).map(|e| e.title.clone()) else { return };
         let slot = slot_of(id);
-        let calendar = if slot == 0 { "Holidays".to_string() } else { self.subs.get(slot - 1).map_or_else(String::new, |s| s.name.clone()) };
+        let calendar = match slot {
+            0 => "Holidays".to_string(),
+            REMINDER_SLOT => "Reminders".to_string(),
+            _ => self.subs.get(slot - 1).map_or_else(String::new, |s| s.name.clone()),
+        };
         self.notice = Some(format!("{title} ({calendar})"));
     }
 
@@ -172,6 +208,10 @@ impl Calendar {
             }
             LAYER_HOLIDAYS => {
                 self.prefs.show_holidays = !self.prefs.show_holidays;
+                self.save_prefs();
+            }
+            LAYER_REMINDERS => {
+                self.prefs.show_reminders = !self.prefs.show_reminders;
                 self.save_prefs();
             }
             n if (LAYER_CAL..=LAYER_CAL + extras::MAX_CALENDARS).contains(&n) => {

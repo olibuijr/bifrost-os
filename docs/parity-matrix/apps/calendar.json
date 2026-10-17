@@ -256,10 +256,10 @@
    "feature": "Respond to invitations; show declined events",
    "area": "menu",
    "apple": "View > Show Declined Events; notifications settings",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Show Accept/Maybe/Decline on events with a pending PARTSTAT for the user, reply via iTIP, and a View toggle for declined events."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/rsvp.rs:94 (respond: PARTSTAT update); springboard/apps/calendar-desktop/src/calendar/rsvp.rs:75 (reply_text: METHOD:REPLY); springboard/apps/calendar-desktop/src/calendar/rsvp.rs:136 (respond_to_invitation: saves calendar.ics and the reply); springboard/apps/calendar-desktop/src/calendar/ics.rs:407 (ORGANIZER parse); springboard/apps/calendar-desktop/src/calendar/overlay.rs:111 (sync_declined, hides declined events); springboard/apps/calendar-desktop/src/calendar.rs:1571 (Accept, Maybe, Decline rows)",
+   "note": "In the event editor, Accept, Maybe and Decline show when the account address (the CalDAV account username, rsvp.rs:174) is an invitee with PARTSTAT=NEEDS-ACTION. The answer is written to calendar.ics, and an iTIP REPLY (METHOD:REPLY, one ATTENDEE line, RFC 5546) is saved to itip-replies/ beside the events file. View > Show Declined Events (off by default) shows the events the account declined. Tests in calendar/rsvp.rs cover the PARTSTAT parse, the exact reply text, the answer and the declined filter; they were written and not run, and nothing is verified on Midget.",
+   "wire": "Left: the reply is not sent. The SDK has no mail compose hand-off for it, and the dav client has no PUT path (grep found none), so the saved itip-replies files need a sender: a Mail compose call or a CalDAV PUT to the organiser calendar. Accept, Maybe and Decline are editor rows, not a popover, and are not in the accessibility tree. An answered invitation cannot be changed from Calendar yet. The declined set is refreshed when the saved-event count changes, not after an edit."
   },
   {
    "feature": "Data detectors in event (address from notes, copy phone)",
@@ -319,10 +319,10 @@
    "feature": "Reminders shown in calendar",
    "area": "view",
    "apple": "View > Show Completed Reminders; RemindersCalendarInspector.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Read dated reminders from the Reminders store and draw them as all-day items, with a View toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/reminders.rs:90 (overlay_events, checkbox glyph, all-day items); springboard/apps/calendar-desktop/src/calendar/reminders.rs:56 (parse of the Reminders store); springboard/apps/calendar-desktop/src/calendar/overlay.rs:171 (sync_overlay adds them); springboard/apps/calendar-desktop/src/calendar/overlay.rs:213 (LAYER_REMINDERS switch); springboard/apps/calendar-desktop/src/calendar.rs:1074 (View > Show Reminders)",
+   "note": "View > Show Reminders (saved in calendar-prefs.txt as show_reminders) draws the open, dated reminders of the Reminders app as all-day items with a checkbox glyph. They are read from appdata/is.olibuijr.reminders.desktop/reminders.tsv beside the Calendar data folder. Tests in calendar/reminders.rs cover the parse and the mapping; they were written and not run, and nothing is verified on Midget.",
+   "wire": "Left: read-only. Completing a reminder from Calendar needs a write API on the Reminders store, and none is shared yet, so it stays in Reminders. Items are all-day only (no time of day). Completed reminders are hidden, with no Show Completed Reminders. The store is re-read only when the shown year or a calendar switch changes, not when the file changes."
   },
   {
    "feature": "Open events in separate windows",

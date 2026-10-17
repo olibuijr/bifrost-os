@@ -1,6 +1,6 @@
 id = "is.olibuijr.calendar.desktop"
 name = "Calendar"
-version = "1.16.1"
+version = "1.17.0"
 exec = "bifrost-calendar"
 icon = "icon.png"
 min_shell = "0.4.84"

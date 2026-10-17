@@ -120,6 +120,8 @@ impl App for CalendarApp {
                 let _ = std::fs::create_dir_all(&ctx.data_dir);
                 let mut c = calendar::Calendar::new(&ctx.ui, w, h, ctx.data_dir.join("events.tsv"), Wall::sample(0.0));
                 c.enable_file_export();
+                // the account's address answers invitations and hides declined events (Internet Accounts, Calendars on)
+                c.set_account_email(calendar::rsvp::account_email());
                 self.cal = Some(c);
             }
         }
@@ -196,7 +198,15 @@ impl App for CalendarApp {
             // merges into the shell's View menu
             AppMenu {
                 title: "View".into(),
-                items: vec![item(Command::ZoomIn), item(Command::ZoomOut), AppMenuItem::separator(), item(Command::RefreshCalendars)],
+                items: vec![
+                    item(Command::ZoomIn),
+                    item(Command::ZoomOut),
+                    AppMenuItem::separator(),
+                    item(Command::ShowReminders),
+                    item(Command::ShowDeclined),
+                    AppMenuItem::separator(),
+                    item(Command::RefreshCalendars),
+                ],
             },
             AppMenu { title: "Settings".into(), items: settings_items(c) },
         ]

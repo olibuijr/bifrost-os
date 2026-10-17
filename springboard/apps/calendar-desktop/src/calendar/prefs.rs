@@ -33,11 +33,15 @@ pub struct Prefs {
     pub show_local: bool,
     /// The bundled holidays are shown (the Holidays row).
     pub show_holidays: bool,
+    /// The open reminders of the Reminders app are shown as all-day items (View > Show Reminders).
+    pub show_reminders: bool,
+    /// Events the account declined are shown (View > Show Declined Events).
+    pub show_declined: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { week_numbers: false, hour_h: HOUR_H_DEFAULT, monday_first: false, duration: 60, day_start: 8, alert: 0, alert_all_day: 0, show_local: true, show_holidays: false }
+        Prefs { week_numbers: false, hour_h: HOUR_H_DEFAULT, monday_first: false, duration: 60, day_start: 8, alert: 0, alert_all_day: 0, show_local: true, show_holidays: false, show_reminders: false, show_declined: false }
     }
 }
 
@@ -136,6 +140,8 @@ impl Prefs {
                 "monday_first" => p.monday_first = value == "1",
                 "show_local" => p.show_local = value != "0",
                 "show_holidays" => p.show_holidays = value == "1",
+                "show_reminders" => p.show_reminders = value == "1",
+                "show_declined" => p.show_declined = value == "1",
                 "hour_h" => {
                     if let Ok(v) = value.parse::<f32>() {
                         if v.is_finite() {
@@ -175,7 +181,7 @@ impl Prefs {
 
     pub fn to_text(&self) -> String {
         format!(
-            "week_numbers={}\nmonday_first={}\nhour_h={}\nduration={}\nday_start={}\nalert={}\nalert_all_day={}\nshow_local={}\nshow_holidays={}\n",
+            "week_numbers={}\nmonday_first={}\nhour_h={}\nduration={}\nday_start={}\nalert={}\nalert_all_day={}\nshow_local={}\nshow_holidays={}\nshow_reminders={}\nshow_declined={}\n",
             u8::from(self.week_numbers),
             u8::from(self.monday_first),
             self.hour_h,
@@ -184,7 +190,9 @@ impl Prefs {
             self.alert,
             self.alert_all_day,
             u8::from(self.show_local),
-            u8::from(self.show_holidays)
+            u8::from(self.show_holidays),
+            u8::from(self.show_reminders),
+            u8::from(self.show_declined)
         )
     }
 
@@ -245,11 +253,12 @@ mod tests {
 
     #[test]
     fn settings_round_trip() {
-        let p = Prefs { week_numbers: true, hour_h: 72.0, monday_first: true, duration: 90, day_start: 7, alert: 3, alert_all_day: 6, show_local: false, show_holidays: true };
+        let p = Prefs { week_numbers: true, hour_h: 72.0, monday_first: true, duration: 90, day_start: 7, alert: 3, alert_all_day: 6, show_local: false, show_holidays: true, show_reminders: true, show_declined: true };
         assert_eq!(Prefs::parse(&p.to_text()), p);
         // the saved events are shown unless the file says otherwise; the holidays only when it says so
         let fresh = Prefs::parse("");
         assert!(fresh.show_local && !fresh.show_holidays);
+        assert!(!fresh.show_reminders && !fresh.show_declined, "reminders and declined events are off until switched on");
     }
 
     #[test]

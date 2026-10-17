@@ -24,6 +24,8 @@ pub mod prefs;
 pub mod printing;
 pub mod quick;
 pub mod recur;
+pub mod reminders;
+pub mod rsvp;
 pub mod search;
 pub use springboard::shell::calendar::{store, Date};
 pub mod subscribe;
@@ -130,6 +132,12 @@ enum Target {
     CopyPhone,
     /// A read-only row: the invitees of an imported event and how each one answered.
     Invitees,
+    /// Accept, Maybe and Decline on an invitation the account has not answered (an index into `rsvp::Answer::ALL`).
+    Rsvp(usize),
+    /// View > Show Reminders.
+    ToggleReminders,
+    /// View > Show Declined Events.
+    ToggleDeclined,
     Toggle(Slot),
     DateStep(i32),
     MonthStep(i32),
@@ -254,6 +262,11 @@ pub struct Calendar {
     overlay: Vec<CalendarEvent>,
     overlay_for: Option<(i64, u64)>,
     overlay_version: u64,
+    /// The account's own address (the CalDAV account's username): the invitations it can answer, and the events it declined.
+    account_email: Option<String>,
+    /// The saved events the account declined, worked out for the saved-event count `declined_for` (see `sync_declined`).
+    declined: std::collections::HashSet<u64>,
+    declined_for: Option<usize>,
     subs: Vec<subscribe::Subscription>,
     /// Title, Location, Notes.
     fields: [TextField; 3],
@@ -364,6 +377,9 @@ impl Calendar {
             saved_scroll: 0.0,
             overlay: vec![],
             overlay_for: None,
+            account_email: None,
+            declined: Default::default(),
+            declined_for: None,
             overlay_version: 0,
             subs,
             fields,
@@ -480,6 +496,9 @@ impl Calendar {
         }
         if !draft.invitees.is_empty() {
             items.extend([None, Some(Target::Invitees)]);
+        }
+        if self.awaiting_reply(&draft.invitees) {
+            items.extend([None, Some(Target::Rsvp(0)), Some(Target::Rsvp(1)), Some(Target::Rsvp(2))]);
         }
         if draft.existing {
             items.extend([None, Some(Target::Duplicate)]);
@@ -1051,6 +1070,12 @@ impl Calendar {
             }
             Target::CopyPhone => self.copy_phone(),
             Target::Invitees => {}
+            Target::Rsvp(i) => self.respond_to_invitation(rsvp::Answer::ALL[i]),
+            Target::ToggleReminders => self.toggle_layer(overlay::LAYER_REMINDERS),
+            Target::ToggleDeclined => {
+                self.prefs.show_declined = !self.prefs.show_declined;
+                self.save_prefs();
+            }
             Target::Repeat
             | Target::Alert
             | Target::RepeatFreq
@@ -1543,6 +1568,7 @@ impl Calendar {
                     let text = invitees::summary(&people);
                     self.centre(s, ui, &text, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), w / 2.0, mid)
                 }
+                Target::Rsvp(i) => self.centre(s, ui, rsvp::Answer::ALL[i].label(), MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid),
                 Target::Duplicate => {
                     self.centre(s, ui, "Duplicate Event", MAC_BODY_PT, Weight::Regular, colors::LINK.now(), w / 2.0, mid)
                 }
@@ -1636,10 +1662,14 @@ pub enum Command {
     NewCalendar,
     /// View > Refresh Calendars: the CalDAV calendars are read now (the app asks `dav_sync` to start).
     RefreshCalendars,
+    /// View > Show Reminders: the open dated reminders of the Reminders app are drawn as all-day items.
+    ShowReminders,
+    /// View > Show Declined Events: the events the account declined are drawn (hidden by default).
+    ShowDeclined,
 }
 
 impl Command {
-    pub const ALL: [Command; 28] = [
+    pub const ALL: [Command; 30] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1668,6 +1698,8 @@ impl Command {
         Command::QuickEvent,
         Command::NewCalendar,
         Command::RefreshCalendars,
+        Command::ShowReminders,
+        Command::ShowDeclined,
     ];
 
     pub fn id(self) -> u32 {
@@ -1708,6 +1740,8 @@ impl Command {
             Command::QuickEvent => "Quick Event...",
             Command::NewCalendar => "New Calendar...",
             Command::RefreshCalendars => "Refresh Calendars",
+            Command::ShowReminders => "Show Reminders",
+            Command::ShowDeclined => "Show Declined Events",
         }
     }
 
@@ -1759,6 +1793,8 @@ impl Calendar {
             Command::ShowMonth => self.view == View::Month,
             Command::ShowYear => self.view == View::Year,
             Command::WeekNumbers => self.prefs.week_numbers,
+            Command::ShowReminders => self.prefs.show_reminders,
+            Command::ShowDeclined => self.prefs.show_declined,
             Command::CalendarList => !self.side_hidden,
             _ => false,
         }
@@ -1803,6 +1839,8 @@ impl Calendar {
             Command::ShowYear => Target::View(View::Year),
             Command::WeekNumbers => Target::WeekNumbers,
             Command::CalendarList => Target::Sidebar,
+            Command::ShowReminders => Target::ToggleReminders,
+            Command::ShowDeclined => Target::ToggleDeclined,
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
             Command::GoToDate => Target::GoOpen,
