@@ -234,6 +234,8 @@ pub struct AppStore {
     /// the last time `maintain` ran
     clock: f64,
     jobs: HashMap<String, Job>,
+    /// queue of installs: one download runs at a time, in request order
+    coord: coordination::Coordinator,
     /// the last time download progress was redrawn
     progress_at: f64,
     failed: HashMap<String, String>,
@@ -324,6 +326,7 @@ impl AppStore {
             icon_failed: HashMap::new(),
             clock: 0.0,
             jobs: HashMap::new(),
+            coord: coordination::Coordinator::new(coordination::current_uid()),
             progress_at: f64::NEG_INFINITY,
             failed: HashMap::new(),
             launch: None,
@@ -593,6 +596,7 @@ impl AppStore {
                 Done::Installed { result: Err(e), .. } if e == install::CANCELLED => {}
                 Done::Installed { id, result } => {
                     self.jobs.remove(&id);
+                    self.coord.finish(&id, result.as_ref().map(|_| ()).map_err(|e| e.clone()));
                     match result {
                         Ok(app) => {
                             if app.is_preinstalled() {
@@ -607,6 +611,7 @@ impl AppStore {
                             self.failed.insert(id, e);
                         }
                     }
+                    self.start_queued();
                 }
             }
         }
@@ -641,6 +646,7 @@ impl AppStore {
             }
         }
         self.clock = t;
+        self.sync_coordinator();
         self.fetch_shots(t);
         // only the icons still to fetch are copied out of the lists
         let wanted: Vec<(String, String)> = self
@@ -690,31 +696,72 @@ impl AppStore {
         }
     }
 
+    /// Queues an install with the coordinator. The UI keeps its progress ring per job; the download itself
+    /// starts when `start_queued` finds no other download running.
     fn start(&mut self, id: &str) {
         let Some(a) = self.find(id).cloned() else { return };
         if self.jobs.contains_key(id) {
             return;
         }
         self.failed.remove(id);
+        if self.coord.request(&a.id, coordination::current_uid(), a.size).is_err() {
+            return;
+        }
         let done = Arc::new(AtomicU64::new(0));
         let cancel = Arc::new(AtomicBool::new(false));
-        self.jobs.insert(id.to_string(), Job { done: done.clone(), size: a.size, cancel: cancel.clone() });
-        let root = self.root.clone();
-        if let Some(p) = &self.pool {
-            p.spawn(move || {
-                crate::gfx::affinity::background_thread();
-                let result = (|| {
-                    let app = install::install_download(&root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &done, &cancel)?;
-                    if app.id != a.id || app.is_preinstalled() != a.is_preinstalled() {
-                        let _ = install::uninstall(&root, &app.id);
-                        return Err("package id does not match the store entry".to_string());
-                    }
-                    Ok(app)
-                })();
-                Done::Installed { id: a.id, result }
-            });
-        } else {
-            self.jobs.remove(id);
+        self.jobs.insert(id.to_string(), Job { done, size: a.size, cancel });
+        self.start_queued();
+    }
+
+    /// Starts the coordinator's next queued install when no download is running. Without a worker pool
+    /// nothing can run, so the job is finished as failed rather than left queued.
+    fn start_queued(&mut self) {
+        while let Some(id) = self.coord.start_next() {
+            let Some(a) = self.find(&id).cloned() else {
+                self.coord.finish(&id, Err("the app is no longer in the catalogue".into()));
+                self.jobs.remove(&id);
+                continue;
+            };
+            let Some(job) = self.jobs.get(&id) else {
+                self.coord.finish(&id, Err("no job for the install".into()));
+                continue;
+            };
+            let (done, cancel) = (job.done.clone(), job.cancel.clone());
+            let root = self.root.clone();
+            match &self.pool {
+                Some(p) => {
+                    p.spawn(move || {
+                        crate::gfx::affinity::background_thread();
+                        let result = (|| {
+                            let app = install::install_download(&root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &done, &cancel)?;
+                            if app.id != a.id || app.is_preinstalled() != a.is_preinstalled() {
+                                let _ = install::uninstall(&root, &app.id);
+                                return Err("package id does not match the store entry".to_string());
+                            }
+                            Ok(app)
+                        })();
+                        Done::Installed { id: a.id, result }
+                    });
+                    return;
+                }
+                None => {
+                    self.coord.finish(&id, Err("no worker pool".into()));
+                    self.jobs.remove(&id);
+                }
+            }
+        }
+    }
+
+    /// Copies each download counter into the coordinator, which keeps the job's bytes and phase. A phase
+    /// change marks the screen dirty; byte counts only feed the progress ring, which already redraws at
+    /// its own rate.
+    fn sync_coordinator(&mut self) {
+        let counts: Vec<(String, u64)> = self.jobs.iter().map(|(id, j)| (id.clone(), j.done.load(Ordering::Relaxed))).collect();
+        for (id, done) in counts {
+            self.coord.progress(&id, done);
+        }
+        if self.coord.drain_events().iter().any(|e| matches!(e, coordination::Event::Phase { .. })) {
+            self.dirty = true;
         }
     }
 
@@ -739,6 +786,8 @@ impl AppStore {
     fn cancel(&mut self, id: &str) {
         if let Some(j) = self.jobs.remove(id) {
             j.cancel.store(true, Ordering::Relaxed);
+            self.coord.cancel(id);
+            self.start_queued();
             self.dirty = true;
         }
     }
@@ -2062,6 +2111,42 @@ mod tests {
         assert!(s.sheet.is_none(), "Buy closes the sheet");
         assert!(s.bought.is_entitled(&chess.id, today_days()), "the purchase is in the ledger");
         assert!(s.jobs.is_empty(), "the test store has no worker pool, so the install is not started");
+    }
+
+    #[test]
+    fn an_install_request_goes_through_the_coordinator() {
+        let mut s = store();
+        let calc = s.catalog[0].clone();
+        s.start(&calc.id);
+        assert!(s.jobs.is_empty(), "no worker pool: the install is not started");
+        assert!(s.coord.jobs().is_empty(), "and the coordinator does not keep the failed job");
+        let phases: Vec<coordination::Phase> = s
+            .coord
+            .drain_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                coordination::Event::Phase { phase, .. } => Some(phase),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(phases, vec![coordination::Phase::Queued, coordination::Phase::Downloading, coordination::Phase::Failed]);
+    }
+
+    #[test]
+    fn a_second_install_waits_while_one_downloads() {
+        let mut s = store();
+        let (calc, chess) = (s.catalog[0].id.clone(), s.catalog[1].id.clone());
+        s.coord.request(&calc, coordination::current_uid(), 100).unwrap();
+        s.coord.request(&chess, coordination::current_uid(), 100).unwrap();
+        s.jobs.insert(calc.clone(), Job { done: Arc::new(AtomicU64::new(0)), size: 100, cancel: Arc::new(AtomicBool::new(false)) });
+        s.jobs.insert(chess.clone(), Job { done: Arc::new(AtomicU64::new(0)), size: 100, cancel: Arc::new(AtomicBool::new(false)) });
+        assert_eq!(s.coord.start_next().as_deref(), Some(calc.as_str()));
+        assert_eq!(s.coord.start_next(), None, "the second download waits its turn");
+        // the download counter feeds the coordinator, and the job is still shown with its ring
+        s.jobs[&calc].done.store(60, Ordering::Relaxed);
+        s.sync_coordinator();
+        assert_eq!(s.coord.job(&calc).map(|j| j.done), Some(60));
+        assert!(s.jobs.contains_key(&chess), "the waiting install keeps its progress ring");
     }
 
     #[test]
