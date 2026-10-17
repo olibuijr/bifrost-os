@@ -238,6 +238,17 @@ impl PreviewView {
         self.style
     }
 
+    /// The rows of the view in a `w` by `h` area at scale `k`: the title row, the body and, unless the style is compact,
+    /// the counter row. The same layout the shell's floating panel uses (`bifrost_ui::preview_view`).
+    pub fn frame(&self, w: f32, h: f32, k: f32) -> bifrost_ui::preview_view::ViewFrame {
+        bifrost_ui::preview_view::view_frame(w, h, k, self.style == ViewStyle::Compact)
+    }
+
+    /// The title the view shows for its item: the item's title, or its URL when it has none. `None` with no item.
+    pub fn title(&self) -> Option<&str> {
+        self.item.as_ref().map(|i| bifrost_ui::preview_view::title_of(&i.title, &i.url))
+    }
+
     /// Changes the layout. The item and its display state are kept.
     pub fn set_style(&mut self, style: ViewStyle) {
         self.style = style;
@@ -321,6 +332,17 @@ mod tests {
 
     fn item(n: &str) -> PreviewItem {
         PreviewItem { url: format!("file:///{n}"), title: n.into() }
+    }
+
+    #[test]
+    fn an_embedded_view_lays_out_its_rows_and_titles_its_item() {
+        let mut v = PreviewView::new(ViewStyle::Normal);
+        assert_eq!(v.title(), None, "no item, no title");
+        v.set_preview_item(Some(PreviewItem { url: "file:///a.txt".into(), title: String::new() }));
+        assert_eq!(v.title(), Some("file:///a.txt"), "the URL stands in for a missing title");
+        assert!(v.frame(300.0, 200.0, 1.0).footer.is_some());
+        let compact = PreviewView::new(ViewStyle::Compact);
+        assert!(compact.frame(300.0, 200.0, 1.0).footer.is_none(), "compact has no counter row");
     }
 
     #[test]
