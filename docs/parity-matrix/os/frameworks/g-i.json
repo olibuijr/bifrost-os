@@ -382,11 +382,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iobluetooth.json",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs; springboard/sdk/src/bluetooth_inquiry.rs; springboard/sdk/src/bluetooth_devices.rs; springboard/sdk/src/bluetooth_picker.rs; springboard/sdk/src/bluetooth_events.rs; springboard/sdk/src/bluetooth_hid.rs; springboard/core/src/rfcomm_frame.rs; springboard/core/src/sdp_element.rs; springboard/core/src/obex_packet.rs; springboard/ui/src/hfp.rs; springboard/core/src/bt_address.rs; springboard/core/src/bt_pairing.rs; springboard/src/bare/bluetooth.rs",
    "status": "partial",
    "note": "from SDK matrix iobluetooth.json Built 2026-10-17: Pairing input checks (PIN, passkey, numeric comparison) in springboard/core/src/bt_pairing.rs, tests bt_pairing::tests; app-facing Bluetooth SDK gaps stay open.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_inquiry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_hid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "rfcomm_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sdp_element::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_address::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hfp::tests"
+    },
+    {
+     "kind": "unit",
+     "name": "bluetooth.service",
+     "state": "enabled"
+    }
+   ],
+   "ready_note": "Apps get the Bluetooth radio state, inquiry, remote device list, pairing picker, device events and HID ignore list from bifrost_app::bluetooth_* over BlueZ (the shell drives the mgmt socket; bluetooth.service is enabled by the installer), plus RFCOMM framing, SDP data elements, OBEX packets, the hands-free profile and address helpers. Open: L2CAP channels to arbitrary PSMs and the raw HCI structures are not offered (the shell uses the mgmt API by design)."
   },
   {
    "id": "path:/System/Library/Frameworks/IOBluetoothUI.framework",
@@ -403,11 +472,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iobluetooth-ui.json",
+   "bifrost": "springboard/ui/src/bt_chooser.rs; springboard/ui/src/object_push.rs; springboard/ui/src/passkey_display.rs; springboard/core/src/bt_service_browser.rs; springboard/core/src/bt_pairing.rs; springboard/sdk/src/bluetooth_picker.rs",
    "status": "partial",
    "note": "from SDK matrix iobluetooth-ui.json Refreshed 2026-10-17: Remaining: pairing panel only in Settings, no passkey pairing (always NoInputNoOutput), no live SDP query, no object push.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "bt_chooser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "object_push::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "passkey_display::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_service_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_picker::tests"
+    }
+   ],
+   "ready_note": "The device selector (bt_chooser), the object push transfer UI model, the passkey and confirmation display, the service browser and the PIN and passkey input checks are in the kit (bifrost_app::controls) and bifrost_app. Open: the live SDP query behind the service browser and the radio side of passkey pairing stay in the shell."
   },
   {
    "id": "path:/System/Library/Frameworks/IOKit.framework",
@@ -424,11 +527,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/device_registry.rs; springboard/src/bare/input.rs; springboard/src/media/v4l2.rs; springboard/src/bare/kms.rs",
+   "bifrost": "springboard/core/src/device_registry.rs; springboard/sdk/src/device_registry.rs; springboard/sdk/src/power_sources.rs; springboard/core/src/power_supply.rs; springboard/sdk/src/hid_devices.rs; springboard/ui/src/hid_match.rs; springboard/core/src/serial_line.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/displays.rs; springboard/sdk/src/audio_devices.rs; springboard/core/src/usb_host.rs",
    "status": "partial",
    "note": "The shell and daemons do the device work on Linux (sysfs, evdev, V4L2, DRM); the device registry is a pure model with host tests and is not yet wired in. Not covered: apps get no driver call, shared data queue or device arrival API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "device_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "power_supply::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "serial_line::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "device_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "power_sources::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "process_info::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "displays::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hid_match::tests"
+    }
+   ],
+   "ready_note": "Apps match devices by class and properties, read registry properties and watch arrival and removal (bifrost_app::device_registry over sysfs and udev), read power sources, thermal state, displays, audio devices, HID matching and serial lines. Driver user-client calls and driver data queues have no common Linux ABI: they are per-device ioctls and mmap (V4L2, DRM, evdev in the shell; usbfs for apps in core usb_host), so there is no generic IOConnectCall."
   },
   {
    "id": "path:/System/Library/Frameworks/IOSurface.framework",
@@ -445,11 +602,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/proto/src/sys.rs; springboard/src/bare/wayland.rs; springboard/src/gpu/desktop.rs; springboard/ui/src/surface_layout.rs",
+   "bifrost": "springboard/core/src/surface_registry.rs; springboard/ui/src/surface_layout.rs; springboard/ui/src/surface_lock.rs; springboard/ui/src/surface_use.rs; springboard/ui/src/surface_attach.rs; springboard/ui/src/surface_colour.rs; springboard/sdk/src/buffer_handoff.rs; springboard/render/src/purgeable.rs; springboard/proto/src/sys.rs; springboard/gpu/src/dmabuf.rs",
    "status": "partial",
    "note": "Memfd shared memory with fd passing, dma-buf import for the compositor and the plane and colour models carry the buffer job inside the system. Not covered: no app-facing IOSurface type, lookup by ID, purgeability or per-buffer attributes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "surface_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_lock::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_use::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_attach::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "surface_colour::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "purgeable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "dmabuf::tests"
+    }
+   ],
+   "ready_note": "Shared buffers for apps: memfd and descriptor passing (buffer_handoff, proto sys), global ids with lookup (bifrost_app::surface_registry), plane layout, CPU lock, use counts, the attribute dictionary, colour space and ICC profile, purgeable memory, and dma-buf textures with format modifiers (bifrost_app::gpu). The ownership ledger is not mirrored (n/a: it accounts memory to Apple's ledger service)."
   },
   {
    "id": "path:/System/Library/Frameworks/IOUSBHost.framework",
@@ -466,11 +667,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iousbhost.json",
+   "bifrost": "springboard/core/src/usb_host.rs; springboard/sdk/src/usb_device.rs; springboard/core/src/usb_claim.rs; springboard/core/src/usb_descriptors.rs; springboard/core/src/usb_pipe.rs; springboard/core/src/usb_approval.rs; springboard/core/src/usb_printer.rs",
    "status": "partial",
    "note": "from SDK matrix iousbhost.json Refreshed 2026-10-17: Remaining: no app transport (the claim plan is not sent to a device), no sandbox binding for USB nodes, no printer transport.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_claim::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_descriptors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_pipe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_printer::tests"
+    }
+   ],
+   "ready_note": "Built this wave: core usb_host is the usbfs transport (open a /dev/bus/usb node, read descriptors, claim and release interfaces, select configuration and alternate setting, control, bulk and interrupt transfers, halt clearing, reset, sysfs listing), re-exported as bifrost_app::usb_device::UsbHostDevice and run against ClaimPlan. Descriptor, claim, pipe and approval models were already tested. A sandboxed app reaches only the nodes its sandbox binds; no node is bound for apps yet, so raw USB is for first-party and unsandboxed code until that grant is decided. Isochronous transfers need an URB queue and are not in the transport."
   },
   {
    "id": "path:/System/Library/Frameworks/IdentityDocumentServices.framework",
@@ -550,11 +785,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/imagecapturecore.json",
+   "bifrost": "springboard/core/src/ptp.rs; springboard/sdk/src/image_capture.rs; springboard/ui/src/camera_device.rs; springboard/ui/src/device_browser.rs; springboard/ui/src/scan_job.rs; springboard/sdk/src/scan_session.rs; springboard/core/src/usb_host.rs",
    "status": "partial",
    "note": "from SDK matrix imagecapturecore.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "ptp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_capture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "scan_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scan_job::tests"
+    }
+   ],
+   "ready_note": "Built this wave: core ptp is the Picture Transfer Protocol (container codec, DeviceInfo and ObjectInfo datasets, a session with list, download, thumbnail, delete, capture, battery and clock, a USB transport over usb_host, and an in-memory camera), and bifrost_app::image_capture fills the camera model (folders and files, capabilities, tethering, per-file delete results, clock sync) from it. Scanner sessions are the scan_job model; SANE is installed but the sane transport is not wired yet. Sandbox access to the camera's USB node is the same open item as IOUSBHost."
   },
   {
    "id": "path:/System/Library/Frameworks/ImageIO.framework",
@@ -643,11 +917,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/inputmethodkit.json",
+   "bifrost": "springboard/ui/src/input_method.rs; springboard/ui/src/candidates.rs; springboard/ui/src/imsession.rs; springboard/ui/src/imk_info.rs; springboard/ui/src/imk_client.rs; springboard/ui/src/input_source.rs; springboard/ui/src/hangul_method.rs; springboard/ui/src/telex_method.rs; springboard/ui/src/kana_method.rs; springboard/ui/src/compose_method.rs; springboard/src/shell/input_methods/mod.rs",
    "status": "partial",
    "note": "from SDK matrix inputmethodkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "candidates::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imsession::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imk_info::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imk_client::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_source::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hangul_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "telex_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "kana_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compose_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::hangul::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::telex::tests"
+    }
+   ],
+   "ready_note": "The kit has the input method server, per-session controller, events, candidates window model, registration from an Info property list, the text input client protocol and input source selection (bifrost_app::controls), and the shell runs Korean, Vietnamese Telex, Japanese kana and compose input methods through them, drawing marked text and the candidate popup. Open: the shell loads only these built-in methods; a third-party method bundle is not loaded as a separate process."
   },
   {
    "id": "path:/System/Library/Frameworks/InstallerPlugins.framework",

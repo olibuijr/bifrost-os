@@ -18,10 +18,37 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/smartcard_slot.rs",
+   "bifrost": "springboard/sdk/src/pcsc.rs; springboard/ui/src/smartcard_slot.rs; springboard/src/installer/plan.rs (pcscd.socket); packaging/arch/runtime-packages.txt (pcsc-tools)",
    "status": "partial",
    "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pcsc::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "smartcard_slot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pcscd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libpcsclite.so.1"
+    }
+   ],
+   "ready_note": "pcsc-lite is the Linux implementation of PC/SC: the pcsc-tools package pulls in pcscd and libpcsclite, and the installer enables pcscd.socket this wave. Built this wave: bifrost_app::pcsc loads libpcsclite and offers the context, reader list, reader states (mapped onto the slot manager with insert and remove events), connect, transmit and disconnect, with typed errors and APDU helpers. A sandboxed app sees the daemon socket only if its sandbox binds it; no bind is granted to apps yet."
   },
   {
    "id": "path:/System/Library/Frameworks/PDFKit.framework",

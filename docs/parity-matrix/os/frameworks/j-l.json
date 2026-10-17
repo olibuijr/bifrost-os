@@ -230,11 +230,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/lightweightcoderequirements.json",
+   "bifrost": "springboard/core/src/codereq.rs; springboard/apps/console-desktop/src/identity.rs",
    "status": "partial",
    "note": "from SDK matrix lightweightcoderequirements.json Refreshed 2026-10-17 (still open): No code-signature verification of executables before launch or after download.; No signed identity (team or signing identifier) for apps, so identity cannot be tied to a developer.; No process peer identity check for control sockets or IPC (not verified; no SO_PEERCRED hits in the app host files).; No SDK API for apps to query identity, entitlements or validity of other code.; Update manifests carry an unsigned SHA-256 only (springboard/src/shell/update.rs:8).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codereq::tests"
+    }
+   ],
+   "ready_note": "The requirement language (process, launch and on-disk constraints, allOf and anyOf, team and signing identifier, code directory and Info.plist hash, signing flags, validation category) is evaluated against identity facts the caller supplies (bifrost_app::codereq); the Console app adapts running processes to those facts. BifrOSt packages carry hash manifests, not signing identities, so the facts come from the package record rather than a signature; entitlement queries are in app_policy. Verifying a developer signature before launch is not part of this framework."
   },
   {
    "id": "path:/System/Library/Frameworks/LinkPresentation.framework",
@@ -251,11 +260,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/link-presentation.json",
+   "bifrost": "springboard/sdk/src/link_metadata.rs; springboard/sdk/src/link_fetch.rs; springboard/ui/src/linkmeta.rs; springboard/ui/src/link_card.rs; springboard/ui/src/detect.rs",
    "status": "partial",
    "note": "from SDK matrix link-presentation.json Built 2026-10-17: Metadata parsing, relative address resolution and fetch state (timeout, cancel, typed LinkError) in springboard/sdk/src/link_metadata.rs (tests link_metadata::tests); the request and the rich link view are still open.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_metadata::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_fetch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linkmeta::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "link_card::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    }
+   ],
+   "ready_note": "Built this wave: bifrost_app::link_fetch::fetch does the request (URLSession, head only, timeout, typed LinkError) and returns the title, icon and picture parsed by link_metadata; the rich link card and the provider and view models are in the kit. Only the host in the address the app passes is contacted. Open: video metadata and a rich preview in the share sheet."
   },
   {
    "id": "path:/System/Library/Frameworks/LinkSecurity.framework",
@@ -359,11 +397,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication-embedded-ui.json",
+   "bifrost": "springboard/sdk/src/view/local_auth_view.rs; springboard/ui/src/auth_view.rs; springboard/core/src/auth_context.rs; springboard/core/src/auth_session.rs; springboard/core/src/fingerprint.rs; springboard/core/src/biometry.rs; springboard/src/shell/services/local_auth.rs",
    "status": "partial",
    "note": "from SDK matrix local-authentication-embedded-ui.json Refreshed 2026-10-17 (still open): No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").; LocalAuthenticationView (sdk view/local_auth_view.rs) draws the icon state; it stays idle until a biometric source exists; The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::local_auth_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "auth_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "auth_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "fingerprint::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "biometry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "The authentication view (idle, evaluating, succeeded, failed and locked states, icon by biometry kind, control size) is bifrost_app::view::local_auth_view over the context and session models. The biometric source is a fingerprint reader through fprintd (core fingerprint, enrolled fingers and verify; fprintd is in the runtime packages); machines without a reader show the password flow of the local_auth service. No face or optic sensor exists on the target hardware."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/JavaLaunching.framework",

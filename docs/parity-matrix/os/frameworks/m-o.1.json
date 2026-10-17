@@ -123,11 +123,90 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "bifrost": "springboard/ui/src/mapview.rs; springboard/ui/src/geo.rs; springboard/ui/src/mapshape.rs; springboard/ui/src/reverse_lookup.rs; springboard/ui/src/poi_filter.rs; springboard/ui/src/route.rs; springboard/ui/src/map_snapshot.rs; springboard/ui/src/map_item.rs; springboard/ui/src/maps_link.rs; springboard/core/src/geojson.rs; springboard/sdk/src/map_snapshotter.rs; springboard/src/maptiles/loader.rs; springboard/src/maptiles/cache.rs; springboard/src/maptiles/geocode.rs",
    "status": "partial",
    "note": "from SDK matrix mapkit.json Refreshed 2026-10-17: Still open: no map renderer or tile source, no annotations or overlays, city-level reverse geocoding only, no SDK routing API, and no IMDF parsing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mapview::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "geo::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mapshape::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "reverse_lookup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "poi_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "route::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_snapshot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_item::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "maps_link::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "geojson::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "map_snapshotter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::loader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::cache::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::tiles::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::geocode::tests"
+    }
+   ],
+   "ready_note": "Map camera and region, view interaction, annotations and overlays, geometry types, place items, point-of-interest filters, routes, maps links and GeoJSON are in the kit; tiles come from the maptiles loader (a configurable OpenStreetMap-compatible source with request pacing, an on-disk cache and offline areas, shared by the Maps app and the shell) and place search from its geocoder. Built this wave: bifrost_app::map_snapshotter composes a snapshot (tiles, routes, pins) from any TileSource, and TileDirectory reads the loader's cache layout, so an app gets a map image without writing its own compositor. Open: IMDF indoor maps; routing needs an OSRM-compatible server the app configures; reverse geocoding is city level."
   },
   {
    "id": "path:/System/Library/Frameworks/Matter.framework",
@@ -144,9 +223,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/matter.json",
+   "bifrost": "springboard/core/src/matter.rs; springboard/core/src/matter_fabric.rs; springboard/core/src/matter_interaction.rs; springboard/core/src/matter_cluster.rs; springboard/sdk/src/avahi_browse.rs",
    "status": "partial",
-   "note": "Refreshed 2026-10-17, still open: No Matter controller: no fabric, certificates, commissioning or interaction model, in the shell or the SDK. No Thread support: no border router, no Thread network credentials and no OpenThread stack. No mDNS or DNS-SD transport: springboard/core/src/dns_browse (via sdk network_browser) is a model fed by the caller; it sends no multicast query and no responder answers, so apps cannot browse services. No BLE commissioning path, and no camera or scan source for setup codes. The Bluetooth module handles classic pairing only (springboard/src/bare/bluetooth.rs). No SDK API or app-facing surface for smart-home accessories, and no Home-style app. Whether BifrOSt should add one is a product decision, not a technical gap.",
+   "note": "Left partial, beyond one agent: the controller needs the Matter secure channel (PASE with SPAKE2+ and CASE with operational certificates), a TLV and message layer, and the IP and BLE transports for commissioning, plus Thread credentials. Built and tested: setup payload (QR and manual code) parsing, DNS-SD name and TXT parsing with discovery through the local Avahi daemon (avahi_browse), fabric and controller state, the interaction model (read, write, invoke, subscribe paths) and typed cluster data, all re-exported by bifrost_app. Reviewed 2026-10-17 (wave 13): the audited crypto for PASE and CASE is the missing engine.",
    "rea": [],
    "method": "assessed"
   },
@@ -166,8 +245,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/matter-support.json",
-   "status": "partial",
-   "note": "from SDK matrix matter-support.json Refreshed 2026-10-17: Still open: no Thread stack and no network transport for the Matter model; no accessory setup flow.",
+   "status": "n/a",
+   "note": "n/a: MatterSupport is the extension point through which a smart-home ecosystem app (the reference platform's Home) adds an accessory during its own setup flow (MatterAddDeviceRequest and its extension request handler, run as an app extension that hands Thread and Wi-Fi credentials from the ecosystem). BifrOSt has no extension host for ecosystem apps and no Apple Home-style ecosystem; apps that commission accessories use the Matter controller rows directly. Evidence: the framework holds only the add-device request and extension handler types.",
    "rea": [],
    "method": "assessed"
   },
@@ -186,11 +265,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-accessibility.json",
+   "bifrost": "springboard/ui/src/captions.rs; springboard/ui/src/media_selection.rs; springboard/ui/src/flashing_lights.rs; springboard/core/src/imgmeta.rs; springboard/sdk/src/accessibility_display.rs",
    "status": "partial",
    "note": "from SDK matrix media-accessibility.json Refreshed 2026-10-17: flashing-lights dimming is covered (springboard/ui/src/flashing_lights.rs; SDK DisplayOptions.dim_flashing_lights). Still open: caption and audible media preferences as an app API and a settings page, subtitle tracks in the demuxers, and image caption metadata.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_selection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "flashing_lights::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "imgmeta::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessibility_display::tests"
+    }
+   ],
+   "ready_note": "Caption appearance profiles with change reporting, caption and audible media track selection from the preferences, flashing-lights dimming (shell setting, service and SDK option) and image caption metadata are in the kit and bifrost_app. Music haptics is n/a on PC hardware. Open: a Settings page for caption appearance and subtitle tracks in the demuxers."
   },
   {
    "id": "path:/System/Library/Frameworks/MediaExtension.framework",
@@ -207,11 +315,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/mediaextension.json",
+   "bifrost": "springboard/core/src/mediaext.rs; springboard/sdk/src/media_extension.rs; springboard/ui/src/format_readers.rs; springboard/render/src/raw_params.rs; springboard/src/media/demux/mod.rs",
    "status": "partial",
    "note": "from SDK matrix mediaextension.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "mediaext::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "format_readers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "raw_params::tests"
+    }
+   ],
+   "ready_note": "Format readers, track readers and sample cursors, video decoder registration by codec type, RAW processing parameters and the extension declaration with its entitlement are in the kit and bifrost_app::media_extension; the shell's demuxers and the libavcodec decoder are the built-in implementations behind the same seams. Open: out-of-process loading of a third-party reader or decoder in a sandbox."
   },
   {
    "id": "path:/System/Library/Frameworks/MediaIntelligence.framework",
@@ -228,9 +355,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-intelligence.json",
+   "bifrost": "springboard/ui/src/face_group.rs; springboard/ui/src/video_analyzer.rs; springboard/ui/src/highlight_rank.rs; springboard/ui/src/keyframe_pick.rs; springboard/ui/src/ml_runtime.rs",
    "status": "partial",
-   "note": "from SDK matrix media-intelligence.json",
+   "note": "Left partial: face detection and embedding need a face model and BifrOSt ships no open one (the reference models are its own ML packs). Built and tested: face grouping and queries from caller-supplied embeddings, the on-device runtime (ml_runtime), and this wave VideoAnalyzer, which measures decoded frames (luma histogram, motion) and answers the highlight segment and key frame requests with no model. Needs an open face detector and embedder to finish.",
    "rea": [],
    "method": "assessed"
   },
@@ -249,11 +376,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "bifrost": "springboard/ui/src/media_search.rs; springboard/ui/src/media_request.rs; springboard/sdk/src/media_intents.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/now_playing.rs",
    "status": "partial",
    "note": "from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "now_playing::tests"
+    }
+   ],
+   "ready_note": "The audio search request with criteria and filters, resolution with disambiguation and confirmation, playback request dialogs, typed intents and entity queries, and now-playing publication are in bifrost_app (media_intents, intents) and the kit. Open: delivery of requests from a voice assistant (BifrOSt has none by design) and launching an app to answer an intent while it is closed."
   },
   {
    "id": "path:/System/Library/Frameworks/MediaLibrary.framework",
@@ -270,11 +421,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-library.json",
+   "bifrost": "springboard/ui/src/media_sources.rs; springboard/ui/src/media_group.rs; springboard/ui/src/media_attributes.rs; springboard/ui/src/media_kind.rs; springboard/ui/src/media_changes.rs; springboard/ui/src/smart_group.rs; springboard/sdk/src/media_library.rs",
    "status": "partial",
    "note": "from SDK matrix media-library.json Built 2026-10-17: smart groups in ui smart_group (attribute rules computing a group's items); tests smart_group::tests. The Music app does not use them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_sources::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_group::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_attributes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_kind::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_changes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "smart_group::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "media_library::tests"
+    }
+   ],
+   "ready_note": "Load options, media sources, groups and types, the typed attribute dictionary, change observation, smart groups and queries over app-supplied records are in the kit and bifrost_app::media_library; the Music and Photos apps scan their folders through them. The source-specific identifiers of the reference platform's retired applications are not mirrored."
   },
   {
    "id": "path:/System/Library/Frameworks/MediaPlayer.framework",
@@ -382,11 +572,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/gpu/src/lib.rs",
+   "bifrost": "springboard/gpu/src/lib.rs; springboard/gpu/src/device.rs; springboard/gpu/src/command.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/src/texture.rs; springboard/gpu/src/memory.rs; springboard/gpu/src/sync.rs; springboard/sdk/src/gpu_pass.rs; springboard/sdk/src/gpu_device.rs; springboard/ui/src/command_buffer.rs; springboard/ui/src/shader_library.rs; springboard/ui/src/compute_dispatch.rs; springboard/ui/src/blit.rs",
    "status": "partial",
    "note": "Checked 2026-10-17: springboard/gpu/Cargo.toml loads Vulkan through ash (loaded feature), so the device comes from libvulkan.so.1 (vulkan-icd-loader, in gpu_packages). The vendor ICDs are chosen per detected GPU by springboard/src/installer/plan.rs gpu_packages: vulkan-intel for Intel, vulkan-radeon for AMD, nvidia-open and nvidia-utils for NVIDIA. Apps get no GPU API, so the row stays partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "command::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "pipeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "texture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "memory::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "dmabuf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "command_buffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shader_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compute_dispatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "blit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "texture_descriptor::tests"
+    }
+   ],
+   "ready_note": "bifrost-gpu is the Metal-shaped API over Vulkan 1.3 (device, textures, buffers, command queues and buffers, render and compute encoders, pipelines and samplers, shared events, dma-buf import and export), re-exported to apps as bifrost_app::gpu this wave; the vendor drivers come from the installer's gpu_packages. The kit models command buffers, shader libraries, compute grids and blits. Open: GPU ray tracing and tensor passes (the CPU graph runs in the kit)."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalFX.framework",
@@ -403,11 +657,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/metalfx.json",
+   "bifrost": "springboard/render/src/temporal_upscale.rs; springboard/render/src/upscale.rs; springboard/render/src/frame_interp.rs; springboard/sdk/src/gpu_pass.rs",
    "status": "partial",
    "note": "from SDK matrix metalfx.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "temporal_upscale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "upscale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "frame_interp::tests"
+    }
+   ],
+   "ready_note": "Spatial upscaling with colour processing modes, temporal upscaling with motion input and the denoised variant, and frame interpolation run as renderer passes on the CPU (bifrost_app::gfx and the render crate); the blur pyramid and linear upscale run on the GPU path. Open: a GPU implementation of the scalers."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalKit.framework",
@@ -424,11 +697,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/metalkit.json",
+   "bifrost": "springboard/ui/src/render_loop.rs; springboard/ui/src/render_view.rs; springboard/ui/src/drawable_setup.rs; springboard/ui/src/texture_loader.rs; springboard/ui/src/texture_catalog.rs; springboard/ui/src/mesh.rs; springboard/render/src/mesh.rs; springboard/sdk/src/display_link.rs; springboard/sdk/src/texture_cache.rs; springboard/sdk/src/gpu_layer.rs; springboard/sdk/src/drawable_pool.rs",
    "status": "partial",
    "note": "from SDK matrix metalkit.json Refreshed 2026-10-17: not ready. The mesh model is in bifrost-ui (ui/src/mesh.rs) but is not re-exported and has no draw path. Still open: the app-facing GPU view and per-frame delegate, a device and drawable handle, a texture object, and an SDK binding for the presenter. See data/metalkit.json gaps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "render_loop::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "texture_loader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "drawable_layer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "mesh::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "display_link::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "texture_cache::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gpu_layer::tests"
+    }
+   ],
+   "ready_note": "The view with a per-frame loop and drawable sizing, drawable pool and layer, the display link, background texture loading and caching, and mesh buffers with their allocator are in bifrost_app and the kit, drawing through bifrost_app::gpu. Open: loading a mesh straight into GPU buffers from a model file in one call."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformancePrimitives.framework",
@@ -466,11 +783,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/metal-performance-shaders.json",
+   "bifrost": "springboard/sdk/src/pixel_filter.rs; springboard/render/src/filter.rs; springboard/render/src/gaussian_filter.rs; springboard/render/src/lanczos.rs; springboard/render/src/plane_stats.rs; springboard/render/src/plane_arith.rs; springboard/render/src/laplacian_pyramid.rs; springboard/render/src/distance.rs; springboard/render/src/guided.rs; springboard/ui/src/cnn_layers.rs; springboard/ui/src/linalg.rs; springboard/ui/src/image_kernels.rs",
    "status": "partial",
    "note": "from SDK matrix metal-performance-shaders.json Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian); tests pixel_filter::tests. Not wired into the shell or apps yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pixel_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gaussian_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "lanczos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "plane_stats::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "plane_arith::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "laplacian_pyramid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "distance::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "guided::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cnn_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "image_kernels::tests"
+    }
+   ],
+   "ready_note": "Image filters (Gaussian, box, tent, morphology, median, Sobel, Laplacian, threshold, histogram and equalisation, Lanczos scale, pyramids, statistics, arithmetic, reductions, distance transform, guided filter), CNN and recurrent layers, matrix and vector kernels and the unary and binary kernel bases run on the CPU and are offered to apps (bifrost_app::pixel_filter and the render and kit crates). Ray tracing acceleration structures are n/a. Open: GPU execution of the kernels."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShadersGraph.framework",
@@ -487,11 +868,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/metal-performance-shaders-graph.json",
+   "bifrost": "springboard/ui/src/graph.rs; springboard/ui/src/nn.rs; springboard/ui/src/tensor.rs; springboard/ui/src/compute.rs; springboard/ui/src/compute_dispatch.rs",
    "status": "partial",
    "note": "from SDK matrix metal-performance-shaders-graph.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tensor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compute::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compute_dispatch::tests"
+    }
+   ],
+   "ready_note": "The tensor type and data, the symbolic graph with convolution, pooling, recurrent, FFT and random operators, compilation options and executables, and device placement run on the CPU and are offered to apps through bifrost_app::controls. The Neural Engine device type is n/a (Apple silicon block). Open: GPU execution of the graph."
   },
   {
    "id": "path:/System/Library/Frameworks/MetricKit.framework",
@@ -508,11 +918,70 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/metrickit.json",
+   "bifrost": "springboard/core/src/daily_metric_report.rs; springboard/sdk/src/diagnostic_report.rs; springboard/sdk/src/call_stack_tree.rs; springboard/sdk/src/hitch_ratio.rs; springboard/core/src/resource_exception.rs; springboard/core/src/app_metrics.rs; springboard/sdk/src/net_totals.rs; springboard/core/src/app_disk_writes.rs; springboard/core/src/frame_metrics.rs; springboard/core/src/signpost.rs; springboard/sdk/src/signpost.rs",
    "status": "partial",
    "note": "from SDK matrix metrickit.json Built 2026-10-17: stall duration histogram in sdk diagnostic_report (stall_histogram); tests diagnostic_report::tests. No delivery to apps yet. Refreshed 2026-10-17: Still open: no app-facing report API, no per-app metric collection, crash and hang records do not fill the call-stack tree, and no limit-kill diagnostics.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "daily_metric_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "resource_exception::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_metrics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_disk_writes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "frame_metrics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "diagnostic_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hitch_ratio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "net_totals::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "signpost::tests"
+    }
+   ],
+   "ready_note": "Daily metric reports, diagnostic reports from crash and stall logs, call-stack trees, hitch ratio, memory and CPU exception diagnostics, launch, resume and termination metrics, network and disk totals, frame metrics and signposts are offered to apps (bifrost_app and its re-exports); reports stay on the machine and are shared with a developer only from Settings with the person's consent. Open: per-app collection is fed by the shell's counters where they exist."
   },
   {
    "id": "path:/System/Library/Frameworks/ModelIO.framework",
@@ -529,11 +998,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/model-i-o.json",
+   "bifrost": "springboard/ui/src/scene_object.rs; springboard/ui/src/vertex_descriptor.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene_material.rs; springboard/ui/src/shading.rs; springboard/ui/src/procedural_texture.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/view_camera.rs; springboard/ui/src/mesh_file.rs; springboard/ui/src/animated_values.rs; springboard/ui/src/mesh_process.rs; springboard/ui/src/voxel_array.rs",
    "status": "partial",
    "note": "from SDK matrix model-i-o.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_object::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "vertex_descriptor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_material::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "procedural_texture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_light::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "view_camera::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh_file::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "animated_values::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh_process::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "voxel_array::tests"
+    }
+   ],
+   "ready_note": "Scene objects with transform stacks, meshes with vertex descriptors and buffer allocation, materials and the shading model, procedural textures, lights, cameras, OBJ, STL and PLY import and export, skeletal and animated values, mesh processing (smoothing, subdivision, baking) and voxel arrays are in the kit (bifrost_app::controls). Open: USD and Alembic files."
   },
   {
    "id": "path:/System/Library/Frameworks/MultipeerConnectivity.framework",
@@ -601,11 +1134,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/music-understanding.json",
+   "bifrost": "springboard/sdk/src/music_understanding.rs; springboard/ui/src/music.rs; springboard/apps/daw/src/lab.rs",
    "status": "partial",
    "note": "from SDK matrix music-understanding.json Built 2026-10-17: loudness analysis (integrated, momentary and short-term LUFS) in the SDK, tests loudness::tests and music::tests; instrument activity and source separation are still open. Refreshed 2026-10-17: rhythm, key, structure and loudness run in the SDK session (springboard/sdk/src/music_understanding.rs, tests music_understanding::tests). Pace is a model the session does not run yet. Still open: instrument activity, source separation, and streaming input.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "music_understanding::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "The analysis session over decoded audio gives rhythm (beats, bars, tempo), key over time, structure boundaries, loudness and pace, with cancel and typed results (bifrost_app::music_understanding). Open: instrument activity and source separation (no open model) and streaming input."
   },
   {
    "id": "path:/System/Library/Frameworks/NaturalLanguage.framework",
@@ -723,11 +1270,70 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/network.json",
+   "bifrost": "springboard/sdk/src/network_stream.rs; springboard/sdk/src/network_connection.rs; springboard/sdk/src/network_listener.rs; springboard/sdk/src/network_group.rs; springboard/sdk/src/network_path.rs; springboard/sdk/src/avahi_browse.rs; springboard/sdk/src/tls_client.rs; springboard/sdk/src/url.rs; springboard/core/src/net_connection.rs; springboard/core/src/net_path.rs; springboard/core/src/websocket.rs; springboard/core/src/dns_browse.rs",
    "status": "partial",
    "note": "from SDK matrix network.json Refreshed 2026-10-17 (still open): No app-facing TCP client: sdk network_connection (Endpoint, Parameters, Connection) is a model that opens no socket; sdk network_listener and network_group bind real sockets for apps; Service browse has no socket query: sdk network_browser and core dns_browse take replies fed in by hand; No QUIC, WebSocket or custom protocol framer; No NWPathMonitor-style object: sdk network_path requests and decodes the shell path and DNS-SD replies, but no app subscribes to interface changes; TLS client options map to a rustls config (sdk tls_client); no client identities or TLS metadata for apps; No packet trace or network inspector for apps",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "avahi_browse::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_listener::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_group::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tls_client::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "net_connection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "net_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "websocket::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dns_browse::tests"
+    },
+    {
+     "kind": "unit",
+     "name": "avahi-daemon.service",
+     "state": "enabled"
+    }
+   ],
+   "ready_note": "Built this wave: bifrost_app::network_stream::NetworkStream is the connection with a socket behind it (TCP with the TCP options, TLS through tls_client, UDP, local path; state ready, failed, cancelled) and avahi_browse fills a service Browser from the Avahi daemon. With URLSession for HTTP, listeners, multicast groups, WebSocket framing, path monitoring and the TLS options model these cover the framework. Open: QUIC, custom protocol framers and a packet trace for apps; client identities for TLS."
   },
   {
    "id": "path:/System/Library/Frameworks/NetworkExtension.framework",
@@ -744,11 +1350,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/network-extension.json",
+   "bifrost": "springboard/core/src/tun_device.rs; springboard/core/src/tunnel.rs; springboard/core/src/vpn_profiles.rs; springboard/core/src/relay.rs; springboard/core/src/content_filter.rs; springboard/core/src/dns_settings.rs; springboard/core/src/dns_proxy.rs; springboard/core/src/local_push.rs; springboard/ui/src/url_filter.rs; springboard/sdk/src/packet_tunnel.rs; springboard/sdk/src/hotspot_configuration.rs",
    "status": "partial",
    "note": "from SDK matrix network-extension.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "tun_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "tunnel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "relay::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "content_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dns_settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dns_proxy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "local_push::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "url_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hotspot_configuration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hotspot_helper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessory_hotspot::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "ip -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Built this wave: the packet tunnel host (core tun_device: a Linux tun interface that moves whole IP packets, the ip commands that address it, and the full-tunnel and split-tunnel route plan with the server and excluded networks kept on the uplink), exposed as bifrost_app::packet_tunnel with the session life cycle, profiles and route policy. The relay, content filter, URL filter, DNS settings, DNS proxy and local push provider models and the Wi-Fi configuration model were already tested. A custom provider supplies its own protocol; IKEv2 and IPsec negotiation are not in tree, and applying a Wi-Fi configuration to the supplicant stays shell-only."
   },
   {
    "id": "path:/System/Library/Frameworks/NotificationCenter.framework",
@@ -765,11 +1435,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/notification-center.json",
+   "bifrost": "springboard/ui/src/widget.rs; springboard/ui/src/widget_list.rs; springboard/ui/src/widget_search.rs; springboard/ui/src/widget_column.rs; springboard/sdk/src/today_widgets.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/src/shell/today.rs",
    "status": "partial",
    "note": "Refreshed 2026-10-17, still open: No app-drawn widget content: springboard/sdk/src/today_widgets.rs (WidgetSet) sets the order and the has-content flags only, and the shell draws its own widgets (NCWidgetProviding). No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController). The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet. The layout model in springboard/ui/src/widget_column.rs exists but nothing calls it yet. WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_list::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_column::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "today_widgets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::today::tests"
+    }
+   ],
+   "ready_note": "Today widgets: the provider and controller models (display modes, margin insets, has-content), the list and search views and the column layout are in the kit, and apps feed the widget area through the widgets_timeline service (timeline entries with reload policy, search results, live activities) that the shell draws in the Today view with editing and ordering. The reference framework is deprecated in favour of timelines, which is the path BifrOSt follows."
   },
   {
    "id": "path:/System/Library/Frameworks/NowPlaying.framework",
@@ -921,11 +1630,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audiod/src/main.rs (playback and capture service)",
+   "bifrost": "springboard/sdk/src/audio_scene.rs; springboard/sdk/src/positional_audio.rs; springboard/audiod/src/main.rs",
    "status": "partial",
    "note": "The audio service plays and captures PCM streams. Built 2026-10-17: a positional source model in the SDK (sdk positional_audio::tests) with inverse-distance gain and equal-power pan. Gap: the model is not wired to audiod playback, and there are no per-source streams.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_scene::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "positional_audio::tests"
+    }
+   ],
+   "ready_note": "Built this wave: bifrost_app::audio_scene::Scene is the OpenAL-shaped context: buffers (mono positioned, stereo as recorded), sources with position, distance model, relative mode, gain, pitch and looping, the source life cycle (initial, playing, paused, stopped), a listener, and a mixer that renders interleaved stereo with sample-rate conversion and clipping. The app writes the blocks to the audio service. Open: Doppler shift, multichannel buffers and per-source effects."
   },
   {
    "id": "path:/System/Library/Frameworks/OpenCL.framework",
@@ -972,11 +1695,39 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/open-directory.json",
+   "bifrost": "springboard/ui/src/directory_node.rs; springboard/ui/src/directory_query.rs; springboard/ui/src/directory_contacts.rs; springboard/ui/src/directory_local.rs; springboard/sdk/src/ldap_directory.rs",
    "status": "partial",
    "note": "from SDK matrix open-directory.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_node::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_query::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_local::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ldap_directory::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/ldapsearch"
+    }
+   ],
+   "ready_note": "Directory sessions and nodes, record queries with asynchronous results, the local account directory and LDAP nodes (through the installed openldap tools, bifrost_app::ldap_directory) are offered to apps, with contact search over a directory in the kit. BifrOSt has one local account and no directory-backed sign-in, so account policies and password verification of other accounts are n/a by design."
   },
   {
    "id": "path:/System/Library/Frameworks/OpenGL.framework",
@@ -993,11 +1744,32 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
+   "bifrost": "packaging/arch/runtime-packages.txt (mesa); springboard/src/installer/plan.rs (libglvnd, gpu_packages); springboard/src/bare/app_policy.rs (/dev/dri for native apps); springboard/src/gpu/egl.rs",
    "status": "partial",
    "note": "Checked 2026-10-17: springboard/src/gpu/egl.rs dlopens libEGL.so.1 and libGLESv2.so.2 (DESKTOP_LIBS). The installer puts libglvnd in the base list (springboard/src/installer/plan.rs BASE_PACKAGES) and mesa from gpu_packages, which also provides the DRI drivers and libgbm (on the host, libEGL.so.1 is owned by libglvnd and dispatches to mesa's libEGL_mesa.so). Apps get no GL SDK surface, so the row stays partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "gpu::egl::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libEGL.so.1"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libGL.so.1"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libGLESv2.so.2"
+    }
+   ],
+   "ready_note": "OpenGL and OpenGL ES are Mesa through libglvnd: native Linux apps in the app sandbox get the DRI render nodes (/dev/dri) and link libGL, libEGL and libGLESv2 directly, and the shell's own presenter uses the same libraries. SDK apps that draw on the GPU use bifrost_app::gpu (Vulkan) instead; the reference platform's legacy GL API has no separate SDK layer by design."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MCCFoundation.framework",

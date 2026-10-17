@@ -2,11 +2,11 @@
 //!
 //! `bifrost_ui::map_snapshot::Snapshot` works out which Web Mercator tiles cover a region and where each lands.
 //! [`render`] takes those tiles from a [`TileSource`], decodes them and places them in an image, then draws pins and
-//! routes on top. Tiles are never fetched from here: a [`TileSource`] is whatever the app has, and [`TileDirectory`] reads
-//! a local tile pack laid out as `ROOT/{z}/{x}/{y}.png` (`.jpg`, `.jpeg` and `.webp` also work). That keeps map viewing
-//! free of requests to a third-party tile server unless the app chooses to build such a source itself. Tiles the source
-//! does not have are left as a plain background and counted, so the app can tell the person a region is not available
-//! offline.
+//! routes on top. Nothing is fetched from here: a [`TileSource`] is whatever tiles the app already holds, and
+//! [`TileDirectory`] reads a directory laid out as `ROOT/{z}/{x}/{y}.png` (`.jpg`, `.jpeg` and `.webp` also work), which
+//! is the layout of the tile cache the Maps app's loader (`springboard::maptiles`) fills, and of a downloaded tile pack.
+//! Tiles the source does not have are left as a plain background and counted, so the app can tell the person a region is
+//! not available offline.
 
 use bifrost_render::cg::imageio::decode;
 use bifrost_render::gfx::{pack, Image};
