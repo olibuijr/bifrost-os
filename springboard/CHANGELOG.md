@@ -4,6 +4,30 @@
 
 - Terminal: the profile look stores a window opacity (0.5 to 1.0), a background image with fit mode (fill, fit, tile) and a dim, saved in prefs and clamped on read. The grid does not paint them yet, and the Profile Editor does not set them yet.
 
+## 0.9.0 — 2026-10-17
+
+OS-layer parity rounds (waves 1-9, about 1,500 commits from Haiku builders, merged and checked by the lead).
+- Parity matrix: OS rows carry `ready` + `checks` (file, cmd, unit, test); `bifrost pc parity os-verify plan|run|promote`
+  runs them on an installed system and promotes the rows that pass. About 2,400 rows are ready for verification.
+- Privacy and accounts: password sheet for app authentication (PAM, three tries), account access prompts with a manifest
+  permission, contacts picker and access sheet, guardian questions, saved privacy grants, account content limits.
+- Notifications: app authorization with per-option grants, provisional authorization, calendar/interval triggers over
+  the wire, foreground presentation delegate, action buttons on banners, lock screen and Notification Center cards,
+  attachments, custom dismiss, hidden previews, per-app settings.
+- Speech: on-device dictation through gst-plugin-whisper after explicit consent (model download in Settings); spoken
+  assistant answers (off by default).
+- Accessibility: Dwell Control, Slow Keys, Mouse Keys, Sticky Keys switch, popup earcons, interface sounds, Speak
+  Selection, AT-SPI notifications, Voice Control and Switch Control models.
+- System: encrypted backups (XChaCha20-Poly1305, key in the keychain) with a destination disk, Spotlight scope settings,
+  background app suspension (off by default), picture in picture, install coordinator and uninstall, migration helper,
+  regulatory domain from the region, app settings panes, screen capture streams with filters and recording.
+- Fonts: licensed reference families resolve to packaged open-source faces (TeX Gyre, Liberation, Libertinus, Source
+  Serif/Sans, Lato, Nunito, IBM Plex, Noto, DejaVu, Inter, JetBrains Mono, Montserrat, Roboto).
+- Graphics: Core Image style filter catalogue (47+ filters, tiles, transitions), PBR shading, demosaic, depth relight,
+  stereo disparity, optical flow, HDR merge, SVG reader, ink strokes.
+- SDK: about 120 new modules (crypto, networking, TLS, HTTP, Kerberos/LDAP, contacts, calendar, photos, media, maps,
+  gamepads, PDF, tabular data, DSP, scripting, search, StoreKit test session, ...). See docs/bifrost-ui.md.
+
 ## 0.8.2 — 2026-10-16
 
 - Installer: explicitly install `mkinitcpio` on the target system so offline installs can generate the initial initramfs and finish boot setup.
