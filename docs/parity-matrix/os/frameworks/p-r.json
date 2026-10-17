@@ -40,7 +40,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/pdfkit.json",
    "status": "partial",
-   "note": "from SDK matrix pdfkit.json",
+   "note": "from SDK matrix pdfkit.json Built 2026-10-17: graphics_pdf::Document gained outline (the nested bookmark tree, with page indexes) and find (page text search); tests graphics_pdf::tests. Still open: annotations, selection, a write path and print pagination.",
    "rea": [],
    "method": "assessed"
   },
@@ -82,7 +82,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/markup.rs (markup editor: strokes, undo and redo); springboard/apps/freeform-desktop/src/freeform.rs",
    "status": "partial",
-   "note": "from SDK matrix paperkit.json",
+   "note": "from SDK matrix paperkit.json Built 2026-10-17: Redo button on the shell markup bar (shell::markup::tests). Still open: no app-facing markup API, vector elements, a reloadable document and feature options.",
    "rea": [],
    "method": "assessed"
   },
@@ -348,7 +348,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/quartz.json",
    "status": "partial",
-   "note": "from SDK matrix quartz.json",
+   "note": "from SDK matrix quartz.json Built 2026-10-17: PdfPage::draw_text writes text in the four standard faces (graphics_pdf::tests). Still open: image browser, filters, scanner, print-to-PDF and Quick Look for apps.",
    "rea": [],
    "method": "assessed"
   },
