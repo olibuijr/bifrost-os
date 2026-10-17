@@ -183,10 +183,10 @@
    "feature": "Save a search as a Smart Folder",
    "area": "sidebar",
    "apple": "Finder File > New Smart Folder",
-   "status": "gap",
-   "bifrost": "",
-   "note": "smart.rs:38 says saving waits for a New Smart Folder sheet; no menu item or key saves the current search",
-   "wire": "Add Save Search as Smart Folder that writes the query into .smart-folders through SmartFolder::serialize (smart.rs:49)"
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/smart.rs:127",
+   "note": "Empty-area menu Save Search as Smart Folder saves the search words as a folder of the open folder (not tested on Midget). No name sheet or kind, tag or age choice yet",
+   "wire": "Add the New Smart Folder sheet (name, kind, tag, age) that calls save_search with those fields"
   },
   {
    "feature": "Tabs in one window",
@@ -390,19 +390,19 @@
    "feature": "Make Alias (symbolic link)",
    "area": "file-ops",
    "apple": "Finder File > Make Alias",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No alias or symlink creation in springboard/apps/files/src or springboard/src/files",
-   "wire": "Add make_alias to springboard/src/files/fs.rs and a Make Alias item with Cmd+L"
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/ops.rs:517",
+   "note": "Cmd+L and the context menu link each selected item beside it as name alias (fs::make_alias, springboard/src/files/fs.rs:331). Not tested on Midget; a link is not undone by Undo yet",
+   "wire": "Verify on Midget; add an undo step that removes the link"
   },
   {
    "feature": "Copy Item Path",
    "area": "file-ops",
    "apple": "Finder Edit > Copy Item Path",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Copy Name exists (menus.rs:80) but no path copy",
-   "wire": "Add Copy Item Path (Option+Cmd+C) to menus.rs beside Copy Name"
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/menus.rs:132",
+   "note": "Option+Cmd+C (keys.rs) and the context menu put the full path on the clipboard. Not tested on Midget",
+   "wire": "Verify the clipboard text on Midget"
   },
   {
    "feature": "Move To… (choose a folder)",
@@ -588,9 +588,9 @@
  "summary": {
   "features": 64,
   "parity": 41,
-  "partial": 14,
-  "gap": 8,
+  "partial": 17,
+  "gap": 5,
   "n/a": 1,
-  "coverage_pct": 76.2
+  "coverage_pct": 78.6
  }
 }

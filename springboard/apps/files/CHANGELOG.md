@@ -1,3 +1,10 @@
+## 1.29.0 — 2026-10-17
+
+- Make Alias (Cmd+L and the context menu) links each selected item beside it as "name alias", a symbolic link.
+- Copy Item Path (Option+Cmd+C and the context menu) puts the full path of the focused item on the clipboard.
+- Save Search as Smart Folder (empty-area menu, when the search field has words) saves the search as a smart folder in the sidebar and `.smart-folders`.
+- Parity inventory for Finder: `docs/parity-matrix/apps/finder.json`.
+
 ## 1.28.4 — 2026-10-17
 
 - Ships a help book (`help/`: files basics, organize, get info and archives), indexed by the shell help index for the Help menu and `help://is.olibuijr.files.desktop` links.
