@@ -12,6 +12,9 @@ permissions = ["storage", "notifications", "documents"]
 handles = ["net.daringfireball.markdown:alternate"]
 window = "full-size"
 
+[privacy]
+location = "Reminders tells you when you arrive at or leave a place you chose for a reminder. Your position is checked only while Reminders is open and is never sent anywhere."
+
 [[intent]]
 id = "add-reminder"
 title = "Add Reminder"
