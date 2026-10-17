@@ -6,31 +6,14 @@
 //! id for an account key handed to an enrolling device, and the share id for a copy sent to a contact. The caller
 //! supplies the sender's ephemeral private key from the random pool, so this module is deterministic and testable.
 
-use bifrost_app::controls::hpke;
+use bifrost_app::cloud_keys;
 use bifrost_app::controls::x25519::PrivateKey;
 use bifrost_core::json::{self, Json};
-use bifrost_core::plist::{base64_decode, base64_encode};
+
+pub use bifrost_app::cloud_keys::{pack, unpack, SealError, Sealed};
 
 /// The AEAD additional data for every sealed blob of the locator.
 const AAD: &[u8] = b"bifrost.locate.v1";
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Sealed {
-    /// base64 of the ciphertext (AES-128-GCM, with its tag).
-    pub sealed: String,
-    /// base64 of the HPKE encapsulated key.
-    pub enc: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SealError {
-    /// A key is not 32 bytes, or it is a low-order point.
-    Key,
-    /// The blob did not authenticate: wrong key, wrong `info`, or a changed byte.
-    Open,
-    /// A blob or a payload is not valid base64 or JSON, or lacks a field.
-    Payload,
-}
 
 /// A position fix as a report carries it: degrees, metres of accuracy when known, the time it was taken (Unix seconds)
 /// and this device's battery level when known.
@@ -45,15 +28,12 @@ pub struct Report {
 
 /// Seals `plaintext` to `recipient_public` (32 raw bytes) under `info`, with the sender's `ephemeral` private key.
 pub fn seal(recipient_public: &[u8], info: &[u8], plaintext: &[u8], ephemeral: &[u8]) -> Result<Sealed, SealError> {
-    let (enc, ct) = hpke::seal_base(recipient_public, info, AAD, plaintext, ephemeral).map_err(|_| SealError::Key)?;
-    Ok(Sealed { sealed: base64_encode(&ct), enc: base64_encode(&enc) })
+    cloud_keys::seal(recipient_public, AAD, info, plaintext, ephemeral)
 }
 
 /// Opens a blob with the recipient's private key (32 raw bytes) and the `info` it was sealed under.
 pub fn open(recipient_private: &[u8], info: &[u8], blob: &Sealed) -> Result<Vec<u8>, SealError> {
-    let enc = base64_decode(&blob.enc).ok_or(SealError::Payload)?;
-    let ct = base64_decode(&blob.sealed).ok_or(SealError::Payload)?;
-    hpke::open_base(&enc, recipient_private, info, AAD, &ct).map_err(|_| SealError::Open)
+    cloud_keys::open(recipient_private, AAD, info, blob)
 }
 
 /// Seals a report to the account public key, with `info` the device id.
@@ -110,21 +90,10 @@ pub fn decode_report(bytes: &[u8]) -> Result<Report, SealError> {
     })
 }
 
-/// A blob as one string, for the approval route: the base64 encapsulated key, a dot, then the base64 ciphertext. Base64
-/// never contains a dot, so the two halves split back apart with `unpack`.
-pub fn pack(blob: &Sealed) -> String {
-    format!("{}.{}", blob.enc, blob.sealed)
-}
-
-/// Splits a packed blob back into its two halves. `None` when there is no dot.
-pub fn unpack(text: &str) -> Option<Sealed> {
-    let (enc, sealed) = text.split_once('.')?;
-    Some(Sealed { sealed: sealed.to_string(), enc: enc.to_string() })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_core::plist::{base64_decode, base64_encode};
 
     /// Fixed test keys: the private scalar is any 32 bytes, the public key is derived from it.
     fn keys(seed: u8) -> ([u8; 32], [u8; 32]) {

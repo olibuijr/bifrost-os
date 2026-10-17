@@ -14,6 +14,7 @@ pub mod gvar;
 pub mod cg;
 pub mod imgdec;
 pub mod cloud_account;
+pub mod cloud_keys;
 pub mod cloud_session;
 pub mod keychain;
 pub mod credentials;
