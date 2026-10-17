@@ -2,6 +2,9 @@
 
 mod feed;
 mod feed_cache;
+// The refresh schedule is tested on its own; the News loop that sleeps for `next_wait` is not wired yet.
+#[allow(dead_code)]
+mod feed_refresh;
 mod news;
 mod pictures;
 mod reader_size;
