@@ -451,6 +451,18 @@ impl Win {
 }
 
 impl Desk {
+    /// The ids of the native apps this desk started (they may still be running). Used by the low-space purge, which
+    /// never clears the cache of a running app.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn native_running_ids(&self) -> Vec<String> {
+        self.native_children.keys().cloned().collect()
+    }
+
+    #[cfg(not(feature = "desktop-wayland"))]
+    pub(super) fn native_running_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     pub(super) fn grab_idle(&self)->bool{self.grab.is_none()}
     pub fn new() -> Self {
         Desk {dock_visible:true,..Default::default()}

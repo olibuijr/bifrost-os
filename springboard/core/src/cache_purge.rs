@@ -48,17 +48,24 @@ pub fn plan_purge(entries: &[CacheEntry], free: u64, target_free: u64) -> PurgeP
     PurgePlan { victims, reclaimed, shortfall: need.saturating_sub(reclaimed) }
 }
 
-/// Removes the cache folders a plan names. Each app's cache is the folder `root/<app>`. An app identifier that is not a
-/// plain name (empty, containing a separator or `..`) is skipped, so a plan can never reach outside `root`, and a
-/// symbolic link or file of that name is left alone. Returns how many folders were removed.
-pub fn execute(plan: &PurgePlan, root: &std::path::Path) -> std::io::Result<usize> {
+/// Removes the cache folders a plan names. The app's data folder is `root/<app>` and its cache is the folder `cache`
+/// inside it (`Library/Caches` for a container); only that folder is removed, never the data beside it. An app
+/// identifier that is not a plain name (empty, containing a separator or `..`) is skipped, and `cache` must be a
+/// relative path without `..`, so a plan can never reach outside `root`. A symbolic link or file at the cache path is
+/// left alone. Returns how many folders were removed.
+pub fn execute(plan: &PurgePlan, root: &std::path::Path, cache: &str) -> std::io::Result<usize> {
+    let relative = std::path::Path::new(cache);
+    let plain_cache = relative.components().all(|c| matches!(c, std::path::Component::Normal(_))) && !cache.is_empty();
+    if !plain_cache {
+        return Ok(0);
+    }
     let mut removed = 0;
     for app in &plan.victims {
         let plain = !app.is_empty() && app != "." && app != ".." && !app.contains(['/', '\\', '\0']);
         if !plain {
             continue;
         }
-        let dir = root.join(app);
+        let dir = root.join(app).join(relative);
         match std::fs::symlink_metadata(&dir) {
             Ok(meta) if meta.is_dir() => {
                 std::fs::remove_dir_all(&dir)?;
@@ -84,37 +91,51 @@ mod execute_tests {
     }
 
     #[test]
-    fn the_planned_caches_are_removed_and_the_rest_stay() {
+    fn only_the_planned_cache_folders_are_removed_and_the_data_stays() {
         let root = scratch("planned");
-        std::fs::create_dir_all(root.join("app.a/cache")).unwrap();
-        std::fs::write(root.join("app.a/cache/blob"), b"12345").unwrap();
-        std::fs::create_dir_all(root.join("app.b")).unwrap();
+        std::fs::create_dir_all(root.join("app.a/Library/Caches")).unwrap();
+        std::fs::write(root.join("app.a/Library/Caches/blob"), b"12345").unwrap();
+        std::fs::write(root.join("app.a/Library/prefs"), b"keep").unwrap();
+        std::fs::create_dir_all(root.join("app.b/Library/Caches")).unwrap();
         let plan = PurgePlan { victims: vec!["app.a".into(), "app.missing".into()], reclaimed: 5, shortfall: 0 };
-        assert_eq!(execute(&plan, &root).unwrap(), 1);
-        assert!(!root.join("app.a").exists());
-        assert!(root.join("app.b").is_dir(), "an app that was not planned keeps its cache");
+        assert_eq!(execute(&plan, &root, "Library/Caches").unwrap(), 1);
+        assert!(!root.join("app.a/Library/Caches").exists());
+        assert!(root.join("app.a/Library/prefs").is_file(), "the app's own data is not removed");
+        assert!(root.join("app.b/Library/Caches").is_dir(), "an app that was not planned keeps its cache");
         let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
     fn a_name_that_leaves_the_root_is_never_removed() {
         let base = scratch("escape");
-        let root = base.join("caches");
-        std::fs::create_dir_all(root.join("ok")).unwrap();
-        std::fs::create_dir_all(base.join("outside")).unwrap();
+        let root = base.join("appdata");
+        std::fs::create_dir_all(root.join("ok/Library/Caches")).unwrap();
+        std::fs::create_dir_all(base.join("outside/Library/Caches")).unwrap();
         let plan = PurgePlan { victims: vec!["../outside".into(), "..".into(), "a/b".into(), String::new()], reclaimed: 0, shortfall: 0 };
-        assert_eq!(execute(&plan, &root).unwrap(), 0);
-        assert!(base.join("outside").is_dir());
+        assert_eq!(execute(&plan, &root, "Library/Caches").unwrap(), 0);
+        assert!(base.join("outside/Library/Caches").is_dir());
         let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
-    fn a_file_with_a_cache_name_is_left_alone() {
+    fn a_cache_path_that_leaves_the_app_folder_is_refused() {
+        let root = scratch("cachepath");
+        std::fs::create_dir_all(root.join("app/Library")).unwrap();
+        let plan = PurgePlan { victims: vec!["app".into()], reclaimed: 0, shortfall: 0 };
+        assert_eq!(execute(&plan, &root, "../..").unwrap(), 0);
+        assert_eq!(execute(&plan, &root, "/").unwrap(), 0);
+        assert!(root.join("app/Library").is_dir());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_file_at_the_cache_path_is_left_alone() {
         let root = scratch("file");
-        std::fs::write(root.join("notes"), b"x").unwrap();
-        let plan = PurgePlan { victims: vec!["notes".into()], reclaimed: 1, shortfall: 0 };
-        assert_eq!(execute(&plan, &root).unwrap(), 0);
-        assert!(root.join("notes").is_file());
+        std::fs::create_dir_all(root.join("app/Library")).unwrap();
+        std::fs::write(root.join("app/Library/Caches"), b"x").unwrap();
+        let plan = PurgePlan { victims: vec!["app".into()], reclaimed: 1, shortfall: 0 };
+        assert_eq!(execute(&plan, &root, "Library/Caches").unwrap(), 0);
+        assert!(root.join("app/Library/Caches").is_file());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

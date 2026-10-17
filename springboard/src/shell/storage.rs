@@ -6,6 +6,7 @@
 
 use super::notify::Notification;
 use super::{AppId, Shell};
+use bifrost_core::cache_purge::{self, plan_purge, CacheEntry};
 use crate::bare::sys;
 use std::path::{Path, PathBuf};
 use crate::shell::clock::tz::unix_now;
@@ -289,6 +290,36 @@ pub fn trim_disposable(dir: &Path) -> u64 {
     CLEARS.iter().map(|&c| clear(c, dir)).sum()
 }
 
+/// Where an app keeps its cache inside its data folder (`appdata/<app id>`): the container's `Library/Caches`.
+const APP_CACHE: &str = "Library/Caches";
+
+/// While `free` is low, clears the caches of the apps the purge plan picks, least recently used first. A running app
+/// is never picked, and only the cache folder of each app is removed. Returns the bytes the plan reclaimed.
+pub fn purge_app_caches(data_dir: &Path, running: &[String], free: u64) -> u64 {
+    let appdata = data_dir.join("appdata");
+    let Ok(read) = std::fs::read_dir(&appdata) else { return 0 };
+    let entries: Vec<CacheEntry> = read
+        .flatten()
+        // the file type is read without following links, so a link in appdata is never taken for an app folder
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| {
+            let app = e.file_name().to_string_lossy().into_owned();
+            let last_used = e
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map_or(0, |d| d.as_secs());
+            CacheEntry { bytes: dir_size(&e.path().join(APP_CACHE)), last_used, running: running.contains(&app), app }
+        })
+        .collect();
+    let plan = plan_purge(&entries, free, LOW_BYTES);
+    match cache_purge::execute(&plan, &appdata, APP_CACHE) {
+        Ok(_) => plan.reclaimed,
+        Err(_) => 0,
+    }
+}
+
 /// Whether `free` bytes is low enough to trim (0 means unknown).
 pub fn is_low(free: u64) -> bool {
     free > 0 && free < LOW_BYTES
@@ -303,16 +334,17 @@ pub struct Guard {
 
 impl Guard {
     /// Starts a trim of `dir` on a worker when `free` is low and none runs.
-    pub fn check(&mut self, free: u64, dir: &Path) {
+    pub fn check(&mut self, free: u64, dir: &Path, running: &[String]) {
         if !is_low(free) || self.rx.is_some() {
             return;
         }
         let (tx, rx) = channel();
         self.rx = Some(rx);
         let dir = dir.to_path_buf();
+        let running = running.to_vec();
         crate::bare::sys::spawn_named("storage-job", move || {
             crate::gfx::affinity::background_thread();
-            let _ = tx.send(trim_disposable(&dir));
+            let _ = tx.send(trim_disposable(&dir) + purge_app_caches(&dir, &running, free));
         });
     }
 
@@ -354,7 +386,19 @@ impl Shell {
             }
         }
         let dir = self.data_dir.clone();
-        self.storage_guard.check(free, &dir);
+        // the apps that may be running now keep their caches
+        let mut running: Vec<String> = self.desk.as_ref().map(|d| d.native_running_ids()).unwrap_or_default();
+        let installed = super::apphost::installed();
+        running.extend(
+            self.ext
+                .iter()
+                .enumerate()
+                .filter(|(_, host)| host.as_ref().is_some_and(|h| h.running()))
+                .filter_map(|(slot, _)| installed.get(slot))
+                .map(|app| app.manifest.id.clone()),
+        );
+        running.extend(self.dying.iter().map(|h| h.id.clone()));
+        self.storage_guard.check(free, &dir, &running);
     }
 }
 
@@ -371,6 +415,25 @@ mod tests {
 
     fn e(n: &str, b: u64) -> (String, u64) {
         (n.to_string(), b)
+    }
+
+    #[test]
+    fn low_space_clears_only_the_planned_idle_app_caches() {
+        let data = scratch("app-caches");
+        for app in ["a", "b", "c"] {
+            let cache = data.join("appdata").join(app).join("Library/Caches");
+            std::fs::create_dir_all(&cache).unwrap();
+            std::fs::write(cache.join("blob"), vec![0u8; 100]).unwrap();
+            std::fs::write(data.join("appdata").join(app).join("Library/state"), b"keep").unwrap();
+        }
+        // `c` is running; the shortfall is 50 bytes, which the oldest idle cache covers (`a` was made first)
+        let free = LOW_BYTES - 50;
+        let reclaimed = purge_app_caches(&data, &["c".to_string()], free);
+        assert_eq!(reclaimed, 100);
+        assert!(!data.join("appdata/a/Library/Caches").exists());
+        assert!(data.join("appdata/a/Library/state").is_file(), "the app's own data stays");
+        assert!(data.join("appdata/b/Library/Caches").is_dir(), "a cache the plan did not need stays");
+        assert!(data.join("appdata/c/Library/Caches").is_dir(), "a running app keeps its cache");
     }
 
     #[test]
