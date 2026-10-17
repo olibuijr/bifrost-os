@@ -5,7 +5,8 @@
 //! `key = value` lines. A password is never written there. It lives in the passwords group ([`crate::passwords`]),
 //! under the site [`Account::password_site`] and the account name [`Account::username`].
 //!
-//! An account is one of three [`Kind`]s: mail over IMAP and SMTP, or a CalDAV or CardDAV server. Each account
+//! An account is one of four [`Kind`]s: mail over IMAP and SMTP, a CalDAV or CardDAV server, or an Exchange server
+//! for notes (Exchange Web Services over HTTPS). Each account
 //! switches its [`Service`]s on and off; a service only applies to the kinds that can feed it (see
 //! [`Kind::services`]). The DAV requests and answers are in [`dav`].
 
@@ -28,16 +29,19 @@ pub enum Kind {
     CalDav,
     /// A CardDAV address book server.
     CardDav,
+    /// An Exchange server (Exchange Web Services, `https://` only) whose Notes folder Notes reads and writes.
+    Exchange,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 3] = [Kind::Mail, Kind::CalDav, Kind::CardDav];
+    pub const ALL: [Kind; 4] = [Kind::Mail, Kind::CalDav, Kind::CardDav, Kind::Exchange];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Kind::Mail => "mail",
             Kind::CalDav => "caldav",
             Kind::CardDav => "carddav",
+            Kind::Exchange => "exchange",
         }
     }
 
@@ -51,6 +55,7 @@ impl Kind {
             Kind::Mail => "Mail (IMAP and SMTP)",
             Kind::CalDav => "Calendar (CalDAV)",
             Kind::CardDav => "Contacts (CardDAV)",
+            Kind::Exchange => "Notes (Exchange)",
         }
     }
 
@@ -61,6 +66,7 @@ impl Kind {
             Kind::Mail => "bifrost.mail",
             Kind::CalDav => "bifrost.caldav",
             Kind::CardDav => "bifrost.carddav",
+            Kind::Exchange => "bifrost.exchange",
         }
     }
 
@@ -70,6 +76,7 @@ impl Kind {
             Kind::Mail => &[Service::Mail],
             Kind::CalDav => &[Service::Calendars, Service::Reminders],
             Kind::CardDav => &[Service::Contacts],
+            Kind::Exchange => &[Service::Notes],
         }
     }
 }
@@ -81,10 +88,11 @@ pub enum Service {
     Calendars,
     Contacts,
     Reminders,
+    Notes,
 }
 
 impl Service {
-    pub const ALL: [Service; 4] = [Service::Mail, Service::Calendars, Service::Contacts, Service::Reminders];
+    pub const ALL: [Service; 5] = [Service::Mail, Service::Calendars, Service::Contacts, Service::Reminders, Service::Notes];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -92,6 +100,7 @@ impl Service {
             Service::Calendars => "calendars",
             Service::Contacts => "contacts",
             Service::Reminders => "reminders",
+            Service::Notes => "notes",
         }
     }
 
@@ -106,6 +115,7 @@ impl Service {
             Service::Calendars => "Calendars",
             Service::Contacts => "Contacts",
             Service::Reminders => "Reminders",
+            Service::Notes => "Notes",
         }
     }
 }
@@ -163,7 +173,7 @@ pub struct Account {
     pub imap: Option<Server>,
     /// Mail: the SMTP outgoing server.
     pub smtp: Option<Server>,
-    /// CalDAV and CardDAV: the server URL (`https://...`). Empty for mail.
+    /// CalDAV, CardDAV and Exchange: the server URL (`https://...`). Empty for mail.
     pub url: String,
     /// The services switched on for this account. Always a subset of [`Kind::services`].
     pub services: Vec<Service>,
@@ -228,7 +238,7 @@ impl Account {
     pub fn password_site(&self) -> String {
         match self.kind {
             Kind::Mail => self.imap.as_ref().map(|s| s.host.clone()).unwrap_or_default(),
-            Kind::CalDav | Kind::CardDav => url_host(&self.url).unwrap_or_default().to_string(),
+            Kind::CalDav | Kind::CardDav | Kind::Exchange => url_host(&self.url).unwrap_or_default().to_string(),
         }
     }
 
@@ -276,6 +286,16 @@ impl Account {
                 }
                 Ok(())
             }
+            Kind::Exchange => {
+                if self.url.is_empty() {
+                    return Err(AccountError::Missing("url"));
+                }
+                // the login travels in every request, so Exchange is https only
+                if !valid_exchange_url(&self.url) {
+                    return Err(AccountError::Invalid("url"));
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -315,6 +335,11 @@ pub fn valid_dav_url(url: &str) -> bool {
         }
         None => false,
     }
+}
+
+/// An Exchange server address: a [`valid_dav_url`] that is `https://`, because the password goes in every request.
+pub fn valid_exchange_url(url: &str) -> bool {
+    url.starts_with("https://") && valid_dav_url(url)
 }
 
 /// The host of an `http://` or `https://` URL, without port, path or user information.
@@ -473,7 +498,7 @@ mod tests {
     #[test]
     fn every_kind_has_its_own_account_type_name() {
         let names: Vec<&str> = Kind::ALL.iter().map(|k| k.account_type()).collect();
-        assert_eq!(names, vec!["bifrost.mail", "bifrost.caldav", "bifrost.carddav"]);
+        assert_eq!(names, vec!["bifrost.mail", "bifrost.caldav", "bifrost.carddav", "bifrost.exchange"]);
         assert!(names.iter().all(|n| n.starts_with("bifrost.")));
     }
 
@@ -494,6 +519,20 @@ mod tests {
     fn accounts_round_trip_through_the_file_format() {
         let accounts = vec![mail(), dav(Kind::CalDav), dav(Kind::CardDav)];
         assert_eq!(decode(&encode(&accounts)).unwrap(), accounts);
+    }
+
+    #[test]
+    fn an_exchange_account_feeds_notes_and_needs_https() {
+        let a = Account { url: "https://mail.example.com/EWS/Exchange.asmx".into(), ..Account::new(Kind::Exchange, "exchange-1", "Work", "ann") };
+        assert_eq!(a.services, vec![Service::Notes]);
+        assert_eq!(a.validate(), Ok(()));
+        assert_eq!(a.password_site(), "mail.example.com");
+        assert_eq!(decode(&encode(&[a.clone()])).unwrap(), vec![a.clone()]);
+        assert_eq!(serving(&[a.clone()], Service::Notes).len(), 1);
+        assert!(serving(&[a.clone()], Service::Calendars).is_empty());
+        let plain = Account { url: "http://mail.example.com/EWS/Exchange.asmx".into(), ..a };
+        assert_eq!(plain.validate(), Err(AccountError::Invalid("url")));
+        assert!(!valid_exchange_url("http://mail.example.com/"));
     }
 
     #[test]
