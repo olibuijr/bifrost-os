@@ -16,6 +16,8 @@ pub mod touch_frames;
 pub mod intents;
 pub mod app_controls;
 pub mod assistant;
+pub mod assistant_panel;
+pub mod assistant_page;
 pub mod media_intents;
 pub mod kinds;
 pub mod app_usage;
@@ -565,6 +567,8 @@ pub struct Shell {
     switcher: Switcher,
     /// the search card pulled down over the home screen
     quicksearch: QuickSearch,
+    /// the assistant panel (Cmd+Shift+A), drawn over the desktop like Search
+    assistant: assistant_panel::Panel,
     /// the built-in compose method over the Search field and its candidate window
     compose_ime: compose_window::ComposeWindow,
     notify: notify::Notify,
@@ -852,6 +856,7 @@ impl Shell {
         let keyboard = Keyboard::new(w as f32, layout.s, true);
         let clock = clock::Clock::new(&ui, w, h);
         let quicksearch = QuickSearch::new(&ui, w as f32, layout.s);
+        let assistant = assistant_panel::Panel::new(&ui);
         let mut today = Today::new(&ui, w, h, mono);
         today.set_wallpaper(wallpaper);
         let mut pager = pager;
@@ -935,6 +940,7 @@ impl Shell {
             perf_drawn: false,
             switcher: Switcher::default(),
             quicksearch,
+            assistant,
             compose_ime: compose_window::ComposeWindow::default(),
             notify: notify::Notify::default(),
             usernotif: usernotif::Registry::default(),
@@ -1773,6 +1779,10 @@ impl Shell {
         if self.screen_on {
             if let Some(w) = self.quicksearch.next_wake(t) {
                 due.add(Some(w));
+            }
+            // the assistant polls its worker threads while a request is out
+            if self.assistant.waiting() {
+                due.add(Some(t + 50.0));
             }
         }
         if self.screen_on && self.screen == Screen::App(AppId::Settings) {
@@ -2704,6 +2714,9 @@ impl Shell {
         if let Some(fx) = self.overlay_event(ev, t) {
             return fx;
         }
+        if let Some(fx) = self.assistant_event(ev) {
+            return fx;
+        }
         if let Some(fx) = self.quicksearch_event(ev, t) {
             return fx;
         }
@@ -3173,6 +3186,7 @@ impl Shell {
             self.dirty = true;
         }
         self.dirty |= self.quicksearch_tick(t);
+        self.dirty |= self.assistant_tick();
         if let Some((a, start)) = self.anim {
             self.dirty = true;
             if t - start >= accessibility::anim_ms(gestures::SPRING_MS) {
@@ -3528,6 +3542,10 @@ impl Shell {
                     if self.quicksearch.animating() {
                         damage.all();
                     }
+                }
+                if self.assistant.is_shown() {
+                    self.draw_assistant(s, t);
+                    damage.all();
                 }
                 // the compose candidate window floats above the windows
                 self.draw_compose(s, &self.ui, self.w, self.h);

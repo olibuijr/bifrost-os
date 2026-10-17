@@ -459,6 +459,7 @@ impl Shell {
         let g=self.ui.pt(super::desk::SHADOW_REACH_PT);
         for r in [self.cc_desk_rect(),self.center_desk_rect()].into_iter().flatten() {let (x,y,w,h)=r;v.push(((x-g).max(0.) as i32,(y-g).max(0.) as i32,(w+2.*g) as i32,(h+2.*g) as i32));}
         if let Some(((x,y,w,h),_))=self.quicksearch.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
+        if let Some(((x,y,w,h),_))=self.assistant.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
         if self.perf.enabled||self.perf_drawn{let (x,y,w,h)=self.perf_rect();let g=self.ui.pt(2.) as i32;v.push((x as i32-g,y as i32-g,w as i32+2*g,h as i32+2*g));}
         Some(v)
     }
@@ -755,6 +756,16 @@ impl Shell {
                 let full=mask.len()/h.max(1);let mask:Vec<u8>=(0..w*h).map(|i|mask.get((i/w)*full+i%w).copied().unwrap_or(0)).collect();
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
                 frames.push(crate::bare::wayland::ChromeFrame{id:3,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px});
+            }
+        }
+        // the assistant panel: id 6, an overlay surface like Search (its keyboard is exclusive while it is open)
+        if let Some(((x,y,w,h),mask))=self.assistant.desk_overlay(&self.ui,self.w) {
+            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
+            if w>0&&h>0 {
+                let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+                let full=mask.len()/h.max(1);let mask:Vec<u8>=(0..w*h).map(|i|mask.get((i/w)*full+i%w).copied().unwrap_or(0)).collect();
+                let mut image=Image{w,h,px:data};image.apply_mask(&mask);
+                frames.push(crate::bare::wayland::ChromeFrame{id:6,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px});
             }
         }
         frames

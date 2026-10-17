@@ -587,8 +587,8 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
-                // id 3 is Search: it takes the keyboard from the window in front while it is open
-                l.set_keyboard_interactivity(if frame.id==3 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
+                // id 3 is Search and id 6 the assistant panel: they take the keyboard from the window in front while open
+                l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();
                 self.state.chrome.insert(frame.id,ChromeWindow{surface:s,layer:l,slots:vec![],configured:false,frame,pending});
             }

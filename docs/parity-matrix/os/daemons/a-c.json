@@ -1740,9 +1740,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "groundwork only: springboard/src/shell/assistant.rs has the settings, per-app intent catalogue, reply protocol and confirmation gate (unit-tested, not compiled in this round). Not wired: the Cmd+Shift+A shortcut and panel, the shared API client, the assistant service registration and Settings > Assistant",
+   "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/assistant-client",
+   "status": "partial",
+   "note": "Cmd+Shift+A opens a panel over the desktop (assistant_panel.rs) with a question field, a wrapped answer and a Run/Cancel card; Settings > Assistant (assistant_page.rs) has the switch, backend (Off by default), history (off) and per-app intent access. Requests go to the Anthropic API only when the backend is chosen and a key is in the keychain. Partial: no speech input (no engine on the image), no assistant service registration, and the panel is drawn on the desktop only. Built but not compiled or run on Midget yet.",
    "rea": [],
    "method": "heuristic"
   },
