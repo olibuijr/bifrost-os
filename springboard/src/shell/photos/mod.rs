@@ -27,6 +27,7 @@ pub mod meta;
 pub mod models;
 pub mod places;
 pub mod recipe;
+pub mod repair;
 pub mod slideshow;
 pub mod stars;
 pub mod thumbs;
