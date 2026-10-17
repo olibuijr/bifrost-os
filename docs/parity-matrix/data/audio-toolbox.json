@@ -61,14 +61,14 @@
       "apple": "Audio session support (route, category, interruption handling)",
       "bifrost": "springboard/src/media/route.rs, springboard/src/media/volume.rs, springboard/audio/alsa/src/ctl.rs; springboard/sdk/src/audio_session.rs (SessionHub: categories, activation, interruptions, route changes)",
       "status": "partial",
-      "note": "Categories, activation, interruptions and route-change events are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: no shell service drives the session hub yet, so the headphone cap and the service's audio focus are not reported to apps."
+      "note": "Categories, activation, interruptions and route-change events are tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: no shell service drives the session hub yet, so the headphone cap and the service's audio focus are not reported to apps. Refreshed 2026-10-17: the SDK session model exists (sdk/src/audio_session.rs, SessionHub; tests in parity_sdk-os-10.rs); the shell still does not drive it."
     },
     {
       "feature": "System sounds and alert playback (Audio Services)",
       "apple": "AudioServicesPlaySystemSound, AudioServicesCreateSystemSoundID",
       "bifrost": "springboard/sdk/src/system_sound.rs (SystemSounds",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-sound or alert API. A search for sound effect and beep terms in springboard/src found nothing."
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-sound or alert API. A search for sound effect and beep terms in springboard/src found nothing. Refreshed 2026-10-17: the SDK system-sound model exists (sdk/src/system_sound.rs, tests in that module); the audio service does not call its take_request yet, so nothing plays through it."
     },
     {
       "feature": "Scheduled file regions and slices (ScheduledAudioFileRegion)",
@@ -102,9 +102,9 @@
   "gaps": [
     "No SDK API for raw audio buffers or render callbacks; apps can only use transport and record calls on the audio service",
     "No audio unit or audio component host (AUv3 or AUv2), and no parameter tree",
-    "No system sound or alert API (AudioServices)",
+    "No system sound playback: the SDK model (sdk/src/system_sound.rs) exists but the audio service does not call take_request, so it never plays.",
     "No general format converter or encoder API for apps",
-    "No app-facing audio session category, interruption or route API (system layer only)",
+    "The SDK session model exists (sdk/src/audio_session.rs), but no shell service drives it, so interruptions and route changes do not reach apps.",
     "No scheduled playback of file regions",
     "No voice processing (echo cancellation) on capture"
   ]

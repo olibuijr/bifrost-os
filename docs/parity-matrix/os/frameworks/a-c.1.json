@@ -666,7 +666,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/audio-toolbox.json",
    "status": "partial",
-   "note": "from SDK matrix audio-toolbox.json",
+   "note": "from SDK matrix audio-toolbox.json Refreshed 2026-10-17: not ready. Still open: raw buffer and render callbacks, audio unit and component hosts, an app-facing demuxer and encoder, a shell-driven audio session, system sound playback, scheduled file regions and voice processing. See data/audio-toolbox.json gaps.",
    "rea": [],
    "method": "assessed"
   },
@@ -1418,7 +1418,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/contacts-ui.json",
    "status": "partial",
-   "note": "from SDK matrix contacts-ui.json",
+   "note": "from SDK matrix contacts-ui.json Refreshed 2026-10-17: not ready; open items are in data/contacts-ui.json gaps.",
    "rea": [],
    "method": "assessed"
   },
