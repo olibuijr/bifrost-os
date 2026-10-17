@@ -17,6 +17,7 @@ pub mod note_url;
 pub mod settings;
 mod chrome;
 pub mod icon;
+pub mod preview;
 pub mod rpc;
 pub mod sketch;
 pub mod smart;

@@ -536,6 +536,10 @@ impl App for NotesApp {
         if method == "notes.state" {
             return Ok(bifrost_core::json::Json::Str(self.notes.as_ref().map_or_else(String::new, |n| n.describe())));
         }
+        // the shell's preview panel asks for a picture of a note (`[[preview]]` in the manifest)
+        if method == ::notes::notes::preview::METHOD {
+            return ::notes::notes::preview::handle(ctx.map(|c| &c.ui), data_dir, params);
+        }
         // scripting: `tell app "Notes"` commands arrive as AppEvents (see `scripting` and the manifest's [[script.*]])
         if let Some(ev) = AppEvent::from_method(method, params) {
             return app_event(self, ctx, data_dir, &ev);

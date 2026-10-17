@@ -47,6 +47,12 @@ description = "Shows the notes of a folder."
 shortcut = false
 params = ["folder:string"]
 
+[[preview]]
+id = "is.olibuijr.notes.markdown"
+types = ["net.daringfireball.markdown"]
+generator = "preview.render"
+timeout_ms = 3000
+
 [[script.command]]
 name = "make new note"
 event = "notes.make"
