@@ -2845,9 +2845,10 @@ static SYSTEM_SOUNDS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec:
 /// At most this many sounds wait for one frame; the rest are dropped so an app cannot flood the audio worker.
 const MAX_SYSTEM_SOUNDS: usize = 4;
 
-/// Queues an app's system sound when the name is one of the shell's alert tones.
+/// Queues an app's system sound when the name is one of the shell's alert tones or interface cues.
 fn queue_system_sound(name: String) {
-    if !super::options::ALERT_SOUNDS.contains(&name.as_str()) {
+    let known = super::options::ALERT_SOUNDS.contains(&name.as_str()) || super::ui_sounds::index_of(&name).is_some();
+    if !known {
         return;
     }
     let mut queue = SYSTEM_SOUNDS.lock().unwrap_or_else(|e| e.into_inner());

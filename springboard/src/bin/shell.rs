@@ -938,6 +938,8 @@ fn run() -> std::io::Result<()> {
         for name in springboard::shell::apphost::take_system_sounds() {
             if let Some(index) = springboard::shell::options::ALERT_SOUNDS.iter().position(|label| *label == name) {
                 let _ = audio_tx.send(AudioJob::Sound(Sound::Alert(index)));
+            } else if let Some(index) = springboard::shell::ui_sounds::index_of(&name) {
+                let _ = audio_tx.send(AudioJob::Sound(Sound::Ui(index)));
             }
         }
         // the screen reader's cues (its moves, wraps and mode changes) play on the sound-effects role
@@ -1627,6 +1629,8 @@ enum Sound {
     Cue(springboard::shell::accessibility::earcons::Earcon),
     /// a shell earcon at this index into `shell::earcon::EARCONS` (a popup opening or closing)
     Earcon(usize),
+    /// an interface cue at this index into `shell::ui_sounds::UI_SOUNDS` (an app's `PlaySystemSound` name)
+    Ui(usize),
 }
 
 /// The audio worker: one thread for every audio job of the shell. A level sets the volume and mute controls of the
@@ -1645,7 +1649,7 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
         let mut at: Option<f32> = None;
         let mut player: Option<SoundPlayer> = None;
         while let Ok(first) = rx.recv() {
-            let (mut volume, mut alert, mut click, mut cue, mut earcon) = (None, None, None, None, None);
+            let (mut volume, mut alert, mut click, mut cue, mut earcon, mut ui) = (None, None, None, None, None, None);
             let mut next = Some(first);
             while let Some(job) = next {
                 match job {
@@ -1654,6 +1658,7 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
                     AudioJob::Sound(Sound::Click(c)) => click = Some(c),
                     AudioJob::Sound(Sound::Cue(c)) => cue = Some(c),
                     AudioJob::Sound(Sound::Earcon(i)) => earcon = Some(i),
+                    AudioJob::Sound(Sound::Ui(i)) => ui = Some(i),
                 }
                 next = rx.try_recv().ok();
             }
@@ -1666,6 +1671,7 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
                 .or(cue.map(Sound::Cue))
                 .or(earcon.map(Sound::Earcon))
                 .or(click.map(Sound::Click))
+                .or(ui.map(Sound::Ui))
             else {
                 continue;
             };
@@ -1684,6 +1690,7 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
                 Sound::Click(c) => p.click(c, 1.0),
                 Sound::Cue(c) => p.reader_cue(c, 1.0),
                 Sound::Earcon(index) => p.earcon(index, 1.0),
+                Sound::Ui(index) => p.ui_cue(index, 1.0),
             };
             if let Err(e) = played {
                 eprintln!("springboard: sound: {e}");

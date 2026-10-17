@@ -77,6 +77,11 @@ pub fn pcm(name: &str, volume: f32) -> Option<Vec<i16>> {
     notes(name).map(|n| render(n, volume))
 }
 
+/// The position of the interface cue `name` in `UI_SOUNDS`, or `None` for an unknown name.
+pub fn index_of(name: &str) -> Option<usize> {
+    UI_SOUNDS.iter().position(|(n, _)| *n == name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,6 +101,14 @@ mod tests {
                 assert_ne!(a, b, "cue {a} is listed twice");
             }
         }
+    }
+
+    #[test]
+    fn index_of_finds_each_cue_in_the_table() {
+        for (i, (name, _)) in UI_SOUNDS.iter().enumerate() {
+            assert_eq!(index_of(name), Some(i));
+        }
+        assert_eq!(index_of("NoSuchCue"), None);
     }
 
     #[test]
