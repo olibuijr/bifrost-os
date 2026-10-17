@@ -375,6 +375,8 @@ pub mod file_version;
 pub mod save_sync;
 pub mod file_provider;
 pub mod file_manager;
+/// File-manager sync extensions: badges, shortcut-menu items, a toolbar button and folder observation for Files.
+pub mod file_manager_sync;
 pub mod url;
 pub mod url_background;
 pub mod multipart;
