@@ -1,0 +1,43 @@
+{
+  "framework": "AccessorySetupKit",
+  "doc": "https://developer.apple.com/documentation/accessorysetupkit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/wireless_accessory_browser.rs, springboard/sdk/src/wifi_accessory_browser.rs, springboard/sdk/src/bluetooth_picker.rs, springboard/sdk/src/external_accessory.rs, springboard/sdk/src/accessory_access.rs",
+  "summary": "Apps can search for unconfigured wireless accessories, pick a Bluetooth device and get connection notices for USB and external accessories. The privacy-preserving discovery flow, where a picker grants access without a permission prompt, is not built.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Discovery criteria for accessories",
+      "apple": "ASDiscoveryDescriptor, ASAccessorySession",
+      "bifrost": "springboard/sdk/src/wireless_accessory_browser.rs, springboard/sdk/src/wifi_accessory_browser.rs",
+      "status": "partial",
+      "note": "an app matches unconfigured accessories by criteria and starts a configuration"
+    },
+    {
+      "feature": "Picker for Bluetooth accessories",
+      "apple": "ASPickerDisplayItem",
+      "bifrost": "springboard/sdk/src/bluetooth_picker.rs",
+      "status": "partial",
+      "note": "an app asks for nearby devices and the user chooses one"
+    },
+    {
+      "feature": "Accessory connection and data sessions",
+      "apple": "ASAccessory, ASAccessory.AccessoryState",
+      "bifrost": "springboard/sdk/src/external_accessory.rs, springboard/sdk/src/accessory_access.rs",
+      "status": "partial",
+      "note": "a registry of connected accessories and listeners for attach and detach; no authorized state per accessory"
+    },
+    {
+      "feature": "Permission-free discovery and migration",
+      "apple": "ASMigrationDisplayItem, accessory authorization without Bluetooth permission",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no picker that grants access without a permission prompt"
+    }
+  ],
+  "gaps": [
+    "No picker that grants access to an accessory without a permission prompt.",
+    "No migration of previously discovered accessories."
+  ]
+}

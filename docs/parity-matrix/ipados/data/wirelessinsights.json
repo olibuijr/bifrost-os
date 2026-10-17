@@ -1,0 +1,19 @@
+{
+  "framework": "WirelessInsights",
+  "doc": "https://developer.apple.com/documentation/wirelessinsights",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Carrier service predictions come from the cellular provider's network data. The tablet port has no carrier prediction feed.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Service predictions for cellular conditions",
+      "apple": "ServicePredictionProvider, Wireless Insights Service Predictions",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs the carrier's network prediction data, which the tablet port does not receive"
+    }
+  ],
+  "gaps": []
+}

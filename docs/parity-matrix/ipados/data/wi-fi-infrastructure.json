@@ -1,0 +1,43 @@
+{
+  "framework": "Wi-Fi Infrastructure",
+  "doc": "https://developer.apple.com/documentation/wifiinfrastructure",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/wifi_secrets.rs, springboard/sdk/src/wlan_keychain.rs, springboard/sdk/src/wlan.rs, springboard/sdk/src/wireless_accessory_browser.rs",
+  "summary": "Apps can store and read Wi-Fi network secrets through the keychain and read scan results. Credential sharing with a connected accessory is not built.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Network credentials store",
+      "apple": "WINetworkSharingController, WISSID",
+      "bifrost": "springboard/sdk/src/wifi_secrets.rs, springboard/sdk/src/wlan_keychain.rs",
+      "status": "partial",
+      "note": "shared and enterprise secrets per network name in the keychain"
+    },
+    {
+      "feature": "Scan results",
+      "apple": "WIChannel, WIMACAddress",
+      "bifrost": "springboard/sdk/src/wlan.rs",
+      "status": "partial",
+      "note": "channel, band and PHY mode of access points; no MAC address type"
+    },
+    {
+      "feature": "Share credentials with an accessory",
+      "apple": "WINetworkSharingProvider, WINetworkSharingAskToShareState",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no secure share of the current network to a Bluetooth accessory"
+    },
+    {
+      "feature": "Accessory Wi-Fi setup",
+      "apple": "Sharing Wi-Fi network credentials after a Bluetooth connection",
+      "bifrost": "springboard/sdk/src/wireless_accessory_browser.rs",
+      "status": "partial",
+      "note": "an app asks for an unconfigured accessory to be given a network name and passphrase"
+    }
+  ],
+  "gaps": [
+    "No secure credential sharing with a connected accessory.",
+    "No network-sharing authorization state."
+  ]
+}

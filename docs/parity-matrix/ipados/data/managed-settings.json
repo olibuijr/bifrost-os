@@ -1,0 +1,51 @@
+{
+  "framework": "Managed Settings",
+  "doc": "https://developer.apple.com/documentation/managedsettings",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/screen_time.rs, springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/usage.rs",
+  "summary": "The shell enforces Screen Time limits and Downtime itself. Apps can read only whether child restrictions are on. There is no app-facing settings store, no tokens for apps or categories, and no family-account service.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Restriction store for apps",
+      "apple": "ManagedSettingsStore",
+      "bifrost": "springboard/sdk/src/screen_time.rs",
+      "status": "gap",
+      "note": "apps can read whether restrictions are enforced and observe changes; they cannot write restrictions"
+    },
+    {
+      "feature": "Shell-side limits and Downtime",
+      "apple": "Screen Time settings applied by the system",
+      "bifrost": "springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/usage.rs",
+      "status": "partial",
+      "note": "per-app daily limits and Downtime are set in the shell and counted from app usage; no framework for other apps to call"
+    },
+    {
+      "feature": "Application and web domain tokens",
+      "apple": "ApplicationToken, WebDomainToken, ActivityCategoryToken, Token",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no privacy-preserving token for an app, category or site"
+    },
+    {
+      "feature": "Family Sharing management",
+      "apple": "Manage settings on devices in a Family Sharing group",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "depends on the Apple Family Sharing account service; BifrOSt has no such service"
+    },
+    {
+      "feature": "TV and movie ratings",
+      "apple": "Confirming the effective TV and movie ratings",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs Apple's content rating data; no rating feed exists on the port"
+    }
+  ],
+  "gaps": [
+    "No app-facing store that applies restrictions to the device or to other apps.",
+    "No tokens that name an app, a category or a website without revealing it.",
+    "Restrictions are shell-only; no third-party app can enforce its own limits through an API."
+  ]
+}

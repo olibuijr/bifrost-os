@@ -1,0 +1,29 @@
+{
+  "framework": "Managed Settings UI",
+  "doc": "https://developer.apple.com/documentation/managedsettingsui",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/screentime/shield.rs",
+  "summary": "The shell draws its own full-screen shield for an app whose limit is reached. Apps cannot configure or supply a shield view.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Shield view for a limited app",
+      "apple": "ShieldConfiguration, ShieldConfigurationDataSource",
+      "bifrost": "springboard/src/shell/screentime/shield.rs",
+      "status": "partial",
+      "note": "a shield with an OK action that backs out of the app; the shell draws it, with fixed content"
+    },
+    {
+      "feature": "App-configurable shield appearance",
+      "apple": "ShieldConfigurationDataSource",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no extension point for an app to set the title, subtitle or icon of a shield"
+    }
+  ],
+  "gaps": [
+    "Shields use fixed content; no app can configure the shield appearance.",
+    "No shield action handler for apps."
+  ]
+}

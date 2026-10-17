@@ -1,0 +1,43 @@
+{
+  "framework": "WorkoutKit",
+  "doc": "https://developer.apple.com/documentation/workoutkit",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/core/src/pedometer.rs",
+  "summary": "BifrOSt has no workout composition model, no workout plan or schedule and no sync to a workout app. The pedometer gives step and distance values only.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Workout composition (single goal, pacer, multisport)",
+      "apple": "SingleGoalWorkout, PacerWorkout, SwimBikeRunWorkout",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no workout types"
+    },
+    {
+      "feature": "Custom interval workouts",
+      "apple": "CustomWorkout, WorkoutStep, IntervalBlock, IntervalStep, WorkoutGoal, WorkoutAlert",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no interval model"
+    },
+    {
+      "feature": "Workout plans and scheduling",
+      "apple": "WorkoutPlan, ScheduledWorkoutPlan, WorkoutScheduler",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no plan or scheduler"
+    },
+    {
+      "feature": "Step and distance counting",
+      "apple": "Pedometer data used by workouts",
+      "bifrost": "springboard/core/src/pedometer.rs",
+      "status": "partial",
+      "note": "step and distance model only; not a workout"
+    }
+  ],
+  "gaps": [
+    "No workout composition, plans or scheduling.",
+    "No preview or sync to a workout app."
+  ]
+}

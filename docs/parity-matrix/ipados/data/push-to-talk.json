@@ -1,0 +1,36 @@
+{
+  "framework": "Push to Talk",
+  "doc": "https://developer.apple.com/documentation/pushtotalk",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/core/src/local_push.rs",
+  "summary": "Nothing implements a channel manager, channel restoration or the Push to Talk system interface. The local push model delivers messages on a Wi-Fi network, but it is not a channel service.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Channel manager and channel life cycle",
+      "apple": "PTChannelManager, PTChannelManagerDelegate, PTChannelDescriptor",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no channel object, join or leave events"
+    },
+    {
+      "feature": "Transmission and participants",
+      "apple": "PTTransmissionMode, PTParticipant, PTChannelTransmitRequestSource",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no transmit request or participant model"
+    },
+    {
+      "feature": "Push delivery for a channel",
+      "apple": "PTPushResult",
+      "bifrost": "springboard/core/src/local_push.rs",
+      "status": "partial",
+      "note": "a bounded inbox for messages a push provider delivers on a Wi-Fi network; not connected to a channel"
+    }
+  ],
+  "gaps": [
+    "No channel manager or system push-to-talk interface.",
+    "No transmit and receive path for a walkie-talkie style app."
+  ]
+}

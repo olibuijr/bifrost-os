@@ -1,0 +1,29 @@
+{
+  "framework": "Assets Library",
+  "doc": "https://developer.apple.com/documentation/assetslibrary",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/photo_library.rs, springboard/ui/src/photo_library.rs",
+  "summary": "Apple deprecated Assets Library in favour of PhotoKit. The shell's PhotoKit surface covers the same job for library access, and the Assets Library names are not exposed.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Library access and enumeration",
+      "apple": "ALAssetsLibrary, ALAssetsGroup",
+      "bifrost": "springboard/sdk/src/photo_library.rs",
+      "status": "partial",
+      "note": "PhotoKit-style fetches and authorization; the Assets Library names are not provided"
+    },
+    {
+      "feature": "Asset read and write",
+      "apple": "ALAsset, ALAssetRepresentation",
+      "bifrost": "springboard/ui/src/photo_library.rs",
+      "status": "partial",
+      "note": "asset change requests and fetches; no ALAsset objects"
+    }
+  ],
+  "gaps": [
+    "Assets Library names are not provided; apps use the PhotoKit surface instead.",
+    "The framework is deprecated by Apple; a row here only records the replacement."
+  ]
+}

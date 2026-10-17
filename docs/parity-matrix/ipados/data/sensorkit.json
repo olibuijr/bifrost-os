@@ -1,0 +1,50 @@
+{
+  "framework": "SensorKit",
+  "doc": "https://developer.apple.com/documentation/sensorkit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/core/src/ambient_light.rs, springboard/core/src/motion_manager.rs, springboard/src/shell/screentime/usage.rs, springboard/core/src/sensor_log.rs",
+  "summary": "Ambient light, motion and device usage are read by the shell. The research reader is gated by Apple-issued entitlements, and the Watch and face sensors are hardware the target devices lack.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Research sensor reader",
+      "apple": "SRSensorReader, com.apple.developer.sensorkit.reader.allow",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "gated by an Apple-approved research study entitlement; BifrOSt has no such approval path"
+    },
+    {
+      "feature": "Ambient light samples",
+      "apple": "SRAmbientLightSensor, SRAmbientLightSample",
+      "bifrost": "springboard/core/src/ambient_light.rs, springboard/ui/src/ambient_light.rs",
+      "status": "partial",
+      "note": "ambient light model in the core and the UI; not exposed to apps through a sensor reader"
+    },
+    {
+      "feature": "Accelerometer and rotation samples",
+      "apple": "SRAccelerometerSensor, SRRotationRateSensor",
+      "bifrost": "springboard/core/src/motion_manager.rs, springboard/core/src/sensor_log.rs",
+      "status": "partial",
+      "note": "samples held in a bounded log; no SensorKit-style fetch request"
+    },
+    {
+      "feature": "Device usage reports",
+      "apple": "SRDeviceUsageReport, SRKeyboardMetrics, SRPhoneUsageReport",
+      "bifrost": "springboard/src/shell/screentime/usage.rs",
+      "status": "partial",
+      "note": "per-app usage counted by the shell; the report is not handed to apps"
+    },
+    {
+      "feature": "Watch, heart and face sensors",
+      "apple": "SRWristTemperatureSession, SRElectrocardiogramSample, SRFaceMetricsSensor",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs Apple Watch or face sensing hardware that the target devices lack"
+    }
+  ],
+  "gaps": [
+    "No research reader or fetch requests for apps.",
+    "Usage reports stay in the shell."
+  ]
+}

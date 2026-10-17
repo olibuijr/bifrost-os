@@ -1,0 +1,36 @@
+{
+  "framework": "OpenGL ES",
+  "doc": "https://developer.apple.com/documentation/opengles",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/ui/src/gl_requirements.rs",
+  "summary": "The SDK gives apps no OpenGL ES context. The shell's GL requirement check parses a GL_VERSION string and nothing else; the renderer is native.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Rendering context and drawable",
+      "apple": "EAGLContext, EAGLSharegroup, EAGLDrawable",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no context an app can create and draw into"
+    },
+    {
+      "feature": "Version and requirement check",
+      "apple": "GL_VERSION string checks",
+      "bifrost": "springboard/ui/src/gl_requirements.rs",
+      "status": "partial",
+      "note": "parses the version and asks whether a context meets a requirement"
+    },
+    {
+      "feature": "GL ES functions",
+      "apple": "OpenGL ES functions and constants",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no GL ES entry points exposed to apps"
+    }
+  ],
+  "gaps": [
+    "No GL ES context for apps.",
+    "No drawable that an app can present through the shell."
+  ]
+}

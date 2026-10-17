@@ -1,0 +1,19 @@
+{
+  "framework": "Exposure Notification",
+  "doc": "https://developer.apple.com/documentation/exposurenotification",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Exposure notification needs region keys and health-authority servers that Apple authorizes. BifrOSt has neither.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Exposure detection and configuration",
+      "apple": "ENManager, ENExposureConfiguration, ENExposureWindow",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs Apple-issued region keys and health-authority servers"
+    }
+  ],
+  "gaps": []
+}

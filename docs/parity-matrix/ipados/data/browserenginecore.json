@@ -1,0 +1,33 @@
+{
+  "framework": "BrowserEngineCore",
+  "doc": "https://developer.apple.com/documentation/browserenginecore",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "springboard/audiod/src/main.rs",
+  "summary": "The kernel event and pointer-authentication calls are Apple kernel and hardware features with no Linux counterpart. The audio session wrapper for a browser has a counterpart in the audio service.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Kernel event registration",
+      "apple": "be_kevent, be_kevent64",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "a kernel event call in Apple's kernel; the Linux port uses its own event loop"
+    },
+    {
+      "feature": "JIT write protection tag",
+      "apple": "BE_JIT_WRITE_PROTECT_TAG",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "a pointer-authentication discriminator in Apple's hardware; no PAC on the target"
+    },
+    {
+      "feature": "Browser audio session",
+      "apple": "BEAudioSession",
+      "bifrost": "springboard/audiod/src/main.rs",
+      "status": "os",
+      "note": "the audio service owns the sessions; apps get no browser-scoped audio session API"
+    }
+  ],
+  "gaps": []
+}
