@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.0 — 2026-10-17
+
+- A reminder's row shows its notes with the Markdown marks taken away (bold as plain words, bullets as bullets), through `format::preview` and the shell's `md::to_plain`.
+- A reminder can carry a place (a circle of latitude, longitude and radius with an arriving or leaving trigger). The place is stored as a 20th field in the store, which moves to format v4 (v1 to v3 still load; older versions refuse a v4 file). `place::Watch` reports the reminders whose place was entered or left. The form does not edit places yet and the location watch is not called, so no alert fires yet. The manifest has the location privacy purpose string.
+
 ## 1.17.0 — 2026-10-17
 
 - Format menu (Bold, Bullet List, Numbered List) writes Markdown marks into a reminder's notes while the Notes field has the focus; a command again takes the mark away. The notes are stored as Markdown text and shown as typed, not rendered.

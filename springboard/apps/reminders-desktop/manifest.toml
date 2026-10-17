@@ -1,6 +1,6 @@
 id = "is.olibuijr.reminders.desktop"
 name = "Reminders"
-version = "1.17.0"
+version = "1.18.0"
 exec = "bifrost-reminders"
 icon = "icon.png"
 min_shell = "0.5.7"
@@ -11,6 +11,9 @@ architecture = "x86_64-linux"
 permissions = ["storage", "notifications", "documents"]
 handles = ["net.daringfireball.markdown:alternate"]
 window = "full-size"
+
+[privacy]
+location = "Reminders tells you when you arrive at or leave a place you chose for a reminder. Your position is checked only while Reminders is open and is never sent anywhere."
 
 [[intent]]
 id = "add-reminder"

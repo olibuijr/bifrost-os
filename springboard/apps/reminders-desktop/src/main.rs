@@ -8,6 +8,9 @@ mod model;
 mod organize;
 mod quick;
 mod format;
+// the location watch is not called by the window yet (the form has no place fields), so its items are unused for now
+#[allow(dead_code)]
+mod place;
 mod repeat;
 mod scripting;
 mod smartdef;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.16.0 — 2026-10-17
+
+- Model for the merge review (`dupes::review`, `dupes::merge_with`): it lists the fields where duplicates disagree, and folds the cards with the value picked for each field (a phone or email takes its label along). The review sheet is not drawn yet, so Card > Merge Duplicates still keeps the first card's values.
+
 ## 1.15.0 — 2026-10-17
 
 - Cmd+W closes the card window it is typed in. Keys and menu items follow the key window: the shell tells the app which window is key (`WindowFocus`) and sends it the input (`WindowInput`), and the app's `window_input` closes the card (`ctx.close_window`).

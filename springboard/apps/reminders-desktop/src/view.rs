@@ -176,8 +176,12 @@ impl Reminders {
             if let Some(rep) = r.repeat {
                 sub = format!("{sub} · {}", rep.label());
             }
-        } else if let Some(line) = r.notes.lines().next().filter(|l| !l.is_empty()) {
-            sub = line.to_string();
+        } else {
+            // the notes' first line with its Markdown marks taken away (format::preview)
+            let preview = crate::format::preview(&r.notes);
+            if !preview.is_empty() {
+                sub = preview;
+            }
         }
         if r.urgent {
             sub = if sub.is_empty() { "Urgent".to_string() } else { format!("{sub} · Urgent") };

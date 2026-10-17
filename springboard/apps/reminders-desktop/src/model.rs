@@ -54,6 +54,8 @@ pub struct Reminder {
     pub urgent: bool,
     /// File names of the pictures attached to the reminder (`attach`), in the `attachments` folder beside the store.
     pub attachments: Vec<String>,
+    /// The place that fires the reminder when the device arrives at it or leaves it (`place`).
+    pub place: Option<crate::place::Place>,
 }
 
 impl Reminder {
@@ -77,6 +79,7 @@ impl Reminder {
             tz: None,
             urgent: false,
             attachments: vec![],
+            place: None,
         }
     }
 

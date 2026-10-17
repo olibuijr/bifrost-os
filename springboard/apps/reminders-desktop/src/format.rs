@@ -2,6 +2,12 @@
 //! reads: `**bold**`, `- ` bullets and `1. ` numbers. A command on text that already has its mark takes the mark away
 //! again, so each command is a toggle. Offsets are byte offsets into the text, as the text field reports them.
 
+/// The row preview of a reminder's notes: the first non-empty line with its Markdown marks taken away, so bold shows as
+/// plain words and a bullet shows as the bullet it stands for. Empty when the notes are blank.
+pub fn preview(notes: &str) -> String {
+    notes.lines().find(|line| !line.trim().is_empty()).map(|line| springboard::shell::md::to_plain(line.trim())).unwrap_or_default()
+}
+
 /// The Format menu's commands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Style {
@@ -93,6 +99,15 @@ fn numbered(line: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_preview_shows_marks_as_their_plain_text() {
+        assert_eq!(preview("**Buy** milk"), "Buy milk");
+        assert_eq!(preview("- eggs"), "\u{2022} eggs");
+        assert_eq!(preview("1. flour"), "1. flour");
+        assert_eq!(preview("\n\n  second line\nthird"), "second line");
+        assert_eq!(preview("   \n"), "");
+    }
 
     #[test]
     fn bold_wraps_the_selection_in_marks() {
