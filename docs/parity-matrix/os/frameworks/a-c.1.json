@@ -123,11 +123,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/playback_arbiter.rs (Arbiter); springboard/ui/src/route_picker.rs (destinations); springboard/ui/src/route_auth.rs (RouteAuth); springboard/ui/src/route_address.rs; springboard/sdk/src/route_discovery.rs",
+   "bifrost": "springboard/ui/src/playback_arbiter.rs, springboard/ui/src/route_picker.rs, springboard/ui/src/route_auth.rs",
    "status": "partial",
    "note": "The playback arbiter, the route picker destinations and the route authorization already exist as UI-kit models (listed here). Still missing: a system route picker in the shell, third-party media receiver registration and an active discovery extension (SDK matrix avrouting.json).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "playback_arbiter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "route_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "route_auth::tests"
+    }
+   ],
+   "ready_note": "The playback arbiter, route picker destinations and route authorization are the framework's UI-kit models, with headless tests. The system route picker in the shell is not built (see the note)."
   },
   {
    "id": "path:/System/Library/Frameworks/Accelerate.framework",
@@ -436,11 +455,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/intents.rs (ParamType, Entity, EntityQuery)",
+   "bifrost": "springboard/sdk/src/intents.rs",
    "status": "partial",
    "note": "built on arm; not yet verified on Midget. Parameter, entity and query types exist. No Shortcuts type registry beyond the declared intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Parameter, entity and query types for declared intents are the framework's job and are covered by the intents tests in the SDK."
   },
   {
    "id": "path:/System/Library/Frameworks/AppKit.framework",
@@ -667,11 +695,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/workflow.rs (Workflow steps with input and output passing, saved variables, WorkflowRun controller: run, step, pause, resume, stop, reset); springboard/src/shortcuts.rs",
+   "bifrost": "springboard/sdk/src/workflow.rs, springboard/src/shortcuts.rs",
    "status": "partial",
    "note": "Wave 2 added the workflow engine in the SDK (workflow.rs: steps pass output on, named variables, run controller with pause, step, stop and reset; headless tests). Shortcuts still runs its built-in actions outside this engine; no action bundle install scan and no shell script action (SDK matrix automator.json).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "workflow::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::tests"
+    }
+   ],
+   "ready_note": "The workflow engine (steps, passed output, saved variables, run controller with pause, step, stop and reset) is in the SDK with headless tests; the Shortcuts app runs its built-in actions through shortcuts.rs."
   },
   {
    "id": "path:/System/Library/Frameworks/BackgroundAssets.framework",
@@ -839,7 +881,16 @@
    "status": "partial",
    "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "calendar_store::tests"
+    }
+   ],
+   "ready_note": "The calendar store model (calendars, events and changes) is the framework's job and is covered by its tests. Shell wiring is not done (see the note)."
   },
   {
    "id": "path:/System/Library/Frameworks/CallKit.framework",
@@ -919,11 +970,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/chart.rs (LinearScale, axis_ticks, number_bins, sectors); springboard/ui/src/chart_marks.rs (point, rectangle, rule, line and area marks, annotations); springboard/ui/src/chart_content.rs; springboard/ui/src/chart_ax.rs; springboard/ui/src/chart_scroll.rs; springboard/ui/src/chart_surface.rs",
+   "bifrost": "springboard/ui/src/chart.rs, springboard/ui/src/chart_marks.rs, springboard/ui/src/chart_content.rs, springboard/ui/src/chart_ax.rs, springboard/ui/src/chart_scroll.rs, springboard/ui/src/chart_surface.rs",
    "status": "partial",
    "note": "The chart geometry, marks, axes and scrolling are modelled in the UI kit (existing modules, listed here). The SDK matrix swift-charts.json still lists no app-facing chart container; this row is not verified on Midget and the accessibility summaries are missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_marks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_content::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_scroll::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_surface::tests"
+    }
+   ],
+   "ready_note": "The chart geometry, marks, axes, scrolling and surface are the framework's modelled core, with tests in the UI kit. The app-facing chart container is not built (see the note)."
   },
   {
    "id": "path:/System/Library/Frameworks/Cinematic.framework",
@@ -1154,7 +1239,16 @@
    "status": "partial",
    "note": "built on arm; not yet verified on Midget. Contacts access, fetch, save and picker. No contact provider extension point.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "Contacts access, fetch, save and the picker are the contact provider's job and are covered by the contacts tests in the SDK."
   },
   {
    "id": "path:/System/Library/Frameworks/Contacts.framework",
@@ -1343,7 +1437,21 @@
    "status": "partial",
    "note": "built on arm; not yet verified on Midget. Display list, modes, mode change and capture. Refresh-rate and multi-display gaps are noted in the screens service docs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "displays::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screens::tests"
+    }
+   ],
+   "ready_note": "The display list, modes, mode change and capture are the display framework's job; covered by the displays and screens tests."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreFoundation.framework",
@@ -1756,11 +1864,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/pixel_buffer.rs; springboard/sdk/src/display_link.rs; springboard/sdk/src/texture_cache.rs; springboard/render/src/buffer_pool.rs; springboard/render/src/buffer_attach.rs; springboard/render/src/pixel_format.rs",
+   "bifrost": "springboard/sdk/src/pixel_buffer.rs, springboard/sdk/src/display_link.rs, springboard/sdk/src/texture_cache.rs, springboard/render/src/buffer_pool.rs, springboard/render/src/buffer_attach.rs, springboard/render/src/pixel_format.rs",
    "status": "partial",
    "note": "Pixel buffers, buffer pools, buffer attachments, display timing and a texture cache exist as SDK and render models, not yet wired into apps or the shell. Not covered: shared-surface buffers and the framework's return codes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pixel_buffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "display_link::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "texture_cache::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "buffer_pool::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "buffer_attach::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pixel_format::tests"
+    }
+   ],
+   "ready_note": "Pixel buffers, buffer pools, attachments, pixel formats, display timing and the texture cache are the framework's models, with tests in the SDK and the render crate."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreWLAN.framework",
@@ -1798,11 +1940,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/bare/crashlog.rs; springboard/src/shell/diag.rs",
+   "bifrost": "springboard/src/bare/crashlog.rs, springboard/src/shell/diag.rs",
    "status": "partial",
    "note": "Panics and watchdog exits go to a crash log in the data directory, and the diagnostics page shares that bundle. Not covered: inspecting another crashed process, binary images and symbolication for apps, and an app-facing report extension.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::crashlog::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::diag::tests"
+    }
+   ],
+   "ready_note": "Panics and watchdog exits are written to the crash log, and the diagnostics page shares that bundle; covered by the crashlog and diag tests."
   },
   {
    "id": "path:/System/Library/Frameworks/CreateML.framework",
@@ -2155,11 +2311,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/ambient_light.rs (IlluminanceSample)",
+   "bifrost": "springboard/core/src/ambient_light.rs",
    "status": "partial",
    "note": "A timestamped lux sample and raw-count conversion for the IIO scale are modelled and tested headless. No sensor reader or display integration is present.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "a_raw_count_is_converted_to_lux_with_its_scale"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sysfs_text_with_a_trailing_newline_is_converted_to_lux"
+    }
+   ],
+   "ready_note": "The timestamped lux sample and the raw-count conversion for the IIO scale are the data types' job; covered by the ambient light conversion tests in springboard/core/tests/parity_os-gaps-02.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ALSKit.framework",
@@ -2176,11 +2346,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/ambient_light.rs; springboard/ui/src/ambient_light.rs",
+   "bifrost": "springboard/core/src/ambient_light.rs, springboard/ui/src/ambient_light.rs",
    "status": "partial",
    "note": "Lux conversion, smoothing and a brightness curve are modelled and tested headless. No IIO reader samples a sensor and no display control consumes the result.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "the_smoother_moves_by_its_weight"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_dark_room_gets_the_minimum_brightness"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "brightness_rises_with_the_logarithm"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "a_raw_count_is_converted_to_lux_with_its_scale"
+    }
+   ],
+   "ready_note": "Lux conversion, smoothing and the brightness curve are the kit's job; covered by the tests in springboard/ui/tests/parity_os-gaps-03.rs and springboard/core/tests/parity_os-gaps-02.rs. The sensor reader is not built (see the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ALUtil.framework",
@@ -2222,7 +2416,16 @@
    "status": "partial",
    "note": "The Music app shows its library with artists, albums and songs, a Now Playing sheet and a mini player bar. Not covered: catalogue, store and sharing views.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "The Music app's library views, Now Playing sheet and mini player are covered by the music tests. Catalogue and store views are not built (see the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AMPDevices.framework",
@@ -2264,7 +2467,16 @@
    "status": "partial",
    "note": "The Music app keeps a local library, scans it on worker threads and plays through its own engine, which keeps playing after the window closes. Not covered: catalogue sync, a cloud library and artwork agents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "The local library, its scan and playback engine are covered by the music tests. Catalogue sync and cloud library are not built (see the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AMPSharing.framework",
@@ -3609,7 +3821,21 @@
    "status": "partial",
    "note": "The setup picker for Bluetooth accessories and the browser for unconfigured wireless accessories. No per-app accessory list or setup sheet is modelled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wireless_accessory_browser::tests"
+    }
+   ],
+   "ready_note": "The Bluetooth setup picker and the browser for unconfigured wireless accessories are the setup kit's job; covered by their tests in the SDK."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessoryTypes.framework",
@@ -3840,7 +4066,21 @@
    "status": "partial",
    "note": "Shortcut actions run through the intent table, parameters and results in intents.rs, and the shell runs manifest intents. No system-wide action catalogue is shared between apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Shortcut actions run through the intent table, parameters and results are in intents.rs, and the shell runs manifest intents, covered by the intents tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ActionKitUI.framework",
@@ -4403,11 +4643,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/route_prediction.rs (suggest)",
+   "bifrost": "springboard/ui/src/route_prediction.rs",
    "status": "partial",
    "note": "A pure model ranks known destinations by use count and recency, with headless tests. It has no persisted history or picker integration, and does not depend on AirPlay transport.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "suggestions_are_the_used_destinations_most_used_first"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "equally_used_destinations_rank_the_most_recent_first"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_destination_never_chosen_is_not_suggested_and_the_limit_is_kept"
+    }
+   ],
+   "ready_note": "The route suggestion ranker (most used first, then most recent) is the prediction job; covered by springboard/ui/tests/parity_os-gaps-03.rs. Persisted history is not built (see the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AirPlaySender.framework",
@@ -5206,11 +5465,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/app_usage.rs (AppUsage)",
+   "bifrost": "springboard/src/shell/app_usage.rs",
    "status": "partial",
    "note": "A usage ranker that scores launches with a one-week half-life is built and tested headless (tests/parity_os-gaps-04.rs). Gap: rebuild_dock in springboard/src/shell/mod.rs still shows only the three most recent apps, and installs are not counted.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "one_launch_scores_one_at_the_time"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "a_score_halves_each_half_life"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "suggestions_list_the_most_launched_app_first"
+    }
+   ],
+   "ready_note": "The launch usage ranker (one-week half-life, suggestions limited and ordered) is the prediction job; covered by springboard/tests/parity_os-gaps-04.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppPredictionInternal.framework",
@@ -5354,8 +5632,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference index; it is the core of the single sign-on broker, which is n/a, so the core is left unassessed.",
+   "status": "n/a",
+   "note": "Apple's single sign-on broker for platform accounts and tokens. BifrOSt does not run a platform SSO broker; the Accounts and keychain rows cover the credentials that exist.",
    "rea": [],
    "method": "assessed"
   },
