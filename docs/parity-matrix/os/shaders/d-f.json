@@ -295,7 +295,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/sprite_frames.rs",
    "status": "partial",
-   "note": "Timed frame sequences exist for animated content, but there is no animated wallpaper renderer and the shipped wallpapers are still images.",
+   "note": "Timed frame sequences exist (springboard/ui/src/sprite_frames.rs), and an animated diagonal wallpaper frame model exists (springboard/render/src/wallpaper_frame.rs, render_frame over gradient::animated_frame), with tests in its own module. Still missing: nothing calls render_frame, so the desktop never shows an animated wallpaper (Shell::draw_wallpaper_layer in springboard/src/shell/desk.rs draws only the still JPEG), and there is no wallpaper choice for it.",
    "rea": [],
    "method": "assessed"
   },
@@ -346,7 +346,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt wallpapers are still JPEGs (springboard/wallpapers), but an animated diagonal wallpaper frame model exists (springboard/render/src/wallpaper_frame.rs, render_frame over gradient::animated_frame), with tests in its own module. Still missing: nothing calls render_frame, so the desktop never shows it (Shell::draw_wallpaper_layer in springboard/src/shell/desk.rs). Screen savers are models (springboard/ui/src/screensaver.rs). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
    "method": "assessed"
   },
@@ -367,7 +367,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/sprite_frames.rs",
    "status": "partial",
-   "note": "Timed frame sequences exist for animated content, but there is no animated wallpaper renderer and the shipped wallpapers are still images.",
+   "note": "Timed frame sequences exist (springboard/ui/src/sprite_frames.rs), and an animated diagonal wallpaper frame model exists (springboard/render/src/wallpaper_frame.rs, render_frame over gradient::animated_frame), with tests in its own module. Still missing: nothing calls render_frame, so the desktop never shows an animated wallpaper (Shell::draw_wallpaper_layer in springboard/src/shell/desk.rs draws only the still JPEG), and there is no wallpaper choice for it.",
    "rea": [],
    "method": "assessed"
   },
