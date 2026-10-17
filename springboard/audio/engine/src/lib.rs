@@ -13,6 +13,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod analysis;
 pub mod engine;
 pub mod graph;
 pub mod rt;

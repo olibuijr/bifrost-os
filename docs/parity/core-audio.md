@@ -15,8 +15,10 @@ the reference platform applies before it accepts a change.
 - `springboard/sdk/src/audio_virtual.rs` (`audio_virtual::VirtualDevice`, `VirtualDeviceSet`, `DriverStatus`): the
   description a driver plug-in would publish (uid, name, channel count from 1 to 64, sample rate from the supported
   list). `VirtualDevice::stream_format` gives the 32-bit float format from `bifrost-audio-types`. `VirtualDeviceSet`
-  refuses duplicate uids. `DriverStatus::current` reports `NoLoader`, and `can_publish` is false, because no
-  user-space loader exists on this platform.
+  refuses duplicate uids. `DriverStatus::current` reports `Loader` and `can_publish` is true: the sound server runs the
+  plug-in driver of `bifrost-audio-driver` (`audio/driver/src/plugin.rs`), which reads every `*.vdev` description in
+  `/etc/bifrost/audio/plugins` and publishes each device as a playback and a capture device (`<uid>:out`, `<uid>:in`)
+  that loop into each other. `VirtualDevice::file_name` names the file to install.
 
 ## Official API names mirrored
 
