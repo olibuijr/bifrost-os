@@ -14,6 +14,7 @@ use super::prefs::Prefs;
 pub mod actions;
 pub mod app_rotors;
 pub mod banner;
+pub mod braille_out;
 pub mod dwell;
 pub mod earcons;
 pub mod guided;
