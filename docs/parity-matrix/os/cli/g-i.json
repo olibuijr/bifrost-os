@@ -43,7 +43,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: halt installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/halt"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/halt; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/sbin/ifconfig",
@@ -169,7 +177,16 @@
    "status": "partial",
    "note": "provided by Arch package gdb; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 gcore --version >/dev/null 2>&1 || timeout 5 gcore --help >/dev/null 2>&1 || timeout 5 gcore -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/gcore (Arch package gdb); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/gem",
@@ -190,7 +207,16 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 gem --version >/dev/null 2>&1 || timeout 5 gem --help >/dev/null 2>&1 || timeout 5 gem -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/gem (Arch package ruby); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/gen_bridge_metadata",
@@ -484,7 +510,15 @@
    "status": "partial",
    "note": "hdid is the disk image attach path; BifrOSt's hdiutil (springboard/cmd/src/hdiutil.rs) covers create, attach, detach, info, verify and convert; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/hdiutil"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/hdiutil; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/usr/bin/hdiutil",
@@ -505,7 +539,15 @@
    "status": "partial",
    "note": "create, attach, detach, info, verify and convert in springboard/cmd/src/hdiutil.rs; attach and detach go through the shell control socket; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/hdiutil"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/hdiutil; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/usr/bin/head",
@@ -631,7 +673,16 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 host --version >/dev/null 2>&1 || timeout 5 host --help >/dev/null 2>&1 || timeout 5 host -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/host (Arch package bind); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/hostinfo",
@@ -736,7 +787,16 @@
    "status": "partial",
    "note": "provided by Arch package rdma-core; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ibv_devices --version >/dev/null 2>&1 || timeout 5 ibv_devices --help >/dev/null 2>&1 || timeout 5 ibv_devices -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ibv_devices (Arch package rdma-core); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ibv_devinfo",
@@ -757,7 +817,16 @@
    "status": "partial",
    "note": "provided by Arch package rdma-core; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ibv_devinfo --version >/dev/null 2>&1 || timeout 5 ibv_devinfo --help >/dev/null 2>&1 || timeout 5 ibv_devinfo -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ibv_devinfo (Arch package rdma-core); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ibv_uc_pingpong",
@@ -778,7 +847,16 @@
    "status": "partial",
    "note": "provided by Arch package rdma-core; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ibv_uc_pingpong --version >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong --help >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ibv_uc_pingpong (Arch package rdma-core); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/iconutil",
@@ -799,7 +877,16 @@
    "status": "partial",
    "note": "iconset folder to ICNS and back, PNG elements copied unchanged; legacy RGB and mask ICNS elements are not converted; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 iconutil --version >/dev/null 2>&1 || timeout 5 iconutil --help >/dev/null 2>&1 || timeout 5 iconutil -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart springboard/cmd/src/bin/iconutil.rs; the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/iconv",
@@ -1051,7 +1138,16 @@
    "status": "partial",
    "note": "provided by Arch package iotop; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 iotop --version >/dev/null 2>&1 || timeout 5 iotop --help >/dev/null 2>&1 || timeout 5 iotop -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/iotop (Arch package iotop); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ip2cc",
@@ -1156,7 +1252,16 @@
    "status": "partial",
    "note": "provided by Arch package iperf3; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 iperf3 --version >/dev/null 2>&1 || timeout 5 iperf3 --help >/dev/null 2>&1 || timeout 5 iperf3 -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/iperf3 (Arch package iperf3); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ippeveprinter",
@@ -1177,7 +1282,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ippeveprinter --version >/dev/null 2>&1 || timeout 5 ippeveprinter --help >/dev/null 2>&1 || timeout 5 ippeveprinter -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ippeveprinter (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ippfind",
@@ -1198,7 +1312,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ippfind --version >/dev/null 2>&1 || timeout 5 ippfind --help >/dev/null 2>&1 || timeout 5 ippfind -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ippfind (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ipptool",
@@ -1219,7 +1342,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ipptool --version >/dev/null 2>&1 || timeout 5 ipptool --help >/dev/null 2>&1 || timeout 5 ipptool -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ipptool (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/iptab",
@@ -1261,7 +1393,16 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 irb --version >/dev/null 2>&1 || timeout 5 irb --help >/dev/null 2>&1 || timeout 5 irb -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/irb (Arch package ruby); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/libexec/GamePolicyAgent",
@@ -1513,7 +1654,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: agetty installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/agetty"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/agetty; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/usr/libexec/gputoolsserviced",
@@ -1870,7 +2019,16 @@
    "status": "partial",
    "note": "provided by Arch package ipp-usb; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ipp-usb --version >/dev/null 2>&1 || timeout 5 ipp-usb --help >/dev/null 2>&1 || timeout 5 ipp-usb -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ipp-usb (Arch package ipp-usb); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/gpt",
@@ -1891,7 +2049,16 @@
    "status": "partial",
    "note": "provided by Arch package gptfdisk; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 sgdisk --version >/dev/null 2>&1 || timeout 5 sgdisk --help >/dev/null 2>&1 || timeout 5 sgdisk -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/sgdisk (Arch package gptfdisk); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/graphicssession",
@@ -1975,7 +2142,16 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 htcacheclean --version >/dev/null 2>&1 || timeout 5 htcacheclean --help >/dev/null 2>&1 || timeout 5 htcacheclean -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/htcacheclean (Arch package apache); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/htdbm",
@@ -1996,7 +2172,16 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 htdbm --version >/dev/null 2>&1 || timeout 5 htdbm --help >/dev/null 2>&1 || timeout 5 htdbm -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/htdbm (Arch package apache); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/htdigest",
@@ -2017,7 +2202,16 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 htdigest --version >/dev/null 2>&1 || timeout 5 htdigest --help >/dev/null 2>&1 || timeout 5 htdigest -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/htdigest (Arch package apache); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/htpasswd",
@@ -2038,7 +2232,16 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 htpasswd --version >/dev/null 2>&1 || timeout 5 htpasswd --help >/dev/null 2>&1 || timeout 5 htpasswd -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/htpasswd (Arch package apache); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/httpd",
@@ -2059,7 +2262,16 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 httpd --version >/dev/null 2>&1 || timeout 5 httpd --help >/dev/null 2>&1 || timeout 5 httpd -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/httpd (Arch package apache); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/httpd-wrapper",
@@ -2101,7 +2313,16 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 httxt2dbm --version >/dev/null 2>&1 || timeout 5 httxt2dbm --help >/dev/null 2>&1 || timeout 5 httxt2dbm -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/httxt2dbm (Arch package apache); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/installer",
@@ -2206,7 +2427,16 @@
    "status": "partial",
    "note": "provided by Arch package sysstat; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 iostat --version >/dev/null 2>&1 || timeout 5 iostat --help >/dev/null 2>&1 || timeout 5 iostat -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/iostat (Arch package sysstat); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/ipconfig",

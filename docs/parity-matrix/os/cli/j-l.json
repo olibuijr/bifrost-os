@@ -22,7 +22,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: kill installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kill"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/kill; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/bin/ksh",
@@ -43,7 +51,16 @@
    "status": "partial",
    "note": "provided by Arch package ksh; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ksh --version >/dev/null 2>&1 || timeout 5 ksh --help >/dev/null 2>&1 || timeout 5 ksh -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ksh (Arch package ksh); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/bin/launchctl",
@@ -190,7 +207,16 @@
    "status": "partial",
    "note": "provided by Arch package jdk-openjdk; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 jar --version >/dev/null 2>&1 || timeout 5 jar --help >/dev/null 2>&1 || timeout 5 jar -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/jar (Arch package jdk-openjdk); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/join",
@@ -253,7 +279,16 @@
    "status": "partial",
    "note": "provided by Arch package jq; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 jq --version >/dev/null 2>&1 || timeout 5 jq --help >/dev/null 2>&1 || timeout 5 jq -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/jq (Arch package jq); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/json_pp",
@@ -442,7 +477,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: killall installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/killall"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/killall; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/usr/bin/kinit",
@@ -694,7 +737,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapcompare --version >/dev/null 2>&1 || timeout 5 ldapcompare --help >/dev/null 2>&1 || timeout 5 ldapcompare -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapcompare (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldapdelete",
@@ -715,7 +767,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapdelete --version >/dev/null 2>&1 || timeout 5 ldapdelete --help >/dev/null 2>&1 || timeout 5 ldapdelete -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapdelete (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldapexop",
@@ -736,7 +797,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapexop --version >/dev/null 2>&1 || timeout 5 ldapexop --help >/dev/null 2>&1 || timeout 5 ldapexop -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapexop (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldapmodify",
@@ -757,7 +827,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapmodify --version >/dev/null 2>&1 || timeout 5 ldapmodify --help >/dev/null 2>&1 || timeout 5 ldapmodify -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapmodify (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldapmodrdn",
@@ -778,7 +857,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapmodrdn --version >/dev/null 2>&1 || timeout 5 ldapmodrdn --help >/dev/null 2>&1 || timeout 5 ldapmodrdn -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapmodrdn (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldappasswd",
@@ -799,7 +887,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldappasswd --version >/dev/null 2>&1 || timeout 5 ldappasswd --help >/dev/null 2>&1 || timeout 5 ldappasswd -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldappasswd (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldapsearch",
@@ -820,7 +917,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapsearch --version >/dev/null 2>&1 || timeout 5 ldapsearch --help >/dev/null 2>&1 || timeout 5 ldapsearch -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapsearch (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldapurl",
@@ -841,7 +947,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapurl --version >/dev/null 2>&1 || timeout 5 ldapurl --help >/dev/null 2>&1 || timeout 5 ldapurl -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapurl (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ldapwhoami",
@@ -862,7 +977,16 @@
    "status": "partial",
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 ldapwhoami --version >/dev/null 2>&1 || timeout 5 ldapwhoami --help >/dev/null 2>&1 || timeout 5 ldapwhoami -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/ldapwhoami (Arch package openldap); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/leaks",
@@ -904,7 +1028,15 @@
    "status": "partial",
    "note": "BifrOSt leave waits for hhmm or +hhmm and prints a reminder in the terminal it runs in; no utmp broadcast and no prompt; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/leave"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/leave; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/usr/bin/less",
@@ -925,7 +1057,16 @@
    "status": "partial",
    "note": "provided by Arch package less; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 less --version >/dev/null 2>&1 || timeout 5 less --help >/dev/null 2>&1 || timeout 5 less -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/less (Arch package less); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lessecho",
@@ -946,7 +1087,16 @@
    "status": "partial",
    "note": "provided by Arch package less; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lessecho --version >/dev/null 2>&1 || timeout 5 lessecho --help >/dev/null 2>&1 || timeout 5 lessecho -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lessecho (Arch package less); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lesskey",
@@ -967,7 +1117,16 @@
    "status": "partial",
    "note": "provided by Arch package less; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lesskey --version >/dev/null 2>&1 || timeout 5 lesskey --help >/dev/null 2>&1 || timeout 5 lesskey -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lesskey (Arch package less); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/libnetcfg",
@@ -1072,7 +1231,16 @@
    "status": "partial",
    "note": "provided by Arch package plocate; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 locate --version >/dev/null 2>&1 || timeout 5 locate --help >/dev/null 2>&1 || timeout 5 locate -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/locate (Arch package plocate); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lockf",
@@ -1177,7 +1345,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: login installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/login"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/login; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/usr/bin/logname",
@@ -1240,7 +1416,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lp --version >/dev/null 2>&1 || timeout 5 lp --help >/dev/null 2>&1 || timeout 5 lp -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lp (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lpoptions",
@@ -1261,7 +1446,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lpoptions --version >/dev/null 2>&1 || timeout 5 lpoptions --help >/dev/null 2>&1 || timeout 5 lpoptions -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lpoptions (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lpq",
@@ -1282,7 +1476,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lpq --version >/dev/null 2>&1 || timeout 5 lpq --help >/dev/null 2>&1 || timeout 5 lpq -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lpq (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lpr",
@@ -1303,7 +1506,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lpr --version >/dev/null 2>&1 || timeout 5 lpr --help >/dev/null 2>&1 || timeout 5 lpr -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lpr (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lprm",
@@ -1324,7 +1536,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lprm --version >/dev/null 2>&1 || timeout 5 lprm --help >/dev/null 2>&1 || timeout 5 lprm -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lprm (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lpstat",
@@ -1345,7 +1566,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lpstat --version >/dev/null 2>&1 || timeout 5 lpstat --help >/dev/null 2>&1 || timeout 5 lpstat -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lpstat (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/lsappinfo",
@@ -1975,7 +2205,15 @@
    "status": "partial",
    "note": "provided by Arch package plocate; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/updatedb"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/updatedb; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/usr/libexec/locationaccessstored",
@@ -2458,7 +2696,16 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 logresolve --version >/dev/null 2>&1 || timeout 5 logresolve --help >/dev/null 2>&1 || timeout 5 logresolve -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/logresolve (Arch package apache); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/lpadmin",
@@ -2479,7 +2726,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lpadmin --version >/dev/null 2>&1 || timeout 5 lpadmin --help >/dev/null 2>&1 || timeout 5 lpadmin -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lpadmin (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/lpc",
@@ -2521,7 +2777,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lpinfo --version >/dev/null 2>&1 || timeout 5 lpinfo --help >/dev/null 2>&1 || timeout 5 lpinfo -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lpinfo (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/lpmove",
@@ -2542,7 +2807,16 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lpmove --version >/dev/null 2>&1 || timeout 5 lpmove --help >/dev/null 2>&1 || timeout 5 lpmove -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lpmove (Arch package cups); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/lsof",
@@ -2563,7 +2837,16 @@
    "status": "partial",
    "note": "provided by Arch package lsof; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 lsof --version >/dev/null 2>&1 || timeout 5 lsof --help >/dev/null 2>&1 || timeout 5 lsof -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/lsof (Arch package lsof); the check runs its --version, --help or -V"
   }
  ]
 }

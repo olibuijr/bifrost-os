@@ -127,7 +127,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: mount installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mount"
+    }
+   ],
+   "ready_note": "installed counterpart /usr/bin/mount; presence check only, the command is not run because it changes machine state or needs arguments"
   },
   {
    "id": "path:/sbin/mount_9p",
@@ -211,7 +219,16 @@
    "status": "partial",
    "note": "The nfs-utils package that supplies mount.nfs is in the runtime package list. No BifrOSt code mounts NFS shares, and the command has not been run on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mount.nfs --version >/dev/null 2>&1 || timeout 5 mount.nfs --help >/dev/null 2>&1 || timeout 5 mount.nfs -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart packaging/arch/runtime-packages.txt (nfs-utils provides mount.nfs) (Arch package nfs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/sbin/mount_smbfs",
@@ -232,7 +249,16 @@
    "status": "partial",
    "note": "cifs-utils provides mount.cifs and is listed in the runtime package list, so SMB shares can be mounted on the image. The reference option syntax is not mapped, and the mount is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mount.cifs --version >/dev/null 2>&1 || timeout 5 mount.cifs --help >/dev/null 2>&1 || timeout 5 mount.cifs -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart packaging/arch/runtime-packages.txt (cifs-utils, mount.cifs) (Arch package cifs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/sbin/mount_webdav",
@@ -421,7 +447,16 @@
    "status": "partial",
    "note": "provided by Arch package s-nail; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mail --version >/dev/null 2>&1 || timeout 5 mail --help >/dev/null 2>&1 || timeout 5 mail -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mail (Arch package s-nail); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/malloc_history",
@@ -757,7 +792,16 @@
    "status": "partial",
    "note": "provided by Arch package mg; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mg --version >/dev/null 2>&1 || timeout 5 mg --help >/dev/null 2>&1 || timeout 5 mg -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mg (Arch package mg); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/mib2c",
@@ -778,7 +822,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mib2c --version >/dev/null 2>&1 || timeout 5 mib2c --help >/dev/null 2>&1 || timeout 5 mib2c -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mib2c (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/mib2c-update",
@@ -799,7 +852,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 mib2c-update --version >/dev/null 2>&1 || timeout 5 mib2c-update --help >/dev/null 2>&1 || timeout 5 mib2c-update -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/mib2c-update (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/mkbom",
@@ -1009,7 +1071,16 @@
    "status": "partial",
    "note": "provided by Arch package openbsd-netcat; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nc --version >/dev/null 2>&1 || timeout 5 nc --help >/dev/null 2>&1 || timeout 5 nc -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nc (Arch package openbsd-netcat); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ncal",
@@ -1114,7 +1185,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 net-snmp-cert --version >/dev/null 2>&1 || timeout 5 net-snmp-cert --help >/dev/null 2>&1 || timeout 5 net-snmp-cert -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/net-snmp-cert (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/net-snmp-config",
@@ -1135,7 +1215,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 net-snmp-config --version >/dev/null 2>&1 || timeout 5 net-snmp-config --help >/dev/null 2>&1 || timeout 5 net-snmp-config -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/net-snmp-config (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/net-snmp-create-v3-user",
@@ -1156,7 +1245,16 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 net-snmp-create-v3-user --version >/dev/null 2>&1 || timeout 5 net-snmp-create-v3-user --help >/dev/null 2>&1 || timeout 5 net-snmp-create-v3-user -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/net-snmp-create-v3-user (Arch package net-snmp); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/nettop",
@@ -1261,7 +1359,16 @@
    "status": "partial",
    "note": "provided by Arch package nfs-utils; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nfsstat --version >/dev/null 2>&1 || timeout 5 nfsstat --help >/dev/null 2>&1 || timeout 5 nfsstat -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nfsstat (Arch package nfs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/nice",
@@ -1387,7 +1494,16 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nslookup --version >/dev/null 2>&1 || timeout 5 nslookup --help >/dev/null 2>&1 || timeout 5 nslookup -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nslookup (Arch package bind); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/nsupdate",
@@ -1408,7 +1524,16 @@
    "status": "partial",
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nsupdate --version >/dev/null 2>&1 || timeout 5 nsupdate --help >/dev/null 2>&1 || timeout 5 nsupdate -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart /usr/bin/nsupdate (Arch package bind); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/bin/ocspcheck",
@@ -3004,7 +3129,16 @@
    "status": "partial",
    "note": "The nfs-utils package that supplies nfsidmap is in the runtime package list. No BifrOSt code maps NFSv4 identities, and the command has not been run on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "sh -c 'timeout 5 nfsidmap --version >/dev/null 2>&1 || timeout 5 nfsidmap --help >/dev/null 2>&1 || timeout 5 nfsidmap -V >/dev/null 2>&1'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "counterpart packaging/arch/runtime-packages.txt (nfs-utils provides nfsidmap) (Arch package nfs-utils); the check runs its --version, --help or -V"
   },
   {
    "id": "path:/usr/sbin/nlcontrol",
