@@ -1100,6 +1100,12 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   and are not modelled here.
 - Focus and stacking: the window server's focus raises through the model and then restores the space order from
   the model, so a floating window stays above the normal ones.
+- Extra windows (`app_windows`): `windows::set_level` levels only the main window. An extra window floats with
+  `windows::set_window_level(ctx, id, Level::Floating)` (it takes the extra window's `WindowId`), which
+  sends `ToShell::WindowLevelOf { id, level }` (tag 0x1cc, id then one byte). The shell keeps the flag in the window table
+  (`app_window_table.rs` `set_floating`, `floating_ids`; id 0 is refused) and `Desk::floating_apps` lists the floating
+  extra windows with the floating apps, so they stack last. Activity Monitor's CPU windows use it (activity-desktop 0.8.0).
+  Built and reviewed by reading only; no Midget run yet.
 - Not matched yet: built and reviewed by reading only (no build, no tests, no Midget run). Notes still share one
   window (Stickies' Float on Top applies to the board window). Apple's `NSWindow.Level` names (`.floating`, `.normal`,
   `.statusBar`, `.modalPanel`) beyond these two are not exposed; the menu bar and panels keep their own layer.
