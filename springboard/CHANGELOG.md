@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## Unreleased
+
+- Terminal: the profile look stores a window opacity (0.5 to 1.0), a background image with fit mode (fill, fit, tile) and a dim, saved in prefs and clamped on read. The grid does not paint them yet, and the Profile Editor does not set them yet.
+
 ## 0.8.2 — 2026-10-16
 
 - Installer: explicitly install `mkinitcpio` on the target system so offline installs can generate the initial initramfs and finish boot setup.
