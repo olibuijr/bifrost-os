@@ -86,6 +86,10 @@ impl Composes {
         if self.active == Some(id) {
             return true;
         }
+        // a send on its way, or a question, keeps its window active until it is answered
+        if self.active.is_some() && (mail.sending || matches!(mail.mail.sheet, Some(Sheet::Question(_)))) {
+            return false;
+        }
         let free = match &mail.mail.sheet {
             None => true,
             Some(Sheet::Compose(_)) => self.active.is_some(),
@@ -104,11 +108,14 @@ impl Composes {
         true
     }
 
-    /// Takes the active compose out of the sheet slot, so the main window shows its own content again. A question
-    /// stays where it is.
-    pub fn deactivate(&mut self, mail: &mut MailWindow) {
-        if self.active.is_none() || matches!(mail.mail.sheet, Some(Sheet::Question(_))) {
-            return;
+    /// Takes the active compose out of the sheet slot, so the main window shows its own content again. Returns false, and
+    /// keeps the compose where it is, while a send is on its way or a question is open.
+    pub fn deactivate(&mut self, mail: &mut MailWindow) -> bool {
+        if self.active.is_none() {
+            return true;
+        }
+        if mail.sending || matches!(mail.mail.sheet, Some(Sheet::Question(_))) {
+            return false;
         }
         self.keep_active(mail);
         if matches!(mail.mail.sheet, Some(Sheet::Compose(_))) {
@@ -117,6 +124,7 @@ impl Composes {
         self.active = None;
         let (w, h) = self.main_size;
         mail.set_size(w, h);
+        true
     }
 
     /// After an app call: keeps the active compose with its window, opens a window for a compose the window just made,

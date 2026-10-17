@@ -276,6 +276,9 @@ pub struct MailWindow {
     pub remote_rect: Option<Rect>,
     /// How many remote images the open message has, as counted for it (message UID, count).
     pub remote_memo: Option<(u32, usize)>,
+    /// An immediate send is on its way from the compose window it was sent from: that window stays the active one until
+    /// the answer comes back.
+    pub sending: bool,
     /// The Previous, Next and Done buttons of the find bar where they were drawn last frame.
     pub find_hits: Option<[Rect; 3]>,
     /// Where the open message's text starts in the reader's scrolled content, the height of a line, and the height of the
@@ -568,6 +571,7 @@ impl MailWindow {
             attach_rects: Vec::new(),
             remote_rect: None,
             remote_memo: None,
+            sending: false,
             find_hits: None,
             reader_metrics: (0.0, 0.0, 0.0),
             press: None,
@@ -1475,6 +1479,9 @@ impl MailWindow {
     /// A message went out, or failed. One sent at once (`id` 0) closes the compose sheet; a queued one is taken off the
     /// books, and a failed one comes back as the sheet it was written in, or waits for another try.
     fn sent(&mut self, id: u64, result: Result<(), String>) {
+        if id == 0 {
+            self.sending = false;
+        }
         let flight = self.in_flight.remove(&id);
         match &result {
             Ok(()) => self.note("A message was sent".to_string()),
@@ -2414,6 +2421,7 @@ impl MailWindow {
             return;
         };
         self.mail.status = "Sending".into();
+        self.sending = true;
         self.jobs += 1;
         let transport = self.transport.clone();
         let from = draft.from.clone();

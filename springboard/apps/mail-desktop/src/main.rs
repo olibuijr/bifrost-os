@@ -102,10 +102,26 @@ impl App for MailApp {
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        self.route_focus(ctx);
         self.with_window(ctx, |mail| mail.menu(ctx, id))
     }
 
+    /// The window with focus decides which compose a key or a command acts on: the focused compose window's message.
+    fn route_focus(&mut self, ctx: &Ctx) {
+        let focused = ctx.windows().focused();
+        if let Some(mail) = &mut self.window {
+            if self.composes.owns(focused) {
+                self.composes.activate(mail, focused);
+            } else if focused.is_main() {
+                self.composes.deactivate(mail);
+            }
+        }
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if matches!(ev, Input::Key(_) | Input::Command(_)) {
+            self.route_focus(ctx);
+        }
         let changed = match &mut self.window {
             None => {
                 // a mailto: link before the window exists waits for configure
@@ -117,8 +133,8 @@ impl App for MailApp {
             Some(mail) => match ev {
                 Input::Touch { kind, x, y, t, .. } => {
                     // a touch on the main window hands the sheet slot back to the main window
-                    if matches!(kind, TouchKind::Down) {
-                        self.composes.deactivate(mail);
+                    if matches!(kind, TouchKind::Down) && !self.composes.deactivate(mail) {
+                        return false;
                     }
                     mail.touch(ctx, kind, x, y, t)
                 }
