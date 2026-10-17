@@ -4,7 +4,7 @@
 
 pub use bifrost_ui::media_queue::PlaybackQueue;
 pub use bifrost_ui::media_request::{MediaVerb, PlaybackAction, PlaybackRequest};
-pub use bifrost_ui::media_search::{MediaCriteria, MediaItem, MediaKind, MediaSearch};
+pub use bifrost_ui::media_search::{resolve, MediaCriteria, MediaFilter, MediaItem, MediaKind, MediaSearch, Resolution};
 
 /// Answers one request against the app's catalogue: plans it, applies the plan to `queue` and returns the dialog
 /// that answers the person. At most `limit` items are considered.
