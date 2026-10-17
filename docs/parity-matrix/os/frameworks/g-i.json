@@ -163,11 +163,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/gameplaykit.json",
+   "bifrost": "springboard/sdk/src/gameplay_kit.rs, springboard/ui/src/ecs.rs, springboard/ui/src/state_machine.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/agents.rs, springboard/ui/src/obstacle.rs, springboard/ui/src/noise.rs, springboard/ui/src/quadtree.rs, springboard/ui/src/decision.rs, springboard/ui/src/rules.rs, springboard/ui/src/rule_system.rs, springboard/ui/src/strategist.rs, springboard/sdk/src/random.rs",
    "status": "partial",
    "note": "from SDK matrix gameplaykit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gameplay_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "state_machine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ecs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "grid_graph::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "agents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "obstacle::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "noise::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "quadtree::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "decision::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "rules::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "rule_system::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "strategist::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: bifrost_app::gameplay_kit re-exports the ui game-logic models for apps (state machines, pathfinding, agents, noise, quadtree, rules, strategists); seeded randomness is bifrost_app::random. Only SpriteKit and SceneKit integration remains, which is n/a."
   },
   {
    "id": "path:/System/Library/Frameworks/GeoToolbox.framework",
@@ -289,10 +353,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/device_browser.rs",
+   "bifrost": "springboard/ui/src/device_browser.rs, springboard/src/shell/camera/mod.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "note": "Audit 2026-10-13: pure kit model with host tests. Built 2026-10-17: the shell camera uses DeviceBrowser (springboard/src/shell/camera/mod.rs), so the model is wired; not tested on Midget.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "Device browser model: snapshot diffing, device filter, preferred device; wired into the shell camera."
   },
   {
    "id": "path:/System/Library/Frameworks/IOBluetooth.framework",
@@ -3767,8 +3840,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "Apple Home app intents for HomeKit accessories. BifrOSt has no Home app and no HomeKit; the App Intents layer this builds on is covered by the app-intents row.",
    "rea": [],
    "method": "assessed"
   },
@@ -6156,11 +6229,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated/src/install_log.rs",
+   "bifrost": "springboard/src/install_log.rs, springboard/src/shell/store/mod.rs, springboard/src/shell/diagnostics_page.rs, springboard/src/shell/settings.rs, springboard/updated/src/main.rs",
    "status": "gap",
-   "note": "springboard/updated writes each failed system update to install-failures.log in the shell data directory (install_log.rs, rotated at 256 KB, tested). Gap: app install failures are not logged yet, and the shell diagnostics page (springboard/src/shell/diagnostics_page.rs) does not list the log yet.",
+   "note": "Built 2026-10-17: the install failure log moved to springboard/src/install_log.rs; the App Store worker logs each failed app install, and Analytics & Diagnostics lists the newest failures. Not logged yet: installs run by the privd daemon (springboard/src/privd/methods.rs) and the OTA app path (springboard/src/shell/ota.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "install_log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "diagnostics_page::tests"
+    }
+   ],
+   "ready_note": "Install failure log (write, rotate, read) and the diagnostics page list of failed installs are tested headless."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IntelligenceEngine.framework",
@@ -6220,8 +6307,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "Apple Intelligence flow preview tooling: Apple internal test tooling for its own assistant app. BifrOSt has no such app or tooling.",
    "rea": [],
    "method": "assessed"
   },
